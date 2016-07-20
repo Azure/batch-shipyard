@@ -4,6 +4,7 @@
 import argparse
 import datetime
 import json
+import hashlib
 import os
 import pathlib
 import pprint
@@ -34,6 +35,7 @@ _STORAGE_CONTAINERS = {
 _REGISTRY_FILENAME = 'docker-registry-v2.tar.gz'
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
+_SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
 _REGISTRY_FILE = (
     _REGISTRY_FILENAME, 'resources/{}'.format(_REGISTRY_FILENAME)
 )
@@ -121,6 +123,7 @@ def upload_resource_files(
     """
     sas_urls = {}
     for file in files:
+        upload = True
         if file[0] == _REGISTRY_FILENAME:
             fp = pathlib.Path(file[1])
             if not fp.exists():
@@ -129,10 +132,10 @@ def upload_resource_files(
                 continue
             else:
                 # check if blob exists
-                upload = True
                 try:
                     prop = blob_client.get_blob_properties(
                         _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
+                    # TODO use MD5 instead
                     if (prop.name == _REGISTRY_FILENAME and
                             prop.properties.content_length ==
                             fp.stat().st_size):
@@ -207,7 +210,10 @@ def add_pool(
     sku_to_use, image_ref_to_use = skus_to_use[-1]
     # upload resource files
     sas_urls = upload_resource_files(
-        blob_client, config, [_NODEPREP_FILE, _CASCADE_FILE, _REGISTRY_FILE])
+        blob_client, config, [
+            _NODEPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE, _REGISTRY_FILE
+        ]
+    )
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=config['addpool']['poolspec']['id'],
@@ -453,7 +459,8 @@ def populate_queues(queue_client, table_client, config):
                 _STORAGE_CONTAINERS['table_globalresources'],
                 {
                     'PartitionKey': pk,
-                    'RowKey': gr,
+                    'RowKey': hashlib.sha1(gr.encode('utf8')).hexdigest(),
+                    'Resource': gr,
                 }
             )
             queue_client.put_message(

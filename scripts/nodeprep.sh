@@ -25,10 +25,10 @@ while getopts "h?o:p:r:s:t" opt; do
             offer=${OPTARG,,}
             ;;
         p)
-            prefix=$OPTARG
+            prefix="--prefix $OPTARG"
             ;;
         r)
-            privatereg="--privatereg $OPTARG"
+            privatereg="--container $OPTARG"
             ;;
         s)
             sku=${OPTARG,,}
@@ -91,6 +91,18 @@ if [ $offer == "ubuntuserver" ]; then
         fi
     fi
     $srvstart
+    # install azure storage python dependency
+    if [ ! -z "$privatereg" ] || [ $p2p -eq 1 ]; then
+        pip3 install azure-storage
+    fi
+    # install private registry if required
+    if [ ! -z "$privatereg" ]; then
+        ./setup_private_registry.py $offer $sku $ipaddress $prefix $privatereg
+        if [ $? -ne 0 ]; then
+            echo "docker private registry setup failed"
+            exit 1
+        fi
+    fi
     # install cascade dependencies
     if [ $p2p -eq 1 ]; then
         apt-get install -y python3-libtorrent
@@ -107,11 +119,6 @@ fi
 
 # enable p2p sharing
 if [ $p2p -eq 1 ]; then
-    # install cascade dependencies
-    pip3 install azure-storage
     # start cascade
-    if [ ! -z $prefix ]; then
-        prefix="--prefix $prefix"
-    fi
-    ./cascade.py $ipaddress $privatereg $prefix > cascade.log &
+    ./cascade.py $ipaddress $prefix > cascade.log &
 fi

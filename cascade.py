@@ -10,7 +10,6 @@ import pathlib
 import random
 import subprocess
 import sys
-import time
 from typing import List
 # non-stdlib imports
 import azure.common
@@ -22,9 +21,6 @@ import libtorrent
 # global defines
 _DEFAULT_PORT_BEGIN = 6881
 _DEFAULT_PORT_END = 6891
-_DEFAULT_PRIVATE_REGISTRY_PORT = 5000
-_REGISTRY_ARCHIVE = 'docker-registry-v2.tar.gz'
-_REGISTRY_IMAGE_ID = '8ff6a4aae657'
 _DOCKER_TAG = 'docker:'
 _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
@@ -34,7 +30,6 @@ _STORAGEACCOUNT = os.environ['CASCADE_SA']
 _STORAGEACCOUNTKEY = os.environ['CASCADE_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
 _POOLID = os.environ['AZ_BATCH_POOL_ID']
-_NODEID = os.environ['AZ_BATCH_NODE_ID']
 _SHARED_DIR = os.environ['AZ_BATCH_NODE_SHARED_DIR']
 _TORRENT_DIR = pathlib.Path(_SHARED_DIR, '.torrents')
 _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
@@ -46,7 +41,6 @@ _STORAGE_CONTAINERS = {
     'table_torrentinfo': None,
     'table_service': None,
     'table_globalresources': None,
-    'queue_registry': None,
     'queue_globalresources': None,
 }
 _REGISTRIES = {}
@@ -64,7 +58,6 @@ def _setup_container_names(sep: str):
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_services'] = sep + 'services'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
-    _STORAGE_CONTAINERS['queue_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['queue_globalresources'] = sep + 'globalresources'
 
 
@@ -113,11 +106,11 @@ def generate_torrent(incl_file: str) -> dict:
 
 
 def create_torrent_session(
-        torrent_file: str, save_path: str, seed_mode: bool,
+        torrent_file: pathlib.Path, save_path: str, seed_mode: bool,
         port_range: List[int]=
         [_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END]) -> tuple:
     """Create a torrent session given a torrent file
-    :param str torrent_file: torrent file
+    :param pathlib.Path torrent_file: torrent file
     :param str save_path: path to save torrented files to
     :param bool seed_mode: seed mode
     :param list port_range: port range to listen on
@@ -127,7 +120,7 @@ def create_torrent_session(
     session = libtorrent.session()
     session.listen_on(port_range[0], port_range[-1])
     torrent_handle = session.add_torrent({
-        'ti': libtorrent.torrent_info(torrent_file),
+        'ti': libtorrent.torrent_info(str(torrent_file)),
         'save_path': save_path,
         'seed_mode': seed_mode
     })
@@ -162,7 +155,7 @@ def _renew_queue_message_lease(
         _STORAGE_CONTAINERS[queue_key],
         message_id=msg_id,
         pop_receipt=_QUEUE_MESSAGES[msg_id].pop_receipt,
-        visibility_timeout=0)
+        visibility_timeout=45)
     if msg.pop_receipt is None:
         raise RuntimeError('update message failed')
     _QUEUE_MESSAGES[msg_id].pop_receipt = msg.pop_receipt
@@ -172,131 +165,8 @@ def _renew_queue_message_lease(
         15, _renew_queue_message_lease, loop, queue_client, queue_key, msg_id)
 
 
-async def _start_private_registry_instance_async(
-        loop: asyncio.BaseEventLoop, container: str):
-    """Start private docker registry instance
-    :param asyncio.BaseEventLoop loop: event loop
-    :param str container: storage container holding registry info
-    """
-    proc = await asyncio.subprocess.create_subprocess_shell(
-        'docker images | grep -E \'^registry.*2\' | awk -e \'{print $3}\'',
-        stdout=asyncio.subprocess.PIPE, loop=loop)
-    stdout = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError('docker images non-zero rc: {}'.format(
-            proc.returncode))
-    if (stdout[0].strip() != _REGISTRY_IMAGE_ID and
-            pathlib.Path(_REGISTRY_ARCHIVE).exists()):
-        print('importing registry from local file: {}'.format(
-            _REGISTRY_ARCHIVE))
-        proc = await asyncio.subprocess.create_subprocess_shell(
-            'gunzip -c {} | docker load'.format(
-                _REGISTRY_ARCHIVE), loop=loop)
-        await proc.wait()
-        if proc.returncode != 0:
-            raise RuntimeError('docker load non-zero rc: {}'.format(
-                proc.returncode))
-    sa = os.getenv('PRIVATE_REGISTRY_SA') or _STORAGEACCOUNT
-    sakey = os.getenv('PRIVATE_REGISTRY_SAKEY') or _STORAGEACCOUNTKEY
-    registry_cmd = [
-        'docker', 'run', '-d', '-p',
-        '{p}:{p}'.format(p=_DEFAULT_PRIVATE_REGISTRY_PORT),
-        '-e', 'REGISTRY_STORAGE=azure',
-        '-e', 'REGISTRY_STORAGE_AZURE_ACCOUNTNAME={}'.format(sa),
-        '-e', 'REGISTRY_STORAGE_AZURE_ACCOUNTKEY={}'.format(sakey),
-        '-e', 'REGISTRY_STORAGE_AZURE_CONTAINER={}'.format(container),
-        '--restart=always', '--name=registry', 'registry:2',
-    ]
-    print('starting private registry on port {} -> {}:{}'.format(
-        _DEFAULT_PRIVATE_REGISTRY_PORT, sa, container))
-    proc = await asyncio.subprocess.create_subprocess_shell(
-        ' '.join(registry_cmd), loop=loop)
-    await proc.wait()
-    if proc.returncode != 0:
-        raise RuntimeError(
-            'docker run for private registry non-zero rc: {}'.format(
-                proc.returncode))
-
-
-async def setup_private_registry_async(
-        loop: asyncio.BaseEventLoop,
-        queue_client: azure.storage.queue.QueueService,
-        table_client: azure.storage.table.TableService,
-        ipaddress: str, container: str):
-    """Set up a docker private registry if a ticket exists
-    :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
-    :param str ipaddress: ip address
-    :param str container: container holding registry
-    """
-    # first check if we've registered before
-    try:
-        entity = table_client.get_entity(
-            _STORAGE_CONTAINERS['table_registry'], _PARTITION_KEY, ipaddress)
-        print('private registry row already exists: {}'.format(entity))
-        await _start_private_registry_instance_async(loop, container)
-        return
-    except azure.common.AzureMissingResourceHttpError:
-        pass
-    while True:
-        # check for a ticket
-        msgs = queue_client.get_messages(
-            _STORAGE_CONTAINERS['queue_registry'], num_messages=1,
-            visibility_timeout=45)
-        # if there are no messages, then check the table to make sure at
-        # least 1 entry exists
-        if len(msgs) == 0:
-            entities = table_client.query_entities(
-                _STORAGE_CONTAINERS['table_registry'],
-                filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY)
-            )
-            if len(entities) == 0:
-                print('no registry entries found, will try again for ticket')
-                await asyncio.sleep(1)
-            else:
-                break
-        else:
-            msg = msgs[0]
-            print('got queue message id={} pr={}'.format(
-                msg.id, msg.pop_receipt))
-            _QUEUE_MESSAGES[msg.id] = msg
-            # create renew callback
-            _CBHANDLES['queue_registry'] = loop.call_later(
-                15, _renew_queue_message_lease, loop, queue_client,
-                'queue_registry', msg.id)
-            # install docker registy container
-            await _start_private_registry_instance_async(loop, container)
-            entity = {
-                'PartitionKey': _PARTITION_KEY,
-                'RowKey': ipaddress,
-                'Port': _DEFAULT_PRIVATE_REGISTRY_PORT,
-                'NodeId': _NODEID,
-                'StorageAccount': _STORAGEACCOUNT,
-                'Container': container,
-            }
-            # register self into registry table
-            table_client.insert_or_replace_entity(
-                _STORAGE_CONTAINERS['table_registry'], entity=entity)
-            # insert self into local registry cache
-            _REGISTRIES[ipaddress] = entity
-            # cancel callback
-            _CBHANDLES['queue_registry'].cancel()
-            _CBHANDLES.pop('queue_registry')
-            # release queue message
-            print('releasing queue message id={} pr={}'.format(
-                msg.id, _QUEUE_MESSAGES[msg.id].pop_receipt))
-            queue_client.update_message(
-                _STORAGE_CONTAINERS['queue_registry'],
-                message_id=msg.id,
-                pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
-                visibility_timeout=0)
-            _QUEUE_MESSAGES.pop(msg.id)
-            break
-
-
 def _pick_random_registry_key():
-    return list(_REGISTRIES.keys())[random.randint(0, len(_REGISTRIES) - 1)]
+    return random.randint(0, len(_REGISTRIES) - 1)
 
 
 def compute_sha1_for_file(file, blocksize=65536):
@@ -324,7 +194,6 @@ async def _direct_download_resources_async(
         if exists:
             _DIRECTDL.pop(dl, None)
     if len(_DIRECTDL) == 0:
-        print('no resources to direct download')
         return
     while True:
         # go through queue and find resources we can download
@@ -337,18 +206,18 @@ async def _direct_download_resources_async(
             if len(msgs) == 0:
                 break
             for _msg in msgs:
-                if _msg.content in _DIRECTDL:
+                if _msg.content in _DIRECTDL and msg is None:
                     msg = _msg
                 else:
                     _release_list.append(_msg)
             if msg is not None:
                 break
-        # renew lease
-        _QUEUE_MESSAGES[msg.id] = msg
-        # create renew callback
-        _CBHANDLES['queue_globalresources'] = loop.call_later(
-            15, _renew_queue_message_lease, loop, queue_client,
-            'queue_globalresources', msg.id)
+        # renew lease and create renew callback
+        if msg is not None:
+            _QUEUE_MESSAGES[msg.id] = msg
+            _CBHANDLES['queue_globalresources'] = loop.call_later(
+                15, _renew_queue_message_lease, loop, queue_client,
+                'queue_globalresources', msg.id)
         # release all messages in release list
         for _msg in _release_list:
             queue_client.update_message(
@@ -357,6 +226,9 @@ async def _direct_download_resources_async(
                 pop_receipt=_msg.pop_receipt,
                 visibility_timeout=0)
         del _release_list
+        if msg is None:
+            await asyncio.sleep(1)
+            continue
         file = None
         # download data
         resource = msg.content
@@ -366,20 +238,19 @@ async def _direct_download_resources_async(
                     ('{} image specified for global resource, but there are '
                      'no registries available').format(resource))
             image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+            registry = None
             while True:
                 # pick random registry to download from
-                registry_ip = _pick_random_registry_key()
-                print('pulling image {} from {}'.format(image, registry_ip))
-                if registry_ip == 'registry.hub.docker.com':
+                registry = _REGISTRIES[_pick_random_registry_key()]
+                print('pulling image {} from {}'.format(image, registry))
+                if registry == 'registry.hub.docker.com':
                     proc = await asyncio.subprocess.create_subprocess_shell(
-                        'docker pull {}'.format(image), loop=loop
-                    )
+                        'docker pull {}'.format(image), loop=loop)
+                    registry = ''
                 else:
-                    registry_port = _REGISTRIES[registry_ip]['Port']
                     proc = await asyncio.subprocess.create_subprocess_shell(
-                        'docker pull {}:{}/{}'.format(
-                            registry_ip, registry_port, image), loop=loop
-                    )
+                        'docker pull {}/{}'.format(registry, image), loop=loop)
+                    registry = '{}/'.format(registry)
                 await proc.wait()
                 if proc.returncode == 0:
                     break
@@ -388,11 +259,12 @@ async def _direct_download_resources_async(
                         proc.returncode))
                     await asyncio.sleep(1)
             # save docker image to seed to torrent
-            print('saving docker image for seeding')
             file = _TORRENT_DIR / '{}.tar.gz'.format(image)
+            print('saving docker image {} to {} for seeding'.format(
+                image, file))
             proc = await asyncio.subprocess.create_subprocess_shell(
-                'docker save {} | gzip -c > {}'.format(
-                    image, file), loop=loop)
+                'docker save {}{} | gzip -c > {}'.format(
+                    registry, image, file), loop=loop)
             await proc.wait()
             if proc.returncode != 0:
                 raise RuntimeError('docker save non-zero rc: {}'.format(
@@ -403,23 +275,27 @@ async def _direct_download_resources_async(
             raise NotImplemented()
         # generate torrent file
         torrent_file, torrent_b64, torrent_sha1 = generate_torrent(str(file))
+        print('torrent file generated: {}'.format(torrent_file))
         # add to torrent dict (effectively enqueues for torrent start)
+        # do not add ipaddress to DHTNodes (will be added on seed+merge)
         entity = {
             'PartitionKey': _PARTITION_KEY,
-            'RowKey': resource,
+            'RowKey': hashlib.sha1(resource.encode('utf8')).hexdigest(),
+            'Resource': resource,
             'TorrentFileBase64': torrent_b64,
             'TorrentFileSHA1': torrent_sha1,
             'FileSizeBytes': file.stat().st_size,
             # 'FileSHA1': compute_sha1_for_file(file),
-            'DHTNodes': ipaddress,
         }
         _TORRENTS[resource] = {
             'entity': entity,
             'etag': None,
             'torrent_file': torrent_file,
-            'started': False
+            'started': False,
+            'seed': True,
         }
         # wait until torrent has started
+        print('waiting for torrent {} to start'.format(resource))
         while not _TORRENTS[resource]['started']:
             await asyncio.sleep(1)
         # cancel callback
@@ -432,6 +308,8 @@ async def _direct_download_resources_async(
             pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
             visibility_timeout=0)
         _QUEUE_MESSAGES.pop(msg.id)
+        print('torrent started, queue message released for {}'.format(
+            resource))
         # remove resources from download list
         _DIRECTDL.pop(resource)
         if len(_DIRECTDL) == 0:
@@ -440,16 +318,18 @@ async def _direct_download_resources_async(
 
 def _merge_torrentinfo(
         table_client: azure.storage.table.TableService,
-        key: str):
+        resource: str):
     """Merge info into torrentinfo table
     :param azure.storage.table.TableService table_client: table client
-    :param str key: torrent dict key
+    :param str resource: torrent dict key
     """
-    entity = _TORRENTS[key]
-    print('merging entity for {} to torrentinfo table: {}'.format(key, entity))
+    info = _TORRENTS[resource]
+    entity = info['entity']
+    print('merging entity for {} to torrentinfo table: {}'.format(
+        resource, info))
     try:
-        if entity['etag'] is None:
-            entity['etag'] = table_client.insert_entity(
+        if info['etag'] is None:
+            info['etag'] = table_client.insert_entity(
                 _STORAGE_CONTAINERS['table_torrentinfo'],
                 entity=entity)
     except azure.common.AzureConflictHttpError:
@@ -470,27 +350,41 @@ def _merge_torrentinfo(
             etag = existing['etag']
             existing.pop('etag')
             try:
-                existing['etag'] = table_client.merge_entity(
+                info['etag'] = table_client.merge_entity(
                     _STORAGE_CONTAINERS['table_torrentinfo'], entity=existing,
                     if_match=etag)
-                _TORRENTS[key] = existing
+                _TORRENTS[resource] = existing
                 break
             except azure.common.AzureConflictHttpError:
                 pass
     print('entity for {} merged to torrentinfo table: {}'.format(
-        key, _TORRENTS[key]))
+        resource, _TORRENTS[resource]))
 
 
-async def download_monitor_async(
+def _get_torrent_session_info(resource, th, session):
+    s = th.status()
+    p = th.get_peer_info()
+
+    print(
+        '\r%s %.2f%% complete (down: %.1f kb/s up: %.1f kB/s peers: %d) %s' %
+        (resource, s.progress * 100, s.download_rate / 1000,
+         s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
+    for i in p:
+        print(i.ip)
+    sys.stdout.flush()
+
+
+async def manage_torrent_sessions_async(
         loop: asyncio.BaseEventLoop,
-        blob_client: azure.storage.blob.BlockBlobService,
-        queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
         ipaddress: str):
     while True:
         # start applicable torrent sessions
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
+                _get_torrent_session_info(
+                    resource, _TORRENTS[resource]['handle'],
+                    _TORRENTS[resource]['session'])
                 continue
             # start torrent session
             try:
@@ -498,14 +392,17 @@ async def download_monitor_async(
                     resource]['entity']['DHTNodes'].split(',')
             except KeyError:
                 dht_nodes = []
-            seed = ipaddress in dht_nodes
+            seed = _TORRENTS[resource]['seed']
+            print(('creating torrent session for {} ipaddress={} '
+                   'dht_nodes={} seed={}').format(
+                       resource, ipaddress, dht_nodes, seed))
             th, session = create_torrent_session(
                 _TORRENTS[resource]['torrent_file'], str(_TORRENT_DIR),
                 seed)
             _TORRENTS[resource]['handle'] = th
             _TORRENTS[resource]['session'] = session
-            print('created torrent session for: {} seed={}'.format(
-                resource, seed))
+            print('created torrent session for {} is_seed={}'.format(
+                resource, th.is_seed()))
             # if we're seeding add self to dht_nodes
             if th.is_seed():
                 if ipaddress not in dht_nodes:
@@ -517,29 +414,25 @@ async def download_monitor_async(
                     # TODO register to services table
             # mark torrent as started
             _TORRENTS[resource]['started'] = True
+        # sleep to avoid pinning cpu
+        await asyncio.sleep(1)
+
+
+async def download_monitor_async(
+        loop: asyncio.BaseEventLoop,
+        blob_client: azure.storage.blob.BlockBlobService,
+        queue_client: azure.storage.queue.QueueService,
+        table_client: azure.storage.table.TableService,
+        ipaddress: str):
+    # begin async manage torrent sessions
+    asyncio.ensure_future(
+        manage_torrent_sessions_async(loop, table_client, ipaddress))
+    while True:
         # check if there are any direct downloads
         await _direct_download_resources_async(
             loop, blob_client, queue_client, table_client, ipaddress)
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
-
-
-def _update_registries(
-        table_client: azure.storage.table.TableService, ipaddress: str):
-    # check if we exist in the list, do not update if so
-    if ipaddress in _REGISTRIES:
-        return
-    print('refreshing docker private registry list...')
-    try:
-        entities = table_client.query_entities(
-            _STORAGE_CONTAINERS['table_registry'],
-            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
-    except azure.common.AzureMissingResourceHttpError:
-        pass
-    else:
-        _REGISTRIES.clear()
-        for ent in entities:
-            _REGISTRIES[ent['RowKey']] = ent
 
 
 def _check_resource_has_torrent(
@@ -548,9 +441,10 @@ def _check_resource_has_torrent(
         resource: str,
         add_to_dict: bool=False) -> bool:
     try:
+        rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
         entity = table_client.get_entity(
             _STORAGE_CONTAINERS['table_torrentinfo'],
-            _PARTITION_KEY, resource)
+            _PARTITION_KEY, rk)
     except azure.common.AzureMissingResourceHttpError:
         if add_to_dict:
             _DIRECTDL[resource] = None
@@ -560,7 +454,7 @@ def _check_resource_has_torrent(
         torrent = base64.b64decode(entity['TorrentFileBase64'])
         torrent_file = _TORRENT_DIR / '{}.torrent'.format(
             entity['TorrentFileSHA1'])
-        with open(torrent_file, 'wb') as f:
+        with open(str(torrent_file), 'wb') as f:
             f.write(torrent)
         try:
             etag = entity['etag']
@@ -572,6 +466,7 @@ def _check_resource_has_torrent(
             'etag': etag,
             'torrent_file': torrent_file,
             'started': False,
+            'seed': False,
         }
     return True
 
@@ -581,17 +476,14 @@ def distribute_global_resources(
         blob_client: azure.storage.blob.BlockBlobService,
         queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
-        ipaddress: str, container: str):
+        ipaddress: str):
     """Distribute global services/resources
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
-    :param str container: container holding registry
     """
-    # get private registry list
-    _update_registries(table_client, ipaddress)
     # get globalresources from table
     try:
         entities = table_client.query_entities(
@@ -601,36 +493,10 @@ def distribute_global_resources(
         entities = []
     # check torrent info table for resource
     for ent in entities:
-        _check_resource_has_torrent(loop, table_client, ent['RowKey'], True)
+        _check_resource_has_torrent(loop, table_client, ent['Resource'], True)
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
         loop, blob_client, queue_client, table_client, ipaddress))
-
-
-def test_torrent():
-    file = '/tmp/test/test2.bin'
-    torrent_name = 'test.torrent'
-    generate_torrent(torrent_name, file)
-    h, session = create_torrent_session(
-        torrent_name, str(pathlib.Path(file).parent), True)
-
-    print('Name: {} Total size: {}'.format(h.name(), h.status().total_wanted))
-    while True:
-        s = h.status()
-
-        print(
-            '\r%.2f%% complete (down: %.1f kb/s up: %.1f kB/s peers: %d) %s' %
-            (s.progress * 100, s.download_rate / 1000, s.upload_rate / 1000,
-             s.num_peers, _TORRENT_STATE[s.state]))
-        sys.stdout.flush()
-        p = h.get_peer_info()
-        for i in p:
-            print(i)
-            print(i.ip)
-        # print(h.is_seed())
-        # print(session.is_dht_running())
-
-        time.sleep(1)
 
 
 def main():
@@ -654,18 +520,20 @@ def main():
     blob_client, queue_client, table_client = _create_credentials()
 
     # create torrent directory
+    print('creating torrent dir: {}'.format(_TORRENT_DIR))
     _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # set up private registry
-    if args.privateregistry:
-        loop.run_until_complete(setup_private_registry_async(
-            loop, queue_client, table_client, args.ipaddress,
-            args.privateregistry))
+    # get registry list
+    global _REGISTRIES
+    with open('.cascade_private_registries.txt', 'r') as f:
+        _REGISTRIES = f.readlines()
+    if len(_REGISTRIES) == 0:
+        _REGISTRIES.append('registry.hub.docker.com')
+    print('docker registries: {}'.format(_REGISTRIES))
 
     # distribute global resources
     distribute_global_resources(
-        loop, blob_client, queue_client, table_client, args.ipaddress,
-        args.privateregistry)
+        loop, blob_client, queue_client, table_client, args.ipaddress)
 
 
 def parseargs():
@@ -679,9 +547,6 @@ def parseargs():
         'ipaddress', nargs='?', default=None, help='ip address')
     parser.add_argument(
         '--prefix', help='storage container prefix')
-    parser.add_argument(
-        '--privateregistry',
-        help='enable private registry and container name')
     return parser.parse_args()
 
 if __name__ == '__main__':
