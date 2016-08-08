@@ -302,7 +302,8 @@ def main():
 
     # write registry file
     with open('.cascade_private_registries.txt', 'w') as f:
-        f.writelines(registries)
+        for registry in registries:
+            f.write('{}\n'.format(registry))
 
     # stop asyncio loop
     loop.stop()

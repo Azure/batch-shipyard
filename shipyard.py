@@ -7,7 +7,6 @@ import json
 import hashlib
 import os
 import pathlib
-import pprint
 import time
 from typing import List
 # non-stdlib imports
@@ -46,7 +45,6 @@ def _populate_global_settings(config: dict):
     :param dict config: configuration dict
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNTKEY
-    global _STORAGE_ENTITY_PREFIX
     _STORAGEACCOUNT = config[
         'global_settings']['credentials']['storage_account']
     _STORAGEACCOUNTKEY = config[
@@ -222,6 +220,7 @@ def add_pool(
             node_agent_sku_id=sku_to_use.id),
         vm_size=config['addpool']['poolspec']['vm_size'],
         target_dedicated=config['addpool']['poolspec']['vm_count'],
+        enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
             command_line='nodeprep.sh -o {} -s {}{}{}{}'.format(
                 offer, sku,
@@ -479,7 +478,7 @@ def main():
         with open(args.json, 'r') as f:
             config = json.load(f)
         print('config:')
-        pprint.pprint(config)
+        print(json.dumps(config, indent=4))
         _populate_global_settings(config)
 
     batch_client, blob_client, queue_client, table_client = \

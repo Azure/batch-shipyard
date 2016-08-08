@@ -50,6 +50,11 @@ if [ -z $sku ]; then
     exit 1
 fi
 
+# set python env vars
+LC_ALL=en_US.UTF-8
+#PYTHONIOENCODING=utf-8
+PYTHONASYNCIODEBUG=1
+
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 

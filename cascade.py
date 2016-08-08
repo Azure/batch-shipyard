@@ -8,9 +8,7 @@ import hashlib
 import os
 import pathlib
 import random
-import subprocess
 import sys
-from typing import List
 # non-stdlib imports
 import azure.common
 import azure.storage.blob as azureblob
@@ -19,6 +17,7 @@ import azure.storage.table as azuretable
 import libtorrent
 
 # global defines
+_ON_WINDOWS = sys.platform == 'win32'
 _DEFAULT_PORT_BEGIN = 6881
 _DEFAULT_PORT_END = 6891
 _DOCKER_TAG = 'docker:'
@@ -26,6 +25,7 @@ _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
     'seeding', 'allocating', 'checking fastresume'
 ]
+_TORRENT_SESSION = libtorrent.session()
 _STORAGEACCOUNT = os.environ['CASCADE_SA']
 _STORAGEACCOUNTKEY = os.environ['CASCADE_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
@@ -43,6 +43,7 @@ _STORAGE_CONTAINERS = {
     'table_globalresources': None,
     'queue_globalresources': None,
 }
+_SELF_REGISTRY_PTR = None
 _REGISTRIES = {}
 _TORRENTS = {}
 _DIRECTDL = {}
@@ -106,37 +107,32 @@ def generate_torrent(incl_file: str) -> dict:
 
 
 def create_torrent_session(
-        torrent_file: pathlib.Path, save_path: str, seed_mode: bool,
-        port_range: List[int]=
-        [_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END]) -> tuple:
+        resource: str, save_path: pathlib.Path, seed_mode: bool):
     """Create a torrent session given a torrent file
-    :param pathlib.Path torrent_file: torrent file
-    :param str save_path: path to save torrented files to
+    :param str resource: torrent resource
+    :param pathlib.Path save_path: path to save torrented files to
     :param bool seed_mode: seed mode
     :param list port_range: port range to listen on
-    :rtype: tuple
-    :return: return (torrent_handle, session)
+    :return: torrent_handle
     """
-    session = libtorrent.session()
-    session.listen_on(port_range[0], port_range[-1])
-    torrent_handle = session.add_torrent({
-        'ti': libtorrent.torrent_info(str(torrent_file)),
-        'save_path': save_path,
+    torrent_handle = _TORRENT_SESSION.add_torrent({
+        'ti': libtorrent.torrent_info(
+            str(_TORRENTS[resource]['torrent_file'])),
+        'save_path': str(save_path),
         'seed_mode': seed_mode
     })
-    session.start_dht()
-    return torrent_handle, session
+    print('created torrent session for {} is_seed={}'.format(
+        resource, torrent_handle.is_seed()))
+    return torrent_handle
 
 
-def add_dht_node(session: libtorrent.session, ip: str, port: int):
-    """Add a node to the DHT
-    :param libtorrent.session session: libtorrent session
+def add_dht_node(ip: str, port: int):
+    """Add a node as a DHT router
     :param str ip: ip address of the dht node
     :param int port: port of the dht node
     """
-    session.add_dht_node((ip, port))
-    if not session.is_dht_running():
-        session.start_dht()
+    _TORRENT_SESSION.add_dht_router(ip, port)
+    print('added {}:{} as dht router'.format(ip, port))
 
 
 def _renew_queue_message_lease(
@@ -166,6 +162,8 @@ def _renew_queue_message_lease(
 
 
 def _pick_random_registry_key():
+    if _SELF_REGISTRY_PTR is not None:
+        return _SELF_REGISTRY_PTR
     return random.randint(0, len(_REGISTRIES) - 1)
 
 
@@ -195,125 +193,125 @@ async def _direct_download_resources_async(
             _DIRECTDL.pop(dl, None)
     if len(_DIRECTDL) == 0:
         return
+    # go through queue and find resources we can download
+    msg = None
+    _release_list = []
     while True:
-        # go through queue and find resources we can download
-        msg = None
-        _release_list = []
-        while True:
-            msgs = queue_client.get_messages(
-                _STORAGE_CONTAINERS['queue_globalresources'], num_messages=32,
-                visibility_timeout=45)
-            if len(msgs) == 0:
-                break
-            for _msg in msgs:
-                if _msg.content in _DIRECTDL and msg is None:
-                    msg = _msg
-                else:
-                    _release_list.append(_msg)
-            if msg is not None:
-                break
-        # renew lease and create renew callback
+        msgs = queue_client.get_messages(
+            _STORAGE_CONTAINERS['queue_globalresources'], num_messages=32,
+            visibility_timeout=45)
+        if len(msgs) == 0:
+            break
+        for _msg in msgs:
+            if _msg.content in _DIRECTDL and msg is None:
+                msg = _msg
+            else:
+                _release_list.append(_msg)
         if msg is not None:
-            _QUEUE_MESSAGES[msg.id] = msg
-            _CBHANDLES['queue_globalresources'] = loop.call_later(
-                15, _renew_queue_message_lease, loop, queue_client,
-                'queue_globalresources', msg.id)
-        # release all messages in release list
-        for _msg in _release_list:
-            queue_client.update_message(
-                _STORAGE_CONTAINERS['queue_globalresources'],
-                message_id=_msg.id,
-                pop_receipt=_msg.pop_receipt,
-                visibility_timeout=0)
-        del _release_list
-        if msg is None:
-            await asyncio.sleep(1)
-            continue
-        file = None
-        # download data
-        resource = msg.content
-        if resource.startswith(_DOCKER_TAG):
-            if len(_REGISTRIES) < 1:
-                raise RuntimeError(
-                    ('{} image specified for global resource, but there are '
-                     'no registries available').format(resource))
-            image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-            registry = None
-            while True:
-                # pick random registry to download from
-                registry = _REGISTRIES[_pick_random_registry_key()]
-                print('pulling image {} from {}'.format(image, registry))
-                if registry == 'registry.hub.docker.com':
-                    proc = await asyncio.subprocess.create_subprocess_shell(
-                        'docker pull {}'.format(image), loop=loop)
-                    registry = ''
-                else:
-                    proc = await asyncio.subprocess.create_subprocess_shell(
-                        'docker pull {}/{}'.format(registry, image), loop=loop)
-                    registry = '{}/'.format(registry)
-                await proc.wait()
-                if proc.returncode == 0:
-                    break
-                else:
-                    print('docker pull non-zero rc: {}'.format(
-                        proc.returncode))
-                    await asyncio.sleep(1)
-            # save docker image to seed to torrent
-            file = _TORRENT_DIR / '{}.tar.gz'.format(image)
-            print('saving docker image {} to {} for seeding'.format(
-                image, file))
-            proc = await asyncio.subprocess.create_subprocess_shell(
-                'docker save {}{} | gzip -c > {}'.format(
-                    registry, image, file), loop=loop)
-            await proc.wait()
-            if proc.returncode != 0:
-                raise RuntimeError('docker save non-zero rc: {}'.format(
-                    proc.returncode))
-        else:
-            # TODO download via blob, explode uri to get container/blob
-            # use download to path into /tmp and move to _TORRENT_DIR
-            raise NotImplemented()
-        # generate torrent file
-        torrent_file, torrent_b64, torrent_sha1 = generate_torrent(str(file))
-        print('torrent file generated: {}'.format(torrent_file))
-        # add to torrent dict (effectively enqueues for torrent start)
-        # do not add ipaddress to DHTNodes (will be added on seed+merge)
-        entity = {
-            'PartitionKey': _PARTITION_KEY,
-            'RowKey': hashlib.sha1(resource.encode('utf8')).hexdigest(),
-            'Resource': resource,
-            'TorrentFileBase64': torrent_b64,
-            'TorrentFileSHA1': torrent_sha1,
-            'FileSizeBytes': file.stat().st_size,
-            # 'FileSHA1': compute_sha1_for_file(file),
-        }
-        _TORRENTS[resource] = {
-            'entity': entity,
-            'etag': None,
-            'torrent_file': torrent_file,
-            'started': False,
-            'seed': True,
-        }
-        # wait until torrent has started
-        print('waiting for torrent {} to start'.format(resource))
-        while not _TORRENTS[resource]['started']:
-            await asyncio.sleep(1)
-        # cancel callback
-        _CBHANDLES['queue_globalresources'].cancel()
-        _CBHANDLES.pop('queue_globalresources')
-        # release queue message
+            break
+    # renew lease and create renew callback
+    if msg is not None:
+        _QUEUE_MESSAGES[msg.id] = msg
+        _CBHANDLES['queue_globalresources'] = loop.call_later(
+            15, _renew_queue_message_lease, loop, queue_client,
+            'queue_globalresources', msg.id)
+    # release all messages in release list
+    for _msg in _release_list:
         queue_client.update_message(
             _STORAGE_CONTAINERS['queue_globalresources'],
-            message_id=msg.id,
-            pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
+            message_id=_msg.id,
+            pop_receipt=_msg.pop_receipt,
             visibility_timeout=0)
-        _QUEUE_MESSAGES.pop(msg.id)
-        print('torrent started, queue message released for {}'.format(
-            resource))
-        # remove resources from download list
-        _DIRECTDL.pop(resource)
-        if len(_DIRECTDL) == 0:
-            break
+    del _release_list
+    if msg is None:
+        return
+    file = None
+    # download data
+    resource = msg.content
+    if resource.startswith(_DOCKER_TAG):
+        if len(_REGISTRIES) < 1:
+            raise RuntimeError(
+                ('{} image specified for global resource, but there are '
+                 'no registries available').format(resource))
+        image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+        registry = None
+        while True:
+            # pick random registry to download from
+            registry = _REGISTRIES[_pick_random_registry_key()]
+            print('pulling image {} from {}'.format(image, registry))
+            if registry == 'registry.hub.docker.com':
+                proc = await asyncio.subprocess.create_subprocess_shell(
+                    'docker pull {}'.format(image), loop=loop)
+                registry = ''
+            else:
+                proc = await asyncio.subprocess.create_subprocess_shell(
+                    'docker pull {}/{}'.format(registry, image), loop=loop)
+                registry = '{}/'.format(registry)
+            await proc.wait()
+            if proc.returncode == 0:
+                break
+            else:
+                print('docker pull non-zero rc: {}'.format(
+                    proc.returncode))
+                await asyncio.sleep(1)
+        # save docker image to seed to torrent
+        file = _TORRENT_DIR / '{}.tar.gz'.format(image)
+        parent = pathlib.Path(file.parent)
+        print('creating path to store torrent: {}'.format(parent))
+        parent.mkdir(parents=True, exist_ok=True)
+        del parent
+        print('saving docker image {} to {} for seeding'.format(
+            image, file))
+        proc = await asyncio.subprocess.create_subprocess_shell(
+            'docker save {}{} | gzip -c > {}'.format(
+                registry, image, file), loop=loop)
+        await proc.wait()
+        if proc.returncode != 0:
+            raise RuntimeError('docker save non-zero rc: {}'.format(
+                proc.returncode))
+    else:
+        # TODO download via blob, explode uri to get container/blob
+        # use download to path into /tmp and move to _TORRENT_DIR
+        raise NotImplementedError()
+    # generate torrent file
+    torrent_file, torrent_b64, torrent_sha1 = generate_torrent(str(file))
+    print('torrent file generated: {}'.format(torrent_file))
+    # add to torrent dict (effectively enqueues for torrent start)
+    # do not add ipaddress to DHTNodes (will be added on seed+merge)
+    entity = {
+        'PartitionKey': _PARTITION_KEY,
+        'RowKey': hashlib.sha1(resource.encode('utf8')).hexdigest(),
+        'Resource': resource,
+        'TorrentFileBase64': torrent_b64,
+        'TorrentFileSHA1': torrent_sha1,
+        'FileSizeBytes': file.stat().st_size,
+        # 'FileSHA1': compute_sha1_for_file(file),
+    }
+    _TORRENTS[resource] = {
+        'entity': entity,
+        'etag': None,
+        'torrent_file': torrent_file,
+        'started': False,
+        'seed': True,
+    }
+    # wait until torrent has started
+    print('waiting for torrent {} to start'.format(resource))
+    while not _TORRENTS[resource]['started']:
+        await asyncio.sleep(1)
+    # cancel callback
+    _CBHANDLES['queue_globalresources'].cancel()
+    _CBHANDLES.pop('queue_globalresources')
+    # release queue message
+    queue_client.update_message(
+        _STORAGE_CONTAINERS['queue_globalresources'],
+        message_id=msg.id,
+        pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
+        visibility_timeout=0)
+    _QUEUE_MESSAGES.pop(msg.id)
+    print('torrent started, queue message released for {}'.format(
+        resource))
+    # remove resources from download list
+    _DIRECTDL.pop(resource)
 
 
 def _merge_torrentinfo(
@@ -325,8 +323,7 @@ def _merge_torrentinfo(
     """
     info = _TORRENTS[resource]
     entity = info['entity']
-    print('merging entity for {} to torrentinfo table: {}'.format(
-        resource, info))
+    print('merging entity for {} to torrentinfo table'.format(resource))
     try:
         if info['etag'] is None:
             info['etag'] = table_client.insert_entity(
@@ -357,24 +354,26 @@ def _merge_torrentinfo(
                 break
             except azure.common.AzureConflictHttpError:
                 pass
-    print('entity for {} merged to torrentinfo table: {}'.format(
-        resource, _TORRENTS[resource]))
+    print('entity for {} merged to torrentinfo table'.format(resource))
 
 
-def _get_torrent_session_info(resource, th, session):
+def _get_torrent_info(resource, th):
     s = th.status()
     p = th.get_peer_info()
 
-    print(
-        '\r%s %.2f%% complete (down: %.1f kb/s up: %.1f kB/s peers: %d) %s' %
-        (resource, s.progress * 100, s.download_rate / 1000,
-         s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
+    print(('%s wanted: %d %.2f%% complete (down: %.1f kb/s up: %.1f kB/s '
+           'peers: %d) %s') %
+          (th.name(), s.total_wanted, s.progress * 100, s.download_rate / 1000,
+           s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
+    ss = _TORRENT_SESSION.status()
+    print(_TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes, ss.dht_nodes,
+          ss.dht_node_cache, ss.dht_torrents, ss.total_dht_upload,
+          ss.total_dht_download, ss.has_incoming_connections)
     for i in p:
         print(i.ip)
-    sys.stdout.flush()
 
 
-async def manage_torrent_sessions_async(
+async def manage_torrents_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
         ipaddress: str):
@@ -382,9 +381,8 @@ async def manage_torrent_sessions_async(
         # start applicable torrent sessions
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
-                _get_torrent_session_info(
-                    resource, _TORRENTS[resource]['handle'],
-                    _TORRENTS[resource]['session'])
+                _get_torrent_info(
+                    resource, _TORRENTS[resource]['handle'])
                 continue
             # start torrent session
             try:
@@ -396,15 +394,21 @@ async def manage_torrent_sessions_async(
             print(('creating torrent session for {} ipaddress={} '
                    'dht_nodes={} seed={}').format(
                        resource, ipaddress, dht_nodes, seed))
-            th, session = create_torrent_session(
-                _TORRENTS[resource]['torrent_file'], str(_TORRENT_DIR),
-                seed)
-            _TORRENTS[resource]['handle'] = th
-            _TORRENTS[resource]['session'] = session
-            print('created torrent session for {} is_seed={}'.format(
-                resource, th.is_seed()))
+            image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+            parent = pathlib.Path((_TORRENT_DIR / image).parent)
+            print('creating torrent download directory: {}'.format(parent))
+            parent.mkdir(parents=True, exist_ok=True)
+            _TORRENTS[resource]['handle'] = create_torrent_session(
+                resource, parent, seed)
+            del parent
+            del image
+            # add nodes to DHT
+            for node in dht_nodes:
+                if ipaddress == node:
+                    continue
+                add_dht_node(node, _DEFAULT_PORT_BEGIN)
             # if we're seeding add self to dht_nodes
-            if th.is_seed():
+            if _TORRENTS[resource]['handle'].is_seed():
                 if ipaddress not in dht_nodes:
                     # add to torrentinfo table
                     dht_nodes.append(ipaddress)
@@ -412,8 +416,10 @@ async def manage_torrent_sessions_async(
                     entity['DHTNodes'] = ','.join(dht_nodes)
                     _merge_torrentinfo(table_client, resource)
                     # TODO register to services table
+                # TODO docker load image
             # mark torrent as started
-            _TORRENTS[resource]['started'] = True
+            if not _TORRENTS[resource]['started']:
+                _TORRENTS[resource]['started'] = True
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
 
@@ -426,11 +432,12 @@ async def download_monitor_async(
         ipaddress: str):
     # begin async manage torrent sessions
     asyncio.ensure_future(
-        manage_torrent_sessions_async(loop, table_client, ipaddress))
+        manage_torrents_async(loop, table_client, ipaddress))
     while True:
         # check if there are any direct downloads
-        await _direct_download_resources_async(
-            loop, blob_client, queue_client, table_client, ipaddress)
+        if len(_DIRECTDL) > 0:
+            await _direct_download_resources_async(
+                loop, blob_client, queue_client, table_client, ipaddress)
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
 
@@ -468,6 +475,7 @@ def _check_resource_has_torrent(
             'started': False,
             'seed': False,
         }
+        print('found torrent for resource {}'.format(resource))
     return True
 
 
@@ -484,6 +492,15 @@ def distribute_global_resources(
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
     """
+    # set torrent session port listen
+    print('creating torrent session on {}:{}'.format(
+        ipaddress, _DEFAULT_PORT_BEGIN))
+    _TORRENT_SESSION.listen_on(_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END)
+    _TORRENT_SESSION.stop_lsd()
+    _TORRENT_SESSION.stop_upnp()
+    _TORRENT_SESSION.stop_natpmp()
+    add_dht_node(None, ipaddress, _DEFAULT_PORT_BEGIN)
+    _TORRENT_SESSION.start_dht()
     # get globalresources from table
     try:
         entities = table_client.query_entities(
@@ -499,19 +516,40 @@ def distribute_global_resources(
         loop, blob_client, queue_client, table_client, ipaddress))
 
 
+async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
+    """Get IP address
+    :param asyncio.BaseEventLoop loop: event loop
+    :rtype: str
+    :return: ip address
+    """
+    if _ON_WINDOWS:
+        raise NotImplementedError()
+    else:
+        proc = await asyncio.subprocess.create_subprocess_shell(
+            'ip addr list eth0 | grep "inet " | cut -d\' \' -f6 | cut -d/ -f1',
+            stdout=asyncio.subprocess.PIPE, loop=loop)
+        output = await proc.communicate()
+        return output[0].decode('ascii').strip()
+
+
 def main():
     """Main function"""
     # get command-line args
     args = parseargs()
 
-    # for local testing
-    if args.ipaddress is None:
-        args.ipaddress = subprocess.check_output(
-            'ip addr list eth0 | grep "inet " | cut -d\' \' -f6 | cut -d/ -f1',
-            shell=True).decode('ascii').strip()
-
     # get event loop
-    loop = asyncio.get_event_loop()
+    if _ON_WINDOWS:
+        loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(loop)
+    else:
+        loop = asyncio.get_event_loop()
+    loop.set_debug(True)
+
+    # get ip address if not specified, for local testing only
+    if args.ipaddress is None:
+        args.ipaddress = loop.run_until_complete(_get_ipaddress_async(loop))
+
+    print('ip address: {}'.format(args.ipaddress))
 
     # set up container names
     _setup_container_names(args.prefix)
@@ -524,12 +562,17 @@ def main():
     _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
 
     # get registry list
-    global _REGISTRIES
-    with open('.cascade_private_registries.txt', 'r') as f:
-        _REGISTRIES = f.readlines()
+    global _REGISTRIES, _SELF_REGISTRY_PTR
+    _REGISTRIES = [line.rstrip('\n') for line in open(
+        '.cascade_private_registries.txt', 'r')]
     if len(_REGISTRIES) == 0:
         _REGISTRIES.append('registry.hub.docker.com')
-    print('docker registries: {}'.format(_REGISTRIES))
+    for i in range(0, len(_REGISTRIES)):
+        if _REGISTRIES[i].split(':')[0] == args.ipaddress:
+            _SELF_REGISTRY_PTR = i
+            break
+    print('docker registries: {} self={}'.format(
+        _REGISTRIES, _SELF_REGISTRY_PTR))
 
     # distribute global resources
     distribute_global_resources(
