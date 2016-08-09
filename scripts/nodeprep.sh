@@ -50,6 +50,13 @@ if [ -z $sku ]; then
     exit 1
 fi
 
+# store node prep start
+if command -v python3 > /dev/null 2>&1; then
+    npstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
+else
+    npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow()))'`
+fi
+
 # set python env vars
 LC_ALL=en_US.UTF-8
 #PYTHONIOENCODING=utf-8
@@ -97,13 +104,17 @@ if [ $offer == "ubuntuserver" ]; then
     fi
     $srvstart
     # install azure storage python dependency
-    if [ ! -z "$privatereg" ] || [ $p2p -eq 1 ]; then
-        pip3 install azure-storage
-    fi
+    pip3 install azure-storage
+    ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
     # install private registry if required
     if [ ! -z "$privatereg" ]; then
+        # mark private registry start
+        ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
         ./setup_private_registry.py $offer $sku $ipaddress $prefix $privatereg
-        if [ $? -ne 0 ]; then
+        rc=$?
+        ./perf.py privateregistry end $prefix
+        # mark private registry end
+        if [ $rc -ne 0 ]; then
             echo "docker private registry setup failed"
             exit 1
         fi
@@ -122,8 +133,12 @@ if [ ! -z $DOCKER_LOGIN_USERNAME ]; then
     docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
 fi
 
+# mark node prep finished
+./perf.py nodeprep end $prefix
+
 # enable p2p sharing
 if [ $p2p -eq 1 ]; then
     # start cascade
+    ./perf.py cascade start $prefix --message "ipaddress=$ipaddress"
     ./cascade.py $ipaddress $prefix > cascade.log &
 fi

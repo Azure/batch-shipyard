@@ -29,6 +29,7 @@ _STORAGE_CONTAINERS = {
     'table_torrentinfo': None,
     'table_services': None,
     'table_globalresources': None,
+    'table_perf': None,
     'queue_registry': None,
     'queue_globalresources': None,
 }
@@ -36,6 +37,7 @@ _REGISTRY_FILENAME = 'docker-registry-v2.tar.gz'
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
 _SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
+_PERF_FILE = ('perf.py', 'perf.py')
 _REGISTRY_FILE = (
     _REGISTRY_FILENAME, 'resources/{}'.format(_REGISTRY_FILENAME)
 )
@@ -64,6 +66,7 @@ def _populate_global_settings(config: dict):
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_services'] = sep + 'services'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
+    _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
         (sep + 'registry',
          config['global_settings']['credentials']['batch_account'].lower(),
@@ -217,7 +220,8 @@ def add_pool(
     # upload resource files
     sas_urls = upload_resource_files(
         blob_client, config, [
-            _NODEPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE, _REGISTRY_FILE
+            _NODEPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE, _PERF_FILE,
+            _REGISTRY_FILE
         ]
     )
     # create pool param
@@ -414,9 +418,17 @@ def _clear_table(table_client, table_name, config):
             config['addpool']['poolspec']['id'])
     )
     # batch delete entities
-    with table_client.batch(table_name) as bet:
-        for ent in ents:
-            bet.delete_entity(ent['PartitionKey'], ent['RowKey'])
+    i = 0
+    bet = azuretable.TableBatch()
+    for ent in ents:
+        bet.delete_entity(ent['PartitionKey'], ent['RowKey'])
+        i += 1
+        if i == 100:
+            table_client.commit_batch(table_name, bet)
+            bet = azuretable.TableBatch()
+            i = 0
+    if i > 0:
+        table_client.commit_batch(table_name, bet)
 
 
 def clear_storage_containers(blob_client, queue_client, table_client, config):

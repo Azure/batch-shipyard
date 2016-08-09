@@ -38,6 +38,7 @@ _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
 # mutable global state
 _CBHANDLES = {}
 _QUEUE_MESSAGES = {}
+_PREFIX = None
 _STORAGE_CONTAINERS = {
     'table_dht': None,
     'table_registry': None,
@@ -52,6 +53,7 @@ _TORRENTS = {}
 _DIRECTDL = {}
 _DHT_ROUTERS = []
 _LR_LOCK_ASYNC = asyncio.Lock()
+_GR_DONE = False
 
 
 def _setup_container_names(sep: str):
@@ -67,6 +69,8 @@ def _setup_container_names(sep: str):
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'globalresources', _BATCHACCOUNT.lower(), _POOLID.lower()))
+    global _PREFIX
+    _PREFIX = sep
 
 
 def _create_credentials() -> tuple:
@@ -195,6 +199,15 @@ def compute_sha1_for_file(file, blocksize=65536):
         return hasher.hexdigest()
 
 
+async def _record_perf_async(loop, event, message):
+    proc = await asyncio.subprocess.create_subprocess_shell(
+        'perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
+            ev=event, pr=_PREFIX, msg=message), loop=loop)
+    await proc.wait()
+    if proc.returncode != 0:
+        print('could not record perf to storage for event: {}'.format(event))
+
+
 async def _direct_download_resources_async(
         loop, blob_client, queue_client, table_client, ipaddress):
     # iterate through downloads to see if there are any torrents available
@@ -249,6 +262,7 @@ async def _direct_download_resources_async(
                  'no registries available').format(resource))
         image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
         registry = None
+        await _record_perf_async(loop, 'pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
         while True:
             # pick random registry to download from
@@ -279,7 +293,11 @@ async def _direct_download_resources_async(
         diff = (datetime.datetime.now() - start).total_seconds()
         print('took {} sec to pull docker image {} from {}'.format(
             diff, image, registry))
+        await _record_perf_async(loop, 'pull-end', 'img={},diff={}'.format(
+            image, diff))
         # save docker image to seed to torrent
+        await _record_perf_async(loop, 'save-start', 'img={}'.format(
+            image))
         start = datetime.datetime.now()
         file = _TORRENT_DIR / '{}.tar.gz'.format(image)
         print('creating path to store torrent: {}'.format(file.parent))
@@ -297,6 +315,8 @@ async def _direct_download_resources_async(
         diff = (datetime.datetime.now() - start).total_seconds()
         print('took {} sec to save docker image {} to {}'.format(
             diff, image, file.parent))
+        await _record_perf_async(loop, 'save-end', 'img={},diff={}'.format(
+            image, diff))
     else:
         # TODO download via blob, explode uri to get container/blob
         # use download to path into /tmp and move to _TORRENT_DIR
@@ -441,18 +461,22 @@ def bootstrap_dht_nodes(
 
 async def _load_and_register_async(
         loop: asyncio.BaseEventLoop,
-        table_client: azure.storage.table.TableService):
+        table_client: azure.storage.table.TableService,
+        nglobalresources: int):
     global _LR_LOCK_ASYNC
     async with _LR_LOCK_ASYNC:
+        nfinished = 0
         for resource in _TORRENTS:
             # if torrent is seeding, load into docker registry and register
             if _TORRENTS[resource]['started']:
                 if _TORRENTS[resource]['handle'].is_seed():
                     # docker load image
                     if not _TORRENTS[resource]['loaded']:
-                        start = datetime.datetime.now()
                         image = resource[
                             resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+                        await _record_perf_async(
+                            loop, 'load-start', 'img={}'.format(image))
+                        start = datetime.datetime.now()
                         file = _TORRENT_DIR / '{}.tar.gz'.format(image)
                         print('loading docker image {} from {}'.format(
                             image, file))
@@ -470,21 +494,34 @@ async def _load_and_register_async(
                                 start).total_seconds()
                         print(('took {} sec to load docker image '
                                'from {}').format(diff, file))
+                        await _record_perf_async(
+                            loop, 'load-end', 'img={},diff={}'.format(
+                                image, diff))
                     # register to services table
                     if not _TORRENTS[resource]['registered']:
                         _merge_service(table_client, resource)
                         _TORRENTS[resource]['registered'] = True
+                    else:
+                        nfinished += 1
+        if not _GR_DONE and nfinished == nglobalresources:
+            await _record_perf_async(
+                loop, 'gr-done',
+                'nglobalresources={}'.format(nglobalresources))
+            global _GR_DONE
+            _GR_DONE = True
 
 
 async def manage_torrents_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
-        ipaddress: str):
+        ipaddress: str,
+        nglobalresources: int):
     global _LR_LOCK_ASYNC
     while True:
         # async schedule load and register
         if not _LR_LOCK_ASYNC.locked():
-            asyncio.ensure_future(_load_and_register_async(loop, table_client))
+            asyncio.ensure_future(_load_and_register_async(
+                loop, table_client, nglobalresources))
         # start applicable torrent sessions
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
@@ -500,6 +537,8 @@ async def manage_torrents_async(
             parent.mkdir(parents=True, exist_ok=True)
             _TORRENTS[resource]['handle'] = create_torrent_session(
                 resource, parent, seed)
+            await _record_perf_async(loop, 'torrent-start', 'img={}'.format(
+                image))
             del image
             # insert torrent into torrentinfo table
             try:
@@ -520,10 +559,11 @@ async def download_monitor_async(
         blob_client: azure.storage.blob.BlockBlobService,
         queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
-        ipaddress: str):
+        ipaddress: str,
+        nglobalresources: int):
     # begin async manage torrent sessions
     asyncio.ensure_future(
-        manage_torrents_async(loop, table_client, ipaddress))
+        manage_torrents_async(loop, table_client, ipaddress, nglobalresources))
     while True:
         # check if there are any direct downloads
         if len(_DIRECTDL) > 0:
@@ -595,13 +635,17 @@ def distribute_global_resources(
             _STORAGE_CONTAINERS['table_globalresources'],
             filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
     except azure.common.AzureMissingResourceHttpError:
-        entities = []
+        entities = None
+    nentities = 0
     # check torrent info table for resource
-    for ent in entities:
-        _check_resource_has_torrent(loop, table_client, ent['Resource'], True)
+    if entities is not None:
+        for ent in entities:
+            nentities += 1
+            _check_resource_has_torrent(
+                loop, table_client, ent['Resource'], True)
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
-        loop, blob_client, queue_client, table_client, ipaddress))
+        loop, blob_client, queue_client, table_client, ipaddress, nentities))
 
 
 async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
