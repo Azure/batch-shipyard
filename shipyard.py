@@ -24,9 +24,10 @@ _STORAGEACCOUNTKEY = os.getenv('STORAGEACCOUNTKEY')
 _BATCHACCOUNTKEY = os.getenv('BATCHACCOUNTKEY')
 _STORAGE_CONTAINERS = {
     'blob_resourcefiles': None,
+    'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
-    'table_service': None,
+    'table_services': None,
     'table_globalresources': None,
     'queue_registry': None,
     'queue_globalresources': None,
@@ -58,12 +59,19 @@ def _populate_global_settings(config: dict):
     if sep is None:
         sep = ''
     _STORAGE_CONTAINERS['blob_resourcefiles'] = sep + 'resourcefiles'
+    _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_services'] = sep + 'services'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
-    _STORAGE_CONTAINERS['queue_registry'] = sep + 'registry'
-    _STORAGE_CONTAINERS['queue_globalresources'] = sep + 'globalresources'
+    _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
+        (sep + 'registry',
+         config['global_settings']['credentials']['batch_account'].lower(),
+         config['addpool']['poolspec']['id'].lower()))
+    _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
+        (sep + 'globalresources',
+         config['global_settings']['credentials']['batch_account'].lower(),
+         config['addpool']['poolspec']['id'].lower()))
 
 
 def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
@@ -222,8 +230,8 @@ def add_pool(
         target_dedicated=config['addpool']['poolspec']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
-            command_line='nodeprep.sh -o {} -s {}{}{}{}'.format(
-                offer, sku,
+            command_line='{} -o {} -s {}{}{}{}'.format(
+                _NODEPREP_FILE[0], offer, sku,
                 ' -p {}'.format(prefix) if prefix else '',
                 ' -r {}'.format(pcont) if preg else '',
                 ' -t' if p2p else ''
@@ -290,16 +298,19 @@ def add_pool(
         pool = batch_client.pool.get(pool.id)
         if pool.resize_error is not None:
             raise RuntimeError(
-                'resize error encountered for pool {}: {!r}'.format(
-                    pool.id, pool.resize_error))
+                'resize error encountered for pool {}: code={} msg={}'.format(
+                    pool.id, pool.resize_error.code,
+                    pool.resize_error.message))
         nodes = list(batch_client.compute_node.list(pool.id))
         if (len(nodes) >= pool.target_dedicated and
                 all(node.state in node_state for node in nodes)):
             break
         i += 1
         if i % 3 == 0:
-            print('waiting for {} nodes to reach desired state...'.format(
+            print('waiting for {} nodes to reach desired state:'.format(
                 pool.target_dedicated))
+            for node in nodes:
+                print(' > {}: {}'.format(node.id, node.state))
         time.sleep(10)
     get_remote_login_settings(batch_client, pool.id, nodes)
     if any(node.state != batchmodels.ComputeNodeState.idle for node in nodes):
@@ -309,13 +320,12 @@ def add_pool(
 
 def resize_pool(batch_client, pool_id, vm_count):
     print('Resizing pool {} to {}'.format(pool_id, vm_count))
-    prp = batchmodels.PoolResizeParameter(
-        target_dedicated=vm_count,
-        resize_timeout=datetime.timedelta(minutes=20),
-    )
     batch_client.pool.resize(
         pool_id=pool_id,
-        pool_resize_parameter=prp,
+        pool_resize_parameter=batchmodels.PoolResizeParameter(
+            target_dedicated=vm_count,
+            resize_timeout=datetime.timedelta(minutes=20),
+        )
     )
 
 
@@ -325,7 +335,6 @@ def del_pool(batch_client, pool_id):
 
 
 def add_job(batch_client, pool_id, job_id, numtasks):
-    # add job
     job = batchmodels.JobAddParameter(
         id=job_id,
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
@@ -381,13 +390,13 @@ def get_remote_login_settings(batch_client, pool_id, nodes=None):
 
 
 def delete_storage_containers(blob_client, queue_client, table_client, config):
-    blob_client.delete_container(_STORAGE_CONTAINERS['blob_resourcefiles'])
-    table_client.delete_table(_STORAGE_CONTAINERS['table_registry'])
-    table_client.delete_table(_STORAGE_CONTAINERS['table_torrentinfo'])
-    table_client.delete_table(_STORAGE_CONTAINERS['table_services'])
-    table_client.delete_table(_STORAGE_CONTAINERS['table_globalresources'])
-    queue_client.delete_queue(_STORAGE_CONTAINERS['queue_registry'])
-    queue_client.delete_queue(_STORAGE_CONTAINERS['queue_globalresources'])
+    for key in _STORAGE_CONTAINERS:
+        if key.startswith('blob_'):
+            blob_client.delete_container(_STORAGE_CONTAINERS[key])
+        elif key.startswith('table_'):
+            table_client.delete_table(_STORAGE_CONTAINERS[key])
+        elif key.startswith('queue_'):
+            queue_client.delete_queue(_STORAGE_CONTAINERS[key])
 
 
 def _clear_blobs(blob_client, container):
@@ -397,35 +406,42 @@ def _clear_blobs(blob_client, container):
         blob_client.delete_blob(container, blob.name)
 
 
-def _clear_table(table_client, table_name):
+def _clear_table(table_client, table_name, config):
     print('clearing table: {}'.format(table_name))
-    ents = table_client.query_entities(table_name)
-    for ent in ents:
-        table_client.delete_entity(
-            table_name, ent['PartitionKey'], ent['RowKey'])
+    ents = table_client.query_entities(
+        table_name, filter='PartitionKey eq \'{}${}\''.format(
+            config['global_settings']['credentials']['batch_account'],
+            config['addpool']['poolspec']['id'])
+    )
+    # batch delete entities
+    with table_client.batch(table_name) as bet:
+        for ent in ents:
+            bet.delete_entity(ent['PartitionKey'], ent['RowKey'])
 
 
 def clear_storage_containers(blob_client, queue_client, table_client, config):
-    # _clear_blobs(blob_client, _STORAGE_CONTAINERS['blob_resourcefiles'])
-    _clear_table(table_client, _STORAGE_CONTAINERS['table_registry'])
-    _clear_table(table_client, _STORAGE_CONTAINERS['table_torrentinfo'])
-    _clear_table(table_client, _STORAGE_CONTAINERS['table_services'])
-    _clear_table(table_client, _STORAGE_CONTAINERS['table_globalresources'])
-    print('clearing queue: {}'.format(_STORAGE_CONTAINERS['queue_registry']))
-    queue_client.clear_messages(_STORAGE_CONTAINERS['queue_registry'])
-    print('clearing queue: {}'.format(
-        _STORAGE_CONTAINERS['queue_globalresources']))
-    queue_client.clear_messages(_STORAGE_CONTAINERS['queue_globalresources'])
+    for key in _STORAGE_CONTAINERS:
+        if key.startswith('blob_'):
+            # clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
+            pass
+        elif key.startswith('table_'):
+            _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
+        elif key.startswith('queue_'):
+            print('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
+            queue_client.clear_messages(_STORAGE_CONTAINERS[key])
 
 
 def create_storage_containers(blob_client, queue_client, table_client, config):
-    blob_client.create_container(_STORAGE_CONTAINERS['blob_resourcefiles'])
-    table_client.create_table(_STORAGE_CONTAINERS['table_registry'])
-    table_client.create_table(_STORAGE_CONTAINERS['table_torrentinfo'])
-    table_client.create_table(_STORAGE_CONTAINERS['table_services'])
-    table_client.create_table(_STORAGE_CONTAINERS['table_globalresources'])
-    queue_client.create_queue(_STORAGE_CONTAINERS['queue_registry'])
-    queue_client.create_queue(_STORAGE_CONTAINERS['queue_globalresources'])
+    for key in _STORAGE_CONTAINERS:
+        if key.startswith('blob_'):
+            print('creating container: {}'.format(_STORAGE_CONTAINERS[key]))
+            blob_client.create_container(_STORAGE_CONTAINERS[key])
+        elif key.startswith('table_'):
+            print('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
+            table_client.create_table(_STORAGE_CONTAINERS[key])
+        elif key.startswith('queue_'):
+            print('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
+            queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
 def populate_queues(queue_client, table_client, config):
@@ -486,6 +502,8 @@ def main():
 
     if args.action == 'addpool':
         create_storage_containers(
+            blob_client, queue_client, table_client, config)
+        clear_storage_containers(
             blob_client, queue_client, table_client, config)
         populate_queues(queue_client, table_client, config)
         add_pool(batch_client, blob_client, config)

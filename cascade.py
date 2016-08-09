@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import base64
+import datetime
 import hashlib
 import os
 import pathlib
@@ -30,6 +31,7 @@ _STORAGEACCOUNT = os.environ['CASCADE_SA']
 _STORAGEACCOUNTKEY = os.environ['CASCADE_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
 _POOLID = os.environ['AZ_BATCH_POOL_ID']
+_NODEID = os.environ['AZ_BATCH_NODE_ID']
 _SHARED_DIR = os.environ['AZ_BATCH_NODE_SHARED_DIR']
 _TORRENT_DIR = pathlib.Path(_SHARED_DIR, '.torrents')
 _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
@@ -37,9 +39,10 @@ _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
 _CBHANDLES = {}
 _QUEUE_MESSAGES = {}
 _STORAGE_CONTAINERS = {
+    'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
-    'table_service': None,
+    'table_services': None,
     'table_globalresources': None,
     'queue_globalresources': None,
 }
@@ -47,6 +50,8 @@ _SELF_REGISTRY_PTR = None
 _REGISTRIES = {}
 _TORRENTS = {}
 _DIRECTDL = {}
+_DHT_ROUTERS = []
+_LR_LOCK_ASYNC = asyncio.Lock()
 
 
 def _setup_container_names(sep: str):
@@ -55,11 +60,13 @@ def _setup_container_names(sep: str):
     """
     if sep is None:
         sep = ''
+    _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_services'] = sep + 'services'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
-    _STORAGE_CONTAINERS['queue_globalresources'] = sep + 'globalresources'
+    _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
+        (sep + 'globalresources', _BATCHACCOUNT.lower(), _POOLID.lower()))
 
 
 def _create_credentials() -> tuple:
@@ -131,8 +138,10 @@ def add_dht_node(ip: str, port: int):
     :param str ip: ip address of the dht node
     :param int port: port of the dht node
     """
-    _TORRENT_SESSION.add_dht_router(ip, port)
-    print('added {}:{} as dht router'.format(ip, port))
+    if ip not in _DHT_ROUTERS:
+        _TORRENT_SESSION.add_dht_router(ip, port)
+        print('added {}:{} as dht router'.format(ip, port))
+        _DHT_ROUTERS.append(ip)
 
 
 def _renew_queue_message_lease(
@@ -153,7 +162,9 @@ def _renew_queue_message_lease(
         pop_receipt=_QUEUE_MESSAGES[msg_id].pop_receipt,
         visibility_timeout=45)
     if msg.pop_receipt is None:
-        raise RuntimeError('update message failed')
+        raise RuntimeError(
+            'update message failed for id={} pr={}'.format(
+                msg_id, _QUEUE_MESSAGES[msg_id].pop_receipt))
     _QUEUE_MESSAGES[msg_id].pop_receipt = msg.pop_receipt
     print('queue message updated id={} pr={}'.format(
         msg_id, _QUEUE_MESSAGES[msg_id].pop_receipt))
@@ -187,9 +198,12 @@ def compute_sha1_for_file(file, blocksize=65536):
 async def _direct_download_resources_async(
         loop, blob_client, queue_client, table_client, ipaddress):
     # iterate through downloads to see if there are any torrents available
+    rmdl = []
     for dl in _DIRECTDL:
-        exists = _check_resource_has_torrent(loop, table_client, dl, False)
-        if exists:
+        if _check_resource_has_torrent(loop, table_client, dl, False):
+            rmdl.append(dl)
+    if len(rmdl) > 0:
+        for dl in rmdl:
             _DIRECTDL.pop(dl, None)
     if len(_DIRECTDL) == 0:
         return
@@ -235,6 +249,7 @@ async def _direct_download_resources_async(
                  'no registries available').format(resource))
         image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
         registry = None
+        start = datetime.datetime.now()
         while True:
             # pick random registry to download from
             registry = _REGISTRIES[_pick_random_registry_key()]
@@ -242,11 +257,9 @@ async def _direct_download_resources_async(
             if registry == 'registry.hub.docker.com':
                 proc = await asyncio.subprocess.create_subprocess_shell(
                     'docker pull {}'.format(image), loop=loop)
-                registry = ''
             else:
                 proc = await asyncio.subprocess.create_subprocess_shell(
                     'docker pull {}/{}'.format(registry, image), loop=loop)
-                registry = '{}/'.format(registry)
             await proc.wait()
             if proc.returncode == 0:
                 break
@@ -254,30 +267,49 @@ async def _direct_download_resources_async(
                 print('docker pull non-zero rc: {}'.format(
                     proc.returncode))
                 await asyncio.sleep(1)
+        # tag image to remove registry ip
+        if registry != 'registry.hub.docker.com':
+            proc = await asyncio.subprocess.create_subprocess_shell(
+                'docker tag {}/{} {}'.format(registry, image, image),
+                loop=loop)
+            await proc.wait()
+            if proc.returncode != 0:
+                raise RuntimeError('docker tag non-zero rc: {}'.format(
+                    proc.returncode))
+        diff = (datetime.datetime.now() - start).total_seconds()
+        print('took {} sec to pull docker image {} from {}'.format(
+            diff, image, registry))
         # save docker image to seed to torrent
+        start = datetime.datetime.now()
         file = _TORRENT_DIR / '{}.tar.gz'.format(image)
-        parent = pathlib.Path(file.parent)
-        print('creating path to store torrent: {}'.format(parent))
-        parent.mkdir(parents=True, exist_ok=True)
-        del parent
+        print('creating path to store torrent: {}'.format(file.parent))
+        file.parent.mkdir(parents=True, exist_ok=True)
         print('saving docker image {} to {} for seeding'.format(
             image, file))
         proc = await asyncio.subprocess.create_subprocess_shell(
-            'docker save {}{} | gzip -c > {}'.format(
-                registry, image, file), loop=loop)
+            'docker save {} | gzip -c > {}'.format(image, file), loop=loop)
         await proc.wait()
         if proc.returncode != 0:
             raise RuntimeError('docker save non-zero rc: {}'.format(
                 proc.returncode))
+        else:
+            print('docker image {} saved for seeding'.format(image))
+        diff = (datetime.datetime.now() - start).total_seconds()
+        print('took {} sec to save docker image {} to {}'.format(
+            diff, image, file.parent))
     else:
         # TODO download via blob, explode uri to get container/blob
         # use download to path into /tmp and move to _TORRENT_DIR
         raise NotImplementedError()
     # generate torrent file
-    torrent_file, torrent_b64, torrent_sha1 = generate_torrent(str(file))
-    print('torrent file generated: {}'.format(torrent_file))
+    start = datetime.datetime.now()
+    future = loop.run_in_executor(None, generate_torrent, str(file))
+    torrent_file, torrent_b64, torrent_sha1 = await future
+    diff = (datetime.datetime.now() - start).total_seconds()
+    print('took {} sec to generate torrent file: {}'.format(
+        diff, torrent_file))
+    start = datetime.datetime.now()
     # add to torrent dict (effectively enqueues for torrent start)
-    # do not add ipaddress to DHTNodes (will be added on seed+merge)
     entity = {
         'PartitionKey': _PARTITION_KEY,
         'RowKey': hashlib.sha1(resource.encode('utf8')).hexdigest(),
@@ -289,15 +321,18 @@ async def _direct_download_resources_async(
     }
     _TORRENTS[resource] = {
         'entity': entity,
-        'etag': None,
         'torrent_file': torrent_file,
         'started': False,
         'seed': True,
+        'loaded': True,
+        'registered': False,
     }
     # wait until torrent has started
     print('waiting for torrent {} to start'.format(resource))
     while not _TORRENTS[resource]['started']:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.1)
+    diff = (datetime.datetime.now() - start).total_seconds()
+    print('took {} sec for {} torrent to start'.format(diff, resource))
     # cancel callback
     _CBHANDLES['queue_globalresources'].cancel()
     _CBHANDLES.pop('queue_globalresources')
@@ -308,115 +343,171 @@ async def _direct_download_resources_async(
         pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
         visibility_timeout=0)
     _QUEUE_MESSAGES.pop(msg.id)
-    print('torrent started, queue message released for {}'.format(
-        resource))
+    print('queue message released for {}'.format(resource))
     # remove resources from download list
     _DIRECTDL.pop(resource)
 
 
-def _merge_torrentinfo(
+def _merge_service(
         table_client: azure.storage.table.TableService,
         resource: str):
-    """Merge info into torrentinfo table
+    """Merge entity to services table
     :param azure.storage.table.TableService table_client: table client
-    :param str resource: torrent dict key
+    :param str resource: resource to add to services table
     """
-    info = _TORRENTS[resource]
-    entity = info['entity']
-    print('merging entity for {} to torrentinfo table'.format(resource))
+    rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
+    entity = {
+        'PartitionKey': _PARTITION_KEY,
+        'RowKey': rk,
+        'Resource': resource,
+        'VmList': _NODEID,
+    }
+    print('merging entity {} to services table'.format(entity))
     try:
-        if info['etag'] is None:
-            info['etag'] = table_client.insert_entity(
-                _STORAGE_CONTAINERS['table_torrentinfo'],
-                entity=entity)
+        table_client.insert_entity(
+            _STORAGE_CONTAINERS['table_services'], entity=entity)
     except azure.common.AzureConflictHttpError:
         while True:
             existing = table_client.get_entity(
-                _STORAGE_CONTAINERS['table_torrentinfo'],
+                _STORAGE_CONTAINERS['table_services'],
                 entity['PartitionKey'], entity['RowKey'])
-            # ensure we're talking about the same file
-            if existing['TorrentFileSHA1'] != entity['TorrentFileSHA1']:
-                raise RuntimeError(
-                    ('torrent file SHA1 mismatch. '
-                     'existing: {} entity: {})'.format(existing, entity)))
-            # merge dht_node into existing
-            edht = set(existing['DHTNodes'].split(','))
-            ndht = set(entity['DHTNodes'].split(','))
-            edht.update(ndht)
-            existing['DHTNodes'] = ','.join(list(edht))
+            # merge VmList into existing
+            evms = set(existing['VmList'].split(','))
+            nvms = set(entity['VmList'].split(','))
+            evms.update(nvms)
+            existing['VmList'] = ','.join(list(evms))
             etag = existing['etag']
             existing.pop('etag')
             try:
-                info['etag'] = table_client.merge_entity(
-                    _STORAGE_CONTAINERS['table_torrentinfo'], entity=existing,
+                table_client.merge_entity(
+                    _STORAGE_CONTAINERS['table_services'], entity=existing,
                     if_match=etag)
-                _TORRENTS[resource] = existing
+                entity = existing
                 break
             except azure.common.AzureConflictHttpError:
                 pass
-    print('entity for {} merged to torrentinfo table'.format(resource))
+    print('entity {} merged to services table'.format(entity))
 
 
 def _get_torrent_info(resource, th):
     s = th.status()
-    p = th.get_peer_info()
-
-    print(('%s wanted: %d %.2f%% complete (down: %.1f kb/s up: %.1f kB/s '
+    print(('%s wanted: %d %.2f%% complete (down: %.1f kB/s up: %.1f kB/s '
            'peers: %d) %s') %
           (th.name(), s.total_wanted, s.progress * 100, s.download_rate / 1000,
            s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
-    ss = _TORRENT_SESSION.status()
-    print(_TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes, ss.dht_nodes,
-          ss.dht_node_cache, ss.dht_torrents, ss.total_dht_upload,
-          ss.total_dht_download, ss.has_incoming_connections)
-    for i in p:
-        print(i.ip)
+#     ss = _TORRENT_SESSION.status()
+#     print(_TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes,
+#           ss.dht_nodes, ss.dht_node_cache, ss.dht_torrents,
+#           ss.total_dht_upload, ss.total_dht_download,
+#           ss.has_incoming_connections)
+#     p = th.get_peer_info()
+#     for i in p:
+#         print(i.ip)
+
+
+def bootstrap_dht_nodes(
+        loop: asyncio.BaseEventLoop,
+        table_client: azure.storage.table.TableService,
+        ipaddress: str):
+    found_self = False
+    dht_nodes = []
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_dht'],
+            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    else:
+        for entity in entities:
+            dht_nodes.append((entity['RowKey'], entity['Port']))
+            if entity['RowKey'] == ipaddress:
+                found_self = True
+    if not found_self and len(dht_nodes) < 3:
+        entity = {
+            'PartitionKey': _PARTITION_KEY,
+            'RowKey': ipaddress,
+            'Port': _DEFAULT_PORT_BEGIN,
+        }
+        table_client.insert_entity(_STORAGE_CONTAINERS['table_dht'], entity)
+        dht_nodes.insert(0, (ipaddress, _DEFAULT_PORT_BEGIN))
+    for node in dht_nodes:
+        if len(_DHT_ROUTERS) >= 3:
+            break
+        add_dht_node(node[0], node[1])
+    # TODO handle if pool has less than 3 nodes total
+    if len(dht_nodes) < 3:
+        loop.call_later(1, bootstrap_dht_nodes, loop, table_client, ipaddress)
+
+
+async def _load_and_register_async(
+        loop: asyncio.BaseEventLoop,
+        table_client: azure.storage.table.TableService):
+    global _LR_LOCK_ASYNC
+    async with _LR_LOCK_ASYNC:
+        for resource in _TORRENTS:
+            # if torrent is seeding, load into docker registry and register
+            if _TORRENTS[resource]['started']:
+                if _TORRENTS[resource]['handle'].is_seed():
+                    # docker load image
+                    if not _TORRENTS[resource]['loaded']:
+                        start = datetime.datetime.now()
+                        image = resource[
+                            resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+                        file = _TORRENT_DIR / '{}.tar.gz'.format(image)
+                        print('loading docker image {} from {}'.format(
+                            image, file))
+                        proc = await \
+                            asyncio.subprocess.create_subprocess_shell(
+                                'gunzip -c {} | docker load'.format(file),
+                                loop=loop)
+                        await proc.wait()
+                        if proc.returncode != 0:
+                            raise RuntimeError(
+                                'docker load non-zero rc: {}'.format(
+                                    proc.returncode))
+                        _TORRENTS[resource]['loaded'] = True
+                        diff = (datetime.datetime.now() -
+                                start).total_seconds()
+                        print(('took {} sec to load docker image '
+                               'from {}').format(diff, file))
+                    # register to services table
+                    if not _TORRENTS[resource]['registered']:
+                        _merge_service(table_client, resource)
+                        _TORRENTS[resource]['registered'] = True
 
 
 async def manage_torrents_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
         ipaddress: str):
+    global _LR_LOCK_ASYNC
     while True:
+        # async schedule load and register
+        if not _LR_LOCK_ASYNC.locked():
+            asyncio.ensure_future(_load_and_register_async(loop, table_client))
         # start applicable torrent sessions
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
-                _get_torrent_info(
-                    resource, _TORRENTS[resource]['handle'])
+                # print out torrent info
+                _get_torrent_info(resource, _TORRENTS[resource]['handle'])
                 continue
-            # start torrent session
-            try:
-                dht_nodes = _TORRENTS[
-                    resource]['entity']['DHTNodes'].split(',')
-            except KeyError:
-                dht_nodes = []
             seed = _TORRENTS[resource]['seed']
             print(('creating torrent session for {} ipaddress={} '
-                   'dht_nodes={} seed={}').format(
-                       resource, ipaddress, dht_nodes, seed))
+                   'seed={}').format(resource, ipaddress, seed))
             image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-            parent = pathlib.Path((_TORRENT_DIR / image).parent)
+            parent = (_TORRENT_DIR / image).parent
             print('creating torrent download directory: {}'.format(parent))
             parent.mkdir(parents=True, exist_ok=True)
             _TORRENTS[resource]['handle'] = create_torrent_session(
                 resource, parent, seed)
-            del parent
             del image
-            # add nodes to DHT
-            for node in dht_nodes:
-                if ipaddress == node:
-                    continue
-                add_dht_node(node, _DEFAULT_PORT_BEGIN)
-            # if we're seeding add self to dht_nodes
-            if _TORRENTS[resource]['handle'].is_seed():
-                if ipaddress not in dht_nodes:
-                    # add to torrentinfo table
-                    dht_nodes.append(ipaddress)
-                    entity = _TORRENTS[resource]['entity']
-                    entity['DHTNodes'] = ','.join(dht_nodes)
-                    _merge_torrentinfo(table_client, resource)
-                    # TODO register to services table
-                # TODO docker load image
+            # insert torrent into torrentinfo table
+            try:
+                table_client.insert_entity(
+                    _STORAGE_CONTAINERS['table_torrentinfo'],
+                    entity=_TORRENTS[resource]['entity'])
+            except azure.common.AzureConflictHttpError:
+                pass
             # mark torrent as started
             if not _TORRENTS[resource]['started']:
                 _TORRENTS[resource]['started'] = True
@@ -463,17 +554,13 @@ def _check_resource_has_torrent(
             entity['TorrentFileSHA1'])
         with open(str(torrent_file), 'wb') as f:
             f.write(torrent)
-        try:
-            etag = entity['etag']
-            entity.pop('etag')
-        except KeyError:
-            etag = None
         _TORRENTS[resource] = {
             'entity': entity,
-            'etag': etag,
             'torrent_file': torrent_file,
             'started': False,
             'seed': False,
+            'loaded': False,
+            'registered': False,
         }
         print('found torrent for resource {}'.format(resource))
     return True
@@ -499,7 +586,8 @@ def distribute_global_resources(
     _TORRENT_SESSION.stop_lsd()
     _TORRENT_SESSION.stop_upnp()
     _TORRENT_SESSION.stop_natpmp()
-    add_dht_node(None, ipaddress, _DEFAULT_PORT_BEGIN)
+    # bootstrap dht nodes
+    bootstrap_dht_nodes(loop, table_client, ipaddress)
     _TORRENT_SESSION.start_dht()
     # get globalresources from table
     try:

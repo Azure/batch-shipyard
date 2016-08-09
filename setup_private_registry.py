@@ -38,7 +38,8 @@ def _setup_container_names(sep: str):
     if sep is None:
         sep = ''
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
-    _STORAGE_CONTAINERS['queue_registry'] = sep + 'registry'
+    _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
+        (sep + 'registry', _BATCHACCOUNT.lower(), _POOLID.lower()))
 
 
 def _create_credentials() -> tuple:
