@@ -14,8 +14,6 @@ import azure.storage.table as azuretable
 
 # global defines
 _DEFAULT_PRIVATE_REGISTRY_PORT = 5000
-_REGISTRY_ARCHIVE = 'docker-registry-v2.tar.gz'
-_REGISTRY_IMAGE_ID = '8ff6a4aae657'
 _STORAGEACCOUNT = os.environ['PRIVATE_REGISTRY_SA']
 _STORAGEACCOUNTKEY = os.environ['PRIVATE_REGISTRY_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
@@ -86,10 +84,13 @@ def _renew_queue_message_lease(
 
 
 async def _start_private_registry_instance_async(
-        loop: asyncio.BaseEventLoop, container: str):
+        loop: asyncio.BaseEventLoop, container: str,
+        registry_archive: str, registry_image_id: str):
     """Start private docker registry instance
     :param asyncio.BaseEventLoop loop: event loop
     :param str container: storage container holding registry info
+    :param str registry_archive: registry archive file
+    :param str registry_image_id: registry image id
     """
     proc = await asyncio.subprocess.create_subprocess_shell(
         'docker images | grep -E \'^registry.*2\' | awk -e \'{print $3}\'',
@@ -98,13 +99,12 @@ async def _start_private_registry_instance_async(
     if proc.returncode != 0:
         raise RuntimeError('docker images non-zero rc: {}'.format(
             proc.returncode))
-    if (stdout[0].strip() != _REGISTRY_IMAGE_ID and
-            pathlib.Path(_REGISTRY_ARCHIVE).exists()):
+    if (stdout[0].strip() != registry_image_id and
+            pathlib.Path(registry_archive).exists()):
         print('importing registry from local file: {}'.format(
-            _REGISTRY_ARCHIVE))
+            registry_archive))
         proc = await asyncio.subprocess.create_subprocess_shell(
-            'gunzip -c {} | docker load'.format(
-                _REGISTRY_ARCHIVE), loop=loop)
+            'gunzip -c {} | docker load'.format(registry_archive), loop=loop)
         await proc.wait()
         if proc.returncode != 0:
             raise RuntimeError('docker load non-zero rc: {}'.format(
@@ -135,20 +135,24 @@ async def setup_private_registry_async(
         loop: asyncio.BaseEventLoop,
         queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
-        ipaddress: str, container: str):
+        ipaddress: str, container: str,
+        registry_archive: str, registry_image_id: str):
     """Set up a docker private registry if a ticket exists
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
     :param str container: container holding registry
+    :param str registry_archive: registry archive file
+    :param str registry_image_id: registry image id
     """
     # first check if we've registered before
     try:
         entity = table_client.get_entity(
             _STORAGE_CONTAINERS['table_registry'], _PARTITION_KEY, ipaddress)
         print('private registry row already exists: {}'.format(entity))
-        await _start_private_registry_instance_async(loop, container)
+        await _start_private_registry_instance_async(
+            loop, container, registry_archive, registry_image_id)
         return
     except azure.common.AzureMissingResourceHttpError:
         pass
@@ -179,7 +183,8 @@ async def setup_private_registry_async(
                 15, _renew_queue_message_lease, loop, queue_client,
                 'queue_registry', msg.id)
             # install docker registy container
-            await _start_private_registry_instance_async(loop, container)
+            await _start_private_registry_instance_async(
+                loop, container, registry_archive, registry_image_id)
             entity = {
                 'PartitionKey': _PARTITION_KEY,
                 'RowKey': ipaddress,
@@ -292,7 +297,8 @@ def main():
 
     # set up private registry
     loop.run_until_complete(setup_private_registry_async(
-        loop, queue_client, table_client, args.ipaddress, args.container))
+        loop, queue_client, table_client, args.ipaddress, args.container,
+        args.regarchive, args.regimageid))
 
     # get private registries
     registries = get_private_registries(table_client)
@@ -325,10 +331,13 @@ def parseargs():
     parser.add_argument(
         'ipaddress', nargs='?', default=None, help='ip address')
     parser.add_argument(
+        '--regarchive', help='private registry archive')
+    parser.add_argument(
+        '--regimageid', help='private registry image id')
+    parser.add_argument(
         '--prefix', help='storage container prefix')
     parser.add_argument(
-        '--container',
-        help='private registry container name')
+        '--container', help='private registry container name')
     return parser.parse_args()
 
 if __name__ == '__main__':

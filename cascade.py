@@ -50,6 +50,7 @@ _STORAGE_CONTAINERS = {
 _SELF_REGISTRY_PTR = None
 _REGISTRIES = {}
 _TORRENTS = {}
+_TORRENT_REVERSE_LOOKUP = {}
 _DIRECTDL = {}
 _DHT_ROUTERS = []
 _LR_LOCK_ASYNC = asyncio.Lock()
@@ -94,19 +95,18 @@ def _create_credentials() -> tuple:
     return blob_client, queue_client, table_client
 
 
-def generate_torrent(incl_file: str) -> dict:
+def generate_torrent(incl_file: pathlib.Path) -> dict:
     """Generate torrent file for a given file and write it to disk
-    :param str incl_file: file to include in torrent
+    :param pathlib.Path incl_file: file to include in torrent
     :rtype: tuple
     :return: (torrent file as pathlib, torrent file encoded as base64,
               torrent file data sha1 hash)
     """
     fs = libtorrent.file_storage()
-    libtorrent.add_files(fs, incl_file)
+    libtorrent.add_files(fs, str(incl_file))
     tor = libtorrent.create_torrent(fs)
     tor.set_creator('libtorrent {}'.format(libtorrent.version))
-    path = pathlib.Path(incl_file)
-    libtorrent.set_piece_hashes(tor, str(path.parent))
+    libtorrent.set_piece_hashes(tor, str(incl_file.parent))
     torrent = tor.generate()
     torrent_data = libtorrent.bencode(torrent)
     torrent_b64 = base64.b64encode(torrent_data).decode('ascii')
@@ -255,6 +255,7 @@ async def _direct_download_resources_async(
     file = None
     # download data
     resource = msg.content
+    resource_hash = hashlib.sha1(resource.encode('utf8')).hexdigest()
     if resource.startswith(_DOCKER_TAG):
         if len(_REGISTRIES) < 1:
             raise RuntimeError(
@@ -299,9 +300,7 @@ async def _direct_download_resources_async(
         await _record_perf_async(loop, 'save-start', 'img={}'.format(
             image))
         start = datetime.datetime.now()
-        file = _TORRENT_DIR / '{}.tar.gz'.format(image)
-        print('creating path to store torrent: {}'.format(file.parent))
-        file.parent.mkdir(parents=True, exist_ok=True)
+        file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
         print('saving docker image {} to {} for seeding'.format(
             image, file))
         proc = await asyncio.subprocess.create_subprocess_shell(
@@ -323,7 +322,7 @@ async def _direct_download_resources_async(
         raise NotImplementedError()
     # generate torrent file
     start = datetime.datetime.now()
-    future = loop.run_in_executor(None, generate_torrent, str(file))
+    future = loop.run_in_executor(None, generate_torrent, file)
     torrent_file, torrent_b64, torrent_sha1 = await future
     diff = (datetime.datetime.now() - start).total_seconds()
     print('took {} sec to generate torrent file: {}'.format(
@@ -332,7 +331,7 @@ async def _direct_download_resources_async(
     # add to torrent dict (effectively enqueues for torrent start)
     entity = {
         'PartitionKey': _PARTITION_KEY,
-        'RowKey': hashlib.sha1(resource.encode('utf8')).hexdigest(),
+        'RowKey': resource_hash,
         'Resource': resource,
         'TorrentFileBase64': torrent_b64,
         'TorrentFileSHA1': torrent_sha1,
@@ -347,6 +346,7 @@ async def _direct_download_resources_async(
         'loaded': True,
         'registered': False,
     }
+    _TORRENT_REVERSE_LOOKUP[resource_hash] = resource
     # wait until torrent has started
     print('waiting for torrent {} to start'.format(resource))
     while not _TORRENTS[resource]['started']:
@@ -411,9 +411,10 @@ def _merge_service(
 
 def _get_torrent_info(resource, th):
     s = th.status()
-    print(('%s wanted: %d %.2f%% complete (down: %.1f kB/s up: %.1f kB/s '
+    print(('%s %s bytes: %d %.2f%% complete (down: %.1f kB/s up: %.1f kB/s '
            'peers: %d) %s') %
-          (th.name(), s.total_wanted, s.progress * 100, s.download_rate / 1000,
+          (_TORRENT_REVERSE_LOOKUP[th.name().split('.')[0]], th.name(),
+           s.total_wanted, s.progress * 100, s.download_rate / 1000,
            s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
 #     ss = _TORRENT_SESSION.status()
 #     print(_TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes,
@@ -463,7 +464,7 @@ async def _load_and_register_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
         nglobalresources: int):
-    global _LR_LOCK_ASYNC
+    global _LR_LOCK_ASYNC, _GR_DONE
     async with _LR_LOCK_ASYNC:
         nfinished = 0
         for resource in _TORRENTS:
@@ -472,12 +473,14 @@ async def _load_and_register_async(
                 if _TORRENTS[resource]['handle'].is_seed():
                     # docker load image
                     if not _TORRENTS[resource]['loaded']:
+                        resource_hash = hashlib.sha1(
+                            resource.encode('utf8')).hexdigest()
                         image = resource[
                             resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
                         await _record_perf_async(
                             loop, 'load-start', 'img={}'.format(image))
                         start = datetime.datetime.now()
-                        file = _TORRENT_DIR / '{}.tar.gz'.format(image)
+                        file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
                         print('loading docker image {} from {}'.format(
                             image, file))
                         proc = await \
@@ -507,7 +510,6 @@ async def _load_and_register_async(
             await _record_perf_async(
                 loop, 'gr-done',
                 'nglobalresources={}'.format(nglobalresources))
-            global _GR_DONE
             _GR_DONE = True
 
 
@@ -516,10 +518,10 @@ async def manage_torrents_async(
         table_client: azure.storage.table.TableService,
         ipaddress: str,
         nglobalresources: int):
-    global _LR_LOCK_ASYNC
+    global _LR_LOCK_ASYNC, _GR_DONE
     while True:
         # async schedule load and register
-        if not _LR_LOCK_ASYNC.locked():
+        if not _GR_DONE and not _LR_LOCK_ASYNC.locked():
             asyncio.ensure_future(_load_and_register_async(
                 loop, table_client, nglobalresources))
         # start applicable torrent sessions
@@ -532,11 +534,8 @@ async def manage_torrents_async(
             print(('creating torrent session for {} ipaddress={} '
                    'seed={}').format(resource, ipaddress, seed))
             image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-            parent = (_TORRENT_DIR / image).parent
-            print('creating torrent download directory: {}'.format(parent))
-            parent.mkdir(parents=True, exist_ok=True)
             _TORRENTS[resource]['handle'] = create_torrent_session(
-                resource, parent, seed)
+                resource, _TORRENT_DIR, seed)
             await _record_perf_async(loop, 'torrent-start', 'img={}'.format(
                 image))
             del image
@@ -590,8 +589,7 @@ def _check_resource_has_torrent(
     else:
         # write torrent file to disk
         torrent = base64.b64decode(entity['TorrentFileBase64'])
-        torrent_file = _TORRENT_DIR / '{}.torrent'.format(
-            entity['TorrentFileSHA1'])
+        torrent_file = _TORRENT_DIR / '{}.torrent'.format(entity['RowKey'])
         with open(str(torrent_file), 'wb') as f:
             f.write(torrent)
         _TORRENTS[resource] = {
@@ -602,6 +600,7 @@ def _check_resource_has_torrent(
             'loaded': False,
             'registered': False,
         }
+        _TORRENT_REVERSE_LOOKUP[entity['RowKey']] = resource
         print('found torrent for resource {}'.format(resource))
     return True
 

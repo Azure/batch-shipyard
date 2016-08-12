@@ -2,6 +2,7 @@
 
 # stdlib imports
 import argparse
+import copy
 import datetime
 import json
 import hashlib
@@ -33,29 +34,24 @@ _STORAGE_CONTAINERS = {
     'queue_registry': None,
     'queue_globalresources': None,
 }
-_REGISTRY_FILENAME = 'docker-registry-v2.tar.gz'
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
 _SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
 _PERF_FILE = ('perf.py', 'perf.py')
-_REGISTRY_FILE = (
-    _REGISTRY_FILENAME, 'resources/{}'.format(_REGISTRY_FILENAME)
-)
+_REGISTRY_FILE = None
 
 
 def _populate_global_settings(config: dict):
     """Populate global settings from config
     :param dict config: configuration dict
     """
-    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNTKEY
-    _STORAGEACCOUNT = config[
-        'global_settings']['credentials']['storage_account']
-    _STORAGEACCOUNTKEY = config[
-        'global_settings']['credentials']['storage_account_key']
-    _BATCHACCOUNTKEY = config[
-        'global_settings']['credentials']['batch_account_key']
+    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNTKEY, \
+        _REGISTRY_FILE
+    _STORAGEACCOUNT = config['credentials']['storage_account']
+    _STORAGEACCOUNTKEY = config['credentials']['storage_account_key']
+    _BATCHACCOUNTKEY = config['credentials']['batch_account_key']
     try:
-        sep = config['global_settings']['storage_entity_prefix']
+        sep = config['storage_entity_prefix']
     except KeyError:
         sep = None
     if sep is None:
@@ -69,12 +65,22 @@ def _populate_global_settings(config: dict):
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
         (sep + 'registry',
-         config['global_settings']['credentials']['batch_account'].lower(),
-         config['addpool']['poolspec']['id'].lower()))
+         config['credentials']['batch_account'].lower(),
+         config['poolspec']['id'].lower()))
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'globalresources',
-         config['global_settings']['credentials']['batch_account'].lower(),
-         config['addpool']['poolspec']['id'].lower()))
+         config['credentials']['batch_account'].lower(),
+         config['poolspec']['id'].lower()))
+    try:
+        rf = config['docker_registry']['private']['docker_save_registry_file']
+        _REGISTRY_FILE = (
+            pathlib.Path(rf).name,
+            rf,
+            config['docker_registry']['private'][
+                'docker_save_registry_image_id']
+        )
+    except Exception:
+        _REGISTRY_FILE = (None, None, None)
 
 
 def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
@@ -95,29 +101,26 @@ def _create_credentials(config: dict) -> tuple:
     :return: (batch client, blob client, queue client, table client)
     """
     credentials = batchauth.SharedKeyCredentials(
-        config['global_settings']['credentials']['batch_account'],
+        config['credentials']['batch_account'],
         _BATCHACCOUNTKEY)
     batch_client = batch.BatchServiceClient(
         credentials,
         base_url='https://{}.{}.{}'.format(
-            config['global_settings']['credentials']['batch_account'],
-            config['global_settings']['credentials']['batch_account_region'],
-            config['global_settings']['credentials']['batch_endpoint']))
+            config['credentials']['batch_account'],
+            config['credentials']['batch_account_region'],
+            config['credentials']['batch_endpoint']))
     blob_client = azureblob.BlockBlobService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config[
-            'global_settings']['credentials']['storage_endpoint'])
+        endpoint_suffix=config['credentials']['storage_endpoint'])
     queue_client = azurequeue.QueueService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config[
-            'global_settings']['credentials']['storage_endpoint'])
+        endpoint_suffix=config['credentials']['storage_endpoint'])
     table_client = azuretable.TableService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config[
-            'global_settings']['credentials']['storage_endpoint'])
+        endpoint_suffix=config['credentials']['storage_endpoint'])
     return batch_client, blob_client, queue_client, table_client
 
 
@@ -132,12 +135,15 @@ def upload_resource_files(
     """
     sas_urls = {}
     for file in files:
+        # skip if no file is specified
+        if file[0] is None:
+            continue
         upload = True
-        if file[0] == _REGISTRY_FILENAME:
+        if file[0] == _REGISTRY_FILE[0]:
             fp = pathlib.Path(file[1])
             if not fp.exists():
                 print('skipping optional docker registry image: {}'.format(
-                    _REGISTRY_FILENAME))
+                    _REGISTRY_FILE[0]))
                 continue
             else:
                 # check if blob exists
@@ -145,11 +151,11 @@ def upload_resource_files(
                     prop = blob_client.get_blob_properties(
                         _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
                     # TODO use MD5 instead
-                    if (prop.name == _REGISTRY_FILENAME and
+                    if (prop.name == _REGISTRY_FILE[0] and
                             prop.properties.content_length ==
                             fp.stat().st_size):
                         print(('remote file size is the same '
-                               'for {}, skipping').format(_REGISTRY_FILENAME))
+                               'for {}, skipping').format(_REGISTRY_FILE[0]))
                         upload = False
                 except azure.common.AzureMissingResourceHttpError:
                     pass
@@ -159,7 +165,7 @@ def upload_resource_files(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0], file[1])
         sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(
             _STORAGEACCOUNT,
-            config['global_settings']['credentials']['storage_endpoint'],
+            config['credentials']['storage_endpoint'],
             _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
             blob_client.generate_blob_shared_access_signature(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
@@ -179,26 +185,26 @@ def add_pool(
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
-    publisher = config['addpool']['poolspec']['publisher']
-    offer = config['addpool']['poolspec']['offer']
-    sku = config['addpool']['poolspec']['sku']
+    publisher = config['poolspec']['publisher']
+    offer = config['poolspec']['offer']
+    sku = config['poolspec']['sku']
     try:
-        p2p = config['addpool']['peer_to_peer']['enabled']
+        p2p = config['peer_to_peer']['enabled']
     except KeyError:
         p2p = True
     try:
-        preg = 'private' in config['addpool']['docker_registry']
-        pcont = config['addpool']['docker_registry']['private']['container']
+        preg = 'private' in config['docker_registry']
+        pcont = config['docker_registry']['private']['container']
     except KeyError:
         preg = False
     try:
-        dockeruser = config['addpool']['docker_registry']['login']['username']
-        dockerpw = config['addpool']['docker_registry']['login']['password']
+        dockeruser = config['docker_registry']['login']['username']
+        dockerpw = config['docker_registry']['login']['password']
     except KeyError:
         dockeruser = None
         dockerpw = None
     try:
-        prefix = config['global_settings']['storage_entity_prefix']
+        prefix = config['storage_entity_prefix']
         if len(prefix) == 0:
             prefix = None
     except KeyError:
@@ -226,18 +232,22 @@ def add_pool(
     )
     # create pool param
     pool = batchmodels.PoolAddParameter(
-        id=config['addpool']['poolspec']['id'],
+        id=config['poolspec']['id'],
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
-        vm_size=config['addpool']['poolspec']['vm_size'],
-        target_dedicated=config['addpool']['poolspec']['vm_count'],
+        vm_size=config['poolspec']['vm_size'],
+        target_dedicated=config['poolspec']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
-            command_line='{} -o {} -s {}{}{}{}'.format(
+            command_line='{} -o {} -s {}{}{}{}{}{}'.format(
                 _NODEPREP_FILE[0], offer, sku,
                 ' -p {}'.format(prefix) if prefix else '',
                 ' -r {}'.format(pcont) if preg else '',
+                ' -a {}'.format(_REGISTRY_FILE[0])
+                if _REGISTRY_FILE[0] else '',
+                ' -i {}'.format(_REGISTRY_FILE[2])
+                if _REGISTRY_FILE[2] else '',
                 ' -t' if p2p else ''
             ),
             run_elevated=True,
@@ -261,14 +271,12 @@ def add_pool(
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'PRIVATE_REGISTRY_SA',
-                config['addpool']['docker_registry'][
-                    'private']['storage_account'])
+                config['docker_registry']['private']['storage_account'])
         )
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'PRIVATE_REGISTRY_SAKEY',
-                config['addpool']['docker_registry'][
-                    'private']['storage_account_key'])
+                config['docker_registry']['private']['storage_account_key'])
         )
     if (dockeruser is not None and len(dockeruser) > 0 and
             dockerpw is not None and len(dockerpw) > 0):
@@ -414,8 +422,8 @@ def _clear_table(table_client, table_name, config):
     print('clearing table: {}'.format(table_name))
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}${}\''.format(
-            config['global_settings']['credentials']['batch_account'],
-            config['addpool']['poolspec']['id'])
+            config['credentials']['batch_account'],
+            config['poolspec']['id'])
     )
     # batch delete entities
     i = 0
@@ -458,12 +466,12 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
 
 def populate_queues(queue_client, table_client, config):
     try:
-        use_hub = 'private' not in config['addpool']['docker_registry']
+        use_hub = 'private' not in config['docker_registry']
     except KeyError:
         use_hub = True
     pk = '{}${}'.format(
-        config['global_settings']['credentials']['batch_account'],
-        config['addpool']['poolspec']['id'])
+        config['credentials']['batch_account'],
+        config['poolspec']['id'])
     # if using docker public hub, then populate registry table with hub
     if use_hub:
         table_client.insert_or_replace_entity(
@@ -476,12 +484,18 @@ def populate_queues(queue_client, table_client, config):
         )
     else:
         # populate registry queue
-        for i in range(0, 3):
+        try:
+            nregistries = config['docker_registry']['private']['replication']
+            if nregistries < 1:
+                nregistries = 1
+        except Exception:
+            nregistries = 1
+        for i in range(0, nregistries):
             queue_client.put_message(
                 _STORAGE_CONTAINERS['queue_registry'], 'create-{}'.format(i))
     # populate global resources
     try:
-        for gr in config['addpool']['global_resources']:
+        for gr in config['global_resources']:
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],
                 {
@@ -496,18 +510,48 @@ def populate_queues(queue_client, table_client, config):
         pass
 
 
+def merge_dict(dict1, dict2):
+    """Recursively merge dictionaries: dict2 on to dict1. This differs
+    from dict.update() in that values that are dicts are recursively merged.
+    Note that only dict value types are merged, not lists, etc.
+
+    Code adapted from:
+    https://www.xormedia.com/recursively-merge-dictionaries-in-python/
+
+    :param dict dict1: dictionary to merge to
+    :param dict dict2: dictionary to merge with
+    :rtype: dict
+    :return: merged dictionary
+    """
+    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
+        raise ValueError('dict1 or dict2 is not a dictionary')
+    result = copy.deepcopy(dict1)
+    for k, v in dict2.items():
+        if k in result and isinstance(result[k], dict):
+            result[k] = merge_dict(result[k], v)
+        else:
+            result[k] = copy.deepcopy(v)
+    return result
+
+
 def main():
     """Main function"""
     # get command-line args
     args = parseargs()
     args.action = args.action.lower()
 
-    if args.json is not None:
-        with open(args.json, 'r') as f:
-            config = json.load(f)
-        print('config:')
-        print(json.dumps(config, indent=4))
-        _populate_global_settings(config)
+    if args.settings is None:
+        raise ValueError('global settings not specified')
+    if args.config is None:
+        raise ValueError('config settings for action not specified')
+
+    with open(args.settings, 'r') as f:
+        config = json.load(f)
+    with open(args.config, 'r') as f:
+        config = merge_dict(config, json.load(f))
+    print('config:')
+    print(json.dumps(config, indent=4))
+    _populate_global_settings(config)
 
     batch_client, blob_client, queue_client, table_client = \
         _create_credentials(config)
@@ -554,8 +598,11 @@ def parseargs():
         'action', help='action: addpool, addjob, addtask, delpool, deljob, '
         'delalljobs, grl, delstorage, clearstorage')
     parser.add_argument(
-        '--json',
-        help='json file config for option. required for all add actions')
+        '--settings',
+        help='global settings json file config. required for all actions')
+    parser.add_argument(
+        '--config',
+        help='json file config for option. required for all actions')
     parser.add_argument('--poolid', help='pool id')
     parser.add_argument('--jobid', help='job id')
     return parser.parse_args()
