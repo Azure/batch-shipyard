@@ -126,7 +126,7 @@ if [ $offer == "ubuntuserver" ]; then
         # mark private registry end
         if [ $rc -ne 0 ]; then
             echo "docker private registry setup failed"
-            exit 1
+            exit $rc
         fi
     fi
     # install cascade dependencies
@@ -148,6 +148,9 @@ fi
 
 # enable p2p sharing
 if [ $p2p -eq 1 ]; then
+    # disable DHT connection tracking
+    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
+    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
     # start cascade
     ./perf.py cascade start $prefix --message "ipaddress=$ipaddress"
     ./cascade.py $ipaddress $prefix > cascade.log &
