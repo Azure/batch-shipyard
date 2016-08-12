@@ -2,6 +2,7 @@
 
 set -o pipefail
 
+nonp2pcd=
 offer=
 p2p=0
 prefix=
@@ -10,12 +11,13 @@ privateregarchive=
 privateregimageid=
 sku=
 
-while getopts "h?a:i:o:p:r:s:t" opt; do
+while getopts "h?a:ci:o:p:r:s:t" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
             echo "-a [registry archive] registry archive file"
+            echo "-c concurrent downloading in non-p2p mode"
             echo "-i [registry image id] registry image id"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -27,6 +29,9 @@ while getopts "h?a:i:o:p:r:s:t" opt; do
             ;;
         a)
             privateregarchive="--regarchive $OPTARG"
+            ;;
+        c)
+            nonp2pcd="--nonp2pcd"
             ;;
         i)
             privateregimageid="--regimageid $OPTARG"
@@ -147,11 +152,14 @@ fi
 ./perf.py nodeprep end $prefix
 
 # enable p2p sharing
+torrentflag=
 if [ $p2p -eq 1 ]; then
     # disable DHT connection tracking
     iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
-    # start cascade
-    ./perf.py cascade start $prefix --message "ipaddress=$ipaddress"
-    ./cascade.py $ipaddress $prefix > cascade.log &
+else
+    torrentflag="--no-torrent"
 fi
+# start cascade
+./perf.py cascade start $prefix
+./cascade.py $ipaddress $prefix $torrentflag $nonp2pcd > cascade.log &

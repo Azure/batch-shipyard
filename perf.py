@@ -5,6 +5,7 @@ import argparse
 import datetime
 import os
 # non-stdlib imports
+import azure.common
 import azure.storage.table as azuretable
 
 # global defines
@@ -37,7 +38,15 @@ def process_event(table_client, table_name, source, event, ts, message):
         'NodeId': _NODEID,
         'Message': message,
     }
-    table_client.insert_entity(table_name, entity)
+    while True:
+        try:
+            table_client.insert_entity(table_name, entity)
+            break
+        except azure.common.AzureConflictHttpError:
+            if not isinstance(ts, float):
+                ts = float(ts)
+            ts += 0.000001
+            entity['RowKey'] = str(ts)
 
 
 def main():

@@ -303,14 +303,14 @@ def main():
     # get private registries
     registries = get_private_registries(table_client)
 
-    # modify init scripts with registry info
-    register_insecure_registries(
-        args.offer.lower(), args.sku.lower(), registries)
-
-    # write registry file
-    with open('.cascade_private_registries.txt', 'w') as f:
-        for registry in registries:
-            f.write('{}\n'.format(registry))
+    if len(registries) > 0:
+        # modify init scripts with registry info
+        register_insecure_registries(
+            args.offer.lower(), args.sku.lower(), registries)
+        # write registry file
+        with open('.cascade_private_registries.txt', 'w') as f:
+            for registry in registries:
+                f.write('{}\n'.format(registry))
 
     # stop asyncio loop
     loop.stop()

@@ -105,10 +105,7 @@ def _create_credentials(config: dict) -> tuple:
         _BATCHACCOUNTKEY)
     batch_client = batch.BatchServiceClient(
         credentials,
-        base_url='https://{}.{}.{}'.format(
-            config['credentials']['batch_account'],
-            config['credentials']['batch_account_region'],
-            config['credentials']['batch_endpoint']))
+        base_url=config['credentials']['batch_account_service_url'])
     blob_client = azureblob.BlockBlobService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
@@ -189,9 +186,17 @@ def add_pool(
     offer = config['poolspec']['offer']
     sku = config['poolspec']['sku']
     try:
-        p2p = config['peer_to_peer']['enabled']
+        p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
         p2p = True
+    if not p2p:
+        try:
+            nonp2pcd = config[
+                'data_replication']['non_peer_to_peer_concurrent_downloading']
+        except KeyError:
+            nonp2pcd = True
+    else:
+        nonp2pcd = False
     try:
         preg = 'private' in config['docker_registry']
         pcont = config['docker_registry']['private']['container']
@@ -240,7 +245,7 @@ def add_pool(
         target_dedicated=config['poolspec']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
-            command_line='{} -o {} -s {}{}{}{}{}{}'.format(
+            command_line='{} -o {} -s {}{}{}{}{}{}{}'.format(
                 _NODEPREP_FILE[0], offer, sku,
                 ' -p {}'.format(prefix) if prefix else '',
                 ' -r {}'.format(pcont) if preg else '',
@@ -248,7 +253,8 @@ def add_pool(
                 if _REGISTRY_FILE[0] else '',
                 ' -i {}'.format(_REGISTRY_FILE[2])
                 if _REGISTRY_FILE[2] else '',
-                ' -t' if p2p else ''
+                ' -t' if p2p else '',
+                ' -c' if nonp2pcd else '',
             ),
             run_elevated=True,
             wait_for_success=True,
@@ -495,6 +501,18 @@ def populate_queues(queue_client, table_client, config):
                 _STORAGE_CONTAINERS['queue_registry'], 'create-{}'.format(i))
     # populate global resources
     try:
+        p2p = config['data_replication']['peer_to_peer']['enabled']
+    except KeyError:
+        p2p = True
+    if p2p:
+        try:
+            p2pcsd = config['data_replication']['peer_to_peer'][
+                'concurrent_source_downloads']
+        except KeyError:
+            p2pcsd = 1
+    else:
+        p2pcsd = 1
+    try:
         for gr in config['global_resources']:
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],
@@ -504,8 +522,9 @@ def populate_queues(queue_client, table_client, config):
                     'Resource': gr,
                 }
             )
-            queue_client.put_message(
-                _STORAGE_CONTAINERS['queue_globalresources'], gr)
+            for _ in range(0, p2pcsd):
+                queue_client.put_message(
+                    _STORAGE_CONTAINERS['queue_globalresources'], gr)
     except KeyError:
         pass
 

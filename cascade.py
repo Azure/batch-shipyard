@@ -55,6 +55,8 @@ _DIRECTDL = {}
 _DHT_ROUTERS = []
 _LR_LOCK_ASYNC = asyncio.Lock()
 _GR_DONE = False
+_ENABLE_P2P = True
+_NON_P2P_CONCURRENT_DOWNLOADING = True
 
 
 def _setup_container_names(sep: str):
@@ -211,6 +213,7 @@ async def _record_perf_async(loop, event, message):
 async def _direct_download_resources_async(
         loop, blob_client, queue_client, table_client, ipaddress):
     # iterate through downloads to see if there are any torrents available
+    # TODO allow multiple downloads
     rmdl = []
     for dl in _DIRECTDL:
         if _check_resource_has_torrent(loop, table_client, dl, False):
@@ -238,10 +241,13 @@ async def _direct_download_resources_async(
             break
     # renew lease and create renew callback
     if msg is not None:
-        _QUEUE_MESSAGES[msg.id] = msg
-        _CBHANDLES['queue_globalresources'] = loop.call_later(
-            15, _renew_queue_message_lease, loop, queue_client,
-            'queue_globalresources', msg.id)
+        if _NON_P2P_CONCURRENT_DOWNLOADING:
+            _release_list.append(msg)
+        else:
+            _QUEUE_MESSAGES[msg.id] = msg
+            _CBHANDLES['queue_globalresources'] = loop.call_later(
+                15, _renew_queue_message_lease, loop, queue_client,
+                'queue_globalresources', msg.id)
     # release all messages in release list
     for _msg in _release_list:
         queue_client.update_message(
@@ -297,73 +303,77 @@ async def _direct_download_resources_async(
         await _record_perf_async(loop, 'pull-end', 'img={},diff={}'.format(
             image, diff))
         # save docker image to seed to torrent
-        await _record_perf_async(loop, 'save-start', 'img={}'.format(
-            image))
-        start = datetime.datetime.now()
-        file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
-        print('saving docker image {} to {} for seeding'.format(
-            image, file))
-        proc = await asyncio.subprocess.create_subprocess_shell(
-            'docker save {} | gzip -c > {}'.format(image, file), loop=loop)
-        await proc.wait()
-        if proc.returncode != 0:
-            raise RuntimeError('docker save non-zero rc: {}'.format(
-                proc.returncode))
-        else:
-            print('docker image {} saved for seeding'.format(image))
-        diff = (datetime.datetime.now() - start).total_seconds()
-        print('took {} sec to save docker image {} to {}'.format(
-            diff, image, file.parent))
-        await _record_perf_async(loop, 'save-end', 'img={},diff={}'.format(
-            image, diff))
+        if _ENABLE_P2P:
+            await _record_perf_async(loop, 'save-start', 'img={}'.format(
+                image))
+            start = datetime.datetime.now()
+            file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
+            print('saving docker image {} to {} for seeding'.format(
+                image, file))
+            proc = await asyncio.subprocess.create_subprocess_shell(
+                'docker save {} | gzip -c > {}'.format(image, file), loop=loop)
+            await proc.wait()
+            if proc.returncode != 0:
+                raise RuntimeError('docker save non-zero rc: {}'.format(
+                    proc.returncode))
+            else:
+                print('docker image {} saved for seeding'.format(image))
+            diff = (datetime.datetime.now() - start).total_seconds()
+            print('took {} sec to save docker image {} to {}'.format(
+                diff, image, file.parent))
+            await _record_perf_async(
+                loop, 'save-end', 'img={},size={},diff={}'.format(
+                    image, file.stat().st_size, diff))
     else:
         # TODO download via blob, explode uri to get container/blob
         # use download to path into /tmp and move to _TORRENT_DIR
         raise NotImplementedError()
     # generate torrent file
-    start = datetime.datetime.now()
-    future = loop.run_in_executor(None, generate_torrent, file)
-    torrent_file, torrent_b64, torrent_sha1 = await future
-    diff = (datetime.datetime.now() - start).total_seconds()
-    print('took {} sec to generate torrent file: {}'.format(
-        diff, torrent_file))
-    start = datetime.datetime.now()
-    # add to torrent dict (effectively enqueues for torrent start)
-    entity = {
-        'PartitionKey': _PARTITION_KEY,
-        'RowKey': resource_hash,
-        'Resource': resource,
-        'TorrentFileBase64': torrent_b64,
-        'TorrentFileSHA1': torrent_sha1,
-        'FileSizeBytes': file.stat().st_size,
-        # 'FileSHA1': compute_sha1_for_file(file),
-    }
-    _TORRENTS[resource] = {
-        'entity': entity,
-        'torrent_file': torrent_file,
-        'started': False,
-        'seed': True,
-        'loaded': True,
-        'registered': False,
-    }
-    _TORRENT_REVERSE_LOOKUP[resource_hash] = resource
-    # wait until torrent has started
-    print('waiting for torrent {} to start'.format(resource))
-    while not _TORRENTS[resource]['started']:
-        await asyncio.sleep(0.1)
-    diff = (datetime.datetime.now() - start).total_seconds()
-    print('took {} sec for {} torrent to start'.format(diff, resource))
+    if _ENABLE_P2P:
+        start = datetime.datetime.now()
+        future = loop.run_in_executor(None, generate_torrent, file)
+        torrent_file, torrent_b64, torrent_sha1 = await future
+        diff = (datetime.datetime.now() - start).total_seconds()
+        print('took {} sec to generate torrent file: {}'.format(
+            diff, torrent_file))
+        start = datetime.datetime.now()
+        # add to torrent dict (effectively enqueues for torrent start)
+        entity = {
+            'PartitionKey': _PARTITION_KEY,
+            'RowKey': resource_hash,
+            'Resource': resource,
+            'TorrentFileBase64': torrent_b64,
+            'TorrentFileSHA1': torrent_sha1,
+            'FileSizeBytes': file.stat().st_size,
+            # 'FileSHA1': compute_sha1_for_file(file),
+        }
+        _TORRENTS[resource] = {
+            'entity': entity,
+            'torrent_file': torrent_file,
+            'started': False,
+            'seed': True,
+            'loaded': True,
+            'registered': False,
+        }
+        _TORRENT_REVERSE_LOOKUP[resource_hash] = resource
+        # wait until torrent has started
+        print('waiting for torrent {} to start'.format(resource))
+        while not _TORRENTS[resource]['started']:
+            await asyncio.sleep(0.1)
+        diff = (datetime.datetime.now() - start).total_seconds()
+        print('took {} sec for {} torrent to start'.format(diff, resource))
     # cancel callback
-    _CBHANDLES['queue_globalresources'].cancel()
-    _CBHANDLES.pop('queue_globalresources')
-    # release queue message
-    queue_client.update_message(
-        _STORAGE_CONTAINERS['queue_globalresources'],
-        message_id=msg.id,
-        pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
-        visibility_timeout=0)
-    _QUEUE_MESSAGES.pop(msg.id)
-    print('queue message released for {}'.format(resource))
+    if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
+        _CBHANDLES['queue_globalresources'].cancel()
+        _CBHANDLES.pop('queue_globalresources')
+        # release queue message
+        queue_client.update_message(
+            _STORAGE_CONTAINERS['queue_globalresources'],
+            message_id=msg.id,
+            pop_receipt=_QUEUE_MESSAGES[msg.id].pop_receipt,
+            visibility_timeout=0)
+        _QUEUE_MESSAGES.pop(msg.id)
+        print('queue message released for {}'.format(resource))
     # remove resources from download list
     _DIRECTDL.pop(resource)
 
@@ -477,10 +487,11 @@ async def _load_and_register_async(
                             resource.encode('utf8')).hexdigest()
                         image = resource[
                             resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-                        await _record_perf_async(
-                            loop, 'load-start', 'img={}'.format(image))
-                        start = datetime.datetime.now()
                         file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
+                        await _record_perf_async(
+                            loop, 'load-start', 'img={},size={}'.format(
+                                image, file.stat().st_size))
+                        start = datetime.datetime.now()
                         print('loading docker image {} from {}'.format(
                             image, file))
                         proc = await \
@@ -561,8 +572,11 @@ async def download_monitor_async(
         ipaddress: str,
         nglobalresources: int):
     # begin async manage torrent sessions
-    asyncio.ensure_future(
-        manage_torrents_async(loop, table_client, ipaddress, nglobalresources))
+    if _ENABLE_P2P:
+        asyncio.ensure_future(
+            manage_torrents_async(
+                loop, table_client, ipaddress, nglobalresources)
+        )
     while True:
         # check if there are any direct downloads
         if len(_DIRECTDL) > 0:
@@ -577,6 +591,8 @@ def _check_resource_has_torrent(
         table_client: azure.storage.table.TableService,
         resource: str,
         add_to_dict: bool=False) -> bool:
+    if not _ENABLE_P2P:
+        return False
     try:
         rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
         entity = table_client.get_entity(
@@ -619,15 +635,16 @@ def distribute_global_resources(
     :param str ipaddress: ip address
     """
     # set torrent session port listen
-    print('creating torrent session on {}:{}'.format(
-        ipaddress, _DEFAULT_PORT_BEGIN))
-    _TORRENT_SESSION.listen_on(_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END)
-    _TORRENT_SESSION.stop_lsd()
-    _TORRENT_SESSION.stop_upnp()
-    _TORRENT_SESSION.stop_natpmp()
-    # bootstrap dht nodes
-    bootstrap_dht_nodes(loop, table_client, ipaddress)
-    _TORRENT_SESSION.start_dht()
+    if _ENABLE_P2P:
+        print('creating torrent session on {}:{}'.format(
+            ipaddress, _DEFAULT_PORT_BEGIN))
+        _TORRENT_SESSION.listen_on(_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END)
+        _TORRENT_SESSION.stop_lsd()
+        _TORRENT_SESSION.stop_upnp()
+        _TORRENT_SESSION.stop_natpmp()
+        # bootstrap dht nodes
+        bootstrap_dht_nodes(loop, table_client, ipaddress)
+        _TORRENT_SESSION.start_dht()
     # get globalresources from table
     try:
         entities = table_client.query_entities(
@@ -665,8 +682,11 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
 
 def main():
     """Main function"""
+    global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING
     # get command-line args
     args = parseargs()
+    _ENABLE_P2P = args.torrent
+    _NON_P2P_CONCURRENT_DOWNLOADING = args.nonp2pcd
 
     # get event loop
     if _ON_WINDOWS:
@@ -694,8 +714,11 @@ def main():
 
     # get registry list
     global _REGISTRIES, _SELF_REGISTRY_PTR
-    _REGISTRIES = [line.rstrip('\n') for line in open(
-        '.cascade_private_registries.txt', 'r')]
+    try:
+        _REGISTRIES = [line.rstrip('\n') for line in open(
+            '.cascade_private_registries.txt', 'r')]
+    except Exception:
+        pass
     if len(_REGISTRIES) == 0:
         _REGISTRIES.append('registry.hub.docker.com')
     for i in range(0, len(_REGISTRIES)):
@@ -717,10 +740,17 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Azure Batch P2P File/Image Replicator')
+    parser.set_defaults(ipaddress=None, nonp2pcd=False, torrent=True)
     parser.add_argument(
-        'ipaddress', nargs='?', default=None, help='ip address')
+        'ipaddress', nargs='?', help='ip address')
     parser.add_argument(
         '--prefix', help='storage container prefix')
+    parser.add_argument(
+        '--no-torrent', action='store_false', dest='torrent',
+        help='disable peer-to-peer transfer')
+    parser.add_argument(
+        '--nonp2pcd', action='store_true',
+        help='non-p2p concurrent downloading')
     return parser.parse_args()
 
 if __name__ == '__main__':
