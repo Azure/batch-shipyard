@@ -62,11 +62,16 @@ def _parse_message(msg):
     return m
 
 
-def _diff_events(data, nodeid, event, end_event, timing, prefix):
+def _diff_events(data, nodeid, event, end_event, timing, prefix, sizes=None):
     for i in range(0, len(data[nodeid][event])):
+        # torrent start -> load start may not always exist due to pull
+        if (event == 'cascade:torrent-start' and
+                end_event == 'cascade:load-start' and
+                end_event not in data[nodeid]):
+            return
+        # find end event for this img
         subevent = data[nodeid][event][i]
         img = subevent['message']['img']
-        # find end event for this img
         found = False
         for j in range(0, len(data[nodeid][end_event])):
             pei = data[
@@ -74,15 +79,21 @@ def _diff_events(data, nodeid, event, end_event, timing, prefix):
             if pei == img:
                 timing[prefix + img] = _compute_delta_t(
                     data, nodeid, event, i, end_event, j)
+                if sizes is not None and img not in sizes:
+                    if event == 'cascade:load-start':
+                        sizes[img] = data[nodeid][event][j]['message']['size']
+                    else:
+                        sizes[img] = data[
+                            nodeid][end_event][j]['message']['size']
                 found = True
                 break
-        if not found:
+        if not found and event != 'cascade:torrent-start':
             raise RuntimeError(
                 'could not find corresponding event for {}:{}'.format(
-                    subevent, img))
+                    event, img))
 
 
-def graph_data(table_client):
+def coalesce_data(table_client):
     print('graphing data from {} with pk={}'.format(
         _TABLE_NAME, _PARTITION_KEY))
     entities = table_client.query_entities(
@@ -106,8 +117,8 @@ def graph_data(table_client):
             ev['message'] = None
         data[nodeid][event].append(ev)
     del entities
+    sizes = {}
     for nodeid in data:
-        print(nodeid)
         # calculate dt timings
         timing = {
             'docker_install': _compute_delta_t(
@@ -132,19 +143,33 @@ def graph_data(table_client):
                 _diff_events(
                     data, nodeid, event, 'cascade:pull-end', timing, 'pull:')
             elif event == 'cascade:save-start':
-                pass
-            elif event == 'cascade:save-end':
-                # message will contain size info
-                pass
+                _diff_events(
+                    data, nodeid, event, 'cascade:save-end', timing, 'save:',
+                    sizes)
             elif event == 'cascade:torrent-start':
-                pass
+                _diff_events(
+                    data, nodeid, event, 'cascade:load-start', timing,
+                    'torrent:')
             elif event == 'cascade:load-start':
-                # load start also marks torrent-seed
-                # message will contain size info
-                pass
-            elif event == 'cascade:load-end':
-                pass
-        print(timing)
+                _diff_events(
+                    data, nodeid, event, 'cascade:load-end', timing,
+                    'load:', sizes)
+        data[nodeid].pop('cascade:pull-start', None)
+        data[nodeid].pop('cascade:pull-end', None)
+        data[nodeid].pop('cascade:save-start', None)
+        data[nodeid].pop('cascade:save-end', None)
+        data[nodeid].pop('cascade:torrent-start')
+        data[nodeid].pop('cascade:load-start', None)
+        data[nodeid].pop('cascade:load-end', None)
+        data[nodeid]['timing'] = timing
+    return data, sizes
+
+
+def graph_data(data, sizes):
+    print(sizes)
+    for nodeid in data:
+        print(nodeid)
+        print(data[nodeid])
 
 
 def merge_dict(dict1, dict2):
@@ -189,7 +214,8 @@ def main():
     # create storage credentials
     table_client = _create_credentials(config)
     # graph data
-    graph_data(table_client)
+    data, sizes = coalesce_data(table_client)
+    graph_data(data, sizes)
 
 
 def parseargs():
