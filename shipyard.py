@@ -2,6 +2,7 @@
 
 # stdlib imports
 import argparse
+import base64
 import copy
 import datetime
 import json
@@ -35,6 +36,7 @@ _STORAGE_CONTAINERS = {
     'queue_globalresources': None,
 }
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
+_JOBPREP_FILE = ('jpdockerblock.sh', 'scripts/jpdockerblock.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
 _SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
 _PERF_FILE = ('perf.py', 'perf.py')
@@ -72,13 +74,17 @@ def _populate_global_settings(config: dict):
          config['credentials']['batch_account'].lower(),
          config['poolspec']['id'].lower()))
     try:
-        rf = config['docker_registry']['private']['docker_save_registry_file']
-        _REGISTRY_FILE = (
-            pathlib.Path(rf).name,
-            rf,
-            config['docker_registry']['private'][
-                'docker_save_registry_image_id']
-        )
+        if config['docker_registry']['private']['enabled']:
+            rf = config['docker_registry']['private'][
+                'docker_save_registry_file']
+            _REGISTRY_FILE = (
+                pathlib.Path(rf).name,
+                rf,
+                config['docker_registry']['private'][
+                    'docker_save_registry_image_id']
+            )
+        else:
+            _REGISTRY_FILE = (None, None, None)
     except Exception:
         _REGISTRY_FILE = (None, None, None)
 
@@ -121,6 +127,24 @@ def _create_credentials(config: dict) -> tuple:
     return batch_client, blob_client, queue_client, table_client
 
 
+def compute_md5_for_file_b64(
+        file: pathlib.Path, blocksize: int=65536) -> str:
+    """Compute MD5 hash for file as base64
+    :param pathlib.Path file: file to compute md5 for
+    :param int blocksize: block size in bytes
+    :rtype: str
+    :return: md5 for file base64 encoded
+    """
+    hasher = hashlib.md5()
+    with file.open('rb') as filedesc:
+        while True:
+            buf = filedesc.read(blocksize)
+            if not buf:
+                break
+            hasher.update(buf)
+        return str(base64.b64encode(hasher.digest()), 'ascii')
+
+
 def upload_resource_files(
         blob_client: azure.storage.blob.BlockBlobService, config: dict,
         files: List[tuple]) -> dict:
@@ -147,11 +171,10 @@ def upload_resource_files(
                 try:
                     prop = blob_client.get_blob_properties(
                         _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
-                    # TODO use MD5 instead
                     if (prop.name == _REGISTRY_FILE[0] and
-                            prop.properties.content_length ==
-                            fp.stat().st_size):
-                        print(('remote file size is the same '
+                            prop.properties.content_settings.content_md5 ==
+                            compute_md5_for_file_b64(fp)):
+                        print(('remote file is the same '
                                'for {}, skipping').format(_REGISTRY_FILE[0]))
                         upload = False
                 except azure.common.AzureMissingResourceHttpError:
@@ -189,16 +212,26 @@ def add_pool(
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
         p2p = True
-    if not p2p:
+    if p2p:
+        nonp2pcd = False
+        try:
+            p2psbias = config['data_replication'][
+                'peer_to_peer']['direct_download_seed_bias']
+        except KeyError:
+            p2psbias = 3
+        try:
+            p2pcomp = config[
+                'data_replication']['peer_to_peer']['compression']
+        except KeyError:
+            p2pcomp = True
+    else:
         try:
             nonp2pcd = config[
                 'data_replication']['non_peer_to_peer_concurrent_downloading']
         except KeyError:
             nonp2pcd = True
-    else:
-        nonp2pcd = False
     try:
-        preg = 'private' in config['docker_registry']
+        preg = config['docker_registry']['private']['enabled']
         pcont = config['docker_registry']['private']['container']
     except KeyError:
         preg = False
@@ -231,8 +264,8 @@ def add_pool(
     # upload resource files
     sas_urls = upload_resource_files(
         blob_client, config, [
-            _NODEPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE, _PERF_FILE,
-            _REGISTRY_FILE
+            _NODEPREP_FILE, _JOBPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE,
+            _PERF_FILE, _REGISTRY_FILE
         ]
     )
     # create pool param
@@ -253,7 +286,7 @@ def add_pool(
                 if _REGISTRY_FILE[0] else '',
                 ' -i {}'.format(_REGISTRY_FILE[2])
                 if _REGISTRY_FILE[2] else '',
-                ' -t' if p2p else '',
+                ' -t {}:{}'.format(p2pcomp, p2psbias) if p2p else '',
                 ' -c' if nonp2pcd else '',
             ),
             run_elevated=True,
@@ -352,24 +385,40 @@ def del_pool(batch_client, pool_id):
     batch_client.pool.delete(pool_id)
 
 
-def add_job(batch_client, pool_id, job_id, numtasks):
+def del_node(batch_client, pool_id, node_id):
+    print('Deleting node {} from pool {}'.format(node_id, pool_id))
+    batch_client.pool.remove_nodes(
+        pool_id=pool_id,
+        node_remove_parameter=batchmodels.NodeRemoveParameter(
+            node_list=[node_id],
+        )
+    )
+
+
+def add_job(batch_client, config):
+    pool_id = config['poolspec']['id']
+    job_id = config['jobspec']['id']
+    global_resources = []
+    for gr in config['global_resources']:
+        global_resources.append(gr.split(':')[-1])
     job = batchmodels.JobAddParameter(
         id=job_id,
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
-        common_environment_settings=[
-            batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
-            batchmodels.EnvironmentSetting(
-                'STORAGEACCOUNT', _STORAGEACCOUNT),
-            batchmodels.EnvironmentSetting(
-                'STORAGEACCOUNTKEY', _STORAGEACCOUNTKEY),
-        ],
+        job_preparation_task=batchmodels.JobPreparationTask(
+            command_line='$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+                _JOBPREP_FILE[0], ' '.join(global_resources)),
+            wait_for_success=True,
+            run_elevated=True,
+            rerun_on_node_reboot_after_success=True,
+        )
     )
     batch_client.job.add(job)
-    for i in range(0, numtasks):
-        add_task(batch_client, pool_id, job.id, i)
 
 
-def add_task(batch_client, pool_id, job_id, tasknum=None):
+def add_task(batch_client, config):
+    job_id = config['jobspec']['id']
+    # TODO get task spec
+    tasknum = None
     if tasknum is None:
         tasknum = int(sorted(
             batch_client.task.list(job_id), key=lambda x: x.id
@@ -472,24 +521,15 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
 
 def populate_queues(queue_client, table_client, config):
     try:
-        use_hub = 'private' not in config['docker_registry']
+        preg = config['docker_registry']['private']['enabled']
     except KeyError:
-        use_hub = True
+        preg = False
     pk = '{}${}'.format(
         config['credentials']['batch_account'],
         config['poolspec']['id'])
     # if using docker public hub, then populate registry table with hub
-    if use_hub:
-        table_client.insert_or_replace_entity(
-            _STORAGE_CONTAINERS['table_registry'],
-            {
-                'PartitionKey': pk,
-                'RowKey': 'registry.hub.docker.com',
-                'Port': 80,
-            }
-        )
-    else:
-        # populate registry queue
+    if preg:
+        # populate private registry queue
         try:
             nregistries = config['docker_registry']['private']['replication']
             if nregistries < 1:
@@ -499,6 +539,15 @@ def populate_queues(queue_client, table_client, config):
         for i in range(0, nregistries):
             queue_client.put_message(
                 _STORAGE_CONTAINERS['queue_registry'], 'create-{}'.format(i))
+    else:
+        table_client.insert_or_replace_entity(
+            _STORAGE_CONTAINERS['table_registry'],
+            {
+                'PartitionKey': pk,
+                'RowKey': 'registry.hub.docker.com',
+                'Port': 80,
+            }
+        )
     # populate global resources
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -586,10 +635,12 @@ def main():
         resize_pool(batch_client, args.poolid, args.numvms)
     elif args.action == 'delpool':
         del_pool(batch_client, args.poolid)
+    elif args.action == 'delnode':
+        del_node(batch_client, args.poolid, args.nodeid)
     elif args.action == 'addjob':
-        add_job(batch_client, args.poolid, args.jobid, args.numtasks)
+        add_job(batch_client, config)
     elif args.action == 'addtask':
-        add_task(batch_client, args.poolid, args.jobid, args.tasknum)
+        add_task(batch_client, config)
     elif args.action == 'deljob':
         del_job(batch_client, args.jobid)
     elif args.action == 'delalljobs':
@@ -614,8 +665,8 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Shipyard: Azure Batch to Docker Bridge')
     parser.add_argument(
-        'action', help='action: addpool, addjob, addtask, delpool, deljob, '
-        'delalljobs, grl, delstorage, clearstorage')
+        'action', help='action: addpool, addjob, addtask, delpool, delnode, '
+        'deljob, delalljobs, grl, delstorage, clearstorage')
     parser.add_argument(
         '--settings',
         help='global settings json file config. required for all actions')
@@ -624,6 +675,7 @@ def parseargs():
         help='json file config for option. required for all actions')
     parser.add_argument('--poolid', help='pool id')
     parser.add_argument('--jobid', help='job id')
+    parser.add_argument('--nodeid', help='node id')
     return parser.parse_args()
 
 if __name__ == '__main__':

@@ -18,7 +18,11 @@ import azure.common
 import azure.storage.blob as azureblob
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
-import libtorrent
+try:
+    import libtorrent
+    _LIBTORRENT_IMPORTED = True
+except ImportError:
+    _LIBTORRENT_IMPORTED = False
 
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
@@ -29,7 +33,7 @@ _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
     'seeding', 'allocating', 'checking fastresume'
 ]
-_TORRENT_SESSION = libtorrent.session()
+_TORRENT_SESSION = None
 _STORAGEACCOUNT = os.environ['CASCADE_SA']
 _STORAGEACCOUNTKEY = os.environ['CASCADE_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
@@ -44,7 +48,10 @@ _DIRECTDL_LOCK = threading.Lock()
 _SELF_REGISTRY_PTR = None
 _ENABLE_P2P = True
 _NON_P2P_CONCURRENT_DOWNLOADING = True
-_REGISTRIES = {}
+_REGISTRIES = None
+_COMPRESSION = True
+_SEED_BIAS = 3
+_SAVELOAD_FILE_EXTENSION = 'tar.gz'
 # mutable global state
 _CBHANDLES = {}
 _QUEUE_MESSAGES = {}
@@ -221,76 +228,87 @@ def _record_perf(event, message):
 
 
 class DockerSaveThread(threading.Thread):
-    def __init__(self, queue_client, resource, msg_id):
+    def __init__(
+            self, queue_client, table_client, resource, msg_id,
+            nglobalresources):
         threading.Thread.__init__(self)
         self.queue_client = queue_client
+        self.table_client = table_client
         self.resource = resource
         self.msg_id = msg_id
+        self.nglobalresources = nglobalresources
         with _DIRECTDL_LOCK:
             _DIRECTDL_DOWNLOADING.append(self.resource)
 
     def run(self):
         file = None
         resource_hash = hashlib.sha1(self.resource.encode('utf8')).hexdigest()
-        if self.resource.startswith(_DOCKER_TAG):
-            if len(_REGISTRIES) < 1:
-                raise RuntimeError(
-                    ('{} image specified for global resource, but there are '
-                     'no registries available').format(self.resource))
-            image = self.resource[
-                self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-            registry = None
-            _record_perf('pull-start', 'img={}'.format(image))
-            start = datetime.datetime.now()
-            while True:
-                # pick random registry to download from
-                registry = _REGISTRIES[_pick_random_registry_key()]
-                print('pulling image {} from {}'.format(image, registry))
-                if registry == 'registry.hub.docker.com':
-                    proc = subprocess.Popen(
-                        'docker pull {}'.format(image), shell=True)
-                else:
-                    proc = subprocess.Popen(
-                        'docker pull {}/{}'.format(registry, image),
-                        shell=True)
-                proc.wait()
-                if proc.returncode == 0:
-                    break
-                else:
-                    print('docker pull non-zero rc: {}'.format(
-                        proc.returncode))
-                    time.sleep(1)
-            # tag image to remove registry ip
-            if registry != 'registry.hub.docker.com':
-                subprocess.check_call(
-                    'docker tag {}/{} {}'.format(registry, image, image),
+        if len(_REGISTRIES) < 1:
+            raise RuntimeError(
+                ('{} image specified for global resource, but there are '
+                 'no registries available').format(self.resource))
+        image = self.resource[
+            self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+        registry = None
+        _record_perf('pull-start', 'img={}'.format(image))
+        start = datetime.datetime.now()
+        while True:
+            # pick random registry to download from
+            registry = _REGISTRIES[_pick_random_registry_key()]
+            print('pulling image {} from {}'.format(image, registry))
+            if registry == 'registry.hub.docker.com':
+                proc = subprocess.Popen(
+                    'docker pull {}'.format(image), shell=True)
+            else:
+                proc = subprocess.Popen(
+                    'docker pull {}/{}'.format(registry, image),
                     shell=True)
-            diff = (datetime.datetime.now() - start).total_seconds()
-            print('took {} sec to pull docker image {} from {}'.format(
-                diff, image, registry))
-            _record_perf('pull-end', 'img={},diff={}'.format(image, diff))
-            # save docker image to seed to torrent
-            if _ENABLE_P2P:
-                _record_perf('save-start', 'img={}'.format(image))
-                start = datetime.datetime.now()
-                file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
-                print('saving docker image {} to {} for seeding'.format(
-                    image, file))
-                subprocess.check_call(
-                    'docker save {} | gzip -c > {}'.format(image, file),
-                    shell=True)
-                print('docker image {} saved for seeding'.format(image))
-                diff = (datetime.datetime.now() - start).total_seconds()
-                print('took {} sec to save docker image {} to {}'.format(
-                    diff, image, file.parent))
-                _record_perf('save-end', 'img={},size={},diff={}'.format(
-                    image, file.stat().st_size, diff))
-        else:
-            # TODO download via blob, explode uri to get container/blob
-            # use download to path into /tmp and move to _TORRENT_DIR
-            raise NotImplementedError()
-        # generate torrent file
+            proc.wait()
+            if proc.returncode == 0:
+                break
+            else:
+                print('docker pull non-zero rc: {}'.format(
+                    proc.returncode))
+                time.sleep(1)
+        # tag image to remove registry ip
+        if registry != 'registry.hub.docker.com':
+            subprocess.check_call(
+                'docker tag {}/{} {}'.format(registry, image, image),
+                shell=True)
+        diff = (datetime.datetime.now() - start).total_seconds()
+        print('took {} sec to pull docker image {} from {}'.format(
+            diff, image, registry))
+        # save docker image to seed to torrent
         if _ENABLE_P2P:
+            _record_perf('pull-end', 'img={},diff={}'.format(
+                image, diff))
+            _record_perf('save-start', 'img={}'.format(image))
+            start = datetime.datetime.now()
+            print('saving docker image {} to {} for seeding'.format(
+                image, file))
+            if _COMPRESSION:
+                tmpdir = _TORRENT_DIR / '{}-tmp'.format(resource_hash)
+                tmpdir.mkdir(parents=True, exist_ok=True)
+                # TODO pick up here
+                file = _TORRENT_DIR / '{}.tar'.format(resource_hash)
+                subprocess.check_call(
+                    ('(docker save {} | tar -xf -) && (tar --sort=name -cpf - '
+                     '| pigz --fast -n -T -c > {})').format(image, file),
+                    cwd=str(tmpdir), shell=True)
+                file = _TORRENT_DIR / '{}.{}'.format(
+                    resource_hash, _SAVELOAD_FILE_EXTENSION)
+            else:
+                file = _TORRENT_DIR / '{}.{}'.format(
+                    resource_hash, _SAVELOAD_FILE_EXTENSION)
+                subprocess.check_call(
+                    'docker save {} -o {}'.format(image, file), shell=True)
+            print('docker image {} saved for seeding'.format(image))
+            diff = (datetime.datetime.now() - start).total_seconds()
+            print('took {} sec to save docker image {} to {}'.format(
+                diff, image, file.parent))
+            _record_perf('save-end', 'img={},size={},diff={}'.format(
+                image, file.stat().st_size, diff))
+            # generate torrent file
             start = datetime.datetime.now()
             torrent_file, torrent_b64, torrent_sha1 = generate_torrent(
                 file, resource_hash)
@@ -327,6 +345,22 @@ class DockerSaveThread(threading.Thread):
             diff = (datetime.datetime.now() - start).total_seconds()
             print('took {} sec for {} torrent to start'.format(
                 diff, self.resource))
+        else:
+            # get docker image size
+            output = subprocess.check_output(
+                ('docker images --format "{{{{.Repository}}}} '
+                 '{{{{.Size}}}}\" | grep {}').format(image), shell=True)
+            size = ' '.join(output.split()[1:])
+            _record_perf('pull-end', 'img={},diff={},size={}'.format(
+                image, diff, size))
+            # register service in non-p2p mode
+            global _GR_DONE
+            nfinished = _merge_service(self.table_client, self.resource, True)
+            if not _GR_DONE and nfinished == self.nglobalresources:
+                _record_perf(
+                    'gr-done',
+                    'nglobalresources={}'.format(self.nglobalresources))
+                _GR_DONE = True
         # cancel callback
         if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
             _CBHANDLES['queue_globalresources'].cancel()
@@ -346,7 +380,8 @@ class DockerSaveThread(threading.Thread):
 
 
 async def _direct_download_resources_async(
-        loop, blob_client, queue_client, table_client, ipaddress):
+        loop, blob_client, queue_client, table_client, ipaddress,
+        nglobalresources):
     # iterate through downloads to see if there are any torrents available
     with _DIRECTDL_LOCK:
         if len(_DIRECTDL) == 0:
@@ -365,15 +400,16 @@ async def _direct_download_resources_async(
             for _msg in msgs:
                 if (msg is None and _msg.content in _DIRECTDL and
                         _msg.content not in _DIRECTDL_DOWNLOADING):
-                    # TODO modify this to work with concurrent source downloads
-                    # check number of seeds
-                    nseeds = _get_torrent_num_seeds(table_client, _msg.content)
-                    # TODO determine a good number of seeds to cut off directdl
-                    if nseeds < 3:
-                        msg = _msg
+                    if _ENABLE_P2P:
+                        nseeds = _get_torrent_num_seeds(
+                            table_client, _msg.content)
+                        if nseeds < _SEED_BIAS:
+                            msg = _msg
+                        else:
+                            rmdl.append(_msg.content)
+                            _release_list.append(_msg)
                     else:
-                        rmdl.append(_msg.content)
-                        _release_list.append(_msg)
+                        msg = _msg
                 else:
                     _release_list.append(_msg)
         if msg is not None:
@@ -406,13 +442,20 @@ async def _direct_download_resources_async(
     if msg is None:
         return
     # pull and save docker image in thread
-    thr = DockerSaveThread(queue_client, msg.content, msg.id)
-    thr.start()
+    if msg.content.startswith(_DOCKER_TAG):
+        thr = DockerSaveThread(
+            queue_client, table_client, msg.content, msg.id, nglobalresources)
+        thr.start()
+    else:
+        # TODO download via blob, explode uri to get container/blob
+        # use download to path into /tmp and move to _TORRENT_DIR
+        raise NotImplementedError()
 
 
 def _merge_service(
         table_client: azure.storage.table.TableService,
-        resource: str):
+        resource: str,
+        get_count: bool):
     """Merge entity to services table
     :param azure.storage.table.TableService table_client: table client
     :param str resource: resource to add to services table
@@ -449,6 +492,19 @@ def _merge_service(
             except azure.common.AzureConflictHttpError:
                 pass
     print('entity {} merged to services table'.format(entity))
+    if get_count:
+        try:
+            entities = table_client.query_entities(
+                _STORAGE_CONTAINERS['table_services'],
+                filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
+        except azure.common.AzureMissingResourceHttpError:
+            entities = []
+        count = 0
+        for entity in entities:
+            vms = set(entity['VmList'].split(','))
+            if _NODEID in vms:
+                count += 1
+        return count
 
 
 def _get_torrent_info(resource, th):
@@ -514,13 +570,17 @@ class DockerLoadThread(threading.Thread):
         resource_hash = hashlib.sha1(self.resource.encode('utf8')).hexdigest()
         image = self.resource[
             self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
-        file = _TORRENT_DIR / '{}.tar.gz'.format(resource_hash)
+        file = _TORRENT_DIR / '{}.{}'.format(
+            resource_hash, _SAVELOAD_FILE_EXTENSION)
         _record_perf('load-start', 'img={},size={}'.format(
             image, file.stat().st_size))
         start = datetime.datetime.now()
         print('loading docker image {} from {}'.format(image, file))
-        subprocess.check_call(
-            'gunzip -c {} | docker load'.format(file), shell=True)
+        if _COMPRESSION:
+            subprocess.check_call(
+                'pigz -cd {} | docker load'.format(file), shell=True)
+        else:
+            subprocess.check_call('docker load -i {}'.format(file), shell=True)
         diff = (datetime.datetime.now() - start).total_seconds()
         print('took {} sec to load docker image from {}'.format(diff, file))
         _record_perf('load-end', 'img={},diff={}'.format(image, diff))
@@ -536,22 +596,26 @@ async def _load_and_register_async(
     async with _LR_LOCK_ASYNC:
         nfinished = 0
         for resource in _TORRENTS:
-            # if torrent is seeding, load into docker registry and register
-            if _TORRENTS[resource]['started']:
-                if _TORRENTS[resource]['handle'].is_seed():
+            # if torrent is seeding, load container/file and register
+            if (_TORRENTS[resource]['started'] and
+                    _TORRENTS[resource]['handle'].is_seed()):
+                if (not _TORRENTS[resource]['loaded'] and
+                        not _TORRENTS[resource]['loading']):
                     # docker load image
-                    if (not _TORRENTS[resource]['loaded'] and
-                            not _TORRENTS[resource]['loading']):
+                    if resource.startswith(_DOCKER_TAG):
                         thr = DockerLoadThread(resource)
                         thr.start()
-                    # register to services table
-                    if (_TORRENTS[resource]['loaded'] and
-                            not _TORRENTS[resource]['loading']):
-                        if not _TORRENTS[resource]['registered']:
-                            _merge_service(table_client, resource)
-                            _TORRENTS[resource]['registered'] = True
-                        else:
-                            nfinished += 1
+                    else:
+                        # TODO "load blob" - move to appropriate path
+                        raise NotImplementedError()
+                # register to services table
+                if (_TORRENTS[resource]['loaded'] and
+                        not _TORRENTS[resource]['loading']):
+                    if not _TORRENTS[resource]['registered']:
+                        _merge_service(table_client, resource, False)
+                        _TORRENTS[resource]['registered'] = True
+                    else:
+                        nfinished += 1
         if not _GR_DONE and nfinished == nglobalresources:
             await _record_perf_async(
                 loop, 'gr-done',
@@ -621,7 +685,11 @@ async def download_monitor_async(
         # check if there are any direct downloads
         if len(_DIRECTDL) > 0:
             await _direct_download_resources_async(
-                loop, blob_client, queue_client, table_client, ipaddress)
+                loop, blob_client, queue_client, table_client, ipaddress,
+                nglobalresources)
+        # if not in peer-to-peer mode, allow exit
+        if not _ENABLE_P2P and _GR_DONE:
+            break
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
 
@@ -693,8 +761,11 @@ def distribute_global_resources(
     """
     # set torrent session port listen
     if _ENABLE_P2P:
+        global _TORRENT_SESSION
+        # create torrent session
         print('creating torrent session on {}:{}'.format(
             ipaddress, _DEFAULT_PORT_BEGIN))
+        _TORRENT_SESSION = libtorrent.session()
         _TORRENT_SESSION.listen_on(_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END)
         _TORRENT_SESSION.stop_lsd()
         _TORRENT_SESSION.stop_upnp()
@@ -714,8 +785,12 @@ def distribute_global_resources(
     if entities is not None:
         for ent in entities:
             nentities += 1
-            _check_resource_has_torrent(
-                loop, table_client, ent['Resource'], True)
+            if _ENABLE_P2P:
+                _check_resource_has_torrent(
+                    loop, table_client, ent['Resource'], True)
+            else:
+                with _DIRECTDL_LOCK:
+                    _DIRECTDL.append(ent['Resource'])
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
         loop, blob_client, queue_client, table_client, ipaddress, nentities))
@@ -742,8 +817,24 @@ def main():
     global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING
     # get command-line args
     args = parseargs()
-    _ENABLE_P2P = args.torrent
     _NON_P2P_CONCURRENT_DOWNLOADING = args.nonp2pcd
+    _ENABLE_P2P = args.torrent
+    # set p2p options
+    if _ENABLE_P2P:
+        if not _LIBTORRENT_IMPORTED:
+            raise ImportError('No module named \'libtorrent\'')
+        global _COMPRESSION, _SEED_BIAS, _SAVELOAD_FILE_EXTENSION
+        p2popts = args.p2popts.split(':')
+        _COMPRESSION = p2popts[0] == 'true'
+        _SEED_BIAS = int(p2popts[1])
+        del p2popts
+        if not _COMPRESSION:
+            _SAVELOAD_FILE_EXTENSION = 'tar'
+        print('peer-to-peer options: compression={} seedbias={}'.format(
+            _COMPRESSION, _SEED_BIAS))
+        # create torrent directory
+        print('creating torrent dir: {}'.format(_TORRENT_DIR))
+        _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
 
     # get event loop
     if _ON_WINDOWS:
@@ -755,9 +846,11 @@ def main():
 
     # get ip address if not specified, for local testing only
     if args.ipaddress is None:
-        args.ipaddress = loop.run_until_complete(_get_ipaddress_async(loop))
+        ipaddress = loop.run_until_complete(_get_ipaddress_async(loop))
+    else:
+        ipaddress = args.ipaddress
 
-    print('ip address: {}'.format(args.ipaddress))
+    print('ip address: {}'.format(ipaddress))
 
     # set up container names
     _setup_container_names(args.prefix)
@@ -765,29 +858,27 @@ def main():
     # create storage credentials
     blob_client, queue_client, table_client = _create_credentials()
 
-    # create torrent directory
-    print('creating torrent dir: {}'.format(_TORRENT_DIR))
-    _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
-
     # get registry list
     global _REGISTRIES, _SELF_REGISTRY_PTR
     try:
         _REGISTRIES = [line.rstrip('\n') for line in open(
             '.cascade_private_registries.txt', 'r')]
     except Exception:
-        pass
+        _REGISTRIES = []
     if len(_REGISTRIES) == 0:
         _REGISTRIES.append('registry.hub.docker.com')
     for i in range(0, len(_REGISTRIES)):
-        if _REGISTRIES[i].split(':')[0] == args.ipaddress:
+        if _REGISTRIES[i].split(':')[0] == ipaddress:
             _SELF_REGISTRY_PTR = i
             break
     print('docker registries: {} self={}'.format(
         _REGISTRIES, _SELF_REGISTRY_PTR))
 
+    del args
+
     # distribute global resources
     distribute_global_resources(
-        loop, blob_client, queue_client, table_client, args.ipaddress)
+        loop, blob_client, queue_client, table_client, ipaddress)
 
 
 def parseargs():
@@ -799,9 +890,14 @@ def parseargs():
         description='Cascade: Azure Batch P2P File/Image Replicator')
     parser.set_defaults(ipaddress=None, nonp2pcd=False, torrent=True)
     parser.add_argument(
-        'ipaddress', nargs='?', help='ip address')
+        'p2popts', nargs='?',
+        help='peer to peer options [compression:seed bias]')
+    parser.add_argument(
+        '--ipaddress', help='ip address')
     parser.add_argument(
         '--prefix', help='storage container prefix')
+    parser.add_argument(
+        '--privateregcount', help='private registry count')
     parser.add_argument(
         '--no-torrent', action='store_false', dest='torrent',
         help='disable peer-to-peer transfer')

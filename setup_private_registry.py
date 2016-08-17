@@ -168,7 +168,7 @@ async def setup_private_registry_async(
                 _STORAGE_CONTAINERS['table_registry'],
                 filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY)
             )
-            if len(entities) == 0:
+            if len(list(entities)) == 0:
                 print('no registry entries found, will try again for ticket')
                 await asyncio.sleep(1)
             else:

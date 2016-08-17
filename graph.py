@@ -48,12 +48,25 @@ def _compute_delta_t(data, nodeid, event1, event1_pos, event2, event2_pos):
                 data[nodeid][event1][event1_pos]['timestamp']).total_seconds()
 
 
-def _parse_message(msg):
+def _parse_message(event, msg):
     parts = msg.split(',')
     m = {}
     for part in parts:
         tmp = part.split('=')
-        if tmp[0] == 'size' or tmp[0] == 'nglobalresources':
+        if tmp[0] == 'size':
+            if event == 'cascade:pull-end':
+                sz = tmp[1].split()
+                if sz[1] == 'kB':
+                    sz[0] *= 1024
+                elif sz[1] == 'MB':
+                    sz[0] *= 1024 * 1024
+                elif sz[1] == 'GB':
+                    sz[0] *= 1024 * 1024 * 1024
+                elif sz[1] == 'TB':
+                    sz[0] *= 1024 * 1024 * 1024 * 1024
+                tmp[1] = sz[0]
+            m[tmp[0]] = int(tmp[1])
+        elif tmp[0] == 'nglobalresources':
             m[tmp[0]] = int(tmp[1])
         elif tmp[0] == 'diff':
             m[tmp[0]] = float(tmp[1])
@@ -112,7 +125,7 @@ def coalesce_data(table_client):
                 float(ent['RowKey'])),
         }
         try:
-            ev['message'] = _parse_message(ent['Message'])
+            ev['message'] = _parse_message(event, ent['Message'])
         except KeyError:
             ev['message'] = None
         data[nodeid][event].append(ev)
@@ -121,27 +134,36 @@ def coalesce_data(table_client):
     for nodeid in data:
         # calculate dt timings
         timing = {
-            'docker_install': _compute_delta_t(
-                data, nodeid, 'nodeprep:start', 0, 'privateregistry:start', 0),
-            'private_registry_setup': _compute_delta_t(
-                data, nodeid, 'privateregistry:start', 0,
-                'privateregistry:end', 0),
             'nodeprep': _compute_delta_t(
                 data, nodeid, 'nodeprep:start', 0, 'nodeprep:end', 0),
             'global_resources_loaded': _compute_delta_t(
                 data, nodeid, 'cascade:start', 0, 'cascade:gr-done', 0),
         }
+        try:
+            timing['docker_install'] = _compute_delta_t(
+                data, nodeid, 'nodeprep:start', 0, 'privateregistry:start', 0)
+        except KeyError:
+            # when no private registry setup exists, install time is
+            # equivalent to nodeprep time
+            timing['docker_install'] = timing['nodeprep']
+        try:
+            timing['private_registry_setup'] = _compute_delta_t(
+                data, nodeid, 'privateregistry:start', 0,
+                'privateregistry:end', 0)
+        except KeyError:
+            timing['private_registry_setup'] = 0
         data[nodeid].pop('nodeprep:start')
         data[nodeid].pop('nodeprep:end')
-        data[nodeid].pop('privateregistry:start')
-        data[nodeid].pop('privateregistry:end')
+        data[nodeid].pop('privateregistry:start', None)
+        data[nodeid].pop('privateregistry:end', None)
         data[nodeid].pop('cascade:start')
         data[nodeid].pop('cascade:gr-done')
         for event in data[nodeid]:
             # print(event, data[nodeid][event])
             if event == 'cascade:pull-start':
                 _diff_events(
-                    data, nodeid, event, 'cascade:pull-end', timing, 'pull:')
+                    data, nodeid, event, 'cascade:pull-end', timing, 'pull:',
+                    sizes)
             elif event == 'cascade:save-start':
                 _diff_events(
                     data, nodeid, event, 'cascade:save-end', timing, 'save:',
@@ -158,7 +180,7 @@ def coalesce_data(table_client):
         data[nodeid].pop('cascade:pull-end', None)
         data[nodeid].pop('cascade:save-start', None)
         data[nodeid].pop('cascade:save-end', None)
-        data[nodeid].pop('cascade:torrent-start')
+        data[nodeid].pop('cascade:torrent-start', None)
         data[nodeid].pop('cascade:load-start', None)
         data[nodeid].pop('cascade:load-end', None)
         data[nodeid]['timing'] = timing
