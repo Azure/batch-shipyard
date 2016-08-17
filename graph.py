@@ -56,6 +56,7 @@ def _parse_message(event, msg):
         if tmp[0] == 'size':
             if event == 'cascade:pull-end':
                 sz = tmp[1].split()
+                sz[0] = float(sz[0])
                 if sz[1] == 'kB':
                     sz[0] *= 1024
                 elif sz[1] == 'MB':

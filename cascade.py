@@ -9,6 +9,7 @@ import hashlib
 import os
 import pathlib
 import random
+import shutil
 import subprocess
 import sys
 import threading
@@ -287,16 +288,24 @@ class DockerSaveThread(threading.Thread):
             print('saving docker image {} to {} for seeding'.format(
                 image, file))
             if _COMPRESSION:
+                # need to create reproducible compressed tarballs
+                # 1. untar docker save file
+                # 2. re-tar files sorted by name and set mtime/user/group
+                #    to known values
+                # 3. fast compress with parallel gzip ignoring file attributes
+                # 4. remove temporary directory
                 tmpdir = _TORRENT_DIR / '{}-tmp'.format(resource_hash)
                 tmpdir.mkdir(parents=True, exist_ok=True)
-                # TODO pick up here
-                file = _TORRENT_DIR / '{}.tar'.format(resource_hash)
-                subprocess.check_call(
-                    ('(docker save {} | tar -xf -) && (tar --sort=name -cpf - '
-                     '| pigz --fast -n -T -c > {})').format(image, file),
-                    cwd=str(tmpdir), shell=True)
                 file = _TORRENT_DIR / '{}.{}'.format(
                     resource_hash, _SAVELOAD_FILE_EXTENSION)
+                subprocess.check_call(
+                    ('(docker save {} | tar -xf -) '
+                     '&& (tar --sort=name --mtime=\'1970-01-01\' '
+                     '--user=0 --group=0 -cf - '
+                     '| pigz --fast -n -T -c > {})').format(image, file),
+                    cwd=str(tmpdir), shell=True)
+                shutil.rmtree(str(tmpdir), ignore_errors=True)
+                del tmpdir
             else:
                 file = _TORRENT_DIR / '{}.{}'.format(
                     resource_hash, _SAVELOAD_FILE_EXTENSION)
@@ -348,9 +357,9 @@ class DockerSaveThread(threading.Thread):
         else:
             # get docker image size
             output = subprocess.check_output(
-                ('docker images --format "{{{{.Repository}}}} '
-                 '{{{{.Size}}}}\" | grep {}').format(image), shell=True)
-            size = ' '.join(output.split()[1:])
+                ('docker images --format \"{{{{.Repository}}}} '
+                 '{{{{.Size}}}}\" | grep ^{}').format(image), shell=True)
+            size = ' '.join(output.decode('utf-8').split()[1:])
             _record_perf('pull-end', 'img={},diff={},size={}'.format(
                 image, diff, size))
             # register service in non-p2p mode
@@ -416,13 +425,13 @@ async def _direct_download_resources_async(
             break
     # renew lease and create renew callback
     if msg is not None:
-        if _NON_P2P_CONCURRENT_DOWNLOADING:
-            _release_list.append(msg)
-        else:
+        if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
             _QUEUE_MESSAGES[msg.id] = msg
             _CBHANDLES['queue_globalresources'] = loop.call_later(
                 15, _renew_queue_message_lease, loop, queue_client,
                 'queue_globalresources', msg.id)
+        else:
+            _release_list.append(msg)
     # release all messages in release list
     for _msg in _release_list:
         queue_client.update_message(
@@ -835,6 +844,9 @@ def main():
         # create torrent directory
         print('creating torrent dir: {}'.format(_TORRENT_DIR))
         _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
+    else:
+        print('non-p2p concurrent downloading: {}'.format(
+            _NON_P2P_CONCURRENT_DOWNLOADING))
 
     # get event loop
     if _ON_WINDOWS:
