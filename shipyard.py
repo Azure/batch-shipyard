@@ -26,13 +26,13 @@ _STORAGEACCOUNTKEY = os.getenv('STORAGEACCOUNTKEY')
 _BATCHACCOUNTKEY = os.getenv('BATCHACCOUNTKEY')
 _STORAGE_CONTAINERS = {
     'blob_resourcefiles': None,
+    'blob_torrents': None,
     'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
     'table_services': None,
     'table_globalresources': None,
     'table_perf': None,
-    'queue_registry': None,
     'queue_globalresources': None,
 }
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
@@ -59,16 +59,16 @@ def _populate_global_settings(config: dict):
     if sep is None:
         sep = ''
     _STORAGE_CONTAINERS['blob_resourcefiles'] = sep + 'resourcefiles'
+    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
+        (sep + 'torrents',
+         config['credentials']['batch_account'].lower(),
+         config['poolspec']['id'].lower()))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_services'] = sep + 'services'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
-    _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
-        (sep + 'registry',
-         config['credentials']['batch_account'].lower(),
-         config['poolspec']['id'].lower()))
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'globalresources',
          config['credentials']['batch_account'].lower(),
@@ -208,6 +208,7 @@ def add_pool(
     publisher = config['poolspec']['publisher']
     offer = config['poolspec']['offer']
     sku = config['poolspec']['sku']
+    # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
@@ -230,17 +231,25 @@ def add_pool(
                 'data_replication']['non_peer_to_peer_concurrent_downloading']
         except KeyError:
             nonp2pcd = True
+    # private registry settings
     try:
         preg = config['docker_registry']['private']['enabled']
         pcont = config['docker_registry']['private']['container']
     except KeyError:
         preg = False
+    if preg:
+        preg = ' -r {}:{}:{}'.format(
+            pcont, _REGISTRY_FILE[0], _REGISTRY_FILE[2])
+    else:
+        preg = ''
+    # docker settings
     try:
         dockeruser = config['docker_registry']['login']['username']
         dockerpw = config['docker_registry']['login']['password']
     except KeyError:
         dockeruser = None
         dockerpw = None
+    # prefix settings
     try:
         prefix = config['storage_entity_prefix']
         if len(prefix) == 0:
@@ -278,14 +287,12 @@ def add_pool(
         target_dedicated=config['poolspec']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
-            command_line='{} -o {} -s {}{}{}{}{}{}{}'.format(
-                _NODEPREP_FILE[0], offer, sku,
+            command_line='{} -o {} -s {}{}{}{}{}'.format(
+                _NODEPREP_FILE[0],
+                offer,
+                sku,
+                preg,
                 ' -p {}'.format(prefix) if prefix else '',
-                ' -r {}'.format(pcont) if preg else '',
-                ' -a {}'.format(_REGISTRY_FILE[0])
-                if _REGISTRY_FILE[0] else '',
-                ' -i {}'.format(_REGISTRY_FILE[2])
-                if _REGISTRY_FILE[2] else '',
                 ' -t {}:{}'.format(p2pcomp, p2psbias) if p2p else '',
                 ' -c' if nonp2pcd else '',
             ),
@@ -497,8 +504,9 @@ def _clear_table(table_client, table_name, config):
 def clear_storage_containers(blob_client, queue_client, table_client, config):
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
-            # clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
-            pass
+            # TODO this is temp to preserve registry upload
+            if key != 'blob_resourcefiles':
+                _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
         elif key.startswith('queue_'):
@@ -528,18 +536,7 @@ def populate_queues(queue_client, table_client, config):
         config['credentials']['batch_account'],
         config['poolspec']['id'])
     # if using docker public hub, then populate registry table with hub
-    if preg:
-        # populate private registry queue
-        try:
-            nregistries = config['docker_registry']['private']['replication']
-            if nregistries < 1:
-                nregistries = 1
-        except Exception:
-            nregistries = 1
-        for i in range(0, nregistries):
-            queue_client.put_message(
-                _STORAGE_CONTAINERS['queue_registry'], 'create-{}'.format(i))
-    else:
+    if not preg:
         table_client.insert_or_replace_entity(
             _STORAGE_CONTAINERS['table_registry'],
             {

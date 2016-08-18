@@ -8,34 +8,24 @@ offer=
 p2p=
 prefix=
 privatereg=
-privateregarchive=
-privateregimageid=
 sku=
 
-while getopts "h?a:ci:o:p:r:s:t:" opt; do
+while getopts "h?co:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
-            echo "-a [registry archive] registry archive file"
             echo "-c concurrent downloading in non-p2p mode"
-            echo "-i [registry image id] registry image id"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
-            echo "-r [container] enable private registry"
+            echo "-r [container:archive:image id] private registry"
             echo "-s [sku] VM sku"
             echo "-t [compression:seed bias] enable p2p sharing"
             echo ""
             exit 1
             ;;
-        a)
-            privateregarchive="--regarchive $OPTARG"
-            ;;
         c)
             nonp2pcd="--nonp2pcd"
-            ;;
-        i)
-            privateregimageid="--regimageid $OPTARG"
             ;;
         o)
             offer=${OPTARG,,}
@@ -44,7 +34,7 @@ while getopts "h?a:ci:o:p:r:s:t:" opt; do
             prefix="--prefix $OPTARG"
             ;;
         r)
-            privatereg="--container $OPTARG"
+            privatereg=$OPTARG
             ;;
         s)
             sku=${OPTARG,,}
@@ -157,7 +147,7 @@ if [ $offer == "ubuntuserver" ]; then
         if [ ! -f ".node_prep_finished" ]; then
             ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
         fi
-        ./setup_private_registry.py $offer $sku $ipaddress $prefix $privatereg $privateregarchive $privateregimageid
+        ./setup_private_registry.py $privatereg $ipaddress $prefix
         # mark private registry end
         if [ ! -f ".node_prep_finished" ]; then
             ./perf.py privateregistry end $prefix

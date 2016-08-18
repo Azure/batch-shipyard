@@ -94,11 +94,15 @@ def _diff_events(data, nodeid, event, end_event, timing, prefix, sizes=None):
                 timing[prefix + img] = _compute_delta_t(
                     data, nodeid, event, i, end_event, j)
                 if sizes is not None and img not in sizes:
-                    if event == 'cascade:load-start':
-                        sizes[img] = data[nodeid][event][j]['message']['size']
-                    else:
-                        sizes[img] = data[
-                            nodeid][end_event][j]['message']['size']
+                    try:
+                        if event == 'cascade:load-start':
+                            sizes[img] = data[
+                                nodeid][event][j]['message']['size']
+                        else:
+                            sizes[img] = data[
+                                nodeid][end_event][j]['message']['size']
+                    except KeyError:
+                        pass
                 found = True
                 break
         if not found and event != 'cascade:torrent-start':
