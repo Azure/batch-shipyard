@@ -189,23 +189,6 @@ def _renew_queue_message_lease(
         msg_id)
 
 
-def compute_sha1_for_file(file, blocksize=65536):
-    """Compute SHA1 hash for file
-    :param pathlib.Path file: file to compute sha1
-    :param int blocksize: block size in bytes
-    :rtype: str
-    :return: SHA1 for file
-    """
-    hasher = hashlib.sha1()
-    with file.open('rb') as filedesc:
-        while True:
-            buf = filedesc.read(blocksize)
-            if not buf:
-                break
-            hasher.update(buf)
-        return hasher.hexdigest()
-
-
 def scantree(path):
     for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=False):
@@ -292,7 +275,7 @@ class DockerSaveThread(threading.Thread):
                 subprocess.check_call(
                     ('(docker save {} | tar -xf -) '
                      '&& (tar --sort=name --mtime=\'1970-01-01\' '
-                     '--user=0 --group=0 -cf - '
+                     '--owner=0 --group=0 -cf - . '
                      '| pigz --fast -n -T -c > {})').format(image, file),
                     cwd=str(tmpdir), shell=True)
                 shutil.rmtree(str(tmpdir), ignore_errors=True)
@@ -345,8 +328,7 @@ class DockerSaveThread(threading.Thread):
                     str(torrent_file.name)),
                 'TorrentFileSHA1': torrent_sha1,
                 'TorrentIsDir': file.is_dir(),
-                'FileSizeBytes': fsize,
-                # 'FileSHA1': compute_sha1_for_file(file),
+                'TorrentContentSizeBytes': fsize,
             }
             with _PT_LOCK:
                 _PENDING_TORRENTS[self.resource] = {

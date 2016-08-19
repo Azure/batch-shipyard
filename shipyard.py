@@ -41,6 +41,8 @@ _CASCADE_FILE = ('cascade.py', 'cascade.py')
 _SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
 _PERF_FILE = ('perf.py', 'perf.py')
 _REGISTRY_FILE = None
+_GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
+_TEMP_DIR = pathlib.Path('/tmp')
 
 
 def _populate_global_settings(config: dict):
@@ -62,7 +64,7 @@ def _populate_global_settings(config: dict):
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'torrents',
          config['credentials']['batch_account'].lower(),
-         config['poolspec']['id'].lower()))
+         config['pool_specification']['id'].lower()))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
@@ -72,7 +74,7 @@ def _populate_global_settings(config: dict):
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'globalresources',
          config['credentials']['batch_account'].lower(),
-         config['poolspec']['id'].lower()))
+         config['pool_specification']['id'].lower()))
     try:
         if config['docker_registry']['private']['enabled']:
             rf = config['docker_registry']['private'][
@@ -96,7 +98,7 @@ def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
     :rtype: str
     :return: wrapped commands
     """
-    return '/bin/bash -c "set -e; set -o pipefail; {}{}"'.format(
+    return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
         ';'.join(commands), '; wait' if wait else '')
 
 
@@ -205,9 +207,9 @@ def add_pool(
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
-    publisher = config['poolspec']['publisher']
-    offer = config['poolspec']['offer']
-    sku = config['poolspec']['sku']
+    publisher = config['pool_specification']['publisher']
+    offer = config['pool_specification']['offer']
+    sku = config['pool_specification']['sku']
     # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -279,12 +281,12 @@ def add_pool(
     )
     # create pool param
     pool = batchmodels.PoolAddParameter(
-        id=config['poolspec']['id'],
+        id=config['pool_specification']['id'],
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
-        vm_size=config['poolspec']['vm_size'],
-        target_dedicated=config['poolspec']['vm_count'],
+        vm_size=config['pool_specification']['vm_size'],
+        target_dedicated=config['pool_specification']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
             command_line='{} -o {} -s {}{}{}{}{}'.format(
@@ -402,49 +404,202 @@ def del_node(batch_client, pool_id, node_id):
     )
 
 
-def add_job(batch_client, config):
-    pool_id = config['poolspec']['id']
-    job_id = config['jobspec']['id']
+def add_job(batch_client, blob_client, config):
+    pool_id = config['pool_specification']['id']
     global_resources = []
-    for gr in config['global_resources']:
-        global_resources.append(gr.split(':')[-1])
-    job = batchmodels.JobAddParameter(
-        id=job_id,
-        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
-        job_preparation_task=batchmodels.JobPreparationTask(
-            command_line='$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
-                _JOBPREP_FILE[0], ' '.join(global_resources)),
-            wait_for_success=True,
-            run_elevated=True,
-            rerun_on_node_reboot_after_success=True,
+    for gr in config['global_resources']['docker_images']:
+        global_resources.append(gr)
+    # TODO add global resources for non-docker resources
+    jpcmdline = _wrap_commands_in_shell([
+        '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+            _JOBPREP_FILE[0], ' '.join(global_resources))])
+    for jobspec in config['job_specifications']:
+        job = batchmodels.JobAddParameter(
+            id=jobspec['id'],
+            pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+            job_preparation_task=batchmodels.JobPreparationTask(
+                command_line=jpcmdline,
+                wait_for_success=True,
+                run_elevated=True,
+                rerun_on_node_reboot_after_success=False,
+            )
         )
-    )
-    batch_client.job.add(job)
-
-
-def add_task(batch_client, config):
-    job_id = config['jobspec']['id']
-    # TODO get task spec
-    tasknum = None
-    if tasknum is None:
-        tasknum = int(sorted(
-            batch_client.task.list(job_id), key=lambda x: x.id
-        )[-1].split('-')[-1]) + 1
-    print('creating task number {}'.format(tasknum))
-    task_commands = [
-        '',
-    ]
-    task = batchmodels.TaskAddParameter(
-        id='demotask-{}'.format(tasknum),
-        command_line=_wrap_commands_in_shell(task_commands),
-    )
-    print(task.command_line)
-    batch_client.task.add(job_id=job_id, task=task)
+        print('adding job: {}'.format(job.id))
+        try:
+            batch_client.job.add(job)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The specified job already exists' not in ex.message.value:
+                raise
+        # add all tasks under job
+        for task in jobspec['tasks']:
+            image = task['image']
+            # get or generate task id
+            try:
+                task_id = task['id']
+                if task_id is None:
+                    raise KeyError()
+            except KeyError:
+                # get filtered, sorted list of generic docker task ids
+                try:
+                    tasklist = sorted(
+                        filter(lambda x: x.id.startswith(
+                            _GENERIC_DOCKER_TASK_PREFIX), list(
+                                batch_client.task.list(job.id))),
+                        key=lambda y: y.id)
+                    tasknum = int(tasklist[-1].id.split('-')[-1]) + 1
+                except (batchmodels.batch_error.BatchErrorException,
+                        IndexError):
+                    tasknum = 0
+                task_id = '{0}{1:03d}'.format(
+                    _GENERIC_DOCKER_TASK_PREFIX, tasknum)
+            # get generic run opts
+            try:
+                run_opts = task['additional_docker_run_options']
+            except KeyError:
+                run_opts = []
+            # parse remove container option
+            try:
+                rm_container = task['remove_container_after_exit']
+            except KeyError:
+                pass
+            else:
+                if rm_container and '--rm' not in run_opts:
+                    run_opts.append('--rm')
+                del rm_container
+            # parse name option
+            try:
+                name = task['name']
+                if name is not None:
+                    run_opts.append('-n {}'.format(name))
+                del name
+            except KeyError:
+                pass
+            # parse labels option
+            try:
+                labels = task['labels']
+                if labels is not None and len(labels) > 0:
+                    for label in labels:
+                        run_opts.append('-l {}'.format(label))
+                del labels
+            except KeyError:
+                pass
+            # parse ports option
+            try:
+                ports = task['ports']
+                if ports is not None and len(ports) > 0:
+                    for port in ports:
+                        run_opts.append('-p {}'.format(port))
+                del ports
+            except KeyError:
+                pass
+            # parse entrypoint
+            try:
+                entrypoint = task['entrypoint']
+                if entrypoint is not None:
+                    run_opts.append('--entrypoint {}'.format(entrypoint))
+                del entrypoint
+            except KeyError:
+                pass
+            # parse data volumes
+            try:
+                data_volumes = task['data_volumes']
+            except KeyError:
+                pass
+            else:
+                if data_volumes is not None and len(data_volumes) > 0:
+                    for key in data_volumes:
+                        dvspec = config[
+                            'global_resources']['docker_volumes'][
+                                'data_volumes'][key]
+                        try:
+                            hostpath = dvspec['host_path']
+                        except KeyError:
+                            hostpath = None
+                        if hostpath is not None:
+                            run_opts.append('-v {}:{}'.format(
+                                hostpath, dvspec['container_path']))
+                        else:
+                            run_opts.append('-v {}'.format(
+                                dvspec['container_path']))
+            # parse shared data volumes
+            try:
+                shared_data_volumes = task['shared_data_volumes']
+            except KeyError:
+                pass
+            else:
+                if (shared_data_volumes is not None and
+                        len(shared_data_volumes) > 0):
+                    for key in shared_data_volumes:
+                        dvspec = config[
+                            'global_resources']['docker_volumes'][
+                                'shared_data_volumes'][key]
+                        run_opts.append('-v {}:{}'.format(
+                            key, dvspec['container_path']))
+            # get command
+            try:
+                command = task['command']
+            except KeyError:
+                command = None
+            # get and create env var file
+            envfile = '{}.env.list'.format(task_id)
+            sas_urls = None
+            try:
+                env_vars = task['environment_variables']
+            except KeyError:
+                pass
+            else:
+                if env_vars is not None and len(env_vars) > 0:
+                    envfiletmp = _TEMP_DIR / envfile
+                    envfileloc = '{}taskrf-{}/{}'.format(
+                        config['storage_entity_prefix'], job.id, envfile)
+                    with envfiletmp.open('w') as f:
+                        for key in env_vars:
+                            f.write('{}={}{}'.format(
+                                key, env_vars[key], os.linesep))
+                    # upload env var file if exists
+                    sas_urls = upload_resource_files(
+                        blob_client, config, [(envfileloc, str(envfiletmp))])
+                    envfiletmp.unlink()
+            # always add option for envfile
+            run_opts.append('--env-file {}'.format(envfile))
+            # mount batch root dir
+            run_opts.append(
+                '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
+            # set working directory
+            run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+            # add task
+            task_commands = [
+                'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                'docker run {} {}{}'.format(
+                    ' '.join(run_opts),
+                    image,
+                    ' {}'.format(command) if command else '')
+            ]
+            task = batchmodels.TaskAddParameter(
+                id=task_id,
+                command_line=_wrap_commands_in_shell(task_commands),
+                run_elevated=True,
+                resource_files=[],
+            )
+            for rf in sas_urls:
+                task.resource_files.append(
+                    batchmodels.ResourceFile(
+                        file_path=str(pathlib.Path(rf).name),
+                        blob_source=sas_urls[rf])
+                )
+            print('adding task {}: {}'.format(
+                task_id, task.command_line))
+            batch_client.task.add(job_id=job.id, task=task)
 
 
 def del_job(batch_client, job_id):
     print('Deleting job: {}'.format(job_id))
     batch_client.job.delete(job_id)
+
+
+def terminate_job(batch_client, job_id):
+    print('Terminating job: {}'.format(job_id))
+    batch_client.job.terminate(job_id)
 
 
 def del_all_jobs(batch_client):
@@ -485,7 +640,7 @@ def _clear_table(table_client, table_name, config):
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}${}\''.format(
             config['credentials']['batch_account'],
-            config['poolspec']['id'])
+            config['pool_specification']['id'])
     )
     # batch delete entities
     i = 0
@@ -527,6 +682,31 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
+def _add_global_resource(
+        queue_client, table_client, config, pk, p2pcsd, grtype):
+    try:
+        for gr in config['global_resources'][grtype]:
+            if grtype == 'docker_images':
+                prefix = 'docker'
+            else:
+                raise NotImplementedError()
+            resource = '{}:{}'.format(prefix, gr)
+            table_client.insert_or_replace_entity(
+                _STORAGE_CONTAINERS['table_globalresources'],
+                {
+                    'PartitionKey': pk,
+                    'RowKey': hashlib.sha1(
+                        resource.encode('utf8')).hexdigest(),
+                    'Resource': resource,
+                }
+            )
+            for _ in range(0, p2pcsd):
+                queue_client.put_message(
+                    _STORAGE_CONTAINERS['queue_globalresources'], resource)
+    except KeyError:
+        pass
+
+
 def populate_queues(queue_client, table_client, config):
     try:
         preg = config['docker_registry']['private']['enabled']
@@ -534,7 +714,7 @@ def populate_queues(queue_client, table_client, config):
         preg = False
     pk = '{}${}'.format(
         config['credentials']['batch_account'],
-        config['poolspec']['id'])
+        config['pool_specification']['id'])
     # if using docker public hub, then populate registry table with hub
     if not preg:
         table_client.insert_or_replace_entity(
@@ -545,7 +725,7 @@ def populate_queues(queue_client, table_client, config):
                 'Port': 80,
             }
         )
-    # populate global resources
+    # get p2pcsd setting
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
@@ -558,21 +738,9 @@ def populate_queues(queue_client, table_client, config):
             p2pcsd = 1
     else:
         p2pcsd = 1
-    try:
-        for gr in config['global_resources']:
-            table_client.insert_or_replace_entity(
-                _STORAGE_CONTAINERS['table_globalresources'],
-                {
-                    'PartitionKey': pk,
-                    'RowKey': hashlib.sha1(gr.encode('utf8')).hexdigest(),
-                    'Resource': gr,
-                }
-            )
-            for _ in range(0, p2pcsd):
-                queue_client.put_message(
-                    _STORAGE_CONTAINERS['queue_globalresources'], gr)
-    except KeyError:
-        pass
+    # add global resources
+    _add_global_resource(
+        queue_client, table_client, config, pk, p2pcsd, 'docker_images')
 
 
 def merge_dict(dict1, dict2):
@@ -635,9 +803,9 @@ def main():
     elif args.action == 'delnode':
         del_node(batch_client, args.poolid, args.nodeid)
     elif args.action == 'addjob':
-        add_job(batch_client, config)
-    elif args.action == 'addtask':
-        add_task(batch_client, config)
+        add_job(batch_client, blob_client, config)
+    elif args.action == 'termjob':
+        terminate_job(batch_client, blob_client, args.jobid)
     elif args.action == 'deljob':
         del_job(batch_client, args.jobid)
     elif args.action == 'delalljobs':
@@ -662,8 +830,8 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Shipyard: Azure Batch to Docker Bridge')
     parser.add_argument(
-        'action', help='action: addpool, addjob, addtask, delpool, delnode, '
-        'deljob, delalljobs, grl, delstorage, clearstorage')
+        'action', help='action: addpool, addjob, termjob, delpool, '
+        'delnode, deljob, delalljobs, grl, delstorage, clearstorage')
     parser.add_argument(
         '--settings',
         help='global settings json file config. required for all actions')
