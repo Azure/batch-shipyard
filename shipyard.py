@@ -9,8 +9,10 @@ import json
 import hashlib
 import os
 import pathlib
+import subprocess
 import time
 from typing import List
+import urllib
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batch
@@ -35,6 +37,17 @@ _STORAGE_CONTAINERS = {
     'table_perf': None,
     'queue_globalresources': None,
 }
+_AZUREFILE_DVD_VERSION = '0.4.1'
+_AZUREFILE_DVD_URL = 'https://github.com/Azure/azurefile-' + \
+    'dockervolumedriver/releases/download/' + _AZUREFILE_DVD_VERSION + \
+    '/azurefile-dockervolumedriver'
+_AZUREFILE_DVD_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
+_AZUREFILE_SYSTEMD_SERVICE_URL = (
+    'https://raw.githubusercontent.com/Azure/'
+    'azurefile-dockervolumedriver/master/contrib/init/systemd/'
+    'azurefile-dockervolumedriver.service'
+)
+_AZUREFILE_SYSTEMD_SERVICE_MD5 = 'd58f2f5e9f9f78216651ac28419878f1'
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _JOBPREP_FILE = ('jpdockerblock.sh', 'scripts/jpdockerblock.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
@@ -45,9 +58,10 @@ _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
 _TEMP_DIR = pathlib.Path('/tmp')
 
 
-def _populate_global_settings(config: dict):
+def _populate_global_settings(config: dict, action: str):
     """Populate global settings from config
     :param dict config: configuration dict
+    :param str action: action
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNTKEY, \
         _REGISTRY_FILE
@@ -60,7 +74,10 @@ def _populate_global_settings(config: dict):
         sep = None
     if sep is None:
         sep = ''
-    _STORAGE_CONTAINERS['blob_resourcefiles'] = sep + 'resourcefiles'
+    _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
+        (sep + 'resourcefiles',
+         config['credentials']['batch_account'].lower(),
+         config['pool_specification']['id'].lower()))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'torrents',
          config['credentials']['batch_account'].lower(),
@@ -75,12 +92,33 @@ def _populate_global_settings(config: dict):
         (sep + 'globalresources',
          config['credentials']['batch_account'].lower(),
          config['pool_specification']['id'].lower()))
+    if action != 'addpool':
+        return
     try:
         if config['docker_registry']['private']['enabled']:
             rf = config['docker_registry']['private'][
                 'docker_save_registry_file']
+            prf = pathlib.Path(rf)
+            # attempt to package if registry file doesn't exist
+            if not prf.exists():
+                print('attempting to generate docker private registry tarball')
+                try:
+                    output = subprocess.check_output(
+                        'sudo docker images -q registry:2', shell=True)
+                    output = output.decode('utf-8').strip()
+                except subprocess.CalledProcessError as ex:
+                    pass
+                else:
+                    if len(output) == 12:
+                        rf = 'resources/docker_registry_v2.tar.gz'
+                        prf = pathlib.Path(rf)
+                        config['docker_registry']['private'][
+                            'docker_save_registry_image_id'] = output
+                        subprocess.check_call(
+                            'sudo docker save registry:2 '
+                            '| gzip -c > {}'.format(rf), shell=True)
             _REGISTRY_FILE = (
-                pathlib.Path(rf).name,
+                prf.name,
                 rf,
                 config['docker_registry']['private'][
                     'docker_save_registry_image_id']
@@ -89,6 +127,7 @@ def _populate_global_settings(config: dict):
             _REGISTRY_FILE = (None, None, None)
     except Exception:
         _REGISTRY_FILE = (None, None, None)
+    print('private registry settings: {}'.format(_REGISTRY_FILE))
 
 
 def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
@@ -129,13 +168,14 @@ def _create_credentials(config: dict) -> tuple:
     return batch_client, blob_client, queue_client, table_client
 
 
-def compute_md5_for_file_b64(
-        file: pathlib.Path, blocksize: int=65536) -> str:
-    """Compute MD5 hash for file as base64
+def compute_md5_for_file(
+        file: pathlib.Path, as_base64: bool, blocksize: int=65536) -> str:
+    """Compute MD5 hash for file
     :param pathlib.Path file: file to compute md5 for
+    :param bool as_base64: return as base64 encoded string
     :param int blocksize: block size in bytes
     :rtype: str
-    :return: md5 for file base64 encoded
+    :return: md5 for file
     """
     hasher = hashlib.md5()
     with file.open('rb') as filedesc:
@@ -144,7 +184,10 @@ def compute_md5_for_file_b64(
             if not buf:
                 break
             hasher.update(buf)
-        return str(base64.b64encode(hasher.digest()), 'ascii')
+        if as_base64:
+            return str(base64.b64encode(hasher.digest()), 'ascii')
+        else:
+            return hasher.digest()
 
 
 def upload_resource_files(
@@ -162,25 +205,23 @@ def upload_resource_files(
         if file[0] is None:
             continue
         upload = True
-        if file[0] == _REGISTRY_FILE[0]:
-            fp = pathlib.Path(file[1])
-            if not fp.exists():
-                print('skipping optional docker registry image: {}'.format(
-                    _REGISTRY_FILE[0]))
-                continue
-            else:
-                # check if blob exists
-                try:
-                    prop = blob_client.get_blob_properties(
-                        _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
-                    if (prop.name == _REGISTRY_FILE[0] and
-                            prop.properties.content_settings.content_md5 ==
-                            compute_md5_for_file_b64(fp)):
-                        print(('remote file is the same '
-                               'for {}, skipping').format(_REGISTRY_FILE[0]))
-                        upload = False
-                except azure.common.AzureMissingResourceHttpError:
-                    pass
+        fp = pathlib.Path(file[1])
+        if fp.name == _REGISTRY_FILE[0] and not fp.exists():
+            print('skipping optional docker registry image: {}'.format(
+                _REGISTRY_FILE[0]))
+            continue
+        else:
+            # check if blob exists
+            try:
+                prop = blob_client.get_blob_properties(
+                    _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
+                if (prop.properties.content_settings.content_md5 ==
+                        compute_md5_for_file(fp, True)):
+                    print(('remote file is the same '
+                           'for {}, skipping').format(file[0]))
+                    upload = False
+            except azure.common.AzureMissingResourceHttpError:
+                pass
         if upload:
             print('uploading file: {}'.format(file[1]))
             blob_client.create_blob_from_path(
@@ -197,6 +238,67 @@ def upload_resource_files(
             )
         )
     return sas_urls
+
+
+def setup_azurefile_volume_driver(
+        blob_client: azure.storage.blob.BlockBlobService,
+        config: dict) -> tuple:
+    # check to see if binary is downloaded
+    bin = pathlib.Path('resources/azurefile-dockervolumedriver')
+    if (not bin.exists() or
+            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_MD5):
+        response = urllib.request.urlopen(_AZUREFILE_DVD_URL)
+        with bin.open('wb') as f:
+            f.write(response.read())
+    srv = pathlib.Path('resources/azurefile-dockervolumedriver.service')
+    if (not srv.exists() or
+            compute_md5_for_file(srv, False) !=
+            _AZUREFILE_SYSTEMD_SERVICE_MD5):
+        response = urllib.request.urlopen(_AZUREFILE_SYSTEMD_SERVICE_URL)
+        with srv.open('wb') as f:
+            f.write(response.read())
+    # construct systemd env file
+    sa = None
+    sakey = None
+    for svkey in config[
+            'global_resources']['docker_volumes']['shared_data_volumes']:
+        conf = config[
+            'global_resources']['docker_volumes']['shared_data_volumes'][svkey]
+        if conf['volume_driver'] == 'azurefile':
+            # check every entry to ensure the same storage account
+            _sa = conf['storage_account']
+            _sakey = conf['storage_account_key']
+            if sa is not None and sa != _sa:
+                raise ValueError(
+                    'multiple storage accounts are not supported for '
+                    'azurefile docker volume driver')
+            sa = _sa
+            sakey = _sakey
+    if sa is None or sakey is None:
+        raise RuntimeError(
+            'storage account or storage account key not specified for '
+            'azurefile docker volume driver')
+    srvenv = pathlib.Path('resources/azurefile-dockervolumedriver.env')
+    with srvenv.open('w') as f:
+        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
+        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
+    # create docker volume mount command script
+    volcreate = pathlib.Path('resources/azurefile-dockervolume-create.sh')
+    with volcreate.open('w') as f:
+        f.write('#!/usr/bin/env bash\n\n')
+        for svkey in config[
+                'global_resources']['docker_volumes']['shared_data_volumes']:
+            conf = config[
+                'global_resources']['docker_volumes'][
+                    'shared_data_volumes'][svkey]
+            opts = [
+                '-o share={}'.format(conf['azure_file_share_name'])
+            ]
+            for opt in conf['mount_options']:
+                opts.append('-o {}'.format(opt))
+            f.write('docker volume create -d azurefile --name {} {}\n'.format(
+                svkey, ' '.join(opts)))
+    return bin, srv, srvenv, volcreate
 
 
 def add_pool(
@@ -251,6 +353,16 @@ def add_pool(
     except KeyError:
         dockeruser = None
         dockerpw = None
+    # check volume mounts for azurefile
+    azurefile_vd = False
+    try:
+        shared_data_volumes = config[
+            'global_resources']['docker_volumes']['shared_data_volumes']
+        for key in shared_data_volumes:
+            if shared_data_volumes[key]['volume_driver'] == 'azurefile':
+                azurefile_vd = True
+    except KeyError:
+        pass
     # prefix settings
     try:
         prefix = config['storage_entity_prefix']
@@ -272,13 +384,27 @@ def add_pool(
         image_ref.sku.lower() == sku.lower()
     ]
     sku_to_use, image_ref_to_use = skus_to_use[-1]
+    # create resource files list
+    _rflist = [
+        _NODEPREP_FILE, _JOBPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE,
+        _PERF_FILE, _REGISTRY_FILE
+    ]
+    # handle azurefile docker volume driver
+    if azurefile_vd:
+        if (publisher != 'Canonical' or offer != 'UbuntuServer' or
+                sku < '16.04.0-LTS'):
+            raise ValueError(
+                'Unsupported Docker Host VM Config with Azurefile '
+                'Docker Volume Driver')
+        afbin, afsrv, afenv, afvc = setup_azurefile_volume_driver(
+            blob_client, config)
+        _rflist.append((str(afbin.name), str(afbin)))
+        _rflist.append((str(afsrv.name), str(afsrv)))
+        _rflist.append((str(afenv.name), str(afenv)))
+        _rflist.append((str(afvc.name), str(afvc)))
     # upload resource files
-    sas_urls = upload_resource_files(
-        blob_client, config, [
-            _NODEPREP_FILE, _JOBPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE,
-            _PERF_FILE, _REGISTRY_FILE
-        ]
-    )
+    sas_urls = upload_resource_files(blob_client, config, _rflist)
+    del _rflist
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=config['pool_specification']['id'],
@@ -289,7 +415,7 @@ def add_pool(
         target_dedicated=config['pool_specification']['vm_count'],
         enable_inter_node_communication=True,
         start_task=batchmodels.StartTask(
-            command_line='{} -o {} -s {}{}{}{}{}'.format(
+            command_line='{} -o {} -s {}{}{}{}{}{}'.format(
                 _NODEPREP_FILE[0],
                 offer,
                 sku,
@@ -297,6 +423,7 @@ def add_pool(
                 ' -p {}'.format(prefix) if prefix else '',
                 ' -t {}:{}'.format(p2pcomp, p2psbias) if p2p else '',
                 ' -c' if nonp2pcd else '',
+                ' -a' if azurefile_vd else '',
             ),
             run_elevated=True,
             wait_for_success=True,
@@ -541,17 +668,26 @@ def add_job(batch_client, blob_client, config):
             except KeyError:
                 command = None
             # get and create env var file
-            envfile = '{}.env.list'.format(task_id)
+            envfile = '.env.list'.format(task_id)
             sas_urls = None
             try:
-                env_vars = task['environment_variables']
+                env_vars = jobspec['environment_variables']
+            except KeyError:
+                env_vars = None
+            try:
+                task_ev = task['environment_variables']
+                if env_vars is None:
+                    env_vars = task_ev
+                else:
+                    env_vars = merge_dict(env_vars, task_ev)
             except KeyError:
                 pass
             else:
                 if env_vars is not None and len(env_vars) > 0:
-                    envfiletmp = _TEMP_DIR / envfile
-                    envfileloc = '{}taskrf-{}/{}'.format(
-                        config['storage_entity_prefix'], job.id, envfile)
+                    envfiletmp = _TEMP_DIR / '{}{}'.format(task_id, envfile)
+                    envfileloc = '{}taskrf-{}/{}{}'.format(
+                        config['storage_entity_prefix'], job.id, task_id,
+                        envfile)
                     with envfiletmp.open('w') as f:
                         for key in env_vars:
                             f.write('{}={}{}'.format(
@@ -560,6 +696,8 @@ def add_job(batch_client, blob_client, config):
                     sas_urls = upload_resource_files(
                         blob_client, config, [(envfileloc, str(envfiletmp))])
                     envfiletmp.unlink()
+                    if len(sas_urls) != 1:
+                        raise RuntimeError('unexpected number of sas urls')
             # always add option for envfile
             run_opts.append('--env-file {}'.format(envfile))
             # mount batch root dir
@@ -581,12 +719,13 @@ def add_job(batch_client, blob_client, config):
                 run_elevated=True,
                 resource_files=[],
             )
-            for rf in sas_urls:
-                task.resource_files.append(
-                    batchmodels.ResourceFile(
-                        file_path=str(pathlib.Path(rf).name),
-                        blob_source=sas_urls[rf])
+            task.resource_files.append(
+                batchmodels.ResourceFile(
+                    file_path=str(envfile),
+                    blob_source=next(iter(sas_urls.values())),
+                    file_mode='0640',
                 )
+            )
             print('adding task {}: {}'.format(
                 task_id, task.command_line))
             batch_client.task.add(job_id=job.id, task=task)
@@ -635,6 +774,14 @@ def _clear_blobs(blob_client, container):
         blob_client.delete_blob(container, blob.name)
 
 
+def _clear_blob_task_resourcefiles(blob_client, container, config):
+    envfileloc = '{}taskrf-'.format(config['storage_entity_prefix'])
+    print('deleting blobs with prefix: {}'.format(envfileloc))
+    blobs = blob_client.list_blobs(container, prefix=envfileloc)
+    for blob in blobs:
+        blob_client.delete_blob(container, blob.name)
+
+
 def _clear_table(table_client, table_name, config):
     print('clearing table: {}'.format(table_name))
     ents = table_client.query_entities(
@@ -662,6 +809,9 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
             # TODO this is temp to preserve registry upload
             if key != 'blob_resourcefiles':
                 _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
+            else:
+                _clear_blob_task_resourcefiles(
+                    blob_client, _STORAGE_CONTAINERS[key], config)
         elif key.startswith('table_'):
             _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
         elif key.startswith('queue_'):
@@ -784,7 +934,7 @@ def main():
         config = merge_dict(config, json.load(f))
     print('config:')
     print(json.dumps(config, indent=4))
-    _populate_global_settings(config)
+    _populate_global_settings(config, args.action)
 
     batch_client, blob_client, queue_client, table_client = \
         _create_credentials(config)

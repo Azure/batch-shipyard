@@ -3,6 +3,7 @@
 set -e
 set -o pipefail
 
+azurefile=0
 nonp2pcd=
 offer=
 p2p=
@@ -10,11 +11,12 @@ prefix=
 privatereg=
 sku=
 
-while getopts "h?co:p:r:s:t:" opt; do
+while getopts "h?aco:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
+            echo "-a install azurefile docker volume driver"
             echo "-c concurrent downloading in non-p2p mode"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -23,6 +25,9 @@ while getopts "h?co:p:r:s:t:" opt; do
             echo "-t [compression:seed bias] enable p2p sharing"
             echo ""
             exit 1
+            ;;
+        a)
+            azurefile=1
             ;;
         c)
             nonp2pcd="--nonp2pcd"
@@ -96,6 +101,8 @@ if [ $offer == "ubuntuserver" ]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
+        afdvdenable="systemctl enable azurefile-dockervolumedriver"
+        afdvdstart="systemctl start azurefile-dockervolumedriver"
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
@@ -117,6 +124,15 @@ if [ $offer == "ubuntuserver" ]; then
     if [ $? -ne 0 ]; then
         set -e
         $srvstop
+        # set up azure file docker volume driver if instructed
+        if [ $azurefile -eq 1 ]; then
+            chown root:root azurefile-dockervolumedriver*
+            chmod 755 azurefile-dockervolumedriver
+            chmod 640 azurefile-dockervolumedriver.env
+            mv azurefile-dockervolumedriver /usr/bin
+            mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
+            mv azurefile-dockervolumedriver.service /etc/systemd/system
+        fi
         set +e
         rm -f /var/lib/docker/network/files/local-kv.db
         echo DOCKER_OPTS="-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock" >> /etc/default/docker
@@ -129,6 +145,14 @@ if [ $offer == "ubuntuserver" ]; then
         fi
         set -e
         $srvstart
+        # start azure file docker volume driver
+        if [ $azurefile -eq 1 ]; then
+            $afdvdenable
+            $afdvdstart
+            # create docker volumes
+            chmod +x azurefile-dockervolume-create.sh
+            ./azurefile-dockervolume-create.sh
+        fi
         set +e
     fi
     set -e

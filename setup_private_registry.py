@@ -67,8 +67,8 @@ async def _start_private_registry_instance_async(
         return
     # check for registry image
     proc = await asyncio.subprocess.create_subprocess_shell(
-        'docker images | grep -E \'^registry.*2\' | awk -e \'{print $3}\'',
-        stdout=asyncio.subprocess.PIPE, loop=loop)
+        'docker images -q registry:2', stdout=asyncio.subprocess.PIPE,
+        loop=loop)
     stdout = await proc.communicate()
     if proc.returncode != 0:
         raise RuntimeError('docker images non-zero rc: {}'.format(
