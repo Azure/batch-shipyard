@@ -12,8 +12,7 @@ import azure.storage.table as azuretable
 
 # global defines
 _DEFAULT_PRIVATE_REGISTRY_PORT = 5000
-_STORAGEACCOUNT = os.environ['PRIVATE_REGISTRY_SA']
-_STORAGEACCOUNTKEY = os.environ['PRIVATE_REGISTRY_SAKEY']
+_CASCADE_STORAGEACCOUNT = None
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
 _POOLID = os.environ['AZ_BATCH_POOL_ID']
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -35,15 +34,17 @@ def _setup_container_names(sep: str):
         (sep + 'registry', _BATCHACCOUNT.lower(), _POOLID.lower()))
 
 
-def _create_credentials() -> tuple:
+def _create_credentials() -> azure.storage.table.TableService:
     """Create storage credentials
     :rtype: azure.storage.table.TableService
     :return: table client
     """
-    ep = os.getenv('CASCADE_EP') or 'core.windows.net'
+    global _CASCADE_STORAGEACCOUNT
+    _CASCADE_STORAGEACCOUNT, ep, sakey = os.environ[
+        'CASCADE_STORAGE_ENV'].split(':')
     table_client = azuretable.TableService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
+        account_name=_CASCADE_STORAGEACCOUNT,
+        account_key=sakey,
         endpoint_suffix=ep)
     return table_client
 
@@ -83,8 +84,7 @@ async def _start_private_registry_instance_async(
         if proc.returncode != 0:
             raise RuntimeError('docker load non-zero rc: {}'.format(
                 proc.returncode))
-    sa = os.getenv('PRIVATE_REGISTRY_SA') or _STORAGEACCOUNT
-    sakey = os.getenv('PRIVATE_REGISTRY_SAKEY') or _STORAGEACCOUNTKEY
+    sa, ep, sakey = os.environ['PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
     registry_cmd = [
         'docker', 'run', '-d', '-p',
         '{p}:{p}'.format(p=_DEFAULT_PRIVATE_REGISTRY_PORT),
@@ -92,6 +92,7 @@ async def _start_private_registry_instance_async(
         '-e', 'REGISTRY_STORAGE_AZURE_ACCOUNTNAME={}'.format(sa),
         '-e', 'REGISTRY_STORAGE_AZURE_ACCOUNTKEY={}'.format(sakey),
         '-e', 'REGISTRY_STORAGE_AZURE_CONTAINER={}'.format(container),
+        '-e', 'REGISTRY_STORAGE_AZURE_REALM={}'.format(ep),
         '--restart=always', '--name=registry', 'registry:2',
     ]
     print('starting private registry on port {} -> {}:{}'.format(
@@ -136,7 +137,7 @@ async def setup_private_registry_async(
             'RowKey': _NODEID,
             'IpAddress': ipaddress,
             'Port': _DEFAULT_PRIVATE_REGISTRY_PORT,
-            'StorageAccount': _STORAGEACCOUNT,
+            'StorageAccount': _CASCADE_STORAGEACCOUNT,
             'Container': container,
         }
         table_client.insert_or_replace_entity(
@@ -145,6 +146,13 @@ async def setup_private_registry_async(
 
 def main():
     """Main function"""
+    # delete existing private registry file if it exists
+    cprfile = pathlib.Path('.cascade_private_registry.txt')
+    try:
+        cprfile.unlink()
+    except FileNotFoundError:
+        pass
+
     # get command-line args
     args = parseargs()
     container, regarchive, regimageid = args.settings.split(':')
@@ -166,10 +174,11 @@ def main():
 
     # set up private registry
     loop.run_until_complete(setup_private_registry_async(
-        loop, table_client, args.ipaddress, container, regarchive, regimageid))
+        loop, table_client, args.ipaddress, container, regarchive,
+        regimageid))
 
     # create a private registry file to notify cascade
-    pathlib.Path('.cascade_private_registry.txt').touch()
+    cprfile.touch()
 
     # stop asyncio loop
     loop.stop()
@@ -185,8 +194,7 @@ def parseargs():
         description='Install Docker Private Registry')
     parser.add_argument(
         'settings',
-        help='private registry settings '
-        '[container:archive:imageid]')
+        help='private registry settings [container:archive:imageid]')
     parser.add_argument(
         'ipaddress', nargs='?', default=None, help='ip address')
     parser.add_argument(

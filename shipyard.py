@@ -265,6 +265,7 @@ def setup_azurefile_volume_driver(
     # construct systemd env file
     sa = None
     sakey = None
+    saep = None
     for svkey in config[
             'global_resources']['docker_volumes']['shared_data_volumes']:
         conf = config[
@@ -273,13 +274,13 @@ def setup_azurefile_volume_driver(
             # check every entry to ensure the same storage account
             ssel = conf['storage_account_settings']
             _sa = config['credentials']['storage'][ssel]['account']
-            _sakey = config['credentials']['storage'][ssel]['account_key']
             if sa is not None and sa != _sa:
                 raise ValueError(
                     'multiple storage accounts are not supported for '
                     'azurefile docker volume driver')
             sa = _sa
-            sakey = _sakey
+            sakey = config['credentials']['storage'][ssel]['account_key']
+            saep = config['credentials']['storage'][ssel]['endpoint']
     if sa is None or sakey is None:
         raise RuntimeError(
             'storage account or storage account key not specified for '
@@ -288,6 +289,7 @@ def setup_azurefile_volume_driver(
     with srvenv.open('w') as f:
         f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
         f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
+        f.write('AZURE_STORAGE_BASE={}\n'.format(saep))
     # create docker volume mount command script
     volcreate = pathlib.Path('resources/azurefile-dockervolume-create.sh')
     with volcreate.open('w') as f:
@@ -345,10 +347,10 @@ def add_pool(
             nonp2pcd = True
     # private registry settings
     try:
-        preg = config['docker_registry']['private']['enabled']
         pcont = config['docker_registry']['private']['container']
         pregpubpull = config['docker_registry']['private'][
             'allow_public_docker_hub_pull_on_missing']
+        preg = config['docker_registry']['private']['enabled']
     except KeyError:
         preg = False
         pregpubpull = False
@@ -437,8 +439,8 @@ def add_pool(
             config['pool_specification']['additional_node_prep_commands'])
     except KeyError:
         pass
-    ssel = config['docker_registry']['private']['storage_account_settings']
     # create pool param
+    ssel = config['credentials']['shipyard_storage']
     pool = batchmodels.PoolAddParameter(
         id=config['pool_specification']['id'],
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
@@ -453,16 +455,18 @@ def add_pool(
             wait_for_success=True,
             environment_settings=[
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
-                batchmodels.EnvironmentSetting('CASCADE_SA', _STORAGEACCOUNT),
                 batchmodels.EnvironmentSetting(
-                    'CASCADE_SAKEY', _STORAGEACCOUNTKEY),
-                batchmodels.EnvironmentSetting(
-                    'CASCADE_EP',
-                    config['credentials']['storage'][ssel]['endpoint']),
+                    'CASCADE_STORAGE_ENV',
+                    '{}:{}:{}'.format(
+                        _STORAGEACCOUNT,
+                        config['credentials']['storage'][ssel]['endpoint'],
+                        _STORAGEACCOUNTKEY)
+                )
             ],
             resource_files=[],
         ),
     )
+    del ssel
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
@@ -470,16 +474,17 @@ def add_pool(
                 blob_source=sas_urls[rf])
         )
     if preg:
+        ssel = config['docker_registry']['private']['storage_account_settings']
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'PRIVATE_REGISTRY_SA',
-                config['credentials']['storage'][ssel]['account'])
+                'PRIVATE_REGISTRY_STORAGE_ENV',
+                '{}:{}:{}'.format(
+                    config['credentials']['storage'][ssel]['account'],
+                    config['credentials']['storage'][ssel]['endpoint'],
+                    config['credentials']['storage'][ssel]['account_key'])
+            )
         )
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'PRIVATE_REGISTRY_SAKEY',
-                config['credentials']['storage'][ssel]['account_key'])
-        )
+        del ssel
     if (dockeruser is not None and len(dockeruser) > 0 and
             dockerpw is not None and len(dockerpw) > 0):
         pool.start_task.environment_settings.append(
