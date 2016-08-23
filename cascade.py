@@ -48,6 +48,7 @@ _ENABLE_P2P = True
 _NON_P2P_CONCURRENT_DOWNLOADING = True
 _COMPRESSION = True
 _SEED_BIAS = 3
+_ALLOW_PUBLIC_PULL_WITH_PRIVATE = False
 _SAVELOAD_FILE_EXTENSION = 'tar.gz'
 _REGISTRY = None
 # mutable global state
@@ -227,6 +228,32 @@ class DockerSaveThread(threading.Thread):
             _DIRECTDL_DOWNLOADING.append(self.resource)
 
     def run(self):
+        success = False
+        try:
+            self._pull_and_load()
+            success = True
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+        finally:
+            # cancel callback
+            if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
+                _CBHANDLES[self.resource].cancel()
+                _CBHANDLES.pop(self.resource)
+                # release queue message
+                self.queue_client.update_message(
+                    _STORAGE_CONTAINERS['queue_globalresources'],
+                    message_id=self.msg_id,
+                    pop_receipt=_QUEUE_MESSAGES[self.msg_id],
+                    visibility_timeout=0)
+                _QUEUE_MESSAGES.pop(self.msg_id)
+                print('queue message released for {}'.format(self.resource))
+            # remove from downloading list
+            if success:
+                with _DIRECTDL_LOCK:
+                    _DIRECTDL_DOWNLOADING.remove(self.resource)
+                    _DIRECTDL.remove(self.resource)
+
+    def _pull_and_load(self):
         if _REGISTRY is None:
             raise RuntimeError(
                 ('{} image specified for global resource, but there are '
@@ -242,13 +269,24 @@ class DockerSaveThread(threading.Thread):
             subprocess.check_output(
                 'docker pull {}'.format(image), shell=True)
         else:
-            subprocess.check_output(
-                'docker pull {}/{}'.format(_REGISTRY, image),
-                shell=True)
+            _pub = False
+            try:
+                subprocess.check_output(
+                    'docker pull {}/{}'.format(_REGISTRY, image),
+                    shell=True)
+            except subprocess.CalledProcessError:
+                if _ALLOW_PUBLIC_PULL_WITH_PRIVATE:
+                    subprocess.check_output(
+                        'docker pull {}'.format(image), shell=True)
+                    _pub = True
+                else:
+                    raise
             # tag image to remove registry ip
-            subprocess.check_call(
-                'docker tag {}/{} {}'.format(_REGISTRY, image, image),
-                shell=True)
+            if not _pub:
+                subprocess.check_call(
+                    'docker tag {}/{} {}'.format(_REGISTRY, image, image),
+                    shell=True)
+            del _pub
         diff = (datetime.datetime.now() - start).total_seconds()
         print('took {} sec to pull docker image {} from {}'.format(
             diff, image, _REGISTRY))
@@ -365,22 +403,6 @@ class DockerSaveThread(threading.Thread):
                     'gr-done',
                     'nglobalresources={}'.format(self.nglobalresources))
                 _GR_DONE = True
-        # cancel callback
-        if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
-            _CBHANDLES[self.resource].cancel()
-            _CBHANDLES.pop(self.resource)
-            # release queue message
-            self.queue_client.update_message(
-                _STORAGE_CONTAINERS['queue_globalresources'],
-                message_id=self.msg_id,
-                pop_receipt=_QUEUE_MESSAGES[self.msg_id],
-                visibility_timeout=0)
-            _QUEUE_MESSAGES.pop(self.msg_id)
-            print('queue message released for {}'.format(self.resource))
-        # remove from downloading list
-        with _DIRECTDL_LOCK:
-            _DIRECTDL_DOWNLOADING.remove(self.resource)
-            _DIRECTDL.remove(self.resource)
 
 
 async def _direct_download_resources_async(
@@ -851,17 +873,18 @@ def main():
     global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING
     # get command-line args
     args = parseargs()
-    _NON_P2P_CONCURRENT_DOWNLOADING = args.nonp2pcd
-    _ENABLE_P2P = args.torrent
+    p2popts = args.p2popts.split(':')
+    _ENABLE_P2P = p2popts[0] == 'true'
+    _NON_P2P_CONCURRENT_DOWNLOADING = p2popts[1]
     # set p2p options
     if _ENABLE_P2P:
         if not _LIBTORRENT_IMPORTED:
             raise ImportError('No module named \'libtorrent\'')
-        global _COMPRESSION, _SEED_BIAS, _SAVELOAD_FILE_EXTENSION
-        p2popts = args.p2popts.split(':')
-        _COMPRESSION = p2popts[0] == 'true'
-        _SEED_BIAS = int(p2popts[1])
-        del p2popts
+        global _COMPRESSION, _SEED_BIAS, _ALLOW_PUBLIC_PULL_WITH_PRIVATE, \
+            _SAVELOAD_FILE_EXTENSION
+        _COMPRESSION = p2popts[3] == 'true'
+        _SEED_BIAS = int(p2popts[2])
+        _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
         if not _COMPRESSION:
             _SAVELOAD_FILE_EXTENSION = 'tar'
         print('peer-to-peer options: compression={} seedbias={}'.format(
@@ -872,6 +895,7 @@ def main():
     else:
         print('non-p2p concurrent downloading: {}'.format(
             _NON_P2P_CONCURRENT_DOWNLOADING))
+    del p2popts
 
     # get event loop
     if _ON_WINDOWS:
@@ -917,10 +941,11 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Azure Batch P2P File/Image Replicator')
-    parser.set_defaults(ipaddress=None, nonp2pcd=False, torrent=True)
+    parser.set_defaults(ipaddress=None)
     parser.add_argument(
-        'p2popts', nargs='?',
-        help='peer to peer options [compression:seed bias]')
+        'p2popts',
+        help='peer to peer options [enabled:non-p2p concurrent '
+        'downloading:seed bias:compression:public pull passthrough]')
     parser.add_argument(
         '--ipaddress', help='ip address')
     parser.add_argument(

@@ -4,33 +4,28 @@ set -e
 set -o pipefail
 
 azurefile=0
-nonp2pcd=
 offer=
 p2p=
 prefix=
 privatereg=
 sku=
 
-while getopts "h?aco:p:r:s:t:" opt; do
+while getopts "h?ao:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
-            echo "-c concurrent downloading in non-p2p mode"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
             echo "-r [container:archive:image id] private registry"
             echo "-s [sku] VM sku"
-            echo "-t [compression:seed bias] enable p2p sharing"
+            echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
             echo ""
             exit 1
             ;;
         a)
             azurefile=1
-            ;;
-        c)
-            nonp2pcd="--nonp2pcd"
             ;;
         o)
             offer=${OPTARG,,}
@@ -76,14 +71,11 @@ PYTHONASYNCIODEBUG=1
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
-# set torrent flag and iptables rules
-torrentflag=
+# set iptables rules
 if [ ! -z "$p2p" ]; then
     # disable DHT connection tracking
     iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
-else
-    torrentflag="--no-torrent"
 fi
 
 # copy job prep docker block file to shared
@@ -196,7 +188,7 @@ fi
 
 # start cascade
 ./perf.py cascade start $prefix
-./cascade.py $p2p --ipaddress $ipaddress $prefix $torrentflag $nonp2pcd > cascade.log &
+./cascade.py $p2p --ipaddress $ipaddress $prefix > cascade.log &
 # if not in p2p mode, then wait for cascade exit
 if [ -z "$p2p" ]; then
     wait

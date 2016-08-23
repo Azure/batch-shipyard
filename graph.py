@@ -26,16 +26,17 @@ def _create_credentials(config: dict):
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNT, _POOLID, \
         _PARTITION_KEY, _TABLE_NAME
-    _STORAGEACCOUNT = config['credentials']['storage_account']
-    _STORAGEACCOUNTKEY = config['credentials']['storage_account_key']
-    _BATCHACCOUNT = config['credentials']['batch_account']
-    _POOLID = config['poolspec']['id']
+    ssel = config['credentials']['shipyard_storage']
+    _STORAGEACCOUNT = config['credentials']['storage'][ssel]['account']
+    _STORAGEACCOUNTKEY = config['credentials']['storage'][ssel]['account_key']
+    _BATCHACCOUNT = config['credentials']['batch']['account']
+    _POOLID = config['pool_specification']['id']
     _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
     _TABLE_NAME = config['storage_entity_prefix'] + 'perf'
     table_client = azuretable.TableService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config['credentials']['storage_endpoint'])
+        endpoint_suffix=config['credentials']['storage'][ssel]['endpoint'])
     return table_client
 
 
@@ -228,14 +229,16 @@ def main():
     # get command-line args
     args = parseargs()
 
-    if args.settings is None:
-        raise ValueError('global settings not specified')
+    if args.credentials is None:
+        raise ValueError('credentials json not specified')
     if args.config is None:
-        raise ValueError('config settings for action not specified')
+        raise ValueError('config json not specified')
 
-    with open(args.settings, 'r') as f:
+    with open(args.credentials, 'r') as f:
         config = json.load(f)
     with open(args.config, 'r') as f:
+        config = merge_dict(config, json.load(f))
+    with open(args.pool, 'r') as f:
         config = merge_dict(config, json.load(f))
 
     # create storage credentials
@@ -253,11 +256,11 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Shipyard perf graph generator')
     parser.add_argument(
-        '--settings',
-        help='global settings json file config. required for all actions')
+        '--credentials', help='credentials json config')
     parser.add_argument(
-        '--config',
-        help='json file config for option. required for all actions')
+        '--config', help='general json config for option')
+    parser.add_argument(
+        '--pool', help='pool json config')
     return parser.parse_args()
 
 if __name__ == '__main__':
