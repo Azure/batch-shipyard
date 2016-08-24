@@ -33,8 +33,6 @@ _TORRENT_STATE = [
     'seeding', 'allocating', 'checking fastresume'
 ]
 _TORRENT_SESSION = None
-_STORAGEACCOUNT = os.environ['CASCADE_SA']
-_STORAGEACCOUNTKEY = os.environ['CASCADE_SAKEY']
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
 _POOLID = os.environ['AZ_BATCH_POOL_ID']
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -97,18 +95,18 @@ def _create_credentials() -> tuple:
     :rtype: tuple
     :return: (blob_client, queue_client, table_client)
     """
-    ep = os.getenv('CASCADE_EP') or 'core.windows.net'
+    sa, ep, sakey = os.environ['CASCADE_STORAGE_ENV'].split(':')
     blob_client = azureblob.BlockBlobService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
+        account_name=sa,
+        account_key=sakey,
         endpoint_suffix=ep)
     queue_client = azurequeue.QueueService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
+        account_name=sa,
+        account_key=sakey,
         endpoint_suffix=ep)
     table_client = azuretable.TableService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
+        account_name=sa,
+        account_key=sakey,
         endpoint_suffix=ep)
     return blob_client, queue_client, table_client
 

@@ -23,9 +23,10 @@ import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 
 # global defines
-_STORAGEACCOUNT = os.getenv('STORAGEACCOUNT')
-_STORAGEACCOUNTKEY = os.getenv('STORAGEACCOUNTKEY')
-_BATCHACCOUNTKEY = os.getenv('BATCHACCOUNTKEY')
+_STORAGEACCOUNT = None
+_STORAGEACCOUNTKEY = None
+_STORAGEACCOUNTEP = None
+_BATCHACCOUNTKEY = None
 _STORAGE_CONTAINERS = {
     'blob_resourcefiles': None,
     'blob_torrents': None,
@@ -63,11 +64,15 @@ def _populate_global_settings(config: dict, action: str):
     :param dict config: configuration dict
     :param str action: action
     """
-    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNTKEY, \
-        _REGISTRY_FILE
+    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
+        _BATCHACCOUNTKEY, _REGISTRY_FILE
     ssel = config['credentials']['shipyard_storage']
     _STORAGEACCOUNT = config['credentials']['storage'][ssel]['account']
     _STORAGEACCOUNTKEY = config['credentials']['storage'][ssel]['account_key']
+    try:
+        _STORAGEACCOUNTEP = config['credentials']['storage'][ssel]['endpoint']
+    except KeyError:
+        _STORAGEACCOUNTEP = 'core.windows.net'
     _BATCHACCOUNTKEY = config['credentials']['batch']['account_key']
     try:
         sep = config['storage_entity_prefix']
@@ -150,7 +155,6 @@ def _create_credentials(config: dict) -> tuple:
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
-    ssel = config['credentials']['shipyard_storage']
     credentials = batchauth.SharedKeyCredentials(
         config['credentials']['batch']['account'],
         _BATCHACCOUNTKEY)
@@ -160,15 +164,15 @@ def _create_credentials(config: dict) -> tuple:
     blob_client = azureblob.BlockBlobService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config['credentials']['storage'][ssel]['endpoint'])
+        endpoint_suffix=_STORAGEACCOUNTEP)
     queue_client = azurequeue.QueueService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config['credentials']['storage'][ssel]['endpoint'])
+        endpoint_suffix=_STORAGEACCOUNTEP)
     table_client = azuretable.TableService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=config['credentials']['storage'][ssel]['endpoint'])
+        endpoint_suffix=_STORAGEACCOUNTEP)
     return batch_client, blob_client, queue_client, table_client
 
 
@@ -203,7 +207,6 @@ def upload_resource_files(
     :rtype: dict
     :return: sas url dict
     """
-    ssel = config['credentials']['shipyard_storage']
     sas_urls = {}
     for file in files:
         # skip if no file is specified
@@ -211,7 +214,8 @@ def upload_resource_files(
             continue
         upload = True
         fp = pathlib.Path(file[1])
-        if fp.name == _REGISTRY_FILE[0] and not fp.exists():
+        if (_REGISTRY_FILE is not None and fp.name == _REGISTRY_FILE[0] and
+                not fp.exists()):
             print('skipping optional docker registry image: {}'.format(
                 _REGISTRY_FILE[0]))
             continue
@@ -233,7 +237,7 @@ def upload_resource_files(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0], file[1])
         sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(
             _STORAGEACCOUNT,
-            config['credentials']['storage'][ssel]['endpoint'],
+            _STORAGEACCOUNTEP,
             _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
             blob_client.generate_blob_shared_access_signature(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
@@ -440,7 +444,6 @@ def add_pool(
     except KeyError:
         pass
     # create pool param
-    ssel = config['credentials']['shipyard_storage']
     pool = batchmodels.PoolAddParameter(
         id=config['pool_specification']['id'],
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
@@ -459,14 +462,13 @@ def add_pool(
                     'CASCADE_STORAGE_ENV',
                     '{}:{}:{}'.format(
                         _STORAGEACCOUNT,
-                        config['credentials']['storage'][ssel]['endpoint'],
+                        _STORAGEACCOUNTEP,
                         _STORAGEACCOUNTKEY)
                 )
             ],
             resource_files=[],
         ),
     )
-    del ssel
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
@@ -751,22 +753,40 @@ def add_jobs(batch_client, blob_client, config):
                     image,
                     ' {}'.format(command) if command else '')
             ]
-            task = batchmodels.TaskAddParameter(
+            batchtask = batchmodels.TaskAddParameter(
                 id=task_id,
                 command_line=_wrap_commands_in_shell(task_commands),
                 run_elevated=True,
                 resource_files=[],
             )
-            task.resource_files.append(
+            batchtask.resource_files.append(
                 batchmodels.ResourceFile(
                     file_path=str(envfile),
                     blob_source=next(iter(sas_urls.values())),
                     file_mode='0640',
                 )
             )
+            # add additional resource files
+            try:
+                rfs = task['resource_files']
+            except KeyError:
+                pass
+            else:
+                for rf in rfs:
+                    try:
+                        fm = rf['file_mode']
+                    except KeyError:
+                        fm = None
+                    batchtask.resource_files.append(
+                        batchmodels.ResourceFile(
+                            file_path=rf['file_path'],
+                            blob_source=rf['blob_source'],
+                            file_mode=fm,
+                        )
+                    )
             print('adding task {}: {}'.format(
-                task_id, task.command_line))
-            batch_client.task.add(job_id=job.id, task=task)
+                task_id, batchtask.command_line))
+            batch_client.task.add(job_id=job.id, task=batchtask)
 
 
 def del_jobs(batch_client, config):
