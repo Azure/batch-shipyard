@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 
 # stdlib imports
+from __future__ import print_function, unicode_literals
 import argparse
 import base64
 import copy
 import datetime
 import json
 import hashlib
+import logging
+import logging.handlers
 import os
 import pathlib
 import subprocess
+import sys
 import time
-from typing import List
-import urllib
+try:
+    import urllib.request as urllibreq
+except ImportError:
+    import urllib as urllibreq
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batch
@@ -22,7 +28,10 @@ import azure.storage.blob as azureblob
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 
+# create logger
+logger = logging.getLogger('shipyard')
 # global defines
+_PY2 = sys.version_info.major == 2
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
@@ -59,7 +68,19 @@ _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
 _TEMP_DIR = pathlib.Path('/tmp')
 
 
-def _populate_global_settings(config: dict, action: str):
+def _setup_logger():
+    """Set up logger"""
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        '%(asctime)sZ %(levelname)s %(funcName)s:%(lineno)d %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info('logger initialized')
+
+
+def _populate_global_settings(config, action):
+    # type: (dict, str) -> None
     """Populate global settings from config
     :param dict config: configuration dict
     :param str action: action
@@ -110,7 +131,8 @@ def _populate_global_settings(config: dict, action: str):
         prf = pathlib.Path(rf)
         # attempt to package if registry file doesn't exist
         if not prf.exists() or prf.stat().st_size == 0:
-            print('attempting to generate docker private registry tarball')
+            logger.debug(
+                'attempting to generate docker private registry tarball')
             try:
                 prf.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
                 output = subprocess.check_output(
@@ -135,10 +157,11 @@ def _populate_global_settings(config: dict, action: str):
         )
     else:
         _REGISTRY_FILE = (None, None, None)
-    print('private registry settings: {}'.format(_REGISTRY_FILE))
+    logger.info('private registry settings: {}'.format(_REGISTRY_FILE))
 
 
-def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
+def _wrap_commands_in_shell(commands, wait=True):
+    # type: (List[str], bool) -> str
     """Wrap commands in a shell
     :param list commands: list of commands to wrap
     :param bool wait: add wait for background processes
@@ -149,7 +172,8 @@ def _wrap_commands_in_shell(commands: List[str], wait: bool=True) -> str:
         ';'.join(commands), '; wait' if wait else '')
 
 
-def _create_credentials(config: dict) -> tuple:
+def _create_credentials(config):
+    # type: (dict) -> tuple
     """Create authenticated clients
     :param dict config: configuration dict
     :rtype: tuple
@@ -176,8 +200,8 @@ def _create_credentials(config: dict) -> tuple:
     return batch_client, blob_client, queue_client, table_client
 
 
-def compute_md5_for_file(
-        file: pathlib.Path, as_base64: bool, blocksize: int=65536) -> str:
+def compute_md5_for_file(file, as_base64, blocksize=65536):
+    # type: (pathlib.Path, bool, int) -> str
     """Compute MD5 hash for file
     :param pathlib.Path file: file to compute md5 for
     :param bool as_base64: return as base64 encoded string
@@ -193,14 +217,16 @@ def compute_md5_for_file(
                 break
             hasher.update(buf)
         if as_base64:
-            return str(base64.b64encode(hasher.digest()), 'ascii')
+            if _PY2:
+                return base64.b64encode(hasher.digest())
+            else:
+                return str(base64.b64encode(hasher.digest()), 'ascii')
         else:
-            return hasher.digest()
+            return hasher.hexdigest()
 
 
-def upload_resource_files(
-        blob_client: azure.storage.blob.BlockBlobService, config: dict,
-        files: List[tuple]) -> dict:
+def upload_resource_files(blob_client, config, files):
+    # type: (azure.storage.blob.BlockBlobService, dict, List[tuple]) -> dict
     """Upload resource files to blob storage
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
@@ -216,7 +242,7 @@ def upload_resource_files(
         fp = pathlib.Path(file[1])
         if (_REGISTRY_FILE is not None and fp.name == _REGISTRY_FILE[0] and
                 not fp.exists()):
-            print('skipping optional docker registry image: {}'.format(
+            logger.debug('skipping optional docker registry image: {}'.format(
                 _REGISTRY_FILE[0]))
             continue
         else:
@@ -226,13 +252,14 @@ def upload_resource_files(
                     _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
                 if (prop.properties.content_settings.content_md5 ==
                         compute_md5_for_file(fp, True)):
-                    print(('remote file is the same '
-                           'for {}, skipping').format(file[0]))
+                    logger.debug(
+                        'remote file is the same for {}, skipping'.format(
+                            file[0]))
                     upload = False
             except azure.common.AzureMissingResourceHttpError:
                 pass
         if upload:
-            print('uploading file: {}'.format(file[1]))
+            logger.info('uploading file: {}'.format(file[1]))
             blob_client.create_blob_from_path(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0], file[1])
         sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(
@@ -249,21 +276,20 @@ def upload_resource_files(
     return sas_urls
 
 
-def setup_azurefile_volume_driver(
-        blob_client: azure.storage.blob.BlockBlobService,
-        config: dict) -> tuple:
+def setup_azurefile_volume_driver(blob_client, config):
+    # type: (azure.storage.blob.BlockBlobService, dict) -> tuple
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
             compute_md5_for_file(bin, False) != _AZUREFILE_DVD_MD5):
-        response = urllib.request.urlopen(_AZUREFILE_DVD_URL)
+        response = urllibreq.urlopen(_AZUREFILE_DVD_URL)
         with bin.open('wb') as f:
             f.write(response.read())
     srv = pathlib.Path('resources/azurefile-dockervolumedriver.service')
     if (not srv.exists() or
             compute_md5_for_file(srv, False) !=
             _AZUREFILE_SYSTEMD_SERVICE_MD5):
-        response = urllib.request.urlopen(_AZUREFILE_SYSTEMD_SERVICE_URL)
+        response = urllibreq.urlopen(_AZUREFILE_SYSTEMD_SERVICE_URL)
         with srv.open('wb') as f:
             f.write(response.read())
     # construct systemd env file
@@ -290,13 +316,13 @@ def setup_azurefile_volume_driver(
             'storage account or storage account key not specified for '
             'azurefile docker volume driver')
     srvenv = pathlib.Path('resources/azurefile-dockervolumedriver.env')
-    with srvenv.open('w') as f:
+    with srvenv.open('w', encoding='utf8') as f:
         f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
         f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
         f.write('AZURE_STORAGE_BASE={}\n'.format(saep))
     # create docker volume mount command script
     volcreate = pathlib.Path('resources/azurefile-dockervolume-create.sh')
-    with volcreate.open('w') as f:
+    with volcreate.open('w', encoding='utf8') as f:
         f.write('#!/usr/bin/env bash\n\n')
         for svkey in config[
                 'global_resources']['docker_volumes']['shared_data_volumes']:
@@ -313,9 +339,8 @@ def setup_azurefile_volume_driver(
     return bin, srv, srvenv, volcreate
 
 
-def add_pool(
-        batch_client: azure.batch.batch_service_client.BatchServiceClient,
-        blob_client: azure.storage.blob.BlockBlobService, config: dict):
+def add_pool(batch_client, blob_client, config):
+    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
     """Add a Batch pool to account
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
@@ -497,54 +522,80 @@ def add_pool(
         )
     # create pool if not exists
     try:
-        print('Attempting to create pool:', pool.id)
-        print(' >> node prep commandline: {}'.format(
+        logger.info('Attempting to create pool: {}'.format(pool.id))
+        logger.debug('node prep commandline: {}'.format(
             pool.start_task.command_line))
         batch_client.pool.add(pool)
-        print('Created pool:', pool.id)
+        logger.info('Created pool: {}'.format(pool.id))
     except batchmodels.BatchErrorException as e:
         if e.error.code != 'PoolExists':
             raise
         else:
-            print('Pool {!r} already exists'.format(pool.id))
+            logger.error('Pool {!r} already exists'.format(pool.id))
     # wait for pool idle
     node_state = frozenset(
         (batchmodels.ComputeNodeState.starttaskfailed,
          batchmodels.ComputeNodeState.unusable,
          batchmodels.ComputeNodeState.idle)
     )
-    print('waiting for all nodes in pool {} to reach one of: {!r}'.format(
-        pool.id, node_state))
+    try:
+        reboot_on_failed = config[
+            'pool_specification']['reboot_on_start_task_failed']
+    except KeyError:
+        reboot_on_failed = False
+    nodes = _wait_for_pool_ready(
+        batch_client, node_state, pool.id, reboot_on_failed)
+    get_remote_login_settings(batch_client, config, nodes)
+
+
+def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
+    # type: (batch.BatchServiceClient, List[batchmodels.ComputeNodeState],
+    #        str, bool) -> List[batchmodels.ComputeNode]
+    logger.info(
+        'waiting for all nodes in pool {} to reach one of: {!r}'.format(
+            pool_id, node_state))
     i = 0
     while True:
         # refresh pool to ensure that there is no resize error
-        pool = batch_client.pool.get(pool.id)
+        pool = batch_client.pool.get(pool_id)
         if pool.resize_error is not None:
             raise RuntimeError(
                 'resize error encountered for pool {}: code={} msg={}'.format(
                     pool.id, pool.resize_error.code,
                     pool.resize_error.message))
         nodes = list(batch_client.compute_node.list(pool.id))
+        if (reboot_on_failed and
+                any(node.state == batchmodels.ComputeNodeState.starttaskfailed
+                    for node in nodes)):
+            for node in nodes:
+                if (node.state ==
+                        batchmodels.ComputeNodeState.starttaskfailed):
+                    _reboot_node(batch_client, pool.id, node.id, True)
+            # refresh node list
+            nodes = list(batch_client.compute_node.list(pool.id))
         if (len(nodes) >= pool.target_dedicated and
                 all(node.state in node_state for node in nodes)):
-            break
+            if any(node.state != batchmodels.ComputeNodeState.idle
+                    for node in nodes):
+                raise RuntimeError(
+                    'node(s) of pool {} not in idle state'.format(pool.id))
+            else:
+                return nodes
         i += 1
         if i % 3 == 0:
-            print('waiting for {} nodes to reach desired state:'.format(
+            i = 0
+            logger.debug('waiting for {} nodes to reach desired state'.format(
                 pool.target_dedicated))
             for node in nodes:
-                print(' > {}: {}'.format(node.id, node.state))
+                logger.debug('{}: {}'.format(node.id, node.state))
         time.sleep(10)
-    get_remote_login_settings(batch_client, config, nodes)
-    if any(node.state != batchmodels.ComputeNodeState.idle for node in nodes):
-        raise RuntimeError('node(s) of pool {} not in idle state'.format(
-            pool.id))
 
 
 def resize_pool(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     pool_id = config['pool_specification']['id']
     vm_count = int(config['pool_specification']['vm_count'])
-    print('Resizing pool {} to {}'.format(pool_id, vm_count))
+    logger.info('Resizing pool {} to {}'.format(pool_id, vm_count))
     batch_client.pool.resize(
         pool_id=pool_id,
         pool_resize_parameter=batchmodels.PoolResizeParameter(
@@ -555,14 +606,16 @@ def resize_pool(batch_client, config):
 
 
 def del_pool(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     pool_id = config['pool_specification']['id']
-    print('Deleting pool: {}'.format(pool_id))
+    logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
 
 
 def del_node(batch_client, config, node_id):
+    # type: (batch.BatchServiceClient, dict, str) -> None
     pool_id = config['pool_specification']['id']
-    print('Deleting node {} from pool {}'.format(node_id, pool_id))
+    logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
     batch_client.pool.remove_nodes(
         pool_id=pool_id,
         node_remove_parameter=batchmodels.NodeRemoveParameter(
@@ -571,7 +624,26 @@ def del_node(batch_client, config, node_id):
     )
 
 
+def _reboot_node(batch_client, pool_id, node_id, wait):
+    # type: (batch.BatchServiceClient, str, str, bool) -> None
+    logger.info('Rebooting node {} from pool {}'.format(node_id, pool_id))
+    batch_client.compute_node.reboot(
+        pool_id=pool_id,
+        node_id=node_id,
+    )
+    if wait:
+        logger.debug('waiting for node {} to enter rebooting state'.format(
+            node_id))
+        while True:
+            node = batch_client.compute_node.get(pool_id, node_id)
+            if node.state == batchmodels.ComputeNodeState.rebooting:
+                break
+            else:
+                time.sleep(1)
+
+
 def add_jobs(batch_client, blob_client, config):
+    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
     pool_id = config['pool_specification']['id']
     global_resources = []
     for gr in config['global_resources']['docker_images']:
@@ -591,7 +663,7 @@ def add_jobs(batch_client, blob_client, config):
                 rerun_on_node_reboot_after_success=False,
             )
         )
-        print('adding job: {}'.format(job.id))
+        logger.info('Adding job: {}'.format(job.id))
         try:
             batch_client.job.add(job)
         except batchmodels.batch_error.BatchErrorException as ex:
@@ -728,7 +800,7 @@ def add_jobs(batch_client, blob_client, config):
                     envfileloc = '{}taskrf-{}/{}{}'.format(
                         config['storage_entity_prefix'], job.id, task_id,
                         envfile)
-                    with envfiletmp.open('w') as f:
+                    with envfiletmp.open('w', encoding='utf8') as f:
                         for key in env_vars:
                             f.write('{}={}{}'.format(
                                 key, env_vars[key], os.linesep))
@@ -784,44 +856,50 @@ def add_jobs(batch_client, blob_client, config):
                             file_mode=fm,
                         )
                     )
-            print('adding task {}: {}'.format(
+            logger.info('Adding task {}: {}'.format(
                 task_id, batchtask.command_line))
             batch_client.task.add(job_id=job.id, task=batchtask)
 
 
 def del_jobs(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     for job in config['job_specifications']:
         job_id = job['id']
-        print('Deleting job: {}'.format(job_id))
+        logger.info('Deleting job: {}'.format(job_id))
         batch_client.job.delete(job_id)
 
 
 def terminate_jobs(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     for job in config['job_specifications']:
         job_id = job['id']
-        print('Terminating job: {}'.format(job_id))
+        logger.info('Terminating job: {}'.format(job_id))
         batch_client.job.terminate(job_id)
 
 
 def del_all_jobs(batch_client):
-    print('Listing jobs...')
+    # type: (azure.batch.batch_service_client.BatchServiceClient) -> None
+    logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
-        print('Deleting job: {}'.format(job.id))
+        logger.info('Deleting job: {}'.format(job.id))
         batch_client.job.delete(job.id)
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict, List[str]) -> None
     pool_id = config['pool_specification']['id']
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool_id, node.id)
-        print('node {}: {}'.format(node.id, rls))
+        logger.info('node {}: {}'.format(node.id, rls))
 
 
 def delete_storage_containers(blob_client, queue_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
+    #        azuretable.TableService, dict) -> None
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             blob_client.delete_container(_STORAGE_CONTAINERS[key])
@@ -832,22 +910,25 @@ def delete_storage_containers(blob_client, queue_client, table_client, config):
 
 
 def _clear_blobs(blob_client, container):
-    print('deleting blobs: {}'.format(container))
+    # type: (azureblob.BlockBlobService, str) -> None
+    logger.info('deleting blobs: {}'.format(container))
     blobs = blob_client.list_blobs(container)
     for blob in blobs:
         blob_client.delete_blob(container, blob.name)
 
 
 def _clear_blob_task_resourcefiles(blob_client, container, config):
+    # type: (azureblob.BlockBlobService, str, dict) -> None
     envfileloc = '{}taskrf-'.format(config['storage_entity_prefix'])
-    print('deleting blobs with prefix: {}'.format(envfileloc))
+    logger.info('deleting blobs with prefix: {}'.format(envfileloc))
     blobs = blob_client.list_blobs(container, prefix=envfileloc)
     for blob in blobs:
         blob_client.delete_blob(container, blob.name)
 
 
 def _clear_table(table_client, table_name, config):
-    print('clearing table: {}'.format(table_name))
+    # type: (azuretable.TableService, str, dict) -> None
+    logger.info('clearing table: {}'.format(table_name))
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}${}\''.format(
             config['credentials']['batch']['account'],
@@ -868,6 +949,8 @@ def _clear_table(table_client, table_name, config):
 
 
 def clear_storage_containers(blob_client, queue_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
+    #        azuretable.TableService, dict) -> None
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             # TODO this is temp to preserve registry upload
@@ -879,25 +962,30 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
         elif key.startswith('table_'):
             _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
         elif key.startswith('queue_'):
-            print('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
+            logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.clear_messages(_STORAGE_CONTAINERS[key])
 
 
 def create_storage_containers(blob_client, queue_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
+    #        azuretable.TableService, dict) -> None
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
-            print('creating container: {}'.format(_STORAGE_CONTAINERS[key]))
+            logger.info(
+                'creating container: {}'.format(_STORAGE_CONTAINERS[key]))
             blob_client.create_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
-            print('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
+            logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.create_table(_STORAGE_CONTAINERS[key])
         elif key.startswith('queue_'):
-            print('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
+            logger.info('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
 def _add_global_resource(
         queue_client, table_client, config, pk, p2pcsd, grtype):
+    # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
+    #        bool, str) -> None
     try:
         for gr in config['global_resources'][grtype]:
             if grtype == 'docker_images':
@@ -905,7 +993,7 @@ def _add_global_resource(
             else:
                 raise NotImplementedError()
             resource = '{}:{}'.format(prefix, gr)
-            print('adding global resource: {}'.format(resource))
+            logger.info('adding global resource: {}'.format(resource))
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],
                 {
@@ -923,6 +1011,7 @@ def _add_global_resource(
 
 
 def populate_queues(queue_client, table_client, config):
+    # type: (azurequeue.QueueService, azuretable.TableService, dict) -> None
     try:
         preg = config['docker_registry']['private']['enabled']
     except KeyError:
@@ -959,6 +1048,7 @@ def populate_queues(queue_client, table_client, config):
 
 
 def merge_dict(dict1, dict2):
+    # type: (dict, dict) -> dict
     """Recursively merge dictionaries: dict2 on to dict1. This differs
     from dict.update() in that values that are dicts are recursively merged.
     Note that only dict value types are merged, not lists, etc.
@@ -1012,8 +1102,7 @@ def main():
             config['job_specifications'] = [{
                 'id': args.jobid
             }]
-    print('config:')
-    print(json.dumps(config, indent=4))
+    logger.debug('config:\n' + json.dumps(config, indent=4))
     _populate_global_settings(config, args.action)
 
     batch_client, blob_client, queue_client, table_client = \
@@ -1078,4 +1167,5 @@ def parseargs():
     return parser.parse_args()
 
 if __name__ == '__main__':
+    _setup_logger()
     main()

@@ -5,6 +5,8 @@ import argparse
 import asyncio
 import datetime
 import hashlib
+import logging
+import logging.handlers
 import os
 import pathlib
 import shutil
@@ -23,6 +25,8 @@ try:
 except ImportError:
     _LIBTORRENT_IMPORTED = False
 
+# create logger
+logger = logging.getLogger('cascade')
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
 _DEFAULT_PORT_BEGIN = 6881
@@ -69,6 +73,20 @@ _TORRENT_REVERSE_LOOKUP = {}
 _DIRECTDL = []
 _DIRECTDL_DOWNLOADING = []
 _GR_DONE = False
+_LAST_DHT_INFO_DUMP = None
+
+
+def _setup_logger():
+    """Set up logger"""
+    logger.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        'cascade.log', maxBytes=10485760, backupCount=5)
+    formatter = logging.Formatter(
+        '%(asctime)s.%(msecs)03dZ %(levelname)s %(filename)s::%(funcName)s:'
+        '%(lineno)d %(process)d:%(threadName)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info('logger initialized')
 
 
 def _setup_container_names(sep: str):
@@ -146,7 +164,7 @@ def create_torrent_session(
         'save_path': str(save_path),
         'seed_mode': seed_mode
     })
-    print('created torrent session for {} is_seed={}'.format(
+    logger.info('created torrent session for {} is_seed={}'.format(
         resource, torrent_handle.is_seed()))
     return torrent_handle
 
@@ -158,7 +176,7 @@ def add_dht_node(ip: str, port: int):
     """
     if ip not in _DHT_ROUTERS:
         _TORRENT_SESSION.add_dht_router(ip, port)
-        print('added {}:{} as dht router'.format(ip, port))
+        logger.debug('added {}:{} as dht router'.format(ip, port))
         _DHT_ROUTERS.append(ip)
 
 
@@ -202,7 +220,8 @@ async def _record_perf_async(loop, event, message):
             ev=event, pr=_PREFIX, msg=message), loop=loop)
     await proc.wait()
     if proc.returncode != 0:
-        print('could not record perf to storage for event: {}'.format(event))
+        logger.error(
+            'could not record perf to storage for event: {}'.format(event))
 
 
 def _record_perf(event, message):
@@ -231,7 +250,7 @@ class DockerSaveThread(threading.Thread):
             self._pull_and_load()
             success = True
         except Exception as ex:
-            print(ex, file=sys.stderr)
+            logger.exception(ex)
         finally:
             # cancel callback
             if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
@@ -244,7 +263,8 @@ class DockerSaveThread(threading.Thread):
                     pop_receipt=_QUEUE_MESSAGES[self.msg_id],
                     visibility_timeout=0)
                 _QUEUE_MESSAGES.pop(self.msg_id)
-                print('queue message released for {}'.format(self.resource))
+                logger.debug(
+                    'queue message released for {}'.format(self.resource))
             # remove from downloading list
             if success:
                 with _DIRECTDL_LOCK:
@@ -262,7 +282,7 @@ class DockerSaveThread(threading.Thread):
             self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
-        print('pulling image {} from {}'.format(image, _REGISTRY))
+        logger.info('pulling image {} from {}'.format(image, _REGISTRY))
         if _REGISTRY == 'registry.hub.docker.com':
             subprocess.check_output(
                 'docker pull {}'.format(image), shell=True)
@@ -286,8 +306,11 @@ class DockerSaveThread(threading.Thread):
                     shell=True)
             del _pub
         diff = (datetime.datetime.now() - start).total_seconds()
-        print('took {} sec to pull docker image {} from {}'.format(
+        logger.debug('took {} sec to pull docker image {} from {}'.format(
             diff, image, _REGISTRY))
+        # register service
+        _merge_service(
+            self.table_client, self.resource, self.nglobalresources)
         # save docker image to seed to torrent
         if _ENABLE_P2P:
             _record_perf('pull-end', 'img={},diff={}'.format(
@@ -306,7 +329,7 @@ class DockerSaveThread(threading.Thread):
                 tmpdir.mkdir(parents=True, exist_ok=True)
                 file = _TORRENT_DIR / '{}.{}'.format(
                     resource_hash, _SAVELOAD_FILE_EXTENSION)
-                print('saving docker image {} to {} for seeding'.format(
+                logger.info('saving docker image {} to {} for seeding'.format(
                     image, file))
                 subprocess.check_call(
                     ('(docker save {} | tar -xf -) '
@@ -322,7 +345,7 @@ class DockerSaveThread(threading.Thread):
                 # we need to untar it and torrent the contents instead
                 file = _TORRENT_DIR / '{}'.format(resource_hash)
                 file.mkdir(parents=True, exist_ok=True)
-                print('saving docker image {} to {} for seeding'.format(
+                logger.info('saving docker image {} to {} for seeding'.format(
                     image, file))
                 subprocess.check_call(
                     'docker save {} | tar -xf -'.format(image),
@@ -332,7 +355,7 @@ class DockerSaveThread(threading.Thread):
                     if entry.is_file(follow_symlinks=False):
                         fsize += entry.stat().st_size
             diff = (datetime.datetime.now() - start).total_seconds()
-            print('took {} sec to save docker image {} to {}'.format(
+            logger.debug('took {} sec to save docker image {} to {}'.format(
                 diff, image, file))
             _record_perf('save-end', 'img={},size={},diff={}'.format(
                 image, fsize, diff))
@@ -351,8 +374,9 @@ class DockerSaveThread(threading.Thread):
                     _STORAGE_CONTAINERS['blob_torrents'],
                     str(torrent_file.name), str(torrent_file))
             diff = (datetime.datetime.now() - start).total_seconds()
-            print('took {} sec to generate and upload torrent file: {}'.format(
-                diff, torrent_file))
+            logger.debug(
+                'took {} sec to generate and upload torrent file: {}'.format(
+                    diff, torrent_file))
             start = datetime.datetime.now()
             # add to torrent dict (effectively enqueues for torrent start)
             entity = {
@@ -374,16 +398,17 @@ class DockerSaveThread(threading.Thread):
                     'seed': True,
                     'loaded': True,
                     'loading': False,
-                    'registered': False,
+                    'registered': True,
                 }
                 _TORRENT_REVERSE_LOOKUP[resource_hash] = self.resource
             # wait until torrent has started
-            print('waiting for torrent {} to start'.format(self.resource))
+            logger.info(
+                'waiting for torrent {} to start'.format(self.resource))
             while (self.resource not in _TORRENTS or
                    not _TORRENTS[self.resource]['started']):
                 time.sleep(0.1)
             diff = (datetime.datetime.now() - start).total_seconds()
-            print('took {} sec for {} torrent to start'.format(
+            logger.debug('took {} sec for {} torrent to start'.format(
                 diff, self.resource))
         else:
             # get docker image size
@@ -393,14 +418,6 @@ class DockerSaveThread(threading.Thread):
             size = ' '.join(output.decode('utf-8').split()[1:])
             _record_perf('pull-end', 'img={},diff={},size={}'.format(
                 image, diff, size))
-            # register service in non-p2p mode
-            global _GR_DONE
-            nfinished = _merge_service(self.table_client, self.resource, True)
-            if not _GR_DONE and nfinished == self.nglobalresources:
-                _record_perf(
-                    'gr-done',
-                    'nglobalresources={}'.format(self.nglobalresources))
-                _GR_DONE = True
 
 
 async def _direct_download_resources_async(
@@ -460,8 +477,9 @@ async def _direct_download_resources_async(
         with _DIRECTDL_LOCK:
             for dl in _rmdl:
                 try:
-                    print('removing resource {} from direct downloads'.format(
-                        dl))
+                    logger.info(
+                        'removing resource {} from direct downloads'.format(
+                            dl))
                     _DIRECTDL.remove(dl)
                 except ValueError:
                     pass
@@ -484,7 +502,7 @@ async def _direct_download_resources_async(
 def _merge_service(
         table_client: azure.storage.table.TableService,
         resource: str,
-        get_count: bool):
+        nglobalresources: int):
     """Merge entity to services table
     :param azure.storage.table.TableService table_client: table client
     :param str resource: resource to add to services table
@@ -496,7 +514,7 @@ def _merge_service(
         'Resource': resource,
         'VmList': _NODEID,
     }
-    print('merging entity {} to services table'.format(entity))
+    logger.debug('merging entity {} to services table'.format(entity))
     try:
         table_client.insert_entity(
             _STORAGE_CONTAINERS['table_services'], entity=entity)
@@ -520,8 +538,9 @@ def _merge_service(
                 break
             except azure.common.AzureConflictHttpError:
                 pass
-    print('entity {} merged to services table'.format(entity))
-    if get_count:
+    logger.info('entity {} merged to services table'.format(entity))
+    global _GR_DONE
+    if not _GR_DONE:
         try:
             entities = table_client.query_entities(
                 _STORAGE_CONTAINERS['table_services'],
@@ -533,24 +552,39 @@ def _merge_service(
             vms = set(entity['VmList'].split(','))
             if _NODEID in vms:
                 count += 1
-        return count
+        if count == nglobalresources:
+            _record_perf(
+                'gr-done',
+                'nglobalresources={}'.format(nglobalresources))
+            _GR_DONE = True
 
 
 def _get_torrent_info(resource, th):
+    global _LAST_DHT_INFO_DUMP
     s = th.status()
-    print(('%s %s bytes: %d %.2f%% complete (down: %.1f kB/s up: %.1f kB/s '
-           'peers: %d) %s') %
-          (_TORRENT_REVERSE_LOOKUP[th.name().split('.')[0]], th.name(),
-           s.total_wanted, s.progress * 100, s.download_rate / 1000,
-           s.upload_rate / 1000, s.num_peers, _TORRENT_STATE[s.state]))
-#     ss = _TORRENT_SESSION.status()
-#     print(_TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes,
-#           ss.dht_nodes, ss.dht_node_cache, ss.dht_torrents,
-#           ss.total_dht_upload, ss.total_dht_download,
-#           ss.has_incoming_connections)
-#     p = th.get_peer_info()
-#     for i in p:
-#         print(i.ip)
+    if (s.download_rate > 0 or s.upload_rate > 0 or s.num_peers > 0 or
+            (s.progress - 1.0) > 1e-6):
+        logger.debug(
+            ('{name} {file} bytes={bytes} state={state} '
+             'completion={completion:.2f}% peers={peers} '
+             'down={down:.3f} kB/s up={up:.3f} kB/s'.format(
+                 name=_TORRENT_REVERSE_LOOKUP[th.name().split('.')[0]],
+                 file=th.name(), bytes=s.total_wanted,
+                 state=_TORRENT_STATE[s.state], completion=s.progress * 100,
+                 peers=s.num_peers, down=s.download_rate / 1000,
+                 up=s.upload_rate / 1000)))
+    now = datetime.datetime.utcnow()
+    if (_LAST_DHT_INFO_DUMP is None or
+            now > _LAST_DHT_INFO_DUMP + datetime.timedelta(minutes=1)):
+        _LAST_DHT_INFO_DUMP = now
+        ss = _TORRENT_SESSION.status()
+        logger.debug(
+            ('dht: running={} globalnodes={} nodes={} node_cache={} '
+             'torrents={} incomingconn={} down={} up={}'.format(
+                 _TORRENT_SESSION.is_dht_running(), ss.dht_global_nodes,
+                 ss.dht_nodes, ss.dht_node_cache, ss.dht_torrents,
+                 ss.has_incoming_connections, ss.total_dht_download,
+                 ss.total_dht_upload)))
 
 
 def bootstrap_dht_nodes(
@@ -596,7 +630,7 @@ class DockerLoadThread(threading.Thread):
         _TORRENTS[self.resource]['loading'] = True
 
     def run(self):
-        print('loading resource: {}'.format(self.resource))
+        logger.debug('loading resource: {}'.format(self.resource))
         resource_hash = hashlib.sha1(self.resource.encode('utf8')).hexdigest()
         image = self.resource[
             self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
@@ -604,19 +638,20 @@ class DockerLoadThread(threading.Thread):
         if _COMPRESSION:
             file = _TORRENT_DIR / '{}.{}'.format(
                 resource_hash, _SAVELOAD_FILE_EXTENSION)
-            print('loading docker image {} from {}'.format(image, file))
+            logger.info('loading docker image {} from {}'.format(image, file))
             _record_perf('load-start', 'img={},size={}'.format(
                 image, file.stat().st_size))
             subprocess.check_call(
                 'pigz -cd {} | docker load'.format(file), shell=True)
         else:
             file = _TORRENT_DIR / '{}'.format(resource_hash)
-            print('loading docker image {} from {}'.format(image, file))
+            logger.info('loading docker image {} from {}'.format(image, file))
             _record_perf('load-start', 'img={}'.format(image))
             subprocess.check_call(
                 'tar -cO . | docker load', cwd=str(file), shell=True)
         diff = (datetime.datetime.now() - start).total_seconds()
-        print('took {} sec to load docker image from {}'.format(diff, file))
+        logger.debug(
+            'took {} sec to load docker image from {}'.format(diff, file))
         _record_perf('load-end', 'img={},diff={}'.format(image, diff))
         _TORRENTS[self.resource]['loading'] = False
         _TORRENTS[self.resource]['loaded'] = True
@@ -626,9 +661,8 @@ async def _load_and_register_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
         nglobalresources: int):
-    global _LR_LOCK_ASYNC, _GR_DONE
+    global _LR_LOCK_ASYNC
     async with _LR_LOCK_ASYNC:
-        nfinished = 0
         for resource in _TORRENTS:
             # if torrent is seeding, load container/file and register
             if (_TORRENTS[resource]['started'] and
@@ -643,18 +677,12 @@ async def _load_and_register_async(
                         # TODO "load blob" - move to appropriate path
                         raise NotImplementedError()
                 # register to services table
-                if (_TORRENTS[resource]['loaded'] and
+                if (not _TORRENTS[resource]['registered'] and
+                        _TORRENTS[resource]['loaded'] and
                         not _TORRENTS[resource]['loading']):
-                    if not _TORRENTS[resource]['registered']:
-                        _merge_service(table_client, resource, False)
-                        _TORRENTS[resource]['registered'] = True
-                    else:
-                        nfinished += 1
-        if not _GR_DONE and nfinished == nglobalresources:
-            await _record_perf_async(
-                loop, 'gr-done',
-                'nglobalresources={}'.format(nglobalresources))
-            _GR_DONE = True
+                    _merge_service(
+                        table_client, resource, nglobalresources)
+                    _TORRENTS[resource]['registered'] = True
 
 
 async def manage_torrents_async(
@@ -676,12 +704,13 @@ async def manage_torrents_async(
         # start applicable torrent sessions
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
-                # print out torrent info
+                # log torrent info
                 _get_torrent_info(resource, _TORRENTS[resource]['handle'])
                 continue
             seed = _TORRENTS[resource]['seed']
-            print(('creating torrent session for {} ipaddress={} '
-                   'seed={}').format(resource, ipaddress, seed))
+            logger.info(
+                ('creating torrent session for {} ipaddress={} '
+                 'seed={}').format(resource, ipaddress, seed))
             image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
             _TORRENTS[resource]['handle'] = create_torrent_session(
                 resource, _TORRENT_DIR, seed)
@@ -789,12 +818,12 @@ def _check_resource_has_torrent(
     except azure.common.AzureMissingResourceHttpError:
         add_to_dict = True
     if add_to_dict:
-        print('adding {} as resource to download'.format(resource))
+        logger.info('adding {} as resource to download'.format(resource))
         with _DIRECTDL_LOCK:
             _DIRECTDL.append(resource)
         return False
     else:
-        print('found torrent for resource {}'.format(resource))
+        logger.info('found torrent for resource {}'.format(resource))
         _start_torrent_via_storage(
             blob_client, table_client, resource, entity)
     return True
@@ -817,7 +846,7 @@ def distribute_global_resources(
     if _ENABLE_P2P:
         global _TORRENT_SESSION
         # create torrent session
-        print('creating torrent session on {}:{}'.format(
+        logger.info('creating torrent session on {}:{}'.format(
             ipaddress, _DEFAULT_PORT_BEGIN))
         _TORRENT_SESSION = libtorrent.session()
         _TORRENT_SESSION.listen_on(_DEFAULT_PORT_BEGIN, _DEFAULT_PORT_END)
@@ -885,13 +914,13 @@ def main():
         _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
         if not _COMPRESSION:
             _SAVELOAD_FILE_EXTENSION = 'tar'
-        print('peer-to-peer options: compression={} seedbias={}'.format(
+        logger.info('peer-to-peer options: compression={} seedbias={}'.format(
             _COMPRESSION, _SEED_BIAS))
         # create torrent directory
-        print('creating torrent dir: {}'.format(_TORRENT_DIR))
+        logger.debug('creating torrent dir: {}'.format(_TORRENT_DIR))
         _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
     else:
-        print('non-p2p concurrent downloading: {}'.format(
+        logger.info('non-p2p concurrent downloading: {}'.format(
             _NON_P2P_CONCURRENT_DOWNLOADING))
     del p2popts
 
@@ -908,8 +937,7 @@ def main():
         ipaddress = loop.run_until_complete(_get_ipaddress_async(loop))
     else:
         ipaddress = args.ipaddress
-
-    print('ip address: {}'.format(ipaddress))
+    logger.debug('ip address: {}'.format(ipaddress))
 
     # set up container names
     _setup_container_names(args.prefix)
@@ -923,7 +951,7 @@ def main():
         _REGISTRY = 'localhost:5000'
     else:
         _REGISTRY = 'registry.hub.docker.com'
-    print('docker registry: {}'.format(_REGISTRY))
+    logger.info('docker registry: {}'.format(_REGISTRY))
 
     del args
 
@@ -959,4 +987,5 @@ def parseargs():
     return parser.parse_args()
 
 if __name__ == '__main__':
+    _setup_logger()
     main()

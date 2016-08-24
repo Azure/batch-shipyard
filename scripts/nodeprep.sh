@@ -188,7 +188,7 @@ fi
 
 # start cascade
 ./perf.py cascade start $prefix
-./cascade.py $p2p --ipaddress $ipaddress $prefix > cascade.log &
+./cascade.py $p2p --ipaddress $ipaddress $prefix &
 # if not in p2p mode, then wait for cascade exit
 if [ -z "$p2p" ]; then
     wait
