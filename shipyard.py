@@ -349,6 +349,10 @@ def add_pool(batch_client, blob_client, config):
     publisher = config['pool_specification']['publisher']
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
+    try:
+        perf = config['store_timing_metrics']
+    except KeyError:
+        perf = False
     # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -359,8 +363,12 @@ def add_pool(batch_client, blob_client, config):
         try:
             p2psbias = config['data_replication'][
                 'peer_to_peer']['direct_download_seed_bias']
+            if p2psbias is None or p2psbias < 1:
+                raise KeyError()
         except KeyError:
-            p2psbias = 3
+            p2psbias = config['pool_specification']['vm_count'] // 10
+            if p2psbias < 1:
+                p2psbias = 1
         try:
             p2pcomp = config[
                 'data_replication']['peer_to_peer']['compression']
@@ -519,6 +527,10 @@ def add_pool(batch_client, blob_client, config):
         )
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('DOCKER_LOGIN_PASSWORD', dockerpw)
+        )
+    if perf:
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting('CASCADE_TIMING', '1')
         )
     # create pool if not exists
     try:
@@ -1150,13 +1162,38 @@ def populate_queues(queue_client, table_client, config):
         try:
             p2pcsd = config['data_replication']['peer_to_peer'][
                 'concurrent_source_downloads']
+            if p2pcsd is None or p2pcsd < 1:
+                raise KeyError()
         except KeyError:
-            p2pcsd = 1
+            p2pcsd = config['pool_specification']['vm_count'] // 6
+            if p2pcsd < 1:
+                p2pcsd = 1
     else:
         p2pcsd = 1
     # add global resources
     _add_global_resource(
         queue_client, table_client, config, pk, p2pcsd, 'docker_images')
+
+
+def _adjust_settings_for_pool_creation(config):
+    # type: (dict) -> None
+    publisher = config['pool_specification']['publisher']
+    vm_count = int(config['pool_specification']['vm_count'])
+    try:
+        p2p = config['data_replication']['peer_to_peer']['enabled']
+    except KeyError:
+        p2p = True
+    max_vms = 20 if publisher.lower() == 'microsoftwindowsserver' else 40
+    if p2p and vm_count > max_vms:
+        logger.warning(
+            ('disabling peer-to-peer transfer as pool size of {} exceeds '
+             'max limit of {} vms for inter-node communication').format(
+                 vm_count, max_vms))
+        if 'data_replication' not in config:
+            config['data_replication'] = {}
+        if 'peer_to_peer' not in config['data_replication']:
+            config['data_replication']['peer_to_peer'] = {}
+        config['data_replication']['peer_to_peer']['enabled'] = False
 
 
 def merge_dict(dict1, dict2):
@@ -1225,6 +1262,7 @@ def main():
             blob_client, queue_client, table_client, config)
         clear_storage_containers(
             blob_client, queue_client, table_client, config)
+        _adjust_settings_for_pool_creation(config)
         populate_queues(queue_client, table_client, config)
         add_pool(batch_client, blob_client, config)
     elif args.action == 'resizepool':

@@ -6,6 +6,8 @@ import copy
 import datetime
 import json
 import os
+import subprocess
+import sys
 # non-stdlib imports
 import azure.storage.table as azuretable
 
@@ -158,6 +160,8 @@ def coalesce_data(table_client):
                 'privateregistry:end', 0)
         except KeyError:
             timing['private_registry_setup'] = 0
+        data[nodeid]['start'] = data[
+            nodeid]['nodeprep:start'][0]['timestamp'].timestamp()
         data[nodeid].pop('nodeprep:start')
         data[nodeid].pop('nodeprep:end')
         data[nodeid].pop('privateregistry:start', None)
@@ -195,9 +199,83 @@ def coalesce_data(table_client):
 
 def graph_data(data, sizes):
     print(sizes)
+    # create data file
+    dat_fname = _PARTITION_KEY.replace('$', '-') + '.dat'
+    mintime = float(sys.maxsize)
+    maxtime = 0.0
+    rdata = {}
     for nodeid in data:
-        print(nodeid)
-        print(data[nodeid])
+        start = data[nodeid]['start']
+        if start in rdata:
+            raise RuntimeError('cannot create reverse mapping')
+        rdata[start] = nodeid
+        if start < mintime:
+            mintime = start
+        if start > maxtime:
+            maxtime = start
+    print('delta:', maxtime - mintime)
+    total_gr = 0
+    total_ac = 0
+    with open(dat_fname, 'w') as f:
+        f.write(
+            'NodePrepStartTime NodeId DockerInstall PrivateRegistrySetup '
+            'GlobalResourcesLoad TotalPull TotalSave TotalLoad '
+            'TotalTorrent\n')
+        for start in sorted(rdata):
+            nodeid = rdata[start]
+            pull = 0
+            save = 0
+            load = 0
+            torrent = 0
+            for event in data[nodeid]['timing']:
+                if event.startswith('pull:'):
+                    pull += data[nodeid]['timing'][event]
+                elif event.startswith('save:'):
+                    save += data[nodeid]['timing'][event]
+                elif event.startswith('load:'):
+                    load += data[nodeid]['timing'][event]
+                elif event.startswith('torrent:'):
+                    torrent += data[nodeid]['timing'][event]
+            acquisition = pull + torrent + load
+            total_ac += acquisition
+            print(nodeid, data[nodeid]['timing'])
+            f.write(
+                '{0} {1} {2} {3} {4} {5:.5f} {6:.5f} {7:.5f} {8:.5f}\n'.format(
+                    datetime.datetime.fromtimestamp(start).strftime(
+                        '%Y-%m-%d-%H:%M:%S.%f'),
+                    nodeid,
+                    data[nodeid]['timing']['docker_install'],
+                    data[nodeid]['timing']['private_registry_setup'],
+                    data[nodeid]['timing']['global_resources_loaded'],
+                    pull,
+                    save,
+                    load,
+                    torrent))
+            total_gr += data[nodeid]['timing']['global_resources_loaded']
+    print('total gr: {} avg: {}'.format(total_gr, total_gr / len(data)))
+    print('total acq: {} avg: {}'.format(total_ac, total_ac / len(data)))
+    # create plot file
+    plot_fname = _PARTITION_KEY.replace('$', '-') + '.plot'
+    with open(plot_fname, 'w') as f:
+        f.write('set terminal pngcairo enhanced transparent crop\n')
+        f.write('set key top left outside horizontal autotitle columnhead\n')
+        f.write('set xtics rotate by 45 right font ", 8"\n')
+        f.write('set ytics\n')
+        f.write('set xlabel "Node Prep Start Time"\n')
+        f.write('set ylabel "Seconds"\n')
+        f.write('set format x "%H:%M:%.3S"\n')
+        f.write('set xdata time\n')
+        f.write('set timefmt "%Y-%m-%d-%H:%M:%S"\n')
+        f.write('set style fill solid border -1\n')
+        f.write('set boxwidth {0:.5f} absolute\n'.format(
+            (maxtime - mintime) / 100.0))
+        f.write('plot "{}" using 1:($3+$4+$5) with boxes lc rgb "red", \\\n'.format(
+            dat_fname))
+        f.write('\t"" using 1:($3+$4) with boxes lc rgb "yellow", \\\n')
+        f.write('\t"" using 1:3 with boxes lc rgb "green"\n')
+    png_fname = _PARTITION_KEY.replace('$', '-') + '.png'
+    subprocess.check_call(
+        'gnuplot {} > {}'.format(plot_fname, png_fname), shell=True)
 
 
 def merge_dict(dict1, dict2):

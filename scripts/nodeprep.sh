@@ -150,7 +150,7 @@ if [ $offer == "ubuntuserver" ]; then
     set -e
     # install azure storage python dependency
     pip3 install --no-cache-dir azure-storage
-    if [ ! -f ".node_prep_finished" ]; then
+    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
         ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
     fi
     # install cascade dependencies
@@ -160,12 +160,12 @@ if [ $offer == "ubuntuserver" ]; then
     # install private registry if required
     if [ ! -z "$privatereg" ]; then
         # mark private registry start
-        if [ ! -f ".node_prep_finished" ]; then
+        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
             ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
         fi
         ./setup_private_registry.py $privatereg $ipaddress $prefix
         # mark private registry end
-        if [ ! -f ".node_prep_finished" ]; then
+        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
             ./perf.py privateregistry end $prefix
         fi
     fi
@@ -181,13 +181,17 @@ fi
 
 # mark node prep finished
 if [ ! -f ".node_prep_finished" ]; then
-    ./perf.py nodeprep end $prefix
+    if [ ! -z ${CASCADE_TIMING+x} ]; then
+        ./perf.py nodeprep end $prefix
+    fi
     # touch file to prevent subsequent perf recording if rebooted
     touch .node_prep_finished
 fi
 
 # start cascade
-./perf.py cascade start $prefix
+if [ ! -z ${CASCADE_TIMING+x} ]; then
+    ./perf.py cascade start $prefix
+fi
 ./cascade.py $p2p --ipaddress $ipaddress $prefix &
 # if not in p2p mode, then wait for cascade exit
 if [ -z "$p2p" ]; then

@@ -53,6 +53,7 @@ _SEED_BIAS = 3
 _ALLOW_PUBLIC_PULL_WITH_PRIVATE = False
 _SAVELOAD_FILE_EXTENSION = 'tar.gz'
 _REGISTRY = None
+_RECORD_PERF = int(os.getenv('CASCADE_TIMING', default='0'))
 # mutable global state
 _CBHANDLES = {}
 _QUEUE_MESSAGES = {}
@@ -215,6 +216,8 @@ def scantree(path):
 
 
 async def _record_perf_async(loop, event, message):
+    if not _RECORD_PERF:
+        return
     proc = await asyncio.subprocess.create_subprocess_shell(
         'perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), loop=loop)
@@ -225,6 +228,8 @@ async def _record_perf_async(loop, event, message):
 
 
 def _record_perf(event, message):
+    if not _RECORD_PERF:
+        return
     subprocess.check_call(
         'perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), shell=True)
@@ -247,7 +252,7 @@ class DockerSaveThread(threading.Thread):
     def run(self):
         success = False
         try:
-            self._pull_and_load()
+            self._pull_and_save()
             success = True
         except Exception as ex:
             logger.exception(ex)
@@ -271,7 +276,7 @@ class DockerSaveThread(threading.Thread):
                     _DIRECTDL_DOWNLOADING.remove(self.resource)
                     _DIRECTDL.remove(self.resource)
 
-    def _pull_and_load(self):
+    def _pull_and_save(self):
         if _REGISTRY is None:
             raise RuntimeError(
                 ('{} image specified for global resource, but there are '
@@ -536,8 +541,11 @@ def _merge_service(
                     if_match=etag)
                 entity = existing
                 break
-            except azure.common.AzureConflictHttpError:
-                pass
+            except azure.common.AzureHttpError as ex:
+                if (ex.status_code == 412):
+                    pass
+                else:
+                    raise
     logger.info('entity {} merged to services table'.format(entity))
     global _GR_DONE
     if not _GR_DONE:
@@ -779,9 +787,15 @@ def _start_torrent_via_storage(
         return
     if entity is None:
         rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
-        entity = table_client.get_entity(
-            _STORAGE_CONTAINERS['table_torrentinfo'],
-            _PARTITION_KEY, rk)
+        # entity may not be populated yet, keep trying until ready
+        while True:
+            try:
+                entity = table_client.get_entity(
+                    _STORAGE_CONTAINERS['table_torrentinfo'],
+                    _PARTITION_KEY, rk)
+                break
+            except azure.common.AzureMissingResourceHttpError:
+                time.sleep(1)
     # retrive torrent file
     torrent_file = _TORRENT_DIR / '{}.torrent'.format(entity['RowKey'])
     tc, tp = entity['TorrentFileLocator'].split(',')
@@ -897,21 +911,21 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
 
 def main():
     """Main function"""
-    global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING
+    global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING, \
+        _ALLOW_PUBLIC_PULL_WITH_PRIVATE
     # get command-line args
     args = parseargs()
     p2popts = args.p2popts.split(':')
     _ENABLE_P2P = p2popts[0] == 'true'
     _NON_P2P_CONCURRENT_DOWNLOADING = p2popts[1]
+    _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
     # set p2p options
     if _ENABLE_P2P:
         if not _LIBTORRENT_IMPORTED:
             raise ImportError('No module named \'libtorrent\'')
-        global _COMPRESSION, _SEED_BIAS, _ALLOW_PUBLIC_PULL_WITH_PRIVATE, \
-            _SAVELOAD_FILE_EXTENSION
+        global _COMPRESSION, _SEED_BIAS, _SAVELOAD_FILE_EXTENSION
         _COMPRESSION = p2popts[3] == 'true'
         _SEED_BIAS = int(p2popts[2])
-        _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
         if not _COMPRESSION:
             _SAVELOAD_FILE_EXTENSION = 'tar'
         logger.info('peer-to-peer options: compression={} seedbias={}'.format(
