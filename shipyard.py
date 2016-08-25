@@ -35,7 +35,6 @@ _PY2 = sys.version_info.major == 2
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
-_BATCHACCOUNTKEY = None
 _STORAGE_CONTAINERS = {
     'blob_resourcefiles': None,
     'blob_torrents': None,
@@ -48,14 +47,14 @@ _STORAGE_CONTAINERS = {
     'queue_globalresources': None,
 }
 _AZUREFILE_DVD_VERSION = '0.4.1'
-_AZUREFILE_DVD_URL = 'https://github.com/Azure/azurefile-' + \
-    'dockervolumedriver/releases/download/' + _AZUREFILE_DVD_VERSION + \
-    '/azurefile-dockervolumedriver'
+_AZUREFILE_DVD_URL = (
+    'https://github.com/Azure/azurefile-dockervolumedriver/releases'
+    '/download/' + _AZUREFILE_DVD_VERSION + '/azurefile-dockervolumedriver'
+)
 _AZUREFILE_DVD_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
 _AZUREFILE_SYSTEMD_SERVICE_URL = (
-    'https://raw.githubusercontent.com/Azure/'
-    'azurefile-dockervolumedriver/master/contrib/init/systemd/'
-    'azurefile-dockervolumedriver.service'
+    'https://raw.githubusercontent.com/Azure/azurefile-dockervolumedriver'
+    '/master/contrib/init/systemd/azurefile-dockervolumedriver.service'
 )
 _AZUREFILE_SYSTEMD_SERVICE_MD5 = 'd58f2f5e9f9f78216651ac28419878f1'
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
@@ -64,6 +63,8 @@ _CASCADE_FILE = ('cascade.py', 'cascade.py')
 _SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
 _PERF_FILE = ('perf.py', 'perf.py')
 _REGISTRY_FILE = None
+_SSH_KEY_PREFIX = 'id_rsa_shipyard'
+_SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
 _TEMP_DIR = pathlib.Path('/tmp')
 
@@ -86,7 +87,7 @@ def _populate_global_settings(config, action):
     :param str action: action
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
-        _BATCHACCOUNTKEY, _REGISTRY_FILE
+        _REGISTRY_FILE
     ssel = config['credentials']['shipyard_storage']
     _STORAGEACCOUNT = config['credentials']['storage'][ssel]['account']
     _STORAGEACCOUNTKEY = config['credentials']['storage'][ssel]['account_key']
@@ -94,7 +95,6 @@ def _populate_global_settings(config, action):
         _STORAGEACCOUNTEP = config['credentials']['storage'][ssel]['endpoint']
     except KeyError:
         _STORAGEACCOUNTEP = 'core.windows.net'
-    _BATCHACCOUNTKEY = config['credentials']['batch']['account_key']
     try:
         sep = config['storage_entity_prefix']
     except KeyError:
@@ -181,7 +181,7 @@ def _create_credentials(config):
     """
     credentials = batchauth.SharedKeyCredentials(
         config['credentials']['batch']['account'],
-        _BATCHACCOUNTKEY)
+        config['credentials']['batch']['account_key'])
     batch_client = batch.BatchServiceClient(
         credentials,
         base_url=config['credentials']['batch']['account_service_url'])
@@ -545,7 +545,60 @@ def add_pool(batch_client, blob_client, config):
         reboot_on_failed = False
     nodes = _wait_for_pool_ready(
         batch_client, node_state, pool.id, reboot_on_failed)
+    # create admin user on each node if requested
+    add_ssh_tunnel_user(batch_client, config, nodes)
+    # log remote login settings
     get_remote_login_settings(batch_client, config, nodes)
+
+
+def add_ssh_tunnel_user(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNode]) -> None
+    pool_id = config['pool_specification']['id']
+    try:
+        docker_user = config[
+            'pool_specification']['ssh_docker_tunnel']['username']
+        if docker_user is None:
+            raise KeyError()
+    except KeyError:
+        logger.info('not creating ssh tunnel user on pool {}'.format(pool_id))
+    else:
+        try:
+            ssh_pub_key = config[
+                'pool_specification']['ssh_docker_tunnel']['ssh_public_key']
+        except KeyError:
+            ssh_pub_key = None
+        try:
+            gen_tunnel_script = config[
+                'pool_specification']['ssh_docker_tunnel'][
+                    'generate_tunnel_script']
+        except KeyError:
+            gen_tunnel_script = False
+        # generate ssh key pair if not specified
+        if ssh_pub_key is None:
+            ssh_priv_key, ssh_pub_key = generate_ssh_keypair()
+        # get node list if not provided
+        if nodes is None:
+            nodes = batch_client.compute_node.list(pool_id)
+        for node in nodes:
+            add_admin_user_to_compute_node(
+                batch_client, pool_id, node, docker_user, ssh_pub_key)
+        # generate tunnel script if requested
+        if gen_tunnel_script:
+            ssh_args = [
+                'ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+                'UserKnownHostsFile=/dev/null', '-i', ssh_priv_key,
+                '-p', '$2', '-N', '-L', '2375:localhost:2375',
+                '{}@$1'.format(docker_user)
+            ]
+            with open(_SSH_TUNNEL_SCRIPT, 'w') as fd:
+                fd.write('#!/usr/bin/env bash\n')
+                fd.write('set -e\n')
+                fd.write(' '.join(ssh_args))
+                fd.write('\n')
+            os.chmod(_SSH_TUNNEL_SCRIPT, 0o755)
+            logger.info('ssh tunnel script generated: {}'.format(
+                _SSH_TUNNEL_SCRIPT))
 
 
 def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
@@ -589,6 +642,65 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
             for node in nodes:
                 logger.debug('{}: {}'.format(node.id, node.state))
         time.sleep(10)
+
+
+def generate_ssh_keypair():
+    # type: (str) -> tuple
+    """Generate an ssh keypair for use with user logins
+
+    :param str key_fileprefix: key file prefix
+    :rtype: tuple
+    :return: (private key filename, public key filename)
+    """
+    pubkey = _SSH_KEY_PREFIX + '.pub'
+    try:
+        if os.path.exists(_SSH_KEY_PREFIX):
+            old = _SSH_KEY_PREFIX + '.old'
+            if os.path.exists(old):
+                os.remove(old)
+            os.rename(_SSH_KEY_PREFIX, old)
+    except OSError:
+        pass
+    try:
+        if os.path.exists(pubkey):
+            old = pubkey + '.old'
+            if os.path.exists(old):
+                os.remove(old)
+            os.rename(pubkey, old)
+    except OSError:
+        pass
+    logger.info('generating ssh key pair')
+    subprocess.check_call(
+        ['ssh-keygen', '-f', _SSH_KEY_PREFIX, '-t', 'rsa', '-N', ''''''])
+    return (_SSH_KEY_PREFIX, pubkey)
+
+
+def add_admin_user_to_compute_node(
+        batch_client, pool_id, node, username, ssh_public_key):
+    # type: (batch.BatchServiceClient, str, batchmodels.ComputeNode, str,
+    #        str) -> None
+    """Adds an administrative user to the Batch Compute Node
+
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param str pool_id: The pool id containing the node.
+    :param node: The compute node.
+    :type node: `batchserviceclient.models.ComputeNode`
+    :param str username: user name
+    :param str ssh_public_key: ssh rsa public key
+    """
+    logger.info('adding user {} to node {} in pool {}'.format(
+        username, node.id, pool_id))
+    batch_client.compute_node.add_user(
+        pool_id,
+        node.id,
+        batchmodels.ComputeNodeUser(
+            username,
+            is_admin=True,
+            password=None,
+            ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
+        )
+    )
 
 
 def resize_pool(batch_client, config):
@@ -887,7 +999,7 @@ def del_all_jobs(batch_client):
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):
-    # type: (batch.BatchServiceClient, dict, List[str]) -> None
+    # type: (batch.BatchServiceClient, dict, List[str], bool) -> None
     pool_id = config['pool_specification']['id']
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
@@ -1119,6 +1231,8 @@ def main():
         resize_pool(batch_client, config)
     elif args.action == 'delpool':
         del_pool(batch_client, config)
+    elif args.action == 'addsshuser':
+        add_ssh_tunnel_user(batch_client, config)
     elif args.action == 'delnode':
         del_node(batch_client, config, args.nodeid)
     elif args.action == 'addjobs':
@@ -1149,8 +1263,8 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Shipyard: Azure Batch to Docker Bridge')
     parser.add_argument(
-        'action', help='action: addpool, addjob, termjob, delpool, '
-        'delnode, deljob, delalljobs, grl, delstorage, clearstorage')
+        'action', help='action: addpool, addjob, addsshuser, termjob, '
+        'delpool, delnode, deljob, delalljobs, grl, delstorage, clearstorage')
     parser.add_argument(
         '--credentials',
         help='credentials json config. required for all actions')
