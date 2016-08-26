@@ -30,8 +30,6 @@ def _setup_container_names(sep: str):
     if sep is None:
         sep = ''
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
-    _STORAGE_CONTAINERS['queue_registry'] = '-'.join(
-        (sep + 'registry', _BATCHACCOUNT.lower(), _POOLID.lower()))
 
 
 def _create_credentials() -> azure.storage.table.TableService:
@@ -74,16 +72,17 @@ async def _start_private_registry_instance_async(
     if proc.returncode != 0:
         raise RuntimeError('docker images non-zero rc: {}'.format(
             proc.returncode))
-    if (stdout[0].strip() != registry_image_id and
-            pathlib.Path(registry_archive).exists()):
-        print('importing registry from local file: {}'.format(
-            registry_archive))
-        proc = await asyncio.subprocess.create_subprocess_shell(
-            'gunzip -c {} | docker load'.format(registry_archive), loop=loop)
-        await proc.wait()
-        if proc.returncode != 0:
-            raise RuntimeError('docker load non-zero rc: {}'.format(
-                proc.returncode))
+    if stdout[0].strip() != registry_image_id:
+        ra = pathlib.Path(
+            os.environ['AZ_BATCH_TASK_WORKING_DIR'], registry_archive)
+        if ra.exists():
+            print('importing registry from local file: {}'.format(ra))
+            proc = await asyncio.subprocess.create_subprocess_shell(
+                'gunzip -c {} | docker load'.format(ra), loop=loop)
+            await proc.wait()
+            if proc.returncode != 0:
+                raise RuntimeError('docker load non-zero rc: {}'.format(
+                    proc.returncode))
     sa, ep, sakey = os.environ['PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
     registry_cmd = [
         'docker', 'run', '-d', '-p',
@@ -147,7 +146,9 @@ async def setup_private_registry_async(
 def main():
     """Main function"""
     # delete existing private registry file if it exists
-    cprfile = pathlib.Path('.cascade_private_registry.txt')
+    cprfile = pathlib.Path(
+        os.environ['AZ_BATCH_TASK_WORKING_DIR'],
+        '.cascade_private_registry.txt')
     try:
         cprfile.unlink()
     except FileNotFoundError:

@@ -77,20 +77,23 @@ _GR_DONE = False
 _LAST_DHT_INFO_DUMP = None
 
 
-def _setup_logger():
+def _setup_logger() -> None:
     """Set up logger"""
     logger.setLevel(logging.DEBUG)
+    logloc = pathlib.Path(
+        os.environ['AZ_BATCH_TASK_WORKING_DIR'],
+        'cascade.log')
     handler = logging.handlers.RotatingFileHandler(
-        'cascade.log', maxBytes=10485760, backupCount=5)
+        str(logloc), maxBytes=10485760, backupCount=5)
     formatter = logging.Formatter(
         '%(asctime)s.%(msecs)03dZ %(levelname)s %(filename)s::%(funcName)s:'
         '%(lineno)d %(process)d:%(threadName)s %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    logger.info('logger initialized')
+    logger.info('logger initialized, log file: {}'.format(logloc))
 
 
-def _setup_container_names(sep: str):
+def _setup_container_names(sep: str) -> None:
     """Set up storage container names
     :param str sep: storage container prefix
     """
@@ -219,7 +222,7 @@ async def _record_perf_async(loop, event, message):
     if not _RECORD_PERF:
         return
     proc = await asyncio.subprocess.create_subprocess_shell(
-        'perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
+        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), loop=loop)
     await proc.wait()
     if proc.returncode != 0:
@@ -231,7 +234,7 @@ def _record_perf(event, message):
     if not _RECORD_PERF:
         return
     subprocess.check_call(
-        'perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
+        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), shell=True)
 
 
@@ -565,13 +568,15 @@ def _merge_service(
                 'gr-done',
                 'nglobalresources={}'.format(nglobalresources))
             _GR_DONE = True
+            logger.info('all {} global resources loaded'.format(
+                nglobalresources))
 
 
 def _get_torrent_info(resource, th):
     global _LAST_DHT_INFO_DUMP
     s = th.status()
     if (s.download_rate > 0 or s.upload_rate > 0 or s.num_peers > 0 or
-            (s.progress - 1.0) > 1e-6):
+            (1.0 - s.progress) > 1e-6):
         logger.debug(
             ('{name} {file} bytes={bytes} state={state} '
              'completion={completion:.2f}% peers={peers} '
@@ -583,7 +588,7 @@ def _get_torrent_info(resource, th):
                  up=s.upload_rate / 1000)))
     now = datetime.datetime.utcnow()
     if (_LAST_DHT_INFO_DUMP is None or
-            now > _LAST_DHT_INFO_DUMP + datetime.timedelta(minutes=1)):
+            now > _LAST_DHT_INFO_DUMP + datetime.timedelta(minutes=2)):
         _LAST_DHT_INFO_DUMP = now
         ss = _TORRENT_SESSION.status()
         logger.debug(
@@ -961,7 +966,9 @@ def main():
 
     # set registry
     global _REGISTRY
-    if pathlib.Path('.cascade_private_registry.txt').exists():
+    if pathlib.Path(
+            os.environ['AZ_BATCH_TASK_WORKING_DIR'],
+            '.cascade_private_registry.txt').exists():
         _REGISTRY = 'localhost:5000'
     else:
         _REGISTRY = 'registry.hub.docker.com'
@@ -990,8 +997,6 @@ def parseargs():
         '--ipaddress', help='ip address')
     parser.add_argument(
         '--prefix', help='storage container prefix')
-    parser.add_argument(
-        '--privateregcount', help='private registry count')
     parser.add_argument(
         '--no-torrent', action='store_false', dest='torrent',
         help='disable peer-to-peer transfer')

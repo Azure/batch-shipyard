@@ -57,6 +57,7 @@ _AZUREFILE_SYSTEMD_SERVICE_URL = (
     '/master/contrib/init/systemd/azurefile-dockervolumedriver.service'
 )
 _AZUREFILE_SYSTEMD_SERVICE_MD5 = 'd58f2f5e9f9f78216651ac28419878f1'
+_MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _JOBPREP_FILE = ('jpdockerblock.sh', 'scripts/jpdockerblock.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade.py')
@@ -70,6 +71,7 @@ _TEMP_DIR = pathlib.Path('/tmp')
 
 
 def _setup_logger():
+    # type: () -> None
     """Set up logger"""
     logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
@@ -278,6 +280,13 @@ def upload_resource_files(blob_client, config, files):
 
 def setup_azurefile_volume_driver(blob_client, config):
     # type: (azure.storage.blob.BlockBlobService, dict) -> tuple
+    """Set up the Azure File docker volume driver
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :rtype: tuple
+    :return: (bin path, service file path, service env file path,
+        volume creation script path)
+    """
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
@@ -353,6 +362,10 @@ def add_pool(batch_client, blob_client, config):
         perf = config['store_timing_metrics']
     except KeyError:
         perf = False
+    try:
+        use_shipyard_docker_image = config['use_shipyard_docker_image']
+    except KeyError:
+        use_shipyard_docker_image = True
     # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -415,6 +428,7 @@ def add_pool(batch_client, blob_client, config):
         for key in shared_data_volumes:
             if shared_data_volumes[key]['volume_driver'] == 'azurefile':
                 azurefile_vd = True
+                break
     except KeyError:
         pass
     # prefix settings
@@ -439,12 +453,14 @@ def add_pool(batch_client, blob_client, config):
     ]
     sku_to_use, image_ref_to_use = skus_to_use[-1]
     # create resource files list
-    _rflist = [
-        _NODEPREP_FILE, _JOBPREP_FILE, _CASCADE_FILE, _SETUP_PR_FILE,
-        _PERF_FILE, _REGISTRY_FILE
-    ]
+    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _REGISTRY_FILE]
+    if not use_shipyard_docker_image:
+        _rflist.append(_CASCADE_FILE, _SETUP_PR_FILE)
+        if perf:
+            _rflist.append(_PERF_FILE)
     # handle azurefile docker volume driver
     if azurefile_vd:
+        # only ubuntu 16.04 is supported for azurefile dvd
         if (publisher != 'Canonical' or offer != 'UbuntuServer' or
                 sku < '16.04.0-LTS'):
             raise ValueError(
@@ -461,7 +477,7 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -469,6 +485,7 @@ def add_pool(batch_client, blob_client, config):
             torrentflags,
             ' -p {}'.format(prefix) if prefix else '',
             ' -a' if azurefile_vd else '',
+            ' -d' if use_shipyard_docker_image else '',
         ),
     ]
     try:
@@ -566,6 +583,12 @@ def add_pool(batch_client, blob_client, config):
 def add_ssh_tunnel_user(batch_client, config, nodes=None):
     # type: (batch.BatchServiceClient, dict,
     #        List[batchmodels.ComputeNode]) -> None
+    """Add an SSH user to node and optionally generate an SSH tunneling script
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
     pool_id = config['pool_specification']['id']
     try:
         docker_user = config[
@@ -620,6 +643,7 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
         'waiting for all nodes in pool {} to reach one of: {!r}'.format(
             pool_id, node_state))
     i = 0
+    reboot_map = {}
     while True:
         # refresh pool to ensure that there is no resize error
         pool = batch_client.pool.get(pool_id)
@@ -635,7 +659,14 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
             for node in nodes:
                 if (node.state ==
                         batchmodels.ComputeNodeState.starttaskfailed):
+                    if node.id not in reboot_map:
+                        reboot_map[node.id] = 0
+                    if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
+                        raise RuntimeError(
+                            ('ran out of reboot retries recovering node {} '
+                             'in pool {}').format(node.id, pool.id))
                     _reboot_node(batch_client, pool.id, node.id, True)
+                    reboot_map[node.id] += 1
             # refresh node list
             nodes = list(batch_client.compute_node.list(pool.id))
         if (len(nodes) >= pool.target_dedicated and
@@ -703,16 +734,20 @@ def add_admin_user_to_compute_node(
     """
     logger.info('adding user {} to node {} in pool {}'.format(
         username, node.id, pool_id))
-    batch_client.compute_node.add_user(
-        pool_id,
-        node.id,
-        batchmodels.ComputeNodeUser(
-            username,
-            is_admin=True,
-            password=None,
-            ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
+    try:
+        batch_client.compute_node.add_user(
+            pool_id,
+            node.id,
+            batchmodels.ComputeNodeUser(
+                username,
+                is_admin=True,
+                password=None,
+                ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
+            )
         )
-    )
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'The node user already exists' not in ex.message.value:
+            raise
 
 
 def resize_pool(batch_client, config):

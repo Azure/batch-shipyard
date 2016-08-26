@@ -4,18 +4,20 @@ set -e
 set -o pipefail
 
 azurefile=0
+cascadecontainer=0
 offer=
 p2p=
 prefix=
 privatereg=
 sku=
 
-while getopts "h?ao:p:r:s:t:" opt; do
+while getopts "h?ado:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
+            echo "-d use docker container for cascade"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
             echo "-r [container:archive:image id] private registry"
@@ -26,6 +28,9 @@ while getopts "h?ao:p:r:s:t:" opt; do
             ;;
         a)
             azurefile=1
+            ;;
+        d)
+            cascadecontainer=1
             ;;
         o)
             offer=${OPTARG,,}
@@ -109,7 +114,7 @@ if [ $offer == "ubuntuserver" ]; then
         apt-get purge -y -q lxc-docker
     fi
     # install required software
-    apt-get install -y -q -o Dpkg::Options::="--force-confnew" linux-image-extra-$(uname -r) docker-engine python3-pip
+    apt-get install -y -q -o Dpkg::Options::="--force-confnew" linux-image-extra-$(uname -r) docker-engine
     # ensure docker opts service modifications are idempotent
     set +e
     grep '^DOCKER_OPTS=' /etc/default/docker
@@ -148,25 +153,29 @@ if [ $offer == "ubuntuserver" ]; then
         set +e
     fi
     set -e
-    # install azure storage python dependency
-    pip3 install --no-cache-dir azure-storage
-    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
-        ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
-    fi
-    # install cascade dependencies
-    if [ ! -z "$p2p" ]; then
-        apt-get install -y -q python3-libtorrent pigz
-    fi
-    # install private registry if required
-    if [ ! -z "$privatereg" ]; then
-        # mark private registry start
+    if [ $cascadecontainer -eq 0 ]; then
+        # install azure storage python dependency
+        apt-get install -y -q python3-pip
+        pip3 install --no-cache-dir azure-storage==0.32.0
+        # backfill node prep start
         if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
-            ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
+            ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         fi
-        ./setup_private_registry.py $privatereg $ipaddress $prefix
-        # mark private registry end
-        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
-            ./perf.py privateregistry end $prefix
+        # install cascade dependencies
+        if [ ! -z "$p2p" ]; then
+            apt-get install -y -q python3-libtorrent pigz
+        fi
+        # install private registry if required
+        if [ ! -z "$privatereg" ]; then
+            # mark private registry start
+            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+                ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
+            fi
+            ./setup_private_registry.py $privatereg $ipaddress $prefix
+            # mark private registry end
+            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+                ./perf.py privateregistry end $prefix
+            fi
         fi
     fi
 else
@@ -175,25 +184,64 @@ else
 fi
 
 # login to docker hub if no private registry
-if [ ! -z $DOCKER_LOGIN_USERNAME ]; then
+if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
     docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
 fi
 
-# mark node prep finished
-if [ ! -f ".node_prep_finished" ]; then
-    if [ ! -z ${CASCADE_TIMING+x} ]; then
+# touch file to prevent subsequent perf recording if rebooted
+touch .node_prep_finished
+
+# execute cascade
+if [ $cascadecontainer -eq 1 ]; then
+    detached=
+    if [ -z "$p2p" ]; then
+        detached="--rm"
+    else
+        detached="-d"
+    fi
+    # store docker run pull start
+    if command -v python3 > /dev/null 2>&1; then
+        drpstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
+    else
+        drpstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow()))'`
+    fi
+    # create env file
+    envfile=.cascade-envfile
+cat > $envfile << EOF
+prefix=$prefix
+ipaddress=$ipaddress
+offer=$offer
+sku=$sku
+npstart=$npstart
+drpstart=$drpstart
+privatereg=$privatereg
+p2p=$p2p
+PRIVATE_REGISTRY_STORAGE_ENV=$PRIVATE_REGISTRY_STORAGE_ENV
+`env | grep CASCADE_`
+`env | grep AZ_BATCH_`
+`env | grep DOCKER_LOGIN_`
+EOF
+    # launch container
+    docker run $detached --env-file $envfile \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
+        -w $AZ_BATCH_TASK_WORKING_DIR \
+        -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
+        alfpark/shipyard
+else
+    # mark node prep finished
+    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
         ./perf.py nodeprep end $prefix
     fi
-    # touch file to prevent subsequent perf recording if rebooted
-    touch .node_prep_finished
+    # start cascade
+    if [ ! -z ${CASCADE_TIMING+x} ]; then
+        ./perf.py cascade start $prefix
+    fi
+    ./cascade.py $p2p --ipaddress $ipaddress $prefix &
 fi
 
-# start cascade
-if [ ! -z ${CASCADE_TIMING+x} ]; then
-    ./perf.py cascade start $prefix
-fi
-./cascade.py $p2p --ipaddress $ipaddress $prefix &
 # if not in p2p mode, then wait for cascade exit
 if [ -z "$p2p" ]; then
     wait
 fi
+
