@@ -64,7 +64,7 @@ _STORAGE_CONTAINERS = {
     'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
-    'table_services': None,
+    'table_images': None,
     'table_globalresources': None,
     'queue_globalresources': None,
 }
@@ -75,6 +75,18 @@ _DIRECTDL = []
 _DIRECTDL_DOWNLOADING = []
 _GR_DONE = False
 _LAST_DHT_INFO_DUMP = None
+
+
+class StandardStreamLogger:
+    def __init__(self, level):
+        self.level = level
+
+    def write(self, message):
+        if message != '\n':
+            self.level(message)
+
+    def flush(self):
+        self.level(sys.stderr)
 
 
 def _setup_logger() -> None:
@@ -90,6 +102,8 @@ def _setup_logger() -> None:
         '%(lineno)d %(process)d:%(threadName)s %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    # redirect stderr to logger
+    sys.stderr = StandardStreamLogger(logger.error)
     logger.info('logger initialized, log file: {}'.format(logloc))
 
 
@@ -104,7 +118,7 @@ def _setup_container_names(sep: str) -> None:
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
-    _STORAGE_CONTAINERS['table_services'] = sep + 'services'
+    _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'globalresources', _BATCHACCOUNT.lower(), _POOLID.lower()))
@@ -173,6 +187,26 @@ def create_torrent_session(
     return torrent_handle
 
 
+def _remove_torrent_from_session(resource: str, torrent_handle) -> None:
+    _TORRENT_SESSION.remove_torrent(torrent_handle)
+    # wait for removal alert
+    retries = 5
+    while True:
+        alert = _TORRENT_SESSION.pop_alert()
+        if not alert:
+            retries -= 1
+            if retries == 0:
+                break
+            else:
+                time.sleep(1)
+                continue
+        if isinstance(alert, str):
+            logger.warning('received alert: {}'.format(alert))
+        else:
+            logger.warning('received alert: {}'.format(alert.message()))
+    logger.info('removed torrent for {}'.format(resource))
+
+
 def add_dht_node(ip: str, port: int):
     """Add a node as a DHT router
     :param str ip: ip address of the dht node
@@ -238,6 +272,14 @@ def _record_perf(event, message):
             ev=event, pr=_PREFIX, msg=message), shell=True)
 
 
+def get_docker_image_name_from_resource(resource: str) -> str:
+    return resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+
+
+def compute_resource_hash(resource: str) -> str:
+    return hashlib.sha1(resource.encode('utf8')).hexdigest()
+
+
 class DockerSaveThread(threading.Thread):
     def __init__(
             self, blob_client, queue_client, table_client, resource, msg_id,
@@ -285,9 +327,8 @@ class DockerSaveThread(threading.Thread):
                 ('{} image specified for global resource, but there are '
                  'no registries available').format(self.resource))
         file = None
-        resource_hash = hashlib.sha1(self.resource.encode('utf8')).hexdigest()
-        image = self.resource[
-            self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+        resource_hash = compute_resource_hash(self.resource)
+        image = get_docker_image_name_from_resource(self.resource)
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
         logger.info('pulling image {} from {}'.format(image, _REGISTRY))
@@ -525,24 +566,26 @@ def _merge_service(
     :param azure.storage.table.TableService table_client: table client
     :param str resource: resource to add to services table
     """
-    rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
+    # merge service into services table
     entity = {
         'PartitionKey': _PARTITION_KEY,
-        'RowKey': rk,
+        'RowKey': compute_resource_hash(resource),
         'Resource': resource,
         'VmList': _NODEID,
     }
     logger.debug('merging entity {} to services table'.format(entity))
     try:
         table_client.insert_entity(
-            _STORAGE_CONTAINERS['table_services'], entity=entity)
+            _STORAGE_CONTAINERS['table_images'], entity=entity)
     except azure.common.AzureConflictHttpError:
         while True:
             existing = table_client.get_entity(
-                _STORAGE_CONTAINERS['table_services'],
+                _STORAGE_CONTAINERS['table_images'],
                 entity['PartitionKey'], entity['RowKey'])
             # merge VmList into existing
             evms = set(existing['VmList'].split(','))
+            if _NODEID in evms:
+                break
             nvms = set(entity['VmList'].split(','))
             evms.update(nvms)
             existing['VmList'] = ','.join(list(evms))
@@ -550,7 +593,7 @@ def _merge_service(
             existing.pop('etag')
             try:
                 table_client.merge_entity(
-                    _STORAGE_CONTAINERS['table_services'], entity=existing,
+                    _STORAGE_CONTAINERS['table_images'], entity=existing,
                     if_match=etag)
                 entity = existing
                 break
@@ -562,7 +605,7 @@ def _merge_service(
     if not _GR_DONE:
         try:
             entities = table_client.query_entities(
-                _STORAGE_CONTAINERS['table_services'],
+                _STORAGE_CONTAINERS['table_images'],
                 filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
         except azure.common.AzureMissingResourceHttpError:
             entities = []
@@ -596,7 +639,7 @@ def _get_torrent_info(resource, th):
                  up=s.upload_rate / 1000)))
     now = datetime.datetime.utcnow()
     if (_LAST_DHT_INFO_DUMP is None or
-            now > _LAST_DHT_INFO_DUMP + datetime.timedelta(minutes=2)):
+            now > _LAST_DHT_INFO_DUMP + datetime.timedelta(minutes=1)):
         _LAST_DHT_INFO_DUMP = now
         ss = _TORRENT_SESSION.status()
         logger.debug(
@@ -652,9 +695,8 @@ class DockerLoadThread(threading.Thread):
 
     def run(self):
         logger.debug('loading resource: {}'.format(self.resource))
-        resource_hash = hashlib.sha1(self.resource.encode('utf8')).hexdigest()
-        image = self.resource[
-            self.resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+        resource_hash = compute_resource_hash(self.resource)
+        image = get_docker_image_name_from_resource(self.resource)
         start = datetime.datetime.now()
         if _COMPRESSION:
             file = _TORRENT_DIR / '{}.{}'.format(
@@ -732,7 +774,7 @@ async def manage_torrents_async(
             logger.info(
                 ('creating torrent session for {} ipaddress={} '
                  'seed={}').format(resource, ipaddress, seed))
-            image = resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+            image = get_docker_image_name_from_resource(resource)
             _TORRENTS[resource]['handle'] = create_torrent_session(
                 resource, _TORRENT_DIR, seed)
             await _record_perf_async(loop, 'torrent-start', 'img={}'.format(
@@ -782,10 +824,9 @@ def _get_torrent_num_seeds(
         table_client: azure.storage.table.TableService,
         resource: str) -> int:
     try:
-        rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
         se = table_client.get_entity(
-            _STORAGE_CONTAINERS['table_services'],
-            _PARTITION_KEY, rk)
+            _STORAGE_CONTAINERS['table_images'],
+            _PARTITION_KEY, compute_resource_hash(resource))
         numseeds = len(se['VmList'].split(','))
     except azure.common.AzureMissingResourceHttpError:
         numseeds = 0
@@ -799,7 +840,7 @@ def _start_torrent_via_storage(
     if not _ENABLE_P2P:
         return
     if entity is None:
-        rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
+        rk = compute_resource_hash(resource)
         # entity may not be populated yet, keep trying until ready
         while True:
             try:
@@ -835,10 +876,9 @@ def _check_resource_has_torrent(
         return False
     add_to_dict = False
     try:
-        rk = hashlib.sha1(resource.encode('utf8')).hexdigest()
         entity = table_client.get_entity(
             _STORAGE_CONTAINERS['table_torrentinfo'],
-            _PARTITION_KEY, rk)
+            _PARTITION_KEY, compute_resource_hash(resource))
         numseeds = _get_torrent_num_seeds(table_client, resource)
         if numseeds < _SEED_BIAS:
             add_to_dict = True

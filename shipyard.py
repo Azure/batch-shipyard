@@ -41,7 +41,7 @@ _STORAGE_CONTAINERS = {
     'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
-    'table_services': None,
+    'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
     'queue_globalresources': None,
@@ -113,7 +113,7 @@ def _populate_global_settings(config, action):
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
-    _STORAGE_CONTAINERS['table_services'] = sep + 'services'
+    _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
@@ -1132,6 +1132,10 @@ def _clear_table(table_client, table_name, config):
 def clear_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
+    try:
+        perf = config['store_timing_metrics']
+    except KeyError:
+        perf = False
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             # TODO this is temp to preserve registry upload
@@ -1141,7 +1145,11 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
                 _clear_blob_task_resourcefiles(
                     blob_client, _STORAGE_CONTAINERS[key], config)
         elif key.startswith('table_'):
-            _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
+            try:
+                _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
+            except azure.common.AzureMissingResourceHttpError:
+                if key != 'table_perf' or perf:
+                    raise
         elif key.startswith('queue_'):
             logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.clear_messages(_STORAGE_CONTAINERS[key])
@@ -1150,12 +1158,18 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
 def create_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
+    try:
+        perf = config['store_timing_metrics']
+    except KeyError:
+        perf = False
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             logger.info(
                 'creating container: {}'.format(_STORAGE_CONTAINERS[key]))
             blob_client.create_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
+            if key == 'table_perf' and not perf:
+                continue
             logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.create_table(_STORAGE_CONTAINERS[key])
         elif key.startswith('queue_'):
