@@ -440,12 +440,13 @@ async def _direct_download_resources_async(
     # go through queue and find resources we can download
     msgs = queue_client.get_messages(
         _STORAGE_CONTAINERS['queue_globalresources'], num_messages=1,
-        visibility_timeout=45)
+        visibility_timeout=60)
     if len(msgs) == 0:
         return
     msg = None
     _rmdl = []
     _release_list = []
+    _start_torrent_list = []
     with _DIRECTDL_LOCK:
         for _msg in msgs:
             if (msg is None and _msg.content in _DIRECTDL and
@@ -456,8 +457,7 @@ async def _direct_download_resources_async(
                     if nseeds < _SEED_BIAS:
                         msg = _msg
                     else:
-                        _start_torrent_via_storage(
-                            blob_client, table_client, _msg.content)
+                        _start_torrent_list.append(_msg)
                         _rmdl.append(_msg.content)
                         _release_list.append(_msg)
                 else:
@@ -475,11 +475,20 @@ async def _direct_download_resources_async(
             _release_list.append(msg)
     # release all messages in release list
     for _msg in _release_list:
-        queue_client.update_message(
-            _STORAGE_CONTAINERS['queue_globalresources'],
-            message_id=_msg.id,
-            pop_receipt=_msg.pop_receipt,
-            visibility_timeout=0)
+        try:
+            queue_client.update_message(
+                _STORAGE_CONTAINERS['queue_globalresources'],
+                message_id=_msg.id,
+                pop_receipt=_msg.pop_receipt,
+                visibility_timeout=0)
+        except azure.common.AzureMissingResourceHttpError as ex:
+            # message not exist can happen if there are large delays from
+            # message lease till now
+            if ex.status_code != 404:
+                raise
+    # start any torrents
+    for _msg in _start_torrent_list:
+        _start_torrent_via_storage(blob_client, table_client, _msg.content)
     # remove messages out of rmdl
     if len(_rmdl) > 0:
         with _DIRECTDL_LOCK:
@@ -493,6 +502,7 @@ async def _direct_download_resources_async(
                     pass
     if msg is None:
         return
+    del _start_torrent_list
     del _release_list
     del _rmdl
     # pull and save docker image in thread
@@ -545,9 +555,7 @@ def _merge_service(
                 entity = existing
                 break
             except azure.common.AzureHttpError as ex:
-                if (ex.status_code == 412):
-                    pass
-                else:
+                if ex.status_code != 412:
                     raise
     logger.info('entity {} merged to services table'.format(entity))
     global _GR_DONE

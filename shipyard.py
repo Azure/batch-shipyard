@@ -140,8 +140,10 @@ def _populate_global_settings(config, action):
                 output = subprocess.check_output(
                     'sudo docker images -q registry:2', shell=True)
                 output = output.decode('utf-8').strip()
-            except subprocess.CalledProcessError as ex:
-                pass
+            except subprocess.CalledProcessError:
+                rf = None
+                config['docker_registry']['private'][
+                    'docker_save_registry_image_id'] = None
             else:
                 if len(output) == 12:
                     rf = 'resources/docker-registry-v2.tar.gz'
@@ -152,7 +154,7 @@ def _populate_global_settings(config, action):
                         'sudo docker save registry:2 '
                         '| gzip -c > {}'.format(rf), shell=True)
         _REGISTRY_FILE = (
-            prf.name,
+            prf.name if rf is not None else None,
             rf,
             config['docker_registry']['private'][
                 'docker_save_registry_image_id']
@@ -358,6 +360,7 @@ def add_pool(batch_client, blob_client, config):
     publisher = config['pool_specification']['publisher']
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
+    vm_count = config['pool_specification']['vm_count']
     try:
         perf = config['store_timing_metrics']
     except KeyError:
@@ -379,7 +382,7 @@ def add_pool(batch_client, blob_client, config):
             if p2psbias is None or p2psbias < 1:
                 raise KeyError()
         except KeyError:
-            p2psbias = config['pool_specification']['vm_count'] // 10
+            p2psbias = vm_count // 10
             if p2psbias < 1:
                 p2psbias = 1
         try:
@@ -455,7 +458,8 @@ def add_pool(batch_client, blob_client, config):
     # create resource files list
     _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _REGISTRY_FILE]
     if not use_shipyard_docker_image:
-        _rflist.append(_CASCADE_FILE, _SETUP_PR_FILE)
+        _rflist.append(_CASCADE_FILE)
+        _rflist.append(_SETUP_PR_FILE)
         if perf:
             _rflist.append(_PERF_FILE)
     # handle azurefile docker volume driver
@@ -500,8 +504,8 @@ def add_pool(batch_client, blob_client, config):
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
         vm_size=config['pool_specification']['vm_size'],
-        target_dedicated=config['pool_specification']['vm_count'],
-        enable_inter_node_communication=True,
+        target_dedicated=vm_count,
+        enable_inter_node_communication=p2p,  # enable only for p2p mode
         start_task=batchmodels.StartTask(
             command_line=_wrap_commands_in_shell(start_task, wait=False),
             run_elevated=True,
@@ -822,6 +826,18 @@ def add_jobs(batch_client, blob_client, config):
                 rerun_on_node_reboot_after_success=False,
             )
         )
+        # check if any tasks in job have dependencies
+        dependencies = False
+        for task in jobspec['tasks']:
+            # do not break, check to ensure ids are set on each task if
+            # task dependencies are set
+            if 'depends_on' in task and len(task['depends_on']) > 0:
+                if ('id' not in task or task['id'] is None or
+                        len(task['id']) == 0):
+                    raise ValueError(
+                        'task id is not specified, but depends_on is set')
+                dependencies = True
+        job.uses_task_dependencies = dependencies
         logger.info('Adding job: {}'.format(job.id))
         try:
             batch_client.job.add(job)
@@ -834,7 +850,7 @@ def add_jobs(batch_client, blob_client, config):
             # get or generate task id
             try:
                 task_id = task['id']
-                if task_id is None:
+                if task_id is None or len(task_id) == 0:
                     raise KeyError()
             except KeyError:
                 # get filtered, sorted list of generic docker task ids
@@ -913,7 +929,7 @@ def add_jobs(batch_client, blob_client, config):
                             hostpath = dvspec['host_path']
                         except KeyError:
                             hostpath = None
-                        if hostpath is not None:
+                        if hostpath is not None and len(hostpath) > 0:
                             run_opts.append('-v {}:{}'.format(
                                 hostpath, dvspec['container_path']))
                         else:
@@ -1015,6 +1031,12 @@ def add_jobs(batch_client, blob_client, config):
                             file_mode=fm,
                         )
                     )
+            # add task dependencies
+            if 'depends_on' in task and len(task['depends_on']) > 0:
+                batchtask.depends_on = batchmodels.TaskDependencies(
+                    task_ids=task['depends_on']
+                )
+            # create task
             logger.info('Adding task {}: {}'.format(
                 task_id, batchtask.command_line))
             batch_client.task.add(job_id=job.id, task=batchtask)

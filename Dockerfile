@@ -5,7 +5,8 @@ FROM gliderlabs/alpine:3.4
 WORKDIR /tmp
 
 # set environment variables
-ENV libtorrent_version=1.1.1 libtorrent_version_path=1_1_1
+# currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
+ENV libtorrent_version=1.0.9 libtorrent_version_path=1_0_9
 ENV CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.5
 
 # add base packages, python dependencies, create script directory,

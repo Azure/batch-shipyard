@@ -1,0 +1,3 @@
+azure-batch==1.0.0
+azure-storage==0.32.0
+pathlib==1.0.1

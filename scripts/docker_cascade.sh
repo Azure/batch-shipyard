@@ -9,9 +9,9 @@ cd /opt/batch-shipyard
 # add timing markers
 if [ ! -z ${CASCADE_TIMING+x} ]; then
     # backfull docker run pull start
-    python3 perf.py cascade docker-run-pull-start $prefix --ts $drpstart
+    python3 perf.py shipyard pull-start $prefix --ts $drpstart
     # mark docker run pull end
-    python3 perf.py cascade docker-run-pull-end $prefix
+    python3 perf.py shipyard pull-end $prefix
     if [ ! -f ".node_prep_finished" ]; then
         # backfill node prep start
         python3 perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"

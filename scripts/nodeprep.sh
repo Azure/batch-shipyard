@@ -206,7 +206,7 @@ if [ $cascadecontainer -eq 1 ]; then
         drpstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow()))'`
     fi
     # create env file
-    envfile=.cascade-envfile
+    envfile=.docker_cascade_envfile
 cat > $envfile << EOF
 prefix=$prefix
 ipaddress=$ipaddress
@@ -222,7 +222,7 @@ PRIVATE_REGISTRY_STORAGE_ENV=$PRIVATE_REGISTRY_STORAGE_ENV
 `env | grep DOCKER_LOGIN_`
 EOF
     # launch container
-    docker run $detached --env-file $envfile \
+    docker run $detached --net=host --env-file $envfile \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
         -w $AZ_BATCH_TASK_WORKING_DIR \
