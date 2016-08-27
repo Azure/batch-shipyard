@@ -60,9 +60,11 @@ _AZUREFILE_SYSTEMD_SERVICE_MD5 = 'd58f2f5e9f9f78216651ac28419878f1'
 _MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _JOBPREP_FILE = ('jpdockerblock.sh', 'scripts/jpdockerblock.sh')
-_CASCADE_FILE = ('cascade.py', 'cascade.py')
-_SETUP_PR_FILE = ('setup_private_registry.py', 'setup_private_registry.py')
-_PERF_FILE = ('perf.py', 'perf.py')
+_CASCADE_FILE = ('cascade.py', 'cascade/cascade.py')
+_SETUP_PR_FILE = (
+    'setup_private_registry.py', 'cascade/setup_private_registry.py'
+)
+_PERF_FILE = ('perf.py', 'cascade/perf.py')
 _REGISTRY_FILE = None
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'

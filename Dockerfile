@@ -32,7 +32,7 @@ RUN apk update \
     && mkdir -p /opt/batch-shipyard
 
 # copy in files
-COPY cascade.py setup_private_registry.py perf.py scripts/docker_cascade.sh /opt/batch-shipyard/
+COPY cascade/cascade.py cascade/setup_private_registry.py cascade/perf.py scripts/docker_cascade.sh /opt/batch-shipyard/
 
 # set command
 CMD ["/opt/batch-shipyard/docker_cascade.sh"]
