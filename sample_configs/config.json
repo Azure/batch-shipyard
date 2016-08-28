@@ -1,0 +1,58 @@
+{
+    "store_timing_metrics": false,
+    "storage_entity_prefix": "shipyard",
+    "use_shipyard_docker_image": true,
+    "docker_registry": {
+        "login": {
+            "username": null,
+            "password": null
+        },
+        "private": {
+            "enabled": true,
+            "storage_account_settings": "",
+            "container": "",
+            "docker_save_registry_file": "",
+            "docker_save_registry_image_id": "",
+            "allow_public_docker_hub_pull_on_missing": true
+        }
+    },
+    "data_replication": {
+        "peer_to_peer": {
+            "enabled": true,
+            "compression": true,
+            "concurrent_source_downloads": 10,
+            "direct_download_seed_bias": null
+        },
+        "non_peer_to_peer_concurrent_downloading": true
+    },
+    "global_resources": {
+        "docker_images": [
+            "hello-world"
+        ],
+        "docker_volumes": {
+            "data_volumes": {
+                "contdatavol": {
+                    "host_path": null,
+                    "container_path": "/abc"
+                },
+                "hosttempvol": {
+                    "host_path": "/tmp",
+                    "container_path": "/hosttmp"
+                }
+            },
+            "shared_data_volumes": {
+                "azurefilevol": {
+                    "volume_driver": "azurefile",
+                    "storage_account_settings": "",
+                    "azure_file_share_name": "",
+                    "container_path": "",
+                    "mount_options": [
+                        "filemode=0640",
+                        "dirmode=0750",
+                        "nolock=true"
+                    ]
+                }
+            }
+        }
+    }
+}

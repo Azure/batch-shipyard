@@ -1,0 +1,43 @@
+{
+    "job_specifications": [
+        {
+            "id": "dockerjob",
+            "environment_variables": {
+                "abc": "xyz"
+            },
+            "tasks": [
+                {
+                    "id": null,
+                    "depends_on": [
+                    ],
+                    "image": "busybox",
+                    "name": null,
+                    "labels": [],
+                    "remove_container_after_exit": true,
+                    "additional_docker_run_options": [
+                    ],
+                    "environment_variables": {
+                        "def": "123"
+                    },
+                    "ports": [],
+                    "data_volumes": [
+                        "contdatavol",
+                        "hosttempvol"
+                    ],
+                    "shared_data_volumes": [
+                        "azurefilevol"
+                    ],
+                    "resource_files": [
+                        {
+                            "file_path": "",
+                            "blob_source": "",
+                            "file_mode": ""
+                        }
+                    ],
+                    "entrypoint": null,
+                    "command": ""
+                }
+            ]
+        }
+    ]
+}

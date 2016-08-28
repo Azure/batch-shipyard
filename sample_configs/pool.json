@@ -1,0 +1,18 @@
+{
+    "pool_specification": {
+        "id": "dockerpool",
+        "vm_size": "STANDARD_D2_V2",
+        "vm_count": 5,
+        "publisher": "Canonical",
+        "offer": "UbuntuServer",
+        "sku": "16.04.0-LTS",
+        "ssh_docker_tunnel": {
+            "username": "docker",
+            "ssh_public_key": null,
+            "generate_tunnel_script": true
+        },
+        "reboot_on_start_task_failed": true,
+        "additional_node_prep_commands": [
+        ]
+    }
+}
