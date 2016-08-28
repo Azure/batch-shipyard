@@ -1,5 +1,29 @@
 #!/usr/bin/env python3
 
+# Copyright (c) Microsoft Corporation
+#
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 # stdlib imports
 import argparse
 import datetime
@@ -15,7 +39,7 @@ _NODEID = os.environ['AZ_BATCH_NODE_ID']
 _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
 
 
-def _create_credentials():
+def _create_credentials() -> azuretable.TableService:
     """Create storage credentials
     :rtype: azure.storage.table.TableService
     :return: azure storage table client
@@ -28,7 +52,18 @@ def _create_credentials():
     return table_client
 
 
-def process_event(table_client, table_name, source, event, ts, message):
+def process_event(
+        table_client: azure.storage.table.TableService,
+        table_name: str, source: str, event: str, ts: float,
+        message: str) -> None:
+    """Process event
+    :param azure.storage.table.TableService table_client: table client
+    :param str table_name: table name
+    :param str source: source
+    :param str event: event
+    :param float ts: time stamp
+    :param str message: message
+    """
     entity = {
         'PartitionKey': _PARTITION_KEY,
         'RowKey': str(ts),

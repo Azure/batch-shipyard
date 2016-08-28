@@ -1,5 +1,29 @@
 #!/usr/bin/env python3
 
+# Copyright (c) Microsoft Corporation
+#
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 # stdlib imports
 import argparse
 import asyncio
@@ -147,6 +171,36 @@ def _create_credentials() -> tuple:
     return blob_client, queue_client, table_client
 
 
+async def _record_perf_async(
+        loop: asyncio.BaseEventLoop, event: str, message: str) -> None:
+    """Record timing metric async
+    :param asyncio.BaseEventLoop loop: event loop
+    :param str event: event
+    :param str message: message
+    """
+    if not _RECORD_PERF:
+        return
+    proc = await asyncio.subprocess.create_subprocess_shell(
+        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
+            ev=event, pr=_PREFIX, msg=message), loop=loop)
+    await proc.wait()
+    if proc.returncode != 0:
+        logger.error(
+            'could not record perf to storage for event: {}'.format(event))
+
+
+def _record_perf(event: str, message: str) -> None:
+    """Record timing metric
+    :param str event: event
+    :param str message: message
+    """
+    if not _RECORD_PERF:
+        return
+    subprocess.check_call(
+        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
+            ev=event, pr=_PREFIX, msg=message), shell=True)
+
+
 def generate_torrent(incl_file: pathlib.Path, resource_hash: str) -> dict:
     """Generate torrent file for a given file and write it to disk
     :param pathlib.Path incl_file: file to include in torrent
@@ -188,6 +242,10 @@ def create_torrent_session(
 
 
 def _remove_torrent_from_session(resource: str, torrent_handle) -> None:
+    """Remove a torrent from the session
+    :param str resource: torrent resource
+    :param torrent_handle: torrent handle
+    """
     _TORRENT_SESSION.remove_torrent(torrent_handle)
     # wait for removal alert
     retries = 5
@@ -244,7 +302,12 @@ def _renew_queue_message_lease(
         msg_id)
 
 
-def scantree(path):
+def scantree(path) -> os.DirEntry:
+    """Recursively scan a directory tree
+    :param str path: path to scan
+    :rtype: os.DirEntry
+    :return: DirEntry via generator
+    """
     for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=False):
             yield from scantree(entry.path)
@@ -252,27 +315,12 @@ def scantree(path):
             yield entry
 
 
-async def _record_perf_async(loop, event, message):
-    if not _RECORD_PERF:
-        return
-    proc = await asyncio.subprocess.create_subprocess_shell(
-        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
-            ev=event, pr=_PREFIX, msg=message), loop=loop)
-    await proc.wait()
-    if proc.returncode != 0:
-        logger.error(
-            'could not record perf to storage for event: {}'.format(event))
-
-
-def _record_perf(event, message):
-    if not _RECORD_PERF:
-        return
-    subprocess.check_call(
-        './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
-            ev=event, pr=_PREFIX, msg=message), shell=True)
-
-
 def get_docker_image_name_from_resource(resource: str) -> str:
+    """Get docker image from resource id
+    :param str resource: resource
+    :rtype: str
+    :return: docker image name
+    """
     return resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
 
 
@@ -281,9 +329,20 @@ def compute_resource_hash(resource: str) -> str:
 
 
 class DockerSaveThread(threading.Thread):
+    """Docker Save Thread"""
     def __init__(
-            self, blob_client, queue_client, table_client, resource, msg_id,
-            nglobalresources):
+            self, blob_client: azure.storage.blob.BlockBlobService,
+            queue_client: azure.storage.queue.QueueService,
+            table_client: azure.storage.table.TableService,
+            resource: str, msg_id: str, nglobalresources: int):
+        """DockerSaveThread ctor
+        :param azure.storage.blob.BlockBlobService blob_client: blob client
+        :param azure.storage.queue.QueueService queue_client: queue client
+        :param azure.storage.table.TableService table_client: table client
+        :param str resource: resource
+        :param str msg_id: queue message id
+        :param int nglobalresources: number of global resources
+        """
         threading.Thread.__init__(self)
         self.blob_client = blob_client
         self.queue_client = queue_client
@@ -294,7 +353,8 @@ class DockerSaveThread(threading.Thread):
         with _DIRECTDL_LOCK:
             _DIRECTDL_DOWNLOADING.append(self.resource)
 
-    def run(self):
+    def run(self) -> None:
+        """Thread main run function"""
         success = False
         try:
             self._pull_and_save()
@@ -321,7 +381,8 @@ class DockerSaveThread(threading.Thread):
                     _DIRECTDL_DOWNLOADING.remove(self.resource)
                     _DIRECTDL.remove(self.resource)
 
-    def _pull_and_save(self):
+    def _pull_and_save(self) -> None:
+        """Thread main logic for pulling and saving docker image"""
         if _REGISTRY is None:
             raise RuntimeError(
                 ('{} image specified for global resource, but there are '
@@ -470,10 +531,19 @@ class DockerSaveThread(threading.Thread):
 
 
 async def _direct_download_resources_async(
-        loop,
+        loop: asyncio.BaseEventLoop,
         blob_client: azure.storage.blob.BlockBlobService,
-        queue_client, table_client, ipaddress,
-        nglobalresources):
+        queue_client: azure.storage.queue.QueueService,
+        table_client: azure.storage.table.TableService,
+        ipaddress: str, nglobalresources: int) -> None:
+    """Direct download resource logic
+    :param asyncio.BaseEventLoop loop: event loop
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param str ipaddress: ip address
+    :param int nglobalresources: number of global resources
+    """
     # iterate through downloads to see if there are any torrents available
     with _DIRECTDL_LOCK:
         if len(_DIRECTDL) == 0:
@@ -560,11 +630,11 @@ async def _direct_download_resources_async(
 
 def _merge_service(
         table_client: azure.storage.table.TableService,
-        resource: str,
-        nglobalresources: int):
+        resource: str, nglobalresources: int) -> None:
     """Merge entity to services table
     :param azure.storage.table.TableService table_client: table client
     :param str resource: resource to add to services table
+    :param int nglobalresources: number of global resources
     """
     # merge service into services table
     entity = {
@@ -623,7 +693,11 @@ def _merge_service(
                 nglobalresources))
 
 
-def _get_torrent_info(resource, th):
+def _log_torrent_info(resource: str, th) -> None:
+    """Log torrent info
+    :param str resource: resource
+    :param th: torrent handle
+    """
     global _LAST_DHT_INFO_DUMP
     s = th.status()
     if (s.download_rate > 0 or s.upload_rate > 0 or s.num_peers > 0 or
@@ -654,7 +728,12 @@ def _get_torrent_info(resource, th):
 def bootstrap_dht_nodes(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
-        ipaddress: str):
+        ipaddress: str) -> None:
+    """Bootstrap DHT router nodes
+    :param asyncio.BaseEventLoop loop: event loop
+    :param azure.storage.table.TableService table_client: table client
+    :param str ipaddress: ip address
+    """
     found_self = False
     dht_nodes = []
     try:
@@ -687,13 +766,18 @@ def bootstrap_dht_nodes(
 
 
 class DockerLoadThread(threading.Thread):
+    """Docker Load Thread"""
     def __init__(self, resource):
+        """DockerLoadThread ctor
+        :param str resource: resource
+        """
         threading.Thread.__init__(self)
         self.resource = resource
         _TORRENTS[self.resource]['seed'] = True
         _TORRENTS[self.resource]['loading'] = True
 
-    def run(self):
+    def run(self) -> None:
+        """Main thread run logic"""
         logger.debug('loading resource: {}'.format(self.resource))
         resource_hash = compute_resource_hash(self.resource)
         image = get_docker_image_name_from_resource(self.resource)
@@ -723,7 +807,12 @@ class DockerLoadThread(threading.Thread):
 async def _load_and_register_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
-        nglobalresources: int):
+        nglobalresources: int) -> None:
+    """Load and register image
+    :param asyncio.BaseEventLoop loop: event loop
+    :param azure.storage.table.TableService table_client: table client
+    :param int nglobalresource: number of global resources
+    """
     global _LR_LOCK_ASYNC
     async with _LR_LOCK_ASYNC:
         for resource in _TORRENTS:
@@ -751,8 +840,13 @@ async def _load_and_register_async(
 async def manage_torrents_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
-        ipaddress: str,
-        nglobalresources: int):
+        ipaddress: str, nglobalresources: int) -> None:
+    """Manage torrents
+    :param asyncio.BaseEventLoop loop: event loop
+    :param azure.storage.table.TableService table_client: table client
+    :param str ipaddress: ip address
+    :param int nglobalresource: number of global resources
+    """
     global _LR_LOCK_ASYNC, _GR_DONE
     while True:
         # async schedule load and register
@@ -768,7 +862,7 @@ async def manage_torrents_async(
         for resource in _TORRENTS:
             if _TORRENTS[resource]['started']:
                 # log torrent info
-                _get_torrent_info(resource, _TORRENTS[resource]['handle'])
+                _log_torrent_info(resource, _TORRENTS[resource]['handle'])
                 continue
             seed = _TORRENTS[resource]['seed']
             logger.info(
@@ -799,8 +893,15 @@ async def download_monitor_async(
         blob_client: azure.storage.blob.BlockBlobService,
         queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
-        ipaddress: str,
-        nglobalresources: int):
+        ipaddress: str, nglobalresources: int) -> None:
+    """Download monitor
+    :param asyncio.BaseEventLoop loop: event loop
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param str ipaddress: ip address
+    :param int nglobalresource: number of global resources
+    """
     # begin async manage torrent sessions
     if _ENABLE_P2P:
         asyncio.ensure_future(
@@ -823,6 +924,12 @@ async def download_monitor_async(
 def _get_torrent_num_seeds(
         table_client: azure.storage.table.TableService,
         resource: str) -> int:
+    """Get number of torrent seeders via table
+    :param azure.storage.table.TableService table_client: table client
+    :param int nglobalresource: number of global resources
+    :rtype: int
+    :return: number of seeds
+    """
     try:
         se = table_client.get_entity(
             _STORAGE_CONTAINERS['table_images'],
@@ -836,7 +943,13 @@ def _get_torrent_num_seeds(
 def _start_torrent_via_storage(
         blob_client: azure.storage.blob.BlockBlobService,
         table_client: azure.storage.table.TableService,
-        resource: str, entity: dict=None):
+        resource: str, entity: dict=None) -> None:
+    """Start a torrent via storage entity
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.table.TableService table_client: table client
+    :param str resource: resource
+    :param dict entity: entity
+    """
     if not _ENABLE_P2P:
         return
     if entity is None:
@@ -872,6 +985,13 @@ def _check_resource_has_torrent(
         blob_client: azure.storage.blob.BlockBlobService,
         table_client: azure.storage.table.TableService,
         resource: str) -> bool:
+    """Check if a resource has an associated torrent
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.table.TableService table_client: table client
+    :param str resource: resource
+    :rtype: bool
+    :return: if resource has torrent
+    """
     if not _ENABLE_P2P:
         return False
     add_to_dict = False
@@ -901,7 +1021,7 @@ def distribute_global_resources(
         blob_client: azure.storage.blob.BlockBlobService,
         queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
-        ipaddress: str):
+        ipaddress: str) -> None:
     """Distribute global services/resources
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.blob.BlockBlobService blob_client: blob client

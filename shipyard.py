@@ -1,5 +1,29 @@
 #!/usr/bin/env python3
 
+# Copyright (c) Microsoft Corporation
+#
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 # stdlib imports
 from __future__ import print_function, unicode_literals
 import argparse
@@ -645,6 +669,15 @@ def add_ssh_tunnel_user(batch_client, config, nodes=None):
 def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
     # type: (batch.BatchServiceClient, List[batchmodels.ComputeNodeState],
     #        str, bool) -> List[batchmodels.ComputeNode]
+    """Wait for pool to enter "ready": steady state and all nodes idle
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str pool_id: pool id
+    :param bool reboot_on_failed: reboot node on failed start state
+    :rtype: list
+    :return: list of nodes
+    """
     logger.info(
         'waiting for all nodes in pool {} to reach one of: {!r}'.format(
             pool_id, node_state))
@@ -696,7 +729,6 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
 def generate_ssh_keypair():
     # type: (str) -> tuple
     """Generate an ssh keypair for use with user logins
-
     :param str key_fileprefix: key file prefix
     :rtype: tuple
     :return: (private key filename, public key filename)
@@ -729,7 +761,6 @@ def add_admin_user_to_compute_node(
     # type: (batch.BatchServiceClient, str, batchmodels.ComputeNode, str,
     #        str) -> None
     """Adds an administrative user to the Batch Compute Node
-
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param str pool_id: The pool id containing the node.
@@ -756,8 +787,119 @@ def add_admin_user_to_compute_node(
             raise
 
 
+def _add_global_resource(
+        queue_client, table_client, config, pk, p2pcsd, grtype):
+    # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
+    #        bool, str) -> None
+    """Add global resources
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str pk: partition key
+    :param int p2pcsd: peer-to-peer concurrent source downloads
+    :param str grtype: global resources type
+    """
+    try:
+        for gr in config['global_resources'][grtype]:
+            if grtype == 'docker_images':
+                prefix = 'docker'
+            else:
+                raise NotImplementedError()
+            resource = '{}:{}'.format(prefix, gr)
+            logger.info('adding global resource: {}'.format(resource))
+            table_client.insert_or_replace_entity(
+                _STORAGE_CONTAINERS['table_globalresources'],
+                {
+                    'PartitionKey': pk,
+                    'RowKey': hashlib.sha1(
+                        resource.encode('utf8')).hexdigest(),
+                    'Resource': resource,
+                }
+            )
+            for _ in range(0, p2pcsd):
+                queue_client.put_message(
+                    _STORAGE_CONTAINERS['queue_globalresources'], resource)
+    except KeyError:
+        pass
+
+
+def populate_queues(queue_client, table_client, config):
+    # type: (azurequeue.QueueService, azuretable.TableService, dict) -> None
+    """Populate queues
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
+    try:
+        preg = config['docker_registry']['private']['enabled']
+    except KeyError:
+        preg = False
+    pk = '{}${}'.format(
+        config['credentials']['batch']['account'],
+        config['pool_specification']['id'])
+    # if using docker public hub, then populate registry table with hub
+    if not preg:
+        table_client.insert_or_replace_entity(
+            _STORAGE_CONTAINERS['table_registry'],
+            {
+                'PartitionKey': pk,
+                'RowKey': 'registry.hub.docker.com',
+                'Port': 80,
+            }
+        )
+    # get p2pcsd setting
+    try:
+        p2p = config['data_replication']['peer_to_peer']['enabled']
+    except KeyError:
+        p2p = True
+    if p2p:
+        try:
+            p2pcsd = config['data_replication']['peer_to_peer'][
+                'concurrent_source_downloads']
+            if p2pcsd is None or p2pcsd < 1:
+                raise KeyError()
+        except KeyError:
+            p2pcsd = config['pool_specification']['vm_count'] // 6
+            if p2pcsd < 1:
+                p2pcsd = 1
+    else:
+        p2pcsd = 1
+    # add global resources
+    _add_global_resource(
+        queue_client, table_client, config, pk, p2pcsd, 'docker_images')
+
+
+def _adjust_settings_for_pool_creation(config):
+    # type: (dict) -> None
+    """Adjust settings for pool creation
+    :param dict config: configuration dict
+    """
+    publisher = config['pool_specification']['publisher']
+    vm_count = int(config['pool_specification']['vm_count'])
+    try:
+        p2p = config['data_replication']['peer_to_peer']['enabled']
+    except KeyError:
+        p2p = True
+    max_vms = 20 if publisher.lower() == 'microsoftwindowsserver' else 40
+    if p2p and vm_count > max_vms:
+        logger.warning(
+            ('disabling peer-to-peer transfer as pool size of {} exceeds '
+             'max limit of {} vms for inter-node communication').format(
+                 vm_count, max_vms))
+        if 'data_replication' not in config:
+            config['data_replication'] = {}
+        if 'peer_to_peer' not in config['data_replication']:
+            config['data_replication']['peer_to_peer'] = {}
+        config['data_replication']['peer_to_peer']['enabled'] = False
+
+
 def resize_pool(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Resize a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
     pool_id = config['pool_specification']['id']
     vm_count = int(config['pool_specification']['vm_count'])
     logger.info('Resizing pool {} to {}'.format(pool_id, vm_count))
@@ -772,6 +914,11 @@ def resize_pool(batch_client, config):
 
 def del_pool(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Delete a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
     pool_id = config['pool_specification']['id']
     logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
@@ -779,6 +926,12 @@ def del_pool(batch_client, config):
 
 def del_node(batch_client, config, node_id):
     # type: (batch.BatchServiceClient, dict, str) -> None
+    """Delete a node in a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str node_id: node id to delete
+    """
     pool_id = config['pool_specification']['id']
     logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
     batch_client.pool.remove_nodes(
@@ -791,6 +944,13 @@ def del_node(batch_client, config, node_id):
 
 def _reboot_node(batch_client, pool_id, node_id, wait):
     # type: (batch.BatchServiceClient, str, str, bool) -> None
+    """Reboot a node in a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param str pool_id: pool id of node
+    :param str node_id: node id to delete
+    :param bool wait: wait for node to enter rebooting state
+    """
     logger.info('Rebooting node {} from pool {}'.format(node_id, pool_id))
     batch_client.compute_node.reboot(
         pool_id=pool_id,
@@ -809,6 +969,12 @@ def _reboot_node(batch_client, pool_id, node_id, wait):
 
 def add_jobs(batch_client, blob_client, config):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
+    """Add jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
     pool_id = config['pool_specification']['id']
     global_resources = []
     for gr in config['global_resources']['docker_images']:
@@ -1046,6 +1212,11 @@ def add_jobs(batch_client, blob_client, config):
 
 def del_jobs(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Delete jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
     for job in config['job_specifications']:
         job_id = job['id']
         logger.info('Deleting job: {}'.format(job_id))
@@ -1054,6 +1225,11 @@ def del_jobs(batch_client, config):
 
 def terminate_jobs(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Terminate jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
     for job in config['job_specifications']:
         job_id = job['id']
         logger.info('Terminating job: {}'.format(job_id))
@@ -1062,6 +1238,10 @@ def terminate_jobs(batch_client, config):
 
 def del_all_jobs(batch_client):
     # type: (azure.batch.batch_service_client.BatchServiceClient) -> None
+    """Delete all jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    """
     logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
@@ -1071,6 +1251,12 @@ def del_all_jobs(batch_client):
 
 def get_remote_login_settings(batch_client, config, nodes=None):
     # type: (batch.BatchServiceClient, dict, List[str], bool) -> None
+    """Get remote login settings
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
     pool_id = config['pool_specification']['id']
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
@@ -1083,6 +1269,12 @@ def get_remote_login_settings(batch_client, config, nodes=None):
 def delete_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
+    """Delete storage containers
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             blob_client.delete_container(_STORAGE_CONTAINERS[key])
@@ -1094,6 +1286,10 @@ def delete_storage_containers(blob_client, queue_client, table_client, config):
 
 def _clear_blobs(blob_client, container):
     # type: (azureblob.BlockBlobService, str) -> None
+    """Clear blobs in container
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str container: container to clear blobs from
+    """
     logger.info('deleting blobs: {}'.format(container))
     blobs = blob_client.list_blobs(container)
     for blob in blobs:
@@ -1102,6 +1298,11 @@ def _clear_blobs(blob_client, container):
 
 def _clear_blob_task_resourcefiles(blob_client, container, config):
     # type: (azureblob.BlockBlobService, str, dict) -> None
+    """Clear task resource file blobs in container
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str container: container to clear blobs from
+    :param dict config: configuration dict
+    """
     envfileloc = '{}taskrf-'.format(config['storage_entity_prefix'])
     logger.info('deleting blobs with prefix: {}'.format(envfileloc))
     blobs = blob_client.list_blobs(container, prefix=envfileloc)
@@ -1110,6 +1311,11 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
 
 
 def _clear_table(table_client, table_name, config):
+    """Clear table entities
+    :param azure.storage.table.TableService table_client: table client
+    :param str table_name: table name
+    :param dict config: configuration dict
+    """
     # type: (azuretable.TableService, str, dict) -> None
     logger.info('clearing table: {}'.format(table_name))
     ents = table_client.query_entities(
@@ -1134,6 +1340,12 @@ def _clear_table(table_client, table_name, config):
 def clear_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
+    """Clear storage containers
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
     try:
         perf = config['store_timing_metrics']
     except KeyError:
@@ -1160,6 +1372,12 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
 def create_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
+    """Create storage containers
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
     try:
         perf = config['store_timing_metrics']
     except KeyError:
@@ -1179,104 +1397,11 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
-def _add_global_resource(
-        queue_client, table_client, config, pk, p2pcsd, grtype):
-    # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
-    #        bool, str) -> None
-    try:
-        for gr in config['global_resources'][grtype]:
-            if grtype == 'docker_images':
-                prefix = 'docker'
-            else:
-                raise NotImplementedError()
-            resource = '{}:{}'.format(prefix, gr)
-            logger.info('adding global resource: {}'.format(resource))
-            table_client.insert_or_replace_entity(
-                _STORAGE_CONTAINERS['table_globalresources'],
-                {
-                    'PartitionKey': pk,
-                    'RowKey': hashlib.sha1(
-                        resource.encode('utf8')).hexdigest(),
-                    'Resource': resource,
-                }
-            )
-            for _ in range(0, p2pcsd):
-                queue_client.put_message(
-                    _STORAGE_CONTAINERS['queue_globalresources'], resource)
-    except KeyError:
-        pass
-
-
-def populate_queues(queue_client, table_client, config):
-    # type: (azurequeue.QueueService, azuretable.TableService, dict) -> None
-    try:
-        preg = config['docker_registry']['private']['enabled']
-    except KeyError:
-        preg = False
-    pk = '{}${}'.format(
-        config['credentials']['batch']['account'],
-        config['pool_specification']['id'])
-    # if using docker public hub, then populate registry table with hub
-    if not preg:
-        table_client.insert_or_replace_entity(
-            _STORAGE_CONTAINERS['table_registry'],
-            {
-                'PartitionKey': pk,
-                'RowKey': 'registry.hub.docker.com',
-                'Port': 80,
-            }
-        )
-    # get p2pcsd setting
-    try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
-    except KeyError:
-        p2p = True
-    if p2p:
-        try:
-            p2pcsd = config['data_replication']['peer_to_peer'][
-                'concurrent_source_downloads']
-            if p2pcsd is None or p2pcsd < 1:
-                raise KeyError()
-        except KeyError:
-            p2pcsd = config['pool_specification']['vm_count'] // 6
-            if p2pcsd < 1:
-                p2pcsd = 1
-    else:
-        p2pcsd = 1
-    # add global resources
-    _add_global_resource(
-        queue_client, table_client, config, pk, p2pcsd, 'docker_images')
-
-
-def _adjust_settings_for_pool_creation(config):
-    # type: (dict) -> None
-    publisher = config['pool_specification']['publisher']
-    vm_count = int(config['pool_specification']['vm_count'])
-    try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
-    except KeyError:
-        p2p = True
-    max_vms = 20 if publisher.lower() == 'microsoftwindowsserver' else 40
-    if p2p and vm_count > max_vms:
-        logger.warning(
-            ('disabling peer-to-peer transfer as pool size of {} exceeds '
-             'max limit of {} vms for inter-node communication').format(
-                 vm_count, max_vms))
-        if 'data_replication' not in config:
-            config['data_replication'] = {}
-        if 'peer_to_peer' not in config['data_replication']:
-            config['data_replication']['peer_to_peer'] = {}
-        config['data_replication']['peer_to_peer']['enabled'] = False
-
-
 def merge_dict(dict1, dict2):
     # type: (dict, dict) -> dict
     """Recursively merge dictionaries: dict2 on to dict1. This differs
     from dict.update() in that values that are dicts are recursively merged.
     Note that only dict value types are merged, not lists, etc.
-
-    Code adapted from:
-    https://www.xormedia.com/recursively-merge-dictionaries-in-python/
 
     :param dict dict1: dictionary to merge to
     :param dict dict2: dictionary to merge with

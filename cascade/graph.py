@@ -1,48 +1,76 @@
 #!/usr/bin/env python3
 
+# Copyright (c) Microsoft Corporation
+#
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 # stdlib imports
 import argparse
 import copy
 import datetime
 import json
-import os
 import subprocess
 import sys
 # non-stdlib imports
 import azure.storage.table as azuretable
 
 # global defines
-_STORAGEACCOUNT = os.getenv('STORAGEACCOUNT')
-_STORAGEACCOUNTKEY = os.getenv('STORAGEACCOUNTKEY')
-_BATCHACCOUNT = None
-_POOLID = None
 _PARTITION_KEY = None
 _TABLE_NAME = None
 
 
-def _create_credentials(config: dict):
+def _create_credentials(config: dict) -> azuretable.TableService:
     """Create authenticated clients
     :param dict config: configuration dict
     :rtype: azure.storage.table.TableService
     :return: table client
     """
-    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _BATCHACCOUNT, _POOLID, \
-        _PARTITION_KEY, _TABLE_NAME
-    ssel = config['credentials']['shipyard_storage']
-    _STORAGEACCOUNT = config['credentials']['storage'][ssel]['account']
-    _STORAGEACCOUNTKEY = config['credentials']['storage'][ssel]['account_key']
-    _BATCHACCOUNT = config['credentials']['batch']['account']
-    _POOLID = config['pool_specification']['id']
-    _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
+    global _PARTITION_KEY, _TABLE_NAME
+    _PARTITION_KEY = '{}${}'.format(
+        config['credentials']['batch']['account'],
+        config['pool_specification']['id'])
     _TABLE_NAME = config['storage_entity_prefix'] + 'perf'
+    ssel = config['credentials']['shipyard_storage']
     table_client = azuretable.TableService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
+        account_name=config['credentials']['storage'][ssel]['account'],
+        account_key=config['credentials']['storage'][ssel]['account_key'],
         endpoint_suffix=config['credentials']['storage'][ssel]['endpoint'])
     return table_client
 
 
-def _compute_delta_t(data, nodeid, event1, event1_pos, event2, event2_pos):
+def _compute_delta_t(
+        data: dict, nodeid: str, event1: str, event1_pos: int, event2: str,
+        event2_pos: int) -> float:
+    """Compute time delta between two events
+    :param dict data: data
+    :param str nodeid: node id
+    :param str event1: event1
+    :param int event1_pos: event1 position in stream
+    :param str event2: event2
+    :param int event2_pos: event2 position in stream
+    :rtype: float
+    :return: delta t of events
+    """
     # attempt to get directly recorded diff
     try:
         return data[nodeid][event2][event2_pos]['message']['diff']
@@ -51,7 +79,13 @@ def _compute_delta_t(data, nodeid, event1, event1_pos, event2, event2_pos):
                 data[nodeid][event1][event1_pos]['timestamp']).total_seconds()
 
 
-def _parse_message(event, msg):
+def _parse_message(event: str, msg: str) -> dict:
+    """Parse message
+    :param str event: event
+    :param str msg: message
+    :rtype: dict
+    :return: dict of message entries
+    """
     parts = msg.split(',')
     m = {}
     for part in parts:
@@ -79,7 +113,18 @@ def _parse_message(event, msg):
     return m
 
 
-def _diff_events(data, nodeid, event, end_event, timing, prefix, sizes=None):
+def _diff_events(
+        data: dict, nodeid: str, event: str, end_event: str, timing: dict,
+        prefix: str, sizes: dict=None) -> None:
+    """Diff start and end event
+    :param dict data: data
+    :param str nodeid: node id
+    :param str event: start event
+    :param str end_event: end event
+    :param dict timing: timing dict
+    :param str prefix: prefix
+    :param dict sizes: sizes dict
+    """
     for i in range(0, len(data[nodeid][event])):
         # torrent start -> load start may not always exist due to pull
         if (event == 'cascade:torrent-start' and
@@ -114,7 +159,12 @@ def _diff_events(data, nodeid, event, end_event, timing, prefix, sizes=None):
                     event, img))
 
 
-def coalesce_data(table_client):
+def coalesce_data(table_client: azuretable.TableService) -> tuple:
+    """Coalesce perf data from table
+    :param azure.storage.table.TableService table_client: table client
+    :rtype: tuple
+    :return: (timing, sizes)
+    """
     print('graphing data from {} with pk={}'.format(
         _TABLE_NAME, _PARTITION_KEY))
     entities = table_client.query_entities(
@@ -205,7 +255,11 @@ def coalesce_data(table_client):
     return data, sizes
 
 
-def graph_data(data, sizes):
+def graph_data(data: dict, sizes: dict):
+    """Graph data via gnuplot
+    :param dict data: timing data
+    :param dict sizes: size data
+    """
     print(sizes)
     # create data file
     dat_fname = _PARTITION_KEY.replace('$', '-') + '.dat'
@@ -292,13 +346,10 @@ def graph_data(data, sizes):
         'gnuplot {} > {}'.format(plot_fname, png_fname), shell=True)
 
 
-def merge_dict(dict1, dict2):
+def merge_dict(dict1: dict, dict2: dict) -> dict:
     """Recursively merge dictionaries: dict2 on to dict1. This differs
     from dict.update() in that values that are dicts are recursively merged.
     Note that only dict value types are merged, not lists, etc.
-
-    Code adapted from:
-    https://www.xormedia.com/recursively-merge-dictionaries-in-python/
 
     :param dict dict1: dictionary to merge to
     :param dict dict2: dictionary to merge with

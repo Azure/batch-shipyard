@@ -1,5 +1,29 @@
 #!/usr/bin/env python3
 
+# Copyright (c) Microsoft Corporation
+#
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 # stdlib imports
 import argparse
 import asyncio
@@ -23,7 +47,7 @@ _STORAGE_CONTAINERS = {
 }
 
 
-def _setup_container_names(sep: str):
+def _setup_container_names(sep: str) -> None:
     """Set up storage container names
     :param str sep: storage container prefix
     """
@@ -49,7 +73,7 @@ def _create_credentials() -> azure.storage.table.TableService:
 
 async def _start_private_registry_instance_async(
         loop: asyncio.BaseEventLoop, container: str,
-        registry_archive: str, registry_image_id: str):
+        registry_archive: str, registry_image_id: str) -> None:
     """Start private docker registry instance
     :param asyncio.BaseEventLoop loop: event loop
     :param str container: storage container holding registry info
@@ -109,7 +133,7 @@ async def setup_private_registry_async(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
         ipaddress: str, container: str, registry_archive: str,
-        registry_image_id: str):
+        registry_image_id: str) -> None:
     """Set up a docker private registry if a ticket exists
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.table.TableService table_client: table client
