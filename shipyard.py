@@ -317,6 +317,7 @@ def setup_azurefile_volume_driver(blob_client, config):
     """
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
+    bin.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     if (not bin.exists() or
             compute_md5_for_file(bin, False) != _AZUREFILE_DVD_MD5):
         response = urllibreq.urlopen(_AZUREFILE_DVD_URL)
@@ -467,10 +468,6 @@ def add_pool(batch_client, blob_client, config):
             prefix = None
     except KeyError:
         prefix = None
-    # TODO for now, only support Ubuntu 16.04
-    if (publisher != 'Canonical' or offer != 'UbuntuServer' or
-            sku < '16.04.0-LTS'):
-        raise ValueError('Unsupported Docker Host VM Config')
     # pick latest sku
     node_agent_skus = batch_client.account.list_node_agent_skus()
     skus_to_use = [
@@ -491,8 +488,9 @@ def add_pool(batch_client, blob_client, config):
     # handle azurefile docker volume driver
     if azurefile_vd:
         # only ubuntu 16.04 is supported for azurefile dvd
-        if (publisher != 'Canonical' or offer != 'UbuntuServer' or
-                sku < '16.04.0-LTS'):
+        if (publisher.lower() != 'canonical' or
+                offer.lower() != 'ubuntuserver' or
+                sku.lower() < '16.04.0-lts'):
             raise ValueError(
                 'Unsupported Docker Host VM Config with Azurefile '
                 'Docker Volume Driver')
@@ -559,7 +557,7 @@ def add_pool(batch_client, blob_client, config):
         ssel = config['docker_registry']['private']['storage_account_settings']
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'PRIVATE_REGISTRY_STORAGE_ENV',
+                'CASCADE_PRIVATE_REGISTRY_STORAGE_ENV',
                 '{}:{}:{}'.format(
                     config['credentials']['storage'][ssel]['account'],
                     config['credentials']['storage'][ssel]['endpoint'],
@@ -628,6 +626,7 @@ def add_ssh_tunnel_user(batch_client, config, nodes=None):
     except KeyError:
         logger.info('not creating ssh tunnel user on pool {}'.format(pool_id))
     else:
+        ssh_priv_key = None
         try:
             ssh_pub_key = config[
                 'pool_specification']['ssh_docker_tunnel']['ssh_public_key']
@@ -650,12 +649,15 @@ def add_ssh_tunnel_user(batch_client, config, nodes=None):
                 batch_client, pool_id, node, docker_user, ssh_pub_key)
         # generate tunnel script if requested
         if gen_tunnel_script:
-            ssh_args = [
-                'ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-                'UserKnownHostsFile=/dev/null', '-i', ssh_priv_key,
+            ssh_args = ['ssh']
+            if ssh_priv_key is not None:
+                ssh_args.append('-i')
+                ssh_args.append(ssh_priv_key)
+            ssh_args.extend([
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'UserKnownHostsFile=/dev/null',
                 '-p', '$2', '-N', '-L', '2375:localhost:2375',
-                '{}@$1'.format(docker_user)
-            ]
+                '{}@$1'.format(docker_user)])
             with open(_SSH_TUNNEL_SCRIPT, 'w') as fd:
                 fd.write('#!/usr/bin/env bash\n')
                 fd.write('set -e\n')
@@ -874,13 +876,59 @@ def _adjust_settings_for_pool_creation(config):
     """Adjust settings for pool creation
     :param dict config: configuration dict
     """
-    publisher = config['pool_specification']['publisher']
+    publisher = config['pool_specification']['publisher'].lower()
+    offer = config['pool_specification']['offer'].lower()
+    sku = config['pool_specification']['sku'].lower()
+    # enforce publisher/offer/sku restrictions
+    allowed = False
+    shipyard_container_required = True
+    if publisher == 'canonical':
+        if offer == 'ubuntuserver':
+            if sku >= '14.04.0-lts':
+                allowed = True
+                if sku >= '16.04.0-lts':
+                    shipyard_container_required = False
+    elif publisher == 'credativ':
+        if offer == 'debian':
+            if sku >= '8':
+                allowed = True
+    elif publisher == 'openlogic':
+        if offer.startswith('centos'):
+            if sku >= '7':
+                allowed = True
+    elif publisher == 'redhat':
+        if offer == 'rhel':
+            if sku >= '7':
+                allowed = True
+    elif publisher == 'suse':
+        if offer.startswith('sles'):
+            if sku >= '12':
+                allowed = True
+        elif offer == 'opensuse-leap':
+            if sku >= '42':
+                allowed = True
+        elif offer == 'opensuse':
+            if sku == '13.2':
+                allowed = True
+    # oracle linux is not supported due to UEKR4 requirement
+    if not allowed:
+        raise ValueError(
+            ('Unsupported Docker Host VM Config, publisher={} offer={} '
+             'sku={}').format(publisher, offer, sku))
+    # adjust for shipyard container requirement
+    if shipyard_container_required:
+        config['use_shipyard_docker_image'] = True
+        logger.warning(
+            ('forcing shipyard docker image to be used due to '
+             'VM config, publisher={} offer={} sku={}').format(
+                 publisher, offer, sku))
+    # adjust inter node comm setting
     vm_count = int(config['pool_specification']['vm_count'])
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
         p2p = True
-    max_vms = 20 if publisher.lower() == 'microsoftwindowsserver' else 40
+    max_vms = 20 if publisher == 'microsoftwindowsserver' else 40
     if p2p and vm_count > max_vms:
         logger.warning(
             ('disabling peer-to-peer transfer as pool size of {} exceeds '
@@ -1456,6 +1504,11 @@ def main():
         _create_credentials(config)
 
     if args.action == 'addpool':
+        # first check if pool exists to prevent accidential metadata clear
+        if batch_client.pool.exists(config['pool_specification']['id']):
+            raise RuntimeError(
+                'attempting to create a pool that already exists: {}'.format(
+                    config['pool_specification']['id']))
         create_storage_containers(
             blob_client, queue_client, table_client, config)
         clear_storage_containers(

@@ -163,7 +163,7 @@ def coalesce_data(table_client: azuretable.TableService) -> tuple:
     """Coalesce perf data from table
     :param azure.storage.table.TableService table_client: table client
     :rtype: tuple
-    :return: (timing, sizes)
+    :return: (timing, sizes, offer, sku)
     """
     print('graphing data from {} with pk={}'.format(
         _TABLE_NAME, _PARTITION_KEY))
@@ -189,7 +189,12 @@ def coalesce_data(table_client: azuretable.TableService) -> tuple:
         data[nodeid][event].append(ev)
     del entities
     sizes = {}
+    offer = None
+    sku = None
     for nodeid in data:
+        if offer is None:
+            offer = data[nodeid]['nodeprep:start'][0]['message']['offer']
+            sku = data[nodeid]['nodeprep:start'][0]['message']['sku']
         # calculate dt timings
         timing = {
             'nodeprep': _compute_delta_t(
@@ -252,13 +257,15 @@ def coalesce_data(table_client: azuretable.TableService) -> tuple:
         data[nodeid].pop('cascade:load-start', None)
         data[nodeid].pop('cascade:load-end', None)
         data[nodeid]['timing'] = timing
-    return data, sizes
+    return data, sizes, offer, sku
 
 
-def graph_data(data: dict, sizes: dict):
+def graph_data(data: dict, sizes: dict, offer: str, sku: str):
     """Graph data via gnuplot
     :param dict data: timing data
     :param dict sizes: size data
+    :param str offer: offer
+    :param str sku: sku
     """
     print(sizes)
     # create data file
@@ -324,16 +331,20 @@ def graph_data(data: dict, sizes: dict):
     with open(plot_fname, 'w') as f:
         f.write('set terminal pngcairo enhanced transparent crop\n')
         f.write(
-            'set key top left outside horizontal autotitle columnhead '
-            'font ", 9"\n')
-        f.write('set xtics rotate by 45 right font ", 8"\n')
-        f.write('set ytics\n')
+            ('set title "Shipyard Performance for {} ({} {})" '
+             'font ", 10" \n').format(
+                 _PARTITION_KEY.split('$')[-1], offer, sku))
+        f.write(
+            'set key top right horizontal autotitle columnhead '
+            'font ", 7"\n')
+        f.write('set xtics rotate by 45 right font ", 7"\n')
+        f.write('set ytics font ", 8"\n')
         f.write('set xlabel "Node Prep Start Time" font ", 8"\n')
         f.write('set ylabel "Seconds" font ", 8"\n')
         f.write('set format x "%H:%M:%.3S"\n')
         f.write('set xdata time\n')
         f.write('set timefmt "%Y-%m-%d-%H:%M:%S"\n')
-        f.write('set style fill solid border -1\n')
+        f.write('set style fill solid\n')
         f.write('set boxwidth {0:.5f} absolute\n'.format(
             (maxtime - mintime) / 100.0))
         f.write('plot "{}" using 1:($3+$4+$5+$6) with boxes, \\\n'.format(
@@ -387,8 +398,8 @@ def main():
     # create storage credentials
     table_client = _create_credentials(config)
     # graph data
-    data, sizes = coalesce_data(table_client)
-    graph_data(data, sizes)
+    data, sizes, offer, sku = coalesce_data(table_client)
+    graph_data(data, sizes, offer, sku)
 
 
 def parseargs():

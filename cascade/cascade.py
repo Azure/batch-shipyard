@@ -302,7 +302,7 @@ def _renew_queue_message_lease(
         msg_id)
 
 
-def scantree(path) -> os.DirEntry:
+def scantree(path):
     """Recursively scan a directory tree
     :param str path: path to scan
     :rtype: os.DirEntry

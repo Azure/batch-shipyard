@@ -107,7 +107,8 @@ async def _start_private_registry_instance_async(
             if proc.returncode != 0:
                 raise RuntimeError('docker load non-zero rc: {}'.format(
                     proc.returncode))
-    sa, ep, sakey = os.environ['PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
+    sa, ep, sakey = os.environ[
+        'CASCADE_PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
     registry_cmd = [
         'docker', 'run', '-d', '-p',
         '{p}:{p}'.format(p=_DEFAULT_PRIVATE_REGISTRY_PORT),
