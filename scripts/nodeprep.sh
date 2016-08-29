@@ -3,7 +3,34 @@
 set -e
 set -o pipefail
 
+install_azurefile_docker_volume_driver() {
+    chown root:root azurefile-dockervolumedriver*
+    chmod 755 azurefile-dockervolumedriver
+    chmod 640 azurefile-dockervolumedriver.env
+    mv azurefile-dockervolumedriver /usr/bin
+    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
+    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
+        mv azurefile-dockervolumedriver.conf /etc/init
+        initctl reload-configuration
+        initctl start azurefile-dockervolumedriver
+    else
+        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
+            systemdloc=/usr/lib/systemd/system
+        else
+            systemdloc=/lib/systemd/system
+        fi
+        mv azurefile-dockervolumedriver.service $systemdloc
+        systemctl daemon-reload
+        systemctl enable azurefile-dockervolumedriver
+        systemctl start azurefile-dockervolumedriver
+    fi
+    # create docker volumes
+    chmod +x azurefile-dockervolume-create.sh
+    ./azurefile-dockervolume-create.sh
+}
+
 azurefile=0
+block=
 cascadecontainer=0
 offer=
 p2p=
@@ -11,12 +38,13 @@ prefix=
 privatereg=
 sku=
 
-while getopts "h?ado:p:r:s:t:" opt; do
+while getopts "h?ab:do:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
+            echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -28,6 +56,9 @@ while getopts "h?ado:p:r:s:t:" opt; do
             ;;
         a)
             azurefile=1
+            ;;
+        b)
+            block=$OPTARG
             ;;
         d)
             cascadecontainer=1
@@ -77,7 +108,7 @@ PYTHONASYNCIODEBUG=1
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
 # set iptables rules
-if [ ! -z "$p2p" ]; then
+if [ ! -z $p2p ]; then
     # disable DHT connection tracking
     iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
@@ -91,28 +122,19 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     name=
     if [[ $sku == 14.04.* ]]; then
-        if [ $azurefile -eq 1 ]; then
-            echo "azure file docker volume driver not supported on this sku: $sku and offer: $offer"
-            exit 1
-        fi
         name=ubuntu-trusty
-        srvstart="service docker start"
-        srvstop="service docker stop"
+        srvstart="initctl start docker"
+        srvstop="initctl stop docker"
     elif [[ $sku == 16.04.* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
-        afdvdenable="systemctl enable azurefile-dockervolumedriver"
-        afdvdstart="systemctl start azurefile-dockervolumedriver"
     elif [[ $sku == "8" ]]; then
-        if [ $azurefile -eq 1 ]; then
-            echo "azure file docker volume driver not supported on this sku: $sku and offer: $offer"
-            exit 1
-        fi
         name=debian-jessie
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
+        srvenable="systemctl enable docker.service"
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
@@ -142,18 +164,9 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         apt-get install -y -q -o Dpkg::Options::="--force-confnew" docker-engine
         set -e
         $srvstop
-        # set up azure file docker volume driver if instructed
-        if [ $azurefile -eq 1 ]; then
-            chown root:root azurefile-dockervolumedriver*
-            chmod 755 azurefile-dockervolumedriver
-            chmod 640 azurefile-dockervolumedriver.env
-            mv azurefile-dockervolumedriver /usr/bin
-            mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
-            mv azurefile-dockervolumedriver.service /etc/systemd/system
-        fi
         set +e
         rm -f /var/lib/docker/network/files/local-kv.db
-        echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/default/docker
+        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/default/docker
         if [[ $sku == 16.04.* ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
@@ -164,13 +177,9 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         fi
         set -e
         $srvstart
-        # start azure file docker volume driver
+        # setup and start azure file docker volume driver
         if [ $azurefile -eq 1 ]; then
-            $afdvdenable
-            $afdvdstart
-            # create docker volumes
-            chmod +x azurefile-dockervolume-create.sh
-            ./azurefile-dockervolume-create.sh
+            install_azurefile_docker_volume_driver $offer $sku
         fi
         set +e
     fi
@@ -184,11 +193,11 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         fi
         # install cascade dependencies
-        if [ ! -z "$p2p" ]; then
+        if [ ! -z $p2p ]; then
             apt-get install -y -q python3-libtorrent pigz
         fi
         # install private registry if required
-        if [ ! -z "$privatereg" ]; then
+        if [ ! -z $privatereg ]; then
             # mark private registry start
             if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
                 ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
@@ -206,14 +215,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         echo "only supported through shipyard container"
         exit 1
     fi
-    # check for azure file docker volume driver disabled
-    if [ $azurefile -eq 1 ]; then
-        echo "azure file docker volume driver not supported on this sku: $sku and offer: $offer"
-        exit 1
-    fi
     if [[ $sku == 7.* ]]; then
-        srvstart="systemctl start docker.service"
-        srvstop="systemctl stop docker.service"
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
         else
@@ -224,74 +226,88 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     # add docker repo to yum
-    if [[ $offer == "oracle-linux" ]]; then
-        # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
-        echo "oracle linux is not supported at this time"
-        exit 1
-cat > /etc/yum.repos.d/docker.repo << EOF
+    yumrepo=/etc/yum.repos.d/docker.repo
+    if [ ! -e $yumrepo ] || [ ! -s $yumrepo ]; then
+        baseurl=
+        if [[ $offer == "oracle-linux" ]]; then
+            baseurl=https://yum.dockerproject.org/repo/main/oraclelinux/7
+            # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
+            echo "oracle linux is not supported at this time"
+            exit 1
+        else
+            baseurl=https://yum.dockerproject.org/repo/main/centos/7/
+        fi
+cat > $yumrepo << EOF
 [dockerrepo]
 name=Docker Repository
-baseurl=https://yum.dockerproject.org/repo/main/oraclelinux/7
+baseurl=$baseurl
 enabled=1
 gpgcheck=1
 gpgkey=https://yum.dockerproject.org/gpg
 EOF
-    else
-cat > /etc/yum.repos.d/docker.repo << EOF
-[dockerrepo]
-name=Docker Repository
-baseurl=https://yum.dockerproject.org/repo/main/centos/7/
-enabled=1
-gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg
-EOF
+        # update yum repo and install docker engine
+        yum install -y docker-engine
+        # modify docker opts
+sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/default/docker
+        sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
+        sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
+        systemctl daemon-reload
+        # start docker service and enable docker daemon on boot
+        $srvenable
+        systemctl start docker.service
+        # setup and start azure file docker volume driver
+        if [ $azurefile -eq 1 ]; then
+            install_azurefile_docker_volume_driver $offer $sku
+        fi
     fi
-    # update yum repo and install docker engine
-    yum install -y docker-engine
-    # start docker service and enable docker daemon on boot
-    $srvstart
-    $srvenable
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
         echo "only supported through shipyard container"
         exit 1
     fi
-    # check for azure file docker volume driver disabled
-    if [ $azurefile -eq 1 ]; then
-        echo "azure file docker volume driver not supported on this sku: $sku and offer: $offer"
-        exit 1
-    fi
-    # set service commands
-    srvstart="systemctl start docker"
-    srvstop="systemctl stop docker"
-    srvenable="systemctl enable docker"
-    # add Virtualization:containers repo for recent docker builds
-    repodir=
-    if [[ $offer == opensuse* ]]; then
-        if [[ $sku == "13.2" ]]; then
-            repodir=openSUSE_13.2
-        elif [[ $sku == "42.1" ]]; then
-            repodir=openSUSE_Leap_42.1
+    if [ ! -f ".node_prep_finished" ]; then
+        # add Virtualization:containers repo for recent docker builds
+        repodir=
+        if [[ $offer == opensuse* ]]; then
+            if [[ $sku == "13.2" ]]; then
+                repodir=openSUSE_13.2
+            elif [[ $sku == "42.1" ]]; then
+                repodir=openSUSE_Leap_42.1
+            fi
+        elif [[ $offer == sles* ]]; then
+            if [[ $sku == "12" ]]; then
+                repodir=SLE_12_SP1
+            elif [[ $sku == "12-sp1" ]]; then
+                repodir=SLE_12
+            fi
         fi
-    elif [[ $offer == sles* ]]; then
-        if [[ $sku == "12" ]]; then
-            repodir=SLE_12_SP1
-        elif [[ $sku == "12-sp1" ]]; then
-            repodir=SLE_12
+        if [ -z $repodir ]; then
+            echo "unsupported sku: $sku for offer: $offer"
+            exit 1
+        fi
+        # uninstall existing docker
+        set +e
+        zypper -n rm docker
+        set -e
+        # update zypper repo and install docker engine
+        zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
+        zypper -n --gpg-auto-import-keys ref
+        zypper -n in docker
+        set +e
+        /usr/lib/docker-image-migrator/do-image-migration-v1to2.sh
+        set -e
+        # modify docker opts, docker opts in /etc/sysconfig/docker
+        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/sysconfig/docker
+        systemctl daemon-reload
+        # start docker service and enable docker daemon on boot
+        systemctl enable docker
+        systemctl start docker
+        # setup and start azure file docker volume driver
+        if [ $azurefile -eq 1 ]; then
+            install_azurefile_docker_volume_driver $offer $sku
         fi
     fi
-    if [ -z $repodir ]; then
-        echo "unsupported sku: $sku for offer: $offer"
-        exit 1
-    fi
-    # update zypper repo and install docker engine
-    zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
-    zypper -n --no-gpg-checks ref
-    zypper -n in docker-1.12.0-143.1.x86_64
-    # start docker service and enable docker daemon on boot
-    $srvstart
-    $srvenable
 else
     echo "unsupported offer: $offer (sku: $sku)"
     exit 1
@@ -308,7 +324,7 @@ touch .node_prep_finished
 # execute cascade
 if [ $cascadecontainer -eq 1 ]; then
     detached=
-    if [ -z "$p2p" ]; then
+    if [ -z $p2p ]; then
         detached="--rm"
     else
         detached="-d"
@@ -354,6 +370,28 @@ else
 fi
 
 # if not in p2p mode, then wait for cascade exit
-if [ -z "$p2p" ]; then
+if [ -z $p2p ]; then
     wait
+fi
+
+# block until images ready if specified
+if [ ! -z $block ]; then
+    echo "blocking until images ready: $block"
+    IFS=',' read -ra RES <<< "$block"
+    declare -a missing
+    while :
+        do
+        for image in "${RES[@]}";  do
+            if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
+                missing=("${missing[@]}" "$image")
+            fi
+        done
+        if [ ${#missing[@]} -eq 0 ]; then
+            echo "all docker images present"
+            break
+        else
+            unset missing
+        fi
+        sleep 2
+    done
 fi

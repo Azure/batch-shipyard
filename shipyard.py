@@ -70,17 +70,12 @@ _STORAGE_CONTAINERS = {
     'table_perf': None,
     'queue_globalresources': None,
 }
-_AZUREFILE_DVD_VERSION = '0.4.1'
-_AZUREFILE_DVD_URL = (
+_AZUREFILE_DVD_BIN_VERSION = '0.4.1'
+_AZUREFILE_DVD_BIN_URL = (
     'https://github.com/Azure/azurefile-dockervolumedriver/releases'
-    '/download/' + _AZUREFILE_DVD_VERSION + '/azurefile-dockervolumedriver'
+    '/download/' + _AZUREFILE_DVD_BIN_VERSION + '/azurefile-dockervolumedriver'
 )
-_AZUREFILE_DVD_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
-_AZUREFILE_SYSTEMD_SERVICE_URL = (
-    'https://raw.githubusercontent.com/Azure/azurefile-dockervolumedriver'
-    '/master/contrib/init/systemd/azurefile-dockervolumedriver.service'
-)
-_AZUREFILE_SYSTEMD_SERVICE_MD5 = 'd58f2f5e9f9f78216651ac28419878f1'
+_AZUREFILE_DVD_BIN_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
 _MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('nodeprep.sh', 'scripts/nodeprep.sh')
 _JOBPREP_FILE = ('jpdockerblock.sh', 'scripts/jpdockerblock.sh')
@@ -315,21 +310,25 @@ def setup_azurefile_volume_driver(blob_client, config):
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
+    publisher = config['pool_specification']['publisher'].lower()
+    offer = config['pool_specification']['offer'].lower()
+    sku = config['pool_specification']['sku'].lower()
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
     bin.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     if (not bin.exists() or
-            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_MD5):
-        response = urllibreq.urlopen(_AZUREFILE_DVD_URL)
+            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN_MD5):
+        response = urllibreq.urlopen(_AZUREFILE_DVD_BIN_URL)
         with bin.open('wb') as f:
             f.write(response.read())
-    srv = pathlib.Path('resources/azurefile-dockervolumedriver.service')
-    if (not srv.exists() or
-            compute_md5_for_file(srv, False) !=
-            _AZUREFILE_SYSTEMD_SERVICE_MD5):
-        response = urllibreq.urlopen(_AZUREFILE_SYSTEMD_SERVICE_URL)
-        with srv.open('wb') as f:
-            f.write(response.read())
+        # check md5
+        if compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN_MD5:
+            raise RuntimeError('md5 mismatch for {}'.format(bin))
+    if (publisher == 'canonical' and offer == 'ubuntuserver' and
+            sku.startswith('14.04')):
+        srv = pathlib.Path('resources/azurefile-dockervolumedriver.conf')
+    else:
+        srv = pathlib.Path('resources/azurefile-dockervolumedriver.service')
     # construct systemd env file
     sa = None
     sakey = None
@@ -349,6 +348,9 @@ def setup_azurefile_volume_driver(blob_client, config):
             sa = _sa
             sakey = config['credentials']['storage'][ssel]['account_key']
             saep = config['credentials']['storage'][ssel]['endpoint']
+        else:
+            raise NotImplementedError(
+                'Unsupported volume driver: {}'.format(conf['volume_driver']))
     if sa is None or sakey is None:
         raise RuntimeError(
             'storage account or storage account key not specified for '
@@ -388,14 +390,11 @@ def add_pool(batch_client, blob_client, config):
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
     vm_count = config['pool_specification']['vm_count']
+    # cascade settings
     try:
         perf = config['store_timing_metrics']
     except KeyError:
         perf = False
-    try:
-        use_shipyard_docker_image = config['use_shipyard_docker_image']
-    except KeyError:
-        use_shipyard_docker_image = True
     # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -450,6 +449,17 @@ def add_pool(batch_client, blob_client, config):
     except KeyError:
         dockeruser = None
         dockerpw = None
+    try:
+        use_shipyard_docker_image = config['use_shipyard_docker_image']
+    except KeyError:
+        use_shipyard_docker_image = True
+    try:
+        block_for_gr = config['block_until_all_global_resources_loaded']
+    except KeyError:
+        block_for_gr = True
+    if block_for_gr:
+        block_for_gr = ','.join(
+            [r for r in config['global_resources']['docker_images']])
     # check volume mounts for azurefile
     azurefile_vd = False
     try:
@@ -487,13 +497,6 @@ def add_pool(batch_client, blob_client, config):
             _rflist.append(_PERF_FILE)
     # handle azurefile docker volume driver
     if azurefile_vd:
-        # only ubuntu 16.04 is supported for azurefile dvd
-        if (publisher.lower() != 'canonical' or
-                offer.lower() != 'ubuntuserver' or
-                sku.lower() < '16.04.0-lts'):
-            raise ValueError(
-                'Unsupported Docker Host VM Config with Azurefile '
-                'Docker Volume Driver')
         afbin, afsrv, afenv, afvc = setup_azurefile_volume_driver(
             blob_client, config)
         _rflist.append((str(afbin.name), str(afbin)))
@@ -505,7 +508,7 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -513,6 +516,7 @@ def add_pool(batch_client, blob_client, config):
             torrentflags,
             ' -p {}'.format(prefix) if prefix else '',
             ' -a' if azurefile_vd else '',
+            ' -b {}'.format(block_for_gr) if block_for_gr is not None else '',
             ' -d' if use_shipyard_docker_image else '',
         ),
     ]
@@ -1522,6 +1526,7 @@ def main():
         del_pool(batch_client, config)
     elif args.action == 'addsshuser':
         add_ssh_tunnel_user(batch_client, config)
+        get_remote_login_settings(batch_client, config)
     elif args.action == 'delnode':
         del_node(batch_client, config, args.nodeid)
     elif args.action == 'addjobs':
