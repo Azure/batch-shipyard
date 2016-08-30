@@ -1027,7 +1027,9 @@ def add_jobs(batch_client, blob_client, config):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
+    # get the pool inter-node comm setting
     pool_id = config['pool_specification']['id']
+    _pool = batch_client.pool.get(pool_id)
     global_resources = []
     for gr in config['global_resources']['docker_images']:
         global_resources.append(gr)
@@ -1066,6 +1068,7 @@ def add_jobs(batch_client, blob_client, config):
                 raise
         # add all tasks under job
         for task in jobspec['tasks']:
+            # get image name
             image = task['image']
             # get or generate task id
             try:
@@ -1088,7 +1091,7 @@ def add_jobs(batch_client, blob_client, config):
                     _GENERIC_DOCKER_TASK_PREFIX, tasknum)
             # get generic run opts
             try:
-                run_opts = task['additional_docker_run_options']
+                run_opts = task['additional_docker_run_options'].split()
             except KeyError:
                 run_opts = []
             # parse remove container option
@@ -1256,6 +1259,39 @@ def add_jobs(batch_client, blob_client, config):
                 batchtask.depends_on = batchmodels.TaskDependencies(
                     task_ids=task['depends_on']
                 )
+            # check if there are multi-instance tasks
+            if 'multi_instance' in task:
+                if not _pool.enable_inter_node_communication:
+                    raise RuntimeError(
+                        ('cannot run a multi-instance task on a '
+                         'non-internode communication enabled '
+                         'pool: {}').format(pool_id))
+                mis = batchmodels.MultiInstanceSettings(
+                    number_of_instances=task[
+                        'multi_instance']['num_instances'],
+                    coordination_command_line=task[
+                        'multi_instance']['coordination_command'],
+                    common_resouorce_files=[]
+                )
+                # add common resource files for multi-instance
+                try:
+                    rfs = task['multi_instance']['resource_files']
+                except KeyError:
+                    pass
+                else:
+                    for rf in rfs:
+                        try:
+                            fm = rf['file_mode']
+                        except KeyError:
+                            fm = None
+                        mis.common_resource_files.append(
+                            batchmodels.ResourceFile(
+                                file_path=rf['file_path'],
+                                blob_source=rf['blob_source'],
+                                file_mode=fm,
+                            )
+                        )
+                batchtask.multi_instance_settings = mis
             # create task
             logger.info('Adding task {}: {}'.format(
                 task_id, batchtask.command_line))

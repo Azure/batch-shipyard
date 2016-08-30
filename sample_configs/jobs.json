@@ -8,8 +8,6 @@
             "tasks": [
                 {
                     "id": null,
-                    "depends_on": [
-                    ],
                     "image": "busybox",
                     "name": null,
                     "labels": [],
@@ -35,7 +33,15 @@
                         }
                     ],
                     "entrypoint": null,
-                    "command": ""
+                    "command": "",
+                    "depends_on": [
+                    ],
+                    "multi_instance": {
+                        "num_instances": 3,
+                        "coordination_command": null,
+                        "resource_files": [
+                        ]
+                    }
                 }
             ]
         }
