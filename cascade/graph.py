@@ -49,8 +49,8 @@ def _create_credentials(config: dict) -> azuretable.TableService:
     _PARTITION_KEY = '{}${}'.format(
         config['credentials']['batch']['account'],
         config['pool_specification']['id'])
-    _TABLE_NAME = config['storage_entity_prefix'] + 'perf'
-    ssel = config['credentials']['shipyard_storage']
+    _TABLE_NAME = config['batch_shipyard']['storage_entity_prefix'] + 'perf'
+    ssel = config['batch_shipyard']['storage_account_settings']
     table_client = azuretable.TableService(
         account_name=config['credentials']['storage'][ssel]['account'],
         account_key=config['credentials']['storage'][ssel]['account_key'],

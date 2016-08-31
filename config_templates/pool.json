@@ -7,13 +7,13 @@
         "publisher": "Canonical",
         "offer": "UbuntuServer",
         "sku": "16.04.0-LTS",
+        "reboot_on_start_task_failed": true,
+        "block_until_all_global_resources_loaded": true,
         "ssh_docker_tunnel": {
             "username": "docker",
             "ssh_public_key": null,
             "generate_tunnel_script": true
         },
-        "reboot_on_start_task_failed": true,
-        "block_until_all_global_resources_loaded": true,
         "additional_node_prep_commands": [
         ]
     }

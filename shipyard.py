@@ -114,7 +114,7 @@ def _populate_global_settings(config, action):
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
         _REGISTRY_FILE
-    ssel = config['credentials']['shipyard_storage']
+    ssel = config['batch_shipyard']['storage_account_settings']
     _STORAGEACCOUNT = config['credentials']['storage'][ssel]['account']
     _STORAGEACCOUNTKEY = config['credentials']['storage'][ssel]['account_key']
     try:
@@ -122,7 +122,7 @@ def _populate_global_settings(config, action):
     except KeyError:
         _STORAGEACCOUNTEP = 'core.windows.net'
     try:
-        sep = config['storage_entity_prefix']
+        sep = config['batch_shipyard']['storage_entity_prefix']
     except KeyError:
         sep = None
     if sep is None:
@@ -397,7 +397,7 @@ def add_pool(batch_client, blob_client, config):
         maxtasks = 1
     # cascade settings
     try:
-        perf = config['store_timing_metrics']
+        perf = config['batch_shipyard']['store_timing_metrics']
     except KeyError:
         perf = False
     # peer-to-peer settings
@@ -455,7 +455,8 @@ def add_pool(batch_client, blob_client, config):
         dockeruser = None
         dockerpw = None
     try:
-        use_shipyard_docker_image = config['use_shipyard_docker_image']
+        use_shipyard_docker_image = config[
+            'batch_shipyard']['use_shipyard_docker_image']
     except KeyError:
         use_shipyard_docker_image = True
     try:
@@ -478,7 +479,7 @@ def add_pool(batch_client, blob_client, config):
         pass
     # prefix settings
     try:
-        prefix = config['storage_entity_prefix']
+        prefix = config['batch_shipyard']['storage_entity_prefix']
         if len(prefix) == 0:
             prefix = None
     except KeyError:
@@ -927,7 +928,7 @@ def _adjust_settings_for_pool_creation(config):
              'sku={}').format(publisher, offer, sku))
     # adjust for shipyard container requirement
     if shipyard_container_required:
-        config['use_shipyard_docker_image'] = True
+        config['batch_shipyard']['use_shipyard_docker_image'] = True
         logger.warning(
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
@@ -1182,7 +1183,7 @@ def add_jobs(batch_client, blob_client, config):
             except KeyError:
                 command = None
             # get and create env var file
-            envfile = '.env.list'.format(task_id)
+            envfile = '.shipyard.envlist'
             sas_urls = None
             try:
                 env_vars = jobspec['environment_variables']
@@ -1199,7 +1200,7 @@ def add_jobs(batch_client, blob_client, config):
                         ('cannot initialize an infiniband task on a '
                          'non-internode communication enabled '
                          'pool: {}').format(pool_id))
-                if (_pool.vm_size.lower() != 'standard_a8' or
+                if (_pool.vm_size.lower() != 'standard_a8' and
                         _pool.vm_size.lower() != 'standard_a9'):
                     raise RuntimeError(
                         ('cannot initialize an infiniband task on nodes '
@@ -1225,8 +1226,8 @@ def add_jobs(batch_client, blob_client, config):
             if env_vars is not None and len(env_vars) > 0:
                 envfiletmp = _TEMP_DIR / '{}{}'.format(task_id, envfile)
                 envfileloc = '{}taskrf-{}/{}{}'.format(
-                    config['storage_entity_prefix'], job.id, task_id,
-                    envfile)
+                    config['batch_shipyard']['storage_entity_prefix'],
+                    job.id, task_id, envfile)
                 with envfiletmp.open('w', encoding='utf8') as f:
                     for key in env_vars:
                         f.write('{}={}{}'.format(
@@ -1551,7 +1552,8 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
     :param str container: container to clear blobs from
     :param dict config: configuration dict
     """
-    envfileloc = '{}taskrf-'.format(config['storage_entity_prefix'])
+    envfileloc = '{}taskrf-'.format(
+        config['batch_shipyard']['storage_entity_prefix'])
     logger.info('deleting blobs with prefix: {}'.format(envfileloc))
     blobs = blob_client.list_blobs(container, prefix=envfileloc)
     for blob in blobs:
@@ -1595,7 +1597,7 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
     :param dict config: configuration dict
     """
     try:
-        perf = config['store_timing_metrics']
+        perf = config['batch_shipyard']['store_timing_metrics']
     except KeyError:
         perf = False
     for key in _STORAGE_CONTAINERS:
@@ -1627,7 +1629,7 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
     :param dict config: configuration dict
     """
     try:
-        perf = config['store_timing_metrics']
+        perf = config['batch_shipyard']['store_timing_metrics']
     except KeyError:
         perf = False
     for key in _STORAGE_CONTAINERS:
@@ -1757,7 +1759,7 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='Shipyard: Azure Batch to Docker Bridge')
+        description='Batch Shipyard: Docker and Azure Batch Integration')
     parser.add_argument(
         'action', help='action: addpool, addjob, addsshuser, cleanmijobs, '
         'termjobs, delpool, delnode, deljob, delalljobs, grl, delstorage, '

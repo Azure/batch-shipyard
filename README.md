@@ -5,34 +5,37 @@
 Batch Shipyard
 ==============
 Batch Shipyard is a tool to help provision and execute Dockerized workloads
-on [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) Compute
-Pools. No experience with the Azure Batch SDK is needed; run your Docker Batch
-tasks through easy-to-understand configuration files!
+on [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) compute
+pools. No experience with the Azure Batch SDK is needed; run your batch-style
+Docker tasks through easy-to-understand configuration files!
 
 Major Features
 --------------
 * Automated [Docker Host Engine](https://docker.io) installation on compute
-  nodes
+nodes
+* Automated deployment of required Docker images to compute nodes
 * Accelerated Docker image deployment at scale to compute pools consisting of
-  a large number of compute nodes via peer-to-peer distribution of Docker
-  images among the VMs
+a large number of compute nodes via peer-to-peer distribution of Docker
+images among the VMs
 * Automated Docker Private Registry instance creation on compute nodes backed
-  to Azure Storage if specified
+to Azure Storage if specified
 * Automated
-  [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
-  installation and share setup for SMB/CIFS backed to Azure Storage if
-  specified
+[Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
+installation and share setup for SMB/CIFS backed to Azure Storage if
+specified
 * Seamless integration with Azure Batch job, task and file concepts along with
-  full pass-through of the Azure Batch API to containers executed on compute
-  nodes
+full pass-through of the Azure Batch API to containers executed on compute
+nodes
 * Support for task dependencies to allow for complex processing pipelines with
-  Docker containers
+Docker containers
 * Support for multi-instance tasks to accomodate Dockerized MPI applications
-  on compute pools
+on compute pools
 * Transparent assist for creating Docker containers utilizing Infiniband/RDMA
-  for MPI on
-  [HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
-  (STANDARD\_A8 and STANDARD\_A9)
+for MPI on
+[HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
+(STANDARD\_A8 and STANDARD\_A9)
+* Automatic set up of SSH tunneling to Docker Hosts on compute nodes if
+specified
 
 Installation
 ------------

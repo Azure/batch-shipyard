@@ -1,7 +1,9 @@
 {
-    "store_timing_metrics": false,
-    "storage_entity_prefix": "shipyard",
-    "use_shipyard_docker_image": true,
+    "batch_shipyard": {
+        "storage_account_settings": "mystorageaccount",
+        "storage_entity_prefix": "shipyard",
+        "use_shipyard_docker_image": true
+    },
     "docker_registry": {
         "login": {
             "username": null,
@@ -27,7 +29,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "hello-world"
+            "busybox"
         ],
         "docker_volumes": {
             "data_volumes": {
@@ -48,7 +50,7 @@
                     "container_path": "",
                     "mount_options": [
                         "filemode=0777",
-                        "dirmode=0755",
+                        "dirmode=0777",
                         "nolock=true"
                     ]
                 }
