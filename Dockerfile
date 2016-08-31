@@ -2,8 +2,6 @@
 
 FROM gliderlabs/alpine:3.4
 
-WORKDIR /tmp
-
 # set environment variables
 # currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
 ENV libtorrent_version=1.0.9 libtorrent_version_path=1_0_9
