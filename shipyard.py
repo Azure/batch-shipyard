@@ -1189,15 +1189,23 @@ def add_jobs(batch_client, blob_client, config):
                 infiniband = task['infiniband']
             except KeyError:
                 infiniband = False
-            # ensure we're on HPC skus with inter node comm enabled
+            # ensure we're on HPC VMs with inter node comm enabled
             if infiniband:
                 if not _pool.enable_inter_node_communication:
                     raise RuntimeError(
                         ('cannot initialize an infiniband task on a '
                          'non-internode communication enabled '
                          'pool: {}').format(pool_id))
-                publisher = config['pool_specification']['publisher'].lower()
-                offer = config['pool_specification']['offer'].lower()
+                if (_pool.vm_size.lower() != 'standard_a8' or
+                        _pool.vm_size.lower() != 'standard_a9'):
+                    raise RuntimeError(
+                        ('cannot initialize an infiniband task on nodes '
+                         'without RDMA, pool: {} vm_size: {}').format(
+                             pool_id, _pool.vm_size))
+                publisher = _pool.virtual_machine_configuration.\
+                    image_reference.publisher.lower()
+                offer = _pool.virtual_machine_configuration.\
+                    image_reference.offer.lower()
                 # TODO support SLES-HPC, for now only support CentOS-HPC
                 if publisher != 'openlogic' and offer != 'centos-hpc':
                     raise ValueError(
