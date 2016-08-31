@@ -4,8 +4,8 @@ FROM gliderlabs/alpine:3.4
 
 # set environment variables
 # currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
-ENV libtorrent_version=1.0.9 libtorrent_version_path=1_0_9
-ENV CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.5
+ENV libtorrent_version=1.0.9 \
+    CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.5
 
 # add base packages, python dependencies, create script directory,
 # build libtorrent-rasterbar for python3 and cleanup packaging
@@ -14,7 +14,7 @@ RUN apk update \
         musl build-base python3 python3-dev openssl-dev ca-certificates \
         boost boost-dev boost-python3 file curl tar pigz docker bash \
     && pip3 install --no-cache-dir --upgrade pip azure-storage==0.32.0 \
-    && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version_path}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
+    && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version//./_}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
     && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && cd libtorrent-rasterbar-${libtorrent_version} \
     && ./configure --prefix=/usr --enable-debug=no --enable-python-binding --with-boost-system=boost_system \
