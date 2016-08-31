@@ -34,12 +34,18 @@
                     ],
                     "entrypoint": null,
                     "command": "",
+                    "infiniband": false,
                     "depends_on": [
                     ],
                     "multi_instance": {
-                        "num_instances": 3,
+                        "num_instances": "pool_specification_vm_count",
                         "coordination_command": null,
                         "resource_files": [
+                            {
+                                "file_path": "",
+                                "blob_source": "",
+                                "file_mode": ""
+                            }
                         ]
                     }
                 }

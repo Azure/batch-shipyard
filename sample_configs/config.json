@@ -47,8 +47,8 @@
                     "azure_file_share_name": "",
                     "container_path": "",
                     "mount_options": [
-                        "filemode=0640",
-                        "dirmode=0750",
+                        "filemode=0777",
+                        "dirmode=0755",
                         "nolock=true"
                     ]
                 }

@@ -114,8 +114,8 @@ if [ ! -z $p2p ]; then
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
 
-# copy job prep docker block file to shared
-cp jpdockerblock.sh $AZ_BATCH_NODE_SHARED_DIR
+# copy required shell scripts to shared
+cp docker_jp_block.sh $AZ_BATCH_NODE_SHARED_DIR
 
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
