@@ -34,14 +34,25 @@ Major Features
   [HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
   (STANDARD\_A8 and STANDARD\_A9)
 
+Installation
+------------
+Simply clone the repository:
+
+```
+git clone https://github.com/Azure/batch-shipyard.git
+```
+
+or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
+
 Requirements
 ------------
-The Batch Shipyard tool is written in Python. The frontend is compatible
+The Batch Shipyard tool is written in Python. The client script is compatible
 with Python 2.7 or 3.3+. You will also need to install the
 [Azure Batch](https://pypi.python.org/pypi/azure-batch) and
 [Azure Storage](https://pypi.python.org/pypi/azure-storage) python packages.
 Installation can be performed using the [requirements.txt](./requirements.txt)
-file via the command `pip install -r requirements.txt`
+file via the command `pip install --user -r requirements.txt` (or via `pip3`
+for python3).
 
 Host OS (Compute Node) Support
 ------------------------------
@@ -50,19 +61,21 @@ configured via
 [VirtualMachineConfiguration](http://azure-sdk-for-python.readthedocs.io/en/latest/_modules/azure/batch/models/virtual_machine_configuration.html).
 Please see the list of
 [Azure Batch supported Marketplace Linux VMs](https://azure.microsoft.com/en-us/documentation/articles/batch-linux-nodes/#list-of-virtual-machine-images)
-for use with Batch Shipyard. Oracle Linux is not supported with Batch Shipyard
-at this time.
+for use with Batch Shipyard.
 
-Example Usage
+Documentation
 -------------
-Please refer to this page.
+Please refer to
+[this guide](https://github.com/Azure/batch-shipyard/blob/master/docs/00-introduction.md)
+for a complete primer on concepts and usage.
 
 Limitations
 -----------
+* Oracle Linux is not supported with Batch Shipyard at this time.
 * Task dependencies are incompatible with multi-instance tasks. This is a
   current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
-  This is a current limitation of the underlying VM.
+  This is a current limitation of the underlying VM and host drivers.
 
 ChangeLog
 ---------
