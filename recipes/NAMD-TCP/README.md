@@ -1,8 +1,10 @@
 # NAMD-TCP
-This recipe shows how to run NAMD 2.10 on Linux using the native Charm++
-runtime (as opposed to MPI) over TCP/IP-connected machines in an Azure Batch
-pool. Regardless of the underlying message passing infrastructure,
-execution requires the use of multi-instance tasks.
+This recipe shows how to run NAMD 2.10 on Linux using the
+[Charm++ runtime](http://charm.cs.illinois.edu/manuals/html/charm++/)
+(as opposed to pure MPI) over TCP/IP-connected machines in an Azure Batch
+compute pool. Regardless of the underlying parallel/distributed programming
+paradigm, execution of this distributed workload requires the use of
+[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
 
 Interested in an Infiniband-enabled version of NAMD for use with Batch
 Shipyard? Visit [this recipe](../NAMD-Infiniband).
