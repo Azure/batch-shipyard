@@ -11,4 +11,6 @@ when peer-to-peer transfer is enabled.
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
 This is a current limitation of the underlying VM and host drivers.
+* Assist in setting up Infiniband/RDMA-enabled containers is only available for
+CentOS-HPC currently. Support for SLES-HPC is forthcoming.
 
