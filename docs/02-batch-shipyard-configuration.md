@@ -224,7 +224,8 @@ The `pool_specification` property has the following members:
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 * `vm_count` is the number of compute nodes to allocate.
 * `max_tasks_per_node` is the maximum number of concurrent tasks that can be
-running at any one time on a compute node.
+running at any one time on a compute node. This is optional and defaults to
+a value of 1.
 * `inter_node_communication_enabled` designates if this pool is set up for
 inter-node communication. This must be set to `true` for any containers that
 must communicate with each other such as MPI applications. This property

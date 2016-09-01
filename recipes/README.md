@@ -2,10 +2,11 @@
 This directory contains recipes and sample batch-style Docker workloads for
 use with Batch Shipyard.
 
-This is not yet completed.
+**NOTE: All recipes are not yet completed.**
 
-### NAMD-TCP
-NAMD TCP
+### [NAMD-TCP](./NAMD-TCP)
+The NAMD-TCP recipe contains information on how to Dockerize distributed
+NAMD across TCP/IP.
 
 ### NAMD-Infiniband
 NAMD Infiniband
