@@ -391,4 +391,4 @@ An example jobs json template can be found
 [here](../config\_templates/jobs.json).
 
 ## Batch Shipyard Usage
-Continue on to [Batch Shipyard Usage](02-batch-shipyard-usage.md).
+Continue on to [Batch Shipyard Usage](03-batch-shipyard-usage.md).

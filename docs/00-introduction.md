@@ -83,6 +83,6 @@ consistency, potential dependency interaction side effects and spend more
 time on things that actually matter for their batch workloads: the job and
 task results themselves!
 
-## Batch Shipyard Configuration
+## Batch Shipyard Installation
 Continue on to
-[Batch Shipyard Configuration](01-batch-shipyard-configuration.md).
+[Batch Shipyard Installation](01-batch-shipyard-installation.md).
