@@ -153,12 +153,13 @@ replication mechanism between compute nodes within a compute pool. The
 to allow unfettered concurrent downloading from the source registry among
 all compute nodes. The following options apply to `peer_to_peer` data
 replication options:
-* `enabled` property enables or disables peer-to-peer transfer
-* `compression` property enables or disables compression of image files
+* `enabled` property enables or disables peer-to-peer transfer.
+* `compression` property enables or disables compression of image files. It
+  is strongly recommended to keep this enabled.
 * `concurrent_source_downloads` property specifies the number of
-simultaneous downloads allowed to each image
+simultaneous downloads allowed to each image.
 * `direct_download_seed_bias` property sets the number of seeds to prefer
-per image
+per image.
 
 The `global_resources` property contains the Docker image and volume
 configuration. `docker_images` is an array of docker images that should
@@ -173,7 +174,7 @@ on the host is mounted in the container at the path specified with
 `container_path`.
 
 `shared_data_volumes` property is for initializing persistent shared storage
-devices. In this example, `shipyardvol` is the alias of this volume:
+volumes. In this example, `shipyardvol` is the alias of this volume:
 * `volume_driver` property specifies the Docker Volume Driver to use.
 Currently Batch Shipyard only supports the `volume_driver` as `azurefile`.
 * `storage_account_settings` is a link to the alias of the storage account
@@ -200,6 +201,7 @@ The pool schema is as follows:
         "vm_size": "STANDARD_A9",
         "vm_count": 10,
         "max_tasks_per_node": 1,
+        "inter_node_communication_enabled": true,
         "publisher": "OpenLogic",
         "offer": "CentOS-HPC",
         "sku": "7.1",
@@ -223,11 +225,15 @@ The `pool_specification` property has the following members:
 * `vm_count` is the number of compute nodes to allocate.
 * `max_tasks_per_node` is the maximum number of concurrent tasks that can be
 running at any one time on a compute node.
+* `inter_node_communication_enabled` designates if this pool is set up for
+inter-node communication. This must be set to `true` for any containers that
+must communicate with each other such as MPI applications. This property
+will be force enabled if peer-to-peer replication is enabled.
 * `publisher` is the publisher name of the Marketplace VM image.
 * `offer` is the offer name of the Marketplace VM image.
 * `sku` is the sku name of the Marketplace VM image.
 * `reboot_on_start_task_failed` allows Batch Shipyard to reboot the compute
-node if there is a failure detected in node preparation.
+node if there is a potential transient failure in node preparation.
 * `block_until_all_global_resources_loaded` will block the node from entering
 ready state until all Docker images are loaded.
 * `ssh_docker_tunnel` is the property for creating a user to accomodate SSH
@@ -341,8 +347,10 @@ be applied to all tasks operating under the job.
   * `additional_docker_run_options` is an array of addition Docker run options
     that should be passed to the Docker daemon when starting this container.
   * `infiniband` designates if this container requires access to the
-    Infiniband/RDMA devices on the host. Note that this automatically will
-    force the container to use the host network stack.
+    Infiniband/RDMA devices on the host. Note that this will automatically
+    force the container to use the host network stack. If this property is
+    set to `true`, ensure that the `pool_specification` property
+    `inter_node_communication_enabled` is set to `true`.
   * `multi_instance` is a property indicating that this task is a
     multi-instance task. Do not define this property for tasks that are not
     multi-instance. Additional members of this property are:

@@ -4,6 +4,7 @@
         "vm_size": "STANDARD_D2_V2",
         "vm_count": 5,
         "max_tasks_per_node": 1,
+        "inter_node_communication_enabled": true,
         "publisher": "Canonical",
         "offer": "UbuntuServer",
         "sku": "16.04.0-LTS",

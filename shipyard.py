@@ -404,7 +404,7 @@ def add_pool(batch_client, blob_client, config):
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
-        p2p = True
+        p2p = False
     if p2p:
         nonp2pcd = False
         try:
@@ -540,7 +540,8 @@ def add_pool(batch_client, blob_client, config):
         vm_size=config['pool_specification']['vm_size'],
         target_dedicated=vm_count,
         max_tasks_per_node=maxtasks,
-        enable_inter_node_communication=p2p,  # enable only for p2p mode
+        enable_inter_node_communication=config[
+            'pool_specification']['inter_node_communication_enabled'],
         start_task=batchmodels.StartTask(
             command_line=_wrap_commands_in_shell(start_task, wait=False),
             run_elevated=True,
@@ -864,7 +865,7 @@ def populate_queues(queue_client, table_client, config):
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
-        p2p = True
+        p2p = False
     if p2p:
         try:
             p2pcsd = config['data_replication']['peer_to_peer'][
@@ -938,18 +939,39 @@ def _adjust_settings_for_pool_creation(config):
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
-        p2p = True
+        p2p = False
+    try:
+        internode = config[
+            'pool_specification']['inter_node_communication_enabled']
+    except KeyError:
+        internode = True
     max_vms = 20 if publisher == 'microsoftwindowsserver' else 40
-    if p2p and vm_count > max_vms:
+    if vm_count > max_vms:
+        if p2p:
+            logger.warning(
+                ('disabling peer-to-peer transfer as pool size of {} exceeds '
+                 'max limit of {} vms for inter-node communication').format(
+                     vm_count, max_vms))
+            if 'data_replication' not in config:
+                config['data_replication'] = {}
+            if 'peer_to_peer' not in config['data_replication']:
+                config['data_replication']['peer_to_peer'] = {}
+            config['data_replication']['peer_to_peer']['enabled'] = False
+            p2p = False
+        if internode:
+            logger.warning(
+                ('disabling inter-node communication as pool size of {} '
+                 'exceeds max limit of {} vms for setting').format(
+                     vm_count, max_vms))
+            config['pool_specification'][
+                'inter_node_communication_enabled'] = False
+            internode = False
+    # ensure settings p2p/internode settings are compatible
+    if p2p and not internode:
+        config['pool_specification']['inter_node_communication_enabled'] = True
         logger.warning(
-            ('disabling peer-to-peer transfer as pool size of {} exceeds '
-             'max limit of {} vms for inter-node communication').format(
-                 vm_count, max_vms))
-        if 'data_replication' not in config:
-            config['data_replication'] = {}
-        if 'peer_to_peer' not in config['data_replication']:
-            config['data_replication']['peer_to_peer'] = {}
-        config['data_replication']['peer_to_peer']['enabled'] = False
+            'force enabling inter-node communication due to peer-to-peer '
+            'transfer')
 
 
 def resize_pool(batch_client, config):

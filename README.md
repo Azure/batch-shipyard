@@ -31,7 +31,7 @@ to containers executed on compute nodes
 graphs with Docker containers
 * Support for multi-instance tasks to accomodate Dockerized MPI applications
 on compute pools
-* Transparent assist for creating Docker containers utilizing Infiniband/RDMA
+* Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on
 [HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
 (i.e., STANDARD\_A8 and STANDARD\_A9)
