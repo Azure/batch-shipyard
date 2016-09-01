@@ -14,7 +14,7 @@ scaling of resources if specified. Costs are incurred only for compute
 resources consumed.
 
 Azure Batch can handle workloads on any point of the parallel and distributed
-processing scale, from embarassingly parallel workloads all the way to
+processing spectrum, from embarassingly parallel workloads all the way to
 tightly-coupled message passing codes such as MPI jobs on Infiniband/RDMA.
 
 ### Concepts
@@ -75,6 +75,13 @@ deployments. More information about Docker can be found
 
 Further in-depth treatment of Docker can be found
 [here](https://docs.docker.com/engine/understanding-docker/).
+
+## Docker+Azure Batch
+By leveraging the Docker ecosystem, tooling and packaging, users can spend
+less time hassling with the underlying infrastructure, VM application state
+consistency, potential dependency interaction side effects and spend more
+time on things that actually matter for their batch workloads: the job and
+task results themselves!
 
 ## Batch Shipyard Configuration
 Continue on to

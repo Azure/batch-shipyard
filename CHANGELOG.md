@@ -1,10 +1,8 @@
 # Change Log
 
 ## [Unreleased]
-#### Added
-- TODO
 
-## [0.1.0] - 2016-08-31
+## [0.1.0] - 2016-09-01
 #### Added
 - Initial release
 
