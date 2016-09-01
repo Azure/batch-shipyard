@@ -54,6 +54,11 @@ import azure.common
 import azure.storage.blob as azureblob
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
+# function remaps
+try:
+    raw_input
+except NameError:
+    raw_input = input
 
 # create logger
 logger = logging.getLogger('shipyard')
@@ -1496,6 +1501,23 @@ def clean_mi_jobs(batch_client, config):
                      'completed').format(batchtask.id, job_id))
 
 
+def del_clean_mi_jobs(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Delete clean up multi-instance jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    for job in config['job_specifications']:
+        job_id = job['id']
+        cleanup_job_id = 'shipyardcleanup-' + job_id
+        logger.info('deleting job: {}'.format(cleanup_job_id))
+        try:
+            batch_client.job.delete(cleanup_job_id)
+        except batchmodels.batch_error.BatchErrorException:
+            pass
+
+
 def terminate_jobs(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     """Terminate jobs
@@ -1537,6 +1559,58 @@ def get_remote_login_settings(batch_client, config, nodes=None):
         rls = batch_client.compute_node.get_remote_login_settings(
             pool_id, node.id)
         logger.info('node {}: {}'.format(node.id, rls))
+
+
+def stream_file_and_wait_for_task(batch_client):
+    # type: (batch.BatchServiceClient) -> None
+    """Stream a file and wait for task to complete
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    """
+    job_id = raw_input('Enter job id: ')
+    task_id = raw_input('Enter task id: ')
+    file = raw_input('Enter task-relative file path to stream [stdout.txt]: ')
+    if file == '' or file is None:
+        file = 'stdout.txt'
+    logger.debug('attempting to stream file {} from job={} task={}'.format(
+        file, job_id, task_id))
+    curr = 0
+    end = 0
+    completed = False
+    timeout = datetime.timedelta(minutes=5)
+    time_to_timeout_at = datetime.datetime.now() + timeout
+    while datetime.datetime.now() < time_to_timeout_at:
+        # get task file properties
+        try:
+            tfp = batch_client.file.get_node_file_properties_from_task(
+                job_id, task_id, file, raw=True)
+        except batchmodels.BatchErrorException as ex:
+            if ('The specified operation is not valid for the current '
+                    'state of the resource.' in ex.message.value):
+                time.sleep(1)
+                continue
+            else:
+                raise
+        size = int(tfp.response.headers['Content-Length'])
+        if size != end and curr != size:
+            end = size
+            # get stdout.txt
+            frag = batch_client.file.get_from_task(
+                job_id, task_id, file,
+                batchmodels.FileGetFromTaskOptions(
+                    ocp_range='bytes={}-{}'.format(curr, end))
+            )
+            for f in frag:
+                print(f.decode('utf8'), end='')
+            curr = end
+        elif completed:
+            print()
+            break
+        if not completed:
+            task = batch_client.task.get(job_id, task_id)
+            if task.state == batchmodels.TaskState.completed:
+                completed = True
+        time.sleep(1)
 
 
 def delete_storage_containers(blob_client, queue_client, table_client, config):
@@ -1763,10 +1837,14 @@ def main():
         terminate_jobs(batch_client, config)
     elif args.action == 'deljobs':
         del_jobs(batch_client, config)
+    elif args.action == 'delcleanmijobs':
+        del_clean_mi_jobs(batch_client, config)
     elif args.action == 'delalljobs':
         del_all_jobs(batch_client)
     elif args.action == 'grls':
         get_remote_login_settings(batch_client, config)
+    elif args.action == 'streamfile':
+        stream_file_and_wait_for_task(batch_client)
     elif args.action == 'delstorage':
         delete_storage_containers(
             blob_client, queue_client, table_client, config)
@@ -1787,8 +1865,8 @@ def parseargs():
         'on Azure Batch')
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
-        'termjobs, deljobs, delalljobs, delpool, delnode, grls, '
-        'clearstorage, delstorage')
+        'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
+        'grls, streamfile, clearstorage, delstorage')
     parser.add_argument(
         '--credentials',
         help='credentials json config. required for all actions')

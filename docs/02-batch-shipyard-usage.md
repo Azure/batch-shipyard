@@ -33,8 +33,8 @@ of actions and their intended effect:
 * `addpool`: creates a pool as specified in the configuration files.
 * `addjobs`: adds jobs as specified in the jobs configuration file.
 * `addsshuser`: adds an SSH tunnel user as specified in the pool configuration
-file. This action is automatically invoked if enabled in the configuration
-file during `addpool`.
+file. This action is automatically invoked during `addpool` if enabled in the
+pool configuration file.
 * `cleanmijobs`: perform clean up action on multi-instance Docker tasks.
 Because the multi-instance coordination command (i.e, the daemonized
 container via `docker run`) is left running even after the multi-instance
@@ -44,10 +44,12 @@ resources in use. This will clean up any multi-instance tasks detected within
 jobs specified in the jobs configuration file.
 * `termjobs`: terminate jobs as specified in the jobs configuration file.
 * `deljobs`: delete jobs as specified in the jobs configuration file.
+* `delcleanmijobs`: delete jobs used to clean up multi-instance jobs.
 * `delalljobs`: delete all jobs under the Batch Account.
 * `delpool`: delete pool as specified in the pool configuration file.
 * `grls`: get remote login settings as specified in the pool configuration
 file.
+* `streamfile`: stream a file from a live compute node.
 * `clearstorage`: clear storage containers as specified in the configuration
 files.
 * `delstorage`: delete storage containers as specified in the configuration

@@ -70,7 +70,7 @@ Please refer to
 for a complete primer on concepts and usage.
 
 Please visit the
-[recipies directory](https://github.com/Azure/batch-shipyard/blob/master/recipies)
+[recipes directory](https://github.com/Azure/batch-shipyard/blob/master/recipes)
 for different sample Docker workloads using Azure Batch and Batch Shipyard
 after you have completed the primer.
 
