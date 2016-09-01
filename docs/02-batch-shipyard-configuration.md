@@ -352,8 +352,11 @@ be applied to all tasks operating under the job.
     set to `true`, ensure that the `pool_specification` property
     `inter_node_communication_enabled` is set to `true`.
   * `multi_instance` is a property indicating that this task is a
-    multi-instance task. Do not define this property for tasks that are not
-    multi-instance. Additional members of this property are:
+    multi-instance task. Additional information about multi-instance tasks
+    and Batch Shipyard can be found
+    [here](80-batch-shipyard-multi-instance-tasks.md). Do not define this
+    property for tasks that are not multi-instance. Additional members of this
+    property are:
     * `num_instances` is a property setting the number of compute node
       instances are required for this multi-instance task. This can be any one
       of the following:

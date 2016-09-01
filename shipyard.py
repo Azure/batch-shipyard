@@ -1316,6 +1316,9 @@ def add_jobs(batch_client, blob_client, config):
                     pass
                 # run in detached mode
                 run_opts.append('-d')
+                # ensure host networking stack is used
+                if '--net=host' not in run_opts:
+                    run_opts.append('--net=host')
                 # get coordination command
                 try:
                     coordination_command = task[

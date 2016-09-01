@@ -71,6 +71,10 @@ python shipyard.py --credentials credentials.json --config config.json --pool po
 ```
 The above invocation will clean up all multi-instance tasks in all of the jobs specified.
 
+## Multi-Instance Tasks
+For more information regarding Multi-Instance Tasks and/or MPI jobs using
+Batch Shipyard, please see [this page](80-batch-shipyard-multi-instance-tasks.md).
+
 ## Current Limitations
 Please see [this page](99-current-limitations.md) for current limitations.
 
