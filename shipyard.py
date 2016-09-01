@@ -1309,6 +1309,8 @@ def add_jobs(batch_client, blob_client, config):
                     if num_instances == 'pool_specification_vm_count':
                         num_instances = config[
                             'pool_specification']['vm_count']
+                    elif num_instances == 'pool_current_dedicated':
+                        num_instances = _pool.current_dedicated
                     else:
                         raise ValueError(
                             ('multi instance num instances setting '
@@ -1741,7 +1743,7 @@ def main():
         del_jobs(batch_client, config)
     elif args.action == 'delalljobs':
         del_all_jobs(batch_client)
-    elif args.action == 'grl':
+    elif args.action == 'grls':
         get_remote_login_settings(batch_client, config)
     elif args.action == 'delstorage':
         delete_storage_containers(
@@ -1759,23 +1761,24 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='Batch Shipyard: Docker and Azure Batch Integration')
+        description='Batch Shipyard: Provision and Execute Docker Workloads '
+        'on Azure Batch')
     parser.add_argument(
-        'action', help='action: addpool, addjob, addsshuser, cleanmijobs, '
-        'termjobs, delpool, delnode, deljob, delalljobs, grl, delstorage, '
-        'clearstorage')
+        'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
+        'termjobs, deljobs, delalljobs, delpool, delnode, grls, '
+        'clearstorage, delstorage')
     parser.add_argument(
         '--credentials',
         help='credentials json config. required for all actions')
     parser.add_argument(
         '--config',
-        help='general json config for option. required for all actions')
+        help='global json config for option. required for all actions')
     parser.add_argument(
         '--pool',
         help='pool json config. required for most actions')
     parser.add_argument(
         '--jobs',
-        help='jobs json config. required for job actions')
+        help='jobs json config. required for job-related actions')
     parser.add_argument('--nodeid', help='node id for delnode action')
     return parser.parse_args()
 

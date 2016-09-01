@@ -4,8 +4,9 @@ tool.
 
 ## Configuration Files
 The Batch Shipyard tool is driven by json configuration files:
+
 1. Credentials - credentials for Azure Batch and Storage accounts
-2. Global config - general and Docker-specific configuration settings
+2. Global config - Batch Shipyard and Docker-specific configuration settings
 3. Pool - Azure Batch pool configuration
 4. Jobs - Azure Batch jobs and tasks configuration
 
@@ -36,7 +37,9 @@ The credentials schema is as follows:
 
 The `credentials` property is where Azure Batch and Storage credentials
 are defined.
-* The `batch` property defines the Azure Batch account.
+* The `batch` property defines the Azure Batch account. Members under the
+`batch` property can be found in the [Azure Portal](https://portal.azure.com)
+under your Batch account.
 * Multiple storage properties can be defined which references different Azure
 Storage account credentials under the `storage` property. This may be needed
 for more flexible configuration in other configuration files. In the example
@@ -98,7 +101,7 @@ The global config schema is as follows:
             "shared_data_volumes": {
                 "shipyardvol": {
                     "volume_driver": "azurefile",
-                    "storage_account_settings": "northcentral",
+                    "storage_account_settings": "mystorageaccount",
                     "azure_file_share_name": "shipyardshared",
                     "container_path": "/shipyardvol",
                     "mount_options": [
@@ -229,10 +232,11 @@ node if there is a failure detected in node preparation.
 ready state until all Docker images are loaded.
 * `ssh_docker_tunnel` is the property for creating a user to accomodate SSH
 tunneling to the Docker Host>
-  * `username` user to create.
-  * `ssh_public_key` path to an existing ssh public key to use. If not
+  * `username` is the user to create on the compute nodes.
+  * `ssh_public_key` is the path to an existing ssh public key to use. If not
     specified, a public/private key pair will be automatically generated.
-  * `generate_tunnel_script` generate an SSH tunnel script.
+  * `generate_tunnel_script` property directs script to generate an SSH tunnel
+script for use with the compute nodes in the pool.
 * `additional_node_prep_commands` is an array of additional commands to
 execute on the compute node host as part of node preparation.
 
@@ -240,6 +244,140 @@ An example pool json template can be found
 [here](../config\_templates/pool.json).
 
 ### Jobs
+The jobs schema is as follows:
+
+```json
+{
+    "job_specifications": [
+        {
+            "id": "dockerjob",
+            "environment_variables": {
+                "abc": "xyz"
+            },
+            "tasks": [
+                {
+                    "id": null,
+                    "depends_on": [
+                    ],
+                    "image": "busybox",
+                    "name": null,
+                    "labels": [],
+                    "environment_variables": {
+                        "def": "123"
+                    },
+                    "ports": [],
+                    "data_volumes": [
+                        "contdatavol",
+                        "hosttempvol"
+                    ],
+                    "shared_data_volumes": [
+                        "azurefilevol"
+                    ],
+                    "resource_files": [
+                        {
+                            "file_path": "",
+                            "blob_source": "",
+                            "file_mode": ""
+                        }
+                    ],
+                    "remove_container_after_exit": true,
+                    "additional_docker_run_options": [
+                    ],
+                    "infiniband": false,
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null,
+                        "resource_files": [
+                            {
+                                "file_path": "",
+                                "blob_source": "",
+                                "file_mode": ""
+                            }
+                        ]
+                    },
+                    "entrypoint": null,
+                    "command": ""
+                }
+            ]
+        }
+    ]
+}
+```
+
+`job_specifications` array consists of jobs to create.
+* `id` is the job id to create. If the job already exists, the specified
+`tasks` under the job will be added to the existing job.
+* `environment_variables` under the job are environment variables which will
+be applied to all tasks operating under the job.
+* `tasks` is an array of tasks to add to the job.
+  * `id` is the task id. Note that if the task `id` is null then a generic
+    task id will be assigned.
+  * `depends_on` is an array of task ids for which this container invocation
+    (task) depends on and must run to successful completion prior to this
+    task executing.
+  * `image` is the Docker image to use for this task
+  * `name` is the name to assign to the container. This is optional if not
+    instantiating a multi-instance task.
+  * `labels` is an array of labels to apply to the container.
+  * `environment_variables` are any additional task-specific environment
+    variables that should be applied to the container.
+  * `ports` is an array of port specifications that should be exposed to the
+    host.
+  * `data_volumes` is an array of `data_volume` aliases as defined in the
+    global configuration file. These volumes will be mounted in the container.
+  * `shared_data_volumes` is an array of `shared_data_volume` aliases as
+    defined in the global configuration file. These volumes will be mounted
+    in the container.
+  * `resource_files` is an array of resource files that should be downloaded
+    as part of the task. Each array entry contains the following information:
+    * `file_path` is the path within the task working directory to place the
+      file on the compute node.
+    * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an Azure
+      Blob Storage URL.
+    * `file_mode` if the file mode to set for the file on the compute node.
+      This is optional.
+  * `remove_container_after_exit` property specifies if the container should be
+    automatically removed/cleaned up after it exits.
+  * `additional_docker_run_options` is an array of addition Docker run options
+    that should be passed to the Docker daemon when starting this container.
+  * `infiniband` designates if this container requires access to the
+    Infiniband/RDMA devices on the host. Note that this automatically will
+    force the container to use the host network stack.
+  * `multi_instance` is a property indicating that this task is a
+    multi-instance task. Do not define this property for tasks that are not
+    multi-instance. Additional members of this property are:
+    * `num_instances` is a property setting the number of compute node
+      instances are required for this multi-instance task. This can be any one
+      of the following:
+      1. An integral number
+      2. `pool_specification_vm_count` which is the `vm_count` specified in the
+         pool configuration.
+      3. `pool_current_dedicated` which is the instantaneous reading of the
+         target pool's current dedicated count during this function invocation.
+    * `coordination_command` is the coordination command this is run by each
+      instance (compute node) of this multi-instance task prior to the
+      application command. This command must not block and must exit
+      successfully for the multi-instance task to proceed. This is the command
+      passed to the container in `docker run` for multi-instance tasks. This
+      docker container instance will automatically be daemonized. This is
+      optional and may be null.
+    * `resource_files` is an array of resource files that should be downloaded
+      as part of the multi-instance task. Each array entry contains the
+      following information:
+        * `file_path` is the path within the task working directory to place
+          the file on the compute node.
+        * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an
+          Azure Blob Storage URL.
+        * `file_mode` if the file mode to set for the file on the compute node.
+          This is optional.
+  * `entrypoint` is the property that can override the Docker image defined
+    `ENTRYPOINT`. This is optional.
+  * `command` is the command to execute in the Docker container context. If
+    this task is a regular non-multi-instance task, then this is the command
+    passed to the container context during `docker run`. If this task is a
+    multi-instance task, then `command` is the application command and is
+    executed with `docker exec` in the running Docker container context from
+    the `coordination_command`. This is optional and may be null.
 
 An example jobs json template can be found
 [here](../config\_templates/jobs.json).
