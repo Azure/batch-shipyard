@@ -71,6 +71,9 @@ python shipyard.py --credentials credentials.json --config config.json --pool po
 ```
 The above invocation will clean up all multi-instance tasks in all of the jobs specified.
 
+## Current Limitations
+Please see [this page](99-current-limitations.md) for current limitations.
+
 ## Explore Recipes and Samples
 Visit the [recipes directory](../recipes) for different sample Docker
 workloads using Azure Batch and Batch Shipyard.

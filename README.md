@@ -74,13 +74,6 @@ Please visit the
 for different sample Docker workloads using Azure Batch and Batch Shipyard
 after you have completed the primer.
 
-## Limitations
-* Oracle Linux is not supported with Batch Shipyard at this time.
-* Task dependencies are incompatible with multi-instance tasks. This is a
-  current limitation of the underlying Azure Batch service.
-* Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
-  This is a current limitation of the underlying VM and host drivers.
-
 ## ChangeLog
 See the [CHANGELOG.md](https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md)
 file.
