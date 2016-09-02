@@ -212,6 +212,12 @@ The pool schema is as follows:
             "ssh_public_key": null,
             "generate_tunnel_script": true
         },
+        "gpu": {
+            "nvidia_driver": {
+                "version": "361.69",
+                "source": "https://some.url"
+            }
+        },
         "additional_node_prep_commands": [
         ]
     }
@@ -222,6 +228,7 @@ The `pool_specification` property has the following members:
 * `id` is the compute pool ID.
 * `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
+Please note that not all regions have every VM size available.
 * `vm_count` is the number of compute nodes to allocate.
 * `max_tasks_per_node` is the maximum number of concurrent tasks that can be
 running at any one time on a compute node. This is optional and defaults to
@@ -244,6 +251,11 @@ tunneling to the Docker Host>
     specified, a public/private key pair will be automatically generated.
   * `generate_tunnel_script` property directs script to generate an SSH tunnel
 script for use with the compute nodes in the pool.
+* `gpu` property defines additional information for nVidia GPU-enabled VMs:
+  * `nvidia_driver` property contains the following required members:
+    * `version` is the version number of the driver. This can be determined
+      by the filename or from nVidia's website.
+    * `source` is the source url to download the driver.
 * `additional_node_prep_commands` is an array of additional commands to
 execute on the compute node host as part of node preparation.
 
@@ -291,6 +303,7 @@ The jobs schema is as follows:
                     "additional_docker_run_options": [
                     ],
                     "infiniband": false,
+                    "gpu": false,
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",
                         "coordination_command": null,
@@ -352,6 +365,9 @@ be applied to all tasks operating under the job.
     force the container to use the host network stack. If this property is
     set to `true`, ensure that the `pool_specification` property
     `inter_node_communication_enabled` is set to `true`.
+  * `gpu` designates if this container requires access to the GPU devices on
+    the host. If this property is set to `true`, Docker containers are
+    instantiated via `nvidia-docker`.
   * `multi_instance` is a property indicating that this task is a
     multi-instance task. Additional information about multi-instance tasks
     and Batch Shipyard can be found

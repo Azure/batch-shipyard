@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+# set node prep finished file
+nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
+
 # ensure we're in the proper directory
 cd /opt/batch-shipyard
 
@@ -12,7 +15,7 @@ if [ ! -z ${CASCADE_TIMING+x} ]; then
     python3 perf.py shipyard pull-start $prefix --ts $drpstart
     # mark docker run pull end
     python3 perf.py shipyard pull-end $prefix
-    if [ ! -f ".node_prep_finished" ]; then
+    if [ ! -f $nodeprepfinished ]; then
         # backfill node prep start
         python3 perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         # mark private registry start
@@ -30,7 +33,7 @@ fi
 
 # add timing markers
 if [ ! -z ${CASCADE_TIMING+x} ]; then
-    if [ ! -f ".node_prep_finished" ]; then
+    if [ ! -f $nodeprepfinished ]; then
         # mark private registry end
         python3 perf.py privateregistry end $prefix
         # mark node prep finished

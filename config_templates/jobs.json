@@ -35,6 +35,7 @@
                     "entrypoint": null,
                     "command": "",
                     "infiniband": false,
+                    "gpu": false,
                     "depends_on": [
                     ],
                     "multi_instance": {

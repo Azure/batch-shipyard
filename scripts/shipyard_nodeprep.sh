@@ -43,7 +43,7 @@ sku=
 while getopts "h?ab:dg:o:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
-            echo "nodeprep.sh parameters"
+            echo "shipyard_nodeprep.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
@@ -105,9 +105,11 @@ else
     npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
 fi
 
+# set node prep finished file
+nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
+
 # set python env vars
 LC_ALL=en_US.UTF-8
-#PYTHONIOENCODING=utf-8
 PYTHONASYNCIODEBUG=1
 
 # get ip address of eth0
@@ -176,7 +178,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         $srvstop
         set +e
         rm -f /var/lib/docker/network/files/local-kv.db
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/default/docker
+        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         if [[ $sku == 16.04.* ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
@@ -195,7 +197,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     fi
     set -e
     # install gpu related items
-    if [ ! -z $gpu ] && [ ! -f ".node_prep_finished" ]; then
+    if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         # split arg into two
         IFS=':' read -ra GPUARGS <<< "$gpu"
         if [ ${GPUARGS[0]} == "True" ]; then
@@ -210,17 +212,40 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         ./$nvdriver -s
         # install nvidia-docker
         dpkg -i $nvdocker
-        # enable nvidia docker service
+        # enable and start nvidia docker service
         systemctl enable nvidia-docker.service
-        # create the docker volume now to remove volume driver conflicts for tasks
-        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
+        systemctl start nvidia-docker.service
+        systemctl status nvidia-docker.service
+        # create the docker volume now to avoid volume driver conflicts for
+        # tasks. run this in a loop as it can fail if triggered too quickly
+        # after start
+        NV_START=$(date -u +"%s")
+        set +e
+        while :
+        do
+            echo "Attempting to create nvidia-docker volume with version $nvdriverver"
+            docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
+            if [ $? -eq 0 ]; then
+                break
+            else
+                NV_NOW=$(date -u +"%s")
+                NV_DIFF=$((($NV_NOW-$NV_START)/60))
+                # fail after 5 minutes of attempts
+                if [ $NV_DIFF -ge 5 ]; then
+                    echo "could not create nvidia-docker volume"
+                    exit 1
+                fi
+                sleep 1
+            fi
+        done
+        set -e
     fi
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         apt-get install -y -q python3-pip
         pip3 install --no-cache-dir azure-storage==0.32.0
         # backfill node prep start
-        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
             ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         fi
         # install cascade dependencies
@@ -230,12 +255,12 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         # install private registry if required
         if [ ! -z $privatereg ]; then
             # mark private registry start
-            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
                 ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
             fi
             ./setup_private_registry.py $privatereg $ipaddress $prefix
             # mark private registry end
-            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
                 ./perf.py privateregistry end $prefix
             fi
         fi
@@ -284,7 +309,7 @@ EOF
         # update yum repo and install docker engine
         yum install -y docker-engine
         # modify docker opts
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/default/docker
+        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
         sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
         sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
         systemctl daemon-reload
@@ -307,7 +332,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         echo "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
-    if [ ! -f ".node_prep_finished" ]; then
+    if [ ! -f $nodeprepfinished ]; then
         # add Virtualization:containers repo for recent docker builds
         repodir=
         if [[ $offer == opensuse* ]]; then
@@ -339,7 +364,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         /usr/lib/docker-image-migrator/do-image-migration-v1to2.sh
         set -e
         # modify docker opts, docker opts in /etc/sysconfig/docker
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock\" >> /etc/sysconfig/docker
+        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/sysconfig/docker
         systemctl daemon-reload
         # start docker service and enable docker daemon on boot
         systemctl enable docker
@@ -360,7 +385,7 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
 fi
 
 # touch file to prevent subsequent perf recording if rebooted
-touch .node_prep_finished
+touch $nodeprepfinished
 
 # reboot node if specified
 if [ $reboot -eq 1 ]; then
@@ -406,7 +431,7 @@ EOF
         alfpark/batch-shipyard
 else
     # mark node prep finished
-    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f ".node_prep_finished" ]; then
+    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
         ./perf.py nodeprep end $prefix
     fi
     # start cascade

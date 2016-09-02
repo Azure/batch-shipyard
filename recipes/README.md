@@ -12,8 +12,15 @@ NAMD across TCP/IP.
 This NAMD-Infiniband recipe contains information on how to Dockerize
 distributed NAMD across Infiniband/RDMA Azure VMs.
 
-### TensorFlow
+### [TensorFlow-GPU](./TensorFlow-GPU)
+This TensorFlow-GPU recipe contains information on how to Dockerize
+TensorFlow GPU for use with N-series Azure VMs.
+
+### TensorFlow-Distributed
 TensorFlow
+
+### CNTK-GPU
+CNTK-gpu
 
 ### CNTK
 CNTK-cpu

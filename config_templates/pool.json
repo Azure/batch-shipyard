@@ -15,6 +15,12 @@
             "ssh_public_key": null,
             "generate_tunnel_script": true
         },
+        "gpu": {
+            "nvidia_driver": {
+                "version": "361.69",
+                "source": "https://some.url"
+            }
+        },
         "additional_node_prep_commands": [
         ]
     }

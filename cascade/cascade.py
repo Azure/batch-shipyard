@@ -728,11 +728,13 @@ def _log_torrent_info(resource: str, th) -> None:
 def bootstrap_dht_nodes(
         loop: asyncio.BaseEventLoop,
         table_client: azure.storage.table.TableService,
-        ipaddress: str) -> None:
+        ipaddress: str,
+        num_attempts: int) -> None:
     """Bootstrap DHT router nodes
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
+    :param int num_attempts: number of attempts
     """
     found_self = False
     dht_nodes = []
@@ -760,9 +762,18 @@ def bootstrap_dht_nodes(
         if len(_DHT_ROUTERS) >= 3:
             break
         add_dht_node(node[0], node[1])
-    # TODO handle if pool has less than 3 nodes total
+    # ensure at least 3 DHT router nodes if possible
     if len(dht_nodes) < 3:
-        loop.call_later(1, bootstrap_dht_nodes, loop, table_client, ipaddress)
+        num_attempts += 1
+        if num_attempts < 600:
+            delay = 1
+        elif num_attempts < 1200:
+            delay = 10
+        else:
+            delay = 30
+        loop.call_later(
+            delay, bootstrap_dht_nodes, loop, table_client, ipaddress,
+            num_attempts)
 
 
 class DockerLoadThread(threading.Thread):
@@ -1041,7 +1052,7 @@ def distribute_global_resources(
         _TORRENT_SESSION.stop_upnp()
         _TORRENT_SESSION.stop_natpmp()
         # bootstrap dht nodes
-        bootstrap_dht_nodes(loop, table_client, ipaddress)
+        bootstrap_dht_nodes(loop, table_client, ipaddress, 0)
         _TORRENT_SESSION.start_dht()
     # get globalresources from table
     try:

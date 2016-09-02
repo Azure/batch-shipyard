@@ -11,8 +11,8 @@ pools. No experience with the
 your Dockerized tasks with easy-to-understand configuration files!
 
 ## Major Features
-* Automated [Docker Host Engine](https://docker.io) installation on compute
-nodes
+* Automated [Docker Host Engine](https://www.docker.com) installation tuned
+for Azure Batch compute nodes
 * Automated deployment of required Docker images to compute nodes
 * Accelerated Docker image deployment at scale to compute pools consisting of
 a large number of VMs via private peer-to-peer distribution of Docker images
@@ -29,8 +29,12 @@ full pass-through of the
 to containers executed on compute nodes
 * Support for task dependencies allowing complex processing pipelines and
 graphs with Docker containers
-* Support for multi-instance tasks to accomodate Dockerized MPI applications
-on compute pools
+* Transparent support for
+[GPU accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
+on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
+([Preview](http://gpu.azure.com/))
+* Support for multi-instance tasks to accomodate Dockerized MPI and multi-node
+cluster applications on compute pools
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on
 [HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
