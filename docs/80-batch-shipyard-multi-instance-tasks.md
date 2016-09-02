@@ -146,7 +146,7 @@ in the [Batch Shipyard Usage](03-batch-shipyard-usage.md) doc.
 ### Automation!
 Nearly all of the Docker runtime complexities are taken care of by the Batch
 Shipyard tooling. The user just needs to ensure that their MPI Docker images
-are either constructed with the aforementioned accomodations or are able
+are either constructed with the aforementioned accommodations or are able
 to provide sufficient commands to the coordination/application commands to
 work with the Azure Batch compute node environment.
 

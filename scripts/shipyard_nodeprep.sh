@@ -245,7 +245,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         apt-get install -y -q python3-pip
         pip3 install --no-cache-dir azure-storage==0.32.0
         # backfill node prep start
-        if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
+        if [ ! -z ${CASCADE_TIMING+x} ]; then
             ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         fi
         # install cascade dependencies
@@ -255,12 +255,12 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         # install private registry if required
         if [ ! -z $privatereg ]; then
             # mark private registry start
-            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
+            if [ ! -z ${CASCADE_TIMING+x} ]; then
                 ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
             fi
             ./setup_private_registry.py $privatereg $ipaddress $prefix
             # mark private registry end
-            if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
+            if [ ! -z ${CASCADE_TIMING+x} ]; then
                 ./perf.py privateregistry end $prefix
             fi
         fi
@@ -431,7 +431,7 @@ EOF
         alfpark/batch-shipyard
 else
     # mark node prep finished
-    if [ ! -z ${CASCADE_TIMING+x} ] && [ ! -f $nodeprepfinished ]; then
+    if [ ! -z ${CASCADE_TIMING+x} ]; then
         ./perf.py nodeprep end $prefix
     fi
     # start cascade

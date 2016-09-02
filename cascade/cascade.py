@@ -523,9 +523,9 @@ class DockerSaveThread(threading.Thread):
         else:
             # get docker image size
             output = subprocess.check_output(
-                ('docker images --format \"{{{{.Repository}}}} '
-                 '{{{{.Size}}}}\" | grep ^{}').format(image), shell=True)
-            size = ' '.join(output.decode('utf-8').split()[1:])
+                ('docker images {} --format \"{{{{.Size}}}}\"').format(
+                    image), shell=True)
+            size = output.decode('utf-8')
             _record_perf('pull-end', 'img={},diff={},size={}'.format(
                 image, diff, size))
 

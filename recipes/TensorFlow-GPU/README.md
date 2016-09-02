@@ -35,9 +35,9 @@ array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
 e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
 * `command` should contain the command to pass to the Docker run invocation.
-As of the `0.10` release of TensorFlow, there is an issue with image where the
-cuDNN libraries are missing symlink for the library. To run the example MNIST
-convolutional example correctly, the `command` would look like:
+As of the `0.10` release of TensorFlow, there is an issue with the image where
+the cuDNN libraries are missing symlink for the library. To run the example
+MNIST convolutional example correctly, the `command` would look like:
 `"/bin/bash -c \"ln -s /usr/lib/x86_64-linux-gnu/libcudnn.so.4 /usr/lib/x86_64-linux-gnu/libcudnn.so; python -m tensorflow.models.image.mnist.convolutional\""`
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
