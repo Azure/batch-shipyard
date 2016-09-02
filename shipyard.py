@@ -84,6 +84,16 @@ _AZUREFILE_DVD_BIN_URL = (
     '/download/' + _AZUREFILE_DVD_BIN_VERSION + '/azurefile-dockervolumedriver'
 )
 _AZUREFILE_DVD_BIN_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
+_NVIDIA_DOCKER = {
+    'ubuntuserver': {
+        'url': (
+            'https://github.com/NVIDIA/nvidia-docker/releases'
+            '/download/v1.0.0-rc.3/nvidia-docker_1.0.0.rc.3-1_amd64.deb'
+        ),
+        'md5': '49990712ebf3778013fae81ee67f6c79'
+    }
+}
+_NVIDIA_DRIVER = 'nvidia-driver.run'
 _MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
@@ -308,6 +318,32 @@ def upload_resource_files(blob_client, config, files):
     return sas_urls
 
 
+def setup_nvidia_docker_package(blob_client, config):
+    # type: (azure.storage.blob.BlockBlobService, dict) -> pathlib.Path
+    """Set up the nvidia docker package
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :rtype: pathlib.Path
+    :return: package path
+    """
+    offer = config['pool_specification']['offer'].lower()
+    if offer == 'ubuntuserver':
+        pkg = pathlib.Path('resources/nvidia-docker.deb')
+    else:
+        raise ValueError('Offer {} is unsupported with nvidia docker'.format(
+            offer))
+    # check to see if package is downloaded
+    if (not pkg.exists() or
+            compute_md5_for_file(pkg, False) != _NVIDIA_DOCKER[offer]['md5']):
+        response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
+        with pkg.open('wb') as f:
+            f.write(response.read())
+        # check md5
+        if compute_md5_for_file(pkg, False) != _NVIDIA_DOCKER[offer]['md5']:
+            raise RuntimeError('md5 mismatch for {}'.format(pkg))
+    return pkg
+
+
 def setup_azurefile_volume_driver(blob_client, config):
     # type: (azure.storage.blob.BlockBlobService, dict) -> tuple
     """Set up the Azure File docker volume driver
@@ -396,6 +432,7 @@ def add_pool(batch_client, blob_client, config):
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
     vm_count = config['pool_specification']['vm_count']
+    vm_size = config['pool_specification']['vm_size']
     try:
         maxtasks = config['pool_specification']['max_tasks_per_node']
     except KeyError:
@@ -465,7 +502,8 @@ def add_pool(batch_client, blob_client, config):
     except KeyError:
         use_shipyard_docker_image = True
     try:
-        block_for_gr = config['block_until_all_global_resources_loaded']
+        block_for_gr = config[
+            'pool_specification']['block_until_all_global_resources_loaded']
     except KeyError:
         block_for_gr = True
     if block_for_gr:
@@ -489,16 +527,6 @@ def add_pool(batch_client, blob_client, config):
             prefix = None
     except KeyError:
         prefix = None
-    # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    skus_to_use = [
-        (nas, image_ref) for nas in node_agent_skus for image_ref in sorted(
-            nas.verified_image_references, key=lambda item: item.sku)
-        if image_ref.publisher.lower() == publisher.lower() and
-        image_ref.offer.lower() == offer.lower() and
-        image_ref.sku.lower() == sku.lower()
-    ]
-    sku_to_use, image_ref_to_use = skus_to_use[-1]
     # create resource files list
     _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _REGISTRY_FILE]
     if not use_shipyard_docker_image:
@@ -514,12 +542,34 @@ def add_pool(batch_client, blob_client, config):
         _rflist.append((str(afsrv.name), str(afsrv)))
         _rflist.append((str(afenv.name), str(afenv)))
         _rflist.append((str(afvc.name), str(afvc)))
+    # gpu settings
+    if (vm_size.lower().startswith('standard_nc') or
+            vm_size.lower().startswith('standard_nv')):
+        gpupkg = setup_nvidia_docker_package(blob_client, config)
+        _rflist.append((str(gpupkg.name), str(gpupkg)))
+        gpu_env = '{}:{}:{}:{}'.format(
+            vm_size.lower().startswith('standard_nv'),
+            config['pool_specification']['gpu']['nvidia_driver']['version'],
+            _NVIDIA_DRIVER,
+            gpupkg.name)
+    else:
+        gpu_env = None
+    # pick latest sku
+    node_agent_skus = batch_client.account.list_node_agent_skus()
+    skus_to_use = [
+        (nas, image_ref) for nas in node_agent_skus for image_ref in sorted(
+            nas.verified_image_references, key=lambda item: item.sku)
+        if image_ref.publisher.lower() == publisher.lower() and
+        image_ref.offer.lower() == offer.lower() and
+        image_ref.sku.lower() == sku.lower()
+    ]
+    sku_to_use, image_ref_to_use = skus_to_use[-1]
     # upload resource files
     sas_urls = upload_resource_files(blob_client, config, _rflist)
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -527,8 +577,9 @@ def add_pool(batch_client, blob_client, config):
             torrentflags,
             ' -p {}'.format(prefix) if prefix else '',
             ' -a' if azurefile_vd else '',
-            ' -b {}'.format(block_for_gr) if block_for_gr is not None else '',
+            ' -b {}'.format(block_for_gr) if block_for_gr else '',
             ' -d' if use_shipyard_docker_image else '',
+            ' -g {}'.format(gpu_env) if gpu_env is not None else '',
         ),
     ]
     try:
@@ -542,7 +593,7 @@ def add_pool(batch_client, blob_client, config):
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
-        vm_size=config['pool_specification']['vm_size'],
+        vm_size=vm_size,
         target_dedicated=vm_count,
         max_tasks_per_node=maxtasks,
         enable_inter_node_communication=config[
@@ -569,6 +620,14 @@ def add_pool(batch_client, blob_client, config):
             batchmodels.ResourceFile(
                 file_path=rf,
                 blob_source=sas_urls[rf])
+        )
+    if gpu_env:
+        pool.start_task.resource_files.append(
+            batchmodels.ResourceFile(
+                file_path=_NVIDIA_DRIVER,
+                blob_source=config[
+                    'pool_specification']['gpu']['nvidia_driver']['source'],
+                file_mode='0755')
         )
     if preg:
         ssel = config['docker_registry']['private']['storage_account_settings']
@@ -896,6 +955,7 @@ def _adjust_settings_for_pool_creation(config):
     publisher = config['pool_specification']['publisher'].lower()
     offer = config['pool_specification']['offer'].lower()
     sku = config['pool_specification']['sku'].lower()
+    vm_size = config['pool_specification']['vm_size']
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
@@ -927,11 +987,17 @@ def _adjust_settings_for_pool_creation(config):
         elif offer == 'opensuse':
             if sku == '13.2':
                 allowed = True
+    # check for valid image if gpu, currently only ubuntu 16.04 is supported
+    if ((vm_size.lower().startswith('standard_nc') or
+         vm_size.lower().startswith('standard_nv')) and
+            (publisher != 'canonical' and offer != 'ubuntuserver' and
+             sku < '16.04.0-lts')):
+        allowed = False
     # oracle linux is not supported due to UEKR4 requirement
     if not allowed:
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '
-             'sku={}').format(publisher, offer, sku))
+             'sku={} vm_size={}').format(publisher, offer, sku, vm_size))
     # adjust for shipyard container requirement
     if shipyard_container_required:
         config['batch_shipyard']['use_shipyard_docker_image'] = True
@@ -1123,6 +1189,9 @@ def add_jobs(batch_client, blob_client, config):
                     tasknum = 0
                 task_id = '{0}{1:03d}'.format(
                     _GENERIC_DOCKER_TASK_PREFIX, tasknum)
+            # set run and exec commands
+            docker_run_cmd = 'docker run'
+            docker_exec_cmd = 'docker exec'
             # get generic run opts
             try:
                 run_opts = task['additional_docker_run_options']
@@ -1242,6 +1311,33 @@ def add_jobs(batch_client, blob_client, config):
                     raise ValueError(
                         ('Unsupported infiniband VM config, publisher={} '
                          'offer={}').format(publisher, offer))
+            # ensure we're on n-series for gpu
+            try:
+                gpu = task['gpu']
+            except KeyError:
+                gpu = False
+            if gpu:
+                if not (_pool.vm_size.lower().startswith('standard_nc') or
+                        _pool.vm_size.lower().startswith('standard_nv')):
+                    raise RuntimeError(
+                        ('cannot initialize a gpu task on nodes without '
+                         'gpus, pool: {} vm_size: {}').format(
+                             pool_id, _pool.vm_size))
+                publisher = _pool.virtual_machine_configuration.\
+                    image_reference.publisher.lower()
+                offer = _pool.virtual_machine_configuration.\
+                    image_reference.offer.lower()
+                sku = _pool.virtual_machine_configuration.\
+                    image_reference.sku.lower()
+                # TODO other images as they become available with gpu support
+                if (publisher != 'canonical' and offer != 'ubuntuserver' and
+                        sku < '16.04.0-lts'):
+                    raise ValueError(
+                        ('Unsupported gpu VM config, publisher={} offer={} '
+                         'sku={}').format(publisher, offer, sku))
+                # override docker commands with nvidia docker wrapper
+                docker_run_cmd = 'nvidia-docker run'
+                docker_exec_cmd = 'nvidia-docker exec'
             try:
                 task_ev = task['environment_variables']
                 if env_vars is None:
@@ -1327,7 +1423,8 @@ def add_jobs(batch_client, blob_client, config):
                     coordination_command = None
                 cc_args = [
                     'env | grep AZ_BATCH_ >> {}'.format(envfile),
-                    'docker run {} {}{}'.format(
+                    '{} {} {}{}'.format(
+                        docker_run_cmd,
                         ' '.join(run_opts),
                         image,
                         '{}'.format(' ' + coordination_command)
@@ -1370,11 +1467,14 @@ def add_jobs(batch_client, blob_client, config):
                             )
                         )
                 # set application command
-                task_commands = ['docker exec {} {}'.format(name, command)]
+                task_commands = [
+                    '{} {} {}'.format(docker_exec_cmd, name, command)
+                ]
             else:
                 task_commands = [
                     'env | grep AZ_BATCH_ >> {}'.format(envfile),
-                    'docker run {} {}{}'.format(
+                    '{} {} {}{}'.format(
+                        docker_run_cmd,
                         ' '.join(run_opts),
                         image,
                         '{}'.format(' ' + command) if command else '')

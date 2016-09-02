@@ -32,13 +32,15 @@ install_azurefile_docker_volume_driver() {
 azurefile=0
 block=
 cascadecontainer=0
+gpu=
 offer=
 p2p=
 prefix=
 privatereg=
+reboot=0
 sku=
 
-while getopts "h?ab:do:p:r:s:t:" opt; do
+while getopts "h?ab:dg:o:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "nodeprep.sh parameters"
@@ -46,6 +48,7 @@ while getopts "h?ab:do:p:r:s:t:" opt; do
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
+            echo "-g [reboot:driver version:driver file:nvidia docker pkg] gpu support"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
             echo "-r [container:archive:image id] private registry"
@@ -62,6 +65,9 @@ while getopts "h?ab:do:p:r:s:t:" opt; do
             ;;
         d)
             cascadecontainer=1
+            ;;
+        g)
+            gpu=${OPTARG,,}
             ;;
         o)
             offer=${OPTARG,,}
@@ -139,6 +145,10 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
     fi
+    if [ ! -z $gpu ] && [ $name != "ubuntu-xenial" ]; then
+        echo "gpu unsupported on this sku: $sku for offer $offer"
+        exit 1
+    fi
     # check if docker apt source list file exists
     aptsrc=/etc/apt/sources.list.d/docker.list
     if [ ! -e $aptsrc ] || [ ! -s $aptsrc ]; then
@@ -184,6 +194,27 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         set +e
     fi
     set -e
+    # install gpu related items
+    if [ ! -z $gpu ] && [ ! -f ".node_prep_finished" ]; then
+        # split arg into two
+        IFS=':' read -ra GPUARGS <<< "$gpu"
+        if [ ${GPUARGS[0]} == "True" ]; then
+            reboot=1
+        fi
+        nvdriverver=${GPUARGS[1]}
+        nvdriver=${GPUARGS[2]}
+        nvdocker=${GPUARGS[3]}
+        # get development essentials
+        apt-get install -y -q build-essential xserver-xorg-dev nvidia-modprobe
+        # install driver
+        ./$nvdriver -s
+        # install nvidia-docker
+        dpkg -i $nvdocker
+        # enable nvidia docker service
+        systemctl enable nvidia-docker.service
+        # create the docker volume now to remove volume driver conflicts for tasks
+        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
+    fi
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         apt-get install -y -q python3-pip
@@ -213,6 +244,11 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
         echo "only supported through shipyard container"
+        exit 1
+    fi
+    # gpu is not supported on these offers
+    if [ ! -z $gpu ]; then
+        echo "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
@@ -264,6 +300,11 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
         echo "only supported through shipyard container"
+        exit 1
+    fi
+    # gpu is not supported on these offers
+    if [ ! -z $gpu ]; then
+        echo "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     if [ ! -f ".node_prep_finished" ]; then
@@ -320,6 +361,12 @@ fi
 
 # touch file to prevent subsequent perf recording if rebooted
 touch .node_prep_finished
+
+# reboot node if specified
+if [ $reboot -eq 1 ]; then
+    echo "rebooting node"
+    reboot
+fi
 
 # execute cascade
 if [ $cascadecontainer -eq 1 ]; then
