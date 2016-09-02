@@ -18,15 +18,7 @@ IFS=',' read -ra HOSTS <<< "$AZ_BATCH_HOST_LIST"
 nodes=${#HOSTS[@]}
 np=$(($nodes * $ppn))
 
-# create node list
-nodelist=.nodelist.charm
-rm -f $nodelist
-touch $nodelist
-for node in "${HOSTS[@]}"; do
-    echo host $node >> $nodelist
-done
-
 # execute NAMD
 echo "Executing namd on $np processors (ppn=$ppn)..."
-$NAMD_DIR/charmrun ++verbose ++timeout 300 ++batch $ppn ++remote-shell ssh ++p $np ++ppn $ppn ++nodelist $nodelist $NAMD_DIR/namd2 $1.namd
-
+source $MPIVARS_SCRIPT
+mpirun -np $np -ppn $ppn -hosts $AZ_BATCH_HOST_LIST $NAMD_DIR/namd2 $1.namd

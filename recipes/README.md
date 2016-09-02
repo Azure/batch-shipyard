@@ -5,11 +5,12 @@ use with Batch Shipyard.
 **NOTE: All recipes are not yet completed.**
 
 ### [NAMD-TCP](./NAMD-TCP)
-The NAMD-TCP recipe contains information on how to Dockerize distributed
+This NAMD-TCP recipe contains information on how to Dockerize distributed
 NAMD across TCP/IP.
 
-### NAMD-Infiniband
-NAMD Infiniband
+### [NAMD-Infiniband](./NAMD-Infiniband)
+This NAMD-Infiniband recipe contains information on how to Dockerize
+distributed NAMD across Infiniband/RDMA Azure VMs.
 
 ### TensorFlow
 TensorFlow
