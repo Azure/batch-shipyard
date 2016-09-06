@@ -1,7 +1,8 @@
 # NAMD-Infiniband
-This recipe shows how to run NAMD 2.10 on Linux using the Intel MPI libraries
-over Infiniband/RDMA Azure VM instances in an Azure Batch compute pool.
-Execution of this distributed workload requires the use of
+This recipe shows how to run [NAMD](http://www.ks.uiuc.edu/Research/namd/)
+2.10 on Linux using the Intel MPI libraries over Infiniband/RDMA Azure VM
+instances in an Azure Batch compute pool. Execution of this distributed
+workload requires the use of
 [multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
 
 Interested in an TCP/IP-enabled version of NAMD for use with Batch Shipyard

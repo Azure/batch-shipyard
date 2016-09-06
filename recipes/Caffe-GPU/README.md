@@ -1,6 +1,6 @@
-# TensorFlow-GPU
-This recipe shows how to run [TensorFlow](https://www.tensorflow.org/) on GPUs
-using N-series Azure VM instances in an Azure Batch compute pool.
+# Caffe-GPU
+This recipe shows how to run [Caffe](http://caffe.berkeleyvision.org/) on
+GPUs using N-series Azure VM instances in an Azure Batch compute pool.
 
 ## Configuration
 ### Pool Configuration
@@ -23,21 +23,24 @@ available for N-series VMs.
 
 ### Global Configuration
 The global configuration should set the following properties:
-* `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
-Docker image. The
-[gcr.io/tensorflow/tensorflow:latest-gpu](https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html#docker-installation)
-is the official Google TensorFlow GPU Docker image and can be used for this
-recipe.
+* `docker_images` array must have a reference to a valid Caffe GPU-enabled
+Docker image. [alfpark/caffe:gpu](https://hub.docker.com/r/alfpark/caffe/) can
+be used for this recipe.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
+e.g., `alfpark/caffe:gpu`
 * `command` should contain the command to pass to the Docker run invocation.
-As of the `0.10` release of TensorFlow, there is an issue with the image where
-the cuDNN libraries are missing symlink for the library. To run the example
-MNIST convolutional example correctly, the `command` would look like:
-`"/bin/bash -c \"ln -s /usr/lib/x86_64-linux-gnu/libcudnn.so.4 /usr/lib/x86_64-linux-gnu/libcudnn.so; python -m tensorflow.models.image.mnist.convolutional\""`
+For the `alfpark/caffe:gpu` Docker image and to run the MNIST convolutional
+example on all available GPUs, the `command` would simply be:
+`"/opt/run_mnist.sh -gpu all"`
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
+
+## Dockerfile and supplementary files
+The `Dockerfile` for the Docker image can be found [here](./docker).
+
+You must agree to the [Caffe License](https://github.com/BVLC/caffe/blob/master/LICENSE)
+prior to use.

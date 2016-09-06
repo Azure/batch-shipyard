@@ -1,5 +1,6 @@
 # NAMD-TCP
-This recipe shows how to run NAMD 2.10 on Linux using the
+This recipe shows how to run [NAMD](http://www.ks.uiuc.edu/Research/namd/)
+2.10 on Linux using the
 [Charm++ runtime](http://charm.cs.illinois.edu/manuals/html/charm++/)
 (as opposed to pure MPI) over TCP/IP-connected machines in an Azure Batch
 compute pool. Regardless of the underlying parallel/distributed programming
