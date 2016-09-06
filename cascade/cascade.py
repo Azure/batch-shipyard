@@ -102,14 +102,20 @@ _LAST_DHT_INFO_DUMP = None
 
 
 class StandardStreamLogger:
+    """Standard Stream Logger"""
     def __init__(self, level):
+        """Standard Stream ctor"""
         self.level = level
 
-    def write(self, message):
+    def write(self, message: str) -> None:
+        """Write a message to the stream
+        :param str message: message to write
+        """
         if message != '\n':
             self.level(message)
 
-    def flush(self):
+    def flush(self) -> None:
+        """Flush stream"""
         self.level(sys.stderr)
 
 

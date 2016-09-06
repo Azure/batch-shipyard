@@ -34,7 +34,7 @@ graphs with Docker containers
 on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
 ([Preview](http://gpu.azure.com/))
 * Support for multi-instance tasks to accomodate Dockerized MPI and multi-node
-cluster applications on compute pools
+cluster applications on compute pools with automatic job cleanup
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on
 [HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)

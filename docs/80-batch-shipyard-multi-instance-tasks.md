@@ -137,9 +137,19 @@ or a wrapper script that launches `mpirun`.
 ### Cleanup
 As the Docker image is run in detached mode with `docker run`, the container
 will still be running after the application command completes. Currently,
-there is no "clean" way to do this from the Azure Batch API, so there are
-helper methods in the Batch Shipyard toolkit to aid in cleaning up compute
-nodes involved in multi-instance tasks if they are needed to be reused for
+there is no "clean" way to do perform cleanup from the Azure Batch API.
+However, by using the job auto-complete and job release facilities provided
+by Azure Batch, Batch Shipyard can automatically stop and remove the Docker
+container. By default, multi-instance tasks are now cleaned up using this
+method, but limits the number of multi-instance tasks per job to 1.
+
+If you require or prefer more than 1 multi-instance task per job, you ca
+override the default cleanup behavior by specifying
+`multi_instance_auto_complete` to `false` in the
+[job specification](02-batch-shipyard-configuration.md) of each job.
+To manually cleanup after multi-instance tasks, there are helper methods in
+the Batch Shipyard toolkit. These methods will aid in cleaning up compute nodes
+involved in multi-instance tasks if they are needed to be reused for
 additional jobs. Please refer to `cleanmijobs` and `delcleanmijobs` actions
 in the [Batch Shipyard Usage](03-batch-shipyard-usage.md) doc.
 

@@ -270,6 +270,7 @@ The jobs schema is as follows:
     "job_specifications": [
         {
             "id": "dockerjob",
+            "multi_instance_auto_complete": true,
             "environment_variables": {
                 "abc": "xyz"
             },
@@ -327,6 +328,10 @@ The jobs schema is as follows:
 `job_specifications` array consists of jobs to create.
 * `id` is the job id to create. If the job already exists, the specified
 `tasks` under the job will be added to the existing job.
+* `multi_instance_auto_complete` enables auto-completion of the job for
+which a multi-task instance is run. This allows automatic cleanup of the
+Docker container in multi-instance tasks. This is defaulted to `true` and
+is optional.
 * `environment_variables` under the job are environment variables which will
 be applied to all tasks operating under the job.
 * `tasks` is an array of tasks to add to the job.

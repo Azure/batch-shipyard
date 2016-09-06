@@ -1064,6 +1064,23 @@ def resize_pool(batch_client, config):
     )
 
 
+def _confirm_action(config, msg=None):
+    # type: (dict) -> bool
+    """Confirm action with user before proceeding
+    :param dict config: configuration dict
+    :rtype: bool
+    :return: if user confirmed or not
+    """
+    if config['_auto_confirm']:
+        return True
+    if msg is None:
+        msg = 'action'
+    user = raw_input('Confirm {} [y/n]: '.format(msg))
+    if user.lower() in ['y', 'yes']:
+        return True
+    return False
+
+
 def del_pool(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     """Delete a pool
@@ -1072,6 +1089,8 @@ def del_pool(batch_client, config):
     :param dict config: configuration dict
     """
     pool_id = config['pool_specification']['id']
+    if not _confirm_action(config, 'delete {} pool'.format(pool_id)):
+        return
     logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
 
@@ -1085,6 +1104,9 @@ def del_node(batch_client, config, node_id):
     :param str node_id: node id to delete
     """
     pool_id = config['pool_specification']['id']
+    if not _confirm_action(
+            config, 'delete node {} from {} pool'.format(node_id, pool_id)):
+        return
     logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
     batch_client.pool.remove_nodes(
         pool_id=pool_id,
@@ -1148,8 +1170,16 @@ def add_jobs(batch_client, blob_client, config):
                 rerun_on_node_reboot_after_success=False,
             )
         )
-        # check if any tasks in job have dependencies
-        dependencies = False
+        # perform checks:
+        # 1. if tasks have dependencies, set it if so
+        # 2. if there are multi-instance tasks
+        try:
+            mi_ac = jobspec['multi_instance_auto_complete']
+        except KeyError:
+            mi_ac = True
+        job.uses_task_dependencies = False
+        multi_instance = False
+        docker_container_name = None
         for task in jobspec['tasks']:
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
@@ -1158,14 +1188,43 @@ def add_jobs(batch_client, blob_client, config):
                         len(task['id']) == 0):
                     raise ValueError(
                         'task id is not specified, but depends_on is set')
-                dependencies = True
-        job.uses_task_dependencies = dependencies
+                job.uses_task_dependencies = True
+            if 'multi_instance' in task:
+                if multi_instance and mi_ac:
+                    raise ValueError(
+                        'cannot specify more than one multi-instance task '
+                        'per job with auto completion enabled')
+                multi_instance = True
+                docker_container_name = task['name']
+        # add multi-instance settings
+        if multi_instance and mi_ac:
+            if (docker_container_name is None or
+                    len(docker_container_name) == 0):
+                raise ValueError(
+                    'multi-instance task must be invoked with a named '
+                    'container')
+            job.on_all_tasks_complete = \
+                batchmodels.OnAllTasksComplete.terminate_job
+            job.job_release_task = batchmodels.JobReleaseTask(
+                command_line=_wrap_commands_in_shell(
+                    ['docker stop {}'.format(docker_container_name),
+                     'docker rm -v {}'.format(docker_container_name)]),
+                run_elevated=True,
+            )
         logger.info('Adding job: {}'.format(job.id))
         try:
             batch_client.job.add(job)
         except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The specified job already exists' not in ex.message.value:
+            if 'The specified job already exists' in ex.message.value:
+                # cannot re-use an existing job if multi-instance due to
+                # job release requirement
+                if multi_instance and mi_ac:
+                    raise
+            else:
                 raise
+        del mi_ac
+        del multi_instance
+        del docker_container_name
         # add all tasks under job
         for task in jobspec['tasks']:
             # get image name
@@ -1537,6 +1596,8 @@ def del_jobs(batch_client, config):
     """
     for job in config['job_specifications']:
         job_id = job['id']
+        if not _confirm_action(config, 'delete {} job'.format(job_id)):
+            continue
         logger.info('Deleting job: {}'.format(job_id))
         batch_client.job.delete(job_id)
 
@@ -1630,19 +1691,24 @@ def terminate_jobs(batch_client, config):
     """
     for job in config['job_specifications']:
         job_id = job['id']
+        if not _confirm_action(config, 'terminate {} job'.format(job_id)):
+            continue
         logger.info('Terminating job: {}'.format(job_id))
         batch_client.job.terminate(job_id)
 
 
-def del_all_jobs(batch_client):
-    # type: (azure.batch.batch_service_client.BatchServiceClient) -> None
+def del_all_jobs(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     """Delete all jobs
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
     """
     logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
+        if not _confirm_action(config, 'delete {} job'.format(job.id)):
+            continue
         logger.info('Deleting job: {}'.format(job.id))
         batch_client.job.delete(job.id)
 
@@ -1906,6 +1972,7 @@ def main():
             }]
     logger.debug('config:\n' + json.dumps(config, indent=4))
     _populate_global_settings(config, args.action)
+    config['_auto_confirm'] = args.yes
 
     batch_client, blob_client, queue_client, table_client = \
         _create_credentials(config)
@@ -1943,7 +2010,7 @@ def main():
     elif args.action == 'delcleanmijobs':
         del_clean_mi_jobs(batch_client, config)
     elif args.action == 'delalljobs':
-        del_all_jobs(batch_client)
+        del_all_jobs(batch_client, config)
     elif args.action == 'grls':
         get_remote_login_settings(batch_client, config)
     elif args.action == 'streamfile':
@@ -1966,10 +2033,14 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Batch Shipyard: Provision and Execute Docker Workloads '
         'on Azure Batch')
+    parser.set_defaults(yes=False)
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
         'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
         'grls, streamfile, clearstorage, delstorage')
+    parser.add_argument(
+        '-y', '--yes', dest='yes', action='store_true',
+        help='assume yes for all yes/no confirmations')
     parser.add_argument(
         '--credentials',
         help='credentials json config. required for all actions')
