@@ -17,7 +17,7 @@ python shipyard.py
 The `-h` option will list the available options, which are explained below.
 
 ## Options
-The script requires configuration json files described the
+The script requires configuration json files described by the
 [previous doc](01-batch-shipyard-configuration.md) to be passed in as
 arguments.
 
@@ -31,7 +31,7 @@ Explanation of arguments:
 The required positional argument to the script is `action`. Here are a list
 of actions and their intended effect:
 * `addpool`: creates a pool as specified in the configuration files.
-* `addjobs`: adds jobs as specified in the jobs configuration file.
+* `addjobs`: adds jobs as specified in the job's configuration file.
 * `addsshuser`: adds an SSH tunnel user as specified in the pool configuration
 file. This action is automatically invoked during `addpool` if enabled in the
 pool configuration file.
@@ -41,9 +41,9 @@ container via `docker run`) is left running even after the multi-instance
 task completes (i.e., application command `docker exec`), subsequent tasks
 on the same compute nodes may fail on the coordination command due to
 resources in use. This will clean up any multi-instance tasks detected within
-jobs specified in the jobs configuration file.
-* `termjobs`: terminate jobs as specified in the jobs configuration file.
-* `deljobs`: delete jobs as specified in the jobs configuration file.
+jobs specified in the job's configuration file.
+* `termjobs`: terminate jobs as specified in the job's configuration file.
+* `deljobs`: delete jobs as specified in the job's configuration file.
 * `delcleanmijobs`: delete jobs used to clean up multi-instance jobs.
 * `delalljobs`: delete all jobs under the Batch Account.
 * `delpool`: delete pool as specified in the pool configuration file.
