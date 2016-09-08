@@ -143,7 +143,7 @@ by Azure Batch, Batch Shipyard can automatically stop and remove the Docker
 container. By default, multi-instance tasks are now cleaned up using this
 method, but limits the number of multi-instance tasks per job to 1.
 
-If you require or prefer more than 1 multi-instance task per job, you ca
+If you require or prefer more than 1 multi-instance task per job, you can
 override the default cleanup behavior by specifying
 `multi_instance_auto_complete` to `false` in the
 [job specification](02-batch-shipyard-configuration.md) of each job.

@@ -23,6 +23,10 @@ are available for N-series VMs.
 available for N-series VMs.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
+* `gpu` property should be specified with the following members:
+  * `nvidia_driver` property contains the following members:
+    * `version` is the nVidia driver version
+    * `source` is a URL for the driver installer .run file
 
 ### Global Configuration
 The global configuration should set the following properties:

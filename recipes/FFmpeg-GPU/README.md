@@ -22,6 +22,10 @@ once they are available for N-series VMs.
 are available for N-series VMs.
 * `sku` should be `16.04.0-LTS`. Other skus will be supported once they are
 available for N-series VMs.
+* `gpu` property should be specified with the following members:
+  * `nvidia_driver` property contains the following members:
+    * `version` is the nVidia driver version
+    * `source` is a URL for the driver installer .run file
 
 ### Global Configuration
 The global configuration should set the following properties:

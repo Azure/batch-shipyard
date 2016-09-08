@@ -18,7 +18,7 @@ The `-h` option will list the available options, which are explained below.
 
 ## Options
 The script requires configuration json files described the
-[previous doc](01-batch-shipyard-configuration.md) to be passed in as
+[previous doc](02-batch-shipyard-configuration.md) to be passed in as
 arguments.
 
 Explanation of arguments:
