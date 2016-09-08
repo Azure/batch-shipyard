@@ -61,12 +61,8 @@ file via the command `pip install --user -r requirements.txt` (or via `pip3`
 for python3).
 
 ## Batch Shipyard Compute Node OS Support
-Batch Shipyard is currently only compatible with Linux Batch Compute Pools
-configured via
-[VirtualMachineConfiguration](http://azure-sdk-for-python.readthedocs.io/en/latest/_modules/azure/batch/models/virtual_machine_configuration.html).
-Please see the list of
-[Azure Batch supported Marketplace Linux VMs](https://azure.microsoft.com/en-us/documentation/articles/batch-linux-nodes/#list-of-virtual-machine-images)
-for use with Batch Shipyard.
+Batch Shipyard is currently only compatible with
+[Azure Batch supported Marketplace Linux VMs](https://azure.microsoft.com/en-us/documentation/articles/batch-linux-nodes/#list-of-virtual-machine-images).
 
 ## Documentation
 Please refer to

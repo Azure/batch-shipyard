@@ -1,6 +1,7 @@
 # Dockerfile for NAMD-Infiniband for use with Batch Shipyard on Azure Batch
 
 FROM centos:7.1.1503
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set up base
 COPY ssh_config /root/.ssh/

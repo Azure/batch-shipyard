@@ -153,13 +153,15 @@ replication mechanism between compute nodes within a compute pool. The
 to allow unfettered concurrent downloading from the source registry among
 all compute nodes. The following options apply to `peer_to_peer` data
 replication options:
-* `enabled` property enables or disables peer-to-peer transfer.
+* `enabled` property enables or disables private peer-to-peer transfer. Note
+that for compute pools with a relatively small number of VMs, peer-to-peer
+transfer may not provide any benefit.
 * `compression` property enables or disables compression of image files. It
-  is strongly recommended to keep this enabled.
+is strongly recommended to keep this enabled.
 * `concurrent_source_downloads` property specifies the number of
 simultaneous downloads allowed to each image.
-* `direct_download_seed_bias` property sets the number of seeds to prefer
-per image.
+* `direct_download_seed_bias` property sets the number of direct download
+seeds to prefer per image before switching to peer-to-peer transfer.
 
 The `global_resources` property contains the Docker image and volume
 configuration. `docker_images` is an array of docker images that should

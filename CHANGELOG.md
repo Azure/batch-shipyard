@@ -6,7 +6,7 @@
 ### Added
 - Transparent GPU support for Azure N-Series VMs
 - New recipes added: Caffe-GPU, CNTK-CPU-OpenMPI, CNTK-GPU-OpenMPI,
-NAMD-Infiniband-IntelMPI, NAMD-TCP, TensorFlow-GPU
+FFmpeg-GPU, NAMD-Infiniband-IntelMPI, NAMD-TCP, TensorFlow-GPU
 
 ### Changed
 - Multi-instance tasks now automatically complete their job by default. This

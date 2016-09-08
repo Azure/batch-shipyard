@@ -1,6 +1,7 @@
 # Dockerfile for CNTK-GPU-OpenMPI for use with Batch Shipyard on Azure Batch
 
 FROM nvidia/cuda:7.5-cudnn5-devel
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # install base system
 COPY ssh_config /root/.ssh/

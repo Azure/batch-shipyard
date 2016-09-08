@@ -38,7 +38,6 @@ offer=
 p2p=
 prefix=
 privatereg=
-reboot=0
 sku=
 
 while getopts "h?ab:dg:no:p:r:s:t:" opt; do
@@ -49,7 +48,7 @@ while getopts "h?ab:dg:no:p:r:s:t:" opt; do
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
-            echo "-g [reboot:driver version:driver file:nvidia docker pkg] gpu support"
+            echo "-g [nv-series:driver version:driver file:nvidia docker pkg] gpu support"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -69,7 +68,7 @@ while getopts "h?ab:dg:no:p:r:s:t:" opt; do
             cascadecontainer=1
             ;;
         g)
-            gpu=${OPTARG,,}
+            gpu=$OPTARG
             ;;
         n)
             networkopt=1
@@ -231,8 +230,19 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         # split arg into two
         IFS=':' read -ra GPUARGS <<< "$gpu"
+        # take special actions if we're on NV-series VMs
         if [ ${GPUARGS[0]} == "True" ]; then
-            reboot=1
+            # remove nouveau
+            apt-get --purge remove xserver-xorg-video-nouveau
+            rmmod nouveau
+            # blacklist nouveau from being loaded if rebooted
+cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
+blacklist nouveau
+blacklist lbm-nouveau
+options nouveau modeset=0
+alias nouveau off
+alias lbm-nouveau off
+EOF
         fi
         nvdriverver=${GPUARGS[1]}
         nvdriver=${GPUARGS[2]}
@@ -274,7 +284,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         apt-get install -y -q python3-pip
-        pip3 install --no-cache-dir azure-storage==0.32.0
+        pip3 install --no-cache-dir azure-storage==0.33.0
         # backfill node prep start
         if [ ! -z ${CASCADE_TIMING+x} ]; then
             ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
@@ -425,12 +435,6 @@ fi
 
 # touch file to prevent subsequent perf recording if rebooted
 touch $nodeprepfinished
-
-# reboot node if specified
-if [ $reboot -eq 1 ]; then
-    echo "rebooting node"
-    reboot
-fi
 
 # execute cascade
 if [ $cascadecontainer -eq 1 ]; then

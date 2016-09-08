@@ -6,14 +6,15 @@ GPUs using N-series Azure VM instances in an Azure Batch compute pool.
 ### Pool Configuration
 **Note: You must be approved for the
 [Azure N-Series Preview](http://gpu.azure.com/) and have escalated a
-customer service support ticket to the Azure Batch team to enable this
-feature. Otherwise, your pool allocation will fail.**
+customer service support ticket with your Batch account details to the Azure
+Batch team to enable this feature. Otherwise, your pool allocation will fail.**
 
 The pool configuration should enable the following properties:
 * `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
 `STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
 K80 GPUs for GPU compute acceleration while `NV` VM instances feature
-M60 GPUs for visualization workloads.
+M60 GPUs for visualization workloads. Because Caffe is a GPU-accelerated
+compute application, it is best to choose `NC` VM instances.
 * `publisher` should be `Canonical`. Other publishers will be supported
 once they are available for N-series VMs.
 * `offer` should be `UbuntuServer`. Other offers will be supported once they

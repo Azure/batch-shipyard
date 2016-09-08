@@ -1,6 +1,7 @@
 # Dockerfile for CNTK-CPU-OpenMPI for use with Batch Shipyard on Azure Batch
 
 FROM ubuntu:14.04
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # install base system
 COPY ssh_config /root/.ssh/

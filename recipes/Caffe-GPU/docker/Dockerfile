@@ -1,6 +1,7 @@
 # Dockerfile for Caffe-GPU for use with Batch Shipyard on Azure Batch
 
 FROM nvidia/cuda:7.5-cudnn5-devel-ubuntu14.04
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \

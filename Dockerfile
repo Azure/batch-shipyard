@@ -1,6 +1,7 @@
 # Dockerfile for Azure/batch-shipyard
 
 FROM gliderlabs/alpine:3.4
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set environment variables
 # currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken

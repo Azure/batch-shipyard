@@ -9,9 +9,12 @@ job scheduling system leveraging the
 their jobs are (e.g., executing a binary to process text data), when to run
 them, where to run them, and on what VM resources they are run on. The Azure
 Batch service takes care of the rest including: compute resource provisioning,
-task scheduling, automatic task recovery and retry on failure, and automatic
-scaling of resources if specified. Costs are incurred only for compute
-resources consumed.
+task scheduling, automatic task recovery and retry on failure, automatic
+scaling of resources if specified, and many other complexities that exist
+at cloud-scale. Costs are incurred only for compute resources consumed, i.e.,
+the same baseline prices for
+[Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
+or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/).
 
 Azure Batch can handle workloads on any point of the parallel and distributed
 processing spectrum, from embarassingly parallel workloads all the way to
@@ -23,7 +26,7 @@ schedule work on machines.
 
 Compute resources:
 ```
-Azure Subscription --> Batch Account --> Compute Pool --> Compute Node
+Azure Subscription --> Batch Account --> Compute Pool --> Compute Nodes
 ```
 
 Batch accounts are provisioned from a valid Azure Subscription. With a
@@ -34,7 +37,7 @@ pools can be provisioned per Batch account.
 
 Compute jobs:
 ```
-Job --> Task --> Subtask (or tasklet)
+Job --> Tasks --> Subtasks (or tasklets)
 ```
 
 Jobs are run on compute pools for which tasks are scheduled on to compute
@@ -47,8 +50,8 @@ Files required as part of a task or generated as a side-effect of a task
 can be referenced using a compute job heirarchy or a compute node heirarchy
 (if the absolute file location is known). Files existing on compute nodes can
 be transferred to any accessible endpoint, including Azure Storage. Files
-may also be fetched from live compute nodes (nodes that have not yet been
-deleted).
+may also be fetched from live compute nodes (i.e., nodes that have not yet
+been deleted).
 
 A high level overview of Azure Batch service basics can be found
 [here](https://azure.microsoft.com/en-us/documentation/articles/batch-technical-overview/).

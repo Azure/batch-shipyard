@@ -1,6 +1,6 @@
 # Batch Shipyard Recipes
 This directory contains recipes and sample batch-style Docker workloads for
-use with Batch Shipyard.
+use with Batch Shipyard on Azure Batch.
 
 **NOTE: Not all recipes are populated.**
 
@@ -45,7 +45,7 @@ This NAMD-TCP recipe contains information on how to Dockerize distributed
 TBC.
 [OpenFoam](http://www.openfoam.com/)
 
-## Video Processing
-### FFmpeg
-TBC.
-[FFmpeg](https://ffmpeg.org/)
+## Audio/Video Processing
+### [FFmpeg-GPU](./FFmpeg-GPU)
+This recipe contains information on how to use Dockerized
+[FFmpeg](https://ffmpeg.org/) on GPUs for use with the N-series Azure VMs.
