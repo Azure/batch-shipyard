@@ -8,7 +8,7 @@ paradigm, execution of this distributed workload requires the use of
 [multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
 
 Interested in an Infiniband-enabled version of NAMD for use with Batch
-Shipyard? Visit [this recipe](../NAMD-Infiniband).
+Shipyard? Visit [this recipe](../NAMD-Infiniband-IntelMPI).
 
 ## Configuration
 ### Pool Configuration

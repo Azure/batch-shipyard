@@ -9,34 +9,43 @@ use with Batch Shipyard.
 This Caffe-GPU recipe contains information on how to Dockerize
 [Caffe](http://caffe.berkeleyvision.org/) GPU for use with N-Series Azure VMs.
 
-### CNTK-GPU
-CNTK-gpu
-[CNTK](https://cntk.ai/)
+### CNTK-CPU-Infiniband-IntelMPI
+TBC.
 
-### CNTK-Infiniband (MPI)
-CNTK-Infiniband
+### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
+This CNTK-CPU-OpenMPI recipe contains information on how to Dockerize
+[CNTK](https://cntk.ai/) for CPUs, including execution across multiple
+compute nodes with multi-instance tasks.
+
+### [CNTK-GPU-OpenMPI](./CNTK-GPU-OpenMPI)
+This CNTK-GPU-OpenMPI recipe contains information on how to Dockerize
+[CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs, including
+execution across multiple compute nodes and multiple GPUs with multi-instance
+tasks.
 
 ### TensorFlow-Distributed
-TensorFlow-Distributed
+TBC.
 
 ### [TensorFlow-GPU](./TensorFlow-GPU)
 This TensorFlow-GPU recipe contains information on how to Dockerize
-[TensorFlow](https://www.tensorflow.org/) GPU for use with N-series Azure VMs.
+[TensorFlow](https://www.tensorflow.org/) on GPUs for use with N-series Azure
+VMs.
 
 ## Computational Fluid Dynamics (CFD) and Molecular Dynamics (MD)
-### [NAMD-Infiniband](./NAMD-Infiniband)
-This NAMD-Infiniband recipe contains information on how to Dockerize
+### [NAMD-Infiniband-IntelMPI](./NAMD-Infiniband-IntelMPI)
+This NAMD-Infiniband-IntelMPI recipe contains information on how to Dockerize
 distributed [NAMD](http://www.ks.uiuc.edu/Research/namd/) across
-Infiniband/RDMA Azure VMs.
+Infiniband/RDMA Azure VMs with Intel MPI.
 
 ### [NAMD-TCP](./NAMD-TCP)
 This NAMD-TCP recipe contains information on how to Dockerize distributed
 [NAMD](http://www.ks.uiuc.edu/Research/namd/) across TCP/IP.
 
-### OpenFOAM-Infiniband (MPI)
-OpenFOAM-Infiniband
+### OpenFOAM-Infiniband-IntelMPI
+TBC.
 [OpenFoam](http://www.openfoam.com/)
 
 ## Video Processing
 ### FFmpeg
+TBC.
 [FFmpeg](https://ffmpeg.org/)

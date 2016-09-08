@@ -103,6 +103,11 @@ _SETUP_PR_FILE = (
 )
 _PERF_FILE = ('perf.py', 'cascade/perf.py')
 _REGISTRY_FILE = None
+_VM_TCP_NO_TUNE = (
+    'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
+    'standard_a1', 'standard_d1', 'standard_d2', 'standard_d1_v2',
+    'standard_f1'
+)
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
@@ -118,7 +123,6 @@ def _setup_logger():
         '%(asctime)sZ %(levelname)s %(funcName)s:%(lineno)d %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    logger.info('logger initialized')
 
 
 def _populate_global_settings(config, action):
@@ -569,17 +573,18 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
             preg,
             torrentflags,
-            ' -p {}'.format(prefix) if prefix else '',
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
             ' -d' if use_shipyard_docker_image else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
+            ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
+            ' -p {}'.format(prefix) if prefix else '',
         ),
     ]
     try:
@@ -1197,14 +1202,14 @@ def add_jobs(batch_client, blob_client, config):
                 multi_instance = True
                 docker_container_name = task['name']
         # add multi-instance settings
+        set_terminate_on_all_tasks_complete = False
         if multi_instance and mi_ac:
             if (docker_container_name is None or
                     len(docker_container_name) == 0):
                 raise ValueError(
                     'multi-instance task must be invoked with a named '
                     'container')
-            job.on_all_tasks_complete = \
-                batchmodels.OnAllTasksComplete.terminate_job
+            set_terminate_on_all_tasks_complete = True
             job.job_release_task = batchmodels.JobReleaseTask(
                 command_line=_wrap_commands_in_shell(
                     ['docker stop {}'.format(docker_container_name),
@@ -1585,6 +1590,14 @@ def add_jobs(batch_client, blob_client, config):
                     'multi-instance task coordination command: {}'.format(
                         mis.coordination_command_line))
             batch_client.task.add(job_id=job.id, task=batchtask)
+            # update job if job autocompletion is needed
+            if set_terminate_on_all_tasks_complete:
+                batch_client.job.update(
+                    job_id=job.id,
+                    job_update_parameter=batchmodels.JobUpdateParameter(
+                        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+                        on_all_tasks_complete=batchmodels.
+                        OnAllTasksComplete.terminate_job))
 
 
 def del_jobs(batch_client, config):

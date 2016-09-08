@@ -33,6 +33,7 @@ azurefile=0
 block=
 cascadecontainer=0
 gpu=
+networkopt=0
 offer=
 p2p=
 prefix=
@@ -40,7 +41,7 @@ privatereg=
 reboot=0
 sku=
 
-while getopts "h?ab:dg:o:p:r:s:t:" opt; do
+while getopts "h?ab:dg:no:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -49,6 +50,7 @@ while getopts "h?ab:dg:o:p:r:s:t:" opt; do
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-g [reboot:driver version:driver file:nvidia docker pkg] gpu support"
+            echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
             echo "-r [container:archive:image id] private registry"
@@ -68,6 +70,9 @@ while getopts "h?ab:dg:o:p:r:s:t:" opt; do
             ;;
         g)
             gpu=${OPTARG,,}
+            ;;
+        n)
+            networkopt=1
             ;;
         o)
             offer=${OPTARG,,}
@@ -122,6 +127,28 @@ if [ ! -z $p2p ]; then
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
 
+# optimize network TCP settings
+if [ $networkopt -eq 1 ]; then
+    sysctlfile=/etc/sysctl.d/60-azure-shipyard.conf
+    if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
+cat > $sysctlfile << EOF
+net.core.rmem_default=16777216
+net.core.wmem_default=16777216
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.core.netdev_max_backlog=30000
+net.ipv4.tcp_max_syn_backlog=80960
+net.ipv4.tcp_mem=16777216 16777216 16777216
+net.ipv4.tcp_rmem=4096 87380 16777216
+net.ipv4.tcp_wmem=4096 65536 16777216
+net.ipv4.tcp_slow_start_after_idle=0
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.tcp_abort_on_overflow=1
+net.ipv4.route.flush=1
+EOF
+    fi
+fi
+
 # copy required shell scripts to shared
 cp docker_jp_block.sh $AZ_BATCH_NODE_SHARED_DIR
 
@@ -150,6 +177,10 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     if [ ! -z $gpu ] && [ $name != "ubuntu-xenial" ]; then
         echo "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
+    fi
+    # reload network settings
+    if [ $networkopt -eq 1 ]; then
+        service procps reload
     fi
     # check if docker apt source list file exists
     aptsrc=/etc/apt/sources.list.d/docker.list
@@ -286,6 +317,10 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
     fi
+    # reload network settings
+    if [ $networkopt -eq 1 ]; then
+        sysctl -p
+    fi
     # add docker repo to yum
     yumrepo=/etc/yum.repos.d/docker.repo
     if [ ! -e $yumrepo ] || [ ! -s $yumrepo ]; then
@@ -331,6 +366,10 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     if [ ! -z $gpu ]; then
         echo "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
+    fi
+    # reload network settings
+    if [ $networkopt -eq 1 ]; then
+        sysctl -p
     fi
     if [ ! -f $nodeprepfinished ]; then
         # add Virtualization:containers repo for recent docker builds

@@ -11,9 +11,10 @@ ENV libtorrent_version=1.0.9 \
 # build libtorrent-rasterbar for python3 and cleanup packaging
 RUN apk update \
     && apk add --update --no-cache \
-        musl build-base python3 python3-dev openssl-dev ca-certificates \
-        boost boost-dev boost-python3 file curl tar pigz docker bash \
-    && pip3 install --no-cache-dir --upgrade pip azure-storage==0.32.0 \
+        musl build-base python3 python3-dev openssl-dev libffi-dev \
+        ca-certificates boost boost-dev boost-python3 file curl tar pigz \
+        docker bash \
+    && pip3 install --no-cache-dir --upgrade pip azure-storage \
     && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version//./_}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
     && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && cd libtorrent-rasterbar-${libtorrent_version} \
@@ -24,7 +25,8 @@ RUN apk update \
     && rm -rf libtorrent-rasterbar-${libtorrent_version} \
     && rm -f zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && apk del --purge \
-        build-base python3-dev openssl-dev python boost-dev file curl \
+        build-base python3-dev openssl-dev libffi-dev python boost-dev \
+        file curl \
     && apk add --no-cache boost-random \
     && rm /var/cache/apk/* \
     && mkdir -p /opt/batch-shipyard

@@ -410,6 +410,9 @@ class DockerSaveThread(threading.Thread):
                     shell=True)
             except subprocess.CalledProcessError:
                 if _ALLOW_PUBLIC_PULL_WITH_PRIVATE:
+                    logger.warning(
+                        'could not pull from private registry, attempting '
+                        'Docker Public Hub instead')
                     subprocess.check_output(
                         'docker pull {}'.format(image), shell=True)
                     _pub = True
