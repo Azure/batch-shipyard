@@ -51,6 +51,9 @@ git clone https://github.com/Azure/batch-shipyard.git
 
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
 
+Please see [this page](docs/01-batch-shipyard-installation.md) for more
+installation information.
+
 ## Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
 with Python 2.7 or 3.3+. You will also need to install the
