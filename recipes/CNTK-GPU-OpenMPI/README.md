@@ -69,7 +69,8 @@ For this example, we will run the Multigpu Simple2d Example in the
 `alfpark/cntk:gpu-openmpi` Docker image. The application `command` to run
 would be:
 `"mpirun --allow-run-as-root --host $AZ_BATCH_HOST_LIST --mca btl_tcp_if_exclude docker0 /bin/bash -c \"export LD_LIBRARY_PATH=/usr/local/openblas/lib:/usr/local/nvidia/lib64 && cp -r /cntk/Examples/Other/Simple2d/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/Multigpu.cntk RootDir=. parallelTrain=true\""`
-  * **NOTE:** tasks that span multiple compute nodes will need their output
+  * **NOTE:** tasks that span multiple compute nodes
+    (i.e., MultiNode+SingleGPU or MultiNode+MultiGPU) will need their output
     stored on a shared file system, otherwise CNTK will fail during test
     as all of the output is written by rank 0 to the specified output
     directory only on that compute node. To override the output directory for

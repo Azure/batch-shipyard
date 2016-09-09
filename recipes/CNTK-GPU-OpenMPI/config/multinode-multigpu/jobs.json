@@ -11,11 +11,12 @@
                     "shared_data_volumes": [
                         "<azure file shared volume name>"
                     ],
-                    "command": "mpirun --allow-run-as-root --host $AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST --mca btl_tcp_if_exclude docker0 /bin/bash -c \"cp -r /cntk/Examples/Other/Simple2d/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/Multigpu.cntk RootDir=. OutputDir=$AZ_BATCH_NODE_SHARED_DIR/azurefileshare/Output parallelTrain=true\"",
+                    "command": "mpirun --allow-run-as-root --host $AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST,$AZ_BATCH_HOST_LIST --mca btl_tcp_if_exclude docker0 /bin/bash -c \"export LD_LIBRARY_PATH=/usr/local/openblas/lib:/usr/local/nvidia/lib64 && cp -r /cntk/Examples/Other/Simple2d/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/Multigpu.cntk RootDir=. OutputDir=$AZ_BATCH_NODE_SHARED_DIR/azurefileshare/Output parallelTrain=true\"",
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",
                         "coordination_command": null
-                    }
+                    },
+                    "gpu": true
                 }
             ]
         }
