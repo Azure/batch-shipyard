@@ -18,6 +18,11 @@ git clone https://github.com/Azure/batch-shipyard.git
 
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
 
+Please note that if cloning the repository on Windows to ensure that git does
+not modify the Unix line-endings (LF) for in the files in the `scripts`
+directory. If these files are modified with Windows line-endings (CRLF) then
+compute nodes will fail to start properly.
+
 ## Batch Shipyard Configuration
 Continue on to
 [Batch Shipyard Configuration](02-batch-shipyard-configuration.md).

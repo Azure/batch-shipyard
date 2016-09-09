@@ -13,4 +13,5 @@ current limitation of the underlying Azure Batch service.
 This is a current limitation of the underlying VM and host drivers.
 * Assist in setting up Infiniband/RDMA-enabled containers is only available for
 CentOS-HPC currently. Support for SLES-HPC is forthcoming.
-
+* On-premise Docker private registries are not supported at this time due to
+VNet requirements.

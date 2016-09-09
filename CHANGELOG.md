@@ -1,6 +1,13 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Ability to retrieve files from live compute nodes in addition to streaming
+- Added .gitattributes to designate Unix line-endings for text files
+
+### Changed
+- Updated [configuration docs](docs/02-batch-shipyard-configuration.md) to
+detail which properties are required vs. those that are optional
 
 ## [0.2.0] - 2016-09-08
 ### Added

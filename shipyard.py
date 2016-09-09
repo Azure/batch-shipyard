@@ -167,40 +167,46 @@ def _populate_global_settings(config, action):
         dpre = config['docker_registry']['private']['enabled']
     except KeyError:
         dpre = False
+    # set docker private registry file info
     if dpre:
+        rf = None
+        imgid = None
         try:
             rf = config['docker_registry']['private'][
                 'docker_save_registry_file']
+            imgid = config['docker_registry']['private'][
+                'docker_save_registry_image_id']
+            if rf is not None and len(rf) == 0:
+                rf = None
+            if imgid is not None and len(imgid) == 0:
+                imgid = None
+            if rf is None or imgid is None:
+                raise KeyError()
         except KeyError:
-            rf = 'resources/docker-registry-v2.tar.gz'
+            if rf is None:
+                rf = 'resources/docker-registry-v2.tar.gz'
+            imgid = None
         prf = pathlib.Path(rf)
         # attempt to package if registry file doesn't exist
-        if not prf.exists() or prf.stat().st_size == 0:
+        if not prf.exists() or prf.stat().st_size == 0 or imgid is None:
             logger.debug(
                 'attempting to generate docker private registry tarball')
             try:
-                output = subprocess.check_output(
-                    'sudo docker images -q registry:2', shell=True)
-                output = output.decode('utf-8').strip()
+                imgid = subprocess.check_output(
+                    'sudo docker images -q registry:2', shell=True).decode(
+                        'utf-8').strip()
             except subprocess.CalledProcessError:
                 rf = None
-                config['docker_registry']['private'][
-                    'docker_save_registry_image_id'] = None
+                imgid = None
             else:
-                if len(output) == 12:
-                    rf = 'resources/docker-registry-v2.tar.gz'
+                if len(imgid) == 12:
+                    if rf is None:
+                        rf = 'resources/docker-registry-v2.tar.gz'
                     prf = pathlib.Path(rf)
-                    config['docker_registry']['private'][
-                        'docker_save_registry_image_id'] = output
                     subprocess.check_call(
                         'sudo docker save registry:2 '
                         '| gzip -c > {}'.format(rf), shell=True)
-        _REGISTRY_FILE = (
-            prf.name if rf is not None else None,
-            rf,
-            config['docker_registry']['private'][
-                'docker_save_registry_image_id']
-        )
+        _REGISTRY_FILE = (prf.name if rf is not None else None, rf, imgid)
     else:
         _REGISTRY_FILE = (None, None, None)
     logger.info('private registry settings: {}'.format(_REGISTRY_FILE))
@@ -1108,6 +1114,8 @@ def del_node(batch_client, config, node_id):
     :param dict config: configuration dict
     :param str node_id: node id to delete
     """
+    if node_id is None or len(node_id) == 0:
+        raise ValueError('node id is invalid')
     pool_id = config['pool_specification']['id']
     if not _confirm_action(
             config, 'delete node {} from {} pool'.format(node_id, pool_id)):
@@ -1340,6 +1348,8 @@ def add_jobs(batch_client, blob_client, config):
             # get command
             try:
                 command = task['command']
+                if command is not None and len(command) == 0:
+                    raise KeyError()
             except KeyError:
                 command = None
             # get and create env var file
@@ -1483,6 +1493,9 @@ def add_jobs(batch_client, blob_client, config):
                 try:
                     coordination_command = task[
                         'multi_instance']['coordination_command']
+                    if (coordination_command is not None and
+                            len(coordination_command) == 0):
+                        raise KeyError()
                 except KeyError:
                     coordination_command = None
                 cc_args = [
@@ -1795,6 +1808,65 @@ def stream_file_and_wait_for_task(batch_client):
         time.sleep(1)
 
 
+def get_file_via_task(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Get a file task style
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    job_id = raw_input('Enter job id: ')
+    task_id = raw_input('Enter task id: ')
+    file = raw_input(
+        'Enter task-relative file path to retrieve [stdout.txt]: ')
+    if file == '' or file is None:
+        file = 'stdout.txt'
+    # check if file exists on disk; a possible race condition here is
+    # understood
+    fp = pathlib.Path(pathlib.Path(file).name)
+    if (fp.exists() and
+            not _confirm_action(config, 'file overwrite of {}'.format(file))):
+        raise RuntimeError('file already exists: {}'.format(file))
+    logger.debug('attempting to retrieve file {} from job={} task={}'.format(
+        file, job_id, task_id))
+    stream = batch_client.file.get_from_task(job_id, task_id, file)
+    with fp.open('wb') as f:
+        for data in stream:
+            f.write(data)
+    logger.debug('file {} retrieved from job={} task={} bytes={}'.format(
+        file, job_id, task_id, fp.stat().st_size))
+
+
+def get_file_via_node(batch_client, config, node_id):
+    # type: (batch.BatchServiceClient, dict, str) -> None
+    """Get a file node style
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str nodeid: node id
+    """
+    if node_id is None or len(node_id) == 0:
+        raise ValueError('node id is invalid')
+    pool_id = config['pool_specification']['id']
+    file = raw_input('Enter node-relative file path to retrieve: ')
+    if file == '' or file is None:
+        raise RuntimeError('specified invalid file to retrieve')
+    # check if file exists on disk; a possible race condition here is
+    # understood
+    fp = pathlib.Path(pathlib.Path(file).name)
+    if (fp.exists() and
+            not _confirm_action(config, 'file overwrite of {}'.format(file))):
+        raise RuntimeError('file already exists: {}'.format(file))
+    logger.debug('attempting to retrieve file {} from pool={} node={}'.format(
+        file, pool_id, node_id))
+    stream = batch_client.file.get_from_compute_node(pool_id, node_id, file)
+    with fp.open('wb') as f:
+        for data in stream:
+            f.write(data)
+    logger.debug('file {} retrieved from pool={} node={} bytes={}'.format(
+        file, pool_id, node_id, fp.stat().st_size))
+
+
 def delete_storage_containers(blob_client, queue_client, table_client, config):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
     #        azuretable.TableService, dict) -> None
@@ -2028,6 +2100,10 @@ def main():
         get_remote_login_settings(batch_client, config)
     elif args.action == 'streamfile':
         stream_file_and_wait_for_task(batch_client)
+    elif args.action == 'gettaskfile':
+        get_file_via_task(batch_client, config)
+    elif args.action == 'getnodefile':
+        get_file_via_node(batch_client, config, args.nodeid)
     elif args.action == 'delstorage':
         delete_storage_containers(
             blob_client, queue_client, table_client, config)
@@ -2050,7 +2126,7 @@ def parseargs():
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
         'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
-        'grls, streamfile, clearstorage, delstorage')
+        'grls, streamfile, gettaskfile, getnodefile, clearstorage, delstorage')
     parser.add_argument(
         '-y', '--yes', dest='yes', action='store_true',
         help='assume yes for all yes/no confirmations')
@@ -2066,7 +2142,9 @@ def parseargs():
     parser.add_argument(
         '--jobs',
         help='jobs json config. required for job-related actions')
-    parser.add_argument('--nodeid', help='node id for delnode action')
+    parser.add_argument(
+        '--nodeid',
+        help='node id for delnode or getnodefile action')
     return parser.parse_args()
 
 if __name__ == '__main__':

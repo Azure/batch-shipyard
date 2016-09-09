@@ -17,7 +17,7 @@ python shipyard.py
 The `-h` option will list the available options, which are explained below.
 
 ## Options
-The script requires configuration json files described the
+The script requires configuration json files described by the
 [previous doc](02-batch-shipyard-configuration.md) to be passed in as
 arguments.
 
@@ -26,7 +26,8 @@ Explanation of arguments:
 * `--config path/to/config.json` is required for all actions.
 * `--pool path/to/pool.json` is required for most actions.
 * `--jobs path/to/jobs.json` is required for job-related actions.
-* `--nodeid <compute batch nodeid>` is only required for the `delnode` action.
+* `--nodeid <compute node id>` is only required for the `delnode` and
+`getnodefile` action.
 
 The required positional argument to the script is `action`. Here are a list
 of actions and their intended effect:
@@ -50,6 +51,8 @@ jobs specified in the jobs configuration file.
 * `grls`: get remote login settings as specified in the pool configuration
 file.
 * `streamfile`: stream a file from a live compute node.
+* `gettaskfile`: retrieve a file with job id/task id from a live compute node.
+* `getnodefile`: retrieve a file with pool id/node id from a live compute node.
 * `clearstorage`: clear storage containers as specified in the configuration
 files.
 * `delstorage`: delete storage containers as specified in the configuration
