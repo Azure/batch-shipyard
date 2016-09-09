@@ -1,0 +1,15 @@
+{
+    "job_specifications": [
+        {
+            "id": "caffejob",
+            "tasks": [
+                {
+                    "image": "alfpark/caffe:gpu",
+                    "remove_container_after_exit": true,
+                    "command": "/opt/run_mnist.sh -gpu all",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}

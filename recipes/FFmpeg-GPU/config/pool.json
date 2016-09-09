@@ -1,0 +1,21 @@
+{
+    "pool_specification": {
+        "id": "<your pool id>",
+        "vm_size": "STANDARD_NV6",
+        "vm_count": 1,
+        "publisher": "Canonical",
+        "offer": "UbuntuServer",
+        "sku": "16.04.0-LTS",
+        "ssh_docker_tunnel": {
+            "username": "docker",
+            "generate_tunnel_script": true
+        },
+        "gpu": {
+            "nvidia_driver": {
+                "source": "<URL for nvidia driver for NC VMs>"
+            }
+        },
+        "reboot_on_start_task_failed": true,
+        "block_until_all_global_resources_loaded": true
+    }
+}

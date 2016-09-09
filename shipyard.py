@@ -41,6 +41,7 @@ except ImportError:
     import pathlib2 as pathlib
 import subprocess
 import sys
+import tempfile
 import time
 try:
     import urllib.request as urllibreq
@@ -111,7 +112,6 @@ _VM_TCP_NO_TUNE = (
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
-_TEMP_DIR = pathlib.Path('/tmp')
 
 
 def _setup_logger():
@@ -1420,29 +1420,30 @@ def add_jobs(batch_client, blob_client, config):
             except KeyError:
                 pass
             if env_vars is not None and len(env_vars) > 0:
-                envfiletmp = _TEMP_DIR / '{}{}'.format(task_id, envfile)
                 envfileloc = '{}taskrf-{}/{}{}'.format(
                     config['batch_shipyard']['storage_entity_prefix'],
                     job.id, task_id, envfile)
-                with envfiletmp.open('w', encoding='utf8') as f:
+                f = tempfile.NamedTemporaryFile(
+                    mode='w', encoding='utf-8', delete=False)
+                fname = f.name
+                try:
                     for key in env_vars:
-                        f.write('{}={}{}'.format(
-                            key, env_vars[key], os.linesep))
+                        f.write('{}={}\n'.format(key, env_vars[key]))
                     if infiniband:
-                        f.write('I_MPI_FABRICS=shm:dapl{}'.format(os.linesep))
-                        f.write('I_MPI_DAPL_PROVIDER=ofa-v2-ib0{}'.format(
-                            os.linesep))
-                        f.write('I_MPI_DYNAMIC_CONNECTION=0{}'.format(
-                            os.linesep))
+                        f.write('I_MPI_FABRICS=shm:dapl\n')
+                        f.write('I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
+                        f.write('I_MPI_DYNAMIC_CONNECTION=0\n')
                         # create a manpath entry for potentially buggy
                         # intel mpivars.sh
-                        f.write(
-                            'MANPATH=/usr/share/man:/usr/local/man{}'.format(
-                                os.linesep))
-                # upload env var file if exists
-                sas_urls = upload_resource_files(
-                    blob_client, config, [(envfileloc, str(envfiletmp))])
-                envfiletmp.unlink()
+                        f.write('MANPATH=/usr/share/man:/usr/local/man\n')
+                    # close and upload env var file
+                    f.close()
+                    sas_urls = upload_resource_files(
+                        blob_client, config, [(envfileloc, fname)])
+                finally:
+                    os.unlink(fname)
+                    del f
+                    del fname
                 if len(sas_urls) != 1:
                     raise RuntimeError('unexpected number of sas urls')
             # always add option for envfile

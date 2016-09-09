@@ -1,0 +1,15 @@
+{
+    "job_specifications": [
+        {
+            "id": "tensorflowjob",
+            "tasks": [
+                {
+                    "image": "gcr.io/tensorflow/tensorflow:latest-gpu",
+                    "remove_container_after_exit": true,
+                    "command": "/bin/bash -c \"ln -s /usr/lib/x86_64-linux-gnu/libcudnn.so.4 /usr/lib/x86_64-linux-gnu/libcudnn.so; python -m tensorflow.models.image.mnist.convolutional\"",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}

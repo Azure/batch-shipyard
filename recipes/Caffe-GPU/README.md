@@ -3,6 +3,9 @@ This recipe shows how to run [Caffe](http://caffe.berkeleyvision.org/) on
 GPUs using N-series Azure VM instances in an Azure Batch compute pool.
 
 ## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
 ### Pool Configuration
 **Note: You must be approved for the
 [Azure N-Series Preview](http://gpu.azure.com/) and have escalated a
@@ -23,7 +26,6 @@ are available for N-series VMs.
 available for N-series VMs.
 * `gpu` property should be specified with the following members:
   * `nvidia_driver` property contains the following members:
-    * `version` is the nVidia driver version
     * `source` is a URL for the driver installer .run file
 
 ### Global Configuration

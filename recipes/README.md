@@ -1,6 +1,9 @@
 # Batch Shipyard Recipes
 This directory contains recipes and sample batch-style Docker workloads for
-use with Batch Shipyard on Azure Batch.
+use with Batch Shipyard on Azure Batch. Please note that all recipes have
+sample configurations that you can use to quickly get going. However, as they
+are samples only, you will need to configure them to your liking for actual
+workloads.
 
 **NOTE: Not all recipes are populated.**
 

@@ -84,7 +84,9 @@ By leveraging the Docker ecosystem, tooling and packaging, users can spend
 less time hassling with the underlying infrastructure, VM application state
 consistency, potential dependency interaction side effects and spend more
 time on things that actually matter for their batch workloads: the job and
-task results themselves!
+task results themselves. And with Azure Batch, you can scale your workload up
+and only pay for the compute resources you use. The Batch Shipyard toolkit
+provides a way to combine both with ease!
 
 ## Batch Shipyard Installation
 Continue on to

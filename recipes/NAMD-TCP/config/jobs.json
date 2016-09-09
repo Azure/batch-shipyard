@@ -1,0 +1,20 @@
+{
+    "job_specifications": [
+        {
+            "id": "namdjob",
+            "multi_instance_auto_complete": true,
+            "tasks": [
+                {
+                    "image": "alfpark/namd:2.10-tcp",
+                    "name": "namd",
+                    "remove_container_after_exit": true,
+                    "command": "/sw/run_namd.sh apoa1 100",
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null
+                    }
+                }
+            ]
+        }
+    ]
+}

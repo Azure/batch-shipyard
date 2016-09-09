@@ -9,6 +9,9 @@ Interested in an TCP/IP-enabled version of NAMD for use with Batch Shipyard
 instead? Visit [this recipe](../NAMD-TCP).
 
 ## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `vm_size` must be either `STANDARD_A8` or `STANDARD_A9`

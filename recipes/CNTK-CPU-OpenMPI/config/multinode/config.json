@@ -1,0 +1,26 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "<your storage account>",
+        "storage_entity_prefix": "shipyard"
+    },
+    "global_resources": {
+        "docker_images": [
+            "alfpark/cntk:cpu-openmpi"
+        ],
+        "docker_volumes": {
+            "shared_data_volumes": {
+                "<my volume name>": {
+                    "volume_driver": "azurefile",
+                    "storage_account_settings": "<storage account with azure file share>",
+                    "azure_file_share_name": "<azure file share name>",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/azurefileshare",
+                    "mount_options": [
+                        "filemode=0777",
+                        "dirmode=0777",
+                        "nolock=true"
+                    ]
+                }
+            }
+        }
+    }
+}

@@ -2,7 +2,13 @@
 This recipe shows how to run [CNTK](https://cntk.ai/) on
 GPUs using N-series Azure VM instances in an Azure Batch compute pool.
 
+Please note that CNTK currently uses MPI even for multiple GPUs on a single
+node.
+
 ## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
 ### Pool Configuration
 **Note: You must be approved for the
 [Azure N-Series Preview](http://gpu.azure.com/) and have escalated a
@@ -25,7 +31,6 @@ available for N-series VMs.
 * `max_tasks_per_node` must be set to 1 or omitted
 * `gpu` property should be specified with the following members:
   * `nvidia_driver` property contains the following members:
-    * `version` is the nVidia driver version
     * `source` is a URL for the driver installer .run file
 
 ### Global Configuration

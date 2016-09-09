@@ -11,6 +11,9 @@ Interested in an Infiniband-enabled version of NAMD for use with Batch
 Shipyard? Visit [this recipe](../NAMD-Infiniband-IntelMPI).
 
 ## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`

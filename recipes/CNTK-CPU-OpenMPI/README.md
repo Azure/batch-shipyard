@@ -3,6 +3,9 @@ This recipe shows how to run [CNTK](https://cntk.ai/) on CPUs on one or
 many compute nodes via MPI.
 
 ## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`

@@ -1,0 +1,21 @@
+{
+    "job_specifications": [
+        {
+            "id": "ffmpegjob",
+            "tasks": [
+                {
+                    "image": "alfpark/ffmpeg:3.1.3-nvenc",
+                    "remove_container_after_exit": true,
+                    "resource_files": [
+                        {
+                            "file_path": "samplevideo.mp4",
+                            "blob_source": "<url of video to transcode>"
+                        }
+                    ],
+                    "command": "-i samplevideo.mp4 -c:v hevc_nvenc -preset default output.mp4",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}

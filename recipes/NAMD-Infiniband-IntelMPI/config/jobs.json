@@ -1,0 +1,21 @@
+{
+    "job_specifications": [
+        {
+            "id": "namdjob",
+            "multi_instance_auto_complete": true,
+            "tasks": [
+                {
+                    "image": "<your intel mpi compiled namd image>",
+                    "name": "namd",
+                    "remove_container_after_exit": true,
+                    "command": "<your mpirun command or script>",
+                    "infiniband": true,
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null
+                    }
+                }
+            ]
+        }
+    ]
+}
