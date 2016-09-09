@@ -126,10 +126,11 @@ requires a storage account for storing metadata in order to execute across a
 distributed environment.
 * (required) `storage_entity_prefix` property is used as a generic qualifier
 to prefix storage containers (blob containers, tables, queues) with.
-* (optional) `use_shipyard_docker_image` property is used to direct the tool to
-use the Batch Shipyard docker image instead of installing software manually
-in order to run the backend portion on the compute nodes. This can only
-be set to `false` for Ubuntu 16.04 or higher.
+* (optional) `use_shipyard_docker_image` property is used to direct the toolkit
+to use the Batch Shipyard docker image instead of installing software manually
+in order to run the backend portion on the compute nodes. It is strongly
+recommended to omit this or to set to `true`. This can only be set to `false`
+for Ubuntu 16.04 or higher. This is defaulted to `true`.
 
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.
@@ -236,7 +237,6 @@ The pool schema is as follows:
         },
         "gpu": {
             "nvidia_driver": {
-                "version": "361.69",
                 "source": "https://some.url"
             }
         },
@@ -279,8 +279,6 @@ script for use with the compute nodes in the pool.
 * (required for N-Series VM instances) `gpu` property defines additional
 information for nVidia GPU-enabled VMs:
   * `nvidia_driver` property contains the following required members:
-    * `version` is the version number of the driver. This can be determined
-      by the filename or from nVidia's website.
     * `source` is the source url to download the driver.
 * (optional) `additional_node_prep_commands` is an array of additional commands
 to execute on the compute node host as part of node preparation. This can

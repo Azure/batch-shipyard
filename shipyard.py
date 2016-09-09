@@ -557,9 +557,8 @@ def add_pool(batch_client, blob_client, config):
             vm_size.lower().startswith('standard_nv')):
         gpupkg = setup_nvidia_docker_package(blob_client, config)
         _rflist.append((str(gpupkg.name), str(gpupkg)))
-        gpu_env = '{}:{}:{}:{}'.format(
+        gpu_env = '{}:{}:{}'.format(
             vm_size.lower().startswith('standard_nv'),
-            config['pool_specification']['gpu']['nvidia_driver']['version'],
             _NVIDIA_DRIVER,
             gpupkg.name)
     else:

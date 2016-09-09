@@ -48,7 +48,7 @@ while getopts "h?ab:dg:no:p:r:s:t:" opt; do
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
-            echo "-g [nv-series:driver version:driver file:nvidia docker pkg] gpu support"
+            echo "-g [nv-series::driver file:nvidia docker pkg] gpu support"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -188,9 +188,11 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         apt-get update
         # install required software first
         if [ $offer == "debian" ]; then
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" apt-transport-https ca-certificates
+            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+                apt-transport-https ca-certificates
         else
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" linux-image-extra-$(uname -r) linux-image-extra-virtual
+            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+                linux-image-extra-$(uname -r) linux-image-extra-virtual
         fi
         apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
         echo deb https://apt.dockerproject.org/repo $name main > /etc/apt/sources.list.d/docker.list
@@ -203,7 +205,8 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     grep '^DOCKER_OPTS=' /etc/default/docker
     if [ $? -ne 0 ]; then
         # install docker engine
-        apt-get install -y -q -o Dpkg::Options::="--force-confnew" docker-engine
+        apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+            docker-engine
         set -e
         $srvstop
         set +e
@@ -244,11 +247,11 @@ alias nouveau off
 alias lbm-nouveau off
 EOF
         fi
-        nvdriverver=${GPUARGS[1]}
-        nvdriver=${GPUARGS[2]}
-        nvdocker=${GPUARGS[3]}
-        # get development essentials
-        apt-get install -y -q build-essential xserver-xorg-dev nvidia-modprobe
+        nvdriver=${GPUARGS[1]}
+        nvdocker=${GPUARGS[2]}
+        # get development essentials for nvidia driver
+        apt-get install -y -q --no-install-recommends \
+            build-essential xserver-xorg-dev nvidia-modprobe
         # install driver
         ./$nvdriver -s
         # install nvidia-docker
@@ -257,6 +260,9 @@ EOF
         systemctl enable nvidia-docker.service
         systemctl start nvidia-docker.service
         systemctl status nvidia-docker.service
+        # get driver version
+        nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
+        echo nvidia driver version $nvdriverver detected
         # create the docker volume now to avoid volume driver conflicts for
         # tasks. run this in a loop as it can fail if triggered too quickly
         # after start
@@ -283,7 +289,8 @@ EOF
     fi
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
-        apt-get install -y -q python3-pip
+        apt-get install -y -q --no-install-recommends \
+            build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir azure-storage==0.33.0
         # backfill node prep start
         if [ ! -z ${CASCADE_TIMING+x} ]; then
@@ -291,7 +298,7 @@ EOF
         fi
         # install cascade dependencies
         if [ ! -z $p2p ]; then
-            apt-get install -y -q python3-libtorrent pigz
+            apt-get install -y -q --no-install-recommends python3-libtorrent pigz
         fi
         # install private registry if required
         if [ ! -z $privatereg ]; then
@@ -433,7 +440,7 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
     docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
 fi
 
-# touch file to prevent subsequent perf recording if rebooted
+# touch node prep finished file to preserve idempotency
 touch $nodeprepfinished
 
 # execute cascade

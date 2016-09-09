@@ -9,6 +9,10 @@
 - Updated [configuration docs](docs/02-batch-shipyard-configuration.md) to
 detail which properties are required vs. those that are optional
 
+### Removed
+- `gpu`:`nvidia_driver`:`version` property removed from pool configuration as
+it is now automatically detected
+
 ## [0.2.0] - 2016-09-08
 ### Added
 - Transparent GPU support for Azure N-Series VMs

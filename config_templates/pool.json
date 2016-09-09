@@ -17,7 +17,6 @@
         },
         "gpu": {
             "nvidia_driver": {
-                "version": "361.69",
                 "source": "https://some.url"
             }
         },
