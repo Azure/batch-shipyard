@@ -6,8 +6,7 @@
                 {
                     "image": "alfpark/cntk:gpu-openmpi-mnist-cifar",
                     "remove_container_after_exit": true,
-                    "command": "/bin/bash -c \"cp -r /cntk/Examples/Image/MNIST/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/02_Convolution_ndl_deprecated.cntk RootDir=.\""
-                    },
+                    "command": "/bin/bash -c \"cp -r /cntk/Examples/Image/MNIST/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/02_Convolution_ndl_deprecated.cntk RootDir=.\"",
                     "gpu": true
                 }
             ]

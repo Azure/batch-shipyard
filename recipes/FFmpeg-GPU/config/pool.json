@@ -12,7 +12,7 @@
         },
         "gpu": {
             "nvidia_driver": {
-                "source": "<URL for nvidia driver for NC VMs>"
+                "source": "<URL for nvidia driver for STANDARD_NV VMs>"
             }
         },
         "reboot_on_start_task_failed": true,
