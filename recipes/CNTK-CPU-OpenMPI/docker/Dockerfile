@@ -163,4 +163,4 @@ RUN cd /cntk/Examples/Image/Miscellaneous/CIFAR-10 && \
 
 # set ssh command
 EXPOSE 23
-CMD ["/usr/sbin/sshd", "-D"]
+CMD ["/usr/sbin/sshd", "-D", "-p", "23"]

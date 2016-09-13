@@ -137,7 +137,7 @@ or a wrapper script that launches `mpirun`.
 ### Cleanup
 As the Docker image is run in detached mode with `docker run`, the container
 will still be running after the application command completes. Currently,
-there is no "clean" way to do perform cleanup from the Azure Batch API.
+there is no "clean" way to perform cleanup from the Azure Batch API.
 However, by using the job auto-complete and job release facilities provided
 by Azure Batch, Batch Shipyard can automatically stop and remove the Docker
 container. By default, multi-instance tasks are now cleaned up using this

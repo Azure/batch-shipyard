@@ -1,7 +1,10 @@
 # Batch Shipyard Recipes
 This directory contains recipes and sample batch-style Docker workloads for
 use with Batch Shipyard on Azure Batch. Please note that all recipes have
-sample configurations that you can use to quickly get going, however, some
+sample configurations that you can use to quickly get going, however, the
+credential configuration file is not provided as these need to be personalized
+for each user with the appropriate credentials
+(please use [this template](../config_templates/credentials.json)), and some
 of the config files cannot be used as-is as they need input such as
 the pool `id` in `pool_specification`. Please review each config file you
 are planning on using and modify accordingly. As the config samples are bare
@@ -29,8 +32,10 @@ This CNTK-GPU-OpenMPI recipe contains information on how to Dockerize
 execution across multiple compute nodes and multiple GPUs with multi-instance
 tasks.
 
-### TensorFlow-Distributed
-TBC.
+### [TensorFlow-Distributed](./TensorFlow-Distributed)
+This TensorFlow-Distributed recipe contains information on how to Dockerize
+[TensorFlow](https://www.tensorflow.org/) on GPUs for use with N-series Azure
+VMs or across multiple CPU nodes.
 
 ### [TensorFlow-GPU](./TensorFlow-GPU)
 This TensorFlow-GPU recipe contains information on how to Dockerize
@@ -51,7 +56,16 @@ This NAMD-TCP recipe contains information on how to Dockerize distributed
 TBC.
 [OpenFoam](http://www.openfoam.com/)
 
-## Audio/Video Processing
+### OpenFOAM-TCP-OpenMPI
+TBC.
+[OpenFoam](http://www.openfoam.com/)
+
+## Data Science
+### R
+TBC.
+[Microsoft R Open](https://mran.microsoft.com/open/)
+
+## Video Processing
 ### [FFmpeg-GPU](./FFmpeg-GPU)
 This recipe contains information on how to use Dockerized
 [FFmpeg](https://ffmpeg.org/) on GPUs for use with the N-series Azure VMs.

@@ -5,10 +5,13 @@
 - Ability to retrieve files from live compute nodes in addition to streaming
 - Added .gitattributes to designate Unix line-endings for text files
 - Sample configuration files for each recipe
+- Add TensorFlow-Distributed recipe
 
 ### Changed
 - Updated [configuration docs](docs/02-batch-shipyard-configuration.md) to
 detail which properties are required vs. those that are optional
+- SSH tunnel user is now added with a default expiry time of 7 days which can
+be modified through the pool configuration file
 
 ### Fixed
 - Non-shipyard docker image node prep with new azure-storage package
@@ -16,7 +19,7 @@ detail which properties are required vs. those that are optional
 
 ### Removed
 - `gpu`:`nvidia_driver`:`version` property removed from pool configuration
-and is no longer required as it the version is now automatically detected
+and is no longer required as the version is now automatically detected
 
 ## [0.2.0] - 2016-09-08
 ### Added

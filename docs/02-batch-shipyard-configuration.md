@@ -232,6 +232,7 @@ The pool schema is as follows:
         "block_until_all_global_resources_loaded": true,
         "ssh_docker_tunnel": {
             "username": "docker",
+            "expiry_days": 7,
             "ssh_public_key": null,
             "generate_tunnel_script": true
         },
@@ -272,6 +273,8 @@ to `true`.
 accomodate SSH tunneling to the Docker Host on compute nodes. If this property
 is absent, then SSH tunnel creation is skipped.
   * `username` is the user to create on the compute nodes.
+  * `expiry_days` is the number of days from now for the account on the compute
+    nodes to expire. The default is 7 days from invocation time.
   * `ssh_public_key` is the path to an existing ssh public key to use. If not
     specified, a public/private key pair will be automatically generated.
   * `generate_tunnel_script` property directs script to generate an SSH tunnel

@@ -531,12 +531,15 @@ class DockerSaveThread(threading.Thread):
                 diff, self.resource))
         else:
             # get docker image size
-            output = subprocess.check_output(
-                ('docker images {} --format \"{{{{.Size}}}}\"').format(
-                    image), shell=True)
-            size = output.decode('utf-8')
-            _record_perf('pull-end', 'img={},diff={},size={}'.format(
-                image, diff, size))
+            try:
+                output = subprocess.check_output(
+                    'docker images {}'.format(image), shell=True)
+                size = ' '.join(output.decode('utf-8').split()[-2:])
+                _record_perf('pull-end', 'img={},diff={},size={}'.format(
+                    image, diff, size))
+            except subprocess.CalledProcessError as ex:
+                logger.exception(ex)
+                _record_perf('pull-end', 'img={},diff={}'.format(image, diff))
 
 
 async def _direct_download_resources_async(

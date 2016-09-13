@@ -322,7 +322,7 @@ def upload_resource_files(blob_client, config, files):
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
                 permission=azureblob.BlobPermissions.READ,
                 expiry=datetime.datetime.utcnow() +
-                datetime.timedelta(hours=2)
+                datetime.timedelta(days=3)
             )
         )
     return sas_urls
@@ -732,7 +732,7 @@ def add_ssh_tunnel_user(batch_client, config, nodes=None):
             nodes = batch_client.compute_node.list(pool_id)
         for node in nodes:
             add_admin_user_to_compute_node(
-                batch_client, pool_id, node, docker_user, ssh_pub_key)
+                batch_client, config, node, docker_user, ssh_pub_key)
         # generate tunnel script if requested
         if gen_tunnel_script:
             ssh_args = ['ssh']
@@ -845,20 +845,28 @@ def generate_ssh_keypair():
 
 
 def add_admin_user_to_compute_node(
-        batch_client, pool_id, node, username, ssh_public_key):
-    # type: (batch.BatchServiceClient, str, batchmodels.ComputeNode, str,
+        batch_client, config, node, username, ssh_public_key):
+    # type: (batch.BatchServiceClient, dict, str, batchmodels.ComputeNode,
     #        str) -> None
-    """Adds an administrative user to the Batch Compute Node
+    """Adds an administrative user to the Batch Compute Node with a default
+    expiry time of 7 days if not specified.
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param str pool_id: The pool id containing the node.
+    :param dict config: configuration dict
     :param node: The compute node.
     :type node: `batchserviceclient.models.ComputeNode`
     :param str username: user name
     :param str ssh_public_key: ssh rsa public key
     """
-    logger.info('adding user {} to node {} in pool {}'.format(
-        username, node.id, pool_id))
+    pool_id = config['pool_specification']['id']
+    expiry = datetime.datetime.utcnow()
+    try:
+        td = config['pool_specification']['ssh_docker_tunnel']['expiry_days']
+        expiry += datetime.timedelta(days=td)
+    except KeyError:
+        expiry += datetime.timedelta(days=7)
+    logger.info('adding user {} to node {} in pool {}, expiry={}'.format(
+        username, node.id, pool_id, expiry))
     try:
         batch_client.compute_node.add_user(
             pool_id,
@@ -866,6 +874,7 @@ def add_admin_user_to_compute_node(
             batchmodels.ComputeNodeUser(
                 username,
                 is_admin=True,
+                expiry_time=expiry,
                 password=None,
                 ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
             )

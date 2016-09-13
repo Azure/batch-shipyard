@@ -13,7 +13,7 @@ The pool configuration should enable the following properties:
 
 ### Global Configuration
 The global configuration should set the following properties:
-* `docker_images` array must have a reference to a valid Caffe CPU-enabled
+* `docker_images` array must have a reference to a valid CNTK CPU-enabled
 Docker image.
 [alfpark/cntk:cpu-openmpi-mnist-cifar](https://hub.docker.com/r/alfpark/cntk/)
 can be used for this recipe which contains reference data for MNIST and CIFAR
