@@ -32,7 +32,7 @@ echo "ps hosts: $ps_hosts"
 echo "worker hosts: $worker_hosts"
 
 # master node acts as parameter server
-if [ ! -z $AZ_BATCH_IS_CURRENT_NODE_MASTER ]; then
+if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     # master node
     ti=${task_index[$master]}
     echo "master node: $ipaddress task index: $ti"

@@ -47,6 +47,7 @@ try:
     import urllib.request as urllibreq
 except ImportError:
     import urllib as urllibreq
+import uuid
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batch
@@ -97,6 +98,7 @@ _NVIDIA_DOCKER = {
 _NVIDIA_DRIVER = 'nvidia-driver.run'
 _MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
+_GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
 _JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade/cascade.py')
 _SETUP_PR_FILE = (
@@ -400,7 +402,7 @@ def setup_azurefile_volume_driver(blob_client, config):
             sa = _sa
             sakey = config['credentials']['storage'][ssel]['account_key']
             saep = config['credentials']['storage'][ssel]['endpoint']
-        else:
+        elif conf['volume_driver'] != 'glusterfs':
             raise NotImplementedError(
                 'Unsupported volume driver: {}'.format(conf['volume_driver']))
     if sa is None or sakey is None:
@@ -421,6 +423,8 @@ def setup_azurefile_volume_driver(blob_client, config):
             conf = config[
                 'global_resources']['docker_volumes'][
                     'shared_data_volumes'][svkey]
+            if conf['volume_driver'] == 'glusterfs':
+                continue
             opts = [
                 '-o share={}'.format(conf['azure_file_share_name'])
             ]
@@ -519,15 +523,17 @@ def add_pool(batch_client, blob_client, config):
     if block_for_gr:
         block_for_gr = ','.join(
             [r for r in config['global_resources']['docker_images']])
-    # check volume mounts for azurefile
+    # check shared data volume mounts
     azurefile_vd = False
+    gluster = False
     try:
         shared_data_volumes = config[
             'global_resources']['docker_volumes']['shared_data_volumes']
         for key in shared_data_volumes:
             if shared_data_volumes[key]['volume_driver'] == 'azurefile':
                 azurefile_vd = True
-                break
+            elif shared_data_volumes[key]['volume_driver'] == 'glusterfs':
+                gluster = True
     except KeyError:
         pass
     # prefix settings
@@ -578,7 +584,7 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -587,6 +593,7 @@ def add_pool(batch_client, blob_client, config):
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
             ' -d' if use_shipyard_docker_image else '',
+            ' -f' if gluster else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
             ' -p {}'.format(prefix) if prefix else '',
@@ -688,10 +695,89 @@ def add_pool(batch_client, blob_client, config):
         reboot_on_failed = False
     nodes = _wait_for_pool_ready(
         batch_client, node_state, pool.id, reboot_on_failed)
+    # set up gluster if specified
+    if gluster:
+        _setup_glusterfs(batch_client, blob_client, config, nodes)
     # create admin user on each node if requested
     add_ssh_tunnel_user(batch_client, config, nodes)
     # log remote login settings
     get_remote_login_settings(batch_client, config, nodes)
+
+
+def _setup_glusterfs(batch_client, blob_client, config, nodes):
+    # type: (batch.BatchServiceClient, azureblob.BlockBlobService, dict,
+    #        List[batchmodels.ComputeNode]) -> None
+    """Setup glusterfs via multi-instance task
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
+    pool_id = config['pool_specification']['id']
+    job_id = 'shipyard-glusterfs-{}'.format(uuid.uuid4())
+    job = batchmodels.JobAddParameter(
+        id=job_id,
+        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+    )
+    batch_client.job.add(job)
+    if config['pool_specification']['offer'].lower() == 'ubuntuserver':
+        tempdisk = '/mnt'
+    else:
+        tempdisk = '/mnt/resource'
+    # upload script
+    sas_urls = upload_resource_files(blob_client, config, [_GLUSTERPREP_FILE])
+    batchtask = batchmodels.TaskAddParameter(
+        id='gluster-setup',
+        multi_instance_settings=batchmodels.MultiInstanceSettings(
+            number_of_instances=config['pool_specification']['vm_count'],
+            coordination_command_line=_wrap_commands_in_shell([
+                '$AZ_BATCH_TASK_DIR/{} {}'.format(
+                    _GLUSTERPREP_FILE[0], tempdisk),
+            ]),
+            common_resource_files=[
+                batchmodels.ResourceFile(
+                    file_path=_GLUSTERPREP_FILE[0],
+                    blob_source=sas_urls[_GLUSTERPREP_FILE[0]],
+                    file_mode='0755'),
+            ],
+        ),
+        command_line=(
+            '/bin/bash -c "[[ -f $AZ_BATCH_TASK_DIR/'
+            '.glusterfs_success ]] || exit 1"'),
+        run_elevated=True,
+    )
+    batch_client.task.add(job_id=job_id, task=batchtask)
+    logger.debug(
+        'waiting for glusterfs setup task {} in job {} to complete'.format(
+            batchtask.id, job_id))
+    # wait for gluster fs setup task to complete
+    while True:
+        batchtask = batch_client.task.get(job_id, batchtask.id)
+        if batchtask.state == batchmodels.TaskState.completed:
+            break
+        time.sleep(1)
+    # ensure all nodes have glusterfs success file
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool_id)
+    success = True
+    for node in nodes:
+        try:
+            batch_client.file.get_node_file_properties_from_compute_node(
+                pool_id, node.id,
+                ('workitems/{}/job-1/gluster-setup/wd/'
+                 '.glusterfs_success').format(job_id))
+        except batchmodels.BatchErrorException as ex:
+            logger.exception(ex)
+            success = False
+            break
+    # delete job
+    batch_client.job.delete(job_id)
+    if not success:
+        raise RuntimeError('glusterfs setup failed')
+    logger.info(
+        'glusterfs setup task {} in job {} completed'.format(
+            batchtask.id, job_id))
 
 
 def add_ssh_tunnel_user(batch_client, config, nodes=None):
@@ -1347,12 +1433,22 @@ def add_jobs(batch_client, blob_client, config):
             else:
                 if (shared_data_volumes is not None and
                         len(shared_data_volumes) > 0):
+                    # get pool spec for gluster mount paths
+                    if (config['pool_specification']['offer'].lower() ==
+                            'ubuntuserver'):
+                        gfspath = '/mnt/gluster/gv0'
+                    else:
+                        gfspath = '/mnt/resource/gluster/gv0'
                     for key in shared_data_volumes:
                         dvspec = config[
                             'global_resources']['docker_volumes'][
                                 'shared_data_volumes'][key]
-                        run_opts.append('-v {}:{}'.format(
-                            key, dvspec['container_path']))
+                        if dvspec['volume_driver'] == 'glusterfs':
+                            run_opts.append('-v {}:{}'.format(
+                                gfspath, dvspec['container_path']))
+                        else:
+                            run_opts.append('-v {}:{}'.format(
+                                key, dvspec['container_path']))
             # get command
             try:
                 command = task['command']
@@ -1427,8 +1523,9 @@ def add_jobs(batch_client, blob_client, config):
                 else:
                     env_vars = merge_dict(env_vars, task_ev)
             except KeyError:
-                pass
-            if env_vars is not None and len(env_vars) > 0:
+                if infiniband:
+                    env_vars = []
+            if infiniband or (env_vars is not None and len(env_vars) > 0):
                 envfileloc = '{}taskrf-{}/{}{}'.format(
                     config['batch_shipyard']['storage_entity_prefix'],
                     job.id, task_id, envfile)
@@ -1574,13 +1671,14 @@ def add_jobs(batch_client, blob_client, config):
             )
             if mis is not None:
                 batchtask.multi_instance_settings = mis
-            batchtask.resource_files.append(
-                batchmodels.ResourceFile(
-                    file_path=str(envfile),
-                    blob_source=next(iter(sas_urls.values())),
-                    file_mode='0640',
+            if sas_urls is not None:
+                batchtask.resource_files.append(
+                    batchmodels.ResourceFile(
+                        file_path=str(envfile),
+                        blob_source=next(iter(sas_urls.values())),
+                        file_mode='0640',
+                    )
                 )
-            )
             # add additional resource files
             try:
                 rfs = task['resource_files']
@@ -1691,7 +1789,8 @@ def clean_mi_jobs(batch_client, config):
                      'for job {} to complete').format(batchtask.id, job_id))
                 # wait for cleanup task to complete before adding another
                 while True:
-                    batchtask = batch_client.task.get(cleanup_job_id, task.id)
+                    batchtask = batch_client.task.get(
+                        cleanup_job_id, batchtask.id)
                     if batchtask.state == batchmodels.TaskState.completed:
                         break
                     time.sleep(1)

@@ -72,7 +72,7 @@ would be:
   * **NOTE:** tasks that span multiple compute nodes
     (i.e., MultiNode+SingleGPU or MultiNode+MultiGPU) will need their output
     stored on a shared file system, otherwise CNTK will fail during test
-    as all of the output is written by rank 0 to the specified output
+    as individual outputs are written by each rank to the specified output
     directory only on that compute node. To override the output directory for
     the example above, add `OutputDir=/some/path` to a shared file system
     location such as Azure File Docker Volume, NFS, GlusterFS, etc. Batch

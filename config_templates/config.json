@@ -47,12 +47,16 @@
                     "volume_driver": "azurefile",
                     "storage_account_settings": "",
                     "azure_file_share_name": "",
-                    "container_path": "",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/azfile",
                     "mount_options": [
                         "filemode=0777",
                         "dirmode=0777",
                         "nolock=true"
                     ]
+                },
+                "glustervol": {
+                    "volume_driver": "glusterfs",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
                 }
             }
         }

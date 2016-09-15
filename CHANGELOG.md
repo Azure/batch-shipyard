@@ -2,14 +2,15 @@
 
 ## [Unreleased]
 ### Added
+- Automated GlusterFS support
 - Ability to retrieve files from live compute nodes in addition to streaming
 - Added .gitattributes to designate Unix line-endings for text files
 - Sample configuration files for each recipe
 - Add TensorFlow-Distributed recipe
 
 ### Changed
-- Updated [configuration docs](docs/02-batch-shipyard-configuration.md) to
-detail which properties are required vs. those that are optional
+- Updated configuration docs to detail which properties are required vs. those
+that are optional
 - SSH tunnel user is now added with a default expiry time of 7 days which can
 be modified through the pool configuration file
 

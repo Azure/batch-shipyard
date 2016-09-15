@@ -32,6 +32,7 @@ install_azurefile_docker_volume_driver() {
 azurefile=0
 block=
 cascadecontainer=0
+gluster=0
 gpu=
 networkopt=0
 offer=
@@ -40,7 +41,7 @@ prefix=
 privatereg=
 sku=
 
-while getopts "h?ab:dg:no:p:r:s:t:" opt; do
+while getopts "h?ab:dfg:no:p:r:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -48,6 +49,7 @@ while getopts "h?ab:dg:no:p:r:s:t:" opt; do
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
+            echo "-f set up glusterfs cluster"
             echo "-g [nv-series::driver file:nvidia docker pkg] gpu support"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
@@ -66,6 +68,9 @@ while getopts "h?ab:dg:no:p:r:s:t:" opt; do
             ;;
         d)
             cascadecontainer=1
+            ;;
+        f)
+            gluster=1
             ;;
         g)
             gpu=$OPTARG
@@ -287,6 +292,11 @@ EOF
         done
         set -e
     fi
+    # set up glusterfs
+    if [ $gluster -eq 1 ]; then
+        echo "gluster setup not implemented yet"
+        exit 1
+    fi
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         apt-get install -y -q --no-install-recommends \
@@ -327,8 +337,10 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     if [[ $sku == 7.* ]]; then
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
+            gfsenable="systemctl enable glusterd"
         else
             srvenable="chkconfig docker on"
+            gfsenable="chkconfig glusterd on"
         fi
     else
         echo "unsupported sku: $sku for offer: $offer"
@@ -371,6 +383,16 @@ EOF
         # setup and start azure file docker volume driver
         if [ $azurefile -eq 1 ]; then
             install_azurefile_docker_volume_driver $offer $sku
+        fi
+        # set up glusterfs
+        if [ $gluster -eq 1 ]; then
+            yum install -y epel-release centos-release-gluster38
+            sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+            yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
+            $gfsenable
+            systemctl start glusterd
+            # create brick directory
+            mkdir -p /mnt/resource/gluster
         fi
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
@@ -428,6 +450,11 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # setup and start azure file docker volume driver
         if [ $azurefile -eq 1 ]; then
             install_azurefile_docker_volume_driver $offer $sku
+        fi
+        # set up glusterfs
+        if [ $gluster -eq 1 ]; then
+            echo "gluster setup not implemented yet"
+            exit 1
         fi
     fi
 else

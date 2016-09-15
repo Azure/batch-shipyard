@@ -19,10 +19,12 @@ a large number of VMs via private peer-to-peer distribution of Docker images
 among the compute nodes
 * Automated Docker Private Registry instance creation on compute nodes with
 Docker images backed to Azure Storage if specified
-* Automated
-[Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
-installation and share setup for SMB/CIFS backed to Azure Storage if
-specified
+* Automatic shared data volume support for:
+  * [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
+    installation and share setup for SMB/CIFS backed to Azure Storage if
+    specified
+  * [GlusterFS](https://www.gluster.org/) distributed network file system
+    installation and setup if specified
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
@@ -70,7 +72,7 @@ Batch Shipyard is currently only compatible with
 ## Documentation
 Please refer to
 [this guide](https://github.com/Azure/batch-shipyard/blob/master/docs)
-for a complete primer on concepts and usage.
+for a complete primer on concepts, usage and a quickstart guide.
 
 Please visit the
 [recipes directory](https://github.com/Azure/batch-shipyard/blob/master/recipes)

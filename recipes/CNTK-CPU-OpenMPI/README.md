@@ -48,7 +48,7 @@ to run would be:
 `"mpirun --allow-run-as-root --host $AZ_BATCH_HOST_LIST --mca btl_tcp_if_exclude docker0 /bin/bash -c \"cp -r /cntk/Examples/Other/Simple2d/* . && /cntk/build/cpu/release/bin/cntk configFile=Config/Multigpu.cntk RootDir=. parallelTrain=true\""`
   * **NOTE:** tasks that span multiple compute nodes will need their output
     stored on a shared file system, otherwise CNTK will fail during test
-    as all of the output is written by rank 0 to the specified output
+    as individual outputs are written by each rank to the specified output
     directory only on that compute node. To override the output directory for
     the example above, add `OutputDir=/some/path` to a shared file system
     location such as Azure File Docker Volume, NFS, GlusterFS, etc. Batch

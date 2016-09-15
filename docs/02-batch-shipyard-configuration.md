@@ -106,12 +106,16 @@ The global config schema is as follows:
                     "volume_driver": "azurefile",
                     "storage_account_settings": "mystorageaccount",
                     "azure_file_share_name": "shipyardshared",
-                    "container_path": "/shipyardvol",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/azfile",
                     "mount_options": [
                         "filemode=0777",
                         "dirmode=0777",
                         "nolock=true"
                     ]
+                },
+                "glustervol": {
+                    "volume_driver": "glusterfs",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
                 }
             }
         }
@@ -190,10 +194,13 @@ image. If `host_path` is set, then the path on the host is mounted in the
 container at the path specified with `container_path`.
 
 `shared_data_volumes` is an optional property for initializing persistent
-shared storage volumes. In this example, `shipyardvol` is the alias of this
-volume:
+shared storage volumes. In the first shared volume, `shipyardvol` is the alias
+of this volume:
 * `volume_driver` property specifies the Docker Volume Driver to use.
-Currently Batch Shipyard only supports the `volume_driver` as `azurefile`.
+Currently Batch Shipyard only supports the `volume_driver` as `azurefile` or
+`glusterfs`. Note that `glusterfs` is not a true Docker Volume Driver. For
+this volume (`shipyardvol`), as this is an Azure File shared volume, the
+`volume_driver` should be set as `azurefile`.
 * `storage_account_settings` is a link to the alias of the storage account
 specified that holds this Azure File Share.
 * `azure_file_share_name` is the name of the share name on Azure Files. Note
@@ -206,6 +213,15 @@ options are documented
 recommended to use `0777` for both `filemode` and `dirmode` as the `uid` and
 `gid` cannot be reliably determined before the compute pool is allocated and
 this volume will be mounted as the root user.
+
+The second shared volue, `glustervol`, is a
+[GlusterFS](https://www.gluster.org/) network file system. Please note that
+GlusterFS volumes are located on the VM's temporary local disk space which is
+a shared resource. Sizes of the local temp disk for each VM size can be found
+[here](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/).
+These volumes have the following properties:
+* `volume_driver` property should be set as `glusterfs`.
+* `container_path` is the path in the container to mount.
 
 Note that all `docker_volumes` can be omitted completely along with one
 or all of `data_volumes` and `shared_data_volumes` if you do not require this
