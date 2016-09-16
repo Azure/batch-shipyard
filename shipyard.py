@@ -2175,6 +2175,13 @@ def main():
     if args.config is None:
         raise ValueError('config json not specified')
 
+    if args.configdir is not None:
+        if args.credentials is None:
+            args.credentials = str(pathlib.Path(
+                args.configdir, 'credentials.json'))
+        if args.config is None:
+            args.config = str(pathlib.Path(args.configdir, 'config.json'))
+
     with open(args.credentials, 'r') as f:
         config = json.load(f)
     with open(args.config, 'r') as f:
@@ -2189,6 +2196,8 @@ def main():
             'id': args.poolid
         }
     if args.action in ('addjobs', 'cleanmijobs', 'deljobs', 'termjobs'):
+        if args.configdir is not None and args.jobs is None:
+                args.jobs = str(pathlib.Path(args.configdir, 'jobs.json'))
         try:
             with open(args.jobs, 'r') as f:
                 config = merge_dict(config, json.load(f))
@@ -2283,6 +2292,12 @@ def parseargs():
     parser.add_argument(
         '--config',
         help='global json config for option. required for all actions')
+    parser.add_argument(
+        '--configdir',
+        help='configdir where all config files can be found. json config '
+        'file must be named exactly the same as the switch option, e.g., '
+        'pool.json for --pool. individually specified configuration options '
+        'take precedence over this option.')
     parser.add_argument(
         '--pool',
         help='pool json config. required for most actions')

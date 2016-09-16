@@ -22,13 +22,19 @@ The script requires configuration json files described by the
 arguments.
 
 Explanation of arguments:
-* `--credentials path/to/credentials.json` is required for all actions.
-* `--config path/to/config.json` is required for all actions.
+* `--configdir path` can be used instead of the individual config switches
+below if all configuration json files are in one directory and named after
+their switch. For example, if you have a directory named `config` and under
+that directory you have the files `credentials.json`, `config.json`,
+`pool.json` and `jobs.json`, then you can use this argument instead of the
+following:
+  * `--credentials path/to/credentials.json` is required for all actions.
+  * `--config path/to/config.json` is required for all actions.
+  * `--pool path/to/pool.json` is required for most actions.
+  * `--jobs path/to/jobs.json` is required for job-related actions.
 * `--filespec jobid:taskid:filename` is to specify the file location to
 stream or retrieve for the actions `streamfile` or `gettaskfile` respectively.
 If this argument is not supplied, the script will prompt for input.
-* `--pool path/to/pool.json` is required for most actions.
-* `--jobs path/to/jobs.json` is required for job-related actions.
 * `--nodeid <compute node id>` is only required for the `delnode` and
 `getnodefile` action.
 * `-v` is for verbose output
@@ -47,7 +53,9 @@ container via `docker run`) is left running even after the multi-instance
 task completes (i.e., application command `docker exec`), subsequent tasks
 on the same compute nodes may fail on the coordination command due to
 resources in use. This will clean up any multi-instance tasks detected within
-jobs specified in the jobs configuration file.
+jobs specified in the jobs configuration file. Note that you can enable
+job auto-completion for these tasks via configuration instead of manually
+cleaning up these types of jobs.
 * `termjobs`: terminate jobs as specified in the jobs configuration file.
 * `deljobs`: delete jobs as specified in the jobs configuration file.
 * `delcleanmijobs`: delete jobs used to clean up multi-instance jobs.
@@ -66,18 +74,31 @@ files.
 ## Example Invocations
 ```
 python shipyard.py --credentials credentials.json --config config.json --pool pool.json addpool
+
+... or if all config files are in the current working directory named as above ...
+
+python shipyard.py --configdir . addpool
 ```
 The above invocation will add the pool specified to the Batch account.
 
 ```
 python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json addjobs
+
+... or if all config files are in the current working directory named as above ...
+
+python shipyard.py --configdir . addjobs
 ```
 The above invocation will add the jobs specified to the designated pool.
 
 ```
-python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json cleanmijobs
+python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json streamfile
+
+... or if all config files are in the current working directory named as above ...
+
+python shipyard.py --configdir . streamfile
 ```
-The above invocation will clean up all multi-instance tasks in all of the jobs specified.
+The above invocation will stream a file from a live compute node with
+interactive prompts from the script.
 
 ## Multi-Instance Tasks
 For more information regarding Multi-Instance Tasks and/or MPI jobs using
