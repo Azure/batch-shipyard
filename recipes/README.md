@@ -14,10 +14,6 @@ workloads.
 **NOTE: Not all recipes are populated.**
 
 ## Deep Learning
-### [Caffe-GPU](./Caffe-GPU)
-This Caffe-GPU recipe contains information on how to Dockerize
-[Caffe](http://caffe.berkeleyvision.org/) GPU for use with N-Series Azure VMs.
-
 ### CNTK-CPU-Infiniband-IntelMPI
 TBC.
 
@@ -31,6 +27,16 @@ This CNTK-GPU-OpenMPI recipe contains information on how to Dockerize
 [CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs, including
 execution across multiple compute nodes and multiple GPUs with multi-instance
 tasks.
+
+### Caffe-CPU
+TBC.
+
+### [Caffe-GPU](./Caffe-GPU)
+This Caffe-GPU recipe contains information on how to Dockerize
+[Caffe](http://caffe.berkeleyvision.org/) GPU for use with N-Series Azure VMs.
+
+### TensorFlow-CPU
+TBC.
 
 ### [TensorFlow-Distributed](./TensorFlow-Distributed)
 This TensorFlow-Distributed recipe contains information on how to Dockerize

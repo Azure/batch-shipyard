@@ -1864,15 +1864,26 @@ def get_remote_login_settings(batch_client, config, nodes=None):
         logger.info('node {}: {}'.format(node.id, rls))
 
 
-def stream_file_and_wait_for_task(batch_client):
-    # type: (batch.BatchServiceClient) -> None
+def stream_file_and_wait_for_task(batch_client, filespec=None):
+    # type: (batch.BatchServiceClient, str) -> None
     """Stream a file and wait for task to complete
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param str filespec: filespec (jobid:taskid:filename)
     """
-    job_id = raw_input('Enter job id: ')
-    task_id = raw_input('Enter task id: ')
-    file = raw_input('Enter task-relative file path to stream [stdout.txt]: ')
+    if filespec is None:
+        job_id = None
+        task_id = None
+        file = None
+    else:
+        job_id, task_id, file = filespec.split(':')
+    if job_id is None:
+        job_id = raw_input('Enter job id: ')
+    if task_id is None:
+        task_id = raw_input('Enter task id: ')
+    if file is None:
+        file = raw_input(
+            'Enter task-relative file path to stream [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
     logger.debug('attempting to stream file {} from job={} task={}'.format(
@@ -1916,17 +1927,27 @@ def stream_file_and_wait_for_task(batch_client):
         time.sleep(1)
 
 
-def get_file_via_task(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+def get_file_via_task(batch_client, config, filespec=None):
+    # type: (batch.BatchServiceClient, dict, str) -> None
     """Get a file task style
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param dict config: configuration dict
+    :param str filespec: filespec (jobid:taskid:filename)
     """
-    job_id = raw_input('Enter job id: ')
-    task_id = raw_input('Enter task id: ')
-    file = raw_input(
-        'Enter task-relative file path to retrieve [stdout.txt]: ')
+    if filespec is None:
+        job_id = None
+        task_id = None
+        file = None
+    else:
+        job_id, task_id, file = filespec.split(':')
+    if job_id is None:
+        job_id = raw_input('Enter job id: ')
+    if task_id is None:
+        task_id = raw_input('Enter task id: ')
+    if file is None:
+        file = raw_input(
+            'Enter task-relative file path to retrieve [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
     # check if file exists on disk; a possible race condition here is
@@ -2163,7 +2184,8 @@ def main():
             config['job_specifications'] = [{
                 'id': args.jobid
             }]
-    logger.debug('config:\n' + json.dumps(config, indent=4))
+    if args.verbose:
+        logger.debug('config:\n' + json.dumps(config, indent=4))
     _populate_global_settings(config, args.action)
     config['_auto_confirm'] = args.yes
 
@@ -2207,9 +2229,9 @@ def main():
     elif args.action == 'grls':
         get_remote_login_settings(batch_client, config)
     elif args.action == 'streamfile':
-        stream_file_and_wait_for_task(batch_client)
+        stream_file_and_wait_for_task(batch_client, args.filespec)
     elif args.action == 'gettaskfile':
-        get_file_via_task(batch_client, config)
+        get_file_via_task(batch_client, config, args.filespec)
     elif args.action == 'getnodefile':
         get_file_via_node(batch_client, config, args.nodeid)
     elif args.action == 'delstorage':
@@ -2230,11 +2252,14 @@ def parseargs():
     parser = argparse.ArgumentParser(
         description='Batch Shipyard: Provision and Execute Docker Workloads '
         'on Azure Batch')
-    parser.set_defaults(yes=False)
+    parser.set_defaults(verbose=False, yes=False)
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
         'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
         'grls, streamfile, gettaskfile, getnodefile, clearstorage, delstorage')
+    parser.add_argument(
+        '-v', '--verbose', dest='verbose', action='store_true',
+        help='verbose output')
     parser.add_argument(
         '-y', '--yes', dest='yes', action='store_true',
         help='assume yes for all yes/no confirmations')
@@ -2253,6 +2278,10 @@ def parseargs():
     parser.add_argument(
         '--nodeid',
         help='node id for delnode or getnodefile action')
+    parser.add_argument(
+        '--filespec',
+        help='parameter for action streamfile/gettaskfile: '
+        'jobid:taskid:filename')
     return parser.parse_args()
 
 if __name__ == '__main__':

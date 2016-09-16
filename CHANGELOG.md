@@ -13,8 +13,11 @@
 that are optional
 - SSH tunnel user is now added with a default expiry time of 7 days which can
 be modified through the pool configuration file
+- Configuration is not output to console by default, `-v` flag added for
+verbose output
 
 ### Fixed
+- Cascade (container-only) start issue with no private registry
 - Non-shipyard docker image node prep with new azure-storage package
 - Temp file creation used for environment variables now works cross-platform
 

@@ -9,6 +9,34 @@ Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --user -r requirements.txt` (or via `pip3`
 for python3).
 
+Please note that the Python dependencies require a valid compiler, ssl, ffi,
+and python development libraries to be installed due to `cryptography`.
+
+####Ubuntu
+```
+apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev
+```
+
+####CentOS
+```
+yum update && yum install -y gcc openssl-dev libffi-devel python-devel
+```
+
+####SLES/OpenSUSE
+```
+zypper ref && zypper -n in libopenssl-dev libffi48-devel python-devel
+```
+
+####Note about Python 3.3+
+If installing for Python 3.3+, then simply use the python3 equivalents for
+the python dependencies. For example, on Ubuntu:
+
+```
+apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev
+```
+
+would install the proper dependencies.
+
 ## Installation
 Simply clone the repository:
 

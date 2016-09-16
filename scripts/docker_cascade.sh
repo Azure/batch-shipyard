@@ -15,11 +15,15 @@ if [ ! -z ${CASCADE_TIMING+x} ]; then
     # mark docker run pull end
     python3 perf.py shipyard pull-end $prefix
     # mark private registry start
-    python3 perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
+    if [ ! -z $privatereg ]; then
+        python3 perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
+    fi
 fi
 
 # set up private registry
-python3 setup_private_registry.py $privatereg $ipaddress $prefix
+if [ ! -z $privatereg ]; then
+    python3 setup_private_registry.py $privatereg $ipaddress $prefix
+fi
 
 # login to docker hub
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
@@ -29,7 +33,9 @@ fi
 # add timing markers
 if [ ! -z ${CASCADE_TIMING+x} ]; then
     # mark private registry end
-    python3 perf.py privateregistry end $prefix
+    if [ ! -z $privatereg ]; then
+        python3 perf.py privateregistry end $prefix
+    fi
     # mark node prep finished
     python3 perf.py nodeprep end $prefix
     # mark cascade start time

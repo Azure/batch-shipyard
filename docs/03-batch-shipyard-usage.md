@@ -24,10 +24,15 @@ arguments.
 Explanation of arguments:
 * `--credentials path/to/credentials.json` is required for all actions.
 * `--config path/to/config.json` is required for all actions.
+* `--filespec jobid:taskid:filename` is to specify the file location to
+stream or retrieve for the actions `streamfile` or `gettaskfile` respectively.
+If this argument is not supplied, the script will prompt for input.
 * `--pool path/to/pool.json` is required for most actions.
 * `--jobs path/to/jobs.json` is required for job-related actions.
 * `--nodeid <compute node id>` is only required for the `delnode` and
 `getnodefile` action.
+* `-v` is for verbose output
+* `-y` is to assume yes for all confirmation prompts
 
 The required positional argument to the script is `action`. Here are a list
 of actions and their intended effect:

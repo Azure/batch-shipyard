@@ -164,16 +164,21 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=ubuntu-trusty
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
+        gfsstart="initctl start glusterd"
     elif [[ $sku == 16.04.* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        gfsstart="systemctl start glusterd"
+        gfsenable="systemctl enable glusterd"
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        gfsstart="systemctl start glusterd"
+        gfsenable="systemctl enable glusterd"
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
@@ -293,9 +298,14 @@ EOF
         set -e
     fi
     # set up glusterfs
-    if [ $gluster -eq 1 ]; then
-        echo "gluster setup not implemented yet"
-        exit 1
+    if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+        apt-get install -y -q --no-install-recommends glusterfs-server
+        if [ ! -z $gfsenable ]; then
+            $gfsenable
+        fi
+        $gfsstart
+        # create brick directory
+        mkdir -p /mnt/gluster
     fi
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
@@ -385,7 +395,7 @@ EOF
             install_azurefile_docker_volume_driver $offer $sku
         fi
         # set up glusterfs
-        if [ $gluster -eq 1 ]; then
+        if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
             yum install -y epel-release centos-release-gluster38
             sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
             yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
@@ -453,8 +463,14 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         fi
         # set up glusterfs
         if [ $gluster -eq 1 ]; then
-            echo "gluster setup not implemented yet"
-            exit 1
+            zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
+            zypper -n --gpg-auto-import-keys ref
+            zypper -n in glusterfs
+            systemctl daemon-reload
+            systemctl enable glusterd
+            systemctl start glusterd
+            # create brick directory
+            mkdir -p /mnt/resource/gluster
         fi
     fi
 else
