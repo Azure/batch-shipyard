@@ -39,6 +39,7 @@ try:
     import pathlib
 except ImportError:
     import pathlib2 as pathlib
+import platform
 import subprocess
 import sys
 import tempfile
@@ -66,6 +67,7 @@ except NameError:
 logger = logging.getLogger('shipyard')
 # global defines
 _PY2 = sys.version_info.major == 2
+_WIN = platform.system() == 'Windows'
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
@@ -1148,6 +1150,18 @@ def _adjust_settings_for_pool_creation(config):
         logger.warning(
             'force enabling inter-node communication due to peer-to-peer '
             'transfer')
+    # adjust ssh settings on windows
+    if _WIN:
+        try:
+            ssh_pub_key = config[
+                'pool_specification']['ssh_docker_tunnel']['ssh_public_key']
+        except KeyError:
+            ssh_pub_key = None
+        if ssh_pub_key is None:
+            logger.warning(
+                'disabling ssh docker tunnel creation due to script being '
+                'run from Windows')
+            config['pool_specification'].pop('ssh_docker_tunnel', None)
 
 
 def resize_pool(batch_client, config):

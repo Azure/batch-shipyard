@@ -54,7 +54,7 @@ to run would be:
     location such as Azure File Docker Volume, NFS, GlusterFS, etc. Batch
     Shipyard has automatic support for setting up Azure File Docker Volumes,
     please refer to the
-    [Batch Shipyard Configuration doc](../../docs/02-batch-shipyard-configuration.md).
+    [Batch Shipyard Configuration doc](../../docs/10-batch-shipyard-configuration.md).
   * `mpirun` requires the following flags:
     * `--alow-run-as-root` allows OpenMPI to run as root, as container is run
       as root.

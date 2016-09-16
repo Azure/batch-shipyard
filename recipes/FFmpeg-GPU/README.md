@@ -47,7 +47,7 @@ using NVENC transcode offload on to the GPU:
 `"-i samplevideo.mp4 -c:v hevc_nvenc -preset default output.mp4"`
   * `samplevideo.mp4` should be a file that is accessible by the task. You
     can utilize the `resource_files` on the
-    [task configuration](../../docs/02-batch-shipyard-configuration.md) for
+    [task configuration](../../docs/10-batch-shipyard-configuration.md) for
     any number of files to be available to the task for processing.
   * `hevc_nvenc` informs FFmpeg to use the H.256/HEVC NVENC encoder. To
     encode with H.264 using NVENC specify `h264_nvenc` instead.

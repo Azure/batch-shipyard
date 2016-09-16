@@ -51,6 +51,9 @@ not modify the Unix line-endings (LF) for any file in the `scripts` directory.
 If these files are modified with Windows line-endings (CRLF) then compute nodes
 will fail to start properly.
 
-## Batch Shipyard Configuration
-Continue on to
-[Batch Shipyard Configuration](02-batch-shipyard-configuration.md).
+## Next Steps
+Either continue on to
+[Batch Shipyard Configuration](10-batch-shipyard-configuration.md) for a full
+explanation of all of the Batch Shipyard configuration options within the
+config files or continue to the
+[Batch Shipyard Quickstart](02-batch-shipyard-quickstart.md) guide.

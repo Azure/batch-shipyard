@@ -292,7 +292,9 @@ is absent, then SSH tunnel creation is skipped.
   * `expiry_days` is the number of days from now for the account on the compute
     nodes to expire. The default is 7 days from invocation time.
   * `ssh_public_key` is the path to an existing ssh public key to use. If not
-    specified, a public/private key pair will be automatically generated.
+    specified, a public/private key pair will be automatically generated only
+    only Linux. If this is `null` or not specified on Windows, SSH tunnel
+    creation will be disabled.
   * `generate_tunnel_script` property directs script to generate an SSH tunnel
 script for use with the compute nodes in the pool.
 * (required for N-Series VM instances) `gpu` property defines additional
@@ -466,4 +468,4 @@ An example jobs json template can be found
 [here](../config\_templates/jobs.json).
 
 ## Batch Shipyard Usage
-Continue on to [Batch Shipyard Usage](03-batch-shipyard-usage.md).
+Continue on to [Batch Shipyard Usage](20-batch-shipyard-usage.md).
