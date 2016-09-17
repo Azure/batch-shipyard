@@ -453,6 +453,11 @@ def add_pool(batch_client, blob_client, config):
         maxtasks = config['pool_specification']['max_tasks_per_node']
     except KeyError:
         maxtasks = 1
+    try:
+        internodecomm = config[
+            'pool_specification']['inter_node_communication_enabled']
+    except KeyError:
+        internodecomm = False
     # cascade settings
     try:
         perf = config['batch_shipyard']['store_timing_metrics']
@@ -615,8 +620,7 @@ def add_pool(batch_client, blob_client, config):
         vm_size=vm_size,
         target_dedicated=vm_count,
         max_tasks_per_node=maxtasks,
-        enable_inter_node_communication=config[
-            'pool_specification']['inter_node_communication_enabled'],
+        enable_inter_node_communication=internodecomm,
         start_task=batchmodels.StartTask(
             command_line=_wrap_commands_in_shell(start_task, wait=False),
             run_elevated=True,
@@ -1914,7 +1918,7 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
                 job_id, task_id, file, raw=True)
         except batchmodels.BatchErrorException as ex:
             if ('The specified operation is not valid for the current '
-                    'state of the resource.' in ex.message.value):
+                    'state of the resource.' in ex.message):
                 time.sleep(1)
                 continue
             else:

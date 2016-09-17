@@ -21,6 +21,7 @@ verbose output
 ### Fixed
 - Cascade (container-only) start issue with no private registry
 - Non-shipyard docker image node prep with new azure-storage package
+- Inter-node communication not specified key error on addpool
 - Cross-platform fixes:
   - Temp file creation used for environment variables
   - SSH tunnel creation disabled on Windows if public key is not supplied
