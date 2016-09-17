@@ -17,6 +17,8 @@ that are optional
 be modified through the pool configuration file
 - Configuration is not output to console by default, `-v` flag added for
 verbose output
+- Determinstic remote login settings output (node, ip, port) that can be
+easily parsed
 
 ### Fixed
 - Cascade (container-only) start issue with no private registry

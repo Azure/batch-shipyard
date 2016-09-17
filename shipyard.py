@@ -1879,7 +1879,8 @@ def get_remote_login_settings(batch_client, config, nodes=None):
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool_id, node.id)
-        logger.info('node {}: {}'.format(node.id, rls))
+        logger.info('node {}: ip {} port {}'.format(
+            node.id, rls.remote_login_ip_address, rls.remote_login_port))
 
 
 def stream_file_and_wait_for_task(batch_client, filespec=None):
