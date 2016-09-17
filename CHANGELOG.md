@@ -6,6 +6,8 @@
 - Added `configdir` argument for convenience in loading configuration files,
 please see the usage documentation for more details
 - Ability to retrieve files from live compute nodes in addition to streaming
+- Added `filespec` argument for non-interactive `streamfile` and `gettaskfile`
+actions
 - Added .gitattributes to designate Unix line-endings for text files
 - Sample configuration files for each recipe
 - Add TensorFlow-Distributed recipe
@@ -27,6 +29,8 @@ easily parsed
 - Cross-platform fixes:
   - Temp file creation used for environment variables
   - SSH tunnel creation disabled on Windows if public key is not supplied
+- Batch Shipyard Docker container not getting cleaned up if peer-to-peer is
+disabled
 
 ### Removed
 - `gpu`:`nvidia_driver`:`version` property removed from pool configuration

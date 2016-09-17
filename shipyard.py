@@ -1905,6 +1905,24 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
             'Enter task-relative file path to stream [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
+    # get first running task if specified
+    if task_id == '@FIRSTRUNNING':
+        logger.debug('attempting to get first running task in job {}'.format(
+            job_id))
+        while True:
+            tasks = batch_client.task.list(
+                job_id,
+                task_list_options=batchmodels.TaskListOptions(
+                    filter='state eq \'running\'',
+                ),
+            )
+            for task in tasks:
+                task_id = task.id
+                break
+            if task_id == '@FIRSTRUNNING':
+                time.sleep(1)
+            else:
+                break
     logger.debug('attempting to stream file {} from job={} task={}'.format(
         file, job_id, task_id))
     curr = 0
@@ -1969,6 +1987,24 @@ def get_file_via_task(batch_client, config, filespec=None):
             'Enter task-relative file path to retrieve [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
+    # get first running task if specified
+    if task_id == '@FIRSTRUNNING':
+        logger.debug('attempting to get first running task in job {}'.format(
+            job_id))
+        while True:
+            tasks = batch_client.task.list(
+                job_id,
+                task_list_options=batchmodels.TaskListOptions(
+                    filter='state eq \'running\'',
+                ),
+            )
+            for task in tasks:
+                task_id = task.id
+                break
+            if task_id == '@FIRSTRUNNING':
+                time.sleep(1)
+            else:
+                break
     # check if file exists on disk; a possible race condition here is
     # understood
     fp = pathlib.Path(pathlib.Path(file).name)

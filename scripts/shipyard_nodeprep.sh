@@ -37,6 +37,7 @@ gpu=
 networkopt=0
 offer=
 p2p=
+p2penabled=0
 prefix=
 privatereg=
 sku=
@@ -92,6 +93,12 @@ while getopts "h?ab:dfg:no:p:r:s:t:" opt; do
             ;;
         t)
             p2p=${OPTARG,,}
+            IFS=':' read -ra p2pflags <<< "$p2p"
+            if [ ${p2pflags[0]} == "true" ]; then
+                p2penabled=1
+            else
+                p2penabled=0
+            fi
             ;;
     esac
 done
@@ -125,7 +132,7 @@ PYTHONASYNCIODEBUG=1
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
 # set iptables rules
-if [ ! -z $p2p ]; then
+if [ $p2penabled -eq 1 ]; then
     # disable DHT connection tracking
     iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
@@ -317,7 +324,7 @@ EOF
             ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
         fi
         # install cascade dependencies
-        if [ ! -z $p2p ]; then
+        if [ $p2penabled -eq 1 ]; then
             apt-get install -y -q --no-install-recommends python3-libtorrent pigz
         fi
         # install private registry if required
@@ -489,10 +496,10 @@ touch $nodeprepfinished
 # execute cascade
 if [ $cascadecontainer -eq 1 ]; then
     detached=
-    if [ -z $p2p ]; then
-        detached="--rm"
-    else
+    if [ $p2penabled -eq 1 ]; then
         detached="-d"
+    else
+        detached="--rm"
     fi
     # store docker run pull start
     if command -v python3 > /dev/null 2>&1; then
@@ -535,7 +542,7 @@ else
 fi
 
 # if not in p2p mode, then wait for cascade exit
-if [ -z $p2p ]; then
+if [ $p2penabled -eq 0 ]; then
     wait
 fi
 

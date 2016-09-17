@@ -34,7 +34,9 @@ following:
   * `--jobs path/to/jobs.json` is required for job-related actions.
 * `--filespec jobid:taskid:filename` is to specify the file location to
 stream or retrieve for the actions `streamfile` or `gettaskfile` respectively.
-If this argument is not supplied, the script will prompt for input.
+If `taskid` is `@FIRSTRUNNING` then the first running task in the job is
+retrieved. If the `filespec` argument is not supplied, the script will prompt
+for input.
 * `--nodeid <compute node id>` is only required for the `delnode` and
 `getnodefile` action.
 * `-v` is for verbose output
