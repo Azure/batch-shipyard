@@ -1,6 +1,6 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
+        "id": "cntk-multinode-multigpu",
         "vm_size": "STANDARD_NC12",
         "vm_count": 2,
         "inter_node_communication_enabled": true,

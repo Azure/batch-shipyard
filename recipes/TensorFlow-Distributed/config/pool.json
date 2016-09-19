@@ -1,6 +1,6 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
+        "id": "tensorflow-distributed",
         "vm_size": "STANDARD_NC12",
         "vm_count": 2,
         "inter_node_communication_enabled": true,

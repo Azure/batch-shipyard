@@ -1,6 +1,6 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
+        "id": "dockerffmpeg",
         "vm_size": "STANDARD_NV6",
         "vm_count": 1,
         "publisher": "Canonical",

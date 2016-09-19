@@ -1,7 +1,7 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
-        "vm_size": "<vm size>",
+        "id": "namd-tcp",
+        "vm_size": "STANDARD_D3_V2",
         "vm_count": 4,
         "inter_node_communication_enabled": true,
         "publisher": "OpenLogic",

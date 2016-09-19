@@ -1,6 +1,6 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
+        "id": "docker-namd-rdma",
         "vm_size": "STANDARD_A9",
         "vm_count": 4,
         "inter_node_communication_enabled": true,

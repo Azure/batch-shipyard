@@ -1,6 +1,6 @@
 {
     "pool_specification": {
-        "id": "<your pool id>",
+        "id": "cntk-cpu-multinode",
         "vm_size": "STANDARD_F1",
         "vm_count": 3,
         "inter_node_communication_enabled": true,

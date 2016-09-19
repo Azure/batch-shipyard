@@ -29,8 +29,9 @@ Docker images backed to Azure Storage if specified
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
 to containers executed on compute nodes
-* Support for task dependencies allowing complex processing pipelines and
-graphs with Docker containers
+* Support for
+[Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
+allowing complex processing pipelines and graphs with Docker containers
 * Transparent support for
 [GPU accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
 on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
