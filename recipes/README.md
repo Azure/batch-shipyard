@@ -9,7 +9,7 @@ config file you are planning on using and modify accordingly. As the config
 samples are bare examples only, you will need to configure them to your liking
 for actual workloads.
 
-**NOTE: Not all recipes are populated.**
+**NOTE: Some recipes are not complete, but are forthcoming.**
 
 ## Deep Learning
 ### CNTK-CPU-Infiniband-IntelMPI
@@ -26,15 +26,17 @@ This CNTK-GPU-OpenMPI recipe contains information on how to Dockerize
 execution across multiple compute nodes and multiple GPUs with multi-instance
 tasks.
 
-### Caffe-CPU
-TBC.
+### [Caffe-CPU](./Caffe-CPU)
+This Caffe-CPU recipe contains information on how to Dockerize
+[Caffe](http://caffe.berkeleyvision.org/) for use on Azure Batch compute nodes.
 
 ### [Caffe-GPU](./Caffe-GPU)
 This Caffe-GPU recipe contains information on how to Dockerize
 [Caffe](http://caffe.berkeleyvision.org/) GPU for use with N-Series Azure VMs.
 
-### TensorFlow-CPU
-TBC.
+### [TensorFlow-CPU](./TensorFlow-CPU)
+This TensorFlow-CPU recipe contains information on how to Dockerize
+[TensorFlow](https://www.tensorflow.org/) for use on Azure Batch compute nodes.
 
 ### [TensorFlow-Distributed](./TensorFlow-Distributed)
 This TensorFlow-Distributed recipe contains information on how to Dockerize

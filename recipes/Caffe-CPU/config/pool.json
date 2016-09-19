@@ -1,7 +1,7 @@
 {
     "pool_specification": {
-        "id": "caffe-gpu",
-        "vm_size": "STANDARD_NC6",
+        "id": "caffe-cpu",
+        "vm_size": "STANDARD_F1",
         "vm_count": 1,
         "publisher": "Canonical",
         "offer": "UbuntuServer",
@@ -9,11 +9,6 @@
         "ssh_docker_tunnel": {
             "username": "docker",
             "generate_tunnel_script": true
-        },
-        "gpu": {
-            "nvidia_driver": {
-                "source": "<URL for nvidia driver for STANDARD_NC VMs>"
-            }
         },
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true

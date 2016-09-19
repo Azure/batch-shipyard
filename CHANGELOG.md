@@ -10,7 +10,7 @@ please see the usage documentation for more details
 actions
 - Added .gitattributes to designate Unix line-endings for text files
 - Sample configuration files for each recipe
-- Add TensorFlow-Distributed recipe
+- Caffe-CPU, TensorFlow-CPU, TensorFlow-Distributed recipes
 
 ### Changed
 - Updated configuration docs to detail which properties are required vs. those

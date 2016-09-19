@@ -8,12 +8,13 @@ Please see refer to this [set of sample configuration files](./config) for
 this recipe.
 
 ### Pool Configuration
-**Note: You must be approved for the
+**Note: If you are running across multiple GPUs, you must be approved for the
 [Azure N-Series Preview](http://gpu.azure.com/) and have escalated a
 customer service support ticket with your Batch account details to the Azure
 Batch team to enable this feature. Otherwise, your pool allocation will fail.**
 
-The pool configuration should enable the following properties:
+The pool configuration should enable the following properties if on multiple
+GPUs:
 * `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
 `STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24` if using GPUs.
 `NC` VM instances feature K80 GPUs for GPU compute acceleration while `NV` VM
@@ -30,6 +31,12 @@ once they are available for N-series VMs.
 members:
   * `nvidia_driver` property contains the following members:
     * `source` is a URL for the driver installer .run file
+
+If on multiple CPUs:
+* `max_tasks_per_node` must be set to 1 or omitted
+
+Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
+`vm_count` should be set to your desired values for multiple CPU configuration.
 
 ### Global Configuration
 The global configuration should set the following properties:

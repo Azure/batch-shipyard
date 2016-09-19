@@ -1,0 +1,14 @@
+{
+    "job_specifications": [
+        {
+            "id": "tensorflowjob",
+            "tasks": [
+                {
+                    "image": "gcr.io/tensorflow/tensorflow",
+                    "remove_container_after_exit": true,
+                    "command": "python -m tensorflow.models.image.mnist.convolutional"
+                }
+            ]
+        }
+    ]
+}

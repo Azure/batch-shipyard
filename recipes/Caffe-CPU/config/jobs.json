@@ -1,0 +1,14 @@
+{
+    "job_specifications": [
+        {
+            "id": "caffejob",
+            "tasks": [
+                {
+                    "image": "alfpark/caffe:cpu",
+                    "remove_container_after_exit": true,
+                    "command": "/opt/run_mnist.sh"
+                }
+            ]
+        }
+    ]
+}
