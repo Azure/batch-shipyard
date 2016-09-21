@@ -1886,7 +1886,8 @@ def get_remote_login_settings(batch_client, config, nodes=None):
 
 def stream_file_and_wait_for_task(batch_client, filespec=None):
     # type: (batch.BatchServiceClient, str) -> None
-    """Stream a file and wait for task to complete
+    """Stream a file and wait for task to complete (streams for a maximum
+    of 30 minutes)
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param str filespec: filespec (jobid:taskid:filename)
@@ -1929,7 +1930,7 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
     curr = 0
     end = 0
     completed = False
-    timeout = datetime.timedelta(minutes=5)
+    timeout = datetime.timedelta(minutes=30)
     time_to_timeout_at = datetime.datetime.now() + timeout
     while datetime.datetime.now() < time_to_timeout_at:
         # get task file properties
