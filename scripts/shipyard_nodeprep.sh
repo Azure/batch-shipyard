@@ -140,7 +140,7 @@ fi
 
 # optimize network TCP settings
 if [ $networkopt -eq 1 ]; then
-    sysctlfile=/etc/sysctl.d/60-azure-shipyard.conf
+    sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
     if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
 cat > $sysctlfile << EOF
 net.core.rmem_default=16777216

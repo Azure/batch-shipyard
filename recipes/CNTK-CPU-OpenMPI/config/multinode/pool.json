@@ -1,7 +1,7 @@
 {
     "pool_specification": {
         "id": "cntk-cpu-multinode",
-        "vm_size": "STANDARD_F1",
+        "vm_size": "STANDARD_D1_V2",
         "vm_count": 3,
         "inter_node_communication_enabled": true,
         "publisher": "Canonical",

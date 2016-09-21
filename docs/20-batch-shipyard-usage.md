@@ -74,28 +74,28 @@ files.
 files.
 
 ## Example Invocations
-```
+```shell
 python shipyard.py --credentials credentials.json --config config.json --pool pool.json addpool
 
-... or if all config files are in the current working directory named as above ...
+# ... or if all config files are in the current working directory named as above ...
 
 python shipyard.py --configdir . addpool
 ```
 The above invocation will add the pool specified to the Batch account.
 
-```
+```shell
 python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json addjobs
 
-... or if all config files are in the current working directory named as above ...
+# ... or if all config files are in the current working directory named as above ...
 
 python shipyard.py --configdir . addjobs
 ```
 The above invocation will add the jobs specified to the designated pool.
 
-```
+```shell
 python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json streamfile
 
-... or if all config files are in the current working directory named as above ...
+# ... or if all config files are in the current working directory named as above ...
 
 python shipyard.py --configdir . streamfile
 ```

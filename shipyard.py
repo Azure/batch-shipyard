@@ -67,7 +67,24 @@ except NameError:
 logger = logging.getLogger('shipyard')
 # global defines
 _PY2 = sys.version_info.major == 2
-_WIN = platform.system() == 'Windows'
+_ON_WINDOWS = platform.system() == 'Windows'
+_AZUREFILE_DVD_BIN = {
+    'url': (
+        'https://github.com/Azure/azurefile-dockervolumedriver/releases'
+        '/download/v0.5.1/azurefile-dockervolumedriver'
+    ),
+    'md5': 'ee14da21efdfda4bedd85a67adbadc14'
+}
+_NVIDIA_DOCKER = {
+    'ubuntuserver': {
+        'url': (
+            'https://github.com/NVIDIA/nvidia-docker/releases'
+            '/download/v1.0.0-rc.3/nvidia-docker_1.0.0.rc.3-1_amd64.deb'
+        ),
+        'md5': '49990712ebf3778013fae81ee67f6c79'
+    }
+}
+_NVIDIA_DRIVER = 'nvidia-driver.run'
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
@@ -82,22 +99,6 @@ _STORAGE_CONTAINERS = {
     'table_perf': None,
     'queue_globalresources': None,
 }
-_AZUREFILE_DVD_BIN_VERSION = '0.4.1'
-_AZUREFILE_DVD_BIN_URL = (
-    'https://github.com/Azure/azurefile-dockervolumedriver/releases'
-    '/download/' + _AZUREFILE_DVD_BIN_VERSION + '/azurefile-dockervolumedriver'
-)
-_AZUREFILE_DVD_BIN_MD5 = 'f3c1750583c4842dfbf95bbd56f65ede'
-_NVIDIA_DOCKER = {
-    'ubuntuserver': {
-        'url': (
-            'https://github.com/NVIDIA/nvidia-docker/releases'
-            '/download/v1.0.0-rc.3/nvidia-docker_1.0.0.rc.3-1_amd64.deb'
-        ),
-        'md5': '49990712ebf3778013fae81ee67f6c79'
-    }
-}
-_NVIDIA_DRIVER = 'nvidia-driver.run'
 _MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
@@ -373,12 +374,12 @@ def setup_azurefile_volume_driver(blob_client, config):
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
-            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN_MD5):
-        response = urllibreq.urlopen(_AZUREFILE_DVD_BIN_URL)
+            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN['md5']):
+        response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
         with bin.open('wb') as f:
             f.write(response.read())
         # check md5
-        if compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN_MD5:
+        if compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN['md5']:
             raise RuntimeError('md5 mismatch for {}'.format(bin))
     if (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku.startswith('14.04')):
@@ -1155,7 +1156,7 @@ def _adjust_settings_for_pool_creation(config):
             'force enabling inter-node communication due to peer-to-peer '
             'transfer')
     # adjust ssh settings on windows
-    if _WIN:
+    if _ON_WINDOWS:
         try:
             ssh_pub_key = config[
                 'pool_specification']['ssh_docker_tunnel']['ssh_public_key']

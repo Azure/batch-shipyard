@@ -21,6 +21,7 @@ be modified through the pool configuration file
 verbose output
 - Determinstic remote login settings output (node, ip, port) that can be
 easily parsed
+- Update Azurefile Docker Volume Driver plugin to 0.5.1
 
 ### Fixed
 - Cascade (container-only) start issue with no private registry
