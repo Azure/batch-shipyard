@@ -2213,17 +2213,19 @@ def main():
     args = parseargs()
     args.action = args.action.lower()
 
-    if args.credentials is None:
-        raise ValueError('credentials json not specified')
-    if args.config is None:
-        raise ValueError('config json not specified')
-
     if args.configdir is not None:
         if args.credentials is None:
             args.credentials = str(pathlib.Path(
                 args.configdir, 'credentials.json'))
         if args.config is None:
             args.config = str(pathlib.Path(args.configdir, 'config.json'))
+        if args.pool is None:
+            args.pool = str(pathlib.Path(args.configdir, 'pool.json'))
+
+    if args.credentials is None:
+        raise ValueError('credentials json not specified')
+    if args.config is None:
+        raise ValueError('config json not specified')
 
     with open(args.credentials, 'r') as f:
         config = json.load(f)
