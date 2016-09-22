@@ -2218,6 +2218,8 @@ def main():
                 args.configdir, 'credentials.json'))
         if args.config is None:
             args.config = str(pathlib.Path(args.configdir, 'config.json'))
+        if args.pool is None:
+            args.pool = str(pathlib.Path(args.configdir, 'pool.json'))
 
     if args.credentials is None:
         raise ValueError('credentials json not specified')
