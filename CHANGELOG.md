@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [1.0.0] - 2016-09-22
 ### Added
 - Automated GlusterFS support
 - Added `configdir` argument for convenience in loading configuration files,
@@ -10,7 +12,8 @@ please see the usage documentation for more details
 actions
 - Added .gitattributes to designate Unix line-endings for text files
 - Sample configuration files for each recipe
-- Caffe-CPU, TensorFlow-CPU, TensorFlow-Distributed recipes
+- Caffe-CPU, OpenFOAM-TCP-OpenMPI, TensorFlow-CPU, TensorFlow-Distributed
+recipes
 
 ### Changed
 - Updated configuration docs to detail which properties are required vs. those
@@ -64,7 +67,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/Azure/batch-shipyard/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/Azure/batch-shipyard/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/Azure/batch-shipyard/compare/ab1fa4d...0.1.0
 

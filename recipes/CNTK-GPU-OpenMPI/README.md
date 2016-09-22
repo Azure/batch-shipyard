@@ -41,6 +41,13 @@ Docker image.
 can be used for this recipe which contains reference data for MNIST and CIFAR
 examples. If you do not need this reference data then you can use the
 `alfpark/cntk:gpu-openmpi` image instead.
+* `docker_volumes` must be populated with the following if running a CNTK MPI
+job (multi-node):
+  * `shared_data_volumes` should contain an Azure File Docker volume driver,
+    a GlusterFS share or a manually configured NFS share. Batch
+    Shipyard has automatic support for setting up Azure File Docker Volumes
+    and GlusterFS, please refer to the
+    [Batch Shipyard Configuration doc](../../docs/10-batch-shipyard-configuration.md).
 
 ### Non-MPI Jobs Configuration (SingleNode+SingleGPU)
 The jobs configuration should set the following properties within the `tasks`
@@ -75,10 +82,7 @@ would be:
     as individual outputs are written by each rank to the specified output
     directory only on that compute node. To override the output directory for
     the example above, add `OutputDir=/some/path` to a shared file system
-    location such as Azure File Docker Volume, NFS, GlusterFS, etc. Batch
-    Shipyard has automatic support for setting up Azure File Docker Volumes,
-    please refer to the
-    [Batch Shipyard Configuration doc](../../docs/10-batch-shipyard-configuration.md).
+    location such as Azure File Docker Volume, NFS, GlusterFS, etc.
   * `mpirun` requires the following flags:
     * `--alow-run-as-root` allows OpenMPI to run as root, as container is run
       as root.
@@ -103,6 +107,9 @@ would be:
     itself (but not the device pass-through as that has already occurred for
     `docker run`). Thus CUDA library locations will need to be explicitly
     specified in `LD_LIBRARY_PATH` as shown above.
+* `shared_data_volumes` should have a valid volume name as defined in the
+global configuration file. Please see the global configuration section above
+for details.
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
 * `multi_instance` property must be defined

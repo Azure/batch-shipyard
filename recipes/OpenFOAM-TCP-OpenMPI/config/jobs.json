@@ -1,0 +1,23 @@
+{
+    "job_specifications": [
+        {
+            "id": "openfoamjob",
+            "multi_instance_auto_complete": true,
+            "tasks": [
+                {
+                    "image": "alfpark/openfoam:v1606plus-openmpi",
+                    "name": "openfoam",
+                    "remove_container_after_exit": true,
+                    "shared_data_volumes": [
+                        "glustervol"
+                    ],
+                    "command": "/opt/OpenFOAM/run_sample.sh",
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null
+                    }
+                }
+            ]
+        }
+    ]
+}

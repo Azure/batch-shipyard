@@ -56,20 +56,17 @@ Infiniband/RDMA Azure VMs with Intel MPI.
 
 ### [NAMD-TCP](./NAMD-TCP)
 This NAMD-TCP recipe contains information on how to Dockerize distributed
-[NAMD](http://www.ks.uiuc.edu/Research/namd/) across TCP/IP.
+[NAMD](http://www.ks.uiuc.edu/Research/namd/) across multiple Azure Batch
+compute nodes using TCP.
 
 ### OpenFOAM-Infiniband-IntelMPI
 TBC.
 [OpenFoam](http://www.openfoam.com/)
 
-### OpenFOAM-TCP-OpenMPI
-TBC.
-[OpenFoam](http://www.openfoam.com/)
-
-## Data Science
-### R
-TBC.
-[Microsoft R Open](https://mran.microsoft.com/open/)
+### [OpenFOAM-TCP-OpenMPI](./OpenFOAM-TCP-OpenMPI)
+This OpenFOAM-TCP-OpenMPI recipe contains information on how to Dockerized
+distributed [OpenFoam](http://www.openfoam.com/) across multiple Azure Batch
+compute nodes.
 
 ## Video Processing
 ### [FFmpeg-GPU](./FFmpeg-GPU)
