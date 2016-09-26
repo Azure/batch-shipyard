@@ -1,6 +1,7 @@
 # Dockerfile for OpenFOAM-TCP-OpenMPI for use with Batch Shipyard on Azure Batch
 
 FROM centos:7.1.1503
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set up base and ssh keys
 COPY ssh_config /root/.ssh/config

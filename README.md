@@ -39,9 +39,10 @@ on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-
 * Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
 cluster applications on compute pools with automatic job cleanup
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
-for MPI on
-[HPC low-latency Azure VM instances](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/)
-(i.e., STANDARD\_A8 and STANDARD\_A9)
+for MPI on HPC low-latency Azure VM instances:
+  * A-Series: STANDARD\_A8, STANDARD\_A9 ([info](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/))
+  * H-Series: STANDARD\_H16R, STANDARD\_H16MR
+  * N-Series: STANDARD\_NC24R
 * Automatic setup of SSH tunneling to Docker Hosts on compute nodes if
 specified
 

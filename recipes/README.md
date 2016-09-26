@@ -32,7 +32,8 @@ This Caffe-CPU recipe contains information on how to Dockerize
 
 ### [Caffe-GPU](./Caffe-GPU)
 This Caffe-GPU recipe contains information on how to Dockerize
-[Caffe](http://caffe.berkeleyvision.org/) GPU for use with N-Series Azure VMs.
+[Caffe](http://caffe.berkeleyvision.org/) on GPUs for use with N-Series Azure
+VMs.
 
 ### [TensorFlow-CPU](./TensorFlow-CPU)
 This TensorFlow-CPU recipe contains information on how to Dockerize
@@ -49,6 +50,11 @@ This TensorFlow-GPU recipe contains information on how to Dockerize
 VMs.
 
 ## Computational Fluid Dynamics (CFD) and Molecular Dynamics (MD)
+### [NAMD-GPU](./NAMD-GPU)
+This NAMD-GPU recipe contains information on how to Dockerize
+[NAMD](http://www.ks.uiuc.edu/Research/namd/) on GPUs for use with N-Series
+Azure VMs.
+
 ### [NAMD-Infiniband-IntelMPI](./NAMD-Infiniband-IntelMPI)
 This NAMD-Infiniband-IntelMPI recipe contains information on how to Dockerize
 distributed [NAMD](http://www.ks.uiuc.edu/Research/namd/) across
