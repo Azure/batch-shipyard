@@ -1,14 +1,18 @@
 {
     "job_specifications": [
         {
-            "id": "namdjob",
+            "id": "openfoamjob",
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/namd:2.11-tcp",
-                    "name": "namd",
+                    "image": "alfpark/openfoam:v1606plus-icc-intelmpi",
+                    "name": "openfoam",
                     "remove_container_after_exit": true,
-                    "command": "/sw/run_namd.sh apoa1 100",
+                    "shared_data_volumes": [
+                        "glustervol"
+                    ],
+                    "command": "/opt/OpenFOAM/run_sample.sh",
+                    "infiniband": true,
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",
                         "coordination_command": null

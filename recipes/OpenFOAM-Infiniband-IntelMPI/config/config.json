@@ -5,7 +5,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "alfpark/openfoam:v1606plus-gcc-openmpi"
+            "alfpark/openfoam:v1606plus-icc-intelmpi"
         ],
         "docker_volumes": {
             "shared_data_volumes": {

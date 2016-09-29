@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 ### Added
-- NAMD-GPU recipe
+- NAMD-GPU, OpenFOAM-Infiniband-IntelMPI recipe
+
+### Changed
+- GlusterFS mountpoint is now within `$AZ_BATCH_NODE_SHARED_DIR` so files can
+be viewed/downloaded with Batch APIs
+- NAMD-Infiniband-IntelMPI recipe now contains a real Docker image link
 
 ## [1.0.0] - 2016-09-22
 ### Added

@@ -36,6 +36,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     done
     set -e
     echo "$numpeers joined peering"
+    # delay to wait for peers to connect
     sleep 5
     # create volume
     echo "creating gv0 ($bricks)"
@@ -52,6 +53,8 @@ while :
 do
         gluster volume info gv0
         if [ $? -eq 0 ]; then
+            # delay to wait for subvolumes
+            sleep 5
             break
         fi
     sleep 1
@@ -59,14 +62,32 @@ done
 set -e
 
 # add gv0 to /etc/fstab for auto-mount on reboot
-mountpoint=$1/gluster/gv0
+mountpoint=$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0
 mkdir -p $mountpoint
 echo "adding $mountpoint to fstab"
 echo "$ipaddress:/gv0 $mountpoint glusterfs defaults,_netdev 0 0" >> /etc/fstab
 
 # mount it
 echo "mounting $mountpoint"
-mount $mountpoint
+START=$(date -u +"%s")
+set +e
+while :
+do
+    mount $mountpoint
+    if [ $? -eq 0 ]; then
+        break
+    else
+        NOW=$(date -u +"%s")
+        DIFF=$((($NOW-$START)/60))
+        # fail after 5 minutes of attempts
+        if [ $DIFF -ge 5 ]; then
+            echo "could not mount gluster volume: $mountpoint"
+            exit 1
+        fi
+        sleep 1
+    fi
+done
+set -e
 
 # touch file noting success
 touch .glusterfs_success

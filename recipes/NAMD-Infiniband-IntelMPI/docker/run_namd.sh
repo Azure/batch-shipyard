@@ -19,6 +19,6 @@ nodes=${#HOSTS[@]}
 np=$(($nodes * $ppn))
 
 # execute NAMD
+source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
 echo "Executing namd on $np processors (ppn=$ppn)..."
-source $MPIVARS_SCRIPT
 mpirun -np $np -ppn $ppn -hosts $AZ_BATCH_HOST_LIST $NAMD_DIR/namd2 $1.namd

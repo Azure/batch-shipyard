@@ -65,9 +65,10 @@ This NAMD-TCP recipe contains information on how to Dockerize distributed
 [NAMD](http://www.ks.uiuc.edu/Research/namd/) across multiple Azure Batch
 compute nodes using TCP.
 
-### OpenFOAM-Infiniband-IntelMPI
-TBC.
-[OpenFoam](http://www.openfoam.com/)
+### [OpenFOAM-Infiniband-IntelMPI](./OpenFOAM-Infiniband-IntelMPI)
+This OpenFOAM-Infiniband-IntelMPI recipe contains information on how to
+Dockerized distributed [OpenFoam](http://www.openfoam.com/) across
+Infiniband/RDMA Azure VMs with Intel MPI.
 
 ### [OpenFOAM-TCP-OpenMPI](./OpenFOAM-TCP-OpenMPI)
 This OpenFOAM-TCP-OpenMPI recipe contains information on how to Dockerized

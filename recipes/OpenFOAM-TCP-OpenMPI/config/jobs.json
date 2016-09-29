@@ -5,7 +5,7 @@
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/openfoam:v1606plus-openmpi",
+                    "image": "alfpark/openfoam:v1606plus-gcc-openmpi",
                     "name": "openfoam",
                     "remove_container_after_exit": true,
                     "shared_data_volumes": [

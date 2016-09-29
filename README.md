@@ -19,7 +19,7 @@ a large number of VMs via private peer-to-peer distribution of Docker images
 among the compute nodes
 * Automated Docker Private Registry instance creation on compute nodes with
 Docker images backed to Azure Storage if specified
-* Automatic shared data volume support for:
+* Automatic shared data volume support:
   * [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
     installation and share setup for SMB/CIFS backed to Azure Storage if
     specified
@@ -40,9 +40,9 @@ on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-
 cluster applications on compute pools with automatic job cleanup
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on HPC low-latency Azure VM instances:
-  * A-Series: STANDARD\_A8, STANDARD\_A9 ([info](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/))
-  * H-Series: STANDARD\_H16R, STANDARD\_H16MR
-  * N-Series: STANDARD\_NC24R
+  * [A-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/): STANDARD\_A8, STANDARD\_A9
+  * [H-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#h-series): STANDARD\_H16R, STANDARD\_H16MR
+  * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R
 * Automatic setup of SSH tunneling to Docker Hosts on compute nodes if
 specified
 

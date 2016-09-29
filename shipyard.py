@@ -774,8 +774,9 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
                 pool_id, node.id,
                 ('workitems/{}/job-1/gluster-setup/wd/'
                  '.glusterfs_success').format(job_id))
-        except batchmodels.BatchErrorException as ex:
-            logger.exception(ex)
+        except batchmodels.BatchErrorException:
+            logger.error('gluster success file absent on node {}'.format(
+                node.id))
             success = False
             break
     # delete job
@@ -1452,19 +1453,14 @@ def add_jobs(batch_client, blob_client, config):
             else:
                 if (shared_data_volumes is not None and
                         len(shared_data_volumes) > 0):
-                    # get pool spec for gluster mount paths
-                    if (config['pool_specification']['offer'].lower() ==
-                            'ubuntuserver'):
-                        gfspath = '/mnt/gluster/gv0'
-                    else:
-                        gfspath = '/mnt/resource/gluster/gv0'
                     for key in shared_data_volumes:
                         dvspec = config[
                             'global_resources']['docker_volumes'][
                                 'shared_data_volumes'][key]
                         if dvspec['volume_driver'] == 'glusterfs':
                             run_opts.append('-v {}:{}'.format(
-                                gfspath, dvspec['container_path']))
+                                '$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0',
+                                dvspec['container_path']))
                         else:
                             run_opts.append('-v {}:{}'.format(
                                 key, dvspec['container_path']))
