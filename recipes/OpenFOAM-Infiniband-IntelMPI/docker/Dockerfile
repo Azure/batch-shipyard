@@ -9,7 +9,7 @@ RUN yum swap -y fakesystemd systemd \
     && yum install -y epel-release \
     && yum install -y \
         openssh-clients openssh-server net-tools gnuplot mpfr-devel \
-        qt-devel qt-assistant qt-x11 qtwebkit-devel libGLU-devel \
+        qt-devel qt-assistant qt-x11 qtwebkit-devel libGLU-devel boost-devel \
         libmlx4 librdmacm libibverbs dapl rdma \
     && yum clean all \
     && mkdir -p /var/run/sshd \
@@ -33,8 +33,8 @@ RUN cd /tmp/l_comp_lib_2016.4.258_comp.cpp_redist \
 ENV INTELCOMPILERVARS=/opt/intel2/bin/compilervars.sh
 
 # add openfoam with env vars
-ADD openfoam-v1606plus-icc-intelmpi.tar.gz /opt
-ENV OPENFOAM_VER=v1606+ FOAM_INST_DIR=/opt/OpenFOAM PATH=${PATH}:/usr/lib64/qt4/bin
+ADD openfoam-4.0-icc-intelmpi.tar.gz /opt/OpenFOAM
+ENV OPENFOAM_VER=4.0 FOAM_INST_DIR=/opt/OpenFOAM PATH=${PATH}:/usr/lib64/qt4/bin
 ENV OPENFOAM_DIR=${FOAM_INST_DIR}/OpenFOAM-${OPENFOAM_VER}
 
 # copy sample run script

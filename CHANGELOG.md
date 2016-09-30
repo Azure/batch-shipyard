@@ -9,6 +9,9 @@
 be viewed/downloaded with Batch APIs
 - NAMD-Infiniband-IntelMPI recipe now contains a real Docker image link
 
+### Fixed
+- GlusterFS not properly starting on Ubuntu
+
 ## [1.0.0] - 2016-09-22
 ### Added
 - Automated GlusterFS support

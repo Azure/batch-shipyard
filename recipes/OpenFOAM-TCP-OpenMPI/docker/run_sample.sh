@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 
 # get mpi ref and set up openfoam env
-OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-v1606+
+OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-4.0
 source /etc/profile.d/modules.sh
 module add mpi/openmpi-x86_64
 source $OPENFOAM_DIR/etc/bashrc
@@ -23,6 +23,12 @@ np=$(($nodes * $ppn))
 
 # substitute proper number of subdomains
 sed -i -e "s/^numberOfSubdomains 4/numberOfSubdomains $np;/" pitzDaily/system/decomposeParDict
+root=`python -c "import math; x=int(math.sqrt($np)); print x if x*x==$np else -1"`
+if [ $root -eq -1 ]; then
+    sed -i -e "s/\s*n\s*(2 2 1)/    n               ($ppn $nodes 1)/g" pitzDaily/system/decomposeParDict
+else
+    sed -i -e "s/\s*n\s*(2 2 1)/    n               ($root $root 1)/g" pitzDaily/system/decomposeParDict
+fi
 
 # decompose
 cd pitzDaily

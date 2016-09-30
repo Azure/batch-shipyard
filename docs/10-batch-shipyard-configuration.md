@@ -382,7 +382,9 @@ multi-instance tasks are specified.
 which will be applied to all tasks operating under the job.
 * (required) `tasks` is an array of tasks to add to the job.
   * (optional) `id` is the task id. Note that if the task `id` is null or
-    empty then a generic task id will be assigned.
+    empty then a generic task id will be assigned. The generic task id is
+    formatted as `dockertask-NNN` where `NNN` starts from `000` and is
+    increased by 1 for each task added to the same job.
   * (optional) `depends_on` is an array of task ids for which this container
     invocation (task) depends on and must run to successful completion prior
     to this task executing.

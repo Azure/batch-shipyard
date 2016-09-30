@@ -1,5 +1,5 @@
 # OpenFOAM-Infiniband-IntelMPI
-This recipe shows how to run [OpenFoam](http://www.openfoam.com/)
+This recipe shows how to run [OpenFOAM](http://www.openfoam.org/)
 on Linux using Intel MPI over Infiniband/RDMA Azure VM instances in an Azure
 Batch compute pool. Execution of this distributed workload requires the use of
 [multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
@@ -25,9 +25,9 @@ supported by the Azure Batch service.
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid OpenFOAM image
 that can be run with Intel MPI and Infiniband in a Docker container context
-on Azure VM instances. This can be
-`alfpark/openfoam:v1606plus-icc-intelmpi` which is published on
-[Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
+on Azure VM instances. This can be `alfpark/openfoam:4.0-icc-intelmpi` or
+`alfpark/openfoam:v1606plus-icc-intelmpi`
+which are published on [Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
 * `docker_volumes` must be populated with the following:
   * `shared_data_volumes` should contain an Azure File Docker volume driver,
     a GlusterFS share or a manually configured NFS share. Batch
@@ -39,7 +39,7 @@ on Azure VM instances. This can be
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation.
-For this example, this should be `alfpark/openfoam:v1606plus-icc-intelmpi`.
+For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `name` is a unique name given to the Docker container instance. This is
 required for Multi-Instance tasks.
 * `command` should contain the `mpirun` command. If using the sample

@@ -171,21 +171,21 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=ubuntu-trusty
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
-        gfsstart="initctl start glusterd"
+        gfsstart="initctl start glusterfs-server"
     elif [[ $sku == 16.04.* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
-        gfsstart="systemctl start glusterd"
-        gfsenable="systemctl enable glusterd"
+        gfsstart="systemctl start glusterfs-server"
+        gfsenable="systemctl enable glusterfs-server"
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
-        gfsstart="systemctl start glusterd"
-        gfsenable="systemctl enable glusterd"
+        gfsstart="systemctl start glusterfs-server"
+        gfsenable="systemctl enable glusterfs-server"
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1

@@ -67,12 +67,12 @@ compute nodes using TCP.
 
 ### [OpenFOAM-Infiniband-IntelMPI](./OpenFOAM-Infiniband-IntelMPI)
 This OpenFOAM-Infiniband-IntelMPI recipe contains information on how to
-Dockerized distributed [OpenFoam](http://www.openfoam.com/) across
+Dockerized distributed [OpenFOAM](http://www.openfoam.org/) across
 Infiniband/RDMA Azure VMs with Intel MPI.
 
 ### [OpenFOAM-TCP-OpenMPI](./OpenFOAM-TCP-OpenMPI)
 This OpenFOAM-TCP-OpenMPI recipe contains information on how to Dockerized
-distributed [OpenFoam](http://www.openfoam.com/) across multiple Azure Batch
+distributed [OpenFOAM](http://www.openfoam.org/) across multiple Azure Batch
 compute nodes.
 
 ## Video Processing

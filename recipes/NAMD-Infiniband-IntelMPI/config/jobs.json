@@ -5,10 +5,10 @@
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "<your intel mpi compiled namd image>",
+                    "image": "alfpark/namd:2.11-icc-mkl-intelmpi",
                     "name": "namd",
                     "remove_container_after_exit": true,
-                    "command": "<your mpirun command or script>",
+                    "command": "/sw/run_namd.sh apoa1 1000",
                     "infiniband": true,
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",

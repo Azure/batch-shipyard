@@ -7,7 +7,7 @@ set -o pipefail
 source $INTELCOMPILERVARS intel64
 source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
 export MPI_ROOT=$I_MPI_ROOT
-OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-v1606+
+OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-4.0
 source $OPENFOAM_DIR/etc/bashrc
 
 # copy sample into glusterfs shared area
