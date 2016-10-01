@@ -15,12 +15,9 @@ The pool configuration should enable the following properties:
 `STANDARD_H16MR`
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic`. `SUSE` will be supported in a future
-version of Batch Shipyard.
-* `offer` should be `CentOS-HPC`. `SLES-HPC` will be supported in a future
-version of Batch Shipyard.
-* `sku` should be `7.1` for the current latest RDMA-enabled CentOS-HPC sku
-supported by the Azure Batch service.
+* `publisher` should be `OpenLogic` or `SUSE`.
+* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`.
+* `sku` should be `7.1` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`.
 
 ### Global Configuration
 The global configuration should set the following properties:

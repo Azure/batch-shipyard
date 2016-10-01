@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- Transparent Infiniband support for SUSE SLES-HPC 12-SP1 image
 - NAMD-GPU, OpenFOAM-Infiniband-IntelMPI recipe
 
 ### Changed

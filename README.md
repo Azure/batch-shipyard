@@ -42,7 +42,7 @@ cluster applications on compute pools with automatic job cleanup
 for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/): STANDARD\_A8, STANDARD\_A9
   * [H-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#h-series): STANDARD\_H16R, STANDARD\_H16MR
-  * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R
+  * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R (not yet available)
 * Automatic setup of SSH tunneling to Docker Hosts on compute nodes if
 specified
 

@@ -10,7 +10,8 @@ file via the command `pip install --user -r requirements.txt` (or via `pip3`
 for python3).
 
 Please note that the Python dependencies require a valid compiler, ssl, ffi,
-and python development libraries to be installed due to `cryptography`.
+and python development libraries to be installed due to the
+[cryptography](https://pypi.python.org/pypi/cryptography) dependency.
 
 ####Ubuntu
 ```

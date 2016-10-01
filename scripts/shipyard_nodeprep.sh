@@ -438,9 +438,9 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             fi
         elif [[ $offer == sles* ]]; then
             if [[ $sku == "12" ]]; then
-                repodir=SLE_12_SP1
-            elif [[ $sku == "12-sp1" ]]; then
                 repodir=SLE_12
+            elif [[ $sku == "12-sp1" ]]; then
+                repodir=SLE_12_SP1
             fi
         fi
         if [ -z $repodir ]; then
@@ -455,9 +455,6 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         zypper -n --gpg-auto-import-keys ref
         zypper -n in docker
-        set +e
-        /usr/lib/docker-image-migrator/do-image-migration-v1to2.sh
-        set -e
         # modify docker opts, docker opts in /etc/sysconfig/docker
         sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/sysconfig/docker
         systemctl daemon-reload
@@ -478,6 +475,17 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             systemctl start glusterd
             # create brick directory
             mkdir -p /mnt/resource/gluster
+        fi
+        # if hpc sku, set up intel mpi
+        if [[ $offer == sles-hpc* ]]; then
+            if [ $sku != "12-sp1" ]; then
+                echo "unsupported sku for intel mpi setup on SLES"
+                exit 1
+            fi
+            zypper -n in lsb
+            rpm -Uvh /opt/intelMPI/intel_mpi_packages/intel-mpi-rt-intel64-5.0.3p-048.x86_64.rpm
+            mkdir -p /opt/intel/compilers_and_libraries/linux
+            ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
         fi
     fi
 else

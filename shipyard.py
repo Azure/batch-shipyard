@@ -1092,7 +1092,7 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
     elif publisher == 'suse':
         if offer.startswith('sles'):
-            if sku >= '12':
+            if sku >= '12-sp1':
                 allowed = True
         elif offer == 'opensuse-leap':
             if sku >= '42':
@@ -1483,6 +1483,7 @@ def add_jobs(batch_client, blob_client, config):
             except KeyError:
                 infiniband = False
             # ensure we're on HPC VMs with inter node comm enabled
+            sles_hpc = False
             if infiniband:
                 if not _pool.enable_inter_node_communication:
                     raise RuntimeError(
@@ -1499,11 +1500,22 @@ def add_jobs(batch_client, blob_client, config):
                     image_reference.publisher.lower()
                 offer = _pool.virtual_machine_configuration.\
                     image_reference.offer.lower()
-                # TODO support SLES-HPC, for now only support CentOS-HPC
-                if publisher != 'openlogic' and offer != 'centos-hpc':
+                sku = _pool.virtual_machine_configuration.\
+                    image_reference.sku.lower()
+                supported = False
+                # only centos-hpc and sles-hpc:12-sp1 are supported
+                # for infiniband
+                if publisher == 'openlogic' and offer == 'centos-hpc':
+                    supported = True
+                elif (publisher == 'suse' and offer == 'sles-hpc' and
+                      sku == '12-sp1'):
+                    supported = True
+                    sles_hpc = True
+                if not supported:
                     raise ValueError(
                         ('Unsupported infiniband VM config, publisher={} '
                          'offer={}').format(publisher, offer))
+                del supported
             # ensure we're on n-series for gpu
             try:
                 gpu = task['gpu']
@@ -1577,6 +1589,8 @@ def add_jobs(batch_client, blob_client, config):
                 run_opts.append('--device=/dev/infiniband/rdma_cm')
                 run_opts.append('--device=/dev/infiniband/uverbs0')
                 run_opts.append('-v /etc/rdma:/etc/rdma:ro')
+                if sles_hpc:
+                    run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
                 run_opts.append('-v /opt/intel:/opt/intel:ro')
             # mount batch root dir
             run_opts.append(

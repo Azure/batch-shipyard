@@ -2,10 +2,10 @@
 It is recommended to review the full
 [in-depth configuration guide](10-batch-shipyard-configuration.md) for
 explanations of all of the configuration options available for Batch Shipyard.
-
 However, for those wanting to jump in and deploy an application quickly,
-this doc will provide step-by-step instructions. For the following, you may
-select any of the following Deep Learning frameworks to quickly get started:
+this doc will provide step-by-step instructions. For the following
+quickstart example, you may select any of the following Deep Learning
+frameworks to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](../recipes/Caffe-CPU)
 * [TensorFlow-CPU](../recipes/TensorFlow-CPU)
