@@ -2,8 +2,8 @@
 
 ## [Unreleased]
 ### Added
-- Transparent Infiniband support for SUSE SLES-HPC 12-SP1 image
-- NAMD-GPU, OpenFOAM-Infiniband-IntelMPI recipe
+- Transparent Infiniband assist for SUSE SLES-HPC 12-SP1 image
+- NAMD-GPU, OpenFOAM-Infiniband-IntelMPI, Torch-CPU, Torch-GPU recipes
 
 ### Changed
 - GlusterFS mountpoint is now within `$AZ_BATCH_NODE_SHARED_DIR` so files can

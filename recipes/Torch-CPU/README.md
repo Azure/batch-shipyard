@@ -1,5 +1,5 @@
-# Caffe-CPU
-This recipe shows how to run [Caffe](http://caffe.berkeleyvision.org/) on
+# Torch-CPU
+This recipe shows how to run [Torch](http://torch.ch/) on
 a single node using CPU only.
 
 ## Configuration
@@ -15,22 +15,22 @@ Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
 
 ### Global Configuration
 The global configuration should set the following properties:
-* `docker_images` array must have a reference to a valid Caffe CPU-enabled
-Docker image. [alfpark/caffe:cpu](https://hub.docker.com/r/alfpark/caffe/) can
+* `docker_images` array must have a reference to a valid Torch CPU-enabled
+Docker image. [alfpark/torch:cpu](https://hub.docker.com/r/alfpark/torch/) can
 be used for this recipe.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `alfpark/caffe:cpu`
+e.g., `alfpark/torch:cpu`
 * `command` should contain the command to pass to the Docker run invocation.
-For the `alfpark/caffe:cpu` Docker image and to run the MNIST convolutional
+For the `alfpark/torch:cpu` Docker image and to run the MNIST convolutional
 example, the `command` would simply be:
-`"/opt/run_mnist.sh"`
+`"/root/torch/run_mnist.sh"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).
 
-You must agree to the [Caffe License](https://github.com/BVLC/caffe/blob/master/LICENSE)
+You must agree to the [Torch License](https://github.com/torch/torch7/blob/master/COPYRIGHT.txt)
 prior to use.

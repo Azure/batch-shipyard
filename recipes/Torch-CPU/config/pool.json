@@ -1,0 +1,16 @@
+{
+    "pool_specification": {
+        "id": "torch",
+        "vm_size": "STANDARD_D3_V2",
+        "vm_count": 1,
+        "publisher": "Canonical",
+        "offer": "UbuntuServer",
+        "sku": "16.04.0-LTS",
+        "ssh_docker_tunnel": {
+            "username": "docker",
+            "generate_tunnel_script": true
+        },
+        "reboot_on_start_task_failed": true,
+        "block_until_all_global_resources_loaded": true
+    }
+}

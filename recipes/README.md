@@ -9,12 +9,7 @@ config file you are planning on using and modify accordingly. As the config
 samples are bare examples only, you will need to configure them to your liking
 for actual workloads.
 
-**NOTE: Some recipes are not complete, but are forthcoming.**
-
 ## Deep Learning
-### CNTK-CPU-Infiniband-IntelMPI
-TBC.
-
 ### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
 This CNTK-CPU-OpenMPI recipe contains information on how to Dockerize
 [CNTK](https://cntk.ai/) for CPUs, including execution across multiple
@@ -48,6 +43,14 @@ VMs or across multiple CPU nodes.
 This TensorFlow-GPU recipe contains information on how to Dockerize
 [TensorFlow](https://www.tensorflow.org/) on GPUs for use with N-series Azure
 VMs.
+
+### [Torch-CPU](./Torch-CPU)
+This Torch-CPU recipe contains information on how to Dockerize
+[Torch](http://torch.ch) for use on Azure Batch compute nodes.
+
+### [Torch-GPU](./Torch-GPU)
+This Torch-GPU recipe contains information on how to Dockerize
+[Torch](http://torch.ch) on GPUs for use with N-series Azure VMs.
 
 ## Computational Fluid Dynamics (CFD) and Molecular Dynamics (MD)
 ### [NAMD-GPU](./NAMD-GPU)

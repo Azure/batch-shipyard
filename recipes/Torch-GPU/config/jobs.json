@@ -1,0 +1,15 @@
+{
+    "job_specifications": [
+        {
+            "id": "torch",
+            "tasks": [
+                {
+                    "image": "alfpark/torch:gpu",
+                    "remove_container_after_exit": true,
+                    "command": "/root/torch/run_mnist.sh",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}

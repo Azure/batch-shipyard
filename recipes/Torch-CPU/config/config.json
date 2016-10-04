@@ -1,0 +1,11 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "<storage account specified in credentials.json>",
+        "storage_entity_prefix": "shipyard"
+    },
+    "global_resources": {
+        "docker_images": [
+            "alfpark/torch:cpu"
+        ]
+    }
+}
