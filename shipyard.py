@@ -66,6 +66,7 @@ except NameError:
 # create logger
 logger = logging.getLogger('shipyard')
 # global defines
+_VERSION = '1.1.0'
 _PY2 = sys.version_info.major == 2
 _ON_WINDOWS = platform.system() == 'Windows'
 _AZUREFILE_DVD_BIN = {
@@ -242,6 +243,7 @@ def _create_credentials(config):
     batch_client = batch.BatchServiceClient(
         credentials,
         base_url=config['credentials']['batch']['account_service_url'])
+    batch_client.config.add_user_agent('batch-shipyard/{}'.format(_VERSION))
     blob_client = azureblob.BlockBlobService(
         account_name=_STORAGEACCOUNT,
         account_key=_STORAGEACCOUNTKEY,
@@ -2366,6 +2368,7 @@ def parseargs():
         '--filespec',
         help='parameter for action streamfile/gettaskfile: '
         'jobid:taskid:filename')
+    parser.add_argument('--version', action='version', version=_VERSION)
     return parser.parse_args()
 
 if __name__ == '__main__':

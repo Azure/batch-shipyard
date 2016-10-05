@@ -1,8 +1,11 @@
 # Change Log
 
 ## [Unreleased]
+
+## [1.1.0] - 2016-10-05
 ### Added
 - Transparent Infiniband assist for SUSE SLES-HPC 12-SP1 image
+- Add version for shipyard.py script
 - NAMD-GPU, OpenFOAM-Infiniband-IntelMPI, Torch-CPU, Torch-GPU recipes
 
 ### Changed
@@ -78,7 +81,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/Azure/batch-shipyard/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/Azure/batch-shipyard/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/Azure/batch-shipyard/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/Azure/batch-shipyard/compare/ab1fa4d...0.1.0

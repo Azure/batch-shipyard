@@ -5,7 +5,7 @@ the context of Azure Batch, Docker, and Batch Shipyard.
 ## Overview
 Multi-instance tasks are a special type of task in Azure Batch that are
 primarily targeted for an execution that requires multiple compute nodes in
-order to run. The typical use case for multi-instance tasks are MPI jobs.
+order to run. The canonical use case for multi-instance tasks are MPI jobs.
 MPI jobs are typically run on a cluster of nodes where each node participates
 in the execution by performing computation on a part of the problem and
 coordinates with other nodes to reach a solution.
