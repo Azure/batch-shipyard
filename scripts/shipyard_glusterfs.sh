@@ -41,6 +41,9 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     # create volume
     echo "creating gv0 ($bricks)"
     gluster volume create gv0 replica $numnodes transport tcp$bricks
+    # modify volume properties
+    gluster volume set gv0 storage.owner-uid `id -u _azbatch`
+    gluster volume set gv0 storage.owner-gid `id -g _azbatch`
     # start volume
     echo "starting gv0"
     gluster volume start gv0
@@ -64,6 +67,7 @@ set -e
 # add gv0 to /etc/fstab for auto-mount on reboot
 mountpoint=$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0
 mkdir -p $mountpoint
+chmod 775 $mountpoint
 echo "adding $mountpoint to fstab"
 echo "$ipaddress:/gv0 $mountpoint glusterfs defaults,_netdev 0 0" >> /etc/fstab
 
@@ -88,6 +92,7 @@ do
     fi
 done
 set -e
+chmod 775 $mountpoint
 
 # touch file noting success
 touch .glusterfs_success

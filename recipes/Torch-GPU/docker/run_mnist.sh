@@ -30,4 +30,4 @@ sed -i "/      local targets = torch.Tensor(opt.batchSize)/a \
       targets = targets:cuda()\n" $train
 
 # train
-th $train -t "$(nproc)"
+th $train -t "$(nproc)" $*

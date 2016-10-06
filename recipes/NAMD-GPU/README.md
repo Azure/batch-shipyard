@@ -42,7 +42,7 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-cuda`
-* `command` should contain the `mpirun` command. If using the sample NAMD-TCP
+* `command` should contain the `mpirun` command. If using the sample NAMD-GPU
 image provided, `"/sw/run_namd.sh <benchmark> <steps> <ppn>"` can be used
 to run the included benchmarks:
   * `<benchmark>` is the benchmark to run: `apoa1` or `stmv`

@@ -15,4 +15,4 @@ curl -O $github_url/$dataset
 curl -O $github_url/$train
 
 # train
-th $train -t "$(nproc)"
+th $train -t "$(nproc)" $*
