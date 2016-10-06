@@ -708,7 +708,7 @@ def add_pool(batch_client, blob_client, config):
     if gluster:
         _setup_glusterfs(batch_client, blob_client, config, nodes)
     # create admin user on each node if requested
-    add_ssh_tunnel_user(batch_client, config, nodes)
+    add_ssh_user(batch_client, config, nodes)
     # log remote login settings
     get_remote_login_settings(batch_client, config, nodes)
 
@@ -790,7 +790,7 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
             batchtask.id, job_id))
 
 
-def add_ssh_tunnel_user(batch_client, config, nodes=None):
+def add_ssh_user(batch_client, config, nodes=None):
     # type: (batch.BatchServiceClient, dict,
     #        List[batchmodels.ComputeNode]) -> None
     """Add an SSH user to node and optionally generate an SSH tunneling script
@@ -801,23 +801,20 @@ def add_ssh_tunnel_user(batch_client, config, nodes=None):
     """
     pool_id = config['pool_specification']['id']
     try:
-        docker_user = config[
-            'pool_specification']['ssh_docker_tunnel']['username']
+        docker_user = config['pool_specification']['ssh']['username']
         if docker_user is None:
             raise KeyError()
     except KeyError:
-        logger.info('not creating ssh tunnel user on pool {}'.format(pool_id))
+        logger.info('not creating ssh user on pool {}'.format(pool_id))
     else:
         ssh_priv_key = None
         try:
-            ssh_pub_key = config[
-                'pool_specification']['ssh_docker_tunnel']['ssh_public_key']
+            ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
         except KeyError:
             ssh_pub_key = None
         try:
             gen_tunnel_script = config[
-                'pool_specification']['ssh_docker_tunnel'][
-                    'generate_tunnel_script']
+                'pool_specification']['ssh']['generate_tunnel_script']
         except KeyError:
             gen_tunnel_script = False
         # generate ssh key pair if not specified
@@ -957,7 +954,7 @@ def add_admin_user_to_compute_node(
     pool_id = config['pool_specification']['id']
     expiry = datetime.datetime.utcnow()
     try:
-        td = config['pool_specification']['ssh_docker_tunnel']['expiry_days']
+        td = config['pool_specification']['ssh']['expiry_days']
         expiry += datetime.timedelta(days=td)
     except KeyError:
         expiry += datetime.timedelta(days=7)
@@ -1158,18 +1155,26 @@ def _adjust_settings_for_pool_creation(config):
         logger.warning(
             'force enabling inter-node communication due to peer-to-peer '
             'transfer')
+    # hpn-ssh can only be used for Ubuntu currently
+    try:
+        if (config['pool_specification']['ssh']['hpn_server_swap'] and
+                publisher != 'canonical' and offer != 'ubuntuserver'):
+            logger.warning('cannot enable HPN SSH swap on {} {} {}'.format(
+                publisher, offer, sku))
+            config['pool_specification']['ssh']['hpn_server_swap'] = False
+    except KeyError:
+        pass
     # adjust ssh settings on windows
     if _ON_WINDOWS:
         try:
-            ssh_pub_key = config[
-                'pool_specification']['ssh_docker_tunnel']['ssh_public_key']
+            ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
         except KeyError:
             ssh_pub_key = None
         if ssh_pub_key is None:
             logger.warning(
-                'disabling ssh docker tunnel creation due to script being '
-                'run from Windows')
-            config['pool_specification'].pop('ssh_docker_tunnel', None)
+                'disabling ssh user creation due to script being run '
+                'from Windows and no public key is specified')
+            config['pool_specification'].pop('ssh', None)
 
 
 def resize_pool(batch_client, config):
@@ -2290,7 +2295,7 @@ def main():
     elif args.action == 'delpool':
         del_pool(batch_client, config)
     elif args.action == 'addsshuser':
-        add_ssh_tunnel_user(batch_client, config)
+        add_ssh_user(batch_client, config)
         get_remote_login_settings(batch_client, config)
     elif args.action == 'delnode':
         del_node(batch_client, config, args.nodeid)

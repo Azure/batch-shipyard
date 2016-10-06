@@ -1,6 +1,17 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Experimental support for OpenSSH HPN on Ubuntu
+
+### Changed
+- **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has
+been replaced by the `ssh` property. Please see the configuration doc for
+more information.
+
+### Fixed
+- GlusterFS mount ownership/permissions fixed such that SSH users can
+read/write
 
 ## [1.1.0] - 2016-10-05
 ### Added

@@ -11,7 +11,8 @@ settings
 3. [Pool](#pool) - Azure Batch pool configuration
 4. [Jobs](#jobs) - Azure Batch jobs and tasks configuration
 
-Each property is marked with required or optional.
+Each property is marked with required or optional. Properties marked with
+experimental should be considered as features for testing only.
 
 Example config templates can be found in [this directory](../config\_templates)
 of the repository.
@@ -246,11 +247,12 @@ The pool schema is as follows:
         "sku": "7.1",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
-        "ssh_docker_tunnel": {
+        "ssh": {
             "username": "docker",
             "expiry_days": 7,
             "ssh_public_key": null,
-            "generate_tunnel_script": true
+            "generate_tunnel_script": true,
+            "hpn_server_swap": false
         },
         "gpu": {
             "nvidia_driver": {
@@ -285,18 +287,23 @@ network timeout or resolution failure). This defaults to `false`.
 * (optional) `block_until_all_global_resources_loaded` will block the node
 from entering ready state until all Docker images are loaded. This defaults
 to `true`.
-* (optional) `ssh_docker_tunnel` is the property for creating a user to
-accomodate SSH tunneling to the Docker Host on compute nodes. If this property
-is absent, then SSH tunnel creation is skipped.
+* (optional) `ssh` is the property for creating a user to accomodate SSH
+sessions to compute nodes. If this property is absent, then an SSH user is not
+created with pool creation.
   * `username` is the user to create on the compute nodes.
   * `expiry_days` is the number of days from now for the account on the compute
     nodes to expire. The default is 7 days from invocation time.
   * `ssh_public_key` is the path to an existing ssh public key to use. If not
     specified, a public/private key pair will be automatically generated only
-    only Linux. If this is `null` or not specified on Windows, SSH tunnel
-    creation will be disabled.
+    only Linux. If this is `null` or not specified on Windows, the SSH user is
+    not created.
   * `generate_tunnel_script` property directs script to generate an SSH tunnel
-script for use with the compute nodes in the pool.
+    script that can be used to connect to the remote Docker engine running on
+    a compute node.
+  * (experimental) `hpn_server_swap` property enables an OpenSSH server with
+    [HPN patches](http://www.psc.edu/index.php/hpn-ssh) to be swapped with the
+    standard distribution OpenSSH server. This is not supported on all
+    Linux distributions and may be force disabled.
 * (required for N-Series VM instances) `gpu` property defines additional
 information for nVidia GPU-enabled VMs:
   * `nvidia_driver` property contains the following required members:

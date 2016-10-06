@@ -10,11 +10,12 @@
         "sku": "16.04.0-LTS",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
-        "ssh_docker_tunnel": {
+        "ssh": {
             "username": "docker",
             "expiry_days": 7,
             "ssh_public_key": null,
-            "generate_tunnel_script": true
+            "generate_tunnel_script": true,
+            "hpn_server_swap": false
         },
         "gpu": {
             "nvidia_driver": {

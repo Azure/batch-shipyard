@@ -7,7 +7,7 @@
         "publisher": "OpenLogic",
         "offer": "CentOS-HPC",
         "sku": "7.1",
-        "ssh_docker_tunnel": {
+        "ssh": {
             "username": "docker",
             "generate_tunnel_script": true
         },
