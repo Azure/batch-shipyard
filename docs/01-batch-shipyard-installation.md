@@ -11,14 +11,16 @@ for python3).
 
 Please note that the Python dependencies require a valid compiler, ssl, ffi,
 and python development libraries to be installed due to the
-[cryptography](https://pypi.python.org/pypi/cryptography) dependency.
+[cryptography](https://pypi.python.org/pypi/cryptography) dependency. The
+following are example commands to execute (as root or with `sudo`) to
+install the required dependencies:
 
-####Ubuntu
+####Ubuntu/Debian
 ```
 apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev
 ```
 
-####CentOS
+####CentOS/RHEL/Fedora
 ```
 yum update && yum install -y gcc openssl-dev libffi-devel python-devel
 ```
@@ -30,13 +32,26 @@ zypper ref && zypper -n in libopenssl-dev libffi48-devel python-devel
 
 ####Note about Python 3.3+
 If installing for Python 3.3+, then simply use the python3 equivalents for
-the python dependencies. For example, on Ubuntu:
+the python dependencies. For example, on Ubuntu/Debian:
 
 ```
 apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev
 ```
 
-would install the proper dependencies.
+would install the proper dependencies for python3.
+
+####Data Movement Support
+Batch Shipyard contains native support for moving files locally accessible
+at the point of script execution. In order to take advantage of this
+functionality, the following programs must be installed:
+
+1. An SSH client that provides `scp`. OpenSSH with
+[HPN patches](http://www.psc.edu/index.php/hpn-ssh) can be used on the client
+side to further accelerate `scp` to Azure Batch compute nodes where
+`hpn_server_swap` has been set to `true` in the `pool_specification`.
+2. `rsync` if `rsync` functionality is needed.
+3. [blobxfer](https://github.com/Azure/blobxfer) if transfering to Azure
+storage.
 
 ## Installation
 Simply clone the repository:

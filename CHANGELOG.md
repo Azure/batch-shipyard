@@ -2,12 +2,16 @@
 
 ## [Unreleased]
 ### Added
+- Data ingress support to GlusterFS. Please see the configuration doc for
+more information.
 - Experimental support for OpenSSH HPN on Ubuntu
 
 ### Changed
 - **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has
 been replaced by the `ssh` property. Please see the configuration doc for
 more information.
+- `streamfile` no longer has an arbitrary max streaming time; the action will
+stream the file indefinitely until the task completes
 
 ### Fixed
 - GlusterFS mount ownership/permissions fixed such that SSH users can

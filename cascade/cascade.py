@@ -331,6 +331,11 @@ def get_docker_image_name_from_resource(resource: str) -> str:
 
 
 def compute_resource_hash(resource: str) -> str:
+    """Calculate compute resource hash
+    :param str resource: resource
+    :rtype: str
+    :return: hash of resource
+    """
     return hashlib.sha1(resource.encode('utf8')).hexdigest()
 
 
