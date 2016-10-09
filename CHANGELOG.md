@@ -12,6 +12,7 @@ been replaced by the `ssh` property. Please see the configuration doc for
 more information.
 - `streamfile` no longer has an arbitrary max streaming time; the action will
 stream the file indefinitely until the task completes
+- Modularized code base
 
 ### Fixed
 - GlusterFS mount ownership/permissions fixed such that SSH users can

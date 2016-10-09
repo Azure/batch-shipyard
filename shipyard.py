@@ -25,10 +25,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 # stdlib imports
-from __future__ import print_function, unicode_literals
+from __future__ import division, print_function, unicode_literals
 import argparse
-import base64
-import copy
 import datetime
 import json
 import hashlib
@@ -36,22 +34,11 @@ import logging
 import logging.handlers
 import os
 try:
-    from os import scandir as scandir
-except ImportError:
-    from scandir import scandir as scandir
-try:
     import pathlib
 except ImportError:
     import pathlib2 as pathlib
-import platform
-try:
-    from shlex import quote as shellquote
-except ImportError:
-    from pipes import quote as shellquote
 import subprocess
-import sys
 import tempfile
-import threading
 import time
 try:
     import urllib.request as urllibreq
@@ -66,18 +53,16 @@ import azure.common
 import azure.storage.blob as azureblob
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
-# function remaps
-try:
-    raw_input
-except NameError:
-    raw_input = input
+# local imports
+import convoy.batch
+import convoy.data
+import convoy.storage
+import convoy.util
 
 # create logger
 logger = logging.getLogger('shipyard')
 # global defines
 _VERSION = '1.1.0'
-_PY2 = sys.version_info.major == 2
-_ON_WINDOWS = platform.system() == 'Windows'
 _AZUREFILE_DVD_BIN = {
     'url': (
         'https://github.com/Azure/azurefile-dockervolumedriver/releases'
@@ -111,7 +96,6 @@ _STORAGE_CONTAINERS = {
     'table_perf': None,
     'queue_globalresources': None,
 }
-_MAX_REBOOT_RETRIES = 5
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
 _JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
@@ -126,20 +110,7 @@ _VM_TCP_NO_TUNE = (
     'standard_a1', 'standard_d1', 'standard_d2', 'standard_d1_v2',
     'standard_f1'
 )
-_SSH_KEY_PREFIX = 'id_rsa_shipyard'
-_SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
-
-
-def _setup_logger():
-    # type: () -> None
-    """Set up logger"""
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        '%(asctime)sZ %(levelname)s %(funcName)s:%(lineno)d %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
 
 
 def _populate_global_settings(config, action):
@@ -229,18 +200,6 @@ def _populate_global_settings(config, action):
     logger.info('private registry settings: {}'.format(_REGISTRY_FILE))
 
 
-def _wrap_commands_in_shell(commands, wait=True):
-    # type: (List[str], bool) -> str
-    """Wrap commands in a shell
-    :param list commands: list of commands to wrap
-    :param bool wait: add wait for background processes
-    :rtype: str
-    :return: wrapped commands
-    """
-    return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
-        '; '.join(commands), '; wait' if wait else '')
-
-
 def _create_credentials(config):
     # type: (dict) -> tuple
     """Create authenticated clients
@@ -270,31 +229,6 @@ def _create_credentials(config):
     return batch_client, blob_client, queue_client, table_client
 
 
-def compute_md5_for_file(file, as_base64, blocksize=65536):
-    # type: (pathlib.Path, bool, int) -> str
-    """Compute MD5 hash for file
-    :param pathlib.Path file: file to compute md5 for
-    :param bool as_base64: return as base64 encoded string
-    :param int blocksize: block size in bytes
-    :rtype: str
-    :return: md5 for file
-    """
-    hasher = hashlib.md5()
-    with file.open('rb') as filedesc:
-        while True:
-            buf = filedesc.read(blocksize)
-            if not buf:
-                break
-            hasher.update(buf)
-        if as_base64:
-            if _PY2:
-                return base64.b64encode(hasher.digest())
-            else:
-                return str(base64.b64encode(hasher.digest()), 'ascii')
-        else:
-            return hasher.hexdigest()
-
-
 def upload_resource_files(blob_client, config, files):
     # type: (azure.storage.blob.BlockBlobService, dict, List[tuple]) -> dict
     """Upload resource files to blob storage
@@ -321,7 +255,7 @@ def upload_resource_files(blob_client, config, files):
                 prop = blob_client.get_blob_properties(
                     _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
                 if (prop.properties.content_settings.content_md5 ==
-                        compute_md5_for_file(fp, True)):
+                        convoy.util.compute_md5_for_file(fp, True)):
                     logger.debug(
                         'remote file is the same for {}, skipping'.format(
                             file[0]))
@@ -362,12 +296,14 @@ def setup_nvidia_docker_package(blob_client, config):
             offer))
     # check to see if package is downloaded
     if (not pkg.exists() or
-            compute_md5_for_file(pkg, False) != _NVIDIA_DOCKER[offer]['md5']):
+            convoy.util.compute_md5_for_file(pkg, False) !=
+            _NVIDIA_DOCKER[offer]['md5']):
         response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
         with pkg.open('wb') as f:
             f.write(response.read())
         # check md5
-        if compute_md5_for_file(pkg, False) != _NVIDIA_DOCKER[offer]['md5']:
+        if (convoy.util.compute_md5_for_file(pkg, False) !=
+                _NVIDIA_DOCKER[offer]['md5']):
             raise RuntimeError('md5 mismatch for {}'.format(pkg))
     return pkg
 
@@ -387,12 +323,14 @@ def setup_azurefile_volume_driver(blob_client, config):
     # check to see if binary is downloaded
     bin = pathlib.Path('resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
-            compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN['md5']):
+            convoy.util.compute_md5_for_file(bin, False) !=
+            _AZUREFILE_DVD_BIN['md5']):
         response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
         with bin.open('wb') as f:
             f.write(response.read())
         # check md5
-        if compute_md5_for_file(bin, False) != _AZUREFILE_DVD_BIN['md5']:
+        if (convoy.util.compute_md5_for_file(bin, False) !=
+                _AZUREFILE_DVD_BIN['md5']):
             raise RuntimeError('md5 mismatch for {}'.format(bin))
     if (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku.startswith('14.04')):
@@ -636,7 +574,8 @@ def add_pool(batch_client, blob_client, config):
         max_tasks_per_node=maxtasks,
         enable_inter_node_communication=internodecomm,
         start_task=batchmodels.StartTask(
-            command_line=_wrap_commands_in_shell(start_task, wait=False),
+            command_line=convoy.util.wrap_commands_in_shell(
+                start_task, wait=False),
             run_elevated=True,
             wait_for_success=True,
             environment_settings=[
@@ -690,38 +629,15 @@ def add_pool(batch_client, blob_client, config):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('CASCADE_TIMING', '1')
         )
-    # create pool if not exists
-    try:
-        logger.info('Attempting to create pool: {}'.format(pool.id))
-        logger.debug('node prep commandline: {}'.format(
-            pool.start_task.command_line))
-        batch_client.pool.add(pool)
-        logger.info('Created pool: {}'.format(pool.id))
-    except batchmodels.BatchErrorException as e:
-        if e.error.code != 'PoolExists':
-            raise
-        else:
-            logger.error('Pool {!r} already exists'.format(pool.id))
-    # wait for pool idle
-    node_state = frozenset(
-        (batchmodels.ComputeNodeState.starttaskfailed,
-         batchmodels.ComputeNodeState.unusable,
-         batchmodels.ComputeNodeState.idle)
-    )
-    try:
-        reboot_on_failed = config[
-            'pool_specification']['reboot_on_start_task_failed']
-    except KeyError:
-        reboot_on_failed = False
-    nodes = _wait_for_pool_ready(
-        batch_client, node_state, pool.id, reboot_on_failed)
+    # create pool
+    nodes = convoy.batch.create_pool(batch_client, config, pool)
     # set up gluster if specified
     if gluster:
         _setup_glusterfs(batch_client, blob_client, config, nodes)
     # create admin user on each node if requested
-    add_ssh_user(batch_client, config, nodes)
+    convoy.batch.add_ssh_user(batch_client, config, nodes)
     # log remote login settings
-    rls = get_remote_login_settings(batch_client, config, nodes)
+    rls = convoy.batch.get_remote_login_settings(batch_client, config, nodes)
     # ingress data if specified
     try:
         ingress_files = config[
@@ -729,7 +645,7 @@ def add_pool(batch_client, blob_client, config):
     except KeyError:
         ingress_files = True
     if ingress_files:
-        ingress_data(batch_client, config, rls)
+        convoy.data.ingress_data(batch_client, config, _GLUSTER_VOLUME, rls)
 
 
 def _setup_glusterfs(batch_client, blob_client, config, nodes):
@@ -759,7 +675,7 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
         id='gluster-setup',
         multi_instance_settings=batchmodels.MultiInstanceSettings(
             number_of_instances=config['pool_specification']['vm_count'],
-            coordination_command_line=_wrap_commands_in_shell([
+            coordination_command_line=convoy.util.wrap_commands_in_shell([
                 '$AZ_BATCH_TASK_DIR/{} {}'.format(
                     _GLUSTERPREP_FILE[0], tempdisk),
             ]),
@@ -807,545 +723,6 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
     logger.info(
         'glusterfs setup task {} in job {} completed'.format(
             batchtask.id, job_id))
-
-
-def add_ssh_user(batch_client, config, nodes=None):
-    # type: (batch.BatchServiceClient, dict,
-    #        List[batchmodels.ComputeNode]) -> None
-    """Add an SSH user to node and optionally generate an SSH tunneling script
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param list nodes: list of nodes
-    """
-    pool_id = config['pool_specification']['id']
-    try:
-        docker_user = config['pool_specification']['ssh']['username']
-        if docker_user is None:
-            raise KeyError()
-    except KeyError:
-        logger.info('not creating ssh user on pool {}'.format(pool_id))
-    else:
-        ssh_priv_key = None
-        try:
-            ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
-        except KeyError:
-            ssh_pub_key = None
-        try:
-            gen_tunnel_script = config[
-                'pool_specification']['ssh']['generate_tunnel_script']
-        except KeyError:
-            gen_tunnel_script = False
-        # generate ssh key pair if not specified
-        if ssh_pub_key is None:
-            ssh_priv_key, ssh_pub_key = generate_ssh_keypair()
-        # get node list if not provided
-        if nodes is None:
-            nodes = batch_client.compute_node.list(pool_id)
-        for node in nodes:
-            add_admin_user_to_compute_node(
-                batch_client, config, node, docker_user, ssh_pub_key)
-        # generate tunnel script if requested
-        if gen_tunnel_script:
-            ssh_args = ['ssh']
-            if ssh_priv_key is not None:
-                ssh_args.append('-i')
-                ssh_args.append(ssh_priv_key)
-            ssh_args.extend([
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'UserKnownHostsFile=/dev/null',
-                '-p', '$2', '-N', '-L', '2375:localhost:2375',
-                '{}@$1'.format(docker_user)])
-            with open(_SSH_TUNNEL_SCRIPT, 'w') as fd:
-                fd.write('#!/usr/bin/env bash\n')
-                fd.write('set -e\n')
-                fd.write(' '.join(ssh_args))
-                fd.write('\n')
-            os.chmod(_SSH_TUNNEL_SCRIPT, 0o755)
-            logger.info('ssh tunnel script generated: {}'.format(
-                _SSH_TUNNEL_SCRIPT))
-
-
-def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
-    # type: (batch.BatchServiceClient, List[batchmodels.ComputeNodeState],
-    #        str, bool) -> List[batchmodels.ComputeNode]
-    """Wait for pool to enter "ready": steady state and all nodes idle
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param str pool_id: pool id
-    :param bool reboot_on_failed: reboot node on failed start state
-    :rtype: list
-    :return: list of nodes
-    """
-    logger.info(
-        'waiting for all nodes in pool {} to reach one of: {!r}'.format(
-            pool_id, node_state))
-    i = 0
-    reboot_map = {}
-    while True:
-        # refresh pool to ensure that there is no resize error
-        pool = batch_client.pool.get(pool_id)
-        if pool.resize_error is not None:
-            raise RuntimeError(
-                'resize error encountered for pool {}: code={} msg={}'.format(
-                    pool.id, pool.resize_error.code,
-                    pool.resize_error.message))
-        nodes = list(batch_client.compute_node.list(pool.id))
-        if (reboot_on_failed and
-                any(node.state == batchmodels.ComputeNodeState.starttaskfailed
-                    for node in nodes)):
-            for node in nodes:
-                if (node.state ==
-                        batchmodels.ComputeNodeState.starttaskfailed):
-                    if node.id not in reboot_map:
-                        reboot_map[node.id] = 0
-                    if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
-                        raise RuntimeError(
-                            ('ran out of reboot retries recovering node {} '
-                             'in pool {}').format(node.id, pool.id))
-                    _reboot_node(batch_client, pool.id, node.id, True)
-                    reboot_map[node.id] += 1
-            # refresh node list
-            nodes = list(batch_client.compute_node.list(pool.id))
-        if (len(nodes) >= pool.target_dedicated and
-                all(node.state in node_state for node in nodes)):
-            if any(node.state != batchmodels.ComputeNodeState.idle
-                    for node in nodes):
-                raise RuntimeError(
-                    'node(s) of pool {} not in idle state'.format(pool.id))
-            else:
-                return nodes
-        i += 1
-        if i % 3 == 0:
-            i = 0
-            logger.debug('waiting for {} nodes to reach desired state'.format(
-                pool.target_dedicated))
-            for node in nodes:
-                logger.debug('{}: {}'.format(node.id, node.state))
-        time.sleep(10)
-
-
-def generate_ssh_keypair():
-    # type: (str) -> tuple
-    """Generate an ssh keypair for use with user logins
-    :param str key_fileprefix: key file prefix
-    :rtype: tuple
-    :return: (private key filename, public key filename)
-    """
-    pubkey = _SSH_KEY_PREFIX + '.pub'
-    try:
-        if os.path.exists(_SSH_KEY_PREFIX):
-            old = _SSH_KEY_PREFIX + '.old'
-            if os.path.exists(old):
-                os.remove(old)
-            os.rename(_SSH_KEY_PREFIX, old)
-    except OSError:
-        pass
-    try:
-        if os.path.exists(pubkey):
-            old = pubkey + '.old'
-            if os.path.exists(old):
-                os.remove(old)
-            os.rename(pubkey, old)
-    except OSError:
-        pass
-    logger.info('generating ssh key pair')
-    subprocess.check_call(
-        ['ssh-keygen', '-f', _SSH_KEY_PREFIX, '-t', 'rsa', '-N', ''''''])
-    return (_SSH_KEY_PREFIX, pubkey)
-
-
-def add_admin_user_to_compute_node(
-        batch_client, config, node, username, ssh_public_key):
-    # type: (batch.BatchServiceClient, dict, str, batchmodels.ComputeNode,
-    #        str) -> None
-    """Adds an administrative user to the Batch Compute Node with a default
-    expiry time of 7 days if not specified.
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param node: The compute node.
-    :type node: `batchserviceclient.models.ComputeNode`
-    :param str username: user name
-    :param str ssh_public_key: ssh rsa public key
-    """
-    pool_id = config['pool_specification']['id']
-    expiry = datetime.datetime.utcnow()
-    try:
-        td = config['pool_specification']['ssh']['expiry_days']
-        expiry += datetime.timedelta(days=td)
-    except KeyError:
-        expiry += datetime.timedelta(days=7)
-    logger.info('adding user {} to node {} in pool {}, expiry={}'.format(
-        username, node.id, pool_id, expiry))
-    try:
-        batch_client.compute_node.add_user(
-            pool_id,
-            node.id,
-            batchmodels.ComputeNodeUser(
-                username,
-                is_admin=True,
-                expiry_time=expiry,
-                password=None,
-                ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
-            )
-        )
-    except batchmodels.batch_error.BatchErrorException as ex:
-        if 'The node user already exists' not in ex.message.value:
-            raise
-
-
-def _subprocess_with_output(cmd, shell=False, suppress_output=False):
-    # type: (str, bool, bool) -> int
-    """Subprocess command and print output
-    :param str cmd: command line to execute
-    :param bool shell: use shell in Popen
-    :param bool suppress_output: suppress output
-    :rtype: int
-    :return: return code of process
-    """
-    _devnull = open(os.devnull, 'w')
-    if suppress_output:
-        proc = subprocess.Popen(
-            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT)
-    else:
-        proc = subprocess.Popen(cmd, shell=shell)
-    proc.wait()
-    _devnull.close()
-    return proc.returncode
-
-
-def _subprocess_nowait(cmd, shell=False, suppress_output=False):
-    # type: (str, bool, bool) -> subprocess.Process
-    """Subprocess command and do not wait for subprocess
-    :param str cmd: command line to execute
-    :param bool shell: use shell in Popen
-    :param bool suppress_output: suppress output
-    :rtype: subprocess.Process
-    :return: subprocess process handle
-    """
-    _devnull = open(os.devnull, 'w')
-    if suppress_output:
-        proc = subprocess.Popen(
-            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT)
-    else:
-        proc = subprocess.Popen(cmd, shell=shell)
-    return proc
-
-
-def _subprocess_wait_all(procs):
-    # type: (list) -> list
-    """Wait for all processes in given list
-    :param list procs: list of processes to wait on
-    :rtype: list
-    :return: list of return codes
-    """
-    rcodes = [None] * len(procs)
-    while True:
-        for i in range(0, len(procs)):
-            if rcodes[i] is None and procs[i].poll() == 0:
-                rcodes[i] = procs[i].returncode
-        if all(x is not None for x in rcodes):
-            break
-        time.sleep(0.03)
-    return rcodes
-
-
-def _scp_data(src, dst, username, ssh_private_key, rls, eo):
-    # type: (str, str, str, pathlib.Path, dict, str, str) -> None
-    """Secure copy data
-    :param str src: source path
-    :param str dst: destination path
-    :param str username: username
-    :param pathlib.Path: ssh private key
-    :param dict rls: remote login settings
-    :param str eo: extra options
-    """
-    recursive = '-r' if pathlib.Path(src).is_dir() else ''
-    _rls = next(iter(rls.values()))
-    ip = _rls.remote_login_ip_address
-    port = _rls.remote_login_port
-    del _rls
-    cmd = ('scp -o StrictHostKeyChecking=no '
-           '-o UserKnownHostsFile=/dev/null -p '
-           '{} {} -i {} -P {} {} {}@{}:"{}"'.format(
-               eo, recursive, ssh_private_key, port, shellquote(src),
-               username, ip, shellquote(dst)))
-    logger.info('begin ingressing data from {} to {}'.format(
-        src, dst))
-    start = datetime.datetime.now()
-    rc = _subprocess_with_output(cmd, shell=True)
-    diff = datetime.datetime.now() - start
-    if rc == 0:
-        logger.info(
-            'finished ingressing data from {0} to {1} in {2:.2f} sec'.format(
-                src, dst, diff.total_seconds()))
-    else:
-        logger.error(
-            'data ingress from {} to {} failed with return code: {}'.format(
-                src, dst, rc))
-
-
-def scantree(path):
-    # type: (str) -> os.DirEntry
-    """Recursively scan a directory tree
-    :param str path: path to scan
-    :rtype: DirEntry
-    :return: DirEntry via generator
-    """
-    for entry in scandir(path):
-        if entry.is_dir(follow_symlinks=True):
-            # due to python2 compat, cannot use yield from here
-            for t in scantree(entry.path):
-                yield t
-        else:
-            yield entry
-
-
-def _multinode_scp_data(src, dst, username, ssh_private_key, rls, eo, mpt):
-    # type: (str, str, str, pathlib.Path, dict, str, str, int) -> None
-    """Secure copy data to multiple destination nodes simultaneously
-    :param str src: source path
-    :param str dst: destination path
-    :param str username: username
-    :param pathlib.Path: ssh private key
-    :param dict rls: remote login settings
-    :param str eo: extra options
-    :param int mpt: max parallel transfers per node
-    """
-    psrc = pathlib.Path(src)
-    if len(rls) == 1 or not psrc.is_dir():
-        _scp_data(src, dst, username, ssh_private_key, rls, eo)
-        return
-    buckets = {}
-    files = {}
-    rcodes = {}
-    for rkey in rls:
-        buckets[rkey] = 0
-        files[rkey] = []
-        rcodes[rkey] = None
-    # walk the directory structure
-    # 1. construct a set of dirs to create on the remote side
-    # 2. binpack files to different nodes
-    total_files = 0
-    dirs = set()
-    for entry in scantree(src):
-        rel = pathlib.Path(entry.path).relative_to(psrc)
-        sparent = str(pathlib.Path(entry.path).relative_to(psrc).parent)
-        if sparent != '.':
-            dirs.add(sparent)
-        if entry.is_file():
-            dstpath = '{}{}/{}'.format(dst, psrc.name, rel)
-            # get key of min bucket values
-            key = min(buckets, key=buckets.get)
-            buckets[key] += entry.stat().st_size
-            files[key].append((entry.path, dstpath))
-            total_files += 1
-    total_size = sum(buckets.values())
-    # create remote directories via ssh
-    logger.debug('creating remote directories: {}'.format(dirs))
-    dirs = ['mkdir -p {}/{}'.format(psrc.name, x) for x in list(dirs)]
-    dirs.insert(0, 'cd {}'.format(dst))
-    _rls = next(iter(rls.values()))
-    ip = _rls.remote_login_ip_address
-    port = _rls.remote_login_port
-    del _rls
-    mkdircmd = ('ssh -o StrictHostKeyChecking=no '
-                '-o UserKnownHostsFile=/dev/null -x '
-                '-i {} -p {} {}@{} {}'.format(
-                    ssh_private_key, port, username, ip,
-                    _wrap_commands_in_shell(dirs)))
-    rc = _subprocess_with_output(mkdircmd.split())
-    if rc == 0:
-        logger.info('remote directories created on {}'.format(dst))
-    else:
-        logger.error('remote directory creation failed')
-        return
-    del ip
-    del port
-    # scp data to multiple nodes simultaneously
-    if mpt is None:
-        mpt = 1
-    logger.info(
-        'ingress data: {0:.4f} MiB in {1} files to transfer, using {2} max '
-        'parallel transfers per node'.format(
-            total_size / 1048576, total_files, mpt))
-    logger.info('begin ingressing data from {} to {}'.format(
-        src, dst))
-    nodekeys = list(buckets.keys())
-    threads = []
-    start = datetime.datetime.now()
-    for i in range(0, len(buckets)):
-        nkey = nodekeys[i]
-        thr = threading.Thread(
-            target=_scp_thread_worker,
-            args=(mpt, nkey, rcodes, files[nkey],
-                  rls[nkey].remote_login_ip_address,
-                  rls[nkey].remote_login_port, username, ssh_private_key, eo)
-        )
-        threads.append(thr)
-        thr.start()
-    for i in range(0, len(buckets)):
-        threads[i].join()
-    diff = datetime.datetime.now() - start
-    success = True
-    for nkey in rcodes:
-        if rcodes[nkey] != 0:
-            logger.error('data ingress failed to node: {}'.format(nkey))
-            success = False
-    if success:
-        logger.info(
-            'finished ingressing {0:.4f} MB of data in {1} files from {2} to '
-            '{3} in {4:.2f} sec ({5:.3f} Mbit/s)'.format(
-                total_size / 1048576, total_files, src, dst,
-                diff.total_seconds(),
-                (total_size * 8 / 1e6) / diff.total_seconds()))
-
-
-def _scp_thread_worker(
-        mpt, node_id, rcodes, files, ip, port, username, ssh_private_key, eo):
-    # type: (int, str, dict, list, str, int, str, pathlib.Path, str) -> None
-    """Worker thread code for secure copy to a node with a file list
-    :param int mpt: max parallel transfers per node
-    :param str node_id: node id
-    :param dict rcodes: return codes dict
-    :param list files: list of files to copy
-    :param str ip: ip address
-    :param int port: port
-    :param str username: username
-    :param pathlib.Path: ssh private key
-    :param str eo: extra options
-    """
-    i = 0
-    while True:
-        procs = []
-        for j in range(i, i + mpt):
-            if j >= len(files):
-                break
-            file = files[j]
-            src = file[0]
-            dst = file[1]
-            cmd = ('scp -o StrictHostKeyChecking=no '
-                   '-o UserKnownHostsFile=/dev/null -p '
-                   '{} -i {} -P {} {} {}@{}:"{}"'.format(
-                       eo, ssh_private_key, port, shellquote(src), username,
-                       ip, shellquote(dst)))
-            procs.append(_subprocess_nowait(cmd, shell=True))
-        rc = _subprocess_wait_all(procs)
-        for _rc in rc:
-            if _rc != 0:
-                logger.error(
-                    'data ingress to {} failed with return code: {}'.format(
-                        node_id, _rc))
-                rcodes[node_id] = _rc
-                return
-        i += len(procs)
-        if i == len(files):
-            break
-    rcodes[node_id] = 0
-
-
-def ingress_data(batch_client, config, rls=None):
-    # type: (batch.BatchServiceClient, dict, dict) -> None
-    """Ingresses data into Azure Batch
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param dict rls: remote login settings
-    """
-    try:
-        files = config['global_resources']['files']
-    except KeyError:
-        logger.debug('no files to ingress detected')
-        return
-    try:
-        username = config['pool_specification']['ssh']['username']
-    except KeyError:
-        username = None
-    if rls is None:
-        rls = get_remote_login_settings(batch_client, config)
-    for fdict in files:
-        src = fdict['source']
-        try:
-            shared = fdict['destination']['shared_data_volume']
-        except KeyError:
-            shared = None
-        try:
-            storage = fdict['destination']['storage_account_settings']
-        except KeyError:
-            storage = None
-        if shared is not None and storage is not None:
-            raise RuntimeError(
-                'cannot specify both shared data volume and storage for the '
-                'destination for source: {}'.format(src))
-        if shared is not None:
-            if username is None:
-                raise RuntimeError(
-                    'cannot ingress data to shared data volume without a '
-                    'valid ssh user')
-            try:
-                method = fdict['destination']['data_transfer'][
-                    'method'].lower()
-            except KeyError:
-                raise RuntimeError(
-                    'no transfer method specified for data transfer of '
-                    'source: {} to {}'.format(src, shared))
-            try:
-                eo = fdict['destination']['data_transfer']['extra_options']
-                if eo is None:
-                    eo = ''
-            except KeyError:
-                eo = ''
-            try:
-                mpt = fdict['destination']['data_transfer'][
-                    'max_parallel_transfers_per_node']
-                if mpt is not None and mpt <= 0:
-                    mpt = None
-            except KeyError:
-                mpt = None
-            try:
-                ssh_private_key = pathlib.Path(
-                    fdict['destination']['data_transfer']['ssh_private_key'])
-            except KeyError:
-                raise RuntimeError('ssh private key must be specified')
-            if not ssh_private_key.exists():
-                raise RuntimeError(
-                    'ssh private key does not exist at: {}'.format(
-                        ssh_private_key))
-            # convert shared to actual path
-            shared_data_volumes = config['global_resources'][
-                'docker_volumes']['shared_data_volumes']
-            for key in shared_data_volumes:
-                if key == shared:
-                    driver = shared_data_volumes[key]['volume_driver']
-                    break
-            if driver == 'glusterfs':
-                if (config['pool_specification']['offer'].lower() ==
-                        'ubuntuserver'):
-                    dst = '/mnt/batch/tasks/shared/{}/'.format(_GLUSTER_VOLUME)
-                else:
-                    dst = '/mnt/resource/batch/tasks/shared/{}/'.format(
-                        _GLUSTER_VOLUME)
-            else:
-                raise RuntimeError(
-                    'data ingress to {} not supported'.format(driver))
-            if method == 'scp':
-                _scp_data(src, dst, username, ssh_private_key, rls, eo)
-            elif method == 'multinode_scp':
-                _multinode_scp_data(
-                    src, dst, username, ssh_private_key, rls, eo, mpt)
-            elif method == 'rsync+ssh':
-                raise NotImplementedError()
-            else:
-                raise RuntimeError(
-                    'unknown transfer method: {}'.format(method))
-        elif storage is not None:
-            # container = fdict['destination']['container']
-            raise NotImplementedError()
-        else:
-            raise RuntimeError(
-                'invalid file transfer configuration: {}'.format(fdict))
 
 
 def _add_global_resource(
@@ -1536,7 +913,7 @@ def _adjust_settings_for_pool_creation(config):
     except KeyError:
         pass
     # adjust ssh settings on windows
-    if _ON_WINDOWS:
+    if convoy.util.on_windows():
         try:
             ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
         except KeyError:
@@ -1561,7 +938,7 @@ def _adjust_settings_for_pool_creation(config):
             if 'shared_data_volume' in fdict['destination']:
                 shared = True
                 break
-        if _ON_WINDOWS and shared and xfer_files_with_pool:
+        if convoy.util.on_windows() and shared and xfer_files_with_pool:
             raise RuntimeError(
                 'cannot transfer files to shared data volume on Windows')
     except KeyError:
@@ -1580,104 +957,6 @@ def _adjust_settings_for_pool_creation(config):
             'block_until_all_global_resources_loaded'] = False
 
 
-def resize_pool(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Resize a pool
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    pool_id = config['pool_specification']['id']
-    vm_count = int(config['pool_specification']['vm_count'])
-    logger.info('Resizing pool {} to {}'.format(pool_id, vm_count))
-    batch_client.pool.resize(
-        pool_id=pool_id,
-        pool_resize_parameter=batchmodels.PoolResizeParameter(
-            target_dedicated=vm_count,
-            resize_timeout=datetime.timedelta(minutes=20),
-        )
-    )
-
-
-def _confirm_action(config, msg=None):
-    # type: (dict) -> bool
-    """Confirm action with user before proceeding
-    :param dict config: configuration dict
-    :rtype: bool
-    :return: if user confirmed or not
-    """
-    if config['_auto_confirm']:
-        return True
-    if msg is None:
-        msg = 'action'
-    user = raw_input('Confirm {} [y/n]: '.format(msg))
-    if user.lower() in ['y', 'yes']:
-        return True
-    return False
-
-
-def del_pool(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Delete a pool
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    pool_id = config['pool_specification']['id']
-    if not _confirm_action(config, 'delete {} pool'.format(pool_id)):
-        return
-    logger.info('Deleting pool: {}'.format(pool_id))
-    batch_client.pool.delete(pool_id)
-
-
-def del_node(batch_client, config, node_id):
-    # type: (batch.BatchServiceClient, dict, str) -> None
-    """Delete a node in a pool
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param str node_id: node id to delete
-    """
-    if node_id is None or len(node_id) == 0:
-        raise ValueError('node id is invalid')
-    pool_id = config['pool_specification']['id']
-    if not _confirm_action(
-            config, 'delete node {} from {} pool'.format(node_id, pool_id)):
-        return
-    logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
-    batch_client.pool.remove_nodes(
-        pool_id=pool_id,
-        node_remove_parameter=batchmodels.NodeRemoveParameter(
-            node_list=[node_id],
-        )
-    )
-
-
-def _reboot_node(batch_client, pool_id, node_id, wait):
-    # type: (batch.BatchServiceClient, str, str, bool) -> None
-    """Reboot a node in a pool
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param str pool_id: pool id of node
-    :param str node_id: node id to delete
-    :param bool wait: wait for node to enter rebooting state
-    """
-    logger.info('Rebooting node {} from pool {}'.format(node_id, pool_id))
-    batch_client.compute_node.reboot(
-        pool_id=pool_id,
-        node_id=node_id,
-    )
-    if wait:
-        logger.debug('waiting for node {} to enter rebooting state'.format(
-            node_id))
-        while True:
-            node = batch_client.compute_node.get(pool_id, node_id)
-            if node.state == batchmodels.ComputeNodeState.rebooting:
-                break
-            else:
-                time.sleep(1)
-
-
 def add_jobs(batch_client, blob_client, config):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
     """Add jobs
@@ -1693,7 +972,7 @@ def add_jobs(batch_client, blob_client, config):
     for gr in config['global_resources']['docker_images']:
         global_resources.append(gr)
     # TODO add global resources for non-docker resources
-    jpcmdline = _wrap_commands_in_shell([
+    jpcmdline = convoy.util.wrap_commands_in_shell([
         '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
             _JOBPREP_FILE[0], ' '.join(global_resources))])
     for jobspec in config['job_specifications']:
@@ -1743,7 +1022,7 @@ def add_jobs(batch_client, blob_client, config):
                     'container')
             set_terminate_on_all_tasks_complete = True
             job.job_release_task = batchmodels.JobReleaseTask(
-                command_line=_wrap_commands_in_shell(
+                command_line=convoy.util.wrap_commands_in_shell(
                     ['docker stop {}'.format(docker_container_name),
                      'docker rm -v {}'.format(docker_container_name)]),
                 run_elevated=True,
@@ -1959,7 +1238,7 @@ def add_jobs(batch_client, blob_client, config):
                 if env_vars is None:
                     env_vars = task_ev
                 else:
-                    env_vars = merge_dict(env_vars, task_ev)
+                    env_vars = convoy.util.merge_dict(env_vars, task_ev)
             except KeyError:
                 if infiniband:
                     env_vars = []
@@ -2067,8 +1346,8 @@ def add_jobs(batch_client, blob_client, config):
                              'invalid: {}').format(num_instances))
                 mis = batchmodels.MultiInstanceSettings(
                     number_of_instances=num_instances,
-                    coordination_command_line=_wrap_commands_in_shell(
-                        cc_args, wait=False),
+                    coordination_command_line=convoy.util.
+                    wrap_commands_in_shell(cc_args, wait=False),
                     common_resource_files=[],
                 )
                 # add common resource files for multi-instance
@@ -2105,7 +1384,7 @@ def add_jobs(batch_client, blob_client, config):
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task_id,
-                command_line=_wrap_commands_in_shell(task_commands),
+                command_line=convoy.util.wrap_commands_in_shell(task_commands),
                 run_elevated=True,
                 resource_files=[],
             )
@@ -2160,475 +1439,6 @@ def add_jobs(batch_client, blob_client, config):
                         OnAllTasksComplete.terminate_job))
 
 
-def del_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Delete jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    for job in config['job_specifications']:
-        job_id = job['id']
-        if not _confirm_action(config, 'delete {} job'.format(job_id)):
-            continue
-        logger.info('Deleting job: {}'.format(job_id))
-        batch_client.job.delete(job_id)
-
-
-def clean_mi_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Clean up multi-instance jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    for job in config['job_specifications']:
-        job_id = job['id']
-        cleanup_job_id = 'shipyardcleanup-' + job_id
-        cleanup_job = batchmodels.JobAddParameter(
-            id=cleanup_job_id,
-            pool_info=batchmodels.PoolInformation(
-                pool_id=config['pool_specification']['id']),
-        )
-        try:
-            batch_client.job.add(cleanup_job)
-            logger.info('Added cleanup job: {}'.format(cleanup_job.id))
-        except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The specified job already exists' not in ex.message.value:
-                raise
-        # get all cleanup tasks
-        cleanup_tasks = [x.id for x in batch_client.task.list(cleanup_job_id)]
-        # list all tasks in job
-        tasks = batch_client.task.list(job_id)
-        for task in tasks:
-            if (task.id in cleanup_tasks or
-                    task.multi_instance_settings is None):
-                continue
-            # check if task is complete
-            if task.state == batchmodels.TaskState.completed:
-                name = task.multi_instance_settings.coordination_command_line.\
-                    split('--name')[-1].split()[0]
-                # create cleanup task
-                batchtask = batchmodels.TaskAddParameter(
-                    id=task.id,
-                    multi_instance_settings=batchmodels.MultiInstanceSettings(
-                        number_of_instances=task.
-                        multi_instance_settings.number_of_instances,
-                        coordination_command_line=_wrap_commands_in_shell([
-                            'docker stop {}'.format(name),
-                            'docker rm -v {}'.format(name),
-                            'exit 0',
-                        ], wait=False),
-                    ),
-                    command_line='/bin/sh -c "exit 0"',
-                    run_elevated=True,
-                )
-                batch_client.task.add(job_id=cleanup_job_id, task=batchtask)
-                logger.debug(
-                    ('Waiting for docker multi-instance clean up task {} '
-                     'for job {} to complete').format(batchtask.id, job_id))
-                # wait for cleanup task to complete before adding another
-                while True:
-                    batchtask = batch_client.task.get(
-                        cleanup_job_id, batchtask.id)
-                    if batchtask.state == batchmodels.TaskState.completed:
-                        break
-                    time.sleep(1)
-                logger.info(
-                    ('Docker multi-instance clean up task {} for job {} '
-                     'completed').format(batchtask.id, job_id))
-
-
-def del_clean_mi_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Delete clean up multi-instance jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    for job in config['job_specifications']:
-        job_id = job['id']
-        cleanup_job_id = 'shipyardcleanup-' + job_id
-        logger.info('deleting job: {}'.format(cleanup_job_id))
-        try:
-            batch_client.job.delete(cleanup_job_id)
-        except batchmodels.batch_error.BatchErrorException:
-            pass
-
-
-def terminate_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Terminate jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    for job in config['job_specifications']:
-        job_id = job['id']
-        if not _confirm_action(config, 'terminate {} job'.format(job_id)):
-            continue
-        logger.info('Terminating job: {}'.format(job_id))
-        batch_client.job.terminate(job_id)
-
-
-def del_all_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Delete all jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    """
-    logger.debug('Getting list of all jobs...')
-    jobs = batch_client.job.list()
-    for job in jobs:
-        if not _confirm_action(config, 'delete {} job'.format(job.id)):
-            continue
-        logger.info('Deleting job: {}'.format(job.id))
-        batch_client.job.delete(job.id)
-
-
-def get_remote_login_settings(batch_client, config, nodes=None):
-    # type: (batch.BatchServiceClient, dict, List[str], bool) -> dict
-    """Get remote login settings
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param list nodes: list of nodes
-    :rtype: dict
-    :return: dict of node id -> remote login settings
-    """
-    pool_id = config['pool_specification']['id']
-    if nodes is None:
-        nodes = batch_client.compute_node.list(pool_id)
-    ret = {}
-    for node in nodes:
-        rls = batch_client.compute_node.get_remote_login_settings(
-            pool_id, node.id)
-        logger.info('node {}: ip {} port {}'.format(
-            node.id, rls.remote_login_ip_address, rls.remote_login_port))
-        ret[node.id] = rls
-    return ret
-
-
-def stream_file_and_wait_for_task(batch_client, filespec=None):
-    # type: (batch.BatchServiceClient, str) -> None
-    """Stream a file and wait for task to complete
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param str filespec: filespec (jobid:taskid:filename)
-    """
-    if filespec is None:
-        job_id = None
-        task_id = None
-        file = None
-    else:
-        job_id, task_id, file = filespec.split(':')
-    if job_id is None:
-        job_id = raw_input('Enter job id: ')
-    if task_id is None:
-        task_id = raw_input('Enter task id: ')
-    if file is None:
-        file = raw_input(
-            'Enter task-relative file path to stream [stdout.txt]: ')
-    if file == '' or file is None:
-        file = 'stdout.txt'
-    # get first running task if specified
-    if task_id == '@FIRSTRUNNING':
-        logger.debug('attempting to get first running task in job {}'.format(
-            job_id))
-        while True:
-            tasks = batch_client.task.list(
-                job_id,
-                task_list_options=batchmodels.TaskListOptions(
-                    filter='state eq \'running\'',
-                ),
-            )
-            for task in tasks:
-                task_id = task.id
-                break
-            if task_id == '@FIRSTRUNNING':
-                time.sleep(1)
-            else:
-                break
-    logger.debug('attempting to stream file {} from job={} task={}'.format(
-        file, job_id, task_id))
-    curr = 0
-    end = 0
-    completed = False
-    while True:
-        # get task file properties
-        try:
-            tfp = batch_client.file.get_node_file_properties_from_task(
-                job_id, task_id, file, raw=True)
-        except batchmodels.BatchErrorException as ex:
-            if ('The specified operation is not valid for the current '
-                    'state of the resource.' in ex.message):
-                time.sleep(1)
-                continue
-            else:
-                raise
-        size = int(tfp.response.headers['Content-Length'])
-        if size != end and curr != size:
-            end = size
-            frag = batch_client.file.get_from_task(
-                job_id, task_id, file,
-                batchmodels.FileGetFromTaskOptions(
-                    ocp_range='bytes={}-{}'.format(curr, end))
-            )
-            for f in frag:
-                print(f.decode('utf8'), end='')
-            curr = end
-        elif completed:
-            print()
-            break
-        if not completed:
-            task = batch_client.task.get(job_id, task_id)
-            if task.state == batchmodels.TaskState.completed:
-                completed = True
-        time.sleep(1)
-
-
-def get_file_via_task(batch_client, config, filespec=None):
-    # type: (batch.BatchServiceClient, dict, str) -> None
-    """Get a file task style
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param str filespec: filespec (jobid:taskid:filename)
-    """
-    if filespec is None:
-        job_id = None
-        task_id = None
-        file = None
-    else:
-        job_id, task_id, file = filespec.split(':')
-    if job_id is None:
-        job_id = raw_input('Enter job id: ')
-    if task_id is None:
-        task_id = raw_input('Enter task id: ')
-    if file is None:
-        file = raw_input(
-            'Enter task-relative file path to retrieve [stdout.txt]: ')
-    if file == '' or file is None:
-        file = 'stdout.txt'
-    # get first running task if specified
-    if task_id == '@FIRSTRUNNING':
-        logger.debug('attempting to get first running task in job {}'.format(
-            job_id))
-        while True:
-            tasks = batch_client.task.list(
-                job_id,
-                task_list_options=batchmodels.TaskListOptions(
-                    filter='state eq \'running\'',
-                ),
-            )
-            for task in tasks:
-                task_id = task.id
-                break
-            if task_id == '@FIRSTRUNNING':
-                time.sleep(1)
-            else:
-                break
-    # check if file exists on disk; a possible race condition here is
-    # understood
-    fp = pathlib.Path(pathlib.Path(file).name)
-    if (fp.exists() and
-            not _confirm_action(config, 'file overwrite of {}'.format(file))):
-        raise RuntimeError('file already exists: {}'.format(file))
-    logger.debug('attempting to retrieve file {} from job={} task={}'.format(
-        file, job_id, task_id))
-    stream = batch_client.file.get_from_task(job_id, task_id, file)
-    with fp.open('wb') as f:
-        for data in stream:
-            f.write(data)
-    logger.debug('file {} retrieved from job={} task={} bytes={}'.format(
-        file, job_id, task_id, fp.stat().st_size))
-
-
-def get_file_via_node(batch_client, config, node_id):
-    # type: (batch.BatchServiceClient, dict, str) -> None
-    """Get a file node style
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
-    :param dict config: configuration dict
-    :param str nodeid: node id
-    """
-    if node_id is None or len(node_id) == 0:
-        raise ValueError('node id is invalid')
-    pool_id = config['pool_specification']['id']
-    file = raw_input('Enter node-relative file path to retrieve: ')
-    if file == '' or file is None:
-        raise RuntimeError('specified invalid file to retrieve')
-    # check if file exists on disk; a possible race condition here is
-    # understood
-    fp = pathlib.Path(pathlib.Path(file).name)
-    if (fp.exists() and
-            not _confirm_action(config, 'file overwrite of {}'.format(file))):
-        raise RuntimeError('file already exists: {}'.format(file))
-    logger.debug('attempting to retrieve file {} from pool={} node={}'.format(
-        file, pool_id, node_id))
-    stream = batch_client.file.get_from_compute_node(pool_id, node_id, file)
-    with fp.open('wb') as f:
-        for data in stream:
-            f.write(data)
-    logger.debug('file {} retrieved from pool={} node={} bytes={}'.format(
-        file, pool_id, node_id, fp.stat().st_size))
-
-
-def delete_storage_containers(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
-    """Delete storage containers
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
-    :param dict config: configuration dict
-    """
-    for key in _STORAGE_CONTAINERS:
-        if key.startswith('blob_'):
-            blob_client.delete_container(_STORAGE_CONTAINERS[key])
-        elif key.startswith('table_'):
-            table_client.delete_table(_STORAGE_CONTAINERS[key])
-        elif key.startswith('queue_'):
-            queue_client.delete_queue(_STORAGE_CONTAINERS[key])
-
-
-def _clear_blobs(blob_client, container):
-    # type: (azureblob.BlockBlobService, str) -> None
-    """Clear blobs in container
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param str container: container to clear blobs from
-    """
-    logger.info('deleting blobs: {}'.format(container))
-    blobs = blob_client.list_blobs(container)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
-
-
-def _clear_blob_task_resourcefiles(blob_client, container, config):
-    # type: (azureblob.BlockBlobService, str, dict) -> None
-    """Clear task resource file blobs in container
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param str container: container to clear blobs from
-    :param dict config: configuration dict
-    """
-    envfileloc = '{}taskrf-'.format(
-        config['batch_shipyard']['storage_entity_prefix'])
-    logger.info('deleting blobs with prefix: {}'.format(envfileloc))
-    blobs = blob_client.list_blobs(container, prefix=envfileloc)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
-
-
-def _clear_table(table_client, table_name, config):
-    """Clear table entities
-    :param azure.storage.table.TableService table_client: table client
-    :param str table_name: table name
-    :param dict config: configuration dict
-    """
-    # type: (azuretable.TableService, str, dict) -> None
-    logger.info('clearing table: {}'.format(table_name))
-    ents = table_client.query_entities(
-        table_name, filter='PartitionKey eq \'{}${}\''.format(
-            config['credentials']['batch']['account'],
-            config['pool_specification']['id'])
-    )
-    # batch delete entities
-    i = 0
-    bet = azuretable.TableBatch()
-    for ent in ents:
-        bet.delete_entity(ent['PartitionKey'], ent['RowKey'])
-        i += 1
-        if i == 100:
-            table_client.commit_batch(table_name, bet)
-            bet = azuretable.TableBatch()
-            i = 0
-    if i > 0:
-        table_client.commit_batch(table_name, bet)
-
-
-def clear_storage_containers(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
-    """Clear storage containers
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
-    :param dict config: configuration dict
-    """
-    try:
-        perf = config['batch_shipyard']['store_timing_metrics']
-    except KeyError:
-        perf = False
-    for key in _STORAGE_CONTAINERS:
-        if key.startswith('blob_'):
-            # TODO this is temp to preserve registry upload
-            if key != 'blob_resourcefiles':
-                _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
-            else:
-                _clear_blob_task_resourcefiles(
-                    blob_client, _STORAGE_CONTAINERS[key], config)
-        elif key.startswith('table_'):
-            try:
-                _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
-            except azure.common.AzureMissingResourceHttpError:
-                if key != 'table_perf' or perf:
-                    raise
-        elif key.startswith('queue_'):
-            logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.clear_messages(_STORAGE_CONTAINERS[key])
-
-
-def create_storage_containers(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
-    """Create storage containers
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
-    :param dict config: configuration dict
-    """
-    try:
-        perf = config['batch_shipyard']['store_timing_metrics']
-    except KeyError:
-        perf = False
-    for key in _STORAGE_CONTAINERS:
-        if key.startswith('blob_'):
-            logger.info(
-                'creating container: {}'.format(_STORAGE_CONTAINERS[key]))
-            blob_client.create_container(_STORAGE_CONTAINERS[key])
-        elif key.startswith('table_'):
-            if key == 'table_perf' and not perf:
-                continue
-            logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
-            table_client.create_table(_STORAGE_CONTAINERS[key])
-        elif key.startswith('queue_'):
-            logger.info('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.create_queue(_STORAGE_CONTAINERS[key])
-
-
-def merge_dict(dict1, dict2):
-    # type: (dict, dict) -> dict
-    """Recursively merge dictionaries: dict2 on to dict1. This differs
-    from dict.update() in that values that are dicts are recursively merged.
-    Note that only dict value types are merged, not lists, etc.
-
-    :param dict dict1: dictionary to merge to
-    :param dict dict2: dictionary to merge with
-    :rtype: dict
-    :return: merged dictionary
-    """
-    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
-        raise ValueError('dict1 or dict2 is not a dictionary')
-    result = copy.deepcopy(dict1)
-    for k, v in dict2.items():
-        if k in result and isinstance(result[k], dict):
-            result[k] = merge_dict(result[k], v)
-        else:
-            result[k] = copy.deepcopy(v)
-    return result
-
-
 def main():
     """Main function"""
     # get command-line args
@@ -2652,10 +1462,10 @@ def main():
     with open(args.credentials, 'r') as f:
         config = json.load(f)
     with open(args.config, 'r') as f:
-        config = merge_dict(config, json.load(f))
+        config = convoy.util.merge_dict(config, json.load(f))
     try:
         with open(args.pool, 'r') as f:
-            config = merge_dict(config, json.load(f))
+            config = convoy.util.merge_dict(config, json.load(f))
     except ValueError:
         raise
     except Exception:
@@ -2667,7 +1477,7 @@ def main():
                 args.jobs = str(pathlib.Path(args.configdir, 'jobs.json'))
         try:
             with open(args.jobs, 'r') as f:
-                config = merge_dict(config, json.load(f))
+                config = convoy.util.merge_dict(config, json.load(f))
         except ValueError:
             raise
         except Exception:
@@ -2688,50 +1498,54 @@ def main():
             raise RuntimeError(
                 'attempting to create a pool that already exists: {}'.format(
                     config['pool_specification']['id']))
-        create_storage_containers(
-            blob_client, queue_client, table_client, config)
-        clear_storage_containers(
-            blob_client, queue_client, table_client, config)
+        convoy.storage.create_storage_containers(
+            blob_client, queue_client, table_client, config,
+            _STORAGE_CONTAINERS)
+        convoy.storage.clear_storage_containers(
+            blob_client, queue_client, table_client, config,
+            _STORAGE_CONTAINERS)
         _adjust_settings_for_pool_creation(config)
         populate_queues(queue_client, table_client, config)
         add_pool(batch_client, blob_client, config)
     elif args.action == 'resizepool':
-        resize_pool(batch_client, config)
+        convoy.batch.resize_pool(batch_client, config)
     elif args.action == 'delpool':
-        del_pool(batch_client, config)
+        convoy.batch.del_pool(batch_client, config)
     elif args.action == 'addsshuser':
-        add_ssh_user(batch_client, config)
-        get_remote_login_settings(batch_client, config)
+        convoy.batch.add_ssh_user(batch_client, config)
+        convoy.batch.get_remote_login_settings(batch_client, config)
     elif args.action == 'delnode':
-        del_node(batch_client, config, args.nodeid)
+        convoy.batch.del_node(batch_client, config, args.nodeid)
     elif args.action == 'addjobs':
         add_jobs(batch_client, blob_client, config)
     elif args.action == 'cleanmijobs':
-        clean_mi_jobs(batch_client, config)
+        convoy.batch.clean_mi_jobs(batch_client, config)
     elif args.action == 'termjobs':
-        terminate_jobs(batch_client, config)
+        convoy.batch.terminate_jobs(batch_client, config)
     elif args.action == 'deljobs':
-        del_jobs(batch_client, config)
+        convoy.batch.del_jobs(batch_client, config)
     elif args.action == 'delcleanmijobs':
-        del_clean_mi_jobs(batch_client, config)
+        convoy.batch.del_clean_mi_jobs(batch_client, config)
     elif args.action == 'delalljobs':
-        del_all_jobs(batch_client, config)
+        convoy.batch.del_all_jobs(batch_client, config)
     elif args.action == 'grls':
-        get_remote_login_settings(batch_client, config)
+        convoy.batch.get_remote_login_settings(batch_client, config)
     elif args.action == 'streamfile':
-        stream_file_and_wait_for_task(batch_client, args.filespec)
+        convoy.batch.stream_file_and_wait_for_task(batch_client, args.filespec)
     elif args.action == 'gettaskfile':
-        get_file_via_task(batch_client, config, args.filespec)
+        convoy.batch.get_file_via_task(batch_client, config, args.filespec)
     elif args.action == 'getnodefile':
-        get_file_via_node(batch_client, config, args.nodeid)
+        convoy.batch.get_file_via_node(batch_client, config, args.nodeid)
     elif args.action == 'ingressdata':
-        ingress_data(batch_client, config)
+        convoy.data.ingress_data(batch_client, config, _GLUSTER_VOLUME)
     elif args.action == 'delstorage':
-        delete_storage_containers(
-            blob_client, queue_client, table_client, config)
+        convoy.storage.delete_storage_containers(
+            blob_client, queue_client, table_client, config,
+            _STORAGE_CONTAINERS)
     elif args.action == 'clearstorage':
-        clear_storage_containers(
-            blob_client, queue_client, table_client, config)
+        convoy.storage.clear_storage_containers(
+            blob_client, queue_client, table_client, config,
+            _STORAGE_CONTAINERS)
     else:
         raise ValueError('Unknown action: {}'.format(args.action))
 
@@ -2784,5 +1598,5 @@ def parseargs():
     return parser.parse_args()
 
 if __name__ == '__main__':
-    _setup_logger()
+    convoy.util.setup_logger(logger)
     main()

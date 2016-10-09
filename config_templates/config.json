@@ -31,6 +31,20 @@
         "docker_images": [
             "busybox"
         ],
+        "files": [
+            {
+                "source": "/some/local/path/dir",
+                "destination": {
+                    "shared_data_volume": "glustervol",
+                    "data_transfer": {
+                        "method": "multinode_scp",
+                        "ssh_private_key": "id_rsa_shipyard",
+                        "extra_options": "",
+                        "max_parallel_transfers_per_node": 2
+                    }
+                }
+            }
+        ],
         "docker_volumes": {
             "data_volumes": {
                 "contdatavol": {

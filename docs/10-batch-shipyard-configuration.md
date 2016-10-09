@@ -91,6 +91,20 @@ The global config schema is as follows:
             "busybox",
             "redis:3.2.3-alpine",
         ],
+        "files": [
+            {
+                "source": "/some/local/path/dir",
+                "destination": {
+                    "shared_data_volume": "glustervol",
+                    "data_transfer": {
+                        "method": "multinode_scp",
+                        "ssh_private_key": "id_rsa_shipyard",
+                        "extra_options": "",
+                        "max_parallel_transfers_per_node": 2
+                    }
+                }
+            }
+        ],
         "docker_volumes": {
             "data_volumes": {
                 "abcvol": {
@@ -186,7 +200,40 @@ The `global_resources` is a required property that contains the Docker image
 and volume configuration. `docker_images` is an array of docker images that
 should be installed on every compute node when this configuration file is
 supplied with the tool for creating a compute pool. Note that tags are
-supported. `docker_volumes` is an optional property that can consist of two
+supported.
+
+`files` is an optional property that specifies data that should be ingressed
+from a location accessible by the local machine (i.e., machine invoking
+`shipyard.py` to a shared file system location accessible by compute nodes
+in the pool). `files` has the following members:
+* (required) `source` property is a local path. A single file or a directory
+can be specified. No globbing/wildcards are currently supported.
+* (required) `destination` property containing the following members:
+  * (required) `shared_data_volume` is a GlusterFS volume name. Please see
+below in the `shared_data_volumes` for information on how to set up a
+GlusterFS share.
+  * (required) `data_transfer` specifies how the transfer should take place,
+and contains the following members:
+    * (required) `method` specified which method should be used to ingress
+data, which should be one of: `scp`, `multinode_scp`, or `rsync+ssh`. `scp`
+will use secure copy to copy a file or a directory (recursively) to the
+remote share path. `multinode_scp` will attempt to simultaneously transfer
+files to many compute nodes at the same time to speed up data transfer.
+`rsync+ssh` will perform an rsync of files through ssh.
+    * (optional) `ssh_private_key` location of the SSH private key for the
+username specified in the `pool_specification`:`ssh` section when connecting
+to compute nodes. The default is `id_rsa_shipyard` which is automatically
+generated if no ssh key is specified when an SSH user is added to a pool.
+    * (optional) `extra_options` are any extra options to pass to `scp` or
+`rsync` for `scp`/`multinode_scp` or `rsync+ssh` methods, respectively.
+    * (optional) `max_parallel_transfers_per_node` is the maximum number of
+parallel transfer to invoke per node with the `multinode_scp` method. For
+example, if there are 3 compute nodes in the pool, and `2` is given for this
+option, then there will be up to 2 scp session in parallel per compute node
+for a maximum of 6 concurrent scp sessions to the pool. The default is 1 if
+not specified or omitted.
+
+`docker_volumes` is an optional property that can consist of two
 different types of volumes: `data_volumes` and `shared_data_volumes`.
 `data_volumes` can be of two flavors depending upon if `host_path` is set to
 null or not. In the former, this is typically used with the `VOLUME` keyword
