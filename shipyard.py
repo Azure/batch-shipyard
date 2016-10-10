@@ -546,7 +546,7 @@ def add_pool(batch_client, blob_client, config):
         ingress_files = config[
             'pool_specification']['transfer_files_on_pool_creation']
     except KeyError:
-        ingress_files = True
+        ingress_files = False
     if ingress_files:
         convoy.data.ingress_data(batch_client, config, rls)
 
@@ -750,7 +750,7 @@ def _adjust_settings_for_pool_creation(config):
         xfer_files_with_pool = config['pool_specification'][
             'transfer_files_on_pool_creation']
     except KeyError:
-        xfer_files_with_pool = True
+        xfer_files_with_pool = False
         config['pool_specification'][
             'transfer_files_on_pool_creation'] = xfer_files_with_pool
     try:

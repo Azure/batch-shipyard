@@ -99,7 +99,8 @@ The global config schema is as follows:
                     "data_transfer": {
                         "method": "multinode_scp",
                         "ssh_private_key": "id_rsa_shipyard",
-                        "extra_options": "",
+                        "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
+                        "rsync_extra_options": "",
                         "max_parallel_transfers_per_node": 2
                     }
                 }
@@ -166,7 +167,7 @@ them.
   * `enabled` property enables or disables the private registry
   * `storage_account_settings` is a link to the alias of the storage account
     specified that stores the private registry blobs.
-  * `container` propery is the name of the Azure Blob container holding the
+  * `container` property is the name of the Azure Blob container holding the
     private registry blobs.
   * `docker_save_registry_file` property represents a filesystem path to
     a gzipped tarball of the Docker registry:2 image as dumped by
@@ -205,34 +206,50 @@ supported.
 `files` is an optional property that specifies data that should be ingressed
 from a location accessible by the local machine (i.e., machine invoking
 `shipyard.py` to a shared file system location accessible by compute nodes
-in the pool). `files` has the following members:
+in the pool). `files` is a json list of objects, which allows for multiple
+sources to destinations to be ingressed during the same invocation. Each
+object within the `files` list contains the following members:
 * (required) `source` property is a local path. A single file or a directory
 can be specified. No globbing/wildcards are currently supported.
 * (required) `destination` property containing the following members:
   * (required) `shared_data_volume` is a GlusterFS volume name. Please see
-below in the `shared_data_volumes` for information on how to set up a
-GlusterFS share.
+    below in the `shared_data_volumes` for information on how to set up a
+    GlusterFS share.
   * (required) `data_transfer` specifies how the transfer should take place,
-and contains the following members:
+    and contains the following members:
     * (required) `method` specified which method should be used to ingress
-data, which should be one of: `scp`, `multinode_scp`, or `rsync+ssh`. `scp`
-will use secure copy to copy a file or a directory (recursively) to the
-remote share path. `multinode_scp` will attempt to simultaneously transfer
-files to many compute nodes at the same time to speed up data transfer.
-`rsync+ssh` will perform an rsync of files through ssh.
+      data, which should be one of: `scp`, `multinode_scp`, `rsync+ssh` or
+      `multinode_rsync+ssh`. `scp` will use secure copy to copy a file or a
+      directory (recursively) to the remote share path. `multinode_scp` will
+      attempt to simultaneously transfer files to many compute nodes using
+      `scp` at the same time to speed up data transfer. `rsync+ssh` will
+      perform an rsync of files through SSH. `multinode_rsync+ssh` will
+      attempt to simultaneously transfer files using `rsync` to many compute
+      nodes at the same time to speed up data transfer with. Note that you may
+      specify the `multinode_*` methods even with only 1 compute node in a
+      pool which will allow you to take advantage of
+      `max_parallel_transfers_per_node` below.
     * (optional) `ssh_private_key` location of the SSH private key for the
-username specified in the `pool_specification`:`ssh` section when connecting
-to compute nodes. The default is `id_rsa_shipyard`, if omitted, which is
-automatically generated if no ssh key is specified when an SSH user is added
-to a pool.
-    * (optional) `extra_options` are any extra options to pass to `scp` or
-`rsync` for `scp`/`multinode_scp` or `rsync+ssh` methods, respectively.
+      username specified in the `pool_specification`:`ssh` section when
+      connecting to compute nodes. The default is `id_rsa_shipyard`, if
+      omitted, which is automatically generated if no SSH key is specified
+      when an SSH user is added to a pool.
+    * (optional) `scp_ssh_extra_options` are any extra options to pass to
+      `scp` or `ssh` for `scp`/`multinode_scp` or
+      `rsync+ssh`/`multinode_rsync+ssh` methods, respectively. In the example
+      above, `-c aes256-gcm@openssh.com` is passed to `scp`, which can
+      potentially increase the transfer speed by selecting the
+      `aes256-gcm@openssh.com` cipher which can exploit Intel AES-NI.
+    * (optional) `rsync_extra_options` are any extra options to pass to
+      `rsync` for the `rsync+ssh`/`multinode_rsync+ssh` transfer methods. This
+      property is ignored for non-rsync transfer methods.
     * (optional) `max_parallel_transfers_per_node` is the maximum number of
-parallel transfer to invoke per node with the `multinode_scp` method. For
-example, if there are 3 compute nodes in the pool, and `2` is given for this
-option, then there will be up to 2 scp sessions in parallel per compute node
-for a maximum of 6 concurrent scp sessions to the pool. The default is 1 if
-not specified or omitted.
+      parallel transfer to invoke per node with the
+      `multinode_scp`/`multinode_rsync+ssh` methods. For example, if there
+      are 3 compute nodes in the pool, and `2` is given for this option, then
+      there will be up to 2 scp sessions in parallel per compute node for a
+      maximum of 6 concurrent scp sessions to the pool. The default is 1 if
+      not specified or omitted.
 
 `docker_volumes` is an optional property that can consist of two
 different types of volumes: `data_volumes` and `shared_data_volumes`.
@@ -295,6 +312,7 @@ The pool schema is as follows:
         "sku": "7.1",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
+        "transfer_files_on_pool_creation": false,
         "ssh": {
             "username": "docker",
             "expiry_days": 7,
@@ -330,20 +348,26 @@ will be force enabled if peer-to-peer replication is enabled.
 * (required) `offer` is the offer name of the Marketplace VM image.
 * (required) `sku` is the sku name of the Marketplace VM image.
 * (optional) `reboot_on_start_task_failed` allows Batch Shipyard to reboot the
-compute node if case there of a transient failure in node preparation (e.g.,
-network timeout or resolution failure). This defaults to `false`.
+compute node in case there is a transient failure in node preparation (e.g.,
+network timeout, resolution failure or download problem). This defaults to
+`false`.
 * (optional) `block_until_all_global_resources_loaded` will block the node
 from entering ready state until all Docker images are loaded. This defaults
 to `true`.
+* (optional) `transfer_files_on_pool_creation` will ingress all `files`
+specified in the `global_resources` section of the configuration json when
+the pool is created to the compute nodes of the pool. If this property is set
+to `true` then `block_until_all_global_resources_loaded` will be force
+disabled. If omitted, this property defaults to `false`.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation.
   * `username` is the user to create on the compute nodes.
   * `expiry_days` is the number of days from now for the account on the compute
     nodes to expire. The default is 7 days from invocation time.
-  * `ssh_public_key` is the path to an existing ssh public key to use. If not
+  * `ssh_public_key` is the path to an existing SSH public key to use. If not
     specified, a public/private key pair will be automatically generated only
-    only Linux. If this is `null` or not specified on Windows, the SSH user is
+    on Linux. If this is `null` or not specified on Windows, the SSH user is
     not created.
   * `generate_tunnel_script` property directs script to generate an SSH tunnel
     script that can be used to connect to the remote Docker engine running on

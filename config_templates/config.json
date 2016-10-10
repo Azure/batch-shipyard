@@ -39,7 +39,8 @@
                     "data_transfer": {
                         "method": "multinode_scp",
                         "ssh_private_key": "id_rsa_shipyard",
-                        "extra_options": "",
+                        "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
+                        "rsync_extra_options": "",
                         "max_parallel_transfers_per_node": 2
                     }
                 }

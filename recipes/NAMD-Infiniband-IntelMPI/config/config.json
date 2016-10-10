@@ -5,7 +5,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "<your intel mpi compiled namd image>"
+            "alfpark/namd:2.11-icc-mkl-intelmpi"
         ]
     }
 }

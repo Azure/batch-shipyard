@@ -10,6 +10,7 @@
         "sku": "16.04.0-LTS",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
+        "transfer_files_on_pool_creation": false,
         "ssh": {
             "username": "docker",
             "expiry_days": 7,
