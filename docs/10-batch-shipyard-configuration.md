@@ -171,7 +171,7 @@ them.
   * `docker_save_registry_file` property represents a filesystem path to
     a gzipped tarball of the Docker registry:2 image as dumped by
     `docker save`. This is optional.
-  * `docker_save_Registry_image_id` property represents the image id hash
+  * `docker_save_registry_image_id` property represents the image id hash
     of the corresponding Docker registry:2 image. This is optional.
   * `allow_public_docker_hub_pull_on_missing` property allows pass through
     of Docker image retrieval to public Docker Hub if it is missing in the
@@ -222,14 +222,15 @@ files to many compute nodes at the same time to speed up data transfer.
 `rsync+ssh` will perform an rsync of files through ssh.
     * (optional) `ssh_private_key` location of the SSH private key for the
 username specified in the `pool_specification`:`ssh` section when connecting
-to compute nodes. The default is `id_rsa_shipyard` which is automatically
-generated if no ssh key is specified when an SSH user is added to a pool.
+to compute nodes. The default is `id_rsa_shipyard`, if omitted, which is
+automatically generated if no ssh key is specified when an SSH user is added
+to a pool.
     * (optional) `extra_options` are any extra options to pass to `scp` or
 `rsync` for `scp`/`multinode_scp` or `rsync+ssh` methods, respectively.
     * (optional) `max_parallel_transfers_per_node` is the maximum number of
 parallel transfer to invoke per node with the `multinode_scp` method. For
 example, if there are 3 compute nodes in the pool, and `2` is given for this
-option, then there will be up to 2 scp session in parallel per compute node
+option, then there will be up to 2 scp sessions in parallel per compute node
 for a maximum of 6 concurrent scp sessions to the pool. The default is 1 if
 not specified or omitted.
 

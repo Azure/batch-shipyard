@@ -31,10 +31,12 @@ try:
 except ImportError:
     import pathlib2 as pathlib
 import os
+import tempfile
 import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 # local imports
+import convoy.storage
 import convoy.util
 
 # create logger
@@ -43,6 +45,17 @@ convoy.util.setup_logger(logger)
 # global defines
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
+_GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
+_GLUSTER_VOLUME = '.gluster/gv0'
+
+
+def get_gluster_volume():
+    # type: (None) -> str
+    """Get gluster volume mount suffix
+    :rtype: str
+    :return: gluster volume mount
+    """
+    return _GLUSTER_VOLUME
 
 
 def _reboot_node(batch_client, pool_id, node_id, wait):
@@ -642,3 +655,486 @@ def get_file_via_node(batch_client, config, node_id):
             f.write(data)
     logger.debug('file {} retrieved from pool={} node={} bytes={}'.format(
         file, pool_id, node_id, fp.stat().st_size))
+
+
+def add_jobs(batch_client, blob_client, config, jpfile):
+    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    #        tuple, dict) -> None
+    """Add jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param tuple jpfile: jobprep file
+    """
+    # get the pool inter-node comm setting
+    pool_id = config['pool_specification']['id']
+    _pool = batch_client.pool.get(pool_id)
+    global_resources = []
+    for gr in config['global_resources']['docker_images']:
+        global_resources.append(gr)
+    # TODO add global resources for non-docker resources
+    jpcmdline = convoy.util.wrap_commands_in_shell([
+        '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+            jpfile[0], ' '.join(global_resources))])
+    for jobspec in config['job_specifications']:
+        job = batchmodels.JobAddParameter(
+            id=jobspec['id'],
+            pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+            job_preparation_task=batchmodels.JobPreparationTask(
+                command_line=jpcmdline,
+                wait_for_success=True,
+                run_elevated=True,
+                rerun_on_node_reboot_after_success=False,
+            )
+        )
+        # perform checks:
+        # 1. if tasks have dependencies, set it if so
+        # 2. if there are multi-instance tasks
+        try:
+            mi_ac = jobspec['multi_instance_auto_complete']
+        except KeyError:
+            mi_ac = True
+        job.uses_task_dependencies = False
+        multi_instance = False
+        docker_container_name = None
+        for task in jobspec['tasks']:
+            # do not break, check to ensure ids are set on each task if
+            # task dependencies are set
+            if 'depends_on' in task and len(task['depends_on']) > 0:
+                if ('id' not in task or task['id'] is None or
+                        len(task['id']) == 0):
+                    raise ValueError(
+                        'task id is not specified, but depends_on is set')
+                job.uses_task_dependencies = True
+            if 'multi_instance' in task:
+                if multi_instance and mi_ac:
+                    raise ValueError(
+                        'cannot specify more than one multi-instance task '
+                        'per job with auto completion enabled')
+                multi_instance = True
+                docker_container_name = task['name']
+        # add multi-instance settings
+        set_terminate_on_all_tasks_complete = False
+        if multi_instance and mi_ac:
+            if (docker_container_name is None or
+                    len(docker_container_name) == 0):
+                raise ValueError(
+                    'multi-instance task must be invoked with a named '
+                    'container')
+            set_terminate_on_all_tasks_complete = True
+            job.job_release_task = batchmodels.JobReleaseTask(
+                command_line=convoy.util.wrap_commands_in_shell(
+                    ['docker stop {}'.format(docker_container_name),
+                     'docker rm -v {}'.format(docker_container_name)]),
+                run_elevated=True,
+            )
+        logger.info('Adding job: {}'.format(job.id))
+        try:
+            batch_client.job.add(job)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The specified job already exists' in ex.message.value:
+                # cannot re-use an existing job if multi-instance due to
+                # job release requirement
+                if multi_instance and mi_ac:
+                    raise
+            else:
+                raise
+        del mi_ac
+        del multi_instance
+        del docker_container_name
+        # add all tasks under job
+        for task in jobspec['tasks']:
+            # get image name
+            image = task['image']
+            # get or generate task id
+            try:
+                task_id = task['id']
+                if task_id is None or len(task_id) == 0:
+                    raise KeyError()
+            except KeyError:
+                # get filtered, sorted list of generic docker task ids
+                try:
+                    tasklist = sorted(
+                        filter(lambda x: x.id.startswith(
+                            _GENERIC_DOCKER_TASK_PREFIX), list(
+                                batch_client.task.list(job.id))),
+                        key=lambda y: y.id)
+                    tasknum = int(tasklist[-1].id.split('-')[-1]) + 1
+                except (batchmodels.batch_error.BatchErrorException,
+                        IndexError):
+                    tasknum = 0
+                task_id = '{0}{1:03d}'.format(
+                    _GENERIC_DOCKER_TASK_PREFIX, tasknum)
+            # set run and exec commands
+            docker_run_cmd = 'docker run'
+            docker_exec_cmd = 'docker exec'
+            # get generic run opts
+            try:
+                run_opts = task['additional_docker_run_options']
+            except KeyError:
+                run_opts = []
+            # parse remove container option
+            try:
+                rm_container = task['remove_container_after_exit']
+            except KeyError:
+                rm_container = False
+            else:
+                if rm_container and '--rm' not in run_opts:
+                    run_opts.append('--rm')
+            # parse name option
+            try:
+                name = task['name']
+                if name is not None:
+                    run_opts.append('--name {}'.format(name))
+            except KeyError:
+                name = None
+            # parse labels option
+            try:
+                labels = task['labels']
+                if labels is not None and len(labels) > 0:
+                    for label in labels:
+                        run_opts.append('-l {}'.format(label))
+                del labels
+            except KeyError:
+                pass
+            # parse ports option
+            try:
+                ports = task['ports']
+                if ports is not None and len(ports) > 0:
+                    for port in ports:
+                        run_opts.append('-p {}'.format(port))
+                del ports
+            except KeyError:
+                pass
+            # parse entrypoint
+            try:
+                entrypoint = task['entrypoint']
+                if entrypoint is not None:
+                    run_opts.append('--entrypoint {}'.format(entrypoint))
+                del entrypoint
+            except KeyError:
+                pass
+            # parse data volumes
+            try:
+                data_volumes = task['data_volumes']
+            except KeyError:
+                pass
+            else:
+                if data_volumes is not None and len(data_volumes) > 0:
+                    for key in data_volumes:
+                        dvspec = config[
+                            'global_resources']['docker_volumes'][
+                                'data_volumes'][key]
+                        try:
+                            hostpath = dvspec['host_path']
+                        except KeyError:
+                            hostpath = None
+                        if hostpath is not None and len(hostpath) > 0:
+                            run_opts.append('-v {}:{}'.format(
+                                hostpath, dvspec['container_path']))
+                        else:
+                            run_opts.append('-v {}'.format(
+                                dvspec['container_path']))
+            # parse shared data volumes
+            try:
+                shared_data_volumes = task['shared_data_volumes']
+            except KeyError:
+                pass
+            else:
+                if (shared_data_volumes is not None and
+                        len(shared_data_volumes) > 0):
+                    for key in shared_data_volumes:
+                        dvspec = config[
+                            'global_resources']['docker_volumes'][
+                                'shared_data_volumes'][key]
+                        if dvspec['volume_driver'] == 'glusterfs':
+                            run_opts.append('-v {}/{}:{}'.format(
+                                '$AZ_BATCH_NODE_SHARED_DIR',
+                                _GLUSTER_VOLUME, dvspec['container_path']))
+                        else:
+                            run_opts.append('-v {}:{}'.format(
+                                key, dvspec['container_path']))
+            # get command
+            try:
+                command = task['command']
+                if command is not None and len(command) == 0:
+                    raise KeyError()
+            except KeyError:
+                command = None
+            # get and create env var file
+            envfile = '.shipyard.envlist'
+            sas_urls = None
+            try:
+                env_vars = jobspec['environment_variables']
+            except KeyError:
+                env_vars = None
+            try:
+                infiniband = task['infiniband']
+            except KeyError:
+                infiniband = False
+            # ensure we're on HPC VMs with inter node comm enabled
+            sles_hpc = False
+            if infiniband:
+                if not _pool.enable_inter_node_communication:
+                    raise RuntimeError(
+                        ('cannot initialize an infiniband task on a '
+                         'non-internode communication enabled '
+                         'pool: {}').format(pool_id))
+                if (_pool.vm_size.lower() != 'standard_a8' and
+                        _pool.vm_size.lower() != 'standard_a9'):
+                    raise RuntimeError(
+                        ('cannot initialize an infiniband task on nodes '
+                         'without RDMA, pool: {} vm_size: {}').format(
+                             pool_id, _pool.vm_size))
+                publisher = _pool.virtual_machine_configuration.\
+                    image_reference.publisher.lower()
+                offer = _pool.virtual_machine_configuration.\
+                    image_reference.offer.lower()
+                sku = _pool.virtual_machine_configuration.\
+                    image_reference.sku.lower()
+                supported = False
+                # only centos-hpc and sles-hpc:12-sp1 are supported
+                # for infiniband
+                if publisher == 'openlogic' and offer == 'centos-hpc':
+                    supported = True
+                elif (publisher == 'suse' and offer == 'sles-hpc' and
+                      sku == '12-sp1'):
+                    supported = True
+                    sles_hpc = True
+                if not supported:
+                    raise ValueError(
+                        ('Unsupported infiniband VM config, publisher={} '
+                         'offer={}').format(publisher, offer))
+                del supported
+            # ensure we're on n-series for gpu
+            try:
+                gpu = task['gpu']
+            except KeyError:
+                gpu = False
+            if gpu:
+                if not (_pool.vm_size.lower().startswith('standard_nc') or
+                        _pool.vm_size.lower().startswith('standard_nv')):
+                    raise RuntimeError(
+                        ('cannot initialize a gpu task on nodes without '
+                         'gpus, pool: {} vm_size: {}').format(
+                             pool_id, _pool.vm_size))
+                publisher = _pool.virtual_machine_configuration.\
+                    image_reference.publisher.lower()
+                offer = _pool.virtual_machine_configuration.\
+                    image_reference.offer.lower()
+                sku = _pool.virtual_machine_configuration.\
+                    image_reference.sku.lower()
+                # TODO other images as they become available with gpu support
+                if (publisher != 'canonical' and offer != 'ubuntuserver' and
+                        sku < '16.04.0-lts'):
+                    raise ValueError(
+                        ('Unsupported gpu VM config, publisher={} offer={} '
+                         'sku={}').format(publisher, offer, sku))
+                # override docker commands with nvidia docker wrapper
+                docker_run_cmd = 'nvidia-docker run'
+                docker_exec_cmd = 'nvidia-docker exec'
+            try:
+                task_ev = task['environment_variables']
+                if env_vars is None:
+                    env_vars = task_ev
+                else:
+                    env_vars = convoy.util.merge_dict(env_vars, task_ev)
+            except KeyError:
+                if infiniband:
+                    env_vars = []
+            if infiniband or (env_vars is not None and len(env_vars) > 0):
+                envfileloc = '{}taskrf-{}/{}{}'.format(
+                    config['batch_shipyard']['storage_entity_prefix'],
+                    job.id, task_id, envfile)
+                f = tempfile.NamedTemporaryFile(
+                    mode='w', encoding='utf-8', delete=False)
+                fname = f.name
+                try:
+                    for key in env_vars:
+                        f.write('{}={}\n'.format(key, env_vars[key]))
+                    if infiniband:
+                        f.write('I_MPI_FABRICS=shm:dapl\n')
+                        f.write('I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
+                        f.write('I_MPI_DYNAMIC_CONNECTION=0\n')
+                        # create a manpath entry for potentially buggy
+                        # intel mpivars.sh
+                        f.write('MANPATH=/usr/share/man:/usr/local/man\n')
+                    # close and upload env var file
+                    f.close()
+                    sas_urls = convoy.storage.upload_resource_files(
+                        blob_client, config, [(envfileloc, fname)])
+                finally:
+                    os.unlink(fname)
+                    del f
+                    del fname
+                if len(sas_urls) != 1:
+                    raise RuntimeError('unexpected number of sas urls')
+            # always add option for envfile
+            run_opts.append('--env-file {}'.format(envfile))
+            # add infiniband run opts
+            if infiniband:
+                run_opts.append('--net=host')
+                run_opts.append('--ulimit memlock=9223372036854775807')
+                run_opts.append('--device=/dev/hvnd_rdma')
+                run_opts.append('--device=/dev/infiniband/rdma_cm')
+                run_opts.append('--device=/dev/infiniband/uverbs0')
+                run_opts.append('-v /etc/rdma:/etc/rdma:ro')
+                if sles_hpc:
+                    run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
+                run_opts.append('-v /opt/intel:/opt/intel:ro')
+            # mount batch root dir
+            run_opts.append(
+                '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
+            # set working directory
+            run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+            # check if there are multi-instance tasks
+            mis = None
+            if 'multi_instance' in task:
+                if not _pool.enable_inter_node_communication:
+                    raise RuntimeError(
+                        ('cannot run a multi-instance task on a '
+                         'non-internode communication enabled '
+                         'pool: {}').format(pool_id))
+                # container must be named
+                if name is None or len(name) == 0:
+                    raise ValueError(
+                        'multi-instance task must be invoked with a named '
+                        'container')
+                # docker exec command cannot be empty/None
+                if command is None or len(command) == 0:
+                    raise ValueError(
+                        'multi-instance task must have an application command')
+                # set docker run as coordination command
+                try:
+                    run_opts.remove('--rm')
+                except ValueError:
+                    pass
+                # run in detached mode
+                run_opts.append('-d')
+                # ensure host networking stack is used
+                if '--net=host' not in run_opts:
+                    run_opts.append('--net=host')
+                # get coordination command
+                try:
+                    coordination_command = task[
+                        'multi_instance']['coordination_command']
+                    if (coordination_command is not None and
+                            len(coordination_command) == 0):
+                        raise KeyError()
+                except KeyError:
+                    coordination_command = None
+                cc_args = [
+                    'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                    '{} {} {}{}'.format(
+                        docker_run_cmd,
+                        ' '.join(run_opts),
+                        image,
+                        '{}'.format(' ' + coordination_command)
+                        if coordination_command else '')
+                ]
+                # create multi-instance settings
+                num_instances = task['multi_instance']['num_instances']
+                if not isinstance(num_instances, int):
+                    if num_instances == 'pool_specification_vm_count':
+                        num_instances = config[
+                            'pool_specification']['vm_count']
+                    elif num_instances == 'pool_current_dedicated':
+                        num_instances = _pool.current_dedicated
+                    else:
+                        raise ValueError(
+                            ('multi instance num instances setting '
+                             'invalid: {}').format(num_instances))
+                mis = batchmodels.MultiInstanceSettings(
+                    number_of_instances=num_instances,
+                    coordination_command_line=convoy.util.
+                    wrap_commands_in_shell(cc_args, wait=False),
+                    common_resource_files=[],
+                )
+                # add common resource files for multi-instance
+                try:
+                    rfs = task['multi_instance']['resource_files']
+                except KeyError:
+                    pass
+                else:
+                    for rf in rfs:
+                        try:
+                            fm = rf['file_mode']
+                        except KeyError:
+                            fm = None
+                        mis.common_resource_files.append(
+                            batchmodels.ResourceFile(
+                                file_path=rf['file_path'],
+                                blob_source=rf['blob_source'],
+                                file_mode=fm,
+                            )
+                        )
+                # set application command
+                task_commands = [
+                    '{} {} {}'.format(docker_exec_cmd, name, command)
+                ]
+            else:
+                task_commands = [
+                    'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                    '{} {} {}{}'.format(
+                        docker_run_cmd,
+                        ' '.join(run_opts),
+                        image,
+                        '{}'.format(' ' + command) if command else '')
+                ]
+            # create task
+            batchtask = batchmodels.TaskAddParameter(
+                id=task_id,
+                command_line=convoy.util.wrap_commands_in_shell(task_commands),
+                run_elevated=True,
+                resource_files=[],
+            )
+            if mis is not None:
+                batchtask.multi_instance_settings = mis
+            if sas_urls is not None:
+                batchtask.resource_files.append(
+                    batchmodels.ResourceFile(
+                        file_path=str(envfile),
+                        blob_source=next(iter(sas_urls.values())),
+                        file_mode='0640',
+                    )
+                )
+            # add additional resource files
+            try:
+                rfs = task['resource_files']
+            except KeyError:
+                pass
+            else:
+                for rf in rfs:
+                    try:
+                        fm = rf['file_mode']
+                    except KeyError:
+                        fm = None
+                    batchtask.resource_files.append(
+                        batchmodels.ResourceFile(
+                            file_path=rf['file_path'],
+                            blob_source=rf['blob_source'],
+                            file_mode=fm,
+                        )
+                    )
+            # add task dependencies
+            if 'depends_on' in task and len(task['depends_on']) > 0:
+                batchtask.depends_on = batchmodels.TaskDependencies(
+                    task_ids=task['depends_on']
+                )
+            # create task
+            logger.info('Adding task {}: {}'.format(
+                task_id, batchtask.command_line))
+            if mis is not None:
+                logger.info(
+                    'multi-instance task coordination command: {}'.format(
+                        mis.coordination_command_line))
+            batch_client.task.add(job_id=job.id, task=batchtask)
+            # update job if job autocompletion is needed
+            if set_terminate_on_all_tasks_complete:
+                batch_client.job.update(
+                    job_id=job.id,
+                    job_update_parameter=batchmodels.JobUpdateParameter(
+                        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+                        on_all_tasks_complete=batchmodels.
+                        OnAllTasksComplete.terminate_job))

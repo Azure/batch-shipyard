@@ -87,6 +87,15 @@ def setup_logger(logger):
 setup_logger(logger)
 
 
+def get_ssh_key_prefix():
+    # type: (None) -> str
+    """Get SSH key prefix
+    :rtype: str
+    :return: ssh key prefix
+    """
+    return _SSH_KEY_PREFIX
+
+
 def get_input(prompt):
     # type: (str) -> str
     """Get user input from keyboard

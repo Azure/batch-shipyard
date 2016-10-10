@@ -36,6 +36,7 @@ except ImportError:
     from pipes import quote as shellquote
 import threading
 # local imports
+import convoy.batch
 import convoy.util
 
 # create logger
@@ -221,13 +222,12 @@ def _scp_thread_worker(
     rcodes[node_id] = 0
 
 
-def ingress_data(batch_client, config, gv, rls=None):
-    # type: (batch.BatchServiceClient, dict, str, dict) -> None
+def ingress_data(batch_client, config, rls=None):
+    # type: (batch.BatchServiceClient, dict, dict) -> None
     """Ingresses data into Azure Batch
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param dict config: configuration dict
-    :param str gv: gluster volume name
     :param dict rls: remote login settings
     """
     try:
@@ -284,10 +284,9 @@ def ingress_data(batch_client, config, gv, rls=None):
                 ssh_private_key = pathlib.Path(
                     fdict['destination']['data_transfer']['ssh_private_key'])
             except KeyError:
-                ssh_private_key = None
-            # use default name for private key
-            if ssh_private_key is None or len(ssh_private_key) == 0:
-                ssh_private_key = pathlib.Path(convoy.util._SSH_KEY_PREFIX)
+                # use default name for private key
+                ssh_private_key = pathlib.Path(
+                    convoy.util.get_ssh_key_prefix())
             if not ssh_private_key.exists():
                 raise RuntimeError(
                     'ssh private key does not exist at: {}'.format(
@@ -302,9 +301,11 @@ def ingress_data(batch_client, config, gv, rls=None):
             if driver == 'glusterfs':
                 if (config['pool_specification']['offer'].lower() ==
                         'ubuntuserver'):
-                    dst = '/mnt/batch/tasks/shared/{}/'.format(gv)
+                    dst = '/mnt/batch/tasks/shared/{}/'.format(
+                        convoy.batch.get_gluster_volume())
                 else:
-                    dst = '/mnt/resource/batch/tasks/shared/{}/'.format(gv)
+                    dst = '/mnt/resource/batch/tasks/shared/{}/'.format(
+                        convoy.batch.get_gluster_volume())
             else:
                 raise RuntimeError(
                     'data ingress to {} not supported'.format(driver))
