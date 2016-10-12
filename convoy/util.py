@@ -266,6 +266,17 @@ def subprocess_nowait(cmd, shell=False, suppress_output=False):
     return proc
 
 
+def subprocess_attach_stdin(cmd, shell=False):
+    # type: (str, bool) -> subprocess.Process
+    """Subprocess command and attach stdin
+    :param str cmd: command line to execute
+    :param bool shell: use shell in Popen
+    :rtype: subprocess.Process
+    :return: subprocess process handle
+    """
+    return subprocess.Popen(cmd, shell=shell, stdin=subprocess.PIPE)
+
+
 def subprocess_wait_all(procs):
     # type: (list) -> list
     """Wait for all processes in given list
@@ -273,6 +284,8 @@ def subprocess_wait_all(procs):
     :rtype: list
     :return: list of return codes
     """
+    if procs is None or len(procs) == 0:
+        raise ValueError('procs is invalid')
     rcodes = [None] * len(procs)
     while True:
         for i in range(0, len(procs)):
@@ -282,3 +295,41 @@ def subprocess_wait_all(procs):
             break
         time.sleep(0.03)
     return rcodes
+
+
+def subprocess_wait_any(procs):
+    # type: (list) -> list
+    """Wait for any process in given list
+    :param list procs: list of processes to wait on
+    :rtype: tuple
+    :return: (integral position in procs list, return code)
+    """
+    if procs is None or len(procs) == 0:
+        raise ValueError('procs is invalid')
+    while True:
+        for i in range(0, len(procs)):
+            if procs[i].poll() == 0:
+                return i, procs[i].returncode
+        time.sleep(0.03)
+
+
+def subprocess_wait_multi(procs1, procs2):
+    # type: (list) -> list
+    """Wait for any process in given list
+    :param list procs: list of processes to wait on
+    :rtype: tuple
+    :return: (integral position in procs list, return code)
+    """
+    if ((procs1 is None or len(procs1) == 0) and
+            (procs2 is None or len(procs2) == 0)):
+        raise ValueError('both procs1 and procs2 are invalid')
+    while True:
+        if procs1 is not None and len(procs1) > 0:
+            for i in range(0, len(procs1)):
+                if procs1[i].poll() == 0:
+                    return procs1, i, procs1[i].returncode
+        if procs2 is not None and len(procs2) > 0:
+            for i in range(0, len(procs2)):
+                if procs2[i].poll() == 0:
+                    return procs2, i, procs2[i].returncode
+        time.sleep(0.03)

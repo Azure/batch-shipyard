@@ -103,8 +103,9 @@ The global config schema is as follows:
                     "data_transfer": {
                         "method": "multinode_scp",
                         "ssh_private_key": "id_rsa_shipyard",
-                        "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
+                        "scp_ssh_extra_options": "-C -c aes256-gcm@openssh.com",
                         "rsync_extra_options": "",
+                        "split_files_megabytes": 500,
                         "max_parallel_transfers_per_node": 2
                     }
                 }
@@ -215,8 +216,8 @@ sources to destinations to be ingressed during the same invocation. Each
 object within the `files` list contains the following members:
 * (required) `source` property contains the following members:
   * (required) `path` is a local path. A single file or a directory
-    can be specified. Filters below cannot be specified for single file to
-    transfer.
+    can be specified. Filters below will be ignored if `path` is a file and
+    not a directory.
   * (optional) `include` is an array of
     [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
     where only files matching a filter are included in the data transfer.
@@ -254,12 +255,23 @@ object within the `files` list contains the following members:
     * (optional) `scp_ssh_extra_options` are any extra options to pass to
       `scp` or `ssh` for `scp`/`multinode_scp` or
       `rsync+ssh`/`multinode_rsync+ssh` methods, respectively. In the example
-      above, `-c aes256-gcm@openssh.com` is passed to `scp`, which can
-      potentially increase the transfer speed by selecting the
-      `aes256-gcm@openssh.com` cipher which can exploit Intel AES-NI.
+      above, `-C` enables compression and `-c aes256-gcm@openssh.com`
+      is passed to `scp`, which can potentially increase the transfer speed by
+      selecting the `aes256-gcm@openssh.com` cipher which can exploit Intel
+      AES-NI.
     * (optional) `rsync_extra_options` are any extra options to pass to
       `rsync` for the `rsync+ssh`/`multinode_rsync+ssh` transfer methods. This
       property is ignored for non-rsync transfer methods.
+    * (optional) `split_files_megabytes` splits files into chunks with the
+      specified size in MiB. This can potentially help with very large files.
+      This option forces the transfer `method` to `multinode_scp`.
+      Note that the destination file system must be able to accommodate
+      up to 2x the size of files which are split. Additionally, transfers
+      involving files which are split will incur reconstruction costs after
+      the transfer is complete, which will increase the total end-to-end
+      ingress time. However, in certain scenarios, by splitting files and
+      transferring chunks in parallel along with reconstruction may end up
+      being faster than transferring a large file without chunking.
     * (optional) `max_parallel_transfers_per_node` is the maximum number of
       parallel transfer to invoke per node with the
       `multinode_scp`/`multinode_rsync+ssh` methods. For example, if there

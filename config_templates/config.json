@@ -45,6 +45,7 @@
                         "ssh_private_key": "id_rsa_shipyard",
                         "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
                         "rsync_extra_options": "",
+                        "split_files_megabytes": 500,
                         "max_parallel_transfers_per_node": 2
                     }
                 }

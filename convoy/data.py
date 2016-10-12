@@ -27,6 +27,7 @@ from __future__ import division, print_function, unicode_literals
 import datetime
 import fnmatch
 import logging
+import math
 try:
     import pathlib
 except ImportError:
@@ -43,16 +44,17 @@ import convoy.util
 # create logger
 logger = logging.getLogger(__name__)
 convoy.util.setup_logger(logger)
+# global defines
+_MEGABYTE = 1048576
+_MAX_READ_BLOCKSIZE_BYTES = 4194304
+_FILE_SPLIT_PREFIX = '_shipyard-'
 
 
 def _singlenode_transfer(
-        method, src, src_incl, src_excl, dst, username, ssh_private_key, rls,
-        eo, reo):
+        method, src, dst, username, ssh_private_key, rls, eo, reo):
     # type: (str, str, str, pathlib.Path, dict, str, str) -> None
     """Transfer data to a single node
     :param str src: source path
-    :param list src_incl: source include
-    :param list src_excl: source exclude
     :param str dst: destination path
     :param str username: username
     :param pathlib.Path: ssh private key
@@ -60,12 +62,6 @@ def _singlenode_transfer(
     :param str eo: ssh extra options
     :param str reo: rsync extra options
     """
-    # source include/exclude specified will force multinode transfer with mpt=1
-    if src_incl is not None or src_excl is not None:
-        _multinode_transfer(
-            'multinode_' + method, src, src_incl, src_excl, dst, username,
-            ssh_private_key, rls, eo, reo, 1)
-        return
     recursive = '-r' if pathlib.Path(src).is_dir() else ''
     _rls = next(iter(rls.values()))
     ip = _rls.remote_login_ip_address
@@ -102,8 +98,9 @@ def _singlenode_transfer(
 
 def _multinode_transfer(
         method, src, src_incl, src_excl, dst, username, ssh_private_key, rls,
-        eo, reo, mpt):
-    # type: (str, str, str, str, pathlib.Path, dict, str, str, int) -> None
+        eo, reo, mpt, split):
+    # type: (str, str, list, list, str, str, pathlib.Path, dict, str, str,
+    #        int, int) -> None
     """Transfer data to multiple destination nodes simultaneously
     :param str method: transfer method
     :param str src: source path
@@ -116,21 +113,25 @@ def _multinode_transfer(
     :param str eo: extra options
     :param str reo: rsync extra options
     :param int mpt: max parallel transfers per node
+    :param int split: split files on MB size
     """
     psrc = pathlib.Path(src)
+    # if source isn't a directory, convert it using src_incl
     if not psrc.is_dir():
-        if src_incl is None and src_excl is None:
-            _singlenode_transfer(
-                method.split('_')[-1], src, src_incl, src_excl, dst, username,
-                ssh_private_key, rls, eo, reo)
-        else:
-            logger.error(
-                'cannot specify include and exclude filters for a source '
-                'path which is not a directory')
-        return
+        src_excl = None
+        src_incl = [src]
+        src = str(psrc.parent)
+        psrc = psrc.parent
+    # if split is specified, force to multinode_scp
+    if split is not None and method != 'multinode_scp':
+        logger.warning('forcing transfer method to multinode_scp with split')
+        method = 'multinode_scp'
     buckets = {}
     files = {}
     rcodes = {}
+    spfiles = []
+    spfiles_count = {}
+    spfiles_count_lock = threading.Lock()
     for rkey in rls:
         buckets[rkey] = 0
         files[rkey] = []
@@ -160,9 +161,34 @@ def _multinode_transfer(
                 continue
             dstpath = '{}{}/{}'.format(dst, psrc.name, rel)
             # get key of min bucket values
-            key = min(buckets, key=buckets.get)
-            buckets[key] += entry.stat().st_size
-            files[key].append((entry.path, dstpath))
+            fsize = entry.stat().st_size
+            if split is not None and fsize > split:
+                nsplits = int(math.ceil(fsize / split))
+                lpad = int(math.log10(nsplits)) + 1
+                spfiles.append(dstpath)
+                spfiles_count[dstpath] = nsplits
+                n = 0
+                curr = 0
+                while True:
+                    end = curr + split
+                    if end > fsize:
+                        end = fsize
+                    key = min(buckets, key=buckets.get)
+                    buckets[key] += (end - curr)
+                    if n == 0:
+                        dstfname = dstpath
+                    else:
+                        dstfname = '{}.{}{}'.format(
+                            dstpath, _FILE_SPLIT_PREFIX, str(n).zfill(lpad))
+                    files[key].append((entry.path, dstfname, curr, end))
+                    if end == fsize:
+                        break
+                    curr = end
+                    n += 1
+            else:
+                key = min(buckets, key=buckets.get)
+                buckets[key] += fsize
+                files[key].append((entry.path, dstpath, None, None))
             total_files += 1
     total_size = sum(buckets.values())
     if total_files == 0:
@@ -176,12 +202,13 @@ def _multinode_transfer(
     ip = _rls.remote_login_ip_address
     port = _rls.remote_login_port
     del _rls
-    mkdircmd = ('ssh -o StrictHostKeyChecking=no '
-                '-o UserKnownHostsFile=/dev/null -x '
+    mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
+                '-o UserKnownHostsFile=/dev/null '
                 '-i {} -p {} {}@{} {}'.format(
                     ssh_private_key, port, username, ip,
                     convoy.util.wrap_commands_in_shell(dirs)))
-    rc = convoy.util.subprocess_with_output(mkdircmd.split())
+    rc = convoy.util.subprocess_with_output(
+        mkdircmd, shell=True, suppress_output=True)
     if rc == 0:
         logger.info('remote directories created on {}'.format(dst))
     else:
@@ -192,7 +219,7 @@ def _multinode_transfer(
     logger.info(
         'ingress data: {0:.4f} MiB in {1} files to transfer, using {2} max '
         'parallel transfers per node'.format(
-            total_size / 1048576, total_files, mpt))
+            total_size / _MEGABYTE, total_files, mpt))
     logger.info('begin ingressing data from {} to {}'.format(
         src, dst))
     nodekeys = list(buckets.keys())
@@ -203,6 +230,7 @@ def _multinode_transfer(
         thr = threading.Thread(
             target=_multinode_thread_worker,
             args=(method, mpt, nkey, rcodes, files[nkey],
+                  spfiles_count, spfiles_count_lock,
                   rls[nkey].remote_login_ip_address,
                   rls[nkey].remote_login_port, username, ssh_private_key, eo,
                   reo)
@@ -212,6 +240,7 @@ def _multinode_transfer(
     for i in range(0, len(buckets)):
         threads[i].join()
     diff = datetime.datetime.now() - start
+    del threads
     success = True
     for nkey in rcodes:
         if rcodes[nkey] != 0:
@@ -221,22 +250,92 @@ def _multinode_transfer(
         logger.info(
             'finished ingressing {0:.4f} MB of data in {1} files from {2} to '
             '{3} in {4:.2f} sec ({5:.3f} Mbit/s)'.format(
-                total_size / 1048576, total_files, src, dst,
+                total_size / _MEGABYTE, total_files, src, dst,
                 diff.total_seconds(),
                 (total_size * 8 / 1e6) / diff.total_seconds()))
 
 
+def _spawn_next_transfer(
+        method, file, ip, port, username, ssh_private_key, eo, reo,
+        procs, psprocs, psdst):
+    # type: (str, tuple, str, int, str, pathlib.Path, str, str, list,
+    #        list, list) -> None
+    """Spawn the next transfer given a file tuple
+    :param str method: transfer method
+    :param tuple file: file tuple
+    :param str ip: ip address
+    :param int port: port
+    :param str username: username
+    :param pathlib.Path: ssh private key
+    :param str eo: extra options
+    :param str reo: rsync extra options
+    :param list procs: process list
+    :param list psprocs: split files process list
+    :param list psdst: split files dstpath list
+    """
+    src = file[0]
+    dst = file[1]
+    begin = file[2]
+    end = file[3]
+    if method == 'multinode_scp':
+        if begin is None and end is None:
+            cmd = ('scp -o StrictHostKeyChecking=no '
+                   '-o UserKnownHostsFile=/dev/null -p '
+                   '{} -i {} -P {} {} {}@{}:"{}"'.format(
+                       eo, ssh_private_key, port, shellquote(src),
+                       username, ip, shellquote(dst)))
+        else:
+            cmd = ('ssh -T -x -o StrictHostKeyChecking=no '
+                   '-o UserKnownHostsFile=/dev/null '
+                   '{} -i {} -p {} {}@{} \'cat > "{}"\''.format(
+                       eo, ssh_private_key, port,
+                       username, ip, shellquote(dst)))
+    elif method == 'multinode_rsync+ssh':
+        if begin is not None or end is not None:
+            raise RuntimeError('cannot rsync with file offsets')
+        cmd = ('rsync {} -e "ssh -T -x -o StrictHostKeyChecking=no '
+               '-o UserKnownHostsFile=/dev/null '
+               '{} -i {} -p {}" {} {}@{}:"{}"'.format(
+                   reo, eo, ssh_private_key, port, shellquote(src),
+                   username, ip, shellquote(dst)))
+    else:
+        raise ValueError('Unknown transfer method: {}'.format(method))
+    if begin is None and end is None:
+        procs.append(convoy.util.subprocess_nowait(cmd, shell=True))
+    else:
+        proc = convoy.util.subprocess_attach_stdin(cmd, shell=True)
+        with open(src, 'rb') as f:
+            f.seek(begin, 0)
+            curr = begin
+            while curr < end:
+                buf = f.read(_MAX_READ_BLOCKSIZE_BYTES)
+                if buf is None or len(buf) == 0:
+                    break
+                proc.stdin.write(buf)
+                curr += len(buf)
+            proc.stdin.close()
+        psprocs.append(proc)
+        dstsp = dst.split('.')
+        if dstsp[-1].startswith(_FILE_SPLIT_PREFIX):
+            dstpath = '.'.join(dstsp[:-1])
+        else:
+            dstpath = dst
+        psdst.append(dstpath)
+
+
 def _multinode_thread_worker(
-        method, mpt, node_id, rcodes, files, ip, port, username,
-        ssh_private_key, eo, reo):
-    # type: (str, int, str, dict, list, str, int, str, pathlib.Path, str,
-    #        str) -> None
-    """Worker thread code for secure copy to a node with a file list
+        method, mpt, node_id, rcodes, files, spfiles_count,
+        spfiles_count_lock, ip, port, username, ssh_private_key, eo, reo):
+    # type: (str, int, str, dict, list, dict, threading.Lock, str, int, str,
+    #        pathlib.Path, str, str) -> None
+    """Worker thread code for data transfer to a node with a file list
     :param str method: transfer method
     :param int mpt: max parallel transfers per node
     :param str node_id: node id
     :param dict rcodes: return codes dict
     :param list files: list of files to copy
+    :param dict spfiles_count: split files count dict
+    :param threading.Lock spfiles_count_lock: split files count lock
     :param str ip: ip address
     :param int port: port
     :param str username: username
@@ -244,41 +343,56 @@ def _multinode_thread_worker(
     :param str eo: extra options
     :param str reo: rsync extra options
     """
+    procs = []
+    psprocs = []
+    psdst = []
+    completed = 0
     i = 0
-    while True:
-        procs = []
-        for j in range(i, i + mpt):
-            if j >= len(files):
-                break
-            file = files[j]
-            src = file[0]
-            dst = file[1]
-            if method == 'multinode_scp':
-                cmd = ('scp -o StrictHostKeyChecking=no '
-                       '-o UserKnownHostsFile=/dev/null -p '
-                       '{} -i {} -P {} {} {}@{}:"{}"'.format(
-                           eo, ssh_private_key, port, shellquote(src),
-                           username, ip, shellquote(dst)))
-            elif method == 'multinode_rsync+ssh':
-                cmd = ('rsync {} -e "ssh -T -x -o StrictHostKeyChecking=no '
-                       '-o UserKnownHostsFile=/dev/null '
-                       '{} -i {} -p {}" {} {}@{}:"{}"'.format(
-                           reo, eo, ssh_private_key, port, shellquote(src),
-                           username, ip, shellquote(dst)))
+    while completed != len(files):
+        xfers = len(procs) + len(psprocs)
+        while xfers < mpt and i < len(files):
+            file = files[i]
+            _spawn_next_transfer(
+                method, file, ip, port, username, ssh_private_key, eo, reo,
+                procs, psprocs, psdst)
+            xfers = len(procs) + len(psprocs)
+            i += 1
+        plist, n, rc = convoy.util.subprocess_wait_multi(psprocs, procs)
+        if rc != 0:
+            logger.error(
+                'data ingress to {} failed with return code: {}'.format(
+                    node_id, rc))
+            rcodes[node_id] = rc
+            return
+        if plist == psprocs:
+            dstpath = psdst[n]
+            del psdst[n]
+            del psprocs[n]
+            join = False
+            with spfiles_count_lock:
+                spfiles_count[dstpath] = spfiles_count[dstpath] - 1
+                if spfiles_count[dstpath] == 0:
+                    join = True
+            if join:
+                logger.debug('joining files on compute node to {}'.format(
+                    dstpath))
+                cmds = [
+                    'cat {}.* >> {}'.format(dstpath, dstpath),
+                    'rm -f {}.*'.format(dstpath)
+                ]
+                joincmd = ('ssh -T -x -o StrictHostKeyChecking=no '
+                           '-o UserKnownHostsFile=/dev/null '
+                           '-i {} -p {} {}@{} {}'.format(
+                               ssh_private_key, port, username, ip,
+                               convoy.util.wrap_commands_in_shell(cmds)))
+                procs.append(
+                    convoy.util.subprocess_nowait(
+                        joincmd, shell=True, suppress_output=True))
             else:
-                raise ValueError('Unknown transfer method: {}'.format(method))
-            procs.append(convoy.util.subprocess_nowait(cmd, shell=True))
-        rc = convoy.util.subprocess_wait_all(procs)
-        for _rc in rc:
-            if _rc != 0:
-                logger.error(
-                    'data ingress to {} failed with return code: {}'.format(
-                        node_id, _rc))
-                rcodes[node_id] = _rc
-                return
-        i += len(procs)
-        if i == len(files):
-            break
+                completed += 1
+        else:
+            del procs[n]
+            completed += 1
     rcodes[node_id] = 0
 
 
@@ -364,6 +478,16 @@ def ingress_data(batch_client, config, rls=None):
             if mpt is None:
                 mpt = 1
             try:
+                split = fdict['destination']['data_transfer'][
+                    'split_files_megabytes']
+                if split is not None and split <= 0:
+                    split = None
+                # convert to bytes
+                if split is not None:
+                    split <<= 20
+            except KeyError:
+                split = None
+            try:
                 ssh_private_key = pathlib.Path(
                     fdict['destination']['data_transfer']['ssh_private_key'])
             except KeyError:
@@ -393,13 +517,21 @@ def ingress_data(batch_client, config, rls=None):
                 raise RuntimeError(
                     'data ingress to {} not supported'.format(driver))
             if method == 'scp' or method == 'rsync+ssh':
-                _singlenode_transfer(
-                    method, src, src_incl, src_excl, dst, username,
-                    ssh_private_key, rls, eo, reo)
+                # split/source include/exclude will force multinode
+                # transfer with mpt=1
+                if (split is not None or src_incl is not None or
+                        src_excl is not None):
+                    _multinode_transfer(
+                        'multinode_' + method, src, src_incl, src_excl, dst,
+                        username, ssh_private_key, rls, eo, reo, 1, split)
+                else:
+                    _singlenode_transfer(
+                        method, src, dst, username, ssh_private_key, rls, eo,
+                        reo)
             elif method == 'multinode_scp' or method == 'multinode_rsync+ssh':
                 _multinode_transfer(
                     method, src, src_incl, src_excl, dst, username,
-                    ssh_private_key, rls, eo, reo, mpt)
+                    ssh_private_key, rls, eo, reo, mpt, split)
             else:
                 raise RuntimeError(
                     'unknown transfer method: {}'.format(method))
