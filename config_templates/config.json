@@ -33,7 +33,11 @@
         ],
         "files": [
             {
-                "source": "/some/local/path/dir",
+                "source": {
+                    "path": "/some/local/path/dir",
+                    "include": ["*.dat"],
+                    "exclude": ["*.bak"]
+                },
                 "destination": {
                     "shared_data_volume": "glustervol",
                     "data_transfer": {

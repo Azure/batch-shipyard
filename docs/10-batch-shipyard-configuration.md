@@ -93,7 +93,11 @@ The global config schema is as follows:
         ],
         "files": [
             {
-                "source": "/some/local/path/dir",
+                "source": {
+                    "path": "/some/local/path/dir",
+                    "include": ["*.dat"],
+                    "exclude": ["*.bak"]
+                },
                 "destination": {
                     "shared_data_volume": "glustervol",
                     "data_transfer": {
@@ -209,9 +213,22 @@ from a location accessible by the local machine (i.e., machine invoking
 in the pool). `files` is a json list of objects, which allows for multiple
 sources to destinations to be ingressed during the same invocation. Each
 object within the `files` list contains the following members:
-* (required) `source` property is a local path. A single file or a directory
-can be specified. No globbing/wildcards are currently supported.
-* (required) `destination` property containing the following members:
+* (required) `source` property contains the following members:
+  * (required) `path` is a local path. A single file or a directory
+    can be specified. Filters below cannot be specified for single file to
+    transfer.
+  * (optional) `include` is an array of
+    [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
+    where only files matching a filter are included in the data transfer.
+    Filters specified in `include` have precedence over `exclude` described
+    next. In this example, all files ending in `.dat` are ingressed.
+  * (optional) `exclude` is an array of
+    [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
+    where files matching a filter are excluded from the data transfer. Filters
+    specified in `include` have precedence over filters specified in
+    `exclude`. In this example, all files ending in `.bak` are skipped for
+    ingress.
+* (required) `destination` property contains the following members:
   * (required) `shared_data_volume` is a GlusterFS volume name. Please see
     below in the `shared_data_volumes` for information on how to set up a
     GlusterFS share.
