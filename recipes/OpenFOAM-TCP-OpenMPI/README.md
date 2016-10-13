@@ -13,11 +13,6 @@ The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 
-If using the sample execution below, the following also must be set to these
-values:
-* `vm_size` must be set to `STANDARD_D2_V2` or `STANDARD_F2`
-* `vm_count` must be set to `2`
-
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid OpenFOAM image

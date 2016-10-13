@@ -141,17 +141,17 @@ def _setup_container_names(sep: str) -> None:
     """Set up storage container names
     :param str sep: storage container prefix
     """
-    if sep is None:
-        sep = ''
+    if sep is None or len(sep) == 0:
+        raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'torrents', _BATCHACCOUNT.lower(), _POOLID.lower()))
+        (sep + 'tor', _BATCHACCOUNT.lower(), _POOLID.lower()))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
-    _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
+    _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
-        (sep + 'globalresources', _BATCHACCOUNT.lower(), _POOLID.lower()))
+        (sep + 'gr', _BATCHACCOUNT.lower(), _POOLID.lower()))
     global _PREFIX
     _PREFIX = sep
 

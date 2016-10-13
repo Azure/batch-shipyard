@@ -13,10 +13,14 @@ more information.
 - `streamfile` no longer has an arbitrary max streaming time; the action will
 stream the file indefinitely until the task completes
 - Modularized code base
+- Ensure `storage_entity_prefix` is valid and validate container name lengths
+- `delpool` action now cleans up and deletes some storage containers
+immediately afterwards (with confirmation prompts)
 
 ### Fixed
 - GlusterFS mount ownership/permissions fixed such that SSH users can
 read/write
+- Azure File shared volume setup when invoked from Windows
 
 ## [1.1.0] - 2016-10-05
 ### Added

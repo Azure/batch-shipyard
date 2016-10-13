@@ -54,7 +54,7 @@ import convoy.util
 # create logger
 logger = logging.getLogger('shipyard')
 # global defines
-_VERSION = '1.1.0'
+_VERSION = '2.0.0'
 _AZUREFILE_DVD_BIN = {
     'url': (
         'https://github.com/Azure/azurefile-dockervolumedriver/releases'
@@ -75,6 +75,7 @@ _NVIDIA_DRIVER = 'nvidia-driver.run'
 _DATA_XFER_METHODS = ('rsync+ssh', 'scp', 'multinode_scp')
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
+_HPNSSH_FILE = ('shipyard_hpnssh.sh', 'scripts/shipyard_hpnssh.sh')
 _JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
 _CASCADE_FILE = ('cascade.py', 'cascade/cascade.py')
 _SETUP_PR_FILE = (
@@ -99,8 +100,8 @@ def _populate_global_settings(config, action):
         sep = config['batch_shipyard']['storage_entity_prefix']
     except KeyError:
         sep = None
-    if sep is None:
-        sep = ''
+    if sep is None or len(sep) == 0:
+        raise ValueError('storage_entity_prefix is invalid')
     postfix = '-'.join(
         (config['credentials']['batch']['account'].lower(),
          config['pool_specification']['id'].lower()))
@@ -266,13 +267,13 @@ def setup_azurefile_volume_driver(blob_client, config):
             'storage account or storage account key not specified for '
             'azurefile docker volume driver')
     srvenv = pathlib.Path('resources/azurefile-dockervolumedriver.env')
-    with srvenv.open('w', encoding='utf8') as f:
+    with srvenv.open('wb') as f:
         f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
         f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
         f.write('AZURE_STORAGE_BASE={}\n'.format(saep))
     # create docker volume mount command script
     volcreate = pathlib.Path('resources/azurefile-dockervolume-create.sh')
-    with volcreate.open('w', encoding='utf8') as f:
+    with volcreate.open('wb') as f:
         f.write('#!/usr/bin/env bash\n\n')
         for svkey in config[
                 'global_resources']['docker_volumes']['shared_data_volumes']:
@@ -384,6 +385,10 @@ def add_pool(batch_client, blob_client, config):
     if block_for_gr:
         block_for_gr = ','.join(
             [r for r in config['global_resources']['docker_images']])
+    try:
+        hpnssh = config['pool_specification']['ssh']['hpn_server_swap']
+    except KeyError:
+        hpnssh = False
     # check shared data volume mounts
     azurefile_vd = False
     gluster = False
@@ -411,6 +416,8 @@ def add_pool(batch_client, blob_client, config):
         _rflist.append(_SETUP_PR_FILE)
         if perf:
             _rflist.append(_PERF_FILE)
+    if hpnssh:
+        _rflist.append(_HPNSSH_FILE)
     # handle azurefile docker volume driver
     if azurefile_vd:
         afbin, afsrv, afenv, afvc = setup_azurefile_volume_driver(
@@ -446,7 +453,7 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -459,6 +466,7 @@ def add_pool(batch_client, blob_client, config):
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
             ' -p {}'.format(prefix) if prefix else '',
+            ' -w' if hpnssh else '',
         ),
     ]
     try:
@@ -849,6 +857,8 @@ def main():
         convoy.batch.resize_pool(batch_client, config)
     elif args.action == 'delpool':
         convoy.batch.del_pool(batch_client, config)
+        convoy.storage.cleanup_with_del_pool(
+            blob_client, queue_client, table_client, config)
     elif args.action == 'addsshuser':
         convoy.batch.add_ssh_user(batch_client, config)
         convoy.batch.get_remote_login_settings(batch_client, config)

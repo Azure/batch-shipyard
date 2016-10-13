@@ -51,8 +51,8 @@ def _setup_container_names(sep: str) -> None:
     """Set up storage container names
     :param str sep: storage container prefix
     """
-    if sep is None:
-        sep = ''
+    if sep is None or len(sep) == 0:
+        raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
 
 

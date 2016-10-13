@@ -70,18 +70,30 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep):
     :param str saep: storage account endpoint
     """
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP
+    if sep is None or len(sep) == 0:
+        raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
-        (sep + 'resourcefiles', postfix))
+        (sep + 'rf', postfix))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'torrents', postfix))
+        (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
-    _STORAGE_CONTAINERS['table_globalresources'] = sep + 'globalresources'
+    _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
-        (sep + 'globalresources', postfix))
+        (sep + 'gr', postfix))
+    # ensure all storage containers are between 3 and 63 chars in length
+    for key in _STORAGE_CONTAINERS:
+        length = len(_STORAGE_CONTAINERS[key])
+        if length < 3 or length > 63:
+            raise RuntimeError(
+                'Storage container {} name {} length {} does not fall in '
+                'storage naming rules. Retry with a modified '
+                'batch_shipyard:storage_entity_prefix and/or '
+                'pool_specification:id.'.format(
+                    key, _STORAGE_CONTAINERS[key], length))
     _STORAGEACCOUNT = sa
     _STORAGEACCOUNTKEY = sakey
     _STORAGEACCOUNTEP = saep
@@ -287,21 +299,27 @@ def upload_resource_files(blob_client, config, files):
     return sas_urls
 
 
-def delete_storage_containers(blob_client, queue_client, table_client, config):
+def delete_storage_containers(
+        blob_client, queue_client, table_client, config, skip_tables=False):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azuretable.TableService, dict, bool) -> None
     """Delete storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param bool skip_tables: skip deleting tables
     """
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
+            logger.debug('deleting container: {}'.format(
+                _STORAGE_CONTAINERS[key]))
             blob_client.delete_container(_STORAGE_CONTAINERS[key])
-        elif key.startswith('table_'):
+        elif not skip_tables and key.startswith('table_'):
+            logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
         elif key.startswith('queue_'):
+            logger.debug('deleting queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.delete_queue(_STORAGE_CONTAINERS[key])
 
 
@@ -339,12 +357,12 @@ def _clear_table(table_client, table_name, config):
     :param dict config: configuration dict
     """
     # type: (azuretable.TableService, str, dict) -> None
-    logger.info('clearing table: {}'.format(table_name))
+    pk = '{}${}'.format(
+        config['credentials']['batch']['account'],
+        config['pool_specification']['id'])
+    logger.debug('clearing table (pk={}): {}'.format(pk, table_name))
     ents = table_client.query_entities(
-        table_name, filter='PartitionKey eq \'{}${}\''.format(
-            config['credentials']['batch']['account'],
-            config['pool_specification']['id'])
-    )
+        table_name, filter='PartitionKey eq \'{}\''.format(pk))
     # batch delete entities
     i = 0
     bet = azuretable.TableBatch()
@@ -359,21 +377,23 @@ def _clear_table(table_client, table_name, config):
         table_client.commit_batch(table_name, bet)
 
 
-def clear_storage_containers(blob_client, queue_client, table_client, config):
+def clear_storage_containers(
+        blob_client, queue_client, table_client, config, tables_only=False):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azuretable.TableService, dict, bool) -> None
     """Clear storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param bool tables_only: clear only tables
     """
     try:
         perf = config['batch_shipyard']['store_timing_metrics']
     except KeyError:
         perf = False
     for key in _STORAGE_CONTAINERS:
-        if key.startswith('blob_'):
+        if not tables_only and key.startswith('blob_'):
             # TODO this is temp to preserve registry upload
             if key != 'blob_resourcefiles':
                 _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
@@ -386,7 +406,7 @@ def clear_storage_containers(blob_client, queue_client, table_client, config):
             except azure.common.AzureMissingResourceHttpError:
                 if key != 'table_perf' or perf:
                     raise
-        elif key.startswith('queue_'):
+        elif not tables_only and key.startswith('queue_'):
             logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.clear_messages(_STORAGE_CONTAINERS[key])
 
@@ -417,3 +437,23 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
         elif key.startswith('queue_'):
             logger.info('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
+
+
+def cleanup_with_del_pool(blob_client, queue_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
+    #        azuretable.TableService, dict) -> None
+    """Special cleanup routine in combination with delete pool
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
+    pool_id = config['pool_specification']['id']
+    if not convoy.util.confirm_action(
+            config, 'delete/cleanup storage containers associated '
+            'with {} pool'.format(pool_id)):
+        return
+    clear_storage_containers(
+        blob_client, queue_client, table_client, config, tables_only=True)
+    delete_storage_containers(
+        blob_client, queue_client, table_client, config, skip_tables=True)

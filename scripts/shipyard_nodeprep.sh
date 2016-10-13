@@ -32,6 +32,7 @@ install_azurefile_docker_volume_driver() {
 azurefile=0
 block=
 cascadecontainer=0
+hpnssh=0
 gluster=0
 gpu=
 networkopt=0
@@ -42,7 +43,7 @@ prefix=
 privatereg=
 sku=
 
-while getopts "h?ab:dfg:no:p:r:s:t:" opt; do
+while getopts "h?ab:dfg:no:p:r:s:t:w" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -58,6 +59,7 @@ while getopts "h?ab:dfg:no:p:r:s:t:" opt; do
             echo "-r [container:archive:image id] private registry"
             echo "-s [sku] VM sku"
             echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
+            echo "-w install openssh-hpn"
             echo ""
             exit 1
             ;;
@@ -100,6 +102,9 @@ while getopts "h?ab:dfg:no:p:r:s:t:" opt; do
                 p2penabled=0
             fi
             ;;
+        w)
+            hpnssh=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -130,6 +135,11 @@ PYTHONASYNCIODEBUG=1
 
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
+
+# set up hpn-ssh
+if [ $hpnssh -eq 1 ]; then
+    ./shipyard_hpnssh.sh $offer $sku
+fi
 
 # set iptables rules
 if [ $p2penabled -eq 1 ]; then
