@@ -5,6 +5,8 @@
 - Data ingress support to GlusterFS. Please see the configuration doc for
 more information.
 - Experimental support for OpenSSH HPN on Ubuntu
+- Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
+`listtasks`. Please see the usage doc for more information.
 
 ### Changed
 - **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has

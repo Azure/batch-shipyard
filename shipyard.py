@@ -564,7 +564,7 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
     #        List[batchmodels.ComputeNode]) -> None
     """Setup glusterfs via multi-instance task
     :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param list nodes: list of nodes
@@ -820,7 +820,9 @@ def main():
         config['pool_specification'] = {
             'id': args.poolid
         }
-    if args.action in ('addjobs', 'cleanmijobs', 'deljobs', 'termjobs'):
+    if args.action in (
+            'addjobs', 'cleanmijobs', 'delcleanmijobs', 'deljobs',
+            'termjobs', 'listtasks', 'listtaskfiles'):
         if args.configdir is not None and args.jobs is None:
                 args.jobs = str(pathlib.Path(args.configdir, 'jobs.json'))
         try:
@@ -882,10 +884,19 @@ def main():
         convoy.batch.stream_file_and_wait_for_task(batch_client, args.filespec)
     elif args.action == 'gettaskfile':
         convoy.batch.get_file_via_task(batch_client, config, args.filespec)
+    elif args.action == 'gettaskallfiles':
+        convoy.batch.get_all_files_via_task(
+            batch_client, config, args.filespec)
     elif args.action == 'getnodefile':
         convoy.batch.get_file_via_node(batch_client, config, args.nodeid)
     elif args.action == 'ingressdata':
         convoy.data.ingress_data(batch_client, config)
+    elif args.action == 'listjobs':
+        convoy.batch.list_jobs(batch_client, config)
+    elif args.action == 'listtasks':
+        convoy.batch.list_tasks(batch_client, config)
+    elif args.action == 'listtaskfiles':
+        convoy.batch.list_task_files(batch_client, config)
     elif args.action == 'delstorage':
         convoy.storage.delete_storage_containers(
             blob_client, queue_client, table_client, config)
@@ -908,7 +919,9 @@ def parseargs():
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
         'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
-        'grls, streamfile, gettaskfile, getnodefile, clearstorage, delstorage')
+        'grls, streamfile, gettaskfile, gettaskallfiles, getnodefile, '
+        'ingressdata, listjobs, listtasks, listtaskfiles, clearstorage, '
+        'delstorage')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true',
         help='verbose output')

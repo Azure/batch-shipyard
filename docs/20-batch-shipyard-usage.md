@@ -67,7 +67,13 @@ cleaning up these types of jobs.
 file.
 * `streamfile`: stream a file from a live compute node.
 * `gettaskfile`: retrieve a file with job id/task id from a live compute node.
+* `gettaskallfiles`: retrieve all files with job id/task id from a live
+compute node. `--filespec` can be used here but without the filename, e.g.,
+`--filespec myjob:mytask`.
 * `getnodefile`: retrieve a file with pool id/node id from a live compute node.
+* `ingressdata`: ingress data as specified in the global configuration file.
+* `listjobs`: list all jobs under the Batch account.
+* `listtasks`: list tasks under jobs specified in the jobs configuraiton file.
 * `clearstorage`: clear storage containers as specified in the configuration
 files.
 * `delstorage`: delete storage containers as specified in the configuration
