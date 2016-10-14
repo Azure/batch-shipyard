@@ -109,6 +109,19 @@ The global config schema is as follows:
                         "max_parallel_transfers_per_node": 2
                     }
                 }
+            },
+            {
+                "source": {
+                    "path": "/some/local/path/bound/for/blob",
+                    "include": ["*.bin"]
+                },
+                "destination": {
+                    "storage_account_settings": "mystorageaccount",
+                    "data_transfer": {
+                        "container": "mycontainer",
+                        "blobxfer_extra_options": "--no-computefilemd5"
+                    }
+                }
             }
         ],
         "docker_volumes": {
@@ -222,19 +235,23 @@ object within the `files` list contains the following members:
     [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
     where only files matching a filter are included in the data transfer.
     Filters specified in `include` have precedence over `exclude` described
-    next. In this example, all files ending in `.dat` are ingressed.
+    next. `include` can only have a maximum of 1 filter for ingress to Azure
+    Blob Storage. In this example, all files ending in `.dat` are ingressed.
   * (optional) `exclude` is an array of
     [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
     where files matching a filter are excluded from the data transfer. Filters
     specified in `include` have precedence over filters specified in
-    `exclude`. In this example, all files ending in `.bak` are skipped for
+    `exclude`. `exclude` cannot be specified for ingress into Azure Blob
+    Storage. In this example, all files ending in `.bak` are skipped for
     ingress.
 * (required) `destination` property contains the following members:
-  * (required) `shared_data_volume` is a GlusterFS volume name. Please see
-    below in the `shared_data_volumes` for information on how to set up a
-    GlusterFS share.
-  * (required) `data_transfer` specifies how the transfer should take place,
-    and contains the following members:
+  * (required) `shared_data_volume` or `storage_account_settings` for data
+    ingress to a GlusterFS volume or Azure Blob Storage. You may specify one
+    or the other, but not both in the same object. Please see below in the
+    `shared_data_volumes` for information on how to set up a GlusterFS share.
+  * (required) `data_transfer` specifies how the transfer should take place.
+    The following list contains members for GlusterFS ingress when a GlusterFS
+    volume is provided for `shared_data_volume`:
     * (required) `method` specified which method should be used to ingress
       data, which should be one of: `scp`, `multinode_scp`, `rsync+ssh` or
       `multinode_rsync+ssh`. `scp` will use secure copy to copy a file or a
@@ -279,6 +296,16 @@ object within the `files` list contains the following members:
       there will be up to 2 scp sessions in parallel per compute node for a
       maximum of 6 concurrent scp sessions to the pool. The default is 1 if
       not specified or omitted.
+  * (required) `data_transfer` specifies how the transfer should take place.
+    When Azure Blob Storage is selected as the destination for data ingress,
+    [blobxfer](https://github.com/Azure/blobxfer) is invoked. The following
+    list contains members for Azure Blob Storage ingress when a storage
+    account link is provided for `storage_account_settings`:
+    * (required) `container` is the container to upload to. The container
+      need not be created beforehand.
+    * (optional) `blobxfer_extra_options` are any extra options to pass to
+      `blobxfer`. In the example above, `--no-computefilemd5` will force
+      `blobxfer` to skip MD5 calculation on files ingressed.
 
 `docker_volumes` is an optional property that can consist of two
 different types of volumes: `data_volumes` and `shared_data_volumes`.

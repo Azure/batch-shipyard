@@ -28,6 +28,7 @@ import datetime
 import fnmatch
 import logging
 import math
+import os
 try:
     import pathlib
 except ImportError:
@@ -396,6 +397,54 @@ def _multinode_thread_worker(
     rcodes[node_id] = 0
 
 
+def _azure_blob_storage_transfer(
+        storage_settings, container, src, src_incl, eo):
+    # type: (dict, str, str, str, str) -> None
+    """Initiate an azure blob storage transfer
+    :param dict storage_settings: storage settings
+    :param str container: container to transfer to
+    :param str src: source directory
+    :param str src_incl: source include filter
+    :param str eo: blobxfer extra options
+    """
+    thr = threading.Thread(
+        target=_wrap_blobxfer_subprocess,
+        args=(storage_settings, container, src, src_incl, eo)
+    )
+    thr.start()
+
+
+def _wrap_blobxfer_subprocess(storage_settings, container, src, src_incl, eo):
+    # type: (dict, str, str, str, str) -> None
+    """Wrapper function for blobxfer
+    :param dict storage_settings: storage settings
+    :param str container: container to transfer to
+    :param str src: source directory
+    :param str src_incl: source include filter
+    :param str eo: blobxfer extra options
+    """
+    psrc = pathlib.Path(src)
+    cwd = str(psrc.parent)
+    rsrc = psrc.relative_to(psrc.parent)
+    env = os.environ.copy()
+    env['BLOBXFER_STORAGEACCOUNTKEY'] = storage_settings['account_key']
+    cmd = ['blobxfer {} {} {} --upload --no-progressbar {} {}'.format(
+        storage_settings['account'], container, rsrc,
+        '--include \'{}\''.format(src_incl) if src_incl is not None else '',
+        eo)]
+    logger.info('begin ingressing data from {} to container {}'.format(
+        src, container))
+    proc = convoy.util.subprocess_nowait_pipe_stdout(
+        convoy.util.wrap_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
+    stdout = proc.communicate()[0]
+    if proc.returncode != 0:
+        logger.error(stdout.decode('utf8'))
+        logger.error('data ingress failed from {} to container {}'.format(
+            src, container))
+    else:
+        logger.info(stdout.decode('utf8'))
+
+
 def ingress_data(batch_client, config, rls=None):
     # type: (batch.BatchServiceClient, dict, dict) -> None
     """Ingresses data into Azure Batch
@@ -413,8 +462,6 @@ def ingress_data(batch_client, config, rls=None):
         username = config['pool_specification']['ssh']['username']
     except KeyError:
         username = None
-    if rls is None:
-        rls = convoy.batch.get_remote_login_settings(batch_client, config)
     for fdict in files:
         src = fdict['source']['path']
         try:
@@ -516,6 +563,9 @@ def ingress_data(batch_client, config, rls=None):
             else:
                 raise RuntimeError(
                     'data ingress to {} not supported'.format(driver))
+            if rls is None:
+                rls = convoy.batch.get_remote_login_settings(
+                    batch_client, config)
             if method == 'scp' or method == 'rsync+ssh':
                 # split/source include/exclude will force multinode
                 # transfer with mpt=1
@@ -536,8 +586,35 @@ def ingress_data(batch_client, config, rls=None):
                 raise RuntimeError(
                     'unknown transfer method: {}'.format(method))
         elif storage is not None:
-            # container = fdict['destination']['container']
-            raise NotImplementedError()
+            try:
+                container = fdict['destination']['data_transfer']['container']
+                if container is not None and len(container) == 0:
+                    container = None
+            except KeyError:
+                container = None
+            if container is None:
+                raise ValueError('container is invalid')
+            if src_incl is not None:
+                if len(src_incl) > 1:
+                    raise ValueError(
+                        'include can only be a maximum of one filter for '
+                        'ingress to Azure Blob Storage')
+                # peel off first into var
+                src_incl = src_incl[0]
+            if src_excl is not None:
+                raise ValueError(
+                    'exclude cannot be specified for ingress to Azure Blob '
+                    'Storage')
+            try:
+                eo = fdict['destination']['data_transfer'][
+                    'blobxfer_extra_options']
+                if eo is None:
+                    eo = ''
+            except KeyError:
+                eo = ''
+            _azure_blob_storage_transfer(
+                config['credentials']['storage'][storage], container, src,
+                src_incl, eo)
         else:
             raise RuntimeError(
                 'invalid file transfer configuration: {}'.format(fdict))

@@ -11,9 +11,10 @@ for python3).
 
 Please note that the Python dependencies require a valid compiler, ssl, ffi,
 and python development libraries to be installed due to the
-[cryptography](https://pypi.python.org/pypi/cryptography) dependency. The
-following are example commands to execute (as root or with `sudo`) to
-install the required dependencies:
+[cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.
+For Windows, binary wheels will be installed for dependencies, thus no
+development environment is needed. The following are example commands to
+execute (as root or with `sudo`) to install the required dependencies on Linux:
 
 ####Ubuntu/Debian
 ```
@@ -51,7 +52,8 @@ side to further accelerate `scp` to Azure Batch compute nodes where
 `hpn_server_swap` has been set to `true` in the `pool_specification`.
 2. `rsync` if `rsync` functionality is needed.
 3. [blobxfer](https://github.com/Azure/blobxfer) if transfering to Azure
-storage.
+storage. This is automatically installed if `pip install` is used with
+`requirements.txt` as per above.
 
 ## Installation
 Simply clone the repository:

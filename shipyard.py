@@ -72,7 +72,6 @@ _NVIDIA_DOCKER = {
     }
 }
 _NVIDIA_DRIVER = 'nvidia-driver.run'
-_DATA_XFER_METHODS = ('rsync+ssh', 'scp', 'multinode_scp')
 _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
 _HPNSSH_FILE = ('shipyard_hpnssh.sh', 'scripts/shipyard_hpnssh.sh')

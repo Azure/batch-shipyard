@@ -248,21 +248,41 @@ def subprocess_with_output(cmd, shell=False, suppress_output=False):
     return proc.returncode
 
 
-def subprocess_nowait(cmd, shell=False, suppress_output=False):
-    # type: (str, bool, bool) -> subprocess.Process
+def subprocess_nowait(
+        cmd, shell=False, suppress_output=False, cwd=None, env=None):
+    # type: (str, bool, bool, str, dict) -> subprocess.Process
     """Subprocess command and do not wait for subprocess
     :param str cmd: command line to execute
     :param bool shell: use shell in Popen
     :param bool suppress_output: suppress output
+    :param str cwd: current working directory
+    :param dict env: env vars to use
     :rtype: subprocess.Process
     :return: subprocess process handle
     """
     _devnull = open(os.devnull, 'w')
     if suppress_output:
         proc = subprocess.Popen(
-            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT)
+            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT,
+            cwd=cwd, env=env)
     else:
-        proc = subprocess.Popen(cmd, shell=shell)
+        proc = subprocess.Popen(cmd, shell=shell, cwd=cwd, env=env)
+    return proc
+
+
+def subprocess_nowait_pipe_stdout(
+        cmd, shell=False, cwd=None, env=None):
+    # type: (str, bool, str, dict) -> subprocess.Process
+    """Subprocess command and do not wait for subprocess
+    :param str cmd: command line to execute
+    :param bool shell: use shell in Popen
+    :param str cwd: current working directory
+    :param dict env: env vars to use
+    :rtype: subprocess.Process
+    :return: subprocess process handle
+    """
+    proc = subprocess.Popen(
+        cmd, shell=shell, stdout=subprocess.PIPE, cwd=cwd, env=env)
     return proc
 
 
