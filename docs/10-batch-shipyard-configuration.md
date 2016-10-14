@@ -412,8 +412,13 @@ from entering ready state until all Docker images are loaded. This defaults
 to `true`.
 * (optional) `transfer_files_on_pool_creation` will ingress all `files`
 specified in the `global_resources` section of the configuration json when
-the pool is created to the compute nodes of the pool. If this property is set
-to `true` then `block_until_all_global_resources_loaded` will be force
+the pool is created. If files are to be ingressed to Azure Blob Storage,
+then data movement operations are overlapped with the creation of the pool.
+If files are to be ingressed to a shared file system on the compute nodes,
+then the files are ingressed after the pool is created and the shared file
+system is ready. Files can be ingressed to both Azure Blob Storage and a
+shared file system during the same pool creation invocation. If this property
+is set to `true` then `block_until_all_global_resources_loaded` will be force
 disabled. If omitted, this property defaults to `false`.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not

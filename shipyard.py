@@ -304,6 +304,16 @@ def add_pool(batch_client, blob_client, config):
     vm_count = config['pool_specification']['vm_count']
     vm_size = config['pool_specification']['vm_size']
     try:
+        ingress_files = config[
+            'pool_specification']['transfer_files_on_pool_creation']
+    except KeyError:
+        ingress_files = False
+    # ingress data to Azure Blob Storage if specified
+    storage_threads = []
+    if ingress_files:
+        storage_threads = convoy.data.ingress_data(
+            batch_client, config, rls=None, kind='storage')
+    try:
         maxtasks = config['pool_specification']['max_tasks_per_node']
     except KeyError:
         maxtasks = 1
@@ -548,14 +558,11 @@ def add_pool(batch_client, blob_client, config):
     convoy.batch.add_ssh_user(batch_client, config, nodes)
     # log remote login settings
     rls = convoy.batch.get_remote_login_settings(batch_client, config, nodes)
-    # ingress data if specified
-    try:
-        ingress_files = config[
-            'pool_specification']['transfer_files_on_pool_creation']
-    except KeyError:
-        ingress_files = False
+    # ingress data to shared fs if specified
     if ingress_files:
-        convoy.data.ingress_data(batch_client, config, rls)
+        convoy.data.ingress_data(batch_client, config, rls=rls, kind='shared')
+    # wait for storage ingress processes
+    convoy.data.wait_for_storage_threads(storage_threads)
 
 
 def _setup_glusterfs(batch_client, blob_client, config, nodes):
@@ -889,7 +896,24 @@ def main():
     elif args.action == 'getnodefile':
         convoy.batch.get_file_via_node(batch_client, config, args.nodeid)
     elif args.action == 'ingressdata':
-        convoy.data.ingress_data(batch_client, config)
+        try:
+            # ensure there are remote login settings
+            rls = convoy.batch.get_remote_login_settings(
+                batch_client, config, nodes=None)
+            # ensure nodes are at least idle/running for shared ingress
+            kind = 'all'
+            if not convoy.batch.check_pool_nodes_runnable(
+                    batch_client, config):
+                kind = 'storage'
+        except batchmodels.BatchErrorException as ex:
+            if 'The specified pool does not exist' in ex.message.value:
+                rls = None
+                kind = 'storage'
+            else:
+                raise
+        storage_threads = convoy.data.ingress_data(
+            batch_client, config, rls=rls, kind=kind)
+        convoy.data.wait_for_storage_threads(storage_threads)
     elif args.action == 'listjobs':
         convoy.batch.list_jobs(batch_client, config)
     elif args.action == 'listtasks':

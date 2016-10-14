@@ -38,6 +38,7 @@ try:
 except ImportError:
     from pipes import quote as shellquote
 import threading
+import time
 # local imports
 import convoy.batch
 import convoy.util
@@ -412,6 +413,7 @@ def _azure_blob_storage_transfer(
         args=(storage_settings, container, src, src_incl, eo)
     )
     thr.start()
+    return thr
 
 
 def _wrap_blobxfer_subprocess(storage_settings, container, src, src_incl, eo):
@@ -428,10 +430,15 @@ def _wrap_blobxfer_subprocess(storage_settings, container, src, src_incl, eo):
     rsrc = psrc.relative_to(psrc.parent)
     env = os.environ.copy()
     env['BLOBXFER_STORAGEACCOUNTKEY'] = storage_settings['account_key']
-    cmd = ['blobxfer {} {} {} --upload --no-progressbar {} {}'.format(
-        storage_settings['account'], container, rsrc,
-        '--include \'{}\''.format(src_incl) if src_incl is not None else '',
-        eo)]
+    cmd = [
+        ('blobxfer {} {} {} --endpoint {} --upload --no-progressbar '
+         '{} {}').format(
+             storage_settings['account'], container, rsrc,
+             storage_settings['endpoint'],
+             '--include \'{}\''.format(src_incl)
+             if src_incl is not None else '',
+             eo)
+    ]
     logger.info('begin ingressing data from {} to container {}'.format(
         src, container))
     proc = convoy.util.subprocess_nowait_pipe_stdout(
@@ -445,13 +452,41 @@ def _wrap_blobxfer_subprocess(storage_settings, container, src, src_incl, eo):
         logger.info(stdout.decode('utf8'))
 
 
-def ingress_data(batch_client, config, rls=None):
-    # type: (batch.BatchServiceClient, dict, dict) -> None
+def wait_for_storage_threads(storage_threads):
+    # type: (list) -> None
+    """Wait for storage processes to complete
+    :param list storage_threads: list of storage threads
+    """
+    i = 0
+    nthreads = len(storage_threads)
+    while nthreads > 0:
+        alive = sum(thr.is_alive() for thr in storage_threads)
+        if alive > 0:
+            i += 1
+            if i % 10 == 0:
+                i = 0
+                logger.debug(
+                    'waiting for Azure Blob Storage transfer processes '
+                    'to complete: {} active, {} completed'.format(
+                        alive, nthreads - alive))
+            time.sleep(1)
+        else:
+            for thr in storage_threads:
+                thr.join()
+            logger.info('Azure Blob Storage transfer completed')
+            break
+
+
+def ingress_data(batch_client, config, rls=None, kind=None):
+    # type: (batch.BatchServiceClient, dict, dict, str) -> list
     """Ingresses data into Azure Batch
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param dict config: configuration dict
     :param dict rls: remote login settings
+    :param str kind: 'all', 'shared', or 'storage'
+    :rtype: list
+    :return: list of storage threads
     """
     try:
         files = config['global_resources']['files']
@@ -462,6 +497,7 @@ def ingress_data(batch_client, config, rls=None):
         username = config['pool_specification']['ssh']['username']
     except KeyError:
         username = None
+    storage_threads = []
     for fdict in files:
         src = fdict['source']['path']
         try:
@@ -489,6 +525,17 @@ def ingress_data(batch_client, config, rls=None):
                 'cannot specify both shared data volume and storage for the '
                 'destination for source: {}'.format(src))
         if shared is not None:
+            if rls is None:
+                logger.warning(
+                    'skipping data ingress from {} to {} for pool with no '
+                    'remote login settings or non-existent pool'.format(
+                        src, shared))
+                continue
+            if kind == 'storage':
+                logger.warning(
+                    'skipping data ingress from {} to {} for pool as ingress '
+                    'to shared file system not specified'.format(src, shared))
+                continue
             if username is None:
                 raise RuntimeError(
                     'cannot ingress data to shared data volume without a '
@@ -563,9 +610,6 @@ def ingress_data(batch_client, config, rls=None):
             else:
                 raise RuntimeError(
                     'data ingress to {} not supported'.format(driver))
-            if rls is None:
-                rls = convoy.batch.get_remote_login_settings(
-                    batch_client, config)
             if method == 'scp' or method == 'rsync+ssh':
                 # split/source include/exclude will force multinode
                 # transfer with mpt=1
@@ -586,6 +630,11 @@ def ingress_data(batch_client, config, rls=None):
                 raise RuntimeError(
                     'unknown transfer method: {}'.format(method))
         elif storage is not None:
+            if kind == 'shared':
+                logger.warning(
+                    'skipping data ingress from {} to {} for pool as ingress '
+                    'to Azure Blob Storage not specified'.format(src, storage))
+                continue
             try:
                 container = fdict['destination']['data_transfer']['container']
                 if container is not None and len(container) == 0:
@@ -612,9 +661,11 @@ def ingress_data(batch_client, config, rls=None):
                     eo = ''
             except KeyError:
                 eo = ''
-            _azure_blob_storage_transfer(
+            thr = _azure_blob_storage_transfer(
                 config['credentials']['storage'][storage], container, src,
                 src_incl, eo)
+            storage_threads.append(thr)
         else:
             raise RuntimeError(
                 'invalid file transfer configuration: {}'.format(fdict))
+    return storage_threads

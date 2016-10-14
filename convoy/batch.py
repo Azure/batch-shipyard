@@ -143,6 +143,28 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
         time.sleep(10)
 
 
+def check_pool_nodes_runnable(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> bool
+    """Check that all pool nodes in idle/running state
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :rtype: bool
+    :return: all pool nodes are runnable
+    """
+    pool_id = config['pool_specification']['id']
+    node_state = frozenset(
+        (batchmodels.ComputeNodeState.idle,
+         batchmodels.ComputeNodeState.running)
+    )
+    pool = batch_client.pool.get(pool_id)
+    nodes = list(batch_client.compute_node.list(pool_id))
+    if (len(nodes) >= pool.target_dedicated and
+            all(node.state in node_state for node in nodes)):
+        return True
+    return False
+
+
 def create_pool(batch_client, config, pool):
     # type: (batch.BatchServiceClient, dict, batchmodels.PoolAddParameter) ->
     #        List[batchmodels.ComputeNode]
