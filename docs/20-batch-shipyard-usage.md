@@ -71,7 +71,8 @@ file.
 compute node. `--filespec` can be used here but without the filename, e.g.,
 `--filespec myjob:mytask`.
 * `getnodefile`: retrieve a file with pool id/node id from a live compute node.
-* `ingressdata`: ingress data as specified in the global configuration file.
+* `ingressdata`: ingress data as specified in the `files` property of the
+global configuration file.
 * `listjobs`: list all jobs under the Batch account.
 * `listtasks`: list tasks under jobs specified in the jobs configuraiton file.
 * `clearstorage`: clear storage containers as specified in the configuration

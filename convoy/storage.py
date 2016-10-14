@@ -165,6 +165,26 @@ def create_clients():
     return blob_client, queue_client, table_client
 
 
+def create_blob_container_rl_saskey(storage_settings, container):
+    # type: (dict, str) -> str
+    """Create a saskey for a blob container with a 7day expiry time and rl perm
+    :param dict storage_settings: storage settings
+    :param str container: container
+    :rtype: str
+    :return: saskey
+    """
+    blob_client = azureblob.BlockBlobService(
+        account_name=storage_settings['account'],
+        account_key=storage_settings['account_key'],
+        endpoint_suffix=storage_settings['endpoint'])
+    return blob_client.generate_container_shared_access_signature(
+        container,
+        azureblob.ContainerPermissions.READ |
+        azureblob.ContainerPermissions.LIST,
+        expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
+    )
+
+
 def _add_global_resource(
         queue_client, table_client, config, pk, p2pcsd, grtype):
     # type: (azurequeue.QueueService, azuretable.TableService, dict, str,

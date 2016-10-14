@@ -76,6 +76,9 @@ _NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
 _GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
 _HPNSSH_FILE = ('shipyard_hpnssh.sh', 'scripts/shipyard_hpnssh.sh')
 _JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
+_BLOBINGRESS_FILE = (
+    'shipyard_blobingress.sh', 'scripts/shipyard_blobingress.sh'
+)
 _CASCADE_FILE = ('cascade.py', 'cascade/cascade.py')
 _SETUP_PR_FILE = (
     'setup_private_registry.py', 'cascade/setup_private_registry.py'
@@ -419,7 +422,7 @@ def add_pool(batch_client, blob_client, config):
     except KeyError:
         prefix = None
     # create resource files list
-    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, regfile]
+    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBINGRESS_FILE, regfile]
     if not use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
@@ -478,11 +481,18 @@ def add_pool(batch_client, blob_client, config):
             ' -w' if hpnssh else '',
         ),
     ]
+    # add additional start task commands
     try:
         start_task.extend(
             config['pool_specification']['additional_node_prep_commands'])
     except KeyError:
         pass
+    # digest any input_data
+    addlcmds = convoy.data.process_input_data(
+        blob_client, config, _BLOBINGRESS_FILE, config['pool_specification'])
+    if addlcmds is not None:
+        start_task.append(addlcmds)
+    del addlcmds
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=config['pool_specification']['id'],
@@ -842,6 +852,7 @@ def main():
             }]
     if args.verbose:
         logger.debug('config:\n' + json.dumps(config, indent=4))
+    config['_verbose'] = args.verbose
     _populate_global_settings(config, args.action)
     config['_auto_confirm'] = args.yes
 
@@ -873,7 +884,9 @@ def main():
     elif args.action == 'delnode':
         convoy.batch.del_node(batch_client, config, args.nodeid)
     elif args.action == 'addjobs':
-        convoy.batch.add_jobs(batch_client, blob_client, config, _JOBPREP_FILE)
+        convoy.batch.add_jobs(
+            batch_client, blob_client, config, _JOBPREP_FILE,
+            _BLOBINGRESS_FILE)
     elif args.action == 'cleanmijobs':
         convoy.batch.clean_mi_jobs(batch_client, config)
     elif args.action == 'termjobs':

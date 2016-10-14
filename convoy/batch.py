@@ -36,6 +36,7 @@ import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 # local imports
+import convoy.data
 import convoy.storage
 import convoy.util
 
@@ -819,15 +820,16 @@ def list_task_files(batch_client, config):
             logger.error('no tasks found for job {}'.format(job['id']))
 
 
-def add_jobs(batch_client, blob_client, config, jpfile):
+def add_jobs(batch_client, blob_client, config, jpfile, bifile):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        tuple, dict) -> None
+    #        dict, tuple, tuple) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param tuple jpfile: jobprep file
+    :param tuple bifile: blob ingress file
     """
     # get the pool inter-node comm setting
     pool_id = config['pool_specification']['id']
@@ -835,11 +837,17 @@ def add_jobs(batch_client, blob_client, config, jpfile):
     global_resources = []
     for gr in config['global_resources']['docker_images']:
         global_resources.append(gr)
-    # TODO add global resources for non-docker resources
-    jpcmdline = convoy.util.wrap_commands_in_shell([
-        '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
-            jpfile[0], ' '.join(global_resources))])
+    jpcmd = ['$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+        jpfile[0], ' '.join(global_resources))]
     for jobspec in config['job_specifications']:
+        # digest any input_data
+        addlcmds = convoy.data.process_input_data(
+            blob_client, config, bifile, jobspec)
+        if addlcmds is not None:
+            jpcmd.append(addlcmds)
+        del addlcmds
+        jpcmdline = convoy.util.wrap_commands_in_shell(jpcmd)
+        del jpcmd
         job = batchmodels.JobAddParameter(
             id=jobspec['id'],
             pool_info=batchmodels.PoolInformation(pool_id=pool_id),
@@ -1244,6 +1252,12 @@ def add_jobs(batch_client, blob_client, config, jpfile):
                         image,
                         '{}'.format(' ' + command) if command else '')
                 ]
+            # digest any input_data
+            addlcmds = convoy.data.process_input_data(
+                blob_client, config, bifile, task, on_task=True)
+            if addlcmds is not None:
+                task_commands.insert(0, addlcmds)
+            del addlcmds
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task_id,
@@ -1285,12 +1299,15 @@ def add_jobs(batch_client, blob_client, config, jpfile):
                     task_ids=task['depends_on']
                 )
             # create task
-            logger.info('Adding task {}: {}'.format(
-                task_id, batchtask.command_line))
-            if mis is not None:
-                logger.info(
-                    'multi-instance task coordination command: {}'.format(
-                        mis.coordination_command_line))
+            if config['_verbose']:
+                if mis is not None:
+                    logger.info(
+                        'Multi-instance task coordination command: {}'.format(
+                            mis.coordination_command_line))
+                logger.info('Adding task: {} command: {}'.format(
+                    task_id, batchtask.command_line))
+            else:
+                logger.info('Adding task: {}'.format(task_id))
             batch_client.task.add(job_id=job.id, task=batchtask)
             # update job if job autocompletion is needed
             if set_terminate_on_all_tasks_complete:

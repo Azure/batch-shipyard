@@ -2,8 +2,19 @@
 
 ## [Unreleased]
 ### Added
-- Data ingress support to GlusterFS and Azure Blob Storage. Please see the
-configuration doc for more information.
+- Comprehensive data movement support. Please see the configuration doc for
+more information.
+  - Ingress from local machine with `files` in global configuration
+    - To GlusterFS shared volume
+    - To Azure Blob Storage
+  - Ingress from Azure Blob Storage with `input_data` in pool and jobs
+    configuration
+    - Pool-level: to compute nodes
+    - Job-level: to compute nodes running the specified job
+    - Task-level: to compute nodes running a task of a job
+  - Egress to local machine as actions
+    - Single file from compute node
+    - Whole task-level directories from compute node
 - Experimental support for OpenSSH HPN on Ubuntu
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
 `listtasks`. Please see the usage doc for more information.

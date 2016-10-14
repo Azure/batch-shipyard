@@ -6,6 +6,17 @@
             "environment_variables": {
                 "abc": "xyz"
             },
+            "input_data": {
+                "azure_blob": [
+                    {
+                        "storage_account_settings": "mystorageaccount",
+                        "container": "jobcontainer",
+                        "include": ["jobdata*.bin"],
+                        "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobdata",
+                        "blobxfer_extra_options": null
+                    }
+                ]
+            },
             "tasks": [
                 {
                     "id": null,
@@ -33,6 +44,17 @@
                             "file_mode": ""
                         }
                     ],
+                    "input_data": {
+                        "azure_blob": [
+                            {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "taskcontainer",
+                                "include": ["taskdata*.bin"],
+                                "destination": "$AZ_BATCH_NODE_SHARED_DIR/taskdata",
+                                "blobxfer_extra_options": null
+                            }
+                        ]
+                    },
                     "entrypoint": null,
                     "command": "",
                     "infiniband": false,

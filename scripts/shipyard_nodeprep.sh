@@ -171,7 +171,7 @@ EOF
 fi
 
 # copy required shell scripts to shared
-cp docker_jp_block.sh $AZ_BATCH_NODE_SHARED_DIR
+cp docker_jp_block.sh shipyard_blobingress.sh $AZ_BATCH_NODE_SHARED_DIR
 
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
@@ -563,6 +563,9 @@ fi
 if [ $p2penabled -eq 0 ]; then
     wait
 fi
+
+# retrieve blobxfer docker image to assist with data ingress from blob
+docker pull alfpark/blobxfer
 
 # block until images ready if specified
 if [ ! -z $block ]; then

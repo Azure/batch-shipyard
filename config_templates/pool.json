@@ -11,6 +11,17 @@
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
+        "input_data": {
+            "azure_blob": [
+                {
+                    "storage_account_settings": "mystorageaccount",
+                    "container": "poolcontainer",
+                    "include": ["pooldata*.bin"],
+                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/pooldata",
+                    "blobxfer_extra_options": null
+                }
+            ]
+        },
         "ssh": {
             "username": "docker",
             "expiry_days": 7,

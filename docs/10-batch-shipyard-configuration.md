@@ -369,6 +369,17 @@ The pool schema is as follows:
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
+        "input_data": {
+            "azure_blob": [
+                {
+                    "storage_account_settings": "mystorageaccount",
+                    "container": "poolcontainer",
+                    "include": ["pooldata*.bin"],
+                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/pooldata",
+                    "blobxfer_extra_options": null
+                }
+            ]
+        },
         "ssh": {
             "username": "docker",
             "expiry_days": 7,
@@ -420,6 +431,32 @@ system is ready. Files can be ingressed to both Azure Blob Storage and a
 shared file system during the same pool creation invocation. If this property
 is set to `true` then `block_until_all_global_resources_loaded` will be force
 disabled. If omitted, this property defaults to `false`.
+* (optional) `input_data` is an object containing data that should be
+ingressed to all compute nodes as part of node preparation. It is
+important to note that if you are combining this action with `files` and
+are ingressing data to Blob storage as part of pool creation, that the blob
+containers defined here will be downloaded as soon as the compute node is
+ready to do so. This may result in the blob container/blobs not being ready
+in time for the `input_data` transfer. It is up to you to ensure that these
+two operations do not overlap. If there is a possibility of overlap, then you
+should ingress data defined in `files` prior to pool creation and disable
+the option above `transfer_files_on_pool_creation`. This object currently only
+supports `azure_blob` as a member.
+  * `azure_blob` contains the following members:
+    * (required) `storage_account_settings` contains a storage account link
+      as defined in the credentials json.
+    * (required) `container` the container to transfer.
+    * (optional) `include` property defines an optional include filter.
+      Although this property is an array, it is only allowed to have 1
+      maximum filter.
+    * (required) `destination` property defines where to place the
+      downloaded files on the host file system. Please note that you should
+      not specify a destination that is on a shared file system. If you
+      require ingressing to a shared file system location like a GlusterFS
+      volume, then use the global configuration `files` property and the
+      `ingressdata` action.
+    * (optional) `blobxfer_extra_options` are any extra options to pass to
+      `blobxfer`.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation.
@@ -460,6 +497,17 @@ The jobs schema is as follows:
             "environment_variables": {
                 "abc": "xyz"
             },
+            "input_data": {
+                "azure_blob": [
+                    {
+                        "storage_account_settings": "mystorageaccount",
+                        "container": "jobcontainer",
+                        "include": ["jobdata*.bin"],
+                        "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobdata",
+                        "blobxfer_extra_options": null
+                    }
+                ]
+            },
             "tasks": [
                 {
                     "id": null,
@@ -486,6 +534,17 @@ The jobs schema is as follows:
                             "file_mode": ""
                         }
                     ],
+                    "input_data": {
+                        "azure_blob": [
+                            {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "taskcontainer",
+                                "include": ["taskdata*.bin"],
+                                "destination": "$AZ_BATCH_NODE_SHARED_DIR/taskdata",
+                                "blobxfer_extra_options": null
+                            }
+                        ]
+                    },
                     "remove_container_after_exit": true,
                     "additional_docker_run_options": [
                     ],
@@ -520,6 +579,31 @@ Docker container in multi-instance tasks. This is defaulted to `true` when
 multi-instance tasks are specified.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job.
+* (optional) `input_data` is an object containing data that should be
+ingressed for the job. Any `input_data` defined at this level will be
+downloaded for this job which can be run on any number of compute nodes
+depending upon the number of constituent tasks and repeat invocations. However,
+`input_data` is only downloaded once per job invocation on a compute node.
+For example, if `job-1`:`task-1` is run on compute node A and then
+`job-1`:`task-2` is run on compute node B, then this `input_data` is ingressed
+to both compute node A and B. However, if `job-1`:`task-3` is run on
+compute node A, then the `input_data` is not transferred again. This object
+currently only supports `azure_blob` as a member.
+  * `azure_blob` contains the following members:
+    * (required) `storage_account_settings` contains a storage account link
+      as defined in the credentials json.
+    * (required) `container` the container to transfer.
+    * (optional) `include` property defines an optional include filter.
+      Although this property is an array, it is only allowed to have 1
+      maximum filter.
+    * (required) `destination` property defines where to place the
+      downloaded files on the host file system. Please note that you should
+      not specify a destination that is on a shared file system. If you
+      require ingressing to a shared file system location like a GlusterFS
+      volume, then use the global configuration `files` property and the
+      `ingressdata` action.
+    * (optional) `blobxfer_extra_options` are any extra options to pass to
+      `blobxfer`.
 * (required) `tasks` is an array of tasks to add to the job.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is
@@ -551,6 +635,27 @@ which will be applied to all tasks operating under the job.
       Blob Storage URL.
     * `file_mode` if the file mode to set for the file on the compute node.
       This is optional.
+  * (optional) `input_data` is an object containing data that should be
+    ingressed for this specific task. This object currently only supports
+    `azure_blob` as a member.
+    * `azure_blob` contains the following members:
+      * (required) `storage_account_settings` contains a storage account link
+        as defined in the credentials json.
+      * (required) `container` the container to transfer.
+      * (optional) `include` property defines an optional include filter.
+        Although this property is an array, it is only allowed to have 1
+        maximum filter.
+      * (optional) `destination` property defines where to place the
+        downloaded files on the host file system. Unlike the job-level
+        version of `input_data`, this `destination` property can be ommitted.
+        If `destination` is not specified at this level, then files are
+        defaulted to download into `$AZ_BATCH_TASK_WORKING_DIR`. Please note
+        that you should not specify a destination that is on a shared file
+        system. If you require ingressing to a shared file system location
+        like a GlusterFS volume, then use the global configuration `files`
+        property and the `ingressdata` action.
+      * (optional) `blobxfer_extra_options` are any extra options to pass to
+        `blobxfer`.
   * (optional) `remove_container_after_exit` property specifies if the
     container should be automatically removed/cleaned up after it exits. This
     defaults to `false`.

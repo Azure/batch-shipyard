@@ -41,6 +41,7 @@ import threading
 import time
 # local imports
 import convoy.batch
+import convoy.storage
 import convoy.util
 
 # create logger
@@ -50,6 +51,94 @@ convoy.util.setup_logger(logger)
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
+
+
+def _process_blob_input_data(blob_client, config, input_data, on_task):
+    # type: (azure.storage.blob.BlockBlobService, dict, dict, bool) -> str
+    """Process blob input data to ingress
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param dict spec: config spec with input_data
+    :param bool on_task: if this is originating from a task spec
+    :rtype: list
+    :return: args to pass to blob ingress script
+    """
+    args = []
+    for xfer in input_data:
+        storage_settings = config['credentials']['storage'][
+            xfer['storage_account_settings']]
+        container = xfer['container']
+        try:
+            include = xfer['include']
+            if include is not None:
+                if len(include) == 0:
+                    include = ''
+                elif len(include) > 1:
+                    raise ValueError(
+                        'include for input_data from {}:{} cannot exceed '
+                        '1 filter'.format(
+                            xfer['storage_account_settings'], container))
+            else:
+                include = ''
+        except KeyError:
+            include = ''
+        try:
+            dst = xfer['destination']
+        except KeyError:
+            if on_task:
+                dst = None
+            else:
+                raise
+        if on_task and dst is None or len(dst) == 0:
+            dst = '$AZ_BATCH_TASK_WORKING_DIR'
+        try:
+            eo = xfer['blobxfer_extra_options']
+            if eo is None:
+                eo = ''
+        except KeyError:
+            eo = ''
+        # create saskey for container with 7day expiry with rl perm
+        saskey = convoy.storage.create_blob_container_rl_saskey(
+            storage_settings, container)
+        # construct argument
+        # sa:ep:saskey:container:include:eo:dst
+        args.append('"{}:{}:{}:{}:{}:{}:{}"'.format(
+            storage_settings['account'], storage_settings['endpoint'],
+            saskey, container, include, eo, dst))
+    return args
+
+
+def process_input_data(blob_client, config, bifile, spec, on_task=False):
+    # type: (azure.storage.blob.BlockBlobService, dict, tuple, dict,
+    #        bool) -> str
+    """Process input data to ingress
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param tuple bifile: blog ingress script
+    :param dict spec: config spec with input_data
+    :param bool on_task: if this is originating from a task spec
+    :rtype: str
+    :return: additonal command
+    """
+    ret = None
+    try:
+        input_data = spec['input_data']
+        if input_data is not None and len(input_data) > 0:
+            for key in input_data:
+                if key == 'azure_batch':
+                    # TODO implement compute node ingress
+                    raise NotImplementedError()
+                elif key == 'azure_blob':
+                    blobargs = _process_blob_input_data(
+                        blob_client, config, input_data[key], on_task)
+                    ret = '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+                        bifile[0], ' '.join(blobargs))
+                else:
+                    raise ValueError(
+                        'unknown input_data method: {}'.format(key))
+    except KeyError:
+        pass
+    return ret
 
 
 def _singlenode_transfer(
@@ -592,6 +681,8 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                 raise RuntimeError(
                     'ssh private key does not exist at: {}'.format(
                         ssh_private_key))
+            logger.debug('using ssh_private_key from: {}'.format(
+                ssh_private_key))
             # convert shared to actual path
             shared_data_volumes = config['global_resources'][
                 'docker_volumes']['shared_data_volumes']
