@@ -25,6 +25,7 @@
 # stdlib imports
 from __future__ import division, print_function, unicode_literals
 import datetime
+import fnmatch
 import logging
 try:
     import pathlib
@@ -660,12 +661,15 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     if filespec is None:
         job_id = None
         task_id = None
+        incl = None
     else:
-        job_id, task_id = filespec.split(':')
+        job_id, task_id, incl = filespec.split(':')
     if job_id is None:
         job_id = convoy.util.get_input('Enter job id: ')
     if task_id is None:
         task_id = convoy.util.get_input('Enter task id: ')
+    if incl is None:
+        incl = convoy.util.get_input('Enter filter: ')
     # get first running task if specified
     if task_id == '@FIRSTRUNNING':
         logger.debug('attempting to get first running task in job {}'.format(
@@ -692,21 +696,24 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     for file in files:
         if file.is_directory:
             continue
-        stream = batch_client.file.get_from_task(job_id, task_id, file.name)
+        if incl is not None and not fnmatch.fnmatch(file.name, incl):
+            continue
         fp = pathlib.Path(job_id, task_id, file.name)
         if str(fp.parent) not in dirs_created:
             fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
             dirs_created.add(str(fp.parent))
+        stream = batch_client.file.get_from_task(job_id, task_id, file.name)
         with fp.open('wb') as f:
             for data in stream:
                 f.write(data)
         i += 1
     if i == 0:
-        logger.error('no files found for task {} job {}'.format(
-            task_id, job_id))
+        logger.error('no files found for task {} job {} include={}'.format(
+            task_id, job_id, incl if incl is not None else ''))
     else:
-        logger.info('all task files retrieved from job={} task={}'.format(
-            job_id, task_id))
+        logger.info(
+            'all task files retrieved from job={} task={} include={}'.format(
+                job_id, task_id, incl if incl is not None else ''))
 
 
 def get_file_via_node(batch_client, config, node_id):

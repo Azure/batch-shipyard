@@ -12,7 +12,7 @@
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
         "input_data": {
-            "azure_blob": [
+            "azure_storage": [
                 {
                     "storage_account_settings": "mystorageaccount",
                     "container": "poolcontainer",

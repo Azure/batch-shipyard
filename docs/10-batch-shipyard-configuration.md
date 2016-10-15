@@ -512,7 +512,7 @@ The jobs schema is as follows:
                 "abc": "xyz"
             },
             "input_data": {
-                "azure_blob": [
+                "azure_storage": [
                     {
                         "storage_account_settings": "mystorageaccount",
                         "container": "jobcontainer",
@@ -549,7 +549,7 @@ The jobs schema is as follows:
                         }
                     ],
                     "input_data": {
-                        "azure_blob": [
+                        "azure_storage": [
                             {
                                 "storage_account_settings": "mystorageaccount",
                                 "container": "taskcontainer",

@@ -34,6 +34,10 @@ following:
   * `--jobs path/to/jobs.json` is required for job-related actions.
 * `--filespec jobid:taskid:filename` is to specify the file location to
 stream or retrieve for the actions `streamfile` or `gettaskfile` respectively.
+For `gettaskallfiles`, the argument becomes `jobid:taskid:include` where
+`include` is a filter like `*.txt` which would only download files ending in
+`.txt`. Note that you must prevent your shell from interpreting wildcards,
+thus it is recommended to quote the argument when including such a filter.
 If `taskid` is `@FIRSTRUNNING` then the first running task in the job is
 retrieved. If the `filespec` argument is not supplied, the script will prompt
 for input.
@@ -68,8 +72,7 @@ file.
 * `streamfile`: stream a file from a live compute node.
 * `gettaskfile`: retrieve a file with job id/task id from a live compute node.
 * `gettaskallfiles`: retrieve all files with job id/task id from a live
-compute node. `--filespec` can be used here but without the filename, e.g.,
-`--filespec myjob:mytask`.
+compute node. `--filespec` can be used with this action as described above.
 * `getnodefile`: retrieve a file with pool id/node id from a live compute node.
 * `ingressdata`: ingress data as specified in the `files` property of the
 global configuration file.

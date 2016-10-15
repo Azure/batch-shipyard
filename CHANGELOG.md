@@ -15,8 +15,8 @@ more information.
     - Task-level: to compute nodes running a task of a job
   - Egress to local machine as actions
     - Single file from compute node
-    - Whole task-level directories from compute node
-- Experimental support for OpenSSH HPN on Ubuntu
+    - Entire task-level directories from compute node
+- Experimental support for OpenSSH with HPN patches on Ubuntu
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
 `listtasks`. Please see the usage doc for more information.
 
