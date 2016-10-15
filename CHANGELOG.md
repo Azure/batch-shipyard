@@ -7,7 +7,8 @@ more information.
   - Ingress from local machine with `files` in global configuration
     - To GlusterFS shared volume
     - To Azure Blob Storage
-  - Ingress from Azure Blob Storage with `input_data` in pool and jobs
+    - To Azure File Storage
+  - Ingress from Azure Blob or File Storage with `input_data` in pool and jobs
     configuration
     - Pool-level: to compute nodes
     - Job-level: to compute nodes running the specified job

@@ -34,6 +34,7 @@ except ImportError:
 # non-stdlib imports
 import azure.common
 import azure.storage.blob as azureblob
+import azure.storage.file as azurefile
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 # local imports
@@ -181,6 +182,26 @@ def create_blob_container_rl_saskey(storage_settings, container):
         container,
         azureblob.ContainerPermissions.READ |
         azureblob.ContainerPermissions.LIST,
+        expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
+    )
+
+
+def create_file_share_rl_saskey(storage_settings, file_share):
+    # type: (dict, str) -> str
+    """Create a saskey for a file share with a 7day expiry time and rl perm
+    :param dict storage_settings: storage settings
+    :param str file_share: file share
+    :rtype: str
+    :return: saskey
+    """
+    file_client = azurefile.FileService(
+        account_name=storage_settings['account'],
+        account_key=storage_settings['account_key'],
+        endpoint_suffix=storage_settings['endpoint'])
+    return file_client.generate_share_shared_access_signature(
+        file_share,
+        azurefile.SharePermissions.READ |
+        azurefile.SharePermissions.LIST,
         expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
     )
 

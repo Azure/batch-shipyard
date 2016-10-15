@@ -224,9 +224,10 @@ supported.
 `files` is an optional property that specifies data that should be ingressed
 from a location accessible by the local machine (i.e., machine invoking
 `shipyard.py` to a shared file system location accessible by compute nodes
-in the pool). `files` is a json list of objects, which allows for multiple
-sources to destinations to be ingressed during the same invocation. Each
-object within the `files` list contains the following members:
+in the pool or Azure Blob or File Storage). `files` is a json list of objects,
+which allows for multiple sources to destinations to be ingressed during the
+same invocation. Each object within the `files` list contains the following
+members:
 * (required) `source` property contains the following members:
   * (required) `path` is a local path. A single file or a directory
     can be specified. Filters below will be ignored if `path` is a file and
@@ -246,12 +247,14 @@ object within the `files` list contains the following members:
     ingress.
 * (required) `destination` property contains the following members:
   * (required) `shared_data_volume` or `storage_account_settings` for data
-    ingress to a GlusterFS volume or Azure Blob Storage. You may specify one
-    or the other, but not both in the same object. Please see below in the
-    `shared_data_volumes` for information on how to set up a GlusterFS share.
+    ingress to a GlusterFS volume or Azure Blob or File Storage. You may
+    specify one or the other, but not both in the same object. Please see
+    below in the `shared_data_volumes` for information on how to set up a
+    GlusterFS share.
   * (required) `data_transfer` specifies how the transfer should take place.
     The following list contains members for GlusterFS ingress when a GlusterFS
-    volume is provided for `shared_data_volume`:
+    volume is provided for `shared_data_volume` (see below for ingressing to
+    Azure Blob or File Storage):
     * (required) `method` specified which method should be used to ingress
       data, which should be one of: `scp`, `multinode_scp`, `rsync+ssh` or
       `multinode_rsync+ssh`. `scp` will use secure copy to copy a file or a
@@ -297,12 +300,17 @@ object within the `files` list contains the following members:
       maximum of 6 concurrent scp sessions to the pool. The default is 1 if
       not specified or omitted.
   * (required) `data_transfer` specifies how the transfer should take place.
-    When Azure Blob Storage is selected as the destination for data ingress,
-    [blobxfer](https://github.com/Azure/blobxfer) is invoked. The following
-    list contains members for Azure Blob Storage ingress when a storage
-    account link is provided for `storage_account_settings`:
-    * (required) `container` is the container to upload to. The container
-      need not be created beforehand.
+    When Azure Blob or File Storage is selected as the destination for data
+    ingress, [blobxfer](https://github.com/Azure/blobxfer) is invoked. The
+    following list contains members for Azure Blob or File Storage ingress
+    when a storage account link is provided for `storage_account_settings`:
+    * (required) `container` or `file_share` is required when uploading to
+      Azure Blob Storage or Azure File Storage, respectively. `container`
+      specifies which container to upload to for Azure Blob Storage while
+      `file_share` specifies which file share to upload to for Azure File
+      Storage. Only one of these properties can be specified per
+      `data_transfer` object. The container or file share need not be created
+      beforehand.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`. In the example above, `--no-computefilemd5` will force
       `blobxfer` to skip MD5 calculation on files ingressed.
@@ -370,7 +378,7 @@ The pool schema is as follows:
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
         "input_data": {
-            "azure_blob": [
+            "azure_storage": [
                 {
                     "storage_account_settings": "mystorageaccount",
                     "container": "poolcontainer",
@@ -423,29 +431,35 @@ from entering ready state until all Docker images are loaded. This defaults
 to `true`.
 * (optional) `transfer_files_on_pool_creation` will ingress all `files`
 specified in the `global_resources` section of the configuration json when
-the pool is created. If files are to be ingressed to Azure Blob Storage,
-then data movement operations are overlapped with the creation of the pool.
-If files are to be ingressed to a shared file system on the compute nodes,
-then the files are ingressed after the pool is created and the shared file
-system is ready. Files can be ingressed to both Azure Blob Storage and a
+the pool is created. If files are to be ingressed to Azure Blob or File
+Storage, then data movement operations are overlapped with the creation of the
+pool. If files are to be ingressed to a shared file system on the compute
+nodes, then the files are ingressed after the pool is created and the shared
+file system is ready. Files can be ingressed to both Azure Blob Storage and a
 shared file system during the same pool creation invocation. If this property
 is set to `true` then `block_until_all_global_resources_loaded` will be force
 disabled. If omitted, this property defaults to `false`.
 * (optional) `input_data` is an object containing data that should be
 ingressed to all compute nodes as part of node preparation. It is
 important to note that if you are combining this action with `files` and
-are ingressing data to Blob storage as part of pool creation, that the blob
-containers defined here will be downloaded as soon as the compute node is
-ready to do so. This may result in the blob container/blobs not being ready
-in time for the `input_data` transfer. It is up to you to ensure that these
-two operations do not overlap. If there is a possibility of overlap, then you
-should ingress data defined in `files` prior to pool creation and disable
-the option above `transfer_files_on_pool_creation`. This object currently only
-supports `azure_blob` as a member.
-  * `azure_blob` contains the following members:
+are ingressing data to Azure Blob or File storage as part of pool creation,
+that the blob containers or file shares defined here will be downloaded as
+soon as the compute node is ready to do so. This may result in the blob
+container/blobs or file share/files not being ready in time for the
+`input_data` transfer. It is up to you to ensure that these two operations do
+not overlap. If there is a possibility of overlap, then you should ingress
+data defined in `files` prior to pool creation and disable the option above
+`transfer_files_on_pool_creation`. This object currently only supports
+`azure_storage` as a member.
+  * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
-    * (required) `container` the container to transfer.
+    * (required) `container` or `file_share` is required when uploading to
+      Azure Blob Storage or Azure File Storage, respectively. `container`
+      specifies which container to upload to for Azure Blob Storage while
+      `file_share` specifies which file share to upload to for Azure File
+      Storage. Only one of these properties can be specified per
+      `data_transfer` object.
     * (optional) `include` property defines an optional include filter.
       Although this property is an array, it is only allowed to have 1
       maximum filter.
@@ -588,11 +602,16 @@ For example, if `job-1`:`task-1` is run on compute node A and then
 `job-1`:`task-2` is run on compute node B, then this `input_data` is ingressed
 to both compute node A and B. However, if `job-1`:`task-3` is run on
 compute node A, then the `input_data` is not transferred again. This object
-currently only supports `azure_blob` as a member.
-  * `azure_blob` contains the following members:
+currently only supports `azure_storage` as a member.
+  * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
-    * (required) `container` the container to transfer.
+    * (required) `container` or `file_share` is required when uploading to
+      Azure Blob Storage or Azure File Storage, respectively. `container`
+      specifies which container to upload to for Azure Blob Storage while
+      `file_share` specifies which file share to upload to for Azure File
+      Storage. Only one of these properties can be specified per
+      `data_transfer` object.
     * (optional) `include` property defines an optional include filter.
       Although this property is an array, it is only allowed to have 1
       maximum filter.
@@ -637,11 +656,16 @@ currently only supports `azure_blob` as a member.
       This is optional.
   * (optional) `input_data` is an object containing data that should be
     ingressed for this specific task. This object currently only supports
-    `azure_blob` as a member.
-    * `azure_blob` contains the following members:
+    `azure_storage` as a member.
+    * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
         as defined in the credentials json.
-      * (required) `container` the container to transfer.
+      * (required) `container` or `file_share` is required when uploading to
+        Azure Blob Storage or Azure File Storage, respectively. `container`
+        specifies which container to upload to for Azure Blob Storage while
+        `file_share` specifies which file share to upload to for Azure File
+        Storage. Only one of these properties can be specified per
+        `data_transfer` object.
       * (optional) `include` property defines an optional include filter.
         Although this property is an array, it is only allowed to have 1
         maximum filter.

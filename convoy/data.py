@@ -53,9 +53,9 @@ _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
 
 
-def _process_blob_input_data(blob_client, config, input_data, on_task):
+def _process_storage_input_data(blob_client, config, input_data, on_task):
     # type: (azure.storage.blob.BlockBlobService, dict, dict, bool) -> str
-    """Process blob input data to ingress
+    """Process Azure storage input data to ingress
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param dict spec: config spec with input_data
@@ -67,7 +67,44 @@ def _process_blob_input_data(blob_client, config, input_data, on_task):
     for xfer in input_data:
         storage_settings = config['credentials']['storage'][
             xfer['storage_account_settings']]
-        container = xfer['container']
+        try:
+            container = xfer['container']
+            if container is not None and len(container) == 0:
+                container = None
+        except KeyError:
+            container = None
+        try:
+            fshare = xfer['file_share']
+            if fshare is not None and len(fshare) == 0:
+                fshare = None
+        except KeyError:
+            fshare = None
+        if container is None and fshare is None:
+            raise ValueError('container or file_share not specified')
+        elif container is not None and fshare is not None:
+            raise ValueError(
+                'cannot specify both container and file_share at the '
+                'same time')
+        try:
+            eo = xfer['blobxfer_extra_options']
+            if eo is None:
+                eo = ''
+        except KeyError:
+            eo = ''
+        # configure for file share
+        if fshare is not None:
+            if '--fileshare' not in eo:
+                eo = '--fileshare {}'.format(eo)
+            # create saskey for file share with 7day expiry with rl perm
+            saskey = convoy.storage.create_file_share_rl_saskey(
+                storage_settings, fshare)
+            # set container as fshare
+            container = fshare
+            del fshare
+        else:
+            # create saskey for container with 7day expiry with rl perm
+            saskey = convoy.storage.create_blob_container_rl_saskey(
+                storage_settings, container)
         try:
             include = xfer['include']
             if include is not None:
@@ -91,15 +128,6 @@ def _process_blob_input_data(blob_client, config, input_data, on_task):
                 raise
         if on_task and dst is None or len(dst) == 0:
             dst = '$AZ_BATCH_TASK_WORKING_DIR'
-        try:
-            eo = xfer['blobxfer_extra_options']
-            if eo is None:
-                eo = ''
-        except KeyError:
-            eo = ''
-        # create saskey for container with 7day expiry with rl perm
-        saskey = convoy.storage.create_blob_container_rl_saskey(
-            storage_settings, container)
         # construct argument
         # sa:ep:saskey:container:include:eo:dst
         args.append('"{}:{}:{}:{}:{}:{}:{}"'.format(
@@ -128,8 +156,8 @@ def process_input_data(blob_client, config, bifile, spec, on_task=False):
                 if key == 'azure_batch':
                     # TODO implement compute node ingress
                     raise NotImplementedError()
-                elif key == 'azure_blob':
-                    blobargs = _process_blob_input_data(
+                elif key == 'azure_storage':
+                    blobargs = _process_storage_input_data(
                         blob_client, config, input_data[key], on_task)
                     ret = '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
                         bifile[0], ' '.join(blobargs))
@@ -732,8 +760,32 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                     container = None
             except KeyError:
                 container = None
-            if container is None:
-                raise ValueError('container is invalid')
+            try:
+                fshare = fdict['destination']['data_transfer']['file_share']
+                if fshare is not None and len(fshare) == 0:
+                    fshare = None
+            except KeyError:
+                fshare = None
+            if container is None and fshare is None:
+                raise ValueError('container or file_share not specified')
+            elif container is not None and fshare is not None:
+                raise ValueError(
+                    'cannot specify both container and file_share at the '
+                    'same time for source {}'.format(src))
+            try:
+                eo = fdict['destination']['data_transfer'][
+                    'blobxfer_extra_options']
+                if eo is None:
+                    eo = ''
+            except KeyError:
+                eo = ''
+            # append appropriate option for fshare
+            if fshare is not None:
+                if '--fileshare' not in eo:
+                    eo = '--fileshare {}'.format(eo)
+                # set container as fshare
+                container = fshare
+                del fshare
             if src_incl is not None:
                 if len(src_incl) > 1:
                     raise ValueError(
@@ -745,13 +797,6 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                 raise ValueError(
                     'exclude cannot be specified for ingress to Azure Blob '
                     'Storage')
-            try:
-                eo = fdict['destination']['data_transfer'][
-                    'blobxfer_extra_options']
-                if eo is None:
-                    eo = ''
-            except KeyError:
-                eo = ''
             thr = _azure_blob_storage_transfer(
                 config['credentials']['storage'][storage], container, src,
                 src_incl, eo)
