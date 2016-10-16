@@ -9,6 +9,7 @@ frameworks to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](../recipes/Caffe-CPU)
 * [TensorFlow-CPU](../recipes/TensorFlow-CPU)
+* [Torch-CPU](../recipes/Torch-CPU)
 
 The example MNIST training sample will be used on one Azure Batch compute node
 regardless of which Deep Learning framework you prefer for the following.
@@ -22,6 +23,7 @@ of your choice to the `config` directory:
   * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
   * [Caffe-CPU](../recipes/Caffe-CPU/config/)
   * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
+  * [Torch-CPU](../recipes/Torch-CPU/config/)
 4. Edit the `config/credentials.json` file and populate it with your Azure
 Batch and Azure Storage credentials. If you do not have an Azure Batch account,
 you can create one via the
@@ -48,6 +50,8 @@ python shipyard.py --configdir config streamfile --filespec cntkjob:dockertask-0
 python shipyard.py --configdir config streamfile --filespec caffejob:dockertask-000:stderr.txt
 # if TensorFlow-CPU:
 python shipyard.py --configdir config streamfile --filespec tensorflowjob:dockertask-000:stdout.txt
+# if Torch-CPU:
+python shipyard.py --configdir config streamfile --filespec torchjob:dockertask-000:stdout.txt
 ```
 The last command will stream the stderr or stdout file to your local console
 which will provide you progress information about your job.

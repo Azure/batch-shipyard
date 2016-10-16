@@ -7,8 +7,7 @@
         "offer": "UbuntuServer",
         "sku": "16.04.0-LTS",
         "ssh": {
-            "username": "docker",
-            "generate_tunnel_script": true
+            "username": "docker"
         },
         "gpu": {
             "nvidia_driver": {

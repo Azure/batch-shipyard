@@ -8,8 +8,7 @@
         "offer": "CentOS",
         "sku": "7.2",
         "ssh": {
-            "username": "docker",
-            "generate_tunnel_script": true
+            "username": "docker"
         },
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true

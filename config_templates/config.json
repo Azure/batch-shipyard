@@ -49,6 +49,19 @@
                         "max_parallel_transfers_per_node": 2
                     }
                 }
+            },
+            {
+                "source": {
+                    "path": "/some/local/path/bound/for/blob",
+                    "include": ["*.bin"]
+                },
+                "destination": {
+                    "storage_account_settings": "mystorageaccount",
+                    "data_transfer": {
+                        "container": "mycontainer",
+                        "blobxfer_extra_options": "--no-computefilemd5"
+                    }
+                }
             }
         ],
         "docker_volumes": {

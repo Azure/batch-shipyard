@@ -26,7 +26,7 @@
             "username": "docker",
             "expiry_days": 7,
             "ssh_public_key": null,
-            "generate_tunnel_script": true,
+            "generate_docker_tunnel_script": true,
             "hpn_server_swap": false
         },
         "gpu": {

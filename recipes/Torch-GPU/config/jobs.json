@@ -1,7 +1,7 @@
 {
     "job_specifications": [
         {
-            "id": "torch",
+            "id": "torchjob",
             "tasks": [
                 {
                     "image": "alfpark/torch:gpu",

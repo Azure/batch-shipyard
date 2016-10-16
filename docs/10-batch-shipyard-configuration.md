@@ -392,7 +392,7 @@ The pool schema is as follows:
             "username": "docker",
             "expiry_days": 7,
             "ssh_public_key": null,
-            "generate_tunnel_script": true,
+            "generate_docker_tunnel_script": true,
             "hpn_server_swap": false
         },
         "gpu": {
@@ -481,9 +481,9 @@ created with pool creation.
     specified, a public/private key pair will be automatically generated only
     on Linux. If this is `null` or not specified on Windows, the SSH user is
     not created.
-  * `generate_tunnel_script` property directs script to generate an SSH tunnel
-    script that can be used to connect to the remote Docker engine running on
-    a compute node.
+  * `generate_docker_tunnel_script` property directs script to generate an
+    SSH tunnel script that can be used to connect to the remote Docker engine
+    running on a compute node.
   * (experimental) `hpn_server_swap` property enables an OpenSSH server with
     [HPN patches](http://www.psc.edu/index.php/hpn-ssh) to be swapped with the
     standard distribution OpenSSH server. This is not supported on all

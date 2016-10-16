@@ -270,7 +270,7 @@ def add_ssh_user(batch_client, config, nodes=None):
             ssh_pub_key = None
         try:
             gen_tunnel_script = config[
-                'pool_specification']['ssh']['generate_tunnel_script']
+                'pool_specification']['ssh']['generate_docker_tunnel_script']
         except KeyError:
             gen_tunnel_script = False
         # generate ssh key pair if not specified
