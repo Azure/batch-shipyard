@@ -166,11 +166,14 @@ def create_clients():
     return blob_client, queue_client, table_client
 
 
-def create_blob_container_rl_saskey(storage_settings, container):
-    # type: (dict, str) -> str
-    """Create a saskey for a blob container with a 7day expiry time and rl perm
+def create_blob_container_saskey(
+        storage_settings, container, kind, create_container=False):
+    # type: (dict, str, str, bool) -> str
+    """Create a saskey for a blob container with a 7day expiry time
     :param dict storage_settings: storage settings
     :param str container: container
+    :param str kind: ingress or egress
+    :param bool create_container: create container
     :rtype: str
     :return: saskey
     """
@@ -178,19 +181,36 @@ def create_blob_container_rl_saskey(storage_settings, container):
         account_name=storage_settings['account'],
         account_key=storage_settings['account_key'],
         endpoint_suffix=storage_settings['endpoint'])
+    if create_container:
+        blob_client.create_container(container, fail_on_exist=False)
+    if kind == 'ingress':
+        perm = (
+            azureblob.ContainerPermissions.READ |
+            azureblob.ContainerPermissions.LIST
+        )
+    elif kind == 'egress':
+        perm = (
+            azureblob.ContainerPermissions.READ |
+            azureblob.ContainerPermissions.WRITE |
+            azureblob.ContainerPermissions.DELETE |
+            azureblob.ContainerPermissions.LIST
+        )
+    else:
+        raise ValueError('{} type of transfer not supported'.format(kind))
     return blob_client.generate_container_shared_access_signature(
-        container,
-        azureblob.ContainerPermissions.READ |
-        azureblob.ContainerPermissions.LIST,
+        container, perm,
         expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
     )
 
 
-def create_file_share_rl_saskey(storage_settings, file_share):
-    # type: (dict, str) -> str
-    """Create a saskey for a file share with a 7day expiry time and rl perm
+def create_file_share_saskey(
+        storage_settings, file_share, kind, create_share=False):
+    # type: (dict, str, str, bool) -> str
+    """Create a saskey for a file share with a 7day expiry time
     :param dict storage_settings: storage settings
     :param str file_share: file share
+    :param str kind: ingress or egress
+    :param bool create_share: create file share
     :rtype: str
     :return: saskey
     """
@@ -198,10 +218,24 @@ def create_file_share_rl_saskey(storage_settings, file_share):
         account_name=storage_settings['account'],
         account_key=storage_settings['account_key'],
         endpoint_suffix=storage_settings['endpoint'])
+    if create_share:
+        file_client.create_share(file_share, fail_on_exist=False)
+    if kind == 'ingress':
+        perm = (
+            azurefile.SharePermissions.READ |
+            azurefile.SharePermissions.LIST,
+        )
+    elif kind == 'egress':
+        perm = (
+            azurefile.SharePermissions.READ |
+            azurefile.SharePermissions.WRITE |
+            azurefile.SharePermissions.DELETE |
+            azurefile.SharePermissions.LIST,
+        )
+    else:
+        raise ValueError('{} type of transfer not supported'.format(kind))
     return file_client.generate_share_shared_access_signature(
-        file_share,
-        azurefile.SharePermissions.READ |
-        azurefile.SharePermissions.LIST,
+        file_share, perm,
         expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
     )
 

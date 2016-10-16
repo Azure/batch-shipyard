@@ -136,22 +136,16 @@ PYTHONASYNCIODEBUG=1
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
-# set up hpn-ssh
-if [ $hpnssh -eq 1 ]; then
-    ./shipyard_hpnssh.sh $offer $sku
-fi
-
-# set iptables rules
-if [ $p2penabled -eq 1 ]; then
-    # disable DHT connection tracking
-    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
-    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
-fi
-
-# optimize network TCP settings
-if [ $networkopt -eq 1 ]; then
-    sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
-    if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
+# one time setup of ssh/tcp tuning
+if [ ! -f $nodeprepfinished ]; then
+    # set up hpn-ssh
+    if [ $hpnssh -eq 1 ]; then
+        ./shipyard_hpnssh.sh $offer $sku
+    fi
+    # optimize network TCP settings
+    if [ $networkopt -eq 1 ]; then
+        sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
+        if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
 cat > $sysctlfile << EOF
 net.core.rmem_default=16777216
 net.core.wmem_default=16777216
@@ -167,11 +161,19 @@ net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_abort_on_overflow=1
 net.ipv4.route.flush=1
 EOF
+        fi
     fi
 fi
 
+# set iptables rules
+if [ $p2penabled -eq 1 ]; then
+    # disable DHT connection tracking
+    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
+    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
+fi
+
 # copy required shell scripts to shared
-cp docker_jp_block.sh shipyard_blobingress.sh $AZ_BATCH_NODE_SHARED_DIR
+cp docker_jp_block.sh shipyard_blobxfer.sh $AZ_BATCH_NODE_SHARED_DIR
 
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then

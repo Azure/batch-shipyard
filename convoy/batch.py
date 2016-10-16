@@ -827,7 +827,7 @@ def list_task_files(batch_client, config):
             logger.error('no tasks found for job {}'.format(job['id']))
 
 
-def add_jobs(batch_client, blob_client, config, jpfile, bifile):
+def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
     #        dict, tuple, tuple) -> None
     """Add jobs
@@ -836,7 +836,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param tuple jpfile: jobprep file
-    :param tuple bifile: blob ingress file
+    :param tuple bxfile: blobxfer file
     """
     # get the pool inter-node comm setting
     pool_id = config['pool_specification']['id']
@@ -848,8 +848,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
         jpfile[0], ' '.join(global_resources))]
     for jobspec in config['job_specifications']:
         # digest any input_data
-        addlcmds = convoy.data.process_input_data(
-            blob_client, config, bifile, jobspec)
+        addlcmds = convoy.data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
             jpcmd.append(addlcmds)
         del addlcmds
@@ -1124,19 +1123,19 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
                 envfileloc = '{}taskrf-{}/{}{}'.format(
                     config['batch_shipyard']['storage_entity_prefix'],
                     job.id, task_id, envfile)
-                f = tempfile.NamedTemporaryFile(
-                    mode='w', encoding='utf-8', delete=False)
+                f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
                 fname = f.name
                 try:
                     for key in env_vars:
-                        f.write('{}={}\n'.format(key, env_vars[key]))
+                        f.write('{}={}\n'.format(key, env_vars[key]).encode(
+                            'utf8'))
                     if infiniband:
-                        f.write('I_MPI_FABRICS=shm:dapl\n')
-                        f.write('I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
-                        f.write('I_MPI_DYNAMIC_CONNECTION=0\n')
+                        f.write(b'I_MPI_FABRICS=shm:dapl\n')
+                        f.write(b'I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
+                        f.write(b'I_MPI_DYNAMIC_CONNECTION=0\n')
                         # create a manpath entry for potentially buggy
                         # intel mpivars.sh
-                        f.write('MANPATH=/usr/share/man:/usr/local/man\n')
+                        f.write(b'MANPATH=/usr/share/man:/usr/local/man\n')
                     # close and upload env var file
                     f.close()
                     sas_urls = convoy.storage.upload_resource_files(
@@ -1261,9 +1260,14 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
                 ]
             # digest any input_data
             addlcmds = convoy.data.process_input_data(
-                blob_client, config, bifile, task, on_task=True)
+                config, bxfile, task, on_task=True)
             if addlcmds is not None:
                 task_commands.insert(0, addlcmds)
+            # digest any output data
+            addlcmds = convoy.data.process_output_data(
+                config, bxfile, task)
+            if addlcmds is not None:
+                task_commands.append(addlcmds)
             del addlcmds
             # create task
             batchtask = batchmodels.TaskAddParameter(
@@ -1274,6 +1278,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
             )
             if mis is not None:
                 batchtask.multi_instance_settings = mis
+            # add envfile
             if sas_urls is not None:
                 batchtask.resource_files.append(
                     batchmodels.ResourceFile(
@@ -1282,6 +1287,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bifile):
                         file_mode='0640',
                     )
                 )
+                sas_urls = None
             # add additional resource files
             try:
                 rfs = task['resource_files']

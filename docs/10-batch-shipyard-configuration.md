@@ -454,12 +454,12 @@ data defined in `files` prior to pool creation and disable the option above
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
-    * (required) `container` or `file_share` is required when uploading to
-      Azure Blob Storage or Azure File Storage, respectively. `container`
-      specifies which container to upload to for Azure Blob Storage while
-      `file_share` specifies which file share to upload to for Azure File
-      Storage. Only one of these properties can be specified per
-      `data_transfer` object.
+    * (required) `container` or `file_share` is required when downloading
+      from Azure Blob Storage or Azure File Storage, respectively.
+      `container` specifies which container to download from for Azure Blob
+      Storage while `file_share` specifies which file share to download from
+      for Azure File Storage. Only one of these properties can be specified
+      per `data_transfer` object.
     * (optional) `include` property defines an optional include filter.
       Although this property is an array, it is only allowed to have 1
       maximum filter.
@@ -559,6 +559,17 @@ The jobs schema is as follows:
                             }
                         ]
                     },
+                    "output_data": {
+                        "azure_storage": [
+                            {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "output",
+                                "source": null,
+                                "include": ["**/out*.dat"],
+                                "blobxfer_extra_options": null
+                            }
+                        ]
+                    },
                     "remove_container_after_exit": true,
                     "additional_docker_run_options": [
                     ],
@@ -606,12 +617,12 @@ currently only supports `azure_storage` as a member.
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
-    * (required) `container` or `file_share` is required when uploading to
-      Azure Blob Storage or Azure File Storage, respectively. `container`
-      specifies which container to upload to for Azure Blob Storage while
-      `file_share` specifies which file share to upload to for Azure File
-      Storage. Only one of these properties can be specified per
-      `data_transfer` object.
+    * (required) `container` or `file_share` is required when downloading
+      from Azure Blob Storage or Azure File Storage, respectively.
+      `container` specifies which container to download from for Azure Blob
+      Storage while `file_share` specifies which file share to download from
+      for Azure File Storage. Only one of these properties can be specified
+      per `data_transfer` object.
     * (optional) `include` property defines an optional include filter.
       Although this property is an array, it is only allowed to have 1
       maximum filter.
@@ -656,16 +667,17 @@ currently only supports `azure_storage` as a member.
       This is optional.
   * (optional) `input_data` is an object containing data that should be
     ingressed for this specific task. This object currently only supports
-    `azure_storage` as a member.
+    `azure_storage` as a member. Note for multi-instance tasks, transfer of
+    `input_data` is only applied to the task running the application command.
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
         as defined in the credentials json.
-      * (required) `container` or `file_share` is required when uploading to
-        Azure Blob Storage or Azure File Storage, respectively. `container`
-        specifies which container to upload to for Azure Blob Storage while
-        `file_share` specifies which file share to upload to for Azure File
-        Storage. Only one of these properties can be specified per
-        `data_transfer` object.
+      * (required) `container` or `file_share` is required when downloading
+        from Azure Blob Storage or Azure File Storage, respectively.
+        `container` specifies which container to download from for Azure Blob
+        Storage while `file_share` specifies which file share to download from
+        for Azure File Storage. Only one of these properties can be specified
+        per `data_transfer` object.
       * (optional) `include` property defines an optional include filter.
         Although this property is an array, it is only allowed to have 1
         maximum filter.
@@ -678,6 +690,28 @@ currently only supports `azure_storage` as a member.
         system. If you require ingressing to a shared file system location
         like a GlusterFS volume, then use the global configuration `files`
         property and the `ingressdata` action.
+      * (optional) `blobxfer_extra_options` are any extra options to pass to
+        `blobxfer`.
+  * (optional) `output_data` is an object containing data that should be
+    egressed for this specific task if and only if the task completes
+    successfully. This object currently only supports `azure_storage` as a
+    member. Note for multi-instance tasks, transfer of `output_data` is only
+    applied to the task running the application command.
+    * `azure_storage` contains the following members:
+      * (required) `storage_account_settings` contains a storage account link
+        as defined in the credentials json.
+      * (required) `container` or `file_share` is required when uploading to
+        Azure Blob Storage or Azure File Storage, respectively. `container`
+        specifies which container to upload to for Azure Blob Storage while
+        `file_share` specifies which file share to upload to for Azure File
+        Storage. Only one of these properties can be specified per
+        `data_transfer` object.
+      * (optional) `source` property defines which directory to upload to
+        Azure storage. If `source` is not specified, then `source` is
+        defaulted to `$AZ_BATCH_TASK_DIR`.
+      * (optional) `include` property defines an optional include filter.
+        Although this property is an array, it is only allowed to have 1
+        maximum filter.
       * (optional) `blobxfer_extra_options` are any extra options to pass to
         `blobxfer`.
   * (optional) `remove_container_after_exit` property specifies if the

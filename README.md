@@ -17,6 +17,8 @@ for Azure Batch compute nodes
 * Accelerated Docker image deployment at scale to compute pools consisting of
 a large number of VMs via private peer-to-peer distribution of Docker images
 among the compute nodes
+* Comprehensive data movement support: move data easily between locally
+accessible storage systems, Azure Blob or File Storage, and compute nodes
 * Automated Docker Private Registry instance creation on compute nodes with
 Docker images backed to Azure Storage if specified
 * Automatic shared data volume support:

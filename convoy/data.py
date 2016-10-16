@@ -53,15 +53,14 @@ _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
 
 
-def _process_storage_input_data(blob_client, config, input_data, on_task):
-    # type: (azure.storage.blob.BlockBlobService, dict, dict, bool) -> str
+def _process_storage_input_data(config, input_data, on_task):
+    # type: (dict, dict, bool) -> str
     """Process Azure storage input data to ingress
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
-    :param dict spec: config spec with input_data
+    :param dict input_data: config spec with input_data
     :param bool on_task: if this is originating from a task spec
     :rtype: list
-    :return: args to pass to blob ingress script
+    :return: args to pass to blobxfer script
     """
     args = []
     for xfer in input_data:
@@ -96,21 +95,23 @@ def _process_storage_input_data(blob_client, config, input_data, on_task):
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
             # create saskey for file share with 7day expiry with rl perm
-            saskey = convoy.storage.create_file_share_rl_saskey(
-                storage_settings, fshare)
+            saskey = convoy.storage.create_file_share_saskey(
+                storage_settings, fshare, 'ingress')
             # set container as fshare
             container = fshare
             del fshare
         else:
             # create saskey for container with 7day expiry with rl perm
-            saskey = convoy.storage.create_blob_container_rl_saskey(
-                storage_settings, container)
+            saskey = convoy.storage.create_blob_container_saskey(
+                storage_settings, container, 'ingress')
         try:
             include = xfer['include']
             if include is not None:
                 if len(include) == 0:
                     include = ''
-                elif len(include) > 1:
+                elif len(include) == 1:
+                    include = include[0]
+                else:
                     raise ValueError(
                         'include for input_data from {}:{} cannot exceed '
                         '1 filter'.format(
@@ -129,20 +130,18 @@ def _process_storage_input_data(blob_client, config, input_data, on_task):
         if on_task and dst is None or len(dst) == 0:
             dst = '$AZ_BATCH_TASK_WORKING_DIR'
         # construct argument
-        # sa:ep:saskey:container:include:eo:dst
-        args.append('"{}:{}:{}:{}:{}:{}:{}"'.format(
+        # kind:sa:ep:saskey:container:include:eo:dst
+        args.append('"ingress:{}:{}:{}:{}:{}:{}:{}"'.format(
             storage_settings['account'], storage_settings['endpoint'],
             saskey, container, include, eo, dst))
     return args
 
 
-def process_input_data(blob_client, config, bifile, spec, on_task=False):
-    # type: (azure.storage.blob.BlockBlobService, dict, tuple, dict,
-    #        bool) -> str
+def process_input_data(config, bxfile, spec, on_task=False):
+    # type: (dict, tuple, dict, bool) -> str
     """Process input data to ingress
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
-    :param tuple bifile: blog ingress script
+    :param tuple bxfile: blobxfer script
     :param dict spec: config spec with input_data
     :param bool on_task: if this is originating from a task spec
     :rtype: str
@@ -153,17 +152,124 @@ def process_input_data(blob_client, config, bifile, spec, on_task=False):
         input_data = spec['input_data']
         if input_data is not None and len(input_data) > 0:
             for key in input_data:
-                if key == 'azure_batch':
+                if key == 'azure_storage':
+                    blobargs = _process_storage_input_data(
+                        config, input_data[key], on_task)
+                    ret = ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                           'set +f').format(bxfile[0], ' '.join(blobargs))
+                elif key == 'azure_batch':
                     # TODO implement compute node ingress
                     raise NotImplementedError()
-                elif key == 'azure_storage':
-                    blobargs = _process_storage_input_data(
-                        blob_client, config, input_data[key], on_task)
-                    ret = '$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
-                        bifile[0], ' '.join(blobargs))
                 else:
                     raise ValueError(
                         'unknown input_data method: {}'.format(key))
+    except KeyError:
+        pass
+    return ret
+
+
+def _process_storage_output_data(config, output_data):
+    # type: (dict, dict, bool) -> str
+    """Process output data to egress to Azure storage
+    :param dict config: configuration dict
+    :param dict output_data: config spec with output_data
+    :rtype: list
+    :return: args to pass to blobxfer script
+    """
+    args = []
+    for xfer in output_data:
+        storage_settings = config['credentials']['storage'][
+            xfer['storage_account_settings']]
+        try:
+            container = xfer['container']
+            if container is not None and len(container) == 0:
+                container = None
+        except KeyError:
+            container = None
+        try:
+            fshare = xfer['file_share']
+            if fshare is not None and len(fshare) == 0:
+                fshare = None
+        except KeyError:
+            fshare = None
+        if container is None and fshare is None:
+            raise ValueError('container or file_share not specified')
+        elif container is not None and fshare is not None:
+            raise ValueError(
+                'cannot specify both container and file_share at the '
+                'same time')
+        try:
+            eo = xfer['blobxfer_extra_options']
+            if eo is None:
+                eo = ''
+        except KeyError:
+            eo = ''
+        # configure for file share
+        if fshare is not None:
+            if '--fileshare' not in eo:
+                eo = '--fileshare {}'.format(eo)
+            # create saskey for file share with 7day expiry with rwdl perm
+            saskey = convoy.storage.create_file_share_saskey(
+                storage_settings, fshare, 'egress', create_share=True)
+            # set container as fshare
+            container = fshare
+            del fshare
+        else:
+            # create saskey for container with 7day expiry with rwdl perm
+            saskey = convoy.storage.create_blob_container_saskey(
+                storage_settings, container, 'egress', create_container=True)
+        try:
+            include = xfer['include']
+            if include is not None:
+                if len(include) == 0:
+                    include = ''
+                elif len(include) == 1:
+                    include = include[0]
+                else:
+                    raise ValueError(
+                        'include for output_data from {}:{} cannot exceed '
+                        '1 filter'.format(
+                            xfer['storage_account_settings'], container))
+            else:
+                include = ''
+        except KeyError:
+            include = ''
+        try:
+            src = xfer['source']
+        except KeyError:
+            src = None
+        if src is None or len(src) == 0:
+            src = '$AZ_BATCH_TASK_DIR'
+        # construct argument
+        # kind:sa:ep:saskey:container:include:eo:src
+        args.append('"egress:{}:{}:{}:{}:{}:{}:{}"'.format(
+            storage_settings['account'], storage_settings['endpoint'],
+            saskey, container, include, eo, src))
+    return args
+
+
+def process_output_data(config, bxfile, spec):
+    # type: (dict, tuple, dict) -> str
+    """Process output data to egress
+    :param dict config: configuration dict
+    :param tuple bxfile: blobxfer script
+    :param dict spec: config spec with input_data
+    :rtype: str
+    :return: additonal command
+    """
+    ret = None
+    try:
+        output_data = spec['output_data']
+        if output_data is not None and len(output_data) > 0:
+            for key in output_data:
+                if key == 'azure_storage':
+                    blobargs = _process_storage_output_data(
+                        config, output_data[key])
+                    ret = ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                           'set +f').format(bxfile[0], ' '.join(blobargs))
+                else:
+                    raise ValueError(
+                        'unknown output_data method: {}'.format(key))
     except KeyError:
         pass
     return ret

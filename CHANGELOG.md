@@ -11,11 +11,15 @@ more information.
   - Ingress from Azure Blob or File Storage with `input_data` in pool and jobs
     configuration
     - Pool-level: to compute nodes
-    - Job-level: to compute nodes running the specified job
-    - Task-level: to compute nodes running a task of a job
+    - Job-level: to compute nodes prior to running the specified job
+    - Task-level: to compute nodes prior to running a task of a job
   - Egress to local machine as actions
     - Single file from compute node
     - Entire task-level directories from compute node
+  - Egress to Azure Blob of File Storage with `output_data` in jobs
+    configuration
+    - Task-level: to Azure Blob or File Storage on succesful completion of a
+      task
 - Experimental support for OpenSSH with HPN patches on Ubuntu
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
 `listtasks`. Please see the usage doc for more information.
