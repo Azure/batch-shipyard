@@ -611,9 +611,10 @@ depending upon the number of constituent tasks and repeat invocations. However,
 `input_data` is only downloaded once per job invocation on a compute node.
 For example, if `job-1`:`task-1` is run on compute node A and then
 `job-1`:`task-2` is run on compute node B, then this `input_data` is ingressed
-to both compute node A and B. However, if `job-1`:`task-3` is run on
-compute node A, then the `input_data` is not transferred again. This object
-currently only supports `azure_storage` as a member.
+to both compute node A and B. However, if `job-1`:`task-3` is then run on
+compute node A after `job-1`:`task-1`, then the `input_data` is not
+transferred again. This object currently only supports `azure_storage` as a
+member.
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.

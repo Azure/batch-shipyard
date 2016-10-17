@@ -112,6 +112,10 @@ python shipyard.py --configdir . streamfile
 The above invocation will stream a file from a live compute node with
 interactive prompts from the script.
 
+## Data Movement
+For more information regarding data movement with respect to Batch Shipyard,
+please see [this page](70-batch-shipyard-data-movement.md).
+
 ## Multi-Instance Tasks
 For more information regarding Multi-Instance Tasks and/or MPI jobs using
 Batch Shipyard, please see [this page](80-batch-shipyard-multi-instance-tasks.md).

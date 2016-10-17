@@ -367,8 +367,7 @@ def upload_resource_files(blob_client, config, files):
             blob_client.generate_blob_shared_access_signature(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
                 permission=azureblob.BlobPermissions.READ,
-                expiry=datetime.datetime.utcnow() +
-                datetime.timedelta(days=3)
+                expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
             )
         )
     return sas_urls

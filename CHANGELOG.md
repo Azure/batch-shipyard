@@ -23,6 +23,7 @@ more information.
 - Experimental support for OpenSSH with HPN patches on Ubuntu
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
 `listtasks`. Please see the usage doc for more information.
+- Data movement overview and guide doc
 - Torch-CPU as an option in quickstart guide
 
 ### Changed

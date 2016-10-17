@@ -55,6 +55,8 @@ side to further accelerate `scp` to Azure Batch compute nodes where
 storage. This is automatically installed if `pip install` is used with
 `requirements.txt` as per above.
 
+Note that data movement is not supported if invoked from Windows.
+
 ## Installation
 Simply clone the repository:
 
