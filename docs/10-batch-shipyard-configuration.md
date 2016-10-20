@@ -61,7 +61,16 @@ The global config schema is as follows:
     "batch_shipyard": {
         "storage_account_settings": "mystorageaccount",
         "storage_entity_prefix": "shipyard",
-        "use_shipyard_docker_image": true
+        "use_shipyard_docker_image": true,
+        "encryption" : {
+            "enabled": true,
+            "pfx": {
+                "filename": "encrypt.pfx",
+                "passphrase": "mysupersecretpassword",
+                "sha1_thumbprint": "123456789..."
+            },
+            "public_key_pem": "encrypt.pem"
+        }
     },
     "docker_registry": {
         "login": {
@@ -169,6 +178,24 @@ to use the Batch Shipyard docker image instead of installing software manually
 in order to run the backend portion on the compute nodes. It is strongly
 recommended to omit this or to set to `true`. This can only be set to `false`
 for Ubuntu 16.04 or higher. This is defaulted to `true`.
+* (optional) `encryption` object is used to define credential encryption which
+contains the following members:
+  * (required) `enabled` property enables or disables this feature.
+  * (required) `pfx` object defines the PFX certificate
+    * (required) `filename` property is the full path and name to the PFX
+      certificate
+    * (required) `passphrase` property is the passphrase for the PFX
+      certificate. This cannot be empty.
+    * (optional) `sha1_thumbprint` is the SHA1 thumbprint of the
+      certificate. If the PFX file is created using the `createcert` action,
+      then the SHA1 thumbprint is output. It is recommended to populate this
+      property such that it does not have to be generated when needed for
+      encryption.
+  * (optional) `public_key_pem` property is the full path and name to the
+    RSA public key in PEM format. If the PFX file is created using the
+    `createcert` action, then this file is generated along with the PFX file.
+    It is recommended to populate this property with the PEM file path such
+    that it does not have to be generated when needed for encryption.
 
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.

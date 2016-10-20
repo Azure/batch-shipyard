@@ -78,6 +78,11 @@ compute node. `--filespec` can be used with this action as described above.
 global configuration file.
 * `listjobs`: list all jobs under the Batch account.
 * `listtasks`: list tasks under jobs specified in the jobs configuraiton file.
+* `createcert`: create certificate and public key required for credential
+encryption.
+* `addcert`: add PFX certificate to the Batch account.
+* `delcert`: delete a PFX certificate from a Batch account. Any pool or task
+referencing the certificate must be deleted first before issuing this action.
 * `clearstorage`: clear storage containers as specified in the configuration
 files.
 * `delstorage`: delete storage containers as specified in the configuration

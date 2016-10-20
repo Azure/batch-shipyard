@@ -2,8 +2,8 @@
 
 ## [Unreleased]
 ### Added
-- Comprehensive data movement support. Please see the configuration doc for
-more information.
+- Comprehensive data movement support. Please see the data movement guide
+and configuration doc for more information.
   - Ingress from local machine with `files` in global configuration
     - To GlusterFS shared volume
     - To Azure Blob Storage
@@ -24,9 +24,8 @@ more information.
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
 `listtasks`, `createcert`, `addcert`, `delcert`. Please see the usage doc
 for more information.
-- Encrypted credential support. Please see the configuration doc for more
-information.
-- Data movement overview and guide doc
+- Credential encryption support. Please see the credential encryption guide
+and configuration doc for more information.
 - Torch-CPU as an option in quickstart guide
 
 ### Changed

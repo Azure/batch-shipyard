@@ -78,7 +78,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
     except KeyError:
         pfx_passphrase = None
     try:
-        sha1_cert_tp = config['batch_shipyard']['encryption'][
+        sha1_cert_tp = config['batch_shipyard']['encryption']['pfx'][
             'sha1_thumbprint']
         if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
             raise KeyError
@@ -88,7 +88,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
             pfx_passphrase = getpass.getpass('Enter password for PFX: ')
         sha1_cert_tp = convoy.crypto.get_sha1_thumbprint_pfx(
             pfxfile, pfx_passphrase)
-        config['batch_shipyard']['encryption'][
+        config['batch_shipyard']['encryption']['pfx'][
             'sha1_thumbprint'] = sha1_cert_tp
     # first check if this cert exists
     certs = batch_client.certificate.list()
@@ -132,7 +132,7 @@ def del_certificate_from_account(batch_client, config):
     except KeyError:
         pfx_passphrase = None
     try:
-        sha1_cert_tp = config['batch_shipyard']['encryption'][
+        sha1_cert_tp = config['batch_shipyard']['encryption']['pfx'][
             'sha1_thumbprint']
         if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
             raise KeyError
@@ -190,7 +190,7 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
         pool = batch_client.pool.get(pool_id)
         if pool.resize_error is not None:
             raise RuntimeError(
-                'resize error encountered for pool {}: code={} msg={}'.format(
+                'Resize error encountered for pool {}: code={} msg={}'.format(
                     pool.id, pool.resize_error.code,
                     pool.resize_error.message))
         nodes = list(batch_client.compute_node.list(pool.id))
@@ -204,7 +204,7 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
                         reboot_map[node.id] = 0
                     if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
                         raise RuntimeError(
-                            ('ran out of reboot retries recovering node {} '
+                            ('Ran out of reboot retries recovering node {} '
                              'in pool {}').format(node.id, pool.id))
                     _reboot_node(batch_client, pool.id, node.id, True)
                     reboot_map[node.id] += 1
@@ -215,7 +215,10 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
             if any(node.state != batchmodels.ComputeNodeState.idle
                     for node in nodes):
                 raise RuntimeError(
-                    'node(s) of pool {} not in idle state'.format(pool.id))
+                    'Node(s) of pool {} not in idle state. Please inspect '
+                    'the stdout.txt and stderr.txt within the startup '
+                    'directory on the compute nodes that are non-idle.'.format(
+                        pool.id))
             else:
                 return nodes
         i += 1

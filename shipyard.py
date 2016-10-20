@@ -308,7 +308,7 @@ def add_pool(batch_client, blob_client, config):
             convoy.batch.add_certificate_to_account(batch_client, config)
             try:
                 encrypt_sha1tp = config['batch_shipyard']['encryption'][
-                    'sha1_thumbprint']
+                    'pfx']['sha1_thumbprint']
             except KeyError:
                 pfxfile = config['batch_shipyard']['encryption']['pfx'][
                     'filename']
@@ -319,7 +319,7 @@ def add_pool(batch_client, blob_client, config):
                     passphrase = None
                 encrypt_sha1tp = convoy.crypto.get_sha1_thumbprint_pfx(
                     pfxfile, passphrase)
-                config['batch_shipyard']['encryption'][
+                config['batch_shipyard']['encryption']['pfx'][
                     'sha1_thumbprint'] = encrypt_sha1tp
     except KeyError:
         pass

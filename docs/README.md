@@ -8,5 +8,6 @@ and effectively running your batch-style Docker workloads on Azure Batch.
 4. [Configuration](10-batch-shipyard-configuration.md)
 5. [Usage](20-batch-shipyard-usage.md)
 6. [Data Movement](70-batch-shipyard-data-movement.md)
-7. [Batch Shipyard and Multi-Instance Tasks](80-batch-shipyard-multi-instance-tasks.md)
-8. [Current Limitations](99-current-limitations.md)
+7. [Credential Encryption](75-batch-shipyard-credential-encryption.md)
+8. [Batch Shipyard and Multi-Instance Tasks](80-batch-shipyard-multi-instance-tasks.md)
+9. [Current Limitations](99-current-limitations.md)

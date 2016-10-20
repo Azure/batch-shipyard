@@ -2,7 +2,16 @@
     "batch_shipyard": {
         "storage_account_settings": "mystorageaccount",
         "storage_entity_prefix": "shipyard",
-        "use_shipyard_docker_image": true
+        "use_shipyard_docker_image": true,
+        "encryption" : {
+            "enabled": true,
+            "pfx": {
+                "filename": "encrypt.pfx",
+                "passphrase": "mysupersecretpassword",
+                "sha1_thumbprint": "123456789..."
+            },
+            "public_key_pem": "encrypt.pem"
+        }
     },
     "docker_registry": {
         "login": {
