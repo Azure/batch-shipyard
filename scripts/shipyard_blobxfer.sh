@@ -5,16 +5,37 @@ set -o pipefail
 set -f
 
 for spec in "$@"; do
-    # kind:sa:ep:saskey:container:include:eo:location
+    # unencrypted = kind:encrypted:sa:ep:saskey:container:include:eo:location
+    # encrypted   = kind:encrypted:<encrypted context>:include:eo:location
     IFS=':' read -ra parts <<< "$spec"
     kind=${parts[0]}
-    sa=${parts[1]}
-    ep=${parts[2]}
-    saskey=${parts[3]}
-    container=${parts[4]}
-    incl=${parts[5]}
-    eo=${parts[6]}
-    location=${parts[7]}
+    encrypted=${parts[1],,}
+
+    if [ $encrypted == "true" ]; then
+        cipher=${parts[2]}
+        incl=${parts[3]}
+        eo=${parts[4]}
+        location=${parts[5]}
+        # decrypt ciphertext
+        privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
+        cipher=`echo $cipher | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+        IFS=':' read -ra storage <<< "$cipher"
+        sa=${storage[0]}
+        ep=${storage[1]}
+        saskey=${storage[2]}
+        container=${storage[3]}
+        unset cipher
+        unset storage
+    else
+        sa=${parts[2]}
+        ep=${parts[3]}
+        saskey=${parts[4]}
+        container=${parts[5]}
+        incl=${parts[6]}
+        eo=${parts[7]}
+        location=${parts[8]}
+    fi
+
     include=
     if [ ! -z $incl ]; then
         include="--include $incl"

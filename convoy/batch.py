@@ -24,8 +24,10 @@
 
 # stdlib imports
 from __future__ import division, print_function, unicode_literals
+import base64
 import datetime
 import fnmatch
+import getpass
 import logging
 try:
     import pathlib
@@ -37,6 +39,7 @@ import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 # local imports
+import convoy.crypto
 import convoy.data
 import convoy.storage
 import convoy.util
@@ -58,6 +61,86 @@ def get_gluster_volume():
     :return: gluster volume mount
     """
     return _GLUSTER_VOLUME
+
+
+def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
+    """Adds a certificate to a Batch account
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str sha1_cert_tp: sha1 thumbprint of pfx
+    :param bool rm_pfxfile: remove PFX file from local disk
+    """
+    pfxfile = config['batch_shipyard']['encryption']['pfx']['filename']
+    try:
+        pfx_passphrase = config['batch_shipyard']['encryption']['pfx'][
+            'passphrase']
+    except KeyError:
+        pfx_passphrase = None
+    try:
+        sha1_cert_tp = config['batch_shipyard']['encryption'][
+            'sha1_thumbprint']
+        if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
+            raise KeyError
+    except KeyError:
+        # get thumbprint of pfx
+        if pfx_passphrase is None:
+            pfx_passphrase = getpass.getpass('Enter password for PFX: ')
+        sha1_cert_tp = convoy.crypto.get_sha1_thumbprint_pfx(
+            pfxfile, pfx_passphrase)
+        config['batch_shipyard']['encryption'][
+            'sha1_thumbprint'] = sha1_cert_tp
+    # first check if this cert exists
+    certs = batch_client.certificate.list()
+    for cert in certs:
+        if cert.thumbprint.lower() == sha1_cert_tp:
+            logger.error(
+                'cert with thumbprint {} already exists for account'.format(
+                    sha1_cert_tp))
+            # remove pfxfile
+            if rm_pfxfile:
+                os.unlink(pfxfile)
+            return
+    # add cert to account
+    if pfx_passphrase is None:
+        pfx_passphrase = getpass.getpass('Enter password for PFX: ')
+    logger.debug('adding pfx cert with thumbprint {} to account'.format(
+        sha1_cert_tp))
+    data = convoy.util.decode_string(
+        base64.b64encode(open(pfxfile, 'rb').read()))
+    batch_client.certificate.add(
+        certificate=batchmodels.CertificateAddParameter(
+            sha1_cert_tp, 'sha1', data,
+            certificate_format=batchmodels.CertificateFormat.pfx,
+            password=pfx_passphrase)
+    )
+    # remove pfxfile
+    if rm_pfxfile:
+        os.unlink(pfxfile)
+
+
+def del_certificate_from_account(batch_client, config):
+    """Delete a certificate from a Batch account
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pfxfile = config['batch_shipyard']['encryption']['pfx']['filename']
+    try:
+        pfx_passphrase = config['batch_shipyard']['encryption']['pfx'][
+            'passphrase']
+    except KeyError:
+        pfx_passphrase = None
+    try:
+        sha1_cert_tp = config['batch_shipyard']['encryption'][
+            'sha1_thumbprint']
+        if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
+            raise KeyError
+    except KeyError:
+        # get thumbprint of pfx
+        sha1_cert_tp = convoy.crypto.get_sha1_thumbprint_pfx(
+            pfxfile, pfx_passphrase)
+    batch_client.certificate.delete('sha1', sha1_cert_tp)
 
 
 def _reboot_node(batch_client, pool_id, node_id, wait):
@@ -275,7 +358,7 @@ def add_ssh_user(batch_client, config, nodes=None):
             gen_tunnel_script = False
         # generate ssh key pair if not specified
         if ssh_pub_key is None:
-            ssh_priv_key, ssh_pub_key = convoy.util.generate_ssh_keypair()
+            ssh_priv_key, ssh_pub_key = convoy.crypto.generate_ssh_keypair()
         # get node list if not provided
         if nodes is None:
             nodes = batch_client.compute_node.list(pool_id)

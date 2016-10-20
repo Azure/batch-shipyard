@@ -18,11 +18,14 @@ more information.
     - Entire task-level directories from compute node
   - Egress to Azure Blob of File Storage with `output_data` in jobs
     configuration
-    - Task-level: to Azure Blob or File Storage on succesful completion of a
+    - Task-level: to Azure Blob or File Storage on successful completion of a
       task
 - Experimental support for OpenSSH with HPN patches on Ubuntu
 - Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
-`listtasks`. Please see the usage doc for more information.
+`listtasks`, `createcert`, `addcert`, `delcert`. Please see the usage doc
+for more information.
+- Encrypted credential support. Please see the configuration doc for more
+information.
 - Data movement overview and guide doc
 - Torch-CPU as an option in quickstart guide
 
@@ -33,7 +36,7 @@ to `generate_docker_tunnel_script`. Please see the configuration doc for
 more information.
 - `streamfile` no longer has an arbitrary max streaming time; the action will
 stream the file indefinitely until the task completes
-- Ensure `storage_entity_prefix` is valid and validate container name lengths
+- Validate container with `storage_entity_prefix` for length issues
 - `delpool` action now cleans up and deletes some storage containers
 immediately afterwards (with confirmation prompts)
 - Modularized code base
@@ -42,6 +45,7 @@ immediately afterwards (with confirmation prompts)
 - GlusterFS mount ownership/permissions fixed such that SSH users can
 read/write
 - Azure File shared volume setup when invoked from Windows
+- Python2 compatibility issues with file encoding
 
 ## [1.1.0] - 2016-10-05
 ### Added

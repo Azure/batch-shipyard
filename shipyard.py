@@ -47,6 +47,7 @@ import azure.batch.batch_service_client as batch
 import azure.batch.models as batchmodels
 # local imports
 import convoy.batch
+import convoy.crypto
 import convoy.data
 import convoy.storage
 import convoy.util
@@ -144,9 +145,8 @@ def _populate_global_settings(config, action):
             logger.debug(
                 'attempting to generate docker private registry tarball')
             try:
-                imgid = subprocess.check_output(
-                    'sudo docker images -q registry:2', shell=True).decode(
-                        'utf-8').strip()
+                imgid = convoy.util.decode_string(subprocess.check_output(
+                    'sudo docker images -q registry:2', shell=True)).strip()
             except subprocess.CalledProcessError:
                 rf = None
                 imgid = None
@@ -299,6 +299,30 @@ def add_pool(batch_client, blob_client, config):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
+    # add encryption cert to account if specified
+    encrypt = False
+    encrypt_sha1tp = None
+    try:
+        encrypt = config['batch_shipyard']['encryption']['enabled']
+        if encrypt:
+            convoy.batch.add_certificate_to_account(batch_client, config)
+            try:
+                encrypt_sha1tp = config['batch_shipyard']['encryption'][
+                    'sha1_thumbprint']
+            except KeyError:
+                pfxfile = config['batch_shipyard']['encryption']['pfx'][
+                    'filename']
+                try:
+                    passphrase = config['batch_shipyard']['encryption'][
+                        'pfx']['passphrase']
+                except KeyError:
+                    passphrase = None
+                encrypt_sha1tp = convoy.crypto.get_sha1_thumbprint_pfx(
+                    pfxfile, passphrase)
+                config['batch_shipyard']['encryption'][
+                    'sha1_thumbprint'] = encrypt_sha1tp
+    except KeyError:
+        pass
     publisher = config['pool_specification']['publisher']
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
@@ -463,7 +487,7 @@ def add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}{}'.format(
+        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
             offer,
             sku,
@@ -472,6 +496,7 @@ def add_pool(batch_client, blob_client, config):
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
             ' -d' if use_shipyard_docker_image else '',
+            ' -e {}'.format(encrypt_sha1tp) if encrypt else '',
             ' -f' if gluster else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
@@ -510,15 +535,24 @@ def add_pool(batch_client, blob_client, config):
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
                 batchmodels.EnvironmentSetting(
                     'CASCADE_STORAGE_ENV',
-                    '{}:{}:{}'.format(
-                        convoy.storage.get_storageaccount(),
-                        convoy.storage.get_storageaccount_endpoint(),
-                        convoy.storage.get_storageaccount_key())
+                    convoy.crypto.encrypt_string(
+                        encrypt, '{}:{}:{}'.format(
+                            convoy.storage.get_storageaccount(),
+                            convoy.storage.get_storageaccount_endpoint(),
+                            convoy.storage.get_storageaccount_key()),
+                        config)
                 )
             ],
             resource_files=[],
         ),
     )
+    if encrypt:
+        pool.certificate_references = [
+            batchmodels.CertificateReference(
+                encrypt_sha1tp, 'sha1',
+                visibility=[batchmodels.CertificateVisibility.starttask]
+            )
+        ]
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
@@ -538,10 +572,12 @@ def add_pool(batch_client, blob_client, config):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'CASCADE_PRIVATE_REGISTRY_STORAGE_ENV',
-                '{}:{}:{}'.format(
-                    config['credentials']['storage'][ssel]['account'],
-                    config['credentials']['storage'][ssel]['endpoint'],
-                    config['credentials']['storage'][ssel]['account_key'])
+                convoy.crypto.encrypt_string(
+                    encrypt, '{}:{}:{}'.format(
+                        config['credentials']['storage'][ssel]['account'],
+                        config['credentials']['storage'][ssel]['endpoint'],
+                        config['credentials']['storage'][ssel]['account_key']),
+                    config)
             )
         )
         del ssel
@@ -551,7 +587,9 @@ def add_pool(batch_client, blob_client, config):
             batchmodels.EnvironmentSetting('DOCKER_LOGIN_USERNAME', dockeruser)
         )
         pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting('DOCKER_LOGIN_PASSWORD', dockerpw)
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_PASSWORD',
+                convoy.crypto.encrypt_string(encrypt, dockerpw, config))
         )
     if perf:
         pool.start_task.environment_settings.append(
@@ -801,6 +839,24 @@ def _adjust_settings_for_pool_creation(config):
             'block_until_all_global_resources_loaded'] = False
 
 
+def _adjust_general_settings(config):
+    # type: (dict) -> None
+    """Adjust general settings
+    :param dict config: configuration dict
+    """
+    # adjust encryption settings on windows
+    if convoy.util.on_windows():
+        try:
+            enc = config['batch_shipyard']['encryption']['enabled']
+        except KeyError:
+            enc = False
+        if enc:
+            logger.warning(
+                'disabling credential encryption due to script being run '
+                'from Windows')
+            config['encryption']['enabled'] = False
+
+
 def main():
     """Main function"""
     # get command-line args
@@ -856,6 +912,8 @@ def main():
 
     batch_client, blob_client, queue_client, table_client = \
         _create_credentials(config)
+
+    _adjust_general_settings(config)
 
     if args.action == 'addpool':
         # first check if pool exists to prevent accidential metadata clear
@@ -930,6 +988,13 @@ def main():
         convoy.batch.list_tasks(batch_client, config)
     elif args.action == 'listtaskfiles':
         convoy.batch.list_task_files(batch_client, config)
+    elif args.action == 'createcert':
+        sha1tp = convoy.crypto.generate_pem_pfx_certificates(config)
+        logger.info('SHA1 Thumbprint: {}'.format(sha1tp))
+    elif args.action == 'addcert':
+        convoy.batch.add_certificate_to_account(batch_client, config, False)
+    elif args.action == 'delcert':
+        convoy.batch.del_certificate_from_account(batch_client, config)
     elif args.action == 'delstorage':
         convoy.storage.delete_storage_containers(
             blob_client, queue_client, table_client, config)
@@ -953,8 +1018,8 @@ def parseargs():
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
         'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
         'grls, streamfile, gettaskfile, gettaskallfiles, getnodefile, '
-        'ingressdata, listjobs, listtasks, listtaskfiles, clearstorage, '
-        'delstorage')
+        'ingressdata, listjobs, listtasks, listtaskfiles, createcert, '
+        'addcert, delcert, clearstorage, delstorage')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true',
         help='verbose output')

@@ -89,8 +89,11 @@ be ready in order for the `ingressdata` action to work. Additionally, although
 you can combine on premises ingress to Azure Storage and then ingress to
 compute node, if there is a possiblity of overlap, it is recommended to
 separate these two processes by ingressing data from `files` with the
-`ingressdata` action then creating the pool with
-`transfer_files_on_pool_creation` to `false`.
+`ingressdata` action first. After that action completes, create the pool with
+`transfer_files_on_pool_creation` to `false` (so the data that was ingressed
+with `ingressdata` is not ingressed again) and specify `input_data` with
+the appropriate properties from the data that was just ingressed with
+`ingressdata`.
 
 `input_data` for each job in `job_specifications` will ingress data to any
 compute node running the specified job once and only once. Any `input_data`
@@ -104,9 +107,12 @@ this `input_data` is ingressed to both compute node A and B. However, if
 the `input_data` is not transferred again.
 
 `input_data` for each task in the task array for each job will ingress data
-to the compute node running the specified task. For multi-instance tasks,
-the download only applies to the compute node running the application command.
-Data is not ingressed with the coordination command which is run on all nodes.
+to the compute node running the specified task. Note that for task-level
+`input_data`, the `destination` property is optional. If not specified,
+data will be ingressed to the `$AZ_BATCH_TASK_WORKING_DIR` by default.
+For multi-instance tasks, the download only applies to the compute node
+running the application command. Data is not ingressed with the coordination
+command which is run on all nodes.
 
 There is one additional method of ingressing data from Azure Storage, which is
 through Azure Batch resource files. In the jobs json file, you can specify
@@ -135,7 +141,7 @@ using a job id, task id and optional include filter.
 This is particularly useful for progress monitoring or tailing an output.
 
 ### To Azure Storage
-If you need to egress data from a compute node and persist it on Azure
+If you need to egress data from a compute node and persist it to Azure
 Storage, Batch Shipyard provides the `output_data` property on tasks of a
 job in `job_specifications`. `source` defines which directory within the
 task directory to egress data from; if nothing is specified for `source` then

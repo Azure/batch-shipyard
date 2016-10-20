@@ -9,8 +9,12 @@ Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --user -r requirements.txt` (or via `pip3`
 for python3).
 
-Please note that the Python dependencies require a valid compiler, ssl, ffi,
-and python development libraries to be installed due to the
+Please note that while Batch Shipyard runs from Windows, it is not the
+primary test environment. Additionally, some functionality is not supported
+in Windows. For the best experience, please run Batch Shipyard from Linux.
+
+Batch Shipyard has some Python dependencies which require a valid compiler,
+ssl, ffi, and python development libraries to be installed due to the
 [cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.
 For Windows, binary wheels will be installed for dependencies, thus no
 development environment is needed. The following are example commands to
@@ -55,7 +59,21 @@ side to further accelerate `scp` to Azure Batch compute nodes where
 storage. This is automatically installed if `pip install` is used with
 `requirements.txt` as per above.
 
-Note that data movement is not supported if invoked from Windows.
+Note that data movement which involves programs required in from 1 or 2 above
+are not supported if invoked from Windows.
+
+####Encryption Support
+Batch Shipyard supports encrypting credentials that are used by backend
+components within your pool deployment. In order to utilize this feature,
+you must have `openssl` installed. Encryption support is not available on
+Windows.
+
+Note that all commandlines, environment variables and resource file URLs
+which are stored by the Azure Batch Service are encrypted by the service.
+This feature is to prevent credentials from being displayed in the clear when
+using the Azure Portal, Batch Explorer, or other tools to inspect the status
+of pools, jobs and tasks. If this is not an issue for your scenario, then
+encrypting credentials is unnecessary.
 
 ## Installation
 Simply clone the repository:

@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 # global defines
 _PY2 = sys.version_info.major == 2
 _ON_WINDOWS = platform.system() == 'Windows'
-_SSH_KEY_PREFIX = 'id_rsa_shipyard'
 
 
 def on_python2():
@@ -87,13 +86,40 @@ def setup_logger(logger):
 setup_logger(logger)
 
 
-def get_ssh_key_prefix():
-    # type: (None) -> str
-    """Get SSH key prefix
+def decode_string(string, encoding=None):
+    # type: (str, str) -> str
+    """Decode a string with specified encoding
+    :type string: str or bytes
+    :param string: string to decode
+    :param str encoding: encoding of string to decode
     :rtype: str
-    :return: ssh key prefix
+    :return: decoded string
     """
-    return _SSH_KEY_PREFIX
+    if isinstance(string, str):
+        return string
+    if encoding is None:
+        encoding = 'utf8'
+    if isinstance(string, bytes):
+        return string.decode(encoding)
+    raise ValueError('invalid string type: {}'.format(type(string)))
+
+
+def encode_string(string, encoding=None):
+    # type: (str, str) -> str
+    """Decode a string with specified encoding
+    :type string: str or bytes
+    :param string: string to decode
+    :param str encoding: encoding of string to decode
+    :rtype: str
+    :return: decoded string
+    """
+    if isinstance(string, bytes):
+        return string
+    if encoding is None:
+        encoding = 'utf8'
+    if isinstance(string, str):
+        return string.encode(encoding)
+    raise ValueError('invalid string type: {}'.format(type(string)))
 
 
 def get_input(prompt):
@@ -173,6 +199,19 @@ def wrap_commands_in_shell(commands, wait=True):
         '; '.join(commands), '; wait' if wait else '')
 
 
+def base64_encode_string(string):
+    # type: (str or bytes) -> str
+    """Base64 encode a string
+    :param str or bytes string: string to encode
+    :rtype: str
+    :return: base64-encoded string
+    """
+    if on_python2():
+        return base64.b64encode(string)
+    else:
+        return str(base64.b64encode(string), 'ascii')
+
+
 def compute_md5_for_file(file, as_base64, blocksize=65536):
     # type: (pathlib.Path, bool, int) -> str
     """Compute MD5 hash for file
@@ -190,42 +229,9 @@ def compute_md5_for_file(file, as_base64, blocksize=65536):
                 break
             hasher.update(buf)
         if as_base64:
-            if on_python2():
-                return base64.b64encode(hasher.digest())
-            else:
-                return str(base64.b64encode(hasher.digest()), 'ascii')
+            return base64_encode_string(hasher.digest())
         else:
             return hasher.hexdigest()
-
-
-def generate_ssh_keypair():
-    # type: (str) -> tuple
-    """Generate an ssh keypair for use with user logins
-    :param str key_fileprefix: key file prefix
-    :rtype: tuple
-    :return: (private key filename, public key filename)
-    """
-    pubkey = _SSH_KEY_PREFIX + '.pub'
-    try:
-        if os.path.exists(_SSH_KEY_PREFIX):
-            old = _SSH_KEY_PREFIX + '.old'
-            if os.path.exists(old):
-                os.remove(old)
-            os.rename(_SSH_KEY_PREFIX, old)
-    except OSError:
-        pass
-    try:
-        if os.path.exists(pubkey):
-            old = pubkey + '.old'
-            if os.path.exists(old):
-                os.remove(old)
-            os.rename(pubkey, old)
-    except OSError:
-        pass
-    logger.info('generating ssh key pair')
-    subprocess.check_call(
-        ['ssh-keygen', '-f', _SSH_KEY_PREFIX, '-t', 'rsa', '-N', ''''''])
-    return (_SSH_KEY_PREFIX, pubkey)
 
 
 def subprocess_with_output(cmd, shell=False, suppress_output=False):

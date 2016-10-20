@@ -32,6 +32,7 @@ install_azurefile_docker_volume_driver() {
 azurefile=0
 block=
 cascadecontainer=0
+encrypted=
 hpnssh=0
 gluster=0
 gpu=
@@ -43,7 +44,7 @@ prefix=
 privatereg=
 sku=
 
-while getopts "h?ab:dfg:no:p:r:s:t:w" opt; do
+while getopts "h?ab:de:fg:no:p:r:s:t:w" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -51,6 +52,7 @@ while getopts "h?ab:dfg:no:p:r:s:t:w" opt; do
             echo "-a install azurefile docker volume driver"
             echo "-b [resources] block until resources loaded"
             echo "-d use docker container for cascade"
+            echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs cluster"
             echo "-g [nv-series::driver file:nvidia docker pkg] gpu support"
             echo "-n optimize network TCP settings"
@@ -71,6 +73,9 @@ while getopts "h?ab:dfg:no:p:r:s:t:w" opt; do
             ;;
         d)
             cascadecontainer=1
+            ;;
+        e)
+            encrypted=${OPTARG,,}
             ;;
         f)
             gluster=1
@@ -162,6 +167,24 @@ net.ipv4.tcp_abort_on_overflow=1
 net.ipv4.route.flush=1
 EOF
         fi
+    fi
+fi
+
+# decrypt encrypted creds
+if [ ! -z $encrypted ]; then
+    # convert pfx to pem
+    pfxfile=$AZ_BATCH_CERTIFICATES_DIR/sha1-$encrypted.pfx
+    privatekey=$AZ_BATCH_CERTIFICATES_DIR/key.pem
+    openssl pkcs12 -in $pfxfile -out $privatekey -nodes -password file:$pfxfile.pw
+    # remove pfx-related files
+    rm -f $pfxfile $pfxfile.pw
+    # decrypt creds
+    CASCADE_STORAGE_ENV=`echo $CASCADE_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
+        DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    fi
+    if [ ! -z $privatereg ]; then
+        CASCADE_PRIVATE_REGISTRY_STORAGE_ENV=`echo $CASCADE_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
 fi
 
@@ -514,6 +537,7 @@ fi
 touch $nodeprepfinished
 
 # execute cascade
+envfile=
 if [ $cascadecontainer -eq 1 ]; then
     detached=
     if [ $p2penabled -eq 1 ]; then
@@ -589,4 +613,7 @@ if [ ! -z $block ]; then
         fi
         sleep 2
     done
+    if [ $cascadecontainer -eq 1 ]; then
+        rm -f $envfile
+    fi
 fi

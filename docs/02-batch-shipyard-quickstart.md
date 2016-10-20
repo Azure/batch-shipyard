@@ -16,7 +16,9 @@ regardless of which Deep Learning framework you prefer for the following.
 
 1. All
 [pre-requisites and installation of Batch Shipyard](01-batch-shipyard-installation.md)
-to your local machine has been completed.
+to your local machine has been completed. Please note that while Batch
+Shipyard works on Windows, some functionality may be disabled. It is
+recommended for the best experience to run Batch Shipyard on Linux.
 2. Create a directory to hold your configuration files, for example: `config`
 3. Copy the sample configuration files from the Deep Learning framework recipe
 of your choice to the `config` directory:
@@ -64,3 +66,7 @@ properties of your Azure Batch accounts, pools, nodes, jobs and tasks.
 [Batch Shipyard Configuration](10-batch-shipyard-configuration.md) contains
 explanations of all of the Batch Shipyard configuration options within the
 config files.
+
+## Commandline Usage Guide
+[Batch Shipyard Usage](20-batch-shipyard-usage.md) contains explanations for
+all of the actions available with the `shipyard.py` tool.

@@ -41,6 +41,7 @@ import threading
 import time
 # local imports
 import convoy.batch
+import convoy.crypto
 import convoy.storage
 import convoy.util
 
@@ -62,6 +63,10 @@ def _process_storage_input_data(config, input_data, on_task):
     :rtype: list
     :return: args to pass to blobxfer script
     """
+    try:
+        encrypt = config['batch_shipyard']['encryption']['enabled']
+    except KeyError:
+        encrypt = False
     args = []
     for xfer in input_data:
         storage_settings = config['credentials']['storage'][
@@ -130,10 +135,18 @@ def _process_storage_input_data(config, input_data, on_task):
         if on_task and dst is None or len(dst) == 0:
             dst = '$AZ_BATCH_TASK_WORKING_DIR'
         # construct argument
-        # kind:sa:ep:saskey:container:include:eo:dst
-        args.append('"ingress:{}:{}:{}:{}:{}:{}:{}"'.format(
-            storage_settings['account'], storage_settings['endpoint'],
-            saskey, container, include, eo, dst))
+        # kind:encrypted:<sa:ep:saskey:container>:include:eo:dst
+        if encrypt:
+            encstorage = '{}:{}:{}:{}'.format(
+                storage_settings['account'], storage_settings['endpoint'],
+                saskey, container)
+            args.append('"ingress:true:{}:{}:{}:{}"'.format(
+                convoy.crypto.encrypt_string(encrypt, encstorage, config),
+                include, eo, dst))
+        else:
+            args.append('"ingress:false:{}:{}:{}:{}:{}:{}:{}"'.format(
+                storage_settings['account'], storage_settings['endpoint'],
+                saskey, container, include, eo, dst))
     return args
 
 
@@ -176,6 +189,10 @@ def _process_storage_output_data(config, output_data):
     :rtype: list
     :return: args to pass to blobxfer script
     """
+    try:
+        encrypt = config['batch_shipyard']['encryption']['enabled']
+    except KeyError:
+        encrypt = False
     args = []
     for xfer in output_data:
         storage_settings = config['credentials']['storage'][
@@ -241,10 +258,18 @@ def _process_storage_output_data(config, output_data):
         if src is None or len(src) == 0:
             src = '$AZ_BATCH_TASK_DIR'
         # construct argument
-        # kind:sa:ep:saskey:container:include:eo:src
-        args.append('"egress:{}:{}:{}:{}:{}:{}:{}"'.format(
-            storage_settings['account'], storage_settings['endpoint'],
-            saskey, container, include, eo, src))
+        # kind:encrypted:<sa:ep:saskey:container>:include:eo:src
+        if encrypt:
+            encstorage = '{}:{}:{}:{}'.format(
+                storage_settings['account'], storage_settings['endpoint'],
+                saskey, container)
+            args.append('"egress:true:{}:{}:{}:{}"'.format(
+                convoy.crypto.encrypt_string(encrypt, encstorage, config),
+                include, eo, src))
+        else:
+            args.append('"egress:false:{}:{}:{}:{}:{}:{}:{}"'.format(
+                storage_settings['account'], storage_settings['endpoint'],
+                saskey, container, include, eo, src))
     return args
 
 
@@ -696,7 +721,8 @@ def wait_for_storage_threads(storage_threads):
         else:
             for thr in storage_threads:
                 thr.join()
-            logger.info('Azure Blob Storage transfer completed')
+            if nthreads > 0:
+                logger.info('Azure Blob/File Storage transfer completed')
             break
 
 
@@ -810,7 +836,7 @@ def ingress_data(batch_client, config, rls=None, kind=None):
             except KeyError:
                 # use default name for private key
                 ssh_private_key = pathlib.Path(
-                    convoy.util.get_ssh_key_prefix())
+                    convoy.crypto.get_ssh_key_prefix())
             if not ssh_private_key.exists():
                 raise RuntimeError(
                     'ssh private key does not exist at: {}'.format(
@@ -858,7 +884,8 @@ def ingress_data(batch_client, config, rls=None, kind=None):
             if kind == 'shared':
                 logger.warning(
                     'skipping data ingress from {} to {} for pool as ingress '
-                    'to Azure Blob Storage not specified'.format(src, storage))
+                    'to Azure Blob/File Storage not specified'.format(
+                        src, storage))
                 continue
             try:
                 container = fdict['destination']['data_transfer']['container']
@@ -896,13 +923,13 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                 if len(src_incl) > 1:
                     raise ValueError(
                         'include can only be a maximum of one filter for '
-                        'ingress to Azure Blob Storage')
+                        'ingress to Azure Blob/File Storage')
                 # peel off first into var
                 src_incl = src_incl[0]
             if src_excl is not None:
                 raise ValueError(
-                    'exclude cannot be specified for ingress to Azure Blob '
-                    'Storage')
+                    'exclude cannot be specified for ingress to Azure '
+                    'Blob/File Storage')
             thr = _azure_blob_storage_transfer(
                 config['credentials']['storage'][storage], container, src,
                 src_incl, eo)
