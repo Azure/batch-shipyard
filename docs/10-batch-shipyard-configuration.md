@@ -376,7 +376,8 @@ The second shared volue, `glustervol`, is a
 GlusterFS volumes are located on the VM's temporary local disk space which is
 a shared resource. Sizes of the local temp disk for each VM size can be found
 [here](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/).
-These volumes have the following properties:
+If specifying a GlusterFS volume, you must enable internode communication
+in the pool configuration file. These volumes have the following properties:
 * `volume_driver` property should be set as `glusterfs`.
 * `container_path` is the path in the container to mount.
 

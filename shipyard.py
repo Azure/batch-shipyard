@@ -785,7 +785,7 @@ def _adjust_settings_for_pool_creation(config):
         internode = config[
             'pool_specification']['inter_node_communication_enabled']
     except KeyError:
-        internode = True
+        internode = False
     max_vms = 20 if publisher == 'microsoftwindowsserver' else 40
     if vm_count > max_vms:
         if p2p:
@@ -800,16 +800,18 @@ def _adjust_settings_for_pool_creation(config):
             config['data_replication']['peer_to_peer']['enabled'] = False
             p2p = False
         if internode:
+            internode = False
             logger.warning(
                 ('disabling inter-node communication as pool size of {} '
                  'exceeds max limit of {} vms for setting').format(
                      vm_count, max_vms))
             config['pool_specification'][
-                'inter_node_communication_enabled'] = False
-            internode = False
+                'inter_node_communication_enabled'] = internode
     # ensure settings p2p/internode settings are compatible
     if p2p and not internode:
-        config['pool_specification']['inter_node_communication_enabled'] = True
+        internode = True
+        config['pool_specification'][
+            'inter_node_communication_enabled'] = internode
         logger.warning(
             'force enabling inter-node communication due to peer-to-peer '
             'transfer')
@@ -833,6 +835,21 @@ def _adjust_settings_for_pool_creation(config):
                 'disabling ssh user creation due to script being run '
                 'from Windows and no public key is specified')
             config['pool_specification'].pop('ssh', None)
+    # glusterfs requires internode comms
+    if not internode:
+        try:
+            shared = config['global_resources']['docker_volumes'][
+                'shared_data_volumes']
+            for sdvkey in shared:
+                if shared[sdvkey]['volume_driver'] == 'glusterfs':
+                    # do not modify value and proceed since this interplays
+                    # with p2p settings, simply raise exception and force
+                    # user to reconfigure
+                    raise ValueError(
+                        'inter node communication in pool configuration '
+                        'must be enabled for glusterfs')
+        except KeyError:
+            pass
     # ensure file transfer settings
     try:
         xfer_files_with_pool = config['pool_specification'][

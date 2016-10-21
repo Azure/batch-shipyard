@@ -20,16 +20,69 @@ my data which exists somewhere, perhaps on premises, into the cloud such that
 my virtual machines have access to them? This problem is even more acute for
 services which deliver resources on-demand such as Azure Batch. How do I get
 my data to nodes which may be ephemeral? And on the flip-side, how do I get
-my data from nodes after completion of a task? A data movement solution is
-half-baked if it solves only one part of the problem. Let's begin with the
-input data problem.
+my data from nodes after completion of a task?
+
+Before diving into ingress and egress support specifics, let's examine a
+high level overview of the data movement support provided by Batch Shipyard.
+
+```
+                      (I)           +-------------------------------------------------------------------------+
+        +-------------------------> |                                                                         |
+        |                           |                      Azure Storage (Blob and File)                      |
+        |        +------------------+                                                                         |
+        |        |                  +------------+-------------------------------------------+----------------+
+        |        |                               |                                           |
+        |        | (E)                           | (I)         ^                             | (I)    ^
+        |        |                               v             | (E)                         v        | (E)
+        |        |                                             |                                      |
+        |        v                  +--------------------------+-------------+         +--------------+-------+
+        |                           |                                        |         |                      |
+    +---+-------------+      (E)    |          Azure Batch Pool "A"          |         | Azure Batch Pool "B" |
+    |                 | <-----------+                                        |         |                      |
+    |                 |             | +----------------+  +----------------+ |         |  +----------------+  |
+    |  Local Machine  |             | |                |  |                | |    (I)  |  |                |  |
+    |                 |    (I)      | | Compute Node 0 |  | Compute Node 1 | | <-------+  | Compute Node 0 |  |
+    |                 +-----------> | |  [GlusterFS]   |  |  [GlusterFS]   | |         |  |                |  |
+    +---+-------------+             | |                |  |                | |         |  +----------------+  |
+        |                           | +----------------+  +----------------+ |         |                      |
+        |         ^                 |                                        |         |  +----------------+  |
+        v         |                 | +----------------+  +----------------+ |  (I)    |  |                |  |
+                  |                 | |                |  |                | +-------> |  | Compute Node 1 |  |
++-----------------+-------+         | | Compute Node 2 |  | Compute Node 3 | |         |  |                |  |
+|                         |         | |  [GlusterFS]   |  |  [GlusterFS]   | |         |  +----------------+  |
+|  Shared File System(s)  |         | |                |  |                | |         |                      |
+|                         |         | +----------------+  +----------------+ |         +----------------------+
++-------------------------+         |                                        |
+                                    +----------------------------------------+
+```
+
+Arrows marked `(I)` are ingress actions with respect to the destination, and
+arrows marked `(E)` are egress actions with respect to the source.
+
+On the left-hand side of the diagram above containing the `Local Machine`
+and `Shared File System(s)`, we will consider this as on premises for the
+purposes of this document. "On premises" is where you would be invoking
+`shipyard.py` actions. The machine that can invoke `shipyard.py` has
+access to your local machine file system and can also access local shared
+file systems.
+
+From on premises, you can ingress your data to both Azure Storage and
+Azure Batch Pools directly. You can also egress data from Azure Batch Pools
+and Azure Storage (via [blobxfer](https://github.com/Azure/blobxfer) or
+[AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/))
+back to your local machine.
+
+Within Azure, you can ingress data from Azure Storage to Azure Batch pools,
+as well as egress data back out to Azure Storage when tasks complete.
+You may also ingress data from other Azure Batch Tasks which may or may
+not be in the same pool as part input data for subsequent Azure Batch Tasks.
+
+The rest of the document will explain each ingress and egress data movement
+operation in detail.
 
 ## Data Ingress
 Batch Shipyard provides multiple paths for ingressing data to ultimately
-be used by your job and tasks. Let us define "on premises" as where you
-are invoking `shipyard.py`. The machine that can invoke `shipyard.py` has
-access to your local machine file system and can also access local shared
-file systems.
+be used by your job and tasks.
 
 ### From On Premises
 You'll need to decide if all or part of your data is long-lived, i.e., will
