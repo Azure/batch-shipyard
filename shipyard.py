@@ -56,6 +56,7 @@ import convoy.util
 logger = logging.getLogger('shipyard')
 # global defines
 _VERSION = '2.0.0'
+_ROOT_PATH = pathlib.Path(__file__).resolve().parent
 _AZUREFILE_DVD_BIN = {
     'url': (
         'https://github.com/Azure/azurefile-dockervolumedriver/releases'
@@ -73,16 +74,38 @@ _NVIDIA_DOCKER = {
     }
 }
 _NVIDIA_DRIVER = 'nvidia-driver.run'
-_NODEPREP_FILE = ('shipyard_nodeprep.sh', 'scripts/shipyard_nodeprep.sh')
-_GLUSTERPREP_FILE = ('shipyard_glusterfs.sh', 'scripts/shipyard_glusterfs.sh')
-_HPNSSH_FILE = ('shipyard_hpnssh.sh', 'scripts/shipyard_hpnssh.sh')
-_JOBPREP_FILE = ('docker_jp_block.sh', 'scripts/docker_jp_block.sh')
-_BLOBXFER_FILE = ('shipyard_blobxfer.sh', 'scripts/shipyard_blobxfer.sh')
-_CASCADE_FILE = ('cascade.py', 'cascade/cascade.py')
-_SETUP_PR_FILE = (
-    'setup_private_registry.py', 'cascade/setup_private_registry.py'
+_NODEPREP_FILE = (
+    'shipyard_nodeprep.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh'))
 )
-_PERF_FILE = ('perf.py', 'cascade/perf.py')
+_GLUSTERPREP_FILE = (
+    'shipyard_glusterfs.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs.sh'))
+)
+_HPNSSH_FILE = (
+    'shipyard_hpnssh.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh'))
+)
+_JOBPREP_FILE = (
+    'docker_jp_block.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh'))
+)
+_BLOBXFER_FILE = (
+    'shipyard_blobxfer.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh'))
+)
+_CASCADE_FILE = (
+    'cascade.py',
+    str(pathlib.Path(_ROOT_PATH, 'cascade/cascade.py'))
+)
+_SETUP_PR_FILE = (
+    'setup_private_registry.py',
+    str(pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py'))
+)
+_PERF_FILE = (
+    'perf.py',
+    str(pathlib.Path(_ROOT_PATH, 'cascade/perf.py'))
+)
 _VM_TCP_NO_TUNE = (
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
     'standard_a1', 'standard_d1', 'standard_d2', 'standard_d1_v2',
@@ -137,7 +160,7 @@ def _populate_global_settings(config, action):
                 raise KeyError()
         except KeyError:
             if rf is None:
-                rf = 'resources/docker-registry-v2.tar.gz'
+                rf = _ROOT_PATH + '/resources/docker-registry-v2.tar.gz'
             imgid = None
         prf = pathlib.Path(rf)
         # attempt to package if registry file doesn't exist
@@ -153,7 +176,8 @@ def _populate_global_settings(config, action):
             else:
                 if len(imgid) == 12:
                     if rf is None:
-                        rf = 'resources/docker-registry-v2.tar.gz'
+                        rf = (_ROOT_PATH +
+                              '/resources/docker-registry-v2.tar.gz')
                     prf = pathlib.Path(rf)
                     subprocess.check_call(
                         'sudo docker save registry:2 '
@@ -193,7 +217,7 @@ def setup_nvidia_docker_package(blob_client, config):
     """
     offer = config['pool_specification']['offer'].lower()
     if offer == 'ubuntuserver':
-        pkg = pathlib.Path('resources/nvidia-docker.deb')
+        pkg = pathlib.Path(_ROOT_PATH, 'resources/nvidia-docker.deb')
     else:
         raise ValueError('Offer {} is unsupported with nvidia docker'.format(
             offer))
@@ -224,7 +248,7 @@ def setup_azurefile_volume_driver(blob_client, config):
     offer = config['pool_specification']['offer'].lower()
     sku = config['pool_specification']['sku'].lower()
     # check to see if binary is downloaded
-    bin = pathlib.Path('resources/azurefile-dockervolumedriver')
+    bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
             convoy.util.compute_md5_for_file(bin, False) !=
             _AZUREFILE_DVD_BIN['md5']):
@@ -237,9 +261,11 @@ def setup_azurefile_volume_driver(blob_client, config):
             raise RuntimeError('md5 mismatch for {}'.format(bin))
     if (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku.startswith('14.04')):
-        srv = pathlib.Path('resources/azurefile-dockervolumedriver.conf')
+        srv = pathlib.Path(
+            _ROOT_PATH, 'resources/azurefile-dockervolumedriver.conf')
     else:
-        srv = pathlib.Path('resources/azurefile-dockervolumedriver.service')
+        srv = pathlib.Path(
+            _ROOT_PATH, 'resources/azurefile-dockervolumedriver.service')
     # construct systemd env file
     sa = None
     sakey = None
@@ -266,13 +292,15 @@ def setup_azurefile_volume_driver(blob_client, config):
         raise RuntimeError(
             'storage account or storage account key not specified for '
             'azurefile docker volume driver')
-    srvenv = pathlib.Path('resources/azurefile-dockervolumedriver.env')
+    srvenv = pathlib.Path(
+        _ROOT_PATH, 'resources/azurefile-dockervolumedriver.env')
     with srvenv.open('wb') as f:
         f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
         f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
         f.write('AZURE_STORAGE_BASE={}\n'.format(saep))
     # create docker volume mount command script
-    volcreate = pathlib.Path('resources/azurefile-dockervolume-create.sh')
+    volcreate = pathlib.Path(
+        _ROOT_PATH, 'resources/azurefile-dockervolume-create.sh')
     with volcreate.open('wb') as f:
         f.write('#!/usr/bin/env bash\n\n')
         for svkey in config[
@@ -534,7 +562,7 @@ def add_pool(batch_client, blob_client, config):
             environment_settings=[
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
                 batchmodels.EnvironmentSetting(
-                    'CASCADE_STORAGE_ENV',
+                    'SHIPYARD_STORAGE_ENV',
                     convoy.crypto.encrypt_string(
                         encrypt, '{}:{}:{}'.format(
                             convoy.storage.get_storageaccount(),
@@ -571,7 +599,7 @@ def add_pool(batch_client, blob_client, config):
         ssel = config['docker_registry']['private']['storage_account_settings']
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'CASCADE_PRIVATE_REGISTRY_STORAGE_ENV',
+                'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
                 convoy.crypto.encrypt_string(
                     encrypt, '{}:{}:{}'.format(
                         config['credentials']['storage'][ssel]['account'],
@@ -593,7 +621,7 @@ def add_pool(batch_client, blob_client, config):
         )
     if perf:
         pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting('CASCADE_TIMING', '1')
+            batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
     # create pool
     nodes = convoy.batch.create_pool(batch_client, config, pool)

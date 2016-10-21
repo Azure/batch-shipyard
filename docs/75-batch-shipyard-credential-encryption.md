@@ -89,9 +89,9 @@ decryption routines. RSA asymmetric encryption (instead of symmetric key
 enveloping techniques) is used as the amount of data that needs to be
 encrypted is small which keeps the process simple and understandable.
 
-All applicable storage account keys, generated SAS keys, docker login
-passwords, and Batch credentials are encrypted if credential encryption is
-enabled.
+All applicable Azure Storage account keys, generated SAS keys, Docker login
+passwords, and Azure Batch credentials are encrypted if credential encryption
+is enabled.
 
 ## Configuration Documentation
 Please see [this page](10-batch-shipyard-configuration.md) for a full

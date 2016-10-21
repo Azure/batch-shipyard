@@ -44,7 +44,7 @@ def _create_credentials() -> azuretable.TableService:
     :rtype: azure.storage.table.TableService
     :return: azure storage table client
     """
-    sa, ep, sakey = os.environ['CASCADE_STORAGE_ENV'].split(':')
+    sa, ep, sakey = os.environ['SHIPYARD_STORAGE_ENV'].split(':')
     table_client = azuretable.TableService(
         account_name=sa,
         account_key=sakey,

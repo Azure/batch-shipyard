@@ -1,4 +1,4 @@
-# Dockerfile for Azure/batch-shipyard
+# Dockerfile for Azure/batch-shipyard (Cascade)
 
 FROM gliderlabs/alpine:3.4
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
@@ -33,7 +33,7 @@ RUN apk update \
     && mkdir -p /opt/batch-shipyard
 
 # copy in files
-COPY cascade/cascade.py cascade/setup_private_registry.py cascade/perf.py scripts/docker_cascade.sh /opt/batch-shipyard/
+COPY cascade.py setup_private_registry.py perf.py docker_cascade.sh /opt/batch-shipyard/
 
 # set command
 CMD ["/opt/batch-shipyard/docker_cascade.sh"]

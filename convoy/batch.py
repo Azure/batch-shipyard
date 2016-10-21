@@ -778,7 +778,7 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     logger.debug('downloading files to {}/{}'.format(job_id, task_id))
     files = batch_client.file.list_from_task(job_id, task_id, recursive=True)
     i = 0
-    dirs_created = set()
+    dirs_created = set('.')
     for file in files:
         if file.is_directory:
             continue

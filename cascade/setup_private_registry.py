@@ -36,7 +36,7 @@ import azure.storage.table as azuretable
 
 # global defines
 _DEFAULT_PRIVATE_REGISTRY_PORT = 5000
-_CASCADE_STORAGEACCOUNT = None
+_SHIPYARD_STORAGEACCOUNT = None
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
 _POOLID = os.environ['AZ_BATCH_POOL_ID']
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -61,11 +61,11 @@ def _create_credentials() -> azure.storage.table.TableService:
     :rtype: azure.storage.table.TableService
     :return: table client
     """
-    global _CASCADE_STORAGEACCOUNT
-    _CASCADE_STORAGEACCOUNT, ep, sakey = os.environ[
-        'CASCADE_STORAGE_ENV'].split(':')
+    global _SHIPYARD_STORAGEACCOUNT
+    _SHIPYARD_STORAGEACCOUNT, ep, sakey = os.environ[
+        'SHIPYARD_STORAGE_ENV'].split(':')
     table_client = azuretable.TableService(
-        account_name=_CASCADE_STORAGEACCOUNT,
+        account_name=_SHIPYARD_STORAGEACCOUNT,
         account_key=sakey,
         endpoint_suffix=ep)
     return table_client
@@ -108,7 +108,7 @@ async def _start_private_registry_instance_async(
                 raise RuntimeError('docker load non-zero rc: {}'.format(
                     proc.returncode))
     sa, ep, sakey = os.environ[
-        'CASCADE_PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
+        'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV'].split(':')
     registry_cmd = [
         'docker', 'run', '-d', '-p',
         '{p}:{p}'.format(p=_DEFAULT_PRIVATE_REGISTRY_PORT),
@@ -161,7 +161,7 @@ async def setup_private_registry_async(
             'RowKey': _NODEID,
             'IpAddress': ipaddress,
             'Port': _DEFAULT_PRIVATE_REGISTRY_PORT,
-            'StorageAccount': _CASCADE_STORAGEACCOUNT,
+            'StorageAccount': _SHIPYARD_STORAGEACCOUNT,
             'Container': container,
         }
         table_client.insert_or_replace_entity(

@@ -179,12 +179,12 @@ if [ ! -z $encrypted ]; then
     # remove pfx-related files
     rm -f $pfxfile $pfxfile.pw
     # decrypt creds
-    CASCADE_STORAGE_ENV=`echo $CASCADE_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
         DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
     if [ ! -z $privatereg ]; then
-        CASCADE_PRIVATE_REGISTRY_STORAGE_ENV=`echo $CASCADE_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
 fi
 
@@ -349,30 +349,15 @@ EOF
         # create brick directory
         mkdir -p /mnt/gluster
     fi
+    # install dependencies if not using cascade container
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         apt-get install -y -q --no-install-recommends \
             build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir azure-storage==0.33.0
-        # backfill node prep start
-        if [ ! -z ${CASCADE_TIMING+x} ]; then
-            ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
-        fi
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             apt-get install -y -q --no-install-recommends python3-libtorrent pigz
-        fi
-        # install private registry if required
-        if [ ! -z $privatereg ]; then
-            # mark private registry start
-            if [ ! -z ${CASCADE_TIMING+x} ]; then
-                ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
-            fi
-            ./setup_private_registry.py $privatereg $ipaddress $prefix
-            # mark private registry end
-            if [ ! -z ${CASCADE_TIMING+x} ]; then
-                ./perf.py privateregistry end $prefix
-            fi
         fi
     fi
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
@@ -528,6 +513,10 @@ else
     exit 1
 fi
 
+# retrieve docker images related to data movement
+docker pull alfpark/blobxfer
+docker pull alfpark/batch-shipyard:tfm-latest
+
 # login to docker hub if no private registry
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
     docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
@@ -562,7 +551,7 @@ npstart=$npstart
 drpstart=$drpstart
 privatereg=$privatereg
 p2p=$p2p
-`env | grep CASCADE_`
+`env | grep SHIPYARD_`
 `env | grep AZ_BATCH_`
 `env | grep DOCKER_LOGIN_`
 EOF
@@ -574,12 +563,28 @@ EOF
         -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
         alfpark/batch-shipyard
 else
+    # backfill node prep start
+    if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+        ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
+    fi
+    # install private registry if required
+    if [ ! -z $privatereg ]; then
+        # mark private registry start
+        if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+            ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
+        fi
+        ./setup_private_registry.py $privatereg $ipaddress $prefix
+        # mark private registry end
+        if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+            ./perf.py privateregistry end $prefix
+        fi
+    fi
     # mark node prep finished
-    if [ ! -z ${CASCADE_TIMING+x} ]; then
+    if [ ! -z ${SHIPYARD_TIMING+x} ]; then
         ./perf.py nodeprep end $prefix
     fi
     # start cascade
-    if [ ! -z ${CASCADE_TIMING+x} ]; then
+    if [ ! -z ${SHIPYARD_TIMING+x} ]; then
         ./perf.py cascade start $prefix
     fi
     ./cascade.py $p2p --ipaddress $ipaddress $prefix &
@@ -589,9 +594,6 @@ fi
 if [ $p2penabled -eq 0 ]; then
     wait
 fi
-
-# retrieve blobxfer docker image to assist with data ingress from blob
-docker pull alfpark/blobxfer
 
 # block until images ready if specified
 if [ ! -z $block ]; then

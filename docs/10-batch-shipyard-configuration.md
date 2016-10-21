@@ -405,6 +405,15 @@ The pool schema is as follows:
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
         "input_data": {
+            "azure_batch": [
+                {
+                    "job_id": "jobonanotherpool",
+                    "task_id": "mytask",
+                    "include": ["wd/*.dat"],
+                    "exclude": ["*.txt"],
+                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobonanotherpool"
+                }
+            ],
             "azure_storage": [
                 {
                     "storage_account_settings": "mystorageaccount",
@@ -476,8 +485,14 @@ container/blobs or file share/files not being ready in time for the
 `input_data` transfer. It is up to you to ensure that these two operations do
 not overlap. If there is a possibility of overlap, then you should ingress
 data defined in `files` prior to pool creation and disable the option above
-`transfer_files_on_pool_creation`. This object currently only supports
-`azure_storage` as a member.
+`transfer_files_on_pool_creation`. This object currently supports
+`azure_batch` and `azure_storage` as members.
+  * `azure_batch` contains the following members:
+    * (required) `job_id` the job id of the task
+    * (required) `task_id` the id of the task to fetch files from
+    * (optional) `include` is an array of include filters
+    * (optional) `exclude` is an array of exclude filters
+    * (required) `destination` is the destination path to place the files
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
@@ -539,6 +554,15 @@ The jobs schema is as follows:
                 "abc": "xyz"
             },
             "input_data": {
+                "azure_batch": [
+                    {
+                        "job_id": "someotherjob",
+                        "task_id": "task-a",
+                        "include": ["wd/*.dat"],
+                        "exclude": ["*.txt"],
+                        "destination": null
+                    }
+                ],
                 "azure_storage": [
                     {
                         "storage_account_settings": "mystorageaccount",
@@ -576,6 +600,15 @@ The jobs schema is as follows:
                         }
                     ],
                     "input_data": {
+                        "azure_batch": [
+                            {
+                                "job_id": "previousjob",
+                                "task_id": "mytask1",
+                                "include": ["wd/output/*.bin"],
+                                "exclude": ["*.txt"],
+                                "destination": null
+                            }
+                        ],
                         "azure_storage": [
                             {
                                 "storage_account_settings": "mystorageaccount",
@@ -640,8 +673,14 @@ For example, if `job-1`:`task-1` is run on compute node A and then
 `job-1`:`task-2` is run on compute node B, then this `input_data` is ingressed
 to both compute node A and B. However, if `job-1`:`task-3` is then run on
 compute node A after `job-1`:`task-1`, then the `input_data` is not
-transferred again. This object currently only supports `azure_storage` as a
-member.
+transferred again. This object currently supports `azure_batch` and
+`azure_storage` as members.
+  * `azure_batch` contains the following members:
+    * (required) `job_id` the job id of the task
+    * (required) `task_id` the id of the task to fetch files from
+    * (optional) `include` is an array of include filters
+    * (optional) `exclude` is an array of exclude filters
+    * (required) `destination` is the destination path to place the files
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials json.
@@ -694,9 +733,18 @@ member.
     * `file_mode` if the file mode to set for the file on the compute node.
       This is optional.
   * (optional) `input_data` is an object containing data that should be
-    ingressed for this specific task. This object currently only supports
-    `azure_storage` as a member. Note for multi-instance tasks, transfer of
-    `input_data` is only applied to the task running the application command.
+    ingressed for this specific task. This object currently supports
+    `azure_batch` and  `azure_storage` as members. Note for multi-instance
+    tasks, transfer of `input_data` is only applied to the task running the
+    application command.
+    * `azure_batch` contains the following members:
+      * (required) `job_id` the job id of the task
+      * (required) `task_id` the id of the task to fetch files from
+      * (optional) `include` is an array of include filters
+      * (optional) `exclude` is an array of exclude filters
+      * (optional) `destination` is the destination path to place the files.
+        If `destination` is not specified at this level, then files are
+        defaulted to download into `$AZ_BATCH_TASK_WORKING_DIR`.
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
         as defined in the credentials json.

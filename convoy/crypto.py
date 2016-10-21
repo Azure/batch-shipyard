@@ -35,6 +35,7 @@ import convoy.util
 
 # create logger
 logger = logging.getLogger(__name__)
+convoy.util.setup_logger(logger)
 # global defines
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 

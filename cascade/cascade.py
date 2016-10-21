@@ -77,7 +77,7 @@ _SEED_BIAS = 3
 _ALLOW_PUBLIC_PULL_WITH_PRIVATE = False
 _SAVELOAD_FILE_EXTENSION = 'tar.gz'
 _REGISTRY = None
-_RECORD_PERF = int(os.getenv('CASCADE_TIMING', default='0'))
+_RECORD_PERF = int(os.getenv('SHIPYARD_TIMING', default='0'))
 # mutable global state
 _CBHANDLES = {}
 _QUEUE_MESSAGES = {}
@@ -161,7 +161,7 @@ def _create_credentials() -> tuple:
     :rtype: tuple
     :return: (blob_client, queue_client, table_client)
     """
-    sa, ep, sakey = os.environ['CASCADE_STORAGE_ENV'].split(':')
+    sa, ep, sakey = os.environ['SHIPYARD_STORAGE_ENV'].split(':')
     blob_client = azureblob.BlockBlobService(
         account_name=sa,
         account_key=sakey,

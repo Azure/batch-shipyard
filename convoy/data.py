@@ -150,6 +150,63 @@ def _process_storage_input_data(config, input_data, on_task):
     return args
 
 
+def _process_batch_input_data(config, input_data, on_task):
+    # type: (dict, dict, bool) -> str
+    """Process Azure batch input data to ingress
+    :param dict config: configuration dict
+    :param dict input_data: config spec with input_data
+    :param bool on_task: if this is originating from a task spec
+    :rtype: list
+    :return: args to pass to blobxfer script
+    """
+    try:
+        encrypt = config['batch_shipyard']['encryption']['enabled']
+    except KeyError:
+        encrypt = False
+    args = []
+    for xfer in input_data:
+        jobid = xfer['job_id']
+        taskid = xfer['task_id']
+        try:
+            include = xfer['include']
+            if include is not None and len(include) == 0:
+                include = ''
+            else:
+                include = ';'.join(include)
+        except KeyError:
+            include = ''
+        if include is None:
+            include = ''
+        try:
+            exclude = xfer['exclude']
+            if exclude is not None and len(exclude) == 0:
+                exclude = ''
+            else:
+                exclude = ';'.join(exclude)
+        except KeyError:
+            exclude = ''
+        if exclude is None:
+            exclude = ''
+        try:
+            dst = xfer['destination']
+        except KeyError:
+            if on_task:
+                dst = None
+            else:
+                raise
+        if on_task and dst is None or len(dst) == 0:
+            dst = '$AZ_BATCH_TASK_WORKING_DIR'
+        creds = convoy.crypto.encrypt_string(encrypt, '{};{};{}'.format(
+            config['credentials']['batch']['account'],
+            config['credentials']['batch']['account_service_url'],
+            config['credentials']['batch']['account_key']), config)
+        # construct argument
+        # encrypt:creds:jobid:taskid:incl:excl:dst
+        args.append('"{}:{}:{}:{}:{}:{}:{}"'.format(
+            encrypt, creds, jobid, taskid, include, exclude, dst))
+    return args
+
+
 def process_input_data(config, bxfile, spec, on_task=False):
     # type: (dict, tuple, dict, bool) -> str
     """Process input data to ingress
@@ -160,25 +217,37 @@ def process_input_data(config, bxfile, spec, on_task=False):
     :rtype: str
     :return: additonal command
     """
-    ret = None
+    ret = []
     try:
         input_data = spec['input_data']
         if input_data is not None and len(input_data) > 0:
             for key in input_data:
                 if key == 'azure_storage':
-                    blobargs = _process_storage_input_data(
+                    args = _process_storage_input_data(
                         config, input_data[key], on_task)
-                    ret = ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
-                           'set +f').format(bxfile[0], ' '.join(blobargs))
+                    ret.append(
+                        ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                         'set +f').format(bxfile[0], ' '.join(args)))
                 elif key == 'azure_batch':
-                    # TODO implement compute node ingress
-                    raise NotImplementedError()
+                    args = _process_batch_input_data(
+                        config, input_data[key], on_task)
+                    ret.append(
+                        ('set -f; docker run --rm -t '
+                         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
+                         '-w $AZ_BATCH_TASK_WORKING_DIR '
+                         '-e "AZ_BATCH_NODE_STARTUP_DIR='
+                         '$AZ_BATCH_NODE_STARTUP_DIR" '
+                         'alfpark/batch-shipyard:tfm-latest {}; '
+                         'set +f'.format(' '.join(args))))
                 else:
                     raise ValueError(
                         'unknown input_data method: {}'.format(key))
     except KeyError:
         pass
-    return ret
+    if len(ret) > 0:
+        return ';'.join(ret)
+    else:
+        return None
 
 
 def _process_storage_output_data(config, output_data):
@@ -282,22 +351,26 @@ def process_output_data(config, bxfile, spec):
     :rtype: str
     :return: additonal command
     """
-    ret = None
+    ret = []
     try:
         output_data = spec['output_data']
         if output_data is not None and len(output_data) > 0:
             for key in output_data:
                 if key == 'azure_storage':
-                    blobargs = _process_storage_output_data(
+                    args = _process_storage_output_data(
                         config, output_data[key])
-                    ret = ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
-                           'set +f').format(bxfile[0], ' '.join(blobargs))
+                    ret.append(
+                        ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                         'set +f').format(bxfile[0], ' '.join(args)))
                 else:
                     raise ValueError(
                         'unknown output_data method: {}'.format(key))
     except KeyError:
         pass
-    return ret
+    if len(ret) > 0:
+        return ';'.join(ret)
+    else:
+        return None
 
 
 def _singlenode_transfer(

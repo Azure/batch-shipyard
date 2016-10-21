@@ -7,7 +7,7 @@ set -o pipefail
 cd /opt/batch-shipyard
 
 # add timing markers
-if [ ! -z ${CASCADE_TIMING+x} ]; then
+if [ ! -z ${SHIPYARD_TIMING+x} ]; then
     # backfill node prep start
     python3 perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
     # backfull docker run pull start
@@ -31,7 +31,7 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
 fi
 
 # add timing markers
-if [ ! -z ${CASCADE_TIMING+x} ]; then
+if [ ! -z ${SHIPYARD_TIMING+x} ]; then
     # mark private registry end
     if [ ! -z $privatereg ]; then
         python3 perf.py privateregistry end $prefix

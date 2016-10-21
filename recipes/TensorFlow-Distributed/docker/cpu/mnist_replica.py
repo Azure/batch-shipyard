@@ -65,19 +65,19 @@ flags.DEFINE_integer("replicas_to_aggregate", None,
                      "num_workers)")
 flags.DEFINE_integer("hidden_units", 100,
                      "Number of units in the hidden layer of the NN")
-flags.DEFINE_integer("train_steps", 200,
+flags.DEFINE_integer("train_steps", 10000,
                      "Number of (global) training steps to perform")
 flags.DEFINE_integer("batch_size", 100, "Training batch size")
 flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 flags.DEFINE_boolean("sync_replicas", False,
                      "Use the sync_replicas (synchronized replicas) mode, "
-                     "wherein the parameter updates from workers are aggregated "
-                     "before applied to avoid stale gradients")
-flags.DEFINE_string("ps_hosts","localhost:2222",
+                     "wherein the parameter updates from workers are "
+                     "aggregated before applied to avoid stale gradients")
+flags.DEFINE_string("ps_hosts", "localhost:2222",
                     "Comma-separated list of hostname:port pairs")
 flags.DEFINE_string("worker_hosts", "localhost:2223,localhost:2224",
                     "Comma-separated list of hostname:port pairs")
-flags.DEFINE_string("job_name", None,"job name: worker or ps")
+flags.DEFINE_string("job_name", None, "job name: worker or ps")
 
 FLAGS = flags.FLAGS
 
@@ -135,7 +135,6 @@ def main(unused_argv):
     # The ps use CPU and workers use corresponding GPU
     with tf.device(tf.train.replica_device_setter(
         worker_device=worker_device,
-        ps_device="/job:ps/cpu:0",
         cluster=cluster)):
       global_step = tf.Variable(0, name="global_step", trainable=False)
 

@@ -12,6 +12,15 @@
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
         "input_data": {
+            "azure_batch": [
+                {
+                    "job_id": "jobonanotherpool",
+                    "task_id": "mytask",
+                    "include": ["wd/*.dat"],
+                    "exclude": ["*.txt"],
+                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobonanotherpool"
+                }
+            ],
             "azure_storage": [
                 {
                     "storage_account_settings": "mystorageaccount",

@@ -8,8 +8,8 @@ and configuration doc for more information.
     - To GlusterFS shared volume
     - To Azure Blob Storage
     - To Azure File Storage
-  - Ingress from Azure Blob or File Storage with `input_data` in pool and jobs
-    configuration
+  - Ingress from Azure Blob Storage, Azure File Storage, or another Azure
+    Batch Task with `input_data` in pool and jobs configuration
     - Pool-level: to compute nodes
     - Job-level: to compute nodes prior to running the specified job
     - Task-level: to compute nodes prior to running a task of a job
@@ -45,6 +45,9 @@ immediately afterwards (with confirmation prompts)
 read/write
 - Azure File shared volume setup when invoked from Windows
 - Python2 compatibility issues with file encoding
+- Allow shipyard.py to be invoked outside of the root of the GitHub cloned
+base directory
+- TensorFlow-Distributed recipe issues
 
 ## [1.1.0] - 2016-10-05
 ### Added
