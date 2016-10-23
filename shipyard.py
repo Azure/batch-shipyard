@@ -295,14 +295,14 @@ def setup_azurefile_volume_driver(blob_client, config):
     srvenv = pathlib.Path(
         _ROOT_PATH, 'resources/azurefile-dockervolumedriver.env')
     with srvenv.open('wb') as f:
-        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa))
-        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey))
-        f.write('AZURE_STORAGE_BASE={}\n'.format(saep))
+        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa).encode('utf8'))
+        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey).encode('utf8'))
+        f.write('AZURE_STORAGE_BASE={}\n'.format(saep).encode('utf8'))
     # create docker volume mount command script
     volcreate = pathlib.Path(
         _ROOT_PATH, 'resources/azurefile-dockervolume-create.sh')
     with volcreate.open('wb') as f:
-        f.write('#!/usr/bin/env bash\n\n')
+        f.write(b'#!/usr/bin/env bash\n\n')
         for svkey in config[
                 'global_resources']['docker_volumes']['shared_data_volumes']:
             conf = config[
@@ -316,7 +316,7 @@ def setup_azurefile_volume_driver(blob_client, config):
             for opt in conf['mount_options']:
                 opts.append('-o {}'.format(opt))
             f.write('docker volume create -d azurefile --name {} {}\n'.format(
-                svkey, ' '.join(opts)))
+                svkey, ' '.join(opts)).encode('utf8'))
     return bin, srv, srvenv, volcreate
 
 
@@ -937,7 +937,7 @@ def main():
         }
     if args.action in (
             'addjobs', 'cleanmijobs', 'delcleanmijobs', 'deljobs',
-            'termjobs', 'listtasks', 'listtaskfiles'):
+            'deljobswait', 'termjobs', 'listtasks', 'listtaskfiles'):
         if args.configdir is not None and args.jobs is None:
                 args.jobs = str(pathlib.Path(args.configdir, 'jobs.json'))
         try:
@@ -993,6 +993,8 @@ def main():
         convoy.batch.terminate_jobs(batch_client, config)
     elif args.action == 'deljobs':
         convoy.batch.del_jobs(batch_client, config)
+    elif args.action == 'deljobswait':
+        convoy.batch.del_jobs(batch_client, config, wait=True)
     elif args.action == 'delcleanmijobs':
         convoy.batch.del_clean_mi_jobs(batch_client, config)
     elif args.action == 'delalljobs':
@@ -1061,10 +1063,10 @@ def parseargs():
     parser.set_defaults(verbose=False, yes=False)
     parser.add_argument(
         'action', help='addpool, addjobs, addsshuser, cleanmijobs, '
-        'termjobs, deljobs, delcleanmijobs, delalljobs, delpool, delnode, '
-        'grls, streamfile, gettaskfile, gettaskallfiles, getnodefile, '
-        'ingressdata, listjobs, listtasks, listtaskfiles, createcert, '
-        'addcert, delcert, clearstorage, delstorage')
+        'termjobs, deljobs, deljobswait, delcleanmijobs, delalljobs, '
+        'delpool, delnode, grls, streamfile, gettaskfile, gettaskallfiles, '
+        'getnodefile, ingressdata, listjobs, listtasks, listtaskfiles, '
+        'createcert, addcert, delcert, clearstorage, delstorage')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true',
         help='verbose output')

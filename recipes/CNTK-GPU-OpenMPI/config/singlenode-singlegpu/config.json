@@ -5,7 +5,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "alfpark/cntk:gpu-openmpi-mnist-cifar"
+            "alfpark/cntk:1.7.2-gpu-openmpi-refdata"
         ]
     }
 }

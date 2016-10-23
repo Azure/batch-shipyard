@@ -371,6 +371,12 @@ recommended to use `0777` for both `filemode` and `dirmode` as the `uid` and
 `gid` cannot be reliably determined before the compute pool is allocated and
 this volume will be mounted as the root user.
 
+Note that when using `azurefile` for a shared data volume, the storage account
+that holds the file share must reside within the same Azure region as the
+Azure Batch compute pool. Attempting to mount an Azure File share that is
+cross-region will result in failure as current Linux Samba clients do not
+support share level encryption at this time.
+
 The second shared volue, `glustervol`, is a
 [GlusterFS](https://www.gluster.org/) network file system. Please note that
 GlusterFS volumes are located on the VM's temporary local disk space which is

@@ -19,7 +19,7 @@ which contains the command line to run.
 
 If the Azure Batch service takes care of encrypting all of the sensitive
 user information, then why does Batch Shipyard need to encrypt credentials?
-The answer lies in if your scenario requires it. Because Azure Batch needs
+The answer lies in if your scenario requires it. Because Batch Shipyard needs
 credentials for some of its components to work, such as Azure Storage,
 these credentials must be exposed to the compute node through environment
 variables or command line arguments. As explained above due to the strict
@@ -37,8 +37,9 @@ Batch Explorer UI.
 The question for you is, does this matter or not? Is there a risk of
 credential leakage by means of these UI or command line display mechanisms?
 If the answer is no, then no action needs to be taken. However, if you
-believe that credentials can be exposed, then please read on for steps to
-enable credential encryption with Batch Shipyard.
+believe that credentials may be exposed when displayed through the
+aforementioned mechanisms, then please read on for steps to enable
+credential encryption with Batch Shipyard.
 
 ## Credential Encryption
 There are various places where credentials are passed from the user from

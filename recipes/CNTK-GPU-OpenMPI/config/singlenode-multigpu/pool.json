@@ -1,7 +1,7 @@
 {
     "pool_specification": {
         "id": "cntk-singlenode-multigpu",
-        "vm_size": "STANDARD_NC12",
+        "vm_size": "STANDARD_NC24",
         "vm_count": 1,
         "publisher": "Canonical",
         "offer": "UbuntuServer",

@@ -20,13 +20,16 @@ and configuration doc for more information.
     configuration
     - Task-level: to Azure Blob or File Storage on successful completion of a
       task
-- Experimental support for OpenSSH with HPN patches on Ubuntu
-- Additional actions: `ingressdata`, `gettaskallfiles`, `listjobs`,
-`listtasks`, `createcert`, `addcert`, `delcert`. Please see the usage doc
+- Added actions: `ingressdata`, `gettaskallfiles`, `listjobs`, `listtasks`,
+`createcert`, `addcert`, `delcert`, `deljobswait`. Please see the usage doc
 for more information.
 - Credential encryption support. Please see the credential encryption guide
 and configuration doc for more information.
+- Experimental support for OpenSSH with
+[HPN patches](https://www.psc.edu/index.php/hpn-ssh) on Ubuntu
 - Torch-CPU as an option in quickstart guide
+- Update CNTK recipes for 1.7.2 and switch multinode/multigpu samples to
+MNIST
 
 ### Changed
 - **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has

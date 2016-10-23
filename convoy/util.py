@@ -143,8 +143,11 @@ def confirm_action(config, msg=None):
         return True
     if msg is None:
         msg = 'action'
-    user = get_input('Confirm {} [y/n]: '.format(msg))
-    if user.lower() in ['y', 'yes']:
+    while True:
+        user = get_input('Confirm {} [y/n]: '.format(msg)).lower()
+        if user in ('y', 'yes', 'n', 'no'):
+            break
+    if user in ('y', 'yes'):
         return True
     return False
 

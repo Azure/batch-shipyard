@@ -4,7 +4,7 @@ FROM ubuntu:14.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # install base system
-COPY ssh_config /root/.ssh/
+COPY ssh_config /root/.ssh/config
 RUN apt-get update && apt-get install -y --no-install-recommends \
         autotools-dev \
         build-essential \
@@ -45,10 +45,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd && \
     ssh-keygen -f /root/.ssh/id_rsa -t rsa -N '' && \
-    chmod 600 /root/.ssh/ssh_config && \
+    chmod 600 /root/.ssh/config && \
     chmod 700 /root/.ssh && \
-    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys && \
-    mv /root/.ssh/ssh_config /root/.ssh/config
+    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
 # install libzip, openmpi, boost, opencv, and openblas
 RUN LIBZIP_VERSION=1.1.3 && \
@@ -109,7 +108,7 @@ ENV PATH=${PATH}:/usr/local/bin:/cntk/build/cpu/release/bin \
 
 # install cntk custom mkl, scipy and kaldi
 RUN mkdir /usr/local/CNTKCustomMKL && \
-    wget --no-verbose -O - https://www.cntk.ai/mkl/CNTKCustomMKL-Linux-1.tgz | \
+    wget --no-verbose -O - https://www.cntk.ai/mkl/CNTKCustomMKL-Linux-2.tgz | \
     tar -xzf - -C /usr/local/CNTKCustomMKL && \
     # scipy
     SCIPY_VERSION=0.18.0 && \
@@ -153,13 +152,27 @@ RUN git clone --recursive https://github.com/Microsoft/cntk/ . && \
     # add LD_LIBRARY_PATH to root
     echo LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:'$LD_LIBRARY_PATH' >> /root/.bashrc
 
-# retrieve example data
-RUN cd /cntk/Examples/Image/Miscellaneous/CIFAR-10 && \
-    python CifarDownload.py && \
-    python CifarConverter.py cifar-10-batches-py && \
-    cd ../../../.. && \
-    cd Examples/Image/MNIST/AdditionalFiles && \
-    python mnist_convert.py
+# retrieve cifar-10/mnist datasets
+RUN cd /cntk/Examples/Image/DataSets/CIFAR-10 && \
+    python install_cifar10.py && \
+    cd /cntk/Examples/Image/DataSets/MNIST && \
+    python install_mnist.py
+
+# create convnet mnist config for parallel training
+RUN cd /cntk/Examples/Image/Classification/ConvNet && \
+    cp ConvNet_MNIST.cntk ConvNet_MNIST_Parallel.cntk && \
+    sed -i "/    SGD = {/a \
+    ParallelTrain = {\n\
+        parallelizationMethod = DataParallelSGD\n\
+        DataParallelSGD = {\n\
+        gradientBits = 1\n\
+        }\n\
+        parallelizationStartEpoch = 2\n\
+    }\n\
+    AutoAdjust = {\n\
+        autoAdjustMinibatch = true\n\
+        minibatchSizeTuningFrequency = 3\n\
+    }\n" ConvNet_MNIST_Parallel.cntk
 
 # set ssh command
 EXPOSE 23

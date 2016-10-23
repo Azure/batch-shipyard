@@ -267,8 +267,9 @@ def create_pool(batch_client, config, pool):
     # create pool if not exists
     try:
         logger.info('Attempting to create pool: {}'.format(pool.id))
-        logger.debug('node prep commandline: {}'.format(
-            pool.start_task.command_line))
+        if config['_verbose']:
+            logger.debug('node prep commandline: {}'.format(
+                pool.start_task.command_line))
         batch_client.pool.add(pool)
         logger.info('Created pool: {}'.format(pool.id))
     except batchmodels.BatchErrorException as e:
@@ -446,20 +447,37 @@ def del_node(batch_client, config, node_id):
     )
 
 
-def del_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+def del_jobs(batch_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str) -> None
     """Delete jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool wait: wait for jobs to delete
     """
+    nocheck = set()
     for job in config['job_specifications']:
         job_id = job['id']
         if not convoy.util.confirm_action(
                 config, 'delete {} job'.format(job_id)):
+            nocheck.add(job_id)
             continue
         logger.info('Deleting job: {}'.format(job_id))
         batch_client.job.delete(job_id)
+    if wait:
+        for job in config['job_specifications']:
+            job_id = job['id']
+            if job_id in nocheck:
+                continue
+            try:
+                logger.debug('waiting for job {} to delete'.format(job_id))
+                while True:
+                    batch_client.job.get(job_id)
+                    time.sleep(1)
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'The specified job does not exist' in ex.message.value:
+                    continue
 
 
 def clean_mi_jobs(batch_client, config):

@@ -124,6 +124,15 @@ if [ -z $sku ]; then
     exit 1
 fi
 
+# TODO temporary check to look for buggy sdb1 mount
+set +e
+mount | grep /dev/sdb1 | grep fuseblk
+if [ $? -eq 0 ]; then
+    echo "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+    exit 1
+fi
+set -e
+
 # store node prep start
 if command -v python3 > /dev/null 2>&1; then
     npstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
@@ -342,7 +351,7 @@ EOF
     # set up glusterfs
     if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
         apt-get install -y -q --no-install-recommends glusterfs-server
-        if [ ! -z $gfsenable ]; then
+        if [[ ! -z $gfsenable ]]; then
             $gfsenable
         fi
         $gfsstart

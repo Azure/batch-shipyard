@@ -64,6 +64,8 @@ job auto-completion for these tasks via configuration instead of manually
 cleaning up these types of jobs.
 * `termjobs`: terminate jobs as specified in the jobs configuration file.
 * `deljobs`: delete jobs as specified in the jobs configuration file.
+* `deljobswait`: delete jobs and wait for successful deletion as specified
+in the jobs configuration file.
 * `delcleanmijobs`: delete jobs used to clean up multi-instance jobs.
 * `delalljobs`: delete all jobs under the Batch Account.
 * `delpool`: delete pool as specified in the pool configuration file.

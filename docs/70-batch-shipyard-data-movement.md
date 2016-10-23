@@ -75,7 +75,7 @@ back to your local machine.
 Within Azure, you can ingress data from Azure Storage to Azure Batch pools,
 as well as egress data back out to Azure Storage when tasks complete.
 You may also ingress data from other Azure Batch Tasks which may or may
-not be in the same pool as part input data for subsequent Azure Batch Tasks.
+not be in the same pool as input data for subsequent Azure Batch Tasks.
 
 The rest of the document will explain each ingress and egress data movement
 operation in detail.
@@ -179,7 +179,9 @@ container or file share.
 ### From Azure Batch Tasks
 Data from previously run Azure Batch tasks, including those run by Batch
 Shipyard, can be ingressed into compute nodes with the `input_data` property
-for json objects at the pool, job, and task-level.
+for json objects at the pool, job, and task-level. Note that the compute node
+where the task was run must still be active and must not have been removed
+or deleted.
 
 To transfer from a previous Azure Batch Task that has completed, you would
 specify the `azure_batch` json object under `input_data`. As with Azure

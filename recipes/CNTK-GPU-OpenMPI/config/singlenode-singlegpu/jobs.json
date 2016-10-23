@@ -4,9 +4,9 @@
             "id": "cntkjob",
             "tasks": [
                 {
-                    "image": "alfpark/cntk:gpu-openmpi-mnist-cifar",
+                    "image": "alfpark/cntk:1.7.2-gpu-openmpi-refdata",
                     "remove_container_after_exit": true,
-                    "command": "/bin/bash -c \"cp -r /cntk/Examples/Image/MNIST/* . && /cntk/build/gpu/release/bin/cntk configFile=Config/02_Convolution_ndl_deprecated.cntk RootDir=.\"",
+                    "command": "/bin/bash -c \"/cntk/build-mkl/gpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST\"",
                     "gpu": true
                 }
             ]

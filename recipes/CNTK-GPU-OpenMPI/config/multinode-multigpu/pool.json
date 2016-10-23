@@ -1,7 +1,7 @@
 {
     "pool_specification": {
         "id": "cntk-multinode-multigpu",
-        "vm_size": "STANDARD_NC12",
+        "vm_size": "STANDARD_NC24",
         "vm_count": 2,
         "inter_node_communication_enabled": true,
         "publisher": "Canonical",
