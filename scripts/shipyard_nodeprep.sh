@@ -465,24 +465,28 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             elif [[ $sku == "42.1" ]]; then
                 repodir=openSUSE_Leap_42.1
             fi
+            # add container repo for zypper
+            zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
+            zypper -n --gpg-auto-import-keys ref
+            # uninstall existing docker
+            set +e
+            zypper -n rm docker
+            set -e
         elif [[ $offer == sles* ]]; then
             if [[ $sku == "12" ]]; then
                 repodir=SLE_12
             elif [[ $sku == "12-sp1" ]]; then
                 repodir=SLE_12_SP1
             fi
+            # enable container module
+            SUSEConnect -p sle-module-containers/12/x86_64 -r ''
+            zypper ref
         fi
         if [ -z $repodir ]; then
             echo "unsupported sku: $sku for offer: $offer"
             exit 1
         fi
-        # uninstall existing docker
-        set +e
-        zypper -n rm docker
-        set -e
-        # update zypper repo and install docker engine
-        zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
-        zypper -n --gpg-auto-import-keys ref
+        # install docker engine
         zypper -n in docker
         # modify docker opts, docker opts in /etc/sysconfig/docker
         sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/sysconfig/docker
