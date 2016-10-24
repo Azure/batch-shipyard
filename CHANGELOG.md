@@ -27,6 +27,7 @@ for more information.
 and configuration doc for more information.
 - Experimental support for OpenSSH with
 [HPN patches](https://www.psc.edu/index.php/hpn-ssh) on Ubuntu
+- Support pool resize up with GlusterFS
 - Torch-CPU as an option in quickstart guide
 - Update CNTK recipes for 1.7.2 and switch multinode/multigpu samples to
 MNIST

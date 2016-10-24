@@ -98,7 +98,10 @@
                 },
                 "glustervol": {
                     "volume_driver": "glusterfs",
-                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs",
+                    "volume_type": "replica",
+                    "volume_options": [
+                    ]
                 }
             }
         }

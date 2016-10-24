@@ -158,7 +158,13 @@ The global config schema is as follows:
                 },
                 "glustervol": {
                     "volume_driver": "glusterfs",
-                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs",
+                    "volume_type": "replica",
+                    "volume_options": [
+                        "performance.cache-size 1 GB",
+                        "performance.cache-max-file-size 10 MB",
+                        "performance.cache-refresh-timeout 61",
+                    ]
                 }
             }
         }
@@ -384,8 +390,12 @@ a shared resource. Sizes of the local temp disk for each VM size can be found
 [here](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/).
 If specifying a GlusterFS volume, you must enable internode communication
 in the pool configuration file. These volumes have the following properties:
-* `volume_driver` property should be set as `glusterfs`.
-* `container_path` is the path in the container to mount.
+* (required) `volume_driver` property should be set as `glusterfs`.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `volume_type` property defines the GlusterFS volume type.
+Currently, `replica` is the only supported type.
+* (optional) `volume_options` property defines additional GlusterFS volume
+options to set.
 
 Note that all `docker_volumes` can be omitted completely along with one
 or all of `data_volumes` and `shared_data_volumes` if you do not require this

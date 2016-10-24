@@ -82,6 +82,10 @@ _GLUSTERPREP_FILE = (
     'shipyard_glusterfs.sh',
     str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs.sh'))
 )
+_GLUSTERRESIZE_FILE = (
+    'shipyard_glusterfs_resize.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_resize.sh'))
+)
 _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
     str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh'))
@@ -627,7 +631,9 @@ def add_pool(batch_client, blob_client, config):
     nodes = convoy.batch.create_pool(batch_client, config, pool)
     # set up gluster if specified
     if gluster:
-        _setup_glusterfs(batch_client, blob_client, config, nodes)
+        _setup_glusterfs(
+            batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
+            cmdline=None)
     # create admin user on each node if requested
     convoy.batch.add_ssh_user(batch_client, config, nodes)
     # log remote login settings
@@ -639,16 +645,33 @@ def add_pool(batch_client, blob_client, config):
     convoy.data.wait_for_storage_threads(storage_threads)
 
 
-def _setup_glusterfs(batch_client, blob_client, config, nodes):
+def _setup_glusterfs(
+        batch_client, blob_client, config, nodes, shell_script, cmdline=None):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService, dict,
-    #        List[batchmodels.ComputeNode]) -> None
+    #        List[batchmodels.ComputeNode], str, str) -> None
     """Setup glusterfs via multi-instance task
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param list nodes: list of nodes
+    :param str shell_script: glusterfs setup script to use
+    :param str cmdline: coordination cmdline
     """
+    # get volume type/options
+    voltype = 'replica'
+    volopts = None
+    shared_data_volumes = config[
+        'global_resources']['docker_volumes']['shared_data_volumes']
+    for key in shared_data_volumes:
+        try:
+            if shared_data_volumes[key]['volume_driver'] == 'glusterfs':
+                voltype = shared_data_volumes[key]['volume_type']
+                volopts = shared_data_volumes[key]['volume_options']
+        except KeyError:
+            pass
+    if volopts is not None and len(volopts) == 0:
+        volopts = None
     pool_id = config['pool_specification']['id']
     job_id = 'shipyard-glusterfs-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
@@ -656,31 +679,38 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
     )
     batch_client.job.add(job)
-    if config['pool_specification']['offer'].lower() == 'ubuntuserver':
-        tempdisk = '/mnt'
-    else:
-        tempdisk = '/mnt/resource'
+    # create coordination command line
+    if cmdline is None:
+        if config['pool_specification']['offer'].lower() == 'ubuntuserver':
+            tempdisk = '/mnt'
+        else:
+            tempdisk = '/mnt/resource'
+        cmdline = convoy.util.wrap_commands_in_shell([
+            '$AZ_BATCH_TASK_DIR/{} {} {}'.format(
+                shell_script[0], voltype.lower(), tempdisk)])
+    # create application command line
+    appcmd = [
+        '[[ -f $AZ_BATCH_TASK_DIR/.glusterfs_success ]] || exit 1',
+    ]
+    if volopts is not None:
+        for vo in volopts:
+            appcmd.append('gluster volume set gv0 {}'.format(vo))
     # upload script
     sas_urls = convoy.storage.upload_resource_files(
-        blob_client, config, [_GLUSTERPREP_FILE])
+        blob_client, config, [shell_script])
     batchtask = batchmodels.TaskAddParameter(
         id='gluster-setup',
         multi_instance_settings=batchmodels.MultiInstanceSettings(
             number_of_instances=config['pool_specification']['vm_count'],
-            coordination_command_line=convoy.util.wrap_commands_in_shell([
-                '$AZ_BATCH_TASK_DIR/{} {}'.format(
-                    _GLUSTERPREP_FILE[0], tempdisk),
-            ]),
+            coordination_command_line=cmdline,
             common_resource_files=[
                 batchmodels.ResourceFile(
-                    file_path=_GLUSTERPREP_FILE[0],
-                    blob_source=sas_urls[_GLUSTERPREP_FILE[0]],
+                    file_path=shell_script[0],
+                    blob_source=sas_urls[shell_script[0]],
                     file_mode='0755'),
             ],
         ),
-        command_line=(
-            '/bin/bash -c "[[ -f $AZ_BATCH_TASK_DIR/'
-            '.glusterfs_success ]] || exit 1"'),
+        command_line=convoy.util.wrap_commands_in_shell(appcmd),
         run_elevated=True,
     )
     batch_client.task.add(job_id=job_id, task=batchtask)
@@ -715,6 +745,67 @@ def _setup_glusterfs(batch_client, blob_client, config, nodes):
     logger.info(
         'glusterfs setup task {} in job {} completed'.format(
             batchtask.id, job_id))
+
+
+def _resize_pool(batch_client, blob_client, config):
+    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    #        dict) -> None
+    """Resize pool that may contain glusterfs
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    pool_id = config['pool_specification']['id']
+    # check if this is a glusterfs-enabled pool
+    voltype = 'replica'
+    old_nodes = {}
+    try:
+        for svkey in config[
+                'global_resources']['docker_volumes']['shared_data_volumes']:
+            conf = ['global_resources']['docker_volumes'][
+                'shared_data_volumes'][svkey]
+            if conf['volume_driver'] == 'glusterfs':
+                gluster_present = True
+                try:
+                    voltype = conf['volume_type']
+                except KeyError:
+                    pass
+                break
+    except KeyError:
+        gluster_present = False
+    logger.debug('glusterfs shared volume present: {}'.format(
+        gluster_present))
+    if gluster_present:
+        for node in batch_client.compute_node.list(pool_id):
+            old_nodes[node.id] = node.ip_address
+    # resize pool
+    convoy.batch.resize_pool(batch_client, config)
+    # add brick for new nodes
+    if gluster_present:
+        # wait for nodes to reach idle
+        nodes = convoy.batch.wait_for_pool_ready(
+            batch_client, config, pool_id)
+        # get internal ip addresses of new nodes
+        new_nodes = [
+            node.ip_address for node in nodes if node.id not in old_nodes
+        ]
+        masterip = next(iter(old_nodes.values()))
+        # get tempdisk mountpoint
+        if config['pool_specification']['offer'].lower() == 'ubuntuserver':
+            tempdisk = '/mnt'
+        else:
+            tempdisk = '/mnt/resource'
+        # construct cmdline
+        vm_count = config['pool_specification']['vm_count']
+        cmdline = convoy.util.wrap_commands_in_shell([
+            '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
+                _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk, vm_count,
+                masterip, ' '.join(new_nodes))])
+        # setup gluster
+        _setup_glusterfs(
+            batch_client, blob_client, config, nodes, _GLUSTERRESIZE_FILE,
+            cmdline=cmdline)
 
 
 def _adjust_settings_for_pool_creation(config):
@@ -836,20 +927,32 @@ def _adjust_settings_for_pool_creation(config):
                 'from Windows and no public key is specified')
             config['pool_specification'].pop('ssh', None)
     # glusterfs requires internode comms
-    if not internode:
-        try:
-            shared = config['global_resources']['docker_volumes'][
-                'shared_data_volumes']
-            for sdvkey in shared:
-                if shared[sdvkey]['volume_driver'] == 'glusterfs':
+    try:
+        num_gluster = 0
+        shared = config['global_resources']['docker_volumes'][
+            'shared_data_volumes']
+        for sdvkey in shared:
+            if shared[sdvkey]['volume_driver'] == 'glusterfs':
+                if not internode:
                     # do not modify value and proceed since this interplays
                     # with p2p settings, simply raise exception and force
                     # user to reconfigure
                     raise ValueError(
                         'inter node communication in pool configuration '
                         'must be enabled for glusterfs')
-        except KeyError:
-            pass
+                num_gluster += 1
+                try:
+                    if shared[sdvkey]['volume_type'] != 'replica':
+                        raise ValueError(
+                            'only replicated GlusterFS volumes are '
+                            'currently supported')
+                except KeyError:
+                    pass
+        if num_gluster > 1:
+            raise ValueError(
+                'cannot create more than one GlusterFS volume per pool')
+    except KeyError:
+        pass
     # ensure file transfer settings
     try:
         xfer_files_with_pool = config['pool_specification'][
@@ -974,7 +1077,7 @@ def main():
         convoy.storage.populate_queues(queue_client, table_client, config)
         add_pool(batch_client, blob_client, config)
     elif args.action == 'resizepool':
-        convoy.batch.resize_pool(batch_client, config)
+        _resize_pool(batch_client, blob_client, config)
     elif args.action == 'delpool':
         convoy.batch.del_pool(batch_client, config)
         convoy.storage.cleanup_with_del_pool(

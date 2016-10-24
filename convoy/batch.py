@@ -168,13 +168,15 @@ def _reboot_node(batch_client, pool_id, node_id, wait):
                 time.sleep(1)
 
 
-def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
+def _block_for_nodes_ready(
+        batch_client, node_state, pool_id, reboot_on_failed):
     # type: (batch.BatchServiceClient, List[batchmodels.ComputeNodeState],
     #        str, bool) -> List[batchmodels.ComputeNode]
-    """Wait for pool to enter "ready": steady state and all nodes idle
+    """Wait for nodes to enter "ready": steady state and all nodes in
+    specified states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param dict config: configuration dict
+    :param list node_state: list of acceptable node states
     :param str pool_id: pool id
     :param bool reboot_on_failed: reboot node on failed start state
     :rtype: list
@@ -210,6 +212,15 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
                     reboot_map[node.id] += 1
             # refresh node list
             nodes = list(batch_client.compute_node.list(pool.id))
+        else:
+            # fast path check for start task failures in non-reboot mode
+            if any(node.state == batchmodels.ComputeNodeState.starttaskfailed
+                   for node in nodes):
+                raise RuntimeError(
+                    'Detected node(s) of pool {} with start task failure. '
+                    'Please inspect the stdout.txt and stderr.txt within '
+                    'the startup directory on the compute nodes which have '
+                    'failed.'.format(pool.id))
         if (len(nodes) >= pool.target_dedicated and
                 all(node.state in node_state for node in nodes)):
             if any(node.state != batchmodels.ComputeNodeState.idle
@@ -229,6 +240,33 @@ def _wait_for_pool_ready(batch_client, node_state, pool_id, reboot_on_failed):
             for node in nodes:
                 logger.debug('{}: {}'.format(node.id, node.state))
         time.sleep(10)
+
+
+def wait_for_pool_ready(batch_client, config, pool_id):
+    # type: (batch.BatchServiceClient, dict, str) ->
+    #        List[batchmodels.ComputeNode]
+    """Wait for pool to enter "ready": steady state and all nodes idle
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str pool_id: pool id
+    :rtype: list
+    :return: list of nodes
+    """
+    # wait for pool idle
+    node_state = frozenset(
+        (batchmodels.ComputeNodeState.starttaskfailed,
+         batchmodels.ComputeNodeState.unusable,
+         batchmodels.ComputeNodeState.idle)
+    )
+    try:
+        reboot_on_failed = config[
+            'pool_specification']['reboot_on_start_task_failed']
+    except KeyError:
+        reboot_on_failed = False
+    nodes = _block_for_nodes_ready(
+        batch_client, node_state, pool_id, reboot_on_failed)
+    return nodes
 
 
 def check_pool_nodes_runnable(batch_client, config):
@@ -278,19 +316,7 @@ def create_pool(batch_client, config, pool):
         else:
             logger.error('Pool {!r} already exists'.format(pool.id))
     # wait for pool idle
-    node_state = frozenset(
-        (batchmodels.ComputeNodeState.starttaskfailed,
-         batchmodels.ComputeNodeState.unusable,
-         batchmodels.ComputeNodeState.idle)
-    )
-    try:
-        reboot_on_failed = config[
-            'pool_specification']['reboot_on_start_task_failed']
-    except KeyError:
-        reboot_on_failed = False
-    nodes = _wait_for_pool_ready(
-        batch_client, node_state, pool.id, reboot_on_failed)
-    return nodes
+    return wait_for_pool_ready(batch_client, config, pool.id)
 
 
 def _add_admin_user_to_compute_node(

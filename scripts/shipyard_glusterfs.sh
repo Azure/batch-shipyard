@@ -2,7 +2,9 @@
 set -e
 set -o pipefail
 
-# args: temp disk mount path
+# args: voltype, temp disk mount path
+voltype=$1
+mntpath=$2
 
 # get my ip address
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
@@ -14,7 +16,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     bricks=
     for node in "${HOSTS[@]}"
     do
-        bricks+=" $node:$1/gluster/brick"
+        bricks+=" $node:$mntpath/gluster/brick"
         # probe peer
         if [ $node != $ipaddress ]; then
             echo "probing $node"
@@ -40,7 +42,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     sleep 5
     # create volume
     echo "creating gv0 ($bricks)"
-    gluster volume create gv0 replica $numnodes transport tcp$bricks
+    gluster volume create gv0 $voltype $numnodes transport tcp$bricks
     # modify volume properties
     gluster volume set gv0 storage.owner-uid `id -u _azbatch`
     gluster volume set gv0 storage.owner-gid `id -g _azbatch`
