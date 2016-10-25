@@ -28,9 +28,11 @@ and configuration doc for more information.
 - Experimental support for OpenSSH with
 [HPN patches](https://www.psc.edu/index.php/hpn-ssh) on Ubuntu
 - Support pool resize up with GlusterFS
-- Torch-CPU as an option in quickstart guide
+- Support GlusterFS volume options
+- MXNet-CPU and Torch-CPU as options in the quickstart guide
 - Update CNTK recipes for 1.7.2 and switch multinode/multigpu samples to
 MNIST
+- MXNet-CPU and MXNet-GPU recipes
 
 ### Changed
 - **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has
@@ -42,6 +44,10 @@ stream the file indefinitely until the task completes
 - Validate container with `storage_entity_prefix` for length issues
 - `delpool` action now cleans up and deletes some storage containers
 immediately afterwards (with confirmation prompts)
+- `/opt/intel` is no longer automatically mounted for infiniband-enabled
+containers on SUES SLES-HPC hosts. Please see the configuration doc
+on how to manually map this directory if required. OpenLogic CentOS-HPC
+hosts remain unchanged.
 - Modularized code base
 
 ### Fixed

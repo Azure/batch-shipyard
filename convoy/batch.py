@@ -1288,7 +1288,8 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                 run_opts.append('-v /etc/rdma:/etc/rdma:ro')
                 if sles_hpc:
                     run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
-                run_opts.append('-v /opt/intel:/opt/intel:ro')
+                else:
+                    run_opts.append('-v /opt/intel:/opt/intel:ro')
             # mount batch root dir
             run_opts.append(
                 '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')

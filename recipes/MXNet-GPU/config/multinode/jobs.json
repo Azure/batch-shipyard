@@ -1,0 +1,23 @@
+{
+    "job_specifications": [
+        {
+            "id": "mxnetjob",
+            "multi_instance_auto_complete": true,
+            "tasks": [
+                {
+                    "image": "alfpark/mxnet:gpu",
+                    "name": "mxnet",
+                    "remove_container_after_exit": true,
+                    "shared_data_volumes": [
+                        "glustervol"
+                    ],
+                    "command": "/mxnet/run_mxnet.sh cifar-10-py $AZ_BATCH_NODE_SHARED_DIR/gfs",
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null
+                    }
+                }
+            ]
+        }
+    ]
+}

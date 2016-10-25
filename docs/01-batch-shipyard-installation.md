@@ -7,7 +7,8 @@ with Python 2.7 or 3.3+. You will also need to install the
 [Azure Storage](https://pypi.python.org/pypi/azure-storage) python packages.
 Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --user -r requirements.txt` (or via `pip3`
-for python3).
+for python3). If `pip` is not installed on your system, please continue
+reading below.
 
 Please note that while Batch Shipyard runs from Windows, it is not the
 primary test environment. Additionally, some functionality is not supported
@@ -22,17 +23,17 @@ execute (as root or with `sudo`) to install the required dependencies on Linux:
 
 ####Ubuntu/Debian
 ```
-apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev
+apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev python-pip
 ```
 
 ####CentOS/RHEL/Fedora
 ```
-yum update && yum install -y gcc openssl-dev libffi-devel python-devel
+yum update && yum install -y gcc openssl-dev libffi-devel python-devel python-pip
 ```
 
 ####SLES/OpenSUSE
 ```
-zypper ref && zypper -n in libopenssl-dev libffi48-devel python-devel
+zypper ref && zypper -n in libopenssl-dev libffi48-devel python-devel python-pip
 ```
 
 ####Note about Python 3.3+
@@ -40,7 +41,7 @@ If installing for Python 3.3+, then simply use the python3 equivalents for
 the python dependencies. For example, on Ubuntu/Debian:
 
 ```
-apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev
+apt-get update && apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
 ```
 
 would install the proper dependencies for python3.

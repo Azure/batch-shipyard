@@ -30,6 +30,17 @@ This Caffe-GPU recipe contains information on how to Dockerize
 [Caffe](http://caffe.berkeleyvision.org/) on GPUs for use with N-Series Azure
 VMs.
 
+### [MXNet-CPU](./MXNet-CPU)
+This MXNet-CPU recipe contains information on how to Dockerize
+[MXNet](http://mxnet.io/) for use on Azure Batch compute nodes, including
+execution across multiple compute nodes with multi-instance tasks.
+
+### [MXNet-GPU](./MXNet-GPU)
+This MXNet-GPU recipe contains information on how to Dockerize
+[MXNet](http://mxnet.io/) on GPUs for use with N-Series Azure VMs, including
+execution across multiple compute nodes and multiple GPUs with multi-instance
+tasks.
+
 ### [TensorFlow-CPU](./TensorFlow-CPU)
 This TensorFlow-CPU recipe contains information on how to Dockerize
 [TensorFlow](https://www.tensorflow.org/) for use on Azure Batch compute nodes.

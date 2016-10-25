@@ -397,9 +397,13 @@ Currently, `replica` is the only supported type.
 * (optional) `volume_options` property defines additional GlusterFS volume
 options to set.
 
-Note that all `docker_volumes` can be omitted completely along with one
-or all of `data_volumes` and `shared_data_volumes` if you do not require this
-functionality.
+Note that when resizing a pool with a GlusterFS shared file system, that
+you must resize with the `resizepool` action and not with Azure Portal,
+Batch Explorer or any other tool.
+
+Finally, note that all `docker_volumes` can be omitted completely along with
+one or all of `data_volumes` and `shared_data_volumes` if you do not require
+this functionality.
 
 An example global config json template can be found
 [here](../config\_templates/config.json).
@@ -817,7 +821,15 @@ transferred again. This object currently supports `azure_batch` and
     Infiniband/RDMA devices on the host. Note that this will automatically
     force the container to use the host network stack. If this property is
     set to `true`, ensure that the `pool_specification` property
-    `inter_node_communication_enabled` is set to `true`.
+    `inter_node_communication_enabled` is set to `true`. If you are
+    selecting `SUSE SLES-HPC` Marketplace images, then you will need to
+    ensure that the Intel MPI redistributable that is used to build the
+    application is present in the container. The Intel MPI libraries that
+    are present by default on the `SUSE SLES-HPC` Marketplace images are
+    not current and may cause issues if used directly with Infiniband-enabled
+    Docker images. If you still wish to use the host Intel MPI libraries,
+    then specify `-v /opt/intel:/opt/intel:ro` under
+    `additional_docker_run_options`.
   * (optional) `gpu` designates if this container requires access to the GPU
     devices on the host. If this property is set to `true`, Docker containers
     are instantiated via `nvidia-docker`. This requires N-series VM instances.

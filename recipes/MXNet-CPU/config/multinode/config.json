@@ -1,0 +1,19 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "<storage account specified in credentials.json>",
+        "storage_entity_prefix": "shipyard"
+    },
+    "global_resources": {
+        "docker_images": [
+            "alfpark/mxnet:cpu"
+        ],
+        "docker_volumes": {
+            "shared_data_volumes": {
+                "glustervol": {
+                    "volume_driver": "glusterfs",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
+                }
+            }
+        }
+    }
+}

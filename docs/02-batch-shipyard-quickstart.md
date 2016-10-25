@@ -8,6 +8,7 @@ quickstart example, you may select any of the following Deep Learning
 frameworks to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](../recipes/Caffe-CPU)
+* [MXNet-CPU](../recipes/MXNet-CPU)
 * [TensorFlow-CPU](../recipes/TensorFlow-CPU)
 * [Torch-CPU](../recipes/Torch-CPU)
 
@@ -24,6 +25,7 @@ recommended for the best experience to run Batch Shipyard on Linux.
 of your choice to the `config` directory:
   * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
   * [Caffe-CPU](../recipes/Caffe-CPU/config/)
+  * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
   * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
   * [Torch-CPU](../recipes/Torch-CPU/config/)
 4. Edit the `config/credentials.json` file and populate it with your Azure
@@ -50,6 +52,8 @@ python shipyard.py --configdir config addjobs
 python shipyard.py --configdir config streamfile --filespec cntkjob:dockertask-000:stderr.txt
 # if Caffe-CPU:
 python shipyard.py --configdir config streamfile --filespec caffejob:dockertask-000:stderr.txt
+# if MXNet-CPU:
+python shipyard.py --configdir config streamfile --filespec mxnetjob:dockertask-000:stdout.txt
 # if TensorFlow-CPU:
 python shipyard.py --configdir config streamfile --filespec tensorflowjob:dockertask-000:stdout.txt
 # if Torch-CPU:
