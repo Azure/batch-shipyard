@@ -20,7 +20,7 @@ RUN apk update \
     && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && cd libtorrent-rasterbar-${libtorrent_version} \
     && ./configure --prefix=/usr --enable-debug=no --enable-python-binding --with-boost-system=boost_system \
-    && make -j"$(nproc)" install \
+    && make -j4 install \
     && ldconfig /usr/lib \
     && cd .. \
     && rm -rf libtorrent-rasterbar-${libtorrent_version} \

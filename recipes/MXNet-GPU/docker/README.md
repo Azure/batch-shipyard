@@ -1,4 +1,4 @@
-# Dockerfile for MXNet-CPU
+# Dockerfile for MXNet-GPU
 This image can be found on [Docker Hub](https://hub.docker.com/r/alfpark/mxnet/).
 
 You must agree to the following licenses prior to use:

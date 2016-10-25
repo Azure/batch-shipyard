@@ -574,7 +574,7 @@ EOF
         -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
         -w $AZ_BATCH_TASK_WORKING_DIR \
         -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-        alfpark/batch-shipyard
+        alfpark/batch-shipyard:cascade-latest
 else
     # backfill node prep start
     if [ ! -z ${SHIPYARD_TIMING+x} ]; then
