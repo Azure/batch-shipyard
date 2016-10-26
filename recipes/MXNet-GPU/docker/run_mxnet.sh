@@ -65,6 +65,9 @@ else
     echo "hosts: ${HOSTS[@]}"
     runscript=$loc/mxnet-$net.sh
     if [ $net == "cifar-10-r" ]; then
+        pushd $loc
+        wget --progress=dot:giga https://mxnetstorage.blob.core.windows.net/blog1/MXNet_AzureVM_install_test.tar.gz -O - | tar xzf -
+        popd
 cat > $runscript << EOF
 #!/usr/bin/env bash
 set -e
@@ -75,7 +78,6 @@ EOF
 cat > $runscript << EOF
 #!/usr/bin/env bash
 set -e
-export PYTHONPATH=$PYTHONPATH
 cd /mxnet/example/image-classification
 python train_cifar10_resnet.py --gpus $gpus --kv-store dist_sync $*
 EOF
@@ -90,7 +92,6 @@ EOF
 cat > $runscript << EOF
 #!/usr/bin/env bash
 set -e
-export PYTHONPATH=$PYTHONPATH
 cd /mxnet/example/image-classification
 python train_mnist.py --gpus $gpus --kv-store dist_sync $*
 EOF

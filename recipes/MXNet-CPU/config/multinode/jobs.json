@@ -11,7 +11,7 @@
                     "shared_data_volumes": [
                         "glustervol"
                     ],
-                    "command": "/mxnet/run_mxnet.sh cifar-10-r $AZ_BATCH_NODE_SHARED_DIR/gfs",
+                    "command": "/mxnet/run_mxnet.sh cifar-10-r $AZ_BATCH_NODE_SHARED_DIR/gfs --model-prefix $AZ_BATCH_TASK_WORKING_DIR/cifar-10-model",
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",
                         "coordination_command": null

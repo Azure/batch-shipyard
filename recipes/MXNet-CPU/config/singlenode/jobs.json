@@ -6,7 +6,7 @@
                 {
                     "image": "alfpark/mxnet:cpu",
                     "remove_container_after_exit": true,
-                    "command": "/mxnet/run_mxnet.sh mnist-py ."
+                    "command": "/mxnet/run_mxnet.sh mnist-py . --model-prefix $AZ_BATCH_TASK_WORKING_DIR/mnist-model"
                 }
             ]
         }

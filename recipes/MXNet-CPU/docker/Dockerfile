@@ -9,9 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git libssl-dev libcurl4-openssl-dev wget curl unzip \
         openssh-server openssh-client ca-certificates && \
     apt-get install -y --no-install-recommends \
+        python-pip python-setuptools && \
+    apt-get install -y --no-install-recommends \
         gfortran libopenblas-dev && \
     apt-get install -y --no-install-recommends \
-        libopencv-dev python-numpy python-opencv && \
+        libopencv-core-dev && \
+    apt-get install -y --no-install-recommends \
+        libopencv-dev && \
+    apt-get install -y --no-install-recommends \
+        python-numpy python-opencv && \
     rm -rf /var/lib/apt/lists/* && \
     # configure ssh server and keys
     mkdir /var/run/sshd && \
@@ -29,10 +35,10 @@ RUN curl -L --retry 10 --retry-max-time 0 https://mran.microsoft.com/install/mro
     ./install.sh -a -u && \
     cd .. && \
     rm -rf microsoft-r-open && \
-    Rscript -e "install.packages('argparse', repo = 'https://cran.rstudio.com')" && \
-    Rscript -e "install.packages('devtools', repo = 'https://cran.rstudio.com')"
+    Rscript -e "install.packages(c('devtools'), repo = 'https://cran.rstudio.com')" && \
+    Rscript -e "install.packages(c('argparse', 'Rcpp', 'DiagrammeR', 'data.table', 'jsonlite', 'magrittr', 'stringr', 'roxygen2'), repos = 'https://cran.rstudio.com')"
 
-# install mxnet
+# install mxnet with both python and R backends
 ENV PYTHONPATH /mxnet/python
 RUN git clone --recursive https://github.com/dmlc/mxnet/ && \
     cd mxnet && \
@@ -44,7 +50,9 @@ RUN git clone --recursive https://github.com/dmlc/mxnet/ && \
     Rscript -e "library(devtools); library(methods); options(repos=c(CRAN='https://cran.rstudio.com')); install_deps(dependencies = TRUE)" && \
     cd .. && \
     make rpkg && \
-    R CMD INSTALL mxnet_*.tar.gz
+    R CMD INSTALL mxnet_*.tar.gz && \
+    cd python && \
+    python setup.py install
 
 # copy in sample run script
 COPY run_mxnet.sh /mxnet

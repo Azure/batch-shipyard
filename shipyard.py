@@ -1079,7 +1079,10 @@ def main():
     elif args.action == 'resizepool':
         _resize_pool(batch_client, blob_client, config)
     elif args.action == 'delpool':
-        convoy.batch.del_pool(batch_client, config)
+        try:
+            convoy.batch.del_pool(batch_client, config)
+        except batchmodels.BatchErrorException as ex:
+            logger.exception(ex)
         convoy.storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config)
     elif args.action == 'addsshuser':
