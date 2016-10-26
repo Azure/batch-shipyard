@@ -1,4 +1,16 @@
 # Batch Shipyard Installation
+If installing through clone from GitHub or download a release, then you will
+need to install the following requirements. If using the
+[alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
+Docker image, then all of the required software is bundled in the image
+itself, however, you will need an installation of the Docker engine on
+your machine. More information on installing Docker to your local machine
+can be found [here](https://www.docker.com/products/overview).
+
+Please note that while Batch Shipyard can run on Windows or Mac, these
+platforms are not the primary test environments and are not officially
+supported. Additionally, some functionality is not supported in Windows.
+For the best experience, please run Batch Shipyard from Linux.
 
 ## Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
@@ -9,10 +21,6 @@ Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --user -r requirements.txt` (or via `pip3`
 for python3). If `pip` is not installed on your system, please continue
 reading below.
-
-Please note that while Batch Shipyard runs from Windows, it is not the
-primary test environment. Additionally, some functionality is not supported
-in Windows. For the best experience, please run Batch Shipyard from Linux.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and python development libraries to be installed due to the
@@ -74,7 +82,9 @@ which are stored by the Azure Batch Service are encrypted by the service.
 This feature is to prevent credentials from being displayed in the clear when
 using the Azure Portal, Batch Explorer, or other tools to inspect the status
 of pools, jobs and tasks. If this is not an issue for your scenario, then
-encrypting credentials is unnecessary.
+encrypting credentials is unnecessary. Please review the
+[credential encryption guide](75-batch-shipyard-credential-encryption.md)
+for more information.
 
 ## Installation
 Simply clone the repository:
@@ -84,6 +94,10 @@ git clone https://github.com/Azure/batch-shipyard.git
 ```
 
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
+
+If you are using the `alfpark/batch-shipyard:cli-latest` Docker image, then
+please see the [Batch Shipyard Usage](20-batch-shipyard-usage.md) guide for
+more information.
 
 **Note:** if cloning the repository on Windows, please ensure that git does
 not modify the Unix line-endings (LF) for any file in the `scripts` directory.

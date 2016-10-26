@@ -36,6 +36,7 @@
             "expiry_days": 7,
             "ssh_public_key": null,
             "generate_docker_tunnel_script": true,
+            "generated_file_export_path": null,
             "hpn_server_swap": false
         },
         "gpu": {

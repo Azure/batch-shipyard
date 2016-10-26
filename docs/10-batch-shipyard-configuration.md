@@ -450,6 +450,7 @@ The pool schema is as follows:
             "expiry_days": 7,
             "ssh_public_key": null,
             "generate_docker_tunnel_script": true,
+            "generated_file_export_path": null,
             "hpn_server_swap": false
         },
         "gpu": {
@@ -537,16 +538,19 @@ data defined in `files` prior to pool creation and disable the option above
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation.
-  * `username` is the user to create on the compute nodes.
-  * `expiry_days` is the number of days from now for the account on the compute
-    nodes to expire. The default is 7 days from invocation time.
-  * `ssh_public_key` is the path to an existing SSH public key to use. If not
-    specified, a public/private key pair will be automatically generated only
-    on Linux. If this is `null` or not specified on Windows, the SSH user is
-    not created.
-  * `generate_docker_tunnel_script` property directs script to generate an
-    SSH tunnel script that can be used to connect to the remote Docker engine
-    running on a compute node.
+  * (required) `username` is the user to create on the compute nodes.
+  * (optional) `expiry_days` is the number of days from now for the account on
+    the compute nodes to expire. The default is 7 days from invocation time.
+  * (optional) `ssh_public_key` is the path to an existing SSH public key to
+    use. If not specified, an RSA public/private keypair will be automatically
+    generated only on Linux. If this is `null` or not specified on Windows,
+    the SSH user is not created.
+  * (optional) `generate_docker_tunnel_script` property directs script to
+    generate an SSH tunnel script that can be used to connect to the remote
+    Docker engine running on a compute node.
+  * (optional) `generated_file_export_path` is the path to export the
+    generated RSA keypair and docker tunnel script to. If omitted, the
+    current directory is used.
   * (experimental) `hpn_server_swap` property enables an OpenSSH server with
     [HPN patches](http://www.psc.edu/index.php/hpn-ssh) to be swapped with the
     standard distribution OpenSSH server. This is not supported on all

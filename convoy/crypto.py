@@ -28,6 +28,10 @@ import base64
 import getpass
 import logging
 import os
+try:
+    import pathlib
+except ImportError:
+    import pathlib2 as pathlib
 import tempfile
 import subprocess
 # local imports
@@ -49,20 +53,21 @@ def get_ssh_key_prefix():
     return _SSH_KEY_PREFIX
 
 
-def generate_ssh_keypair():
+def generate_ssh_keypair(export_path):
     # type: (str) -> tuple
     """Generate an ssh keypair for use with user logins
-    :param str key_fileprefix: key file prefix
+    :param str export_path: keypair export path
     :rtype: tuple
     :return: (private key filename, public key filename)
     """
-    pubkey = _SSH_KEY_PREFIX + '.pub'
+    privkey = str(pathlib.Path(export_path, _SSH_KEY_PREFIX))
+    pubkey = str(pathlib.Path(export_path, _SSH_KEY_PREFIX + '.pub'))
     try:
-        if os.path.exists(_SSH_KEY_PREFIX):
-            old = _SSH_KEY_PREFIX + '.old'
+        if os.path.exists(privkey):
+            old = privkey + '.old'
             if os.path.exists(old):
                 os.unlink(old)
-            os.rename(_SSH_KEY_PREFIX, old)
+            os.rename(privkey, old)
     except OSError:
         pass
     try:
@@ -73,10 +78,10 @@ def generate_ssh_keypair():
             os.rename(pubkey, old)
     except OSError:
         pass
-    logger.info('generating ssh key pair')
+    logger.info('generating ssh key pair to path: {}'.format(export_path))
     subprocess.check_call(
-        ['ssh-keygen', '-f', _SSH_KEY_PREFIX, '-t', 'rsa', '-N', ''''''])
-    return (_SSH_KEY_PREFIX, pubkey)
+        ['ssh-keygen', '-f', privkey, '-t', 'rsa', '-N', ''''''])
+    return (privkey, pubkey)
 
 
 def derive_pem_from_pfx(pfxfile, passphrase=None, pemfile=None):

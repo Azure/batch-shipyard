@@ -33,7 +33,7 @@ full pass-through of the
 to containers executed on compute nodes
 * Support for
 [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
-allowing complex processing pipelines and graphs with Docker containers
+allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for
 [GPU accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
 on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
@@ -49,13 +49,13 @@ for MPI on HPC low-latency Azure VM instances:
 specified
 
 ## Installation
-Simply clone the repository:
+Installation can be performed in any of the following methods:
 
-```
-git clone https://github.com/Azure/batch-shipyard.git
-```
-
-or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
+1. Clone the repository: `git clone https://github.com/Azure/batch-shipyard.git`
+2. [Download the latest release](https://github.com/Azure/batch-shipyard/releases)
+and extract to your local machine
+3. Run the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
+Docker image
 
 Please see [this page](docs/01-batch-shipyard-installation.md) for more
 information regarding installation and requirements.

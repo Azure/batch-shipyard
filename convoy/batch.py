@@ -386,9 +386,17 @@ def add_ssh_user(batch_client, config, nodes=None):
                 'pool_specification']['ssh']['generate_docker_tunnel_script']
         except KeyError:
             gen_tunnel_script = False
+        try:
+            export_path = config['pool_specification']['ssh'][
+                'generated_file_export_path']
+        except KeyError:
+            export_path = None
+        if export_path is None or len(export_path) == 0:
+            export_path = '.'
         # generate ssh key pair if not specified
         if ssh_pub_key is None:
-            ssh_priv_key, ssh_pub_key = convoy.crypto.generate_ssh_keypair()
+            ssh_priv_key, ssh_pub_key = convoy.crypto.generate_ssh_keypair(
+                export_path)
         # get node list if not provided
         if nodes is None:
             nodes = batch_client.compute_node.list(pool_id)
@@ -406,14 +414,14 @@ def add_ssh_user(batch_client, config, nodes=None):
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-p', '$2', '-N', '-L', '2375:localhost:2375',
                 '{}@$1'.format(docker_user)])
-            with open(_SSH_TUNNEL_SCRIPT, 'w') as fd:
+            tunnelscript = pathlib.Path(export_path, _SSH_TUNNEL_SCRIPT)
+            with tunnelscript.open('w') as fd:
                 fd.write('#!/usr/bin/env bash\n')
                 fd.write('set -e\n')
                 fd.write(' '.join(ssh_args))
                 fd.write('\n')
-            os.chmod(_SSH_TUNNEL_SCRIPT, 0o755)
-            logger.info('ssh tunnel script generated: {}'.format(
-                _SSH_TUNNEL_SCRIPT))
+            os.chmod(str(tunnelscript), 0o755)
+            logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
 
 
 def resize_pool(batch_client, config):

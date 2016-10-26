@@ -11,5 +11,5 @@ install:
 script:
   - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then flake8 shipyard.py convoy/*.py; fi
   - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then flake8 shipyard.py convoy/*.py; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then flake8 cascade/*.py; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]]; then flake8 cascade/*.py tfm/*.py; fi
 

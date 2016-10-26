@@ -1,5 +1,8 @@
 # Batch Shipyard Usage
 This page contains in-depth details on how to use the Batch Shipyard tool.
+Please see the [Batch Shipyard Docker Image CLI](#docker-cli) section for
+information regarding how to use the `alfpark/batch-shipyard:cli-latest`
+image if not invoking the Python script directly.
 
 ## shipyard.py Invocation
 If you are invoking the script with a python3 interpreter, you can simply
@@ -118,6 +121,45 @@ python shipyard.py --configdir . streamfile
 ```
 The above invocation will stream a file from a live compute node with
 interactive prompts from the script.
+
+## <a name="docker-cli"></a>Batch Shipyard Docker Image CLI Invocation
+If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
+Docker image, then you would invoke the tool as:
+
+```shell
+docker run --rm -it alfpark/batch-shipyard:cli-latest <action> <options...>
+```
+
+where `<action>` is the action as described above and `<options...>` are any
+additional options to pass to the `<action>`.
+
+Invariably, you will need to pass config files to the tool which reside
+on the host and not in the container by default. Please use the `-v` volume
+mount option to mount host directories inside the container. For example,
+if your Batch Shipyard configs are stored in the host path
+`/home/user/batch-shipyard-configs` you could modify the docker run command
+as:
+
+```shell
+docker run --rm -it -v /home/user/batch-shipyard-configs:/configs alfpark/batch-shipyard:cli-latest <action> --configdir /configs <options...>
+```
+
+Notice that we specified the `--configdir` argument to match the container
+path of the volume mount.
+
+Additionally, if you wish to ingress data from locally accessible file
+systems using Batch Shipyard, then you will need to map additional volume
+mounts as appropriate from the host to the container.
+
+Batch Shipyard may generate files with some actions, such as adding a SSH
+user or creating a pool with an SSH user. In this case, you will need
+to create a volume mount with the `-v` option and also ensure that the
+pool specification `ssh` object has a `generated_file_export_path` property
+set to the volume mount path. This will ensure that generated files will be
+written to the host and persisted after the docker container exits. Otherwise,
+the generated files will only reside within the docker container and
+will not be available for use on the host (e.g., SSH into compute node with
+generated RSA private key or use the generated SSH docker tunnel script).
 
 ## Data Movement
 For more information regarding data movement with respect to Batch Shipyard,
