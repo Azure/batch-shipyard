@@ -119,6 +119,27 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
         os.unlink(pfxfile)
 
 
+def list_certificates_in_account(batch_client):
+    """List all certificates in a Batch account
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    """
+    i = 0
+    certs = batch_client.certificate.list()
+    for cert in certs:
+        if cert.delete_certificate_error is not None:
+            ce = 'delete_error=(code={} msg={})'.format(
+                cert.delete_certificate_error.code,
+                cert.delete_certificate_error.message)
+        else:
+            ce = ''
+        logger.info('{}={} [state={}{}]'.format(
+            cert.thumbprint_algorithm, cert.thumbprint, cert.state, ce))
+        i += 1
+    if i == 0:
+        logger.error('no certificates found')
+
+
 def del_certificate_from_account(batch_client, config):
     """Delete a certificate from a Batch account
     :param batch_client: The batch client to use.
@@ -424,6 +445,30 @@ def add_ssh_user(batch_client, config, nodes=None):
             logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
 
 
+def list_pools(batch_client):
+    # type: (azure.batch.batch_service_client.BatchServiceClient) -> None
+    """List pools
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    """
+    i = 0
+    pools = batch_client.pool.list()
+    for pool in pools:
+        if pool.resize_error is not None:
+            re = ' resize_error=(code={} msg={})'.format(
+                pool.resize_error.code, pool.resize_error.message)
+        else:
+            re = ''
+        logger.info(
+            ('pool_id={} [state={} allocation_state={}{} vm_size={}, '
+             'vm_count={} target_vm_count={}])'.format(
+                 pool.id, pool.state, pool.allocation_state, re, pool.vm_size,
+                 pool.current_dedicated, pool.target_dedicated)))
+        i += 1
+    if i == 0:
+        logger.error('no pools found')
+
+
 def resize_pool(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     """Resize a pool
@@ -444,18 +489,21 @@ def resize_pool(batch_client, config):
 
 
 def del_pool(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> bool
     """Delete a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :rtype: bool
+    :return: if pool was deleted
     """
     pool_id = config['pool_specification']['id']
     if not convoy.util.confirm_action(
             config, 'delete {} pool'.format(pool_id)):
-        return
+        return False
     logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
+    return True
 
 
 def del_node(batch_client, config, node_id):
@@ -483,7 +531,7 @@ def del_node(batch_client, config, node_id):
 
 def del_jobs(batch_client, config, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str) -> None
+    #        bool) -> None
     """Delete jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -504,6 +552,37 @@ def del_jobs(batch_client, config, wait=False):
             job_id = job['id']
             if job_id in nocheck:
                 continue
+            try:
+                logger.debug('waiting for job {} to delete'.format(job_id))
+                while True:
+                    batch_client.job.get(job_id)
+                    time.sleep(1)
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'The specified job does not exist' in ex.message.value:
+                    continue
+
+
+def del_all_jobs(batch_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool) -> None
+    """Delete all jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param bool wait: wait for jobs to delete
+    """
+    check = set()
+    logger.debug('Getting list of all jobs...')
+    jobs = batch_client.job.list()
+    for job in jobs:
+        if not convoy.util.confirm_action(
+                config, 'delete {} job'.format(job.id)):
+            continue
+        logger.info('Deleting job: {}'.format(job.id))
+        batch_client.job.delete(job.id)
+        check.add(job.id)
+    if wait:
+        for job_id in check:
             try:
                 logger.debug('waiting for job {} to delete'.format(job_id))
                 while True:
@@ -596,37 +675,72 @@ def del_clean_mi_jobs(batch_client, config):
             pass
 
 
-def terminate_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+def terminate_jobs(batch_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool) -> None
     """Terminate jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool wait: wait for job to terminate
     """
+    nocheck = set()
     for job in config['job_specifications']:
         job_id = job['id']
         if not convoy.util.confirm_action(
                 config, 'terminate {} job'.format(job_id)):
+            nocheck.add(job_id)
             continue
         logger.info('Terminating job: {}'.format(job_id))
         batch_client.job.terminate(job_id)
+    if wait:
+        for job in config['job_specifications']:
+            job_id = job['id']
+            if job_id in nocheck:
+                continue
+            try:
+                logger.debug('waiting for job {} to terminate'.format(job_id))
+                while True:
+                    _job = batch_client.job.get(job_id)
+                    if _job.state == batchmodels.JobState.completed:
+                        break
+                    time.sleep(1)
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'The specified job does not exist' in ex.message.value:
+                    continue
 
 
-def del_all_jobs(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
-    """Delete all jobs
+def terminate_all_jobs(batch_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool) -> None
+    """Terminate all jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool wait: wait for jobs to terminate
     """
+    check = set()
     logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
         if not convoy.util.confirm_action(
-                config, 'delete {} job'.format(job.id)):
+                config, 'terminate {} job'.format(job.id)):
             continue
-        logger.info('Deleting job: {}'.format(job.id))
-        batch_client.job.delete(job.id)
+        logger.info('Terminating job: {}'.format(job.id))
+        batch_client.job.terminate(job.id)
+        check.add(job.id)
+    if wait:
+        for job_id in check:
+            try:
+                logger.debug('waiting for job {} to termiante'.format(job_id))
+                while True:
+                    _job = batch_client.job.get(job_id)
+                    if _job.state == batchmodels.JobState.completed:
+                        break
+                    time.sleep(1)
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'The specified job does not exist' in ex.message.value:
+                    continue
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):
@@ -852,6 +966,47 @@ def get_all_files_via_task(batch_client, config, filespec=None):
         logger.info(
             'all task files retrieved from job={} task={} include={}'.format(
                 job_id, task_id, incl if incl is not None else ''))
+
+
+def get_all_files_via_node(batch_client, config, node_id):
+    # type: (batch.BatchServiceClient, dict, str) -> None
+    """Get a file node style
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str nodeid: node id
+    """
+    if node_id is None or len(node_id) == 0:
+        raise ValueError('node id is invalid')
+    pool_id = config['pool_specification']['id']
+    incl = convoy.util.get_input('Enter filter: ')
+    logger.debug('downloading files to {}/{}'.format(pool_id, node_id))
+    files = batch_client.file.list_from_compute_node(
+        pool_id, node_id, recursive=True)
+    i = 0
+    dirs_created = set('.')
+    for file in files:
+        if file.is_directory:
+            continue
+        if incl is not None and not fnmatch.fnmatch(file.name, incl):
+            continue
+        fp = pathlib.Path(pool_id, node_id, file.name)
+        if str(fp.parent) not in dirs_created:
+            fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+            dirs_created.add(str(fp.parent))
+        stream = batch_client.file.get_from_compute_node(
+            pool_id, node_id, file.name)
+        with fp.open('wb') as f:
+            for data in stream:
+                f.write(data)
+        i += 1
+    if i == 0:
+        logger.error('no files found for pool {} node {} include={}'.format(
+            pool_id, node_id, incl if incl is not None else ''))
+    else:
+        logger.info(
+            'all files retrieved from pool={} node={} include={}'.format(
+                pool_id, node_id, incl if incl is not None else ''))
 
 
 def get_file_via_node(batch_client, config, node_id):

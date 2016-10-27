@@ -41,8 +41,6 @@ import azure.batch.batch_service_client as batch
 
 # create logger
 logger = logging.getLogger(__name__)
-# global defines
-_VERSION = '2.0.0'
 
 
 def _setup_logger() -> None:
@@ -66,7 +64,7 @@ def _create_credentials():
     ba, url, bakey = os.environ['SHIPYARD_BATCH_ENV'].split(';')
     batch_client = batch.BatchServiceClient(
         batchauth.SharedKeyCredentials(ba, bakey), base_url=url)
-    batch_client.config.add_user_agent('batch-shipyard/{}'.format(_VERSION))
+    batch_client.config.add_user_agent('batch-shipyard/tfm')
     return batch_client
 
 

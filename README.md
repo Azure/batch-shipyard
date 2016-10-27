@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/Azure/batch-shipyard.svg?branch=master)](https://travis-ci.org/Azure/batch-shipyard)
 [![Docker Pulls](https://img.shields.io/docker/pulls/alfpark/batch-shipyard.svg)](https://hub.docker.com/r/alfpark/batch-shipyard)
-[![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
+[![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:cli-latest.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
 
 # Batch Shipyard
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
