@@ -9,6 +9,10 @@ config file you are planning on using and modify accordingly. As the config
 samples are bare examples only, you will need to configure them to your liking
 for actual workloads.
 
+If you would like to contribute your recipe, please take a look at
+[this guide](../docs/98-contributing-recipes.md) before submitting a
+pull request.
+
 ## Deep Learning
 ### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
 This CNTK-CPU-OpenMPI recipe contains information on how to Dockerize

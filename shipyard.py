@@ -46,7 +46,9 @@ _CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 
 class CliContext(object):
+    """CliContext class: holds context for CLI commands"""
     def __init__(self):
+        """Ctor for CliContext"""
         self.verbose = False
         self.yes = False
         self.config = None
@@ -56,6 +58,7 @@ class CliContext(object):
         self.table_client = None
 
     def init_config(self):
+        """Initializes configuration of the context"""
         # use configdir if available
         if self.configdir is not None:
             if self.json_credentials is None:
@@ -94,6 +97,7 @@ class CliContext(object):
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
 
     def init_clients(self):
+        """Initializes clients for the context"""
         clients = convoy.fleet.create_clients(self.config)
         self.batch_client = clients[0]
         self.blob_client = clients[1]
@@ -101,6 +105,7 @@ class CliContext(object):
         self.table_client = clients[3]
 
 
+# create a pass decorator for shared context between commands
 pass_cli_context = click.make_pass_decorator(CliContext, ensure=True)
 
 
