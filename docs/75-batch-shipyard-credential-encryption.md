@@ -52,7 +52,7 @@ actions that need to be taken in order to enable credential encryption are:
 2. Modify the global configuration file to reference these certificates
 3. Add the certificate to your Batch account (optional)
 
-For step 1, invoke the `createcert` command with `shipyard.py` which will
+For step 1, invoke the `cert create` command with `shipyard.py` which will
 create the necessary certificates and keys. The end result should be two files
 (the names of which you will be prompted for) created: (1) a PFX file for
 use with the Azure Batch service and (2) an RSA public key PEM file for
@@ -79,10 +79,10 @@ members are correctly populated. It is recommended to fill the
 `createcert`) members such that they do not need to be generated each
 time encryption is required.
 
-Step 3 is optional, but one may invoke `addcert` with `shipyard.py` to
+Step 3 is optional, but one may invoke `cert add` with `shipyard.py` to
 add the certificate to the Batch account specified in the credentials json
-file. If `encryption` is enabled, then this `addcert` action is automatically
-invoked for every subsequent `addpool`.
+file. If `encryption` is enabled, then this `cert add` action is automatically
+invoked for every subsequent `pool add`.
 
 ## Encryption Details
 System-installed `openssl` is used in all certificate, encryption and

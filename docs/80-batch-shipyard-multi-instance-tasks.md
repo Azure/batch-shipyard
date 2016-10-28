@@ -150,7 +150,7 @@ override the default cleanup behavior by specifying
 To manually cleanup after multi-instance tasks, there are helper methods in
 the Batch Shipyard toolkit. These methods will aid in cleaning up compute nodes
 involved in multi-instance tasks if they are needed to be reused for
-additional jobs. Please refer to `cleanmijobs` and `delcleanmijobs` actions
+additional jobs. Please refer to `jobs cmi` and `jobs cmi --delete` actions
 in the [Batch Shipyard Usage](20-batch-shipyard-usage.md) doc.
 
 ### Automation!

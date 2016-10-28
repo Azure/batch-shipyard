@@ -468,12 +468,7 @@ def clear_storage_containers(
         perf = False
     for key in _STORAGE_CONTAINERS:
         if not tables_only and key.startswith('blob_'):
-            # TODO this is temp to preserve registry upload
-            if key != 'blob_resourcefiles':
-                _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
-            else:
-                _clear_blob_task_resourcefiles(
-                    blob_client, _STORAGE_CONTAINERS[key], config)
+            _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             try:
                 _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
@@ -524,8 +519,8 @@ def cleanup_with_del_pool(blob_client, queue_client, table_client, config):
     """
     pool_id = config['pool_specification']['id']
     if not convoy.util.confirm_action(
-            config, 'delete/cleanup storage containers associated '
-            'with {} pool'.format(pool_id)):
+            config, 'delete/cleanup of Batch Shipyard metadata in storage '
+            'containers associated with {} pool'.format(pool_id)):
         return
     clear_storage_containers(
         blob_client, queue_client, table_client, config, tables_only=True)

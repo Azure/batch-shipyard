@@ -2,29 +2,186 @@
 This page contains in-depth details on how to use the Batch Shipyard tool.
 Please see the [Batch Shipyard Docker Image CLI](#docker-cli) section for
 information regarding how to use the `alfpark/batch-shipyard:cli-latest`
-image if not invoking the Python script directly.
+Docker image if not invoking the Python script directly.
 
 ## shipyard.py Invocation
-If you are invoking the script with a python3 interpreter, you can simply
+If you are invoking the script with a Python3 interpreter, you can simply
 run the script as:
 
 ```
 ./shipyard.py
 ```
 
-With python2 invoke as:
+With Python2 invoke as:
 ```
 python shipyard.py
 ```
 
-The `-h` option will list the available options, which are explained below.
+The `-h` or `--help` option will list the available options, which are
+explained below.
 
-## Options
-The script requires configuration json files described by the
-[previous doc](10-batch-shipyard-configuration.md) to be passed in as
-arguments.
+## Commands and Sub-commands
+`shipyard.py` is invoked with a command and a sub-command as positional
+arguments, i.e.:
+```shell
+python shipyard.py <command> <subcommand> <options>
+```
+For instance:
+```shell
+python shipyard.py pool add --configdir config
+```
+Would create a pool on the Batch account as specified in the config files
+found in the `config` directory. Please note that `<options>` must be
+specified after the command and subcommand.
 
-Explanation of arguments:
+You can issue the `-h` or `--help` option at every level to view all
+available options for that level and additional help text. For example:
+```shell
+python shipyard.py -h
+python shipyard.py pool -h
+python shipyard.py pool add -h
+```
+
+## Commands
+The `shipyard.py` script contains the following top-level commands:
+```
+  cert     Certificate actions
+  data     Data actions
+  jobs     Jobs actions
+  pool     Pool actions
+  storage  Storage actions
+```
+* `cert` commands deal with certificates to be used with Azure Batch
+* `data` commands deal with data ingress and egress from Azure
+* `jobs` commands deal with Azure Batch jobs
+* `pool` commands deal with Azure Batch pools
+* `storage` commands deal with Batch Shipyard metadata on Azure Storage
+
+## Certificate Command
+The `cert` command has the following sub-commands:
+```
+  add     Add a certificate to a Batch account
+  create  Create a certificate to use with a Batch...
+  del     Add a certificate to a Batch account
+  list    List all certificates in a Batch account
+```
+* `add` will add a certificate to the Batch account
+* `create` will create a certificate locally for use with the Batch account.
+You must edit your `config.json` to incorporate the generated certificate and
+then invoked the `cert add` command. Please see the
+[credential encryption](75-batch-shipyard-credential-encryption.md) guide for more information.
+* `del` will delete a certificate from the Batch account
+* `list` will list certificates in the Batch account
+
+## Data Command
+The `data` command has the following sub-commands:
+```
+  getfile      Retrieve file(s) from a job/task
+  getfilenode  Retrieve file(s) from a compute node
+  ingress      Ingress data into Azure
+  listfiles    List files for all tasks in jobs
+  stream       Stream a text file to the local console
+```
+* `getfile` will retrieve a file with job, task, filename semantics
+  * `-all --filespec <jobid>,<taskid>,<include pattern>` can be given to
+    download all files for the job and task with an optional include pattern
+  * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
+    specific file from the job and task. If `<taskid>` is set to
+    `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
+    will be used to locate the `<filename>`.
+* `getfilenode` will retrieve a file with node id and filename semantics
+  * `-all --filespec <nodeid>,<include pattern>` can be given to download
+    all files from the compute node with the optional include pattern
+  * `--filespec <nodeid>,<filename>` can be given to download one
+    specific file from compute node
+* `ingress` will ingress data as specified in configuration files
+* `listfiles` will list files for all tasks in jobs
+* `stream` will stream a file as text (UTF-8 decoded) to the local console
+  * `--filespec <jobid>,<taskid>,<filename>` can be given to stream a
+    specific file. If `<taskid>` is set to `@FIRSTRUNNING`, then the first
+    running task within the job of `<jobid>` will be used to locate the
+    `<filename>`.
+
+## Jobs Command
+The `jobs` command has the following sub-commands:
+```
+  add        Add jobs
+  cmi        Cleanup multi-instance jobs
+  del        Delete jobs
+  list       List jobs
+  listtasks  List tasks within jobs
+  term       Terminate jobs
+```
+* `add` will add all jobs and tasks defined in the jobs configuration file
+to the Batch pool
+* `cmi` will cleanup any stale multi-instance tasks and jobs. Note that this
+sub-command is typically not required if `multi_instance_auto_complete` is
+set to `true` in the job specification for the job.
+  * `--delete` will delete any stale cleanup jobs
+* `del` will delete jobs specified in the jobs configuration file
+  * `--all` will delete all jobs found in the Batch account
+* `list` will list all jobs in the Batch account
+* `listtasks` will list tasks from jobs specified in the jobs configuration
+file
+* `term` will terminate jobs found in the jobs configuration file
+
+## Pool Command
+The `pool` command has the following sub-commands:
+```
+  add        Add a pool to the Batch account
+  asu        Add an SSH user to all nodes in pool
+  del        Delete a pool from the Batch account
+  delnode    Delete a node from a pool
+  dsu        Delete an SSH user from all nodes in pool
+  grls       Get remote login settings for all nodes in...
+  list       List all pools in the Batch account
+  listnodes  List nodes in pool
+  resize     Resize a pool
+```
+* `add` will add the pool defined in the pool configuration file to the
+Batch account
+* `asu` will add the SSH user defined in the pool configuration file to
+all nodes in the specified pool
+* `del` will delete the pool defined in the pool configuration file from
+the Batch account along with associated metadata in Azure Storage used by
+Batch Shipyard
+* `delnode` will delete the specified node from the pool
+* `dsu` will delete the SSH user defined in the pool configuration file
+from all nodes in the specified pool
+* `grls` will retrieve all of the remote login settings for every node
+in the specified pool
+* `list` will list all pools in the Batch account
+* `listnodes` will list all nodes in the specified pool
+* `resize` will resize the pool to the `vm_count` specified in the pool
+configuration file
+
+## Storage Command
+The `storage` command has the following sub-commands:
+```
+  clear  Clear Azure Storage containers used by Batch...
+  del    Delete Azure Storage containers used by Batch...
+```
+* `clear` will clear the Azure Storage containers used by Batch Shipyard
+for metadata purposes
+* `del` will delete the Azure Storage containers used by Batch Shipyard
+for metadata purposes
+
+## Shared Options
+There are a set of shared options which are used for every sub-command.
+These options must be specified after the command and sub-command. These are:
+```
+  -y, --yes           Assume yes for all confirmation prompts
+  -v, --verbose       Verbose output
+  --configdir TEXT    Configuration directory where all configuration files
+                      can be found. Each json config file must be named
+                      exactly the same as the regular switch option, e.g.,
+                      pool.json for --pool. Individually specified config
+                      options take precedence over this option.
+  --credentials TEXT  Credentials json config file
+  --config TEXT       Global json config file
+  --pool TEXT         Pool json config file
+  --jobs TEXT         Jobs json config file
+```
 * `--configdir path` can be used instead of the individual config switches
 below if all configuration json files are in one directory and named after
 their switch. For example, if you have a directory named `config` and under
@@ -35,113 +192,53 @@ following:
   * `--config path/to/config.json` is required for all actions.
   * `--pool path/to/pool.json` is required for most actions.
   * `--jobs path/to/jobs.json` is required for job-related actions.
-* `--filespec jobid:taskid:filename` is to specify the file location to
-stream or retrieve for the actions `streamfile` or `gettaskfile` respectively.
-For `gettaskallfiles`, the argument becomes `jobid:taskid:include` where
-`include` is a filter like `*.txt` which would only download files ending in
-`.txt`. Note that you must prevent your shell from interpreting wildcards,
-thus it is recommended to quote the argument when including such a filter.
-If `taskid` is `@FIRSTRUNNING` then the first running task in the job is
-retrieved. If the `filespec` argument is not supplied, the script will prompt
-for input.
-* `--nodeid <compute node id>` is only required for the `delnode` and
-`getnodefile` action.
-* `-v` is for verbose output
-* `-y` is to assume yes for all confirmation prompts
-
-The required positional argument to the script is `action`. Here are a list
-of actions and their intended effect:
-* `addpool`: creates a pool as specified in the configuration files.
-* `addjobs`: adds jobs as specified in the jobs configuration file.
-* `addsshuser`: adds an SSH tunnel user as specified in the pool configuration
-file. This action is automatically invoked during `addpool` if enabled in the
-pool configuration file.
-* `cleanmijobs`: perform clean up action on multi-instance Docker tasks.
-Because the multi-instance coordination command (i.e, the daemonized
-container via `docker run`) is left running even after the multi-instance
-task completes (i.e., application command `docker exec`), subsequent tasks
-on the same compute nodes may fail on the coordination command due to
-resources in use. This will clean up any multi-instance tasks detected within
-jobs specified in the jobs configuration file. Note that you can enable
-job auto-completion for these tasks via configuration instead of manually
-cleaning up these types of jobs.
-* `termjobs`: terminate jobs as specified in the jobs configuration file.
-* `deljobs`: delete jobs as specified in the jobs configuration file.
-* `deljobswait`: delete jobs and wait for successful deletion as specified
-in the jobs configuration file.
-* `delcleanmijobs`: delete jobs used to clean up multi-instance jobs.
-* `delalljobs`: delete all jobs under the Batch Account.
-* `delpool`: delete pool as specified in the pool configuration file.
-* `grls`: get remote login settings as specified in the pool configuration
-file.
-* `streamfile`: stream a file from a live compute node.
-* `gettaskfile`: retrieve a file with job id/task id from a live compute node.
-* `gettaskallfiles`: retrieve all files with job id/task id from a live
-compute node. `--filespec` can be used with this action as described above.
-* `getnodefile`: retrieve a file with pool id/node id from a live compute node.
-* `ingressdata`: ingress data as specified in the `files` property of the
-global configuration file.
-* `listjobs`: list all jobs under the Batch account.
-* `listtasks`: list tasks under jobs specified in the jobs configuraiton file.
-* `createcert`: create certificate and public key required for credential
-encryption.
-* `addcert`: add PFX certificate to the Batch account.
-* `delcert`: delete a PFX certificate from a Batch account. Any pool or task
-referencing the certificate must be deleted first before issuing this action.
-* `clearstorage`: clear storage containers as specified in the configuration
-files.
-* `delstorage`: delete storage containers as specified in the configuration
-files.
+* `-v` or `--verbose` is for verbose output
+* `-y` or `--yes` is to assume yes for all confirmation prompts
 
 ## Example Invocations
 ```shell
-python shipyard.py --credentials credentials.json --config config.json --pool pool.json addpool
+python shipyard.py pool add --credentials credentials.json --config config.json --pool pool.json
 
 # ... or if all config files are in the current working directory named as above ...
 
-python shipyard.py --configdir . addpool
+python shipyard.py pool add --configdir .
 ```
 The above invocation will add the pool specified to the Batch account.
 
 ```shell
-python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json addjobs
-
-# ... or if all config files are in the current working directory named as above ...
-
-python shipyard.py --configdir . addjobs
+python shipyard.py jobs add --configdir .
 ```
-The above invocation will add the jobs specified to the designated pool.
+The above invocation will add the jobs specified in the jobs.json file to
+the designated pool.
 
 ```shell
-python shipyard.py --credentials credentials.json --config config.json --pool pool.json --jobs jobs.json streamfile
-
-# ... or if all config files are in the current working directory named as above ...
-
-python shipyard.py --configdir . streamfile
+python shipyard.py data stream --configdir . --filespec job1,dockertask-000,stdout.txt
 ```
-The above invocation will stream a file from a live compute node with
-interactive prompts from the script.
+The above invocation will stream the stdout.txt file from the job `job1` and
+task `task1` from a live compute node. Because all portions of the
+`--filespec` option are specified, the tool will not prompt for any input.
 
 ## <a name="docker-cli"></a>Batch Shipyard Docker Image CLI Invocation
 If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then you would invoke the tool as:
 
 ```shell
-docker run --rm -it alfpark/batch-shipyard:cli-latest <action> <options...>
+docker run --rm -it alfpark/batch-shipyard:cli-latest <command> <subcommand> <options...>
 ```
 
-where `<action>` is the action as described above and `<options...>` are any
-additional options to pass to the `<action>`.
+where `<command> <subcommand>` is the command and subcommand as described
+above and `<options...>` are any additional options to pass to the
+`<subcommand>`.
 
 Invariably, you will need to pass config files to the tool which reside
 on the host and not in the container by default. Please use the `-v` volume
-mount option to mount host directories inside the container. For example,
-if your Batch Shipyard configs are stored in the host path
+mount option with `docker run` to mount host directories inside the container.
+For example, if your Batch Shipyard configs are stored in the host path
 `/home/user/batch-shipyard-configs` you could modify the docker run command
 as:
 
 ```shell
-docker run --rm -it -v /home/user/batch-shipyard-configs:/configs alfpark/batch-shipyard:cli-latest <action> --configdir /configs <options...>
+docker run --rm -it -v /home/user/batch-shipyard-configs:/configs alfpark/batch-shipyard:cli-latest <command> <subcommand> --configdir /configs <options...>
 ```
 
 Notice that we specified the `--configdir` argument to match the container

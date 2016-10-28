@@ -376,14 +376,18 @@ def _add_admin_user_to_compute_node(
             )
         )
     except batchmodels.batch_error.BatchErrorException as ex:
-        if 'The node user already exists' not in ex.message.value:
+        if 'The specified node user already exists' in ex.message.value:
+            logger.warning('user {} already exists on node {}'.format(
+                username, node.id))
+        else:
             raise
 
 
 def add_ssh_user(batch_client, config, nodes=None):
     # type: (batch.BatchServiceClient, dict,
     #        List[batchmodels.ComputeNode]) -> None
-    """Add an SSH user to node and optionally generate an SSH tunneling script
+    """Add an SSH user to all nodes of a pool and optionally generate a
+    SSH tunneling script
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
@@ -391,8 +395,8 @@ def add_ssh_user(batch_client, config, nodes=None):
     """
     pool_id = config['pool_specification']['id']
     try:
-        docker_user = config['pool_specification']['ssh']['username']
-        if docker_user is None:
+        username = config['pool_specification']['ssh']['username']
+        if username is None or len(username) == 0:
             raise KeyError()
     except KeyError:
         logger.info('not creating ssh user on pool {}'.format(pool_id))
@@ -423,7 +427,7 @@ def add_ssh_user(batch_client, config, nodes=None):
             nodes = batch_client.compute_node.list(pool_id)
         for node in nodes:
             _add_admin_user_to_compute_node(
-                batch_client, config, node, docker_user, ssh_pub_key)
+                batch_client, config, node, username, ssh_pub_key)
         # generate tunnel script if requested
         if gen_tunnel_script:
             ssh_args = ['ssh']
@@ -434,7 +438,7 @@ def add_ssh_user(batch_client, config, nodes=None):
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-p', '$2', '-N', '-L', '2375:localhost:2375',
-                '{}@$1'.format(docker_user)])
+                '{}@$1'.format(username)])
             tunnelscript = pathlib.Path(export_path, _SSH_TUNNEL_SCRIPT)
             with tunnelscript.open('w') as fd:
                 fd.write('#!/usr/bin/env bash\n')
@@ -443,6 +447,42 @@ def add_ssh_user(batch_client, config, nodes=None):
                 fd.write('\n')
             os.chmod(str(tunnelscript), 0o755)
             logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
+
+
+def del_ssh_user(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNode]) -> None
+    """Delete an SSH user on all nodes of a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
+    pool_id = config['pool_specification']['id']
+    try:
+        username = config['pool_specification']['ssh']['username']
+        if username is None or len(username) == 0:
+            raise KeyError()
+    except KeyError:
+        logger.error('not deleting unspecified ssh user on pool {}'.format(
+            pool_id))
+    else:
+        if not convoy.util.confirm_action(
+                config, 'delete user {} from pool {}'.format(
+                    username, pool_id)):
+            return
+        # get node list if not provided
+        if nodes is None:
+            nodes = batch_client.compute_node.list(pool_id)
+        for node in nodes:
+            try:
+                batch_client.compute_node.delete_user(
+                    pool_id, node.id, username)
+                logger.debug('deleted user {} from node {}'.format(
+                    username, node.id))
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'The node user does not exist' not in ex.message.value:
+                    raise
 
 
 def list_pools(batch_client):
@@ -743,8 +783,28 @@ def terminate_all_jobs(batch_client, config, wait=False):
                     continue
 
 
+def list_nodes(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Get a list of nodes
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool_id = config['pool_specification']['id']
+    logger.debug('listing nodes for pool {}'.format(pool_id))
+    nodes = batch_client.compute_node.list(pool_id)
+    for node in nodes:
+        logger.info(
+            ('node_id={} [state={} scheduling_state={} ip_address={} '
+             'vm_size={} total_tasks_run={} running_tasks_count={} '
+             'total_tasks_succeeded={}]').format(
+                 node.id, node.state, node.scheduling_state, node.ip_address,
+                 node.vm_size, node.total_tasks_run, node.running_tasks_count,
+                 node.total_tasks_succeeded))
+
+
 def get_remote_login_settings(batch_client, config, nodes=None):
-    # type: (batch.BatchServiceClient, dict, List[str], bool) -> dict
+    # type: (batch.BatchServiceClient, dict, List[str]) -> dict
     """Get remote login settings
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -771,14 +831,14 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
     """Stream a file and wait for task to complete
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param str filespec: filespec (jobid:taskid:filename)
+    :param str filespec: filespec (jobid,taskid,filename)
     """
     if filespec is None:
         job_id = None
         task_id = None
         file = None
     else:
-        job_id, task_id, file = filespec.split(':')
+        job_id, task_id, file = filespec.split(',')
     if job_id is None:
         job_id = convoy.util.get_input('Enter job id: ')
     if task_id is None:
@@ -850,14 +910,14 @@ def get_file_via_task(batch_client, config, filespec=None):
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param str filespec: filespec (jobid:taskid:filename)
+    :param str filespec: filespec (jobid,taskid,filename)
     """
     if filespec is None:
         job_id = None
         task_id = None
         file = None
     else:
-        job_id, task_id, file = filespec.split(':')
+        job_id, task_id, file = filespec.split(',')
     if job_id is None:
         job_id = convoy.util.get_input('Enter job id: ')
     if task_id is None:
@@ -908,14 +968,14 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param str filespec: filespec (jobid:taskid:filename)
+    :param str filespec: filespec (jobid,taskid,include_pattern)
     """
     if filespec is None:
         job_id = None
         task_id = None
         incl = None
     else:
-        job_id, task_id, incl = filespec.split(':')
+        job_id, task_id, incl = filespec.split(',')
     if job_id is None:
         job_id = convoy.util.get_input('Enter job id: ')
     if task_id is None:
@@ -968,18 +1028,26 @@ def get_all_files_via_task(batch_client, config, filespec=None):
                 job_id, task_id, incl if incl is not None else ''))
 
 
-def get_all_files_via_node(batch_client, config, node_id):
+def get_all_files_via_node(batch_client, config, filespec=None):
     # type: (batch.BatchServiceClient, dict, str) -> None
     """Get a file node style
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param str nodeid: node id
+    :param str filespec: filespec (nodeid,include_pattern)
     """
+    if filespec is None:
+        node_id = None
+        incl = None
+    else:
+        node_id, incl = filespec.split(',')
+    if node_id is None:
+        node_id = convoy.util.get_input('Enter node id: ')
+    if incl is None:
+        incl = convoy.util.get_input('Enter filter: ')
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
     pool_id = config['pool_specification']['id']
-    incl = convoy.util.get_input('Enter filter: ')
     logger.debug('downloading files to {}/{}'.format(pool_id, node_id))
     files = batch_client.file.list_from_compute_node(
         pool_id, node_id, recursive=True)
@@ -1009,20 +1077,29 @@ def get_all_files_via_node(batch_client, config, node_id):
                 pool_id, node_id, incl if incl is not None else ''))
 
 
-def get_file_via_node(batch_client, config, node_id):
+def get_file_via_node(batch_client, config, filespec=None):
     # type: (batch.BatchServiceClient, dict, str) -> None
     """Get a file node style
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param str nodeid: node id
+    :param str filespec: filespec (nodeid,filename)
     """
+    if filespec is None:
+        node_id = None
+        file = None
+    else:
+        node_id, file = filespec.split(',')
+    if node_id is None:
+        node_id = convoy.util.get_input('Enter node id: ')
+    if file is None:
+        file = convoy.util.get_input(
+            'Enter node-relative file path to retrieve: ')
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
-    pool_id = config['pool_specification']['id']
-    file = convoy.util.get_input('Enter node-relative file path to retrieve: ')
     if file == '' or file is None:
         raise RuntimeError('specified invalid file to retrieve')
+    pool_id = config['pool_specification']['id']
     # check if file exists on disk; a possible race condition here is
     # understood
     fp = pathlib.Path(pathlib.Path(file).name)
@@ -1069,11 +1146,29 @@ def list_tasks(batch_client, config):
         try:
             tasks = batch_client.task.list(job['id'])
             for task in tasks:
+                if task.execution_info is not None:
+                    if task.execution_info.scheduling_error is not None:
+                        ei = (' scheduling_error=(category={} code={} '
+                              'message={})').format(
+                                  task.execution_info.
+                                  scheduling_error.category,
+                                  task.execution_info.
+                                  scheduling_error.code,
+                                  task.execution_info.
+                                  scheduling_error.message)
+                    else:
+                        ei = (' start_time={} end_time={} '
+                              'exit_code={}').format(
+                                  task.execution_info.start_time,
+                                  task.execution_info.end_time,
+                                  task.execution_info.exit_code)
+                else:
+                    ei = ''
                 logger.info(
                     'job_id={} task_id={} [display_name={} state={} '
-                    'pool_id={} node_id={}]'.format(
+                    'pool_id={} node_id={}{}]'.format(
                         job['id'], task.id, task.display_name, task.state,
-                        task.node_info.pool_id, task.node_info.node_id))
+                        task.node_info.pool_id, task.node_info.node_id, ei))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:

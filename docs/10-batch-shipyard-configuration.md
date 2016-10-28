@@ -398,8 +398,8 @@ Currently, `replica` is the only supported type.
 options to set.
 
 Note that when resizing a pool with a GlusterFS shared file system, that
-you must resize with the `resizepool` action and not with Azure Portal,
-Batch Explorer or any other tool.
+you must resize with the `pool resize` command in `shipyard.py` and not with
+Azure Portal, Batch Explorer or any other tool.
 
 Finally, note that all `docker_volumes` can be omitted completely along with
 one or all of `data_volumes` and `shared_data_volumes` if you do not require
@@ -532,7 +532,7 @@ data defined in `files` prior to pool creation and disable the option above
       not specify a destination that is on a shared file system. If you
       require ingressing to a shared file system location like a GlusterFS
       volume, then use the global configuration `files` property and the
-      `ingressdata` action.
+      `data ingress` command.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
@@ -723,7 +723,7 @@ transferred again. This object currently supports `azure_batch` and
       not specify a destination that is on a shared file system. If you
       require ingressing to a shared file system location like a GlusterFS
       volume, then use the global configuration `files` property and the
-      `ingressdata` action.
+      `data ingress` command.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
 * (required) `tasks` is an array of tasks to add to the job.
@@ -790,7 +790,7 @@ transferred again. This object currently supports `azure_batch` and
         that you should not specify a destination that is on a shared file
         system. If you require ingressing to a shared file system location
         like a GlusterFS volume, then use the global configuration `files`
-        property and the `ingressdata` action.
+        property and the `data ingress` command.
       * (optional) `blobxfer_extra_options` are any extra options to pass to
         `blobxfer`.
   * (optional) `output_data` is an object containing data that should be

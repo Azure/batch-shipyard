@@ -100,7 +100,7 @@ define these files under the global configuration json file property
 `global_resources`:`files`. The `destination` member should include a property
 named `shared_data_volume` which references your GlusterFS volume. Any files
 in the `source` path (matching the optional `include` and `exclude`) filters
-will then be ingressed into the compute nodes using the `ingressdata` action
+will then be ingressed into the compute nodes using the `data ingress` command
 or by specifying `transfer_files_on_pool_creation` as `true` in the pool
 configuration json. There are many configuration options under the
 `data_transfer` member which may help optimize for your particular scenario.
@@ -138,15 +138,15 @@ you would specify the `azure_storage` property under `input_data` and within
 pool-level, `container` or `file_share` data is ingressed to all compute nodes
 to the specified destination location as part of pool creation if the
 `transfer_files_on_pool_creation` property is `true`. Note that the pool must
-be ready in order for the `ingressdata` action to work. Additionally, although
-you can combine on premises ingress to Azure Storage and then ingress to
-compute node, if there is a possiblity of overlap, it is recommended to
+be ready in order for the `data ingress` command to work. Additionally,
+although you can combine on premises ingress to Azure Storage and then ingress
+to compute node, if there is a possiblity of overlap, it is recommended to
 separate these two processes by ingressing data from `files` with the
-`ingressdata` action first. After that action completes, create the pool with
-`transfer_files_on_pool_creation` to `false` (so the data that was ingressed
-with `ingressdata` is not ingressed again) and specify `input_data` with
-the appropriate properties from the data that was just ingressed with
-`ingressdata`.
+`data ingress` command first. After that action completes, create the pool
+with `transfer_files_on_pool_creation` to `false` (so the data that was
+ingressed with `data ingress` is not ingressed again) and specify `input_data`
+with the appropriate properties from the data that was just ingressed with
+the `data ingress` command.
 
 `input_data` for each job in `job_specifications` will ingress data to any
 compute node running the specified job once and only once. Any `input_data`

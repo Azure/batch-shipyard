@@ -1119,6 +1119,15 @@ def action_pool_grls(batch_client, config):
     convoy.batch.get_remote_login_settings(batch_client, config)
 
 
+def action_pool_listnodes(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Action: Pool Listnodes
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    """
+    convoy.batch.list_nodes(batch_client, config)
+
+
 def action_pool_asu(batch_client, config):
     # type: (batch.BatchServiceClient, dict) -> None
     """Action: Pool Asu
@@ -1127,6 +1136,15 @@ def action_pool_asu(batch_client, config):
     """
     convoy.batch.add_ssh_user(batch_client, config)
     convoy.batch.get_remote_login_settings(batch_client, config)
+
+
+def action_pool_dsu(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Action: Pool Dsu
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    """
+    convoy.batch.del_ssh_user(batch_client, config)
 
 
 def action_pool_delnode(batch_client, config, nodeid):
@@ -1207,6 +1225,7 @@ def action_jobs_cmi(batch_client, config, delete):
         convoy.batch.del_clean_mi_jobs(batch_client, config)
     else:
         convoy.batch.clean_mi_jobs(batch_client, config)
+        convoy.batch.del_clean_mi_jobs(batch_client, config)
 
 
 def action_storage_del(blob_client, queue_client, table_client, config):

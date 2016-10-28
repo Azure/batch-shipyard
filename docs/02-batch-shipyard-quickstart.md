@@ -40,27 +40,35 @@ you can create one via the
 run the following commands:
 ```shell
 # create the compute pool
-python shipyard.py --configdir config addpool
+python shipyard.py pool add --configdir config
 
 # ... wait for pool to allocate ...
 
 # add the training job
-python shipyard.py --configdir config addjobs
+python shipyard.py jobs add --configdir config
 
 # stream the stdout or stderr file back to local console to monitor progress
 # if CNTK-CPU-OpenMPI:
-python shipyard.py --configdir config streamfile --filespec cntkjob:dockertask-000:stderr.txt
+python shipyard.py data stream --configdir config --filespec cntkjob,dockertask-000,stderr.txt
 # if Caffe-CPU:
-python shipyard.py --configdir config streamfile --filespec caffejob:dockertask-000:stderr.txt
+python shipyard.py data stream --configdir config --filespec caffejob,dockertask-000,stderr.txt
 # if MXNet-CPU:
-python shipyard.py --configdir config streamfile --filespec mxnetjob:dockertask-000:stdout.txt
+python shipyard.py data stream --configdir config --filespec mxnetjob,dockertask-000,stdout.txt
 # if TensorFlow-CPU:
-python shipyard.py --configdir config streamfile --filespec tensorflowjob:dockertask-000:stdout.txt
+python shipyard.py data stream --configdir config --filespec tensorflowjob,dockertask-000,stdout.txt
 # if Torch-CPU:
-python shipyard.py --configdir config streamfile --filespec torchjob:dockertask-000:stdout.txt
+python shipyard.py data stream --configdir config --filespec torchjob,dockertask-000,stdout.txt
 ```
 The last command will stream the stderr or stdout file to your local console
 which will provide you progress information about your job.
+
+Once you are finished interacting with your jobs, tasks and pool, you can
+remove them with the following commands:
+```shell
+# ... done interacting with jobs/tasks/pool
+python shipyard.py jobs del --configdir config
+python shipyard.py pool del --configdir config
+```
 
 You can also use the [Azure Portal](https://portal.azure.com) or
 [Batch Explorer](https://github.com/Azure/azure-batch-samples) to view more

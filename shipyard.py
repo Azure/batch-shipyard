@@ -217,7 +217,6 @@ def _setup_context(ctx, pool_add_action=False):
 
 
 @click.group(context_settings=_CONTEXT_SETTINGS)
-@common_options
 @click.version_option(version=convoy.fleet.__version__)
 @click.pass_context
 def cli(ctx):
@@ -226,7 +225,6 @@ def cli(ctx):
 
 
 @cli.group()
-@common_options
 @pass_cli_context
 def storage(ctx):
     """Storage actions"""
@@ -254,7 +252,6 @@ def storage_clear(ctx):
 
 
 @cli.group()
-@common_options
 @pass_cli_context
 def cert(ctx):
     """Certificate actions"""
@@ -292,13 +289,12 @@ def cert_list(ctx):
 @common_options
 @pass_cli_context
 def cert_del(ctx):
-    """Add a certificate to a Batch account"""
+    """Delete a certificate from a Batch account"""
     _setup_context(ctx)
     convoy.fleet.action_cert_del(ctx.batch_client, ctx.config)
 
 
 @cli.group()
-@common_options
 @pass_cli_context
 def pool(ctx):
     """Pool actions"""
@@ -357,13 +353,31 @@ def pool_grls(ctx):
     convoy.fleet.action_pool_grls(ctx.batch_client, ctx.config)
 
 
+@pool.command('listnodes')
+@common_options
+@pass_cli_context
+def pool_listnodes(ctx):
+    """List nodes in pool"""
+    _setup_context(ctx)
+    convoy.fleet.action_pool_listnodes(ctx.batch_client, ctx.config)
+
+
 @pool.command('asu')
 @common_options
 @pass_cli_context
 def pool_asu(ctx):
-    """Add an SSH user to all ndoes in pool"""
+    """Add an SSH user to all nodes in pool"""
     _setup_context(ctx)
     convoy.fleet.action_pool_asu(ctx.batch_client, ctx.config)
+
+
+@pool.command('dsu')
+@common_options
+@pass_cli_context
+def pool_dsu(ctx):
+    """Delete an SSH user from all nodes in pool"""
+    _setup_context(ctx)
+    convoy.fleet.action_pool_dsu(ctx.batch_client, ctx.config)
 
 
 @pool.command('delnode')
@@ -378,7 +392,6 @@ def pool_delnode(ctx, nodeid):
 
 
 @cli.group()
-@common_options
 @pass_cli_context
 def jobs(ctx):
     """Jobs actions"""
@@ -446,13 +459,12 @@ def jobs_del(ctx, all, wait):
 @common_options
 @pass_cli_context
 def jobs_cmi(ctx, delete):
-    """Cleanup Multi-Instance jobs"""
+    """Cleanup multi-instance jobs"""
     _setup_context(ctx)
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
 
 
 @cli.group()
-@common_options
 @pass_cli_context
 def data(ctx):
     """Data actions"""
@@ -470,7 +482,7 @@ def data_listfiles(ctx):
 
 @data.command('stream')
 @click.option(
-    '--filespec', help='File specification as jobid:taskid:filename')
+    '--filespec', help='File specification as jobid,taskid,filename')
 @common_options
 @pass_cli_context
 def data_stream(ctx, filespec):
@@ -484,8 +496,8 @@ def data_stream(ctx, filespec):
     '--all', is_flag=True, help='Retrieve all files for given job/task')
 @click.option(
     '--filespec',
-    help='File specification as jobid:taskid:filename or '
-    'jobid:taskid:include_pattern if invoked with --all')
+    help='File specification as jobid,taskid,filename or '
+    'jobid,taskid,include_pattern if invoked with --all')
 @common_options
 @pass_cli_context
 def data_getfile(ctx, all, filespec):
@@ -499,14 +511,15 @@ def data_getfile(ctx, all, filespec):
 @click.option(
     '--all', is_flag=True, help='Retrieve all files for given compute node')
 @click.option(
-    '--nodeid', help='NodeId of compute node to retrieve file from')
+    '--filespec', help='File specification as nodeid,filename or '
+    'nodeid,include_pattern if invoked with --all')
 @common_options
 @pass_cli_context
-def data_getfilenode(ctx, all, nodeid):
+def data_getfilenode(ctx, all, filespec):
     """Retrieve file(s) from a compute node"""
     _setup_context(ctx)
     convoy.fleet.action_data_getfilenode(
-        ctx.batch_client, ctx.config, all, nodeid)
+        ctx.batch_client, ctx.config, all, filespec)
 
 
 @data.command('ingress')
