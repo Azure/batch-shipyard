@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.0.0rc1] - 2016-10-28
 ### Added
 - Comprehensive data movement support. Please see the data movement guide
 and configuration doc for more information.
@@ -38,7 +40,7 @@ MNIST
 Please see usage doc for more information.
   - Added new commands: `cert`, `data`
   - Added many new convenience subcommands
-  - Changed `--filespec` to be delimited by `,` instead of `:`
+  - `--filespec` is now delimited by `,` instead of `:`
 - **Breaking Change:** `ssh_docker_tunnel` in the `pool_specification` has
 been replaced by the `ssh` property. `generate_tunnel_script` has been renamed
 to `generate_docker_tunnel_script`. Please see the configuration doc for
@@ -145,7 +147,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/1.1.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...HEAD
+[2.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/1.1.0...2.0.0rc1
 [1.1.0]: https://github.com/Azure/batch-shipyard/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/Azure/batch-shipyard/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/Azure/batch-shipyard/compare/0.1.0...0.2.0

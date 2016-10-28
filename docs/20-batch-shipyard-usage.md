@@ -137,7 +137,8 @@ file
   * `--jobid` force termination scope to just this job id
   * `--wait` will wait for termination to complete
 * `termtasks` will terminate tasks within jobs specified in the jobs
-configuration file
+configuration file. Termination of running tasks requires a valid SSH
+user.
   * `--jobid` force termination scope to just this job id
   * `--taskid` force termination scope to just this task id
   * `--wait` will wait for termination to complete
