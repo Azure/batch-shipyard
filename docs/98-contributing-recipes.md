@@ -76,12 +76,14 @@ This involves coalescing multiple `RUN` or other statements together.
 Reducing the number of layers can potentially reduce the size of the
 Docker image which is of concern for image replication to compute nodes.
 
-Additionally, if some software is only needed to build the application and
-can be safely removed, then it is recommended to do so. For instance,
-if your software requires development headers to compile, these can be
-removed after the binary is produced. Similarly, temporary files as a
-result of the build process (e.g., `.o` or `.dep` files) can be removed
-to reduce the size of the final Docker image.
+If you are able to completely remove the source files of your application,
+then it is recommended to do so after the binaries are installed on the
+system (e.g., through `make install`). Additionally, if some software is
+only needed to build the application and can be safely removed, then it is
+recommended to do so. For instance, if your software requires development
+headers to compile, these can be removed after the binary is produced.
+Similarly, temporary files as a result of the build process (e.g., `.o` or
+`.dep` files) can be removed to reduce the size of the final Docker image.
 
 ### Multi-Instance (MPI) Recipes
 Please ensure that the necessary SSH, MPI runtime, or other software is

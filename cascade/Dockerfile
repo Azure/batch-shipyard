@@ -24,7 +24,7 @@ RUN apk update \
     && ldconfig /usr/lib \
     && cd .. \
     && rm -rf libtorrent-rasterbar-${libtorrent_version} \
-    && rm -f zxvpf libtorrent-${libtorrent_version}.tar.gz \
+    && rm -f libtorrent-${libtorrent_version}.tar.gz \
     && apk del --purge \
         build-base python3-dev openssl-dev libffi-dev python boost-dev \
         file curl \
