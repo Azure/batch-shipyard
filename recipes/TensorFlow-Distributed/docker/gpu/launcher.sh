@@ -3,6 +3,15 @@
 set -e
 set -o pipefail
 
+# get number of GPUs on machine
+ngpus=`nvidia-smi -L | wc -l`
+echo "num gpus: $ngpus"
+
+if [ $ngpus -eq 0 ]; then
+    echo "No GPUs detected."
+    exit 1
+fi
+
 # get my ip address
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
@@ -40,7 +49,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     # master node
     ti=${task_index[$master]}
     echo "master node: $ipaddress task index: $ti"
-    python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=ps --task_index=$ti --data_dir=./master $* > ps-$ti.log 2>&1 &
+    python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=ps --task_index=$ti --data_dir=./master --num_gpus=$ngpus $* > ps-$ti.log 2>&1 &
     masterpid=$!
 fi
 
@@ -52,10 +61,10 @@ do
     ti=${task_index[$node]}
     echo "worker node: $node task index: $ti"
     if [ $node == $master ]; then
-        python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=./worker-$ti $* > worker-$ti.log 2>&1 &
+        python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=./worker-$ti --num_gpus=$ngpus $* > worker-$ti.log 2>&1 &
         waitpids=("${waitpids[@]}" "$!")
     else
-        ssh $node "python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1" &
+        ssh $node "python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti --num_gpus=$ngpus $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1" &
         waitpids=("${waitpids[@]}" "$!")
     fi
 done

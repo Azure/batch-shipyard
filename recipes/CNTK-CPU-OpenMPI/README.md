@@ -45,8 +45,6 @@ array which should have a task definition containing:
 Since we are not using either the MNIST or CIFAR examples, this can simply
 be `alfpark/cntk:1.7.2-cpu-openmpi`. Please note that the `docker_images` in
 the Global Configuration should match this image name.
-* `name` is a unique name given to the Docker container instance. This is
-required for Multi-Instance tasks.
 * `command` should contain the command to pass to the Docker run invocation.
 For this example, we will run the ConvNet MNIST Example that has been modified
 to run in parallel in the `alfpark/cntk:1.7.2-cpu-openmpi-refdata` Docker

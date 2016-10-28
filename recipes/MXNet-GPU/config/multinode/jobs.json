@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/mxnet:gpu",
-                    "name": "mxnet",
                     "remove_container_after_exit": true,
                     "shared_data_volumes": [
                         "glustervol"

@@ -27,8 +27,6 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-tcp`
-* `name` is a unique name given to the Docker container instance. This is
-required for Multi-Instance tasks.
 * `command` should contain the `mpirun` command. If using the sample NAMD-TCP
 image provided, `"/sw/run_namd.sh <benchmark> <steps> <ppn>"` can be used
 to run the included benchmarks:

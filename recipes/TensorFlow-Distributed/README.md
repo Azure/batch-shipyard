@@ -52,13 +52,13 @@ array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/tensorflow/0.10.0-gpu` or `alfpark/tensorflow/0.10.0-cpu`
 * `command` should contain the command to pass to the Docker run invocation.
-To run the example MNIST replica example on GPUs, the `command` would look
-like: `"/bin/bash /sw/launcher.sh --num_gpus=<number of total gpus>"` where
-the total number of gpus would be specified for the `--num_gpus` parameter.
+To run the example MNIST replica example, the `command` would look
+like: `"/bin/bash /sw/launcher.sh"`. The launcher will automatically detect
+the number of GPUs and pass the correct number to the TensorFlow script.
 Please see the [launcher.sh](docker/gpu/launcher.sh) for the launcher source.
-`--num_gpus=` parameter must be omitted if run on CPUs.
 * `gpu` must be set to `true` if run on GPUs. This enables invoking the
-`nvidia-docker` wrapper.
+`nvidia-docker` wrapper. This property should be omitted or set to `false`
+if run on CPUs.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count` or
     `pool_current_dedicated`

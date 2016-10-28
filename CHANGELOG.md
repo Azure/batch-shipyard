@@ -43,7 +43,10 @@ Please see usage doc for more information.
 been replaced by the `ssh` property. `generate_tunnel_script` has been renamed
 to `generate_docker_tunnel_script`. Please see the configuration doc for
 more information.
-- `streamfile` no longer has an arbitrary max streaming time; the action will
+- The `name` property of a task json object in the jobs specification is no
+longer required for multi-instance tasks. If not specified, `name` defaults
+to `id` for all task types.
+- `data stream` no longer has an arbitrary max streaming time; the action will
 stream the file indefinitely until the task completes
 - Validate container with `storage_entity_prefix` for length issues
 - `delpool` action now cleans up and deletes some storage containers

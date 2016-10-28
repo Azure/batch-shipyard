@@ -6,9 +6,8 @@
             "tasks": [
                 {
                     "image": "alfpark/tensorflow:0.10.0-gpu",
-                    "name": "tensorflow",
                     "remove_container_after_exit": true,
-                    "command": "/bin/bash /sw/launcher.sh --num_gpus 2",
+                    "command": "/bin/bash /sw/launcher.sh",
                     "gpu": true,
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",

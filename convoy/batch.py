@@ -1215,6 +1215,32 @@ def list_task_files(batch_client, config):
             logger.error('no tasks found for job {}'.format(job['id']))
 
 
+def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, str,
+    #        str) -> str
+    """Generate the next generic task id
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job id
+    :param str reserved: reserved task id
+    :rtype: str
+    :return: returns a generic docker task id
+    """
+    # get filtered, sorted list of generic docker task ids
+    try:
+        tasklist = sorted(filter(
+            lambda x: x.id.startswith(_GENERIC_DOCKER_TASK_PREFIX),
+            (batch_client.task.list(job_id))), key=lambda y: y.id)
+        tasknum = int(tasklist[-1].id.split('-')[-1]) + 1
+    except (batchmodels.batch_error.BatchErrorException, IndexError):
+        tasknum = 0
+    if reserved is not None:
+        tasknum_reserved = int(reserved.split('-')[-1])
+        while tasknum == tasknum_reserved:
+            tasknum += 1
+    return '{0}{1:03d}'.format(_GENERIC_DOCKER_TASK_PREFIX, tasknum)
+
+
 def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
     #        dict, tuple, tuple) -> None
@@ -1261,7 +1287,8 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
             mi_ac = True
         job.uses_task_dependencies = False
         multi_instance = False
-        docker_container_name = None
+        mi_docker_container_name = None
+        reserved_task_id = None
         for task in jobspec['tasks']:
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
@@ -1277,20 +1304,26 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                         'cannot specify more than one multi-instance task '
                         'per job with auto completion enabled')
                 multi_instance = True
-                docker_container_name = task['name']
+                try:
+                    mi_docker_container_name = task['name']
+                    if task['name'] is None or len(task['name']) == 0:
+                        raise KeyError()
+                except KeyError:
+                    if ('id' not in task or task['id'] is None or
+                            len(task['id']) == 0):
+                        reserved_task_id = _generate_next_generic_task_id(
+                            batch_client, job.id)
+                        task['id'] = reserved_task_id
+                    task['name'] = task['id']
+                    mi_docker_container_name = task['name']
         # add multi-instance settings
         set_terminate_on_all_tasks_complete = False
         if multi_instance and mi_ac:
-            if (docker_container_name is None or
-                    len(docker_container_name) == 0):
-                raise ValueError(
-                    'multi-instance task must be invoked with a named '
-                    'container')
             set_terminate_on_all_tasks_complete = True
             job.job_release_task = batchmodels.JobReleaseTask(
                 command_line=convoy.util.wrap_commands_in_shell(
-                    ['docker stop {}'.format(docker_container_name),
-                     'docker rm -v {}'.format(docker_container_name)]),
+                    ['docker stop {}'.format(mi_docker_container_name),
+                     'docker rm -v {}'.format(mi_docker_container_name)]),
                 run_elevated=True,
             )
         logger.info('Adding job: {}'.format(job.id))
@@ -1306,7 +1339,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                 raise
         del mi_ac
         del multi_instance
-        del docker_container_name
+        del mi_docker_container_name
         # add all tasks under job
         for task in jobspec['tasks']:
             # get image name
@@ -1317,19 +1350,8 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                 if task_id is None or len(task_id) == 0:
                     raise KeyError()
             except KeyError:
-                # get filtered, sorted list of generic docker task ids
-                try:
-                    tasklist = sorted(
-                        filter(lambda x: x.id.startswith(
-                            _GENERIC_DOCKER_TASK_PREFIX), list(
-                                batch_client.task.list(job.id))),
-                        key=lambda y: y.id)
-                    tasknum = int(tasklist[-1].id.split('-')[-1]) + 1
-                except (batchmodels.batch_error.BatchErrorException,
-                        IndexError):
-                    tasknum = 0
-                task_id = '{0}{1:03d}'.format(
-                    _GENERIC_DOCKER_TASK_PREFIX, tasknum)
+                task_id = _generate_next_generic_task_id(
+                    batch_client, job.id, reserved_task_id)
             # set run and exec commands
             docker_run_cmd = 'docker run'
             docker_exec_cmd = 'docker exec'
@@ -1346,13 +1368,14 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
             else:
                 if rm_container and '--rm' not in run_opts:
                     run_opts.append('--rm')
-            # parse name option
+            # parse name option, if not specified use task id
             try:
                 name = task['name']
-                if name is not None:
-                    run_opts.append('--name {}'.format(name))
+                if name is None or len(name) == 0:
+                    raise KeyError()
             except KeyError:
-                name = None
+                name = task['id']
+            run_opts.append('--name {}'.format(name))
             # parse labels option
             try:
                 labels = task['labels']

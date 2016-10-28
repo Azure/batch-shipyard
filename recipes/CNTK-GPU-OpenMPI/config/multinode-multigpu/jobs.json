@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/cntk:1.7.2-gpu-openmpi-refdata",
-                    "name": "cntk",
                     "remove_container_after_exit": true,
                     "shared_data_volumes": [
                         "glustervol"

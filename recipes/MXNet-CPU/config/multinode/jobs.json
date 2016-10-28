@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/mxnet:cpu",
-                    "name": "mxnet",
                     "remove_container_after_exit": true,
                     "shared_data_volumes": [
                         "glustervol"

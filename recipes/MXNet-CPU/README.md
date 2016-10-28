@@ -49,8 +49,6 @@ array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation.
 This can be `alfpark/mxnet:cpu`. Please note that the `docker_images` in
 the Global Configuration should match this image name.
-* `name` is a unique name given to the Docker container instance. This is
-required for Multi-Instance tasks.
 * `command` should contain the command to pass to the Docker run invocation.
 For this example, we will run the CIFAR-10 example across distributed nodes
 in the `alfpark/mxnet:cpu` Docker image. The application `command` to run

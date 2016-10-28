@@ -735,8 +735,8 @@ transferred again. This object currently supports `azure_batch` and
     invocation (task) depends on and must run to successful completion prior
     to this task executing.
   * (required) `image` is the Docker image to use for this task
-  * `name` is the name to assign to the container. This is required for
-    multi-instance tasks, optional if not.
+  * (optional) `name` is the name to assign to the container. If not
+    specified, the value of the `id` property will be used for `name`.
   * (optional) `labels` is an array of labels to apply to the container.
   * (optional) `environment_variables` are any additional task-specific
     environment variables that should be applied to the container.

@@ -1,19 +1,18 @@
 {
     "job_specifications": [
         {
-            "id": "openfoamjob",
+            "id": "tensorflow",
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/openfoam:4.0-gcc-openmpi",
+                    "image": "alfpark/tensorflow:0.10.0-cpu",
                     "remove_container_after_exit": true,
-                    "shared_data_volumes": [
-                        "glustervol"
-                    ],
-                    "command": "/opt/OpenFOAM/run_sample.sh",
+                    "command": "/bin/bash /sw/launcher.sh",
                     "multi_instance": {
                         "num_instances": "pool_specification_vm_count",
-                        "coordination_command": null
+                        "coordination_command": null,
+                        "resource_files": [
+                        ]
                     }
                 }
             ]
