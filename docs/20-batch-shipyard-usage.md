@@ -108,9 +108,11 @@ The `jobs` command has the following sub-commands:
   add        Add jobs
   cmi        Cleanup multi-instance jobs
   del        Delete jobs
+  deltasks   Delete specified tasks in jobs
   list       List jobs
   listtasks  List tasks within jobs
   term       Terminate jobs
+  termtasks  Terminate specified tasks in jobs
 ```
 * `add` will add all jobs and tasks defined in the jobs configuration file
 to the Batch pool
@@ -120,10 +122,25 @@ set to `true` in the job specification for the job.
   * `--delete` will delete any stale cleanup jobs
 * `del` will delete jobs specified in the jobs configuration file
   * `--all` will delete all jobs found in the Batch account
+  * `--jobid` force termination scope to just this job id
+  * `--wait` will wait for deletion to complete
+* `deltasks` will delete tasks within jobs specified in the jobs
+configuration file. Active or running tasks will be terminated first.
+  * `--jobid` force deletion scope to just this job id
+  * `--taskid` force deletion scope to just this task id
+  * `--wait` will wait for deletion to complete
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
 * `term` will terminate jobs found in the jobs configuration file
+  * `--all` will terminate all jobs found in the Batch account
+  * `--jobid` force termination scope to just this job id
+  * `--wait` will wait for termination to complete
+* `termtasks` will terminate tasks within jobs specified in the jobs
+configuration file
+  * `--jobid` force termination scope to just this job id
+  * `--taskid` force termination scope to just this task id
+  * `--wait` will wait for termination to complete
 
 ## Pool Command
 The `pool` command has the following sub-commands:
@@ -145,6 +162,7 @@ all nodes in the specified pool
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard
+  * `--wait` will wait for deletion to complete
 * `delnode` will delete the specified node from the pool
 * `dsu` will delete the SSH user defined in the pool configuration file
 from all nodes in the specified pool

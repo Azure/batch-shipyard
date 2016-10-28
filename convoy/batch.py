@@ -569,17 +569,22 @@ def del_node(batch_client, config, node_id):
     )
 
 
-def del_jobs(batch_client, config, wait=False):
+def del_jobs(batch_client, config, jobid=None, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool) -> None
+    #        str, bool) -> None
     """Delete jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param str jobid: job id to delete
     :param bool wait: wait for jobs to delete
     """
+    if jobid is None:
+        jobs = config['job_specifications']
+    else:
+        jobs = [{'id': jobid}]
     nocheck = set()
-    for job in config['job_specifications']:
+    for job in jobs:
         job_id = job['id']
         if not convoy.util.confirm_action(
                 config, 'delete {} job'.format(job_id)):
@@ -588,7 +593,7 @@ def del_jobs(batch_client, config, wait=False):
         logger.info('Deleting job: {}'.format(job_id))
         batch_client.job.delete(job_id)
     if wait:
-        for job in config['job_specifications']:
+        for job in jobs:
             job_id = job['id']
             if job_id in nocheck:
                 continue
@@ -631,6 +636,66 @@ def del_all_jobs(batch_client, config, wait=False):
             except batchmodels.batch_error.BatchErrorException as ex:
                 if 'The specified job does not exist' in ex.message.value:
                     continue
+
+
+def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str, bool) -> None
+    """Delete tasks
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id of task to terminate
+    :param str taskid: task id to terminate
+    :param bool wait: wait for task to terminate
+    """
+    # first terminate tasks, force wait for completion
+    terminate_tasks(
+        batch_client, config, jobid=jobid, taskid=taskid, wait=True)
+    # proceed with deletion
+    if jobid is None:
+        jobs = config['job_specifications']
+    else:
+        jobs = [{'id': jobid}]
+    nocheck = {}
+    for job in jobs:
+        job_id = job['id']
+        nocheck[job_id] = set()
+        if taskid is None:
+            tasks = [x.id for x in batch_client.task.list(job_id)]
+        else:
+            tasks = [taskid]
+        for task in tasks:
+            if not convoy.util.confirm_action(
+                    config, 'delete {} task in job {}'.format(
+                        task, job_id)):
+                nocheck[job_id].add(task)
+                continue
+            logger.info('Deleting task: {}'.format(task))
+            batch_client.task.delete(job_id, task)
+    if wait:
+        for job in jobs:
+            job_id = job['id']
+            if taskid is None:
+                tasks = [x.id for x in batch_client.task.list(job_id)]
+            else:
+                tasks = [taskid]
+            for task in tasks:
+                try:
+                    if task in nocheck[job_id]:
+                        continue
+                except KeyError:
+                    pass
+                try:
+                    logger.debug(
+                        'waiting for task {} in job {} to terminate'.format(
+                            task, job_id))
+                    while True:
+                        batch_client.task.get(job_id, task)
+                        time.sleep(1)
+                except batchmodels.batch_error.BatchErrorException as ex:
+                    if 'The specified task does not exist' in ex.message.value:
+                        continue
 
 
 def clean_mi_jobs(batch_client, config):
@@ -715,17 +780,22 @@ def del_clean_mi_jobs(batch_client, config):
             pass
 
 
-def terminate_jobs(batch_client, config, wait=False):
+def terminate_jobs(batch_client, config, jobid=None, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool) -> None
+    #        str, bool) -> None
     """Terminate jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param str jobid: job id to terminate
     :param bool wait: wait for job to terminate
     """
+    if jobid is None:
+        jobs = config['job_specifications']
+    else:
+        jobs = [{'id': jobid}]
     nocheck = set()
-    for job in config['job_specifications']:
+    for job in jobs:
         job_id = job['id']
         if not convoy.util.confirm_action(
                 config, 'terminate {} job'.format(job_id)):
@@ -734,7 +804,7 @@ def terminate_jobs(batch_client, config, wait=False):
         logger.info('Terminating job: {}'.format(job_id))
         batch_client.job.terminate(job_id)
     if wait:
-        for job in config['job_specifications']:
+        for job in jobs:
             job_id = job['id']
             if job_id in nocheck:
                 continue
@@ -781,6 +851,143 @@ def terminate_all_jobs(batch_client, config, wait=False):
             except batchmodels.batch_error.BatchErrorException as ex:
                 if 'The specified job does not exist' in ex.message.value:
                     continue
+
+
+def _send_docker_kill_signal(
+        batch_client, username, ssh_private_key, pool_id, node_id, job_id,
+        task_id, task_is_mi):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, str,
+    #        pathlib.Path, str, str, str, str, bool) -> None
+    """Send docker kill signal via SSH
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str username: SSH username
+    :param pathlib.Path ssh_private_key: SSH private key
+    :param str pool_id: pool_id of node
+    :param str node_id: node_id of node
+    :param str job_id: job id of task id to kill
+    :param str task_id: task id to kill
+    :param bool task_is_mi: task is multi-instance
+    """
+    targets = [(pool_id, node_id)]
+    # if this task is multi-instance, get all subtasks
+    if task_is_mi:
+        subtasks = batch_client.task.list_subtasks(job_id, task_id)
+        for subtask in subtasks.value:
+            targets.append(
+                (subtask.node_info.pool_id, subtask.node_info.node_id))
+    # for each task node target, issue docker kill
+    for target in targets:
+        rls = batch_client.compute_node.get_remote_login_settings(
+            target[0], target[1])
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+            'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
+            '-p', str(rls.remote_login_port),
+            '{}@{}'.format(username, rls.remote_login_ip_address),
+            'sudo', 'docker', 'kill', task_id,
+        ]
+        rc = convoy.util.subprocess_with_output(ssh_args, shell=False)
+        if rc != 0:
+            logger.error('docker kill failed with return code: {}'.format(rc))
+
+
+def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str, bool) -> None
+    """Terminate tasks
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id of task to terminate
+    :param str taskid: task id to terminate
+    :param bool wait: wait for task to terminate
+    """
+    # get ssh login settings
+    try:
+        username = config['pool_specification']['ssh']['username']
+    except KeyError:
+        pass
+    if username is None or len(username) == 0:
+        raise ValueError(
+            'cannot terminate docker container without an ssh username')
+    try:
+        export_path = config['pool_specification']['ssh'][
+            'generated_file_export_path']
+    except KeyError:
+        export_path = None
+    if export_path is None or len(export_path) == 0:
+        export_path = '.'
+    ssh_private_key = pathlib.Path(
+        export_path, convoy.crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
+        raise RuntimeError('ssh private key at {} not found'.format(
+            ssh_private_key))
+    if jobid is None:
+        jobs = config['job_specifications']
+    else:
+        jobs = [{'id': jobid}]
+    nocheck = {}
+    for job in jobs:
+        job_id = job['id']
+        nocheck[job_id] = set()
+        if taskid is None:
+            tasks = [x.id for x in batch_client.task.list(job_id)]
+        else:
+            tasks = [taskid]
+        for task in tasks:
+            _task = batch_client.task.get(job_id, task)
+            # if completed, skip
+            if _task.state == batchmodels.TaskState.completed:
+                logger.debug(
+                    'Skipping termination of completed task {} on '
+                    'job {}'.format(task, job_id))
+                nocheck[job_id].add(task)
+                continue
+            if not convoy.util.confirm_action(
+                    config, 'terminate {} task in job {}'.format(
+                        task, job_id)):
+                nocheck[job_id].add(task)
+                continue
+            logger.info('Terminating task: {}'.format(task))
+            # directly send docker kill signal if running
+            if _task.state == batchmodels.TaskState.running:
+                if (_task.multi_instance_settings is not None and
+                        _task.multi_instance_settings.number_of_instances > 1):
+                    task_is_mi = True
+                else:
+                    task_is_mi = False
+                _send_docker_kill_signal(
+                    batch_client, username, ssh_private_key,
+                    _task.node_info.pool_id, _task.node_info.node_id,
+                    job_id, task, task_is_mi)
+            else:
+                batch_client.task.terminate(job_id, task)
+    if wait:
+        for job in jobs:
+            job_id = job['id']
+            if taskid is None:
+                tasks = [x.id for x in batch_client.task.list(job_id)]
+            else:
+                tasks = [taskid]
+            for task in tasks:
+                try:
+                    if task in nocheck[job_id]:
+                        continue
+                except KeyError:
+                    pass
+                try:
+                    logger.debug(
+                        'waiting for task {} in job {} to terminate'.format(
+                            task, job_id))
+                    while True:
+                        _task = batch_client.task.get(job_id, task)
+                        if _task.state == batchmodels.TaskState.completed:
+                            break
+                        time.sleep(1)
+                except batchmodels.batch_error.BatchErrorException as ex:
+                    if 'The specified task does not exist' in ex.message.value:
+                        continue
 
 
 def list_nodes(batch_client, config):
@@ -1352,6 +1559,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
             except KeyError:
                 task_id = _generate_next_generic_task_id(
                     batch_client, job.id, reserved_task_id)
+                task['id'] = task_id
             # set run and exec commands
             docker_run_cmd = 'docker run'
             docker_exec_cmd = 'docker exec'
@@ -1375,6 +1583,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                     raise KeyError()
             except KeyError:
                 name = task['id']
+                task['name'] = name
             run_opts.append('--name {}'.format(name))
             # parse labels option
             try:

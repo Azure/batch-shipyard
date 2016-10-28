@@ -1186,32 +1186,73 @@ def action_jobs_listtasks(batch_client, config):
     convoy.batch.list_tasks(batch_client, config)
 
 
-def action_jobs_term(batch_client, config, all, wait):
-    # type: (batch.BatchServiceClient, dict, bool, bool) -> None
+def action_jobs_termtasks(batch_client, config, jobid, taskid, wait):
+    # type: (batch.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Jobs Termtasks
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    :param str jobid: job id
+    :param str taskid: task id
+    :param bool wait: wait for action to complete
+    """
+    if taskid is not None and jobid is None:
+        raise ValueError(
+            'cannot specify a task to terminate without the corresponding '
+            'job id')
+    convoy.batch.terminate_tasks(
+        batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
+
+
+def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
+    # type: (batch.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Jobs Deltasks
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    :param str jobid: job id
+    :param str taskid: task id
+    :param bool wait: wait for action to complete
+    """
+    if taskid is not None and jobid is None:
+        raise ValueError(
+            'cannot specify a task to delete without the corresponding '
+            'job id')
+    convoy.batch.del_tasks(
+        batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
+
+
+def action_jobs_term(batch_client, config, all, jobid, wait):
+    # type: (batch.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Term
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param bool all: all jobs
+    :param str jobid: job id
     :param bool wait: wait for action to complete
     """
     if all:
+        if jobid is not None:
+            raise ValueError('cannot specify both --all and --jobid')
         convoy.batch.terminate_all_jobs(batch_client, config, wait=wait)
     else:
-        convoy.batch.terminate_jobs(batch_client, config, wait=wait)
+        convoy.batch.terminate_jobs(
+            batch_client, config, jobid=jobid, wait=wait)
 
 
-def action_jobs_del(batch_client, config, all, wait):
-    # type: (batch.BatchServiceClient, dict, bool, bool) -> None
+def action_jobs_del(batch_client, config, all, jobid, wait):
+    # type: (batch.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Del
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param bool all: all jobs
+    :param str jobid: job id
     :param bool wait: wait for action to complete
     """
     if all:
+        if jobid is not None:
+            raise ValueError('cannot specify both --all and --jobid')
         convoy.batch.del_all_jobs(batch_client, config, wait=wait)
     else:
-        convoy.batch.del_jobs(batch_client, config, wait=wait)
+        convoy.batch.del_jobs(batch_client, config, jobid=jobid, wait=wait)
 
 
 def action_jobs_cmi(batch_client, config, delete):

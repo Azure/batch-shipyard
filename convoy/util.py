@@ -246,37 +246,32 @@ def subprocess_with_output(cmd, shell=False, suppress_output=False):
     :rtype: int
     :return: return code of process
     """
-    _devnull = open(os.devnull, 'w')
-    if suppress_output:
-        proc = subprocess.Popen(
-            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT)
-    else:
-        proc = subprocess.Popen(cmd, shell=shell)
-    proc.wait()
-    _devnull.close()
+    _devnull = None
+    try:
+        if suppress_output:
+            _devnull = open(os.devnull, 'w')
+            proc = subprocess.Popen(
+                cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT)
+        else:
+            proc = subprocess.Popen(cmd, shell=shell)
+        proc.wait()
+    finally:
+        if _devnull is not None:
+            _devnull.close()
     return proc.returncode
 
 
-def subprocess_nowait(
-        cmd, shell=False, suppress_output=False, cwd=None, env=None):
-    # type: (str, bool, bool, str, dict) -> subprocess.Process
+def subprocess_nowait(cmd, shell=False, cwd=None, env=None):
+    # type: (str, bool, str, dict) -> subprocess.Process
     """Subprocess command and do not wait for subprocess
     :param str cmd: command line to execute
     :param bool shell: use shell in Popen
-    :param bool suppress_output: suppress output
     :param str cwd: current working directory
     :param dict env: env vars to use
     :rtype: subprocess.Process
     :return: subprocess process handle
     """
-    _devnull = open(os.devnull, 'w')
-    if suppress_output:
-        proc = subprocess.Popen(
-            cmd, shell=shell, stdout=_devnull, stderr=subprocess.STDOUT,
-            cwd=cwd, env=env)
-    else:
-        proc = subprocess.Popen(cmd, shell=shell, cwd=cwd, env=env)
-    return proc
+    return subprocess.Popen(cmd, shell=shell, cwd=cwd, env=env)
 
 
 def subprocess_nowait_pipe_stdout(
@@ -290,9 +285,8 @@ def subprocess_nowait_pipe_stdout(
     :rtype: subprocess.Process
     :return: subprocess process handle
     """
-    proc = subprocess.Popen(
+    return subprocess.Popen(
         cmd, shell=shell, stdout=subprocess.PIPE, cwd=cwd, env=env)
-    return proc
 
 
 def subprocess_attach_stdin(cmd, shell=False):

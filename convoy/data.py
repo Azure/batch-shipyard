@@ -709,8 +709,7 @@ def _multinode_thread_worker(
                                ssh_private_key, port, username, ip,
                                convoy.util.wrap_commands_in_shell(cmds)))
                 procs.append(
-                    convoy.util.subprocess_nowait(
-                        joincmd, shell=True, suppress_output=True))
+                    convoy.util.subprocess_nowait(joincmd, shell=True))
             else:
                 completed += 1
         else:

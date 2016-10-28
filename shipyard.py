@@ -426,30 +426,68 @@ def jobs_list_tasks(ctx):
     convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config)
 
 
+@jobs.command('termtasks')
+@click.option(
+    '--jobid', help='Terminate tasks in the specified job id')
+@click.option(
+    '--taskid', help='Terminate tasks in the specified task id')
+@click.option(
+    '--wait', is_flag=True, help='Wait for task termination to complete')
+@common_options
+@pass_cli_context
+def jobs_termtasks(ctx, jobid, taskid, wait):
+    """Terminate specified tasks in jobs"""
+    _setup_context(ctx)
+    convoy.fleet.action_jobs_termtasks(
+        ctx.batch_client, ctx.config, jobid, taskid, wait)
+
+
 @jobs.command('term')
 @click.option(
     '--all', is_flag=True, help='Terminate all jobs in Batch account')
 @click.option(
+    '--jobid', help='Terminate just the specified job id')
+@click.option(
     '--wait', is_flag=True, help='Wait for jobs termination to complete')
 @common_options
 @pass_cli_context
-def jobs_term(ctx, all, wait):
+def jobs_term(ctx, all, jobid, wait):
     """Terminate jobs"""
     _setup_context(ctx)
-    convoy.fleet.action_jobs_term(ctx.batch_client, ctx.config, all, wait)
+    convoy.fleet.action_jobs_term(
+        ctx.batch_client, ctx.config, all, jobid, wait)
 
 
 @jobs.command('del')
 @click.option(
     '--all', is_flag=True, help='Delete all jobs in Batch account')
 @click.option(
+    '--jobid', help='Delete just the specified job id')
+@click.option(
     '--wait', is_flag=True, help='Wait for jobs deletion to complete')
 @common_options
 @pass_cli_context
-def jobs_del(ctx, all, wait):
+def jobs_del(ctx, all, jobid, wait):
     """Delete jobs"""
     _setup_context(ctx)
-    convoy.fleet.action_jobs_del(ctx.batch_client, ctx.config, all, wait)
+    convoy.fleet.action_jobs_del(
+        ctx.batch_client, ctx.config, all, jobid, wait)
+
+
+@jobs.command('deltasks')
+@click.option(
+    '--jobid', help='Delete tasks in the specified job id')
+@click.option(
+    '--taskid', help='Delete tasks in the specified task id')
+@click.option(
+    '--wait', is_flag=True, help='Wait for task deletion to complete')
+@common_options
+@pass_cli_context
+def jobs_deltasks(ctx, jobid, taskid, wait):
+    """Delete specified tasks in jobs"""
+    _setup_context(ctx)
+    convoy.fleet.action_jobs_deltasks(
+        ctx.batch_client, ctx.config, jobid, taskid, wait)
 
 
 @jobs.command('cmi')

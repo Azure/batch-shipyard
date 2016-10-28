@@ -80,7 +80,7 @@ Additionally, if some software is only needed to build the application and
 can be safely removed, then it is recommended to do so. For instance,
 if your software requires development headers to compile, these can be
 removed after the binary is produced. Similarly, temporary files as a
-result of the build process, e.g., `.o` or `.dep` files) can be removed
+result of the build process (e.g., `.o` or `.dep` files) can be removed
 to reduce the size of the final Docker image.
 
 ### Multi-Instance (MPI) Recipes
@@ -94,5 +94,5 @@ information.
 There are sample recipes which showcase MPI on Batch Shipyard, please
 reference those as examples.
 
-## Exiting Recipes
+## Existing Recipes
 Please see [this directory](../recipes) for existing recipes.

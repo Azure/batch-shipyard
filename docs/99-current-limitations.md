@@ -13,3 +13,10 @@ current limitation of the underlying Azure Batch service.
 This is a current limitation of the underlying VM and host drivers.
 * On-premise Docker private registries are not supported at this time due to
 VNet requirements.
+
+The following Azure Batch actions should only be performed through Batch
+Shipyard when deploying your workload through this toolkit, as Batch
+Shipyard needs to take special actions or ensure the intended outcome:
+* Pool resize
+* Task termination (if task is not completed)
+* Task deletion (if task is not completed)
