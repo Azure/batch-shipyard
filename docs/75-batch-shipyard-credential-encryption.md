@@ -10,7 +10,7 @@ for Batch Shipyard.
 Azure Batch naturally must deal with potentially sensitive information that
 customers submit for job scheduling, such as command lines for processes,
 environment variables, and URLs for resource files. All of this information
-is encrypted from the time it sent from the your submission machine or Portal
+is encrypted from the point of origin from the submission machine or Portal
 and stored in the Azure Batch service. All REST API calls are encrypted in
 transit through HTTPS to the Azure Batch service endpoints. Any sensitive
 information as described above is then encrypted. Encryption of this
@@ -76,7 +76,7 @@ For step 2, there is one json object that must be configured under
 Ensure that the `enabled` property is set to `true` and that the `pfx`
 members are correctly populated. It is recommended to fill the
 `public_key_pem` and `sha1_thumbprint` (which is output at the end of
-`createcert`) members such that they do not need to be generated each
+`cert create`) members such that they do not need to be generated each
 time encryption is required.
 
 Step 3 is optional, but one may invoke `cert add` with `shipyard.py` to

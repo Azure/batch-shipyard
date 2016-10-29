@@ -18,9 +18,9 @@ with Python 2.7 or 3.3+. You will also need to install the
 [Azure Batch](https://pypi.python.org/pypi/azure-batch) and
 [Azure Storage](https://pypi.python.org/pypi/azure-storage) python packages.
 Installation can be performed using the [requirements.txt](../requirements.txt)
-file via the command `pip install --user -r requirements.txt` (or via `pip3`
-for python3). If `pip` is not installed on your system, please continue
-reading below.
+file via the command `pip install --upgrade --user -r requirements.txt`
+(or via `pip3` for python3). If `pip` is not installed on your system,
+please continue reading below.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and python development libraries to be installed due to the

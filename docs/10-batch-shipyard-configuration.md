@@ -193,15 +193,15 @@ contains the following members:
     * (required) `passphrase` property is the passphrase for the PFX
       certificate. This cannot be empty.
     * (optional) `sha1_thumbprint` is the SHA1 thumbprint of the
-      certificate. If the PFX file is created using the `createcert` action,
+      certificate. If the PFX file is created using the `cert create` command,
       then the SHA1 thumbprint is output. It is recommended to populate this
       property such that it does not have to be generated when needed for
       encryption.
   * (optional) `public_key_pem` property is the full path and name to the
     RSA public key in PEM format. If the PFX file is created using the
-    `createcert` action, then this file is generated along with the PFX file.
-    It is recommended to populate this property with the PEM file path such
-    that it does not have to be generated when needed for encryption.
+    `cert create` command, then this file is generated along with the PFX
+    file. It is recommended to populate this property with the PEM file path
+    such that it does not have to be generated when needed for encryption.
 
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.

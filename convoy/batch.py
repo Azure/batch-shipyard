@@ -52,6 +52,10 @@ _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
 _GLUSTER_VOLUME = '.gluster/gv0'
+_RDMA_INSTANCES = (
+    'standard_a8', 'standard_a9', 'standard_h16r', 'standard_h16mr',
+    'standard_nc24r'
+)
 
 
 def get_gluster_volume():
@@ -883,7 +887,7 @@ def _send_docker_kill_signal(
         ssh_args = [
             'ssh', '-o', 'StrictHostKeyChecking=no', '-o',
             'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
-            '-p', str(rls.remote_login_port),
+            '-p', str(rls.remote_login_port), '-t',
             '{}@{}'.format(username, rls.remote_login_ip_address),
             'sudo', 'docker', 'kill', task_id,
         ]
@@ -1529,7 +1533,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
             set_terminate_on_all_tasks_complete = True
             job.job_release_task = batchmodels.JobReleaseTask(
                 command_line=convoy.util.wrap_commands_in_shell(
-                    ['docker stop {}'.format(mi_docker_container_name),
+                    ['docker kill {}'.format(mi_docker_container_name),
                      'docker rm -v {}'.format(mi_docker_container_name)]),
                 run_elevated=True,
             )
@@ -1677,8 +1681,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                         ('cannot initialize an infiniband task on a '
                          'non-internode communication enabled '
                          'pool: {}').format(pool_id))
-                if (_pool.vm_size.lower() != 'standard_a8' and
-                        _pool.vm_size.lower() != 'standard_a9'):
+                if _pool.vm_size.lower() not in _RDMA_INSTANCES:
                     raise RuntimeError(
                         ('cannot initialize an infiniband task on nodes '
                          'without RDMA, pool: {} vm_size: {}').format(

@@ -1,6 +1,6 @@
 # MXNet-CPU
 This recipe shows how to run [MXNet](http://mxnet.io/) on CPUs on one or
-many compute nodes via SSH.
+more compute nodes via SSH.
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for

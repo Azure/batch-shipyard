@@ -25,7 +25,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
+from __future__ import division, print_function
 import click
 import json
 import logging
@@ -62,31 +62,37 @@ class CliContext(object):
         # use configdir if available
         if self.configdir is not None:
             if self.json_credentials is None:
-                self.json_credentials = str(pathlib.Path(
-                    self.configdir, 'credentials.json'))
+                self.json_credentials = pathlib.Path(
+                    self.configdir, 'credentials.json')
             if self.json_config is None:
-                self.json_config = str(pathlib.Path(
-                    self.configdir, 'config.json'))
+                self.json_config = pathlib.Path(
+                    self.configdir, 'config.json')
             if self.json_pool is None:
-                self.json_pool = str(pathlib.Path(self.configdir, 'pool.json'))
+                self.json_pool = pathlib.Path(self.configdir, 'pool.json')
             if self.json_jobs is None:
-                self.json_jobs = str(pathlib.Path(self.configdir, 'jobs.json'))
+                self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
         # check for required json files
         if self.json_credentials is None:
             raise ValueError('credentials json was not specified')
+        elif not isinstance(self.json_credentials, pathlib.Path):
+            self.json_credentials = pathlib.Path(self.json_credentials)
         if self.json_config is None:
             raise ValueError('config json was not specified')
+        elif not isinstance(self.json_config, pathlib.Path):
+            self.json_config = pathlib.Path(self.json_config)
         if self.json_pool is None:
             raise ValueError('pool json was not specified')
+        elif not isinstance(self.json_pool, pathlib.Path):
+            self.json_pool = pathlib.Path(self.json_pool)
         # load json files into memory
-        with open(self.json_credentials, 'r') as f:
+        with self.json_credentials.open('r') as f:
             self.config = json.load(f)
-        with open(self.json_config, 'r') as f:
+        with self.json_config.open('r') as f:
             self.config = convoy.util.merge_dict(self.config, json.load(f))
-        with open(self.json_pool, 'r') as f:
+        with self.json_pool.open('r') as f:
             self.config = convoy.util.merge_dict(self.config, json.load(f))
         try:
-            with open(self.json_jobs, 'r') as f:
+            with self.json_jobs.open('r') as f:
                 self.config = convoy.util.merge_dict(self.config, json.load(f))
         except Exception:
             pass

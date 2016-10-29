@@ -1,6 +1,6 @@
 # MXNet-GPU
 This recipe shows how to run [MXNet](http://mxnet.io/) on GPUs on one or
-N-series Azure VM instances in an Azure Batch compute pool.
+more N-series Azure VM instances in an Azure Batch compute pool.
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for
