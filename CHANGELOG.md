@@ -1,6 +1,15 @@
 # Change Log
 
 ## [Unreleased]
+### Changed
+- Pools failing to start will now automatically retrieve stdout.txt and
+stderr.txt to the current working directory. These files can be inspected
+locally and submitted as context as GitHub issues.
+
+### Fixed
+- Unicode literals warning with Click
+- Config file loading issue in some contexts
+- Documentation typos
 
 ## [2.0.0rc1] - 2016-10-28
 ### Added

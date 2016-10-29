@@ -22,6 +22,10 @@ file via the command `pip install --upgrade --user -r requirements.txt`
 (or via `pip3` for python3). If `pip` is not installed on your system,
 please continue reading below.
 
+**Note on Upgrades:** If you are upgrading between Batch Shipyard releases,
+please re-run the `pip` command above to ensure that you have all of the
+latest dependencies.
+
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and python development libraries to be installed due to the
 [cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.

@@ -193,14 +193,37 @@ def _reboot_node(batch_client, pool_id, node_id, wait):
                 time.sleep(1)
 
 
+def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Retrieve stdout/stderr from failed nodes
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool_id = config['pool_specification']['id']
+    if nodeid is None:
+        nodes = batch_client.compute_node.list(pool_id)
+    else:
+        nodes = [batch_client.compute_node.get(pool_id, nodeid)]
+    # for any node in state start task failed, retrieve the stdout and stderr
+    for node in nodes:
+        if node.state == batchmodels.ComputeNodeState.starttaskfailed:
+            config['_auto_confirm'] = True
+            get_all_files_via_node(
+                batch_client, config,
+                filespec='{},{}'.format(node.id, 'startup/std*.txt'))
+
+
 def _block_for_nodes_ready(
-        batch_client, node_state, pool_id, reboot_on_failed):
-    # type: (batch.BatchServiceClient, List[batchmodels.ComputeNodeState],
-    #        str, bool) -> List[batchmodels.ComputeNode]
+        batch_client, config, node_state, pool_id, reboot_on_failed):
+    # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNodeState], str,
+    #        bool) -> List[batchmodels.ComputeNode]
     """Wait for nodes to enter "ready": steady state and all nodes in
     specified states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     :param list node_state: list of acceptable node states
     :param str pool_id: pool id
     :param bool reboot_on_failed: reboot node on failed start state
@@ -221,40 +244,60 @@ def _block_for_nodes_ready(
                     pool.id, pool.resize_error.code,
                     pool.resize_error.message))
         nodes = list(batch_client.compute_node.list(pool.id))
-        if (reboot_on_failed and
-                any(node.state == batchmodels.ComputeNodeState.starttaskfailed
-                    for node in nodes)):
-            for node in nodes:
-                if (node.state ==
-                        batchmodels.ComputeNodeState.starttaskfailed):
+        # check if any nodes are in start task failed state
+        if (any(node.state == batchmodels.ComputeNodeState.starttaskfailed
+                for node in nodes)):
+            # attempt reboot if enabled for potentially transient errors
+            if reboot_on_failed:
+                for node in nodes:
+                    if (node.state !=
+                            batchmodels.ComputeNodeState.starttaskfailed):
+                        continue
                     if node.id not in reboot_map:
                         reboot_map[node.id] = 0
+                        logger.error(
+                            ('Detected start task failure, retrieving '
+                             'stdout/stderr for error diagnosis for '
+                             'node {}').format(node.id))
+                        _retrieve_outputs_from_failed_nodes(
+                            batch_client, config, nodeid=node.id)
                     if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
+                        list_nodes(batch_client, config)
                         raise RuntimeError(
-                            ('Ran out of reboot retries recovering node {} '
-                             'in pool {}').format(node.id, pool.id))
+                            ('Ran out of reboot retries for recovery. '
+                             'Please inspect stdout.txt/stderr.txt files '
+                             'within the {}/{}/startup directory in the '
+                             'current working directory. If this error '
+                             'appears non-transient, please submit an '
+                             'issue on GitHub').format(
+                                 pool.id, node.id))
                     _reboot_node(batch_client, pool.id, node.id, True)
                     reboot_map[node.id] += 1
-            # refresh node list
-            nodes = list(batch_client.compute_node.list(pool.id))
-        else:
-            # fast path check for start task failures in non-reboot mode
-            if any(node.state == batchmodels.ComputeNodeState.starttaskfailed
-                   for node in nodes):
+                # refresh node list to reflect rebooting states
+                nodes = list(batch_client.compute_node.list(pool.id))
+            else:
+                # fast path check for start task failures in non-reboot mode
+                logger.error(
+                    'Detected start task failure, retrieving stdout/stderr '
+                    'for error diagnosis')
+                _retrieve_outputs_from_failed_nodes(batch_client, config)
+                list_nodes(batch_client, config)
                 raise RuntimeError(
-                    'Detected node(s) of pool {} with start task failure. '
-                    'Please inspect the stdout.txt and stderr.txt within '
-                    'the startup directory on the compute nodes which have '
-                    'failed.'.format(pool.id))
+                    ('Please inspect stdout.txt/stderr.txt files within '
+                     'the {}/<nodes>/startup directory in the current '
+                     'working directory. If this error appears '
+                     'non-transient, please submit an issue on '
+                     'GitHub.').format(pool.id))
         if (len(nodes) >= pool.target_dedicated and
                 all(node.state in node_state for node in nodes)):
             if any(node.state != batchmodels.ComputeNodeState.idle
                     for node in nodes):
+                # list nodes of pool
+                list_nodes(batch_client, config)
                 raise RuntimeError(
                     'Node(s) of pool {} not in idle state. Please inspect '
-                    'the stdout.txt and stderr.txt within the startup '
-                    'directory on the compute nodes that are non-idle.'.format(
-                        pool.id))
+                    'the state of nodes in the pool. Please retry pool '
+                    'creation by deleting and recreating the pool.')
             else:
                 return nodes
         i += 1
@@ -290,7 +333,7 @@ def wait_for_pool_ready(batch_client, config, pool_id):
     except KeyError:
         reboot_on_failed = False
     nodes = _block_for_nodes_ready(
-        batch_client, node_state, pool_id, reboot_on_failed)
+        batch_client, config, node_state, pool_id, reboot_on_failed)
     return nodes
 
 
@@ -1193,6 +1236,8 @@ def get_all_files_via_task(batch_client, config, filespec=None):
         task_id = convoy.util.get_input('Enter task id: ')
     if incl is None:
         incl = convoy.util.get_input('Enter filter: ')
+    if incl is not None and len(incl) == 0:
+        incl = None
     # get first running task if specified
     if task_id == '@FIRSTRUNNING':
         logger.debug('attempting to get first running task in job {}'.format(
@@ -1258,6 +1303,8 @@ def get_all_files_via_node(batch_client, config, filespec=None):
         incl = convoy.util.get_input('Enter filter: ')
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
+    if incl is not None and len(incl) == 0:
+        incl = None
     pool_id = config['pool_specification']['id']
     logger.debug('downloading files to {}/{}'.format(pool_id, node_id))
     files = batch_client.file.list_from_compute_node(
