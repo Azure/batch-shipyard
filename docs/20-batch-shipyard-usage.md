@@ -4,31 +4,38 @@ Please see the [Batch Shipyard Docker Image CLI](#docker-cli) section for
 information regarding how to use the `alfpark/batch-shipyard:cli-latest`
 Docker image if not invoking the Python script directly.
 
-## shipyard.py Invocation
-If you are invoking the script with a Python3 interpreter, you can simply
-run the script as:
-
+## Batch Shipyard Invocation
+If you installed Batch Shipyard using the `install.sh` script, then
+you can invoke as:
+```shell
+# Change directory to batch-shipyard installed directory
+./shipyard
 ```
+You can also invoke `shipyard` from any directory if given the full path
+to the script.
+
+If you installed for Python3, you can alternatively invoke the script
+directly as:
+```shell
 ./shipyard.py
 ```
-
-With Python2 invoke as:
+If on Windows, you will need to invoke the Python interpreter and pass
+the script as an argument. For example:
 ```
-python shipyard.py
+C:\Python35\python.exe shipyard.py
 ```
-
 The `-h` or `--help` option will list the available options, which are
 explained below.
 
 ## Commands and Sub-commands
-`shipyard.py` is invoked with a command and a sub-command as positional
-arguments, i.e.:
+`shipyard` (and `shipyard.py`) is invoked with a command and a sub-command as
+positional arguments, i.e.:
 ```shell
-python shipyard.py <command> <subcommand> <options>
+shipyard <command> <subcommand> <options>
 ```
 For instance:
 ```shell
-python shipyard.py pool add --configdir config
+shipyard pool add --configdir config
 ```
 Would create a pool on the Batch account as specified in the config files
 found in the `config` directory. Please note that `<options>` must be
@@ -37,13 +44,14 @@ specified after the command and subcommand.
 You can issue the `-h` or `--help` option at every level to view all
 available options for that level and additional help text. For example:
 ```shell
-python shipyard.py -h
-python shipyard.py pool -h
-python shipyard.py pool add -h
+shipyard -h
+shipyard pool -h
+shipyard pool add -h
 ```
 
 ## Commands
-The `shipyard.py` script contains the following top-level commands:
+`shipyard` (and `shipyard.py`) script contains the following top-level
+commands:
 ```
   cert     Certificate actions
   data     Data actions
@@ -53,7 +61,7 @@ The `shipyard.py` script contains the following top-level commands:
 ```
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
-* `jobs` commands deal with Azure Batch jobs
+* `jobs` commands deal with Azure Batch jobs and tasks
 * `pool` commands deal with Azure Batch pools
 * `storage` commands deal with Batch Shipyard metadata on Azure Storage
 
@@ -216,22 +224,24 @@ following:
 
 ## Example Invocations
 ```shell
-python shipyard.py pool add --credentials credentials.json --config config.json --pool pool.json
+shipyard pool add --credentials credentials.json --config config.json --pool pool.json
 
 # ... or if all config files are in the current working directory named as above ...
 
-python shipyard.py pool add --configdir .
+shipyard pool add --configdir .
 ```
-The above invocation will add the pool specified to the Batch account.
+The above invocation will add the pool specified to the Batch account. Notice
+that the options and shared options are given after the command and
+sub-command and not before.
 
 ```shell
-python shipyard.py jobs add --configdir .
+shipyard jobs add --configdir .
 ```
 The above invocation will add the jobs specified in the jobs.json file to
 the designated pool.
 
 ```shell
-python shipyard.py data stream --configdir . --filespec job1,dockertask-000,stdout.txt
+shipyard data stream --configdir . --filespec job1,dockertask-000,stdout.txt
 ```
 The above invocation will stream the stdout.txt file from the job `job1` and
 task `task1` from a live compute node. Because all portions of the

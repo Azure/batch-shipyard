@@ -1,10 +1,15 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- `install.sh` install/setup helper script
+- `shipyard` execution helper script created via `install.sh`
+
 ### Changed
 - Pools failing to start will now automatically retrieve stdout.txt and
 stderr.txt to the current working directory. These files can be inspected
 locally and submitted as context as GitHub issues.
+- Improve installation doc
 
 ### Fixed
 - Unicode literals warning with Click

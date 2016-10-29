@@ -11,7 +11,7 @@ RUN apk update \
     && pip3 install --no-cache-dir --upgrade pip \
     && git clone https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
     && cd /opt/batch-shipyard \
-    && rm -rf .git* \
+    && rm -rf .git* .travis.yml install.sh shipyard \
     && pip3 install -r requirements.txt \
     && apk del --purge \
         build-base python3-dev openssl-dev libffi-dev git \
