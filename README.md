@@ -39,7 +39,8 @@ allowing complex processing pipelines and DAGs with Docker containers
 on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
 ([Preview](http://gpu.azure.com/))
 * Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
-cluster applications on compute pools with automatic job cleanup
+cluster applications on compute pools with automatic job completion and Docker
+task termination
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/): STANDARD\_A8, STANDARD\_A9

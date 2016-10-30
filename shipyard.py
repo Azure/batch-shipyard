@@ -57,6 +57,26 @@ class CliContext(object):
         self.queue_client = None
         self.table_client = None
 
+    def _read_json_file(self, json_file):
+        # type: (CliContext, pathlib.Path) -> None
+        """Read a json file into self.config, while checking for invalid
+        JSON and returning an error that makes sense if ValueError
+        :param CliContext self: this
+        :param pathlib.Path json_file: json file to load
+        """
+        try:
+            with json_file.open('r') as f:
+                if self.config is None:
+                    self.config = json.load(f)
+                else:
+                    self.config = convoy.util.merge_dict(
+                        self.config, json.load(f))
+        except ValueError:
+            raise ValueError(
+                ('Detected invalid JSON in file: {}. Please ensure the JSON '
+                 'is valid and is encoded UTF-8 without BOM.'.format(
+                     json_file)))
+
     def init_config(self):
         """Initializes configuration of the context"""
         # use configdir if available
@@ -85,22 +105,23 @@ class CliContext(object):
         elif not isinstance(self.json_pool, pathlib.Path):
             self.json_pool = pathlib.Path(self.json_pool)
         # load json files into memory
-        with self.json_credentials.open('r') as f:
-            self.config = json.load(f)
-        with self.json_config.open('r') as f:
-            self.config = convoy.util.merge_dict(self.config, json.load(f))
-        with self.json_pool.open('r') as f:
-            self.config = convoy.util.merge_dict(self.config, json.load(f))
-        try:
-            with self.json_jobs.open('r') as f:
-                self.config = convoy.util.merge_dict(self.config, json.load(f))
-        except Exception:
-            pass
+        self._read_json_file(self.json_credentials)
+        self._read_json_file(self.json_config)
+        self._read_json_file(self.json_pool)
+        if self.json_jobs is not None:
+            self._read_json_file(self.json_jobs)
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
         if self.verbose:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
+        # free mem
+        del self.json_credentials
+        del self.json_config
+        del self.json_pool
+        del self.json_jobs
+        del self.verbose
+        del self.yes
 
     def init_clients(self):
         """Initializes clients for the context"""
