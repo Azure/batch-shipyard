@@ -92,6 +92,7 @@ ENV/
 .ropeproject
 
 # project specific ignores
+shipyard
 ssh_docker_tunnel_shipyard.sh
 id_rsa_shipyard*
 resources/azurefile-dockervolume-create.sh

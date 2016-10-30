@@ -181,6 +181,7 @@ in the specified pool
 * `listnodes` will list all nodes in the specified pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
+  * `--wait` will wait for resize to complete
 
 ## Storage Command
 The `storage` command has the following sub-commands:

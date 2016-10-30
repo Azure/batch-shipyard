@@ -1049,14 +1049,15 @@ def action_pool_delete(
                 time.sleep(3)
 
 
-def action_pool_resize(batch_client, blob_client, config):
+def action_pool_resize(batch_client, blob_client, config, wait):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict) -> None
+    #        dict, bool) -> None
     """Resize pool that may contain glusterfs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
     """
     pool_id = config['pool_specification']['id']
     # check if this is a glusterfs-enabled pool
@@ -1081,13 +1082,12 @@ def action_pool_resize(batch_client, blob_client, config):
     if gluster_present:
         for node in batch_client.compute_node.list(pool_id):
             old_nodes[node.id] = node.ip_address
+        logger.debug('forcing wait to True due to glusterfs')
+        wait = True
     # resize pool
-    convoy.batch.resize_pool(batch_client, config)
+    nodes = convoy.batch.resize_pool(batch_client, config, wait)
     # add brick for new nodes
     if gluster_present:
-        # wait for nodes to reach idle
-        nodes = convoy.batch.wait_for_pool_ready(
-            batch_client, config, pool_id)
         # get internal ip addresses of new nodes
         new_nodes = [
             node.ip_address for node in nodes if node.id not in old_nodes

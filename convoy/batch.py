@@ -215,16 +215,19 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
 
 
 def _block_for_nodes_ready(
-        batch_client, config, node_state, pool_id, reboot_on_failed):
+        batch_client, config, stopping_states, end_states, pool_id,
+        reboot_on_failed):
     # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNodeState],
     #        List[batchmodels.ComputeNodeState], str,
     #        bool) -> List[batchmodels.ComputeNode]
-    """Wait for nodes to enter "ready": steady state and all nodes in
-    specified states
+    """Wait for pool to enter steady state and all nodes to enter stopping
+    states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param list node_state: list of acceptable node states
+    :param list stopping_states: list of node states to stop polling
+    :param list end_states: list of acceptable end states
     :param str pool_id: pool id
     :param bool reboot_on_failed: reboot node on failed start state
     :rtype: list
@@ -232,7 +235,7 @@ def _block_for_nodes_ready(
     """
     logger.info(
         'waiting for all nodes in pool {} to reach one of: {!r}'.format(
-            pool_id, node_state))
+            pool_id, stopping_states))
     i = 0
     reboot_map = {}
     while True:
@@ -289,15 +292,15 @@ def _block_for_nodes_ready(
                      'non-transient, please submit an issue on '
                      'GitHub.').format(pool.id))
         if (len(nodes) >= pool.target_dedicated and
-                all(node.state in node_state for node in nodes)):
-            if any(node.state != batchmodels.ComputeNodeState.idle
-                    for node in nodes):
+                all(node.state in stopping_states for node in nodes)):
+            if any(node.state not in end_states for node in nodes):
                 # list nodes of pool
                 list_nodes(batch_client, config)
                 raise RuntimeError(
-                    'Node(s) of pool {} not in idle state. Please inspect '
-                    'the state of nodes in the pool. Please retry pool '
-                    'creation by deleting and recreating the pool.')
+                    ('Node(s) of pool {} not in {} state. Please inspect '
+                     'the state of nodes in the pool. Please retry pool '
+                     'creation by deleting and recreating the pool.').format(
+                         pool.id, end_states))
             else:
                 return nodes
         i += 1
@@ -310,30 +313,38 @@ def _block_for_nodes_ready(
         time.sleep(10)
 
 
-def wait_for_pool_ready(batch_client, config, pool_id):
-    # type: (batch.BatchServiceClient, dict, str) ->
-    #        List[batchmodels.ComputeNode]
-    """Wait for pool to enter "ready": steady state and all nodes idle
+def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
+    # type: (batch.BatchServiceClient, dict, str,
+    #        List[batchmodels.ComputeNode]) -> List[batchmodels.ComputeNode]
+    """Wait for pool to enter steady state and all nodes in end states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str pool_id: pool id
+    :param list addl_end_states: additional end states
     :rtype: list
     :return: list of nodes
     """
-    # wait for pool idle
-    node_state = frozenset(
-        (batchmodels.ComputeNodeState.starttaskfailed,
-         batchmodels.ComputeNodeState.unusable,
-         batchmodels.ComputeNodeState.idle)
-    )
+    base_stopping_states = [
+        batchmodels.ComputeNodeState.starttaskfailed,
+        batchmodels.ComputeNodeState.unusable,
+        batchmodels.ComputeNodeState.idle
+    ]
+    base_end_states = [batchmodels.ComputeNodeState.idle]
     try:
         reboot_on_failed = config[
             'pool_specification']['reboot_on_start_task_failed']
     except KeyError:
         reboot_on_failed = False
+    if addl_end_states is not None and len(addl_end_states) > 0:
+        base_stopping_states.extend(addl_end_states)
+        base_end_states.extend(addl_end_states)
+    stopping_states = frozenset(base_stopping_states)
+    end_states = frozenset(base_end_states)
     nodes = _block_for_nodes_ready(
-        batch_client, config, node_state, pool_id, reboot_on_failed)
+        batch_client, config, stopping_states, end_states, pool_id,
+        reboot_on_failed)
+    list_nodes(batch_client, config, nodes=nodes)
     return nodes
 
 
@@ -556,16 +567,21 @@ def list_pools(batch_client):
         logger.error('no pools found')
 
 
-def resize_pool(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+def resize_pool(batch_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool) -> list
     """Resize a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
+    :rtype: list or None
+    :return: list of nodes if wait or None
     """
     pool_id = config['pool_specification']['id']
     vm_count = int(config['pool_specification']['vm_count'])
-    logger.info('Resizing pool {} to {}'.format(pool_id, vm_count))
+    logger.info('Resizing pool {} to {} compute nodes'.format(
+        pool_id, vm_count))
     batch_client.pool.resize(
         pool_id=pool_id,
         pool_resize_parameter=batchmodels.PoolResizeParameter(
@@ -573,6 +589,10 @@ def resize_pool(batch_client, config):
             resize_timeout=datetime.timedelta(minutes=20),
         )
     )
+    if wait:
+        return wait_for_pool_ready(
+            batch_client, config, pool_id,
+            addl_end_states=[batchmodels.ComputeNodeState.running])
 
 
 def del_pool(batch_client, config):
@@ -1037,16 +1057,18 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                         continue
 
 
-def list_nodes(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+def list_nodes(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict, list) -> None
     """Get a list of nodes
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param lsit nodes: list of nodes
     """
     pool_id = config['pool_specification']['id']
     logger.debug('listing nodes for pool {}'.format(pool_id))
-    nodes = batch_client.compute_node.list(pool_id)
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool_id)
     for node in nodes:
         logger.info(
             ('node_id={} [state={} scheduling_state={} ip_address={} '

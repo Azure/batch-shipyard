@@ -29,6 +29,7 @@ import argparse
 import copy
 import datetime
 import json
+import pathlib
 import subprocess
 import sys
 # non-stdlib imports
@@ -282,7 +283,7 @@ def graph_data(data: dict, sizes: dict, offer: str, sku: str):
             mintime = start
         if start > maxtime:
             maxtime = start
-    print('delta:', maxtime - mintime)
+    print('nodeready variance:', maxtime - mintime)
     total_gr = 0
     total_ac = 0
     with open(dat_fname, 'w') as f:
@@ -383,10 +384,21 @@ def main():
     # get command-line args
     args = parseargs()
 
+    if args.configdir is not None:
+        if args.credentials is None:
+            args.credentials = str(
+                pathlib.Path(args.configdir, 'credentials.json'))
+        if args.config is None:
+            args.config = str(pathlib.Path(args.configdir, 'config.json'))
+        if args.pool is None:
+            args.pool = str(pathlib.Path(args.configdir, 'pool.json'))
+
     if args.credentials is None:
         raise ValueError('credentials json not specified')
     if args.config is None:
         raise ValueError('config json not specified')
+    if args.pool is None:
+        raise ValueError('pool json not specified')
 
     with open(args.credentials, 'r') as f:
         config = json.load(f)
@@ -408,7 +420,9 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='Shipyard perf graph generator')
+        description='Batch Shipyard perf graph generator')
+    parser.add_argument(
+        '--configdir', help='json config dir')
     parser.add_argument(
         '--credentials', help='credentials json config')
     parser.add_argument(

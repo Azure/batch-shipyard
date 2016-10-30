@@ -107,7 +107,7 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='Shipyard perf recorder')
+        description='Batch Shipyard perf recorder')
     parser.add_argument('source', help='event source')
     parser.add_argument('event', help='event')
     parser.add_argument('--ts', help='timestamp (posix)')

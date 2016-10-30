@@ -341,13 +341,15 @@ def pool_del(ctx, wait):
 
 
 @pool.command('resize')
+@click.option(
+    '--wait', is_flag=True, help='Wait for pool resize to complete')
 @common_options
 @pass_cli_context
-def pool_resize(ctx):
+def pool_resize(ctx, wait):
     """Resize a pool"""
     _setup_context(ctx)
     convoy.fleet.action_pool_resize(
-        ctx.batch_client, ctx.blob_client, ctx.config)
+        ctx.batch_client, ctx.blob_client, ctx.config, wait=wait)
 
 
 @pool.command('grls')

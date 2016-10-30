@@ -10,7 +10,7 @@ git clone https://github.com/Azure/batch-shipyard.git
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
 
 Batch Shipyard includes an installation script to simplify installation on
-a variety of recent platforms. This installation script can be used
+a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
@@ -70,9 +70,9 @@ line-endings (CRLF) then compute nodes will fail to start properly.
 ## Manual Installation
 ### Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
-with Python 2.7 or 3.3+. You will also need to install the
-[Azure Batch](https://pypi.python.org/pypi/azure-batch) and
-[Azure Storage](https://pypi.python.org/pypi/azure-storage) python packages.
+with Python 2.7 or 3.3+. You will also need to install dependent Python
+packages including the [Azure Batch](https://pypi.python.org/pypi/azure-batch)
+and [Azure Storage](https://pypi.python.org/pypi/azure-storage) packages.
 Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --upgrade --user -r requirements.txt`
 (or via `pip3` for python3). If `pip` is not installed on your system,
@@ -80,7 +80,7 @@ please continue reading below. Note that this `pip` command should be run
 for every Batch Shipyard upgrade if not using `install.sh`.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
-ssl, ffi, and python development libraries to be installed due to the
+ssl, ffi, and Python development libraries to be installed due to the
 [cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.
 For Windows, binary wheels will be installed for dependencies, thus no
 development environment is needed. The following are example commands to
@@ -109,13 +109,11 @@ pip install --upgrade pip
 ####Note about Python 3.3+
 If installing for Python 3.3+, then simply use the Python3 equivalents for
 the python dependencies. For example, on Ubuntu/Debian:
-
 ```
 apt-get update
 apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
 pip install --upgrade pip
 ```
-
 would install the proper dependencies for Python3.
 
 ###Data Movement Support
