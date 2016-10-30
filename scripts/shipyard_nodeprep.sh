@@ -272,8 +272,17 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         $srvstop
         set +e
         rm -f /var/lib/docker/network/files/local-kv.db
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
-        if [[ $sku == 16.04.* ]]; then
+        if [ $name == "debian-jessie" ]; then
+            mkdir -p /mnt/resource/docker-tmp
+            sed -i -e '/export TMPDIR=.*/,${s||export TMPDIR=\"/mnt/resource/docker-tmp\"|;b};$q1' /etc/default/docker
+            sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
+        else
+            mkdir -p /mnt/docker-tmp
+            sed -i -e '/export TMPDIR=.*/,${s||export TMPDIR=\"/mnt/docker-tmp\"|;b};$q1' /etc/default/docker
+            sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
+        fi
+
+        if [[ $sku == 16.04.* ]] || [[ $name == "debian-jessie" ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
             set -e
@@ -419,6 +428,8 @@ EOF
         # update yum repo and install docker engine
         yum install -y docker-engine
         # modify docker opts
+        mkdir -p /mnt/resource/docker-tmp
+        sed -i -e '/export TMPDIR=.*/,${s||export TMPDIR=\"/mnt/resource/docker-tmp\"|;b};$q1' /etc/default/docker
         sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
         sed -i '/^\[Service\]/a EnvironmentFile=-/etc/default/docker' /lib/systemd/system/docker.service
         sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
@@ -489,6 +500,8 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # install docker engine
         zypper -n in docker
         # modify docker opts, docker opts in /etc/sysconfig/docker
+        mkdir -p /mnt/resource/docker-tmp
+        sed -i -e '/export TMPDIR=.*/,${s||export TMPDIR=\"/mnt/resource/docker-tmp\"|;b};$q1' /etc/default/docker
         sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/sysconfig/docker
         systemctl daemon-reload
         # start docker service and enable docker daemon on boot
