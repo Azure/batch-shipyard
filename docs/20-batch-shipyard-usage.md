@@ -14,11 +14,6 @@ you can invoke as:
 You can also invoke `shipyard` from any directory if given the full path
 to the script.
 
-If you installed for Python3, you can alternatively invoke the script
-directly as:
-```shell
-./shipyard.py
-```
 If on Windows, you will need to invoke the Python interpreter and pass
 the script as an argument. For example:
 ```
@@ -170,7 +165,10 @@ Batch account
 all nodes in the specified pool
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
-Batch Shipyard
+Batch Shipyard. It is recommended to use this command instead of deleting
+a pool directly from the Azure Portal, Batch Explorer, or other tools as
+this action can conveniently remove all associated Batch Shipyard metadata on
+Azure Storage.
   * `--wait` will wait for deletion to complete
 * `delnode` will delete the specified node from the pool
 * `dsu` will delete the SSH user defined in the pool configuration file
