@@ -521,8 +521,12 @@ def _multinode_transfer(
     if total_files == 0:
         logger.error('no files to ingress')
         return
+    # ensure at least one directory (parent) is created
+    if len(dirs) == 0:
+        dirs.add('')
     # create remote directories via ssh
-    logger.debug('creating remote directories: {}'.format(dirs))
+    logger.debug('creating remote directories: {} and {}'.format(
+        psrc.name, dirs))
     dirs = ['mkdir -p {}/{}'.format(psrc.name, x) for x in list(dirs)]
     dirs.insert(0, 'cd {}'.format(dst))
     _rls = next(iter(rls.values()))
