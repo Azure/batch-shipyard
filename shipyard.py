@@ -24,8 +24,10 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# compat imports
+from __future__ import (absolute_import, division, print_function)
+from builtins import (dict, object)
 # stdlib imports
-from __future__ import division, print_function
 import click
 import json
 import logging

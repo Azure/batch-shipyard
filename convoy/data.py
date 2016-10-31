@@ -22,8 +22,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# compat imports
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
+from builtins import (int, list, range, str, next, open)
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
 import datetime
 import fnmatch
 import logging
@@ -99,14 +103,14 @@ def _process_storage_input_data(config, input_data, on_task):
         if fshare is not None:
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
-            # create saskey for file share with 7day expiry with rl perm
+            # create saskey for file share with rl perm
             saskey = convoy.storage.create_file_share_saskey(
                 storage_settings, fshare, 'ingress')
             # set container as fshare
             container = fshare
             del fshare
         else:
-            # create saskey for container with 7day expiry with rl perm
+            # create saskey for container with rl perm
             saskey = convoy.storage.create_blob_container_saskey(
                 storage_settings, container, 'ingress')
         try:
@@ -294,14 +298,14 @@ def _process_storage_output_data(config, output_data):
         if fshare is not None:
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
-            # create saskey for file share with 7day expiry with rwdl perm
+            # create saskey for file share with rwdl perm
             saskey = convoy.storage.create_file_share_saskey(
                 storage_settings, fshare, 'egress', create_share=True)
             # set container as fshare
             container = fshare
             del fshare
         else:
-            # create saskey for container with 7day expiry with rwdl perm
+            # create saskey for container with rwdl perm
             saskey = convoy.storage.create_blob_container_saskey(
                 storage_settings, container, 'egress', create_container=True)
         try:

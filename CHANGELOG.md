@@ -4,14 +4,20 @@
 ### Added
 - `install.sh` install/setup helper script
 - `shipyard` execution helper script created via `install.sh`
+- `generated_sas_expiry_days` json property to config json for the ability to
+override the default number of days generated SAS keys are valid for.
 
 ### Changed
+- Default SAS expiry time used for resource files and data movement changed
+from 7 to 30 days.
 - Pools failing to start will now automatically retrieve stdout.txt and
-stderr.txt to the current working directory. These files can be inspected
-locally and submitted as context as GitHub issues.
+stderr.txt to the current working directory under
+`poolid/<node ids>/std{out,err}.txt`. These files can be inspected
+locally and submitted as context for GitHub issues if pertinent.
 - Improve installation doc
 
 ### Fixed
+- Improve Python2/3 compatibility
 - Unicode literals warning with Click
 - Config file loading issue in some contexts
 - Documentation typos

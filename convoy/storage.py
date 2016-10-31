@@ -22,8 +22,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# compat imports
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
+from builtins import range
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
 import datetime
 import hashlib
 import logging
@@ -44,6 +48,7 @@ import convoy.util
 logger = logging.getLogger(__name__)
 convoy.util.setup_logger(logger)
 # global defines
+_DEFAULT_SAS_EXPIRY_DAYS = 30
 _REGISTRY_FILE = None
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
@@ -61,16 +66,18 @@ _STORAGE_CONTAINERS = {
 }
 
 
-def set_storage_configuration(sep, postfix, sa, sakey, saep):
-    # type: (str, str, str, str, str) -> None
+def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
+    # type: (str, str, str, str, str, int) -> None
     """Set storage configuration
     :param str sep: storage entity prefix
     :param str postfix: storage entity postfix
     :param str sa: storage account
     :param str sakey: storage account key
     :param str saep: storage account endpoint
+    :param int sasexpiry: sas expiry default time in days
     """
-    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP
+    global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
+        _DEFAULT_SAS_EXPIRY_DAYS
     if sep is None or len(sep) == 0:
         raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
@@ -98,6 +105,8 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep):
     _STORAGEACCOUNT = sa
     _STORAGEACCOUNTKEY = sakey
     _STORAGEACCOUNTEP = saep
+    if sasexpiry is not None:
+        _DEFAULT_SAS_EXPIRY_DAYS = sasexpiry
 
 
 def set_registry_file(rf):
@@ -199,7 +208,8 @@ def create_blob_container_saskey(
         raise ValueError('{} type of transfer not supported'.format(kind))
     return blob_client.generate_container_shared_access_signature(
         container, perm,
-        expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        expiry=datetime.datetime.utcnow() +
+        datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
     )
 
 
@@ -236,7 +246,8 @@ def create_file_share_saskey(
         raise ValueError('{} type of transfer not supported'.format(kind))
     return file_client.generate_share_shared_access_signature(
         file_share, perm,
-        expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        expiry=datetime.datetime.utcnow() +
+        datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
     )
 
 
@@ -367,7 +378,8 @@ def upload_resource_files(blob_client, config, files):
             blob_client.generate_blob_shared_access_signature(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
                 permission=azureblob.BlobPermissions.READ,
-                expiry=datetime.datetime.utcnow() + datetime.timedelta(days=7)
+                expiry=datetime.datetime.utcnow() +
+                datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
             )
         )
     return sas_urls

@@ -61,6 +61,7 @@ The global config schema is as follows:
     "batch_shipyard": {
         "storage_account_settings": "mystorageaccount",
         "storage_entity_prefix": "shipyard",
+        "generated_sas_expiry_days": 90,
         "use_shipyard_docker_image": true,
         "encryption" : {
             "enabled": true,
@@ -179,6 +180,10 @@ requires a storage account for storing metadata in order to execute across a
 distributed environment.
 * (required) `storage_entity_prefix` property is used as a generic qualifier
 to prefix storage containers (blob containers, tables, queues) with.
+* (optional) `generated_sas_expiry_days` property is used to set the number of
+days any generated SAS key by Batch Shipyard is valid for. The default is 30
+days. This is useful if you have long-lived pools and want to ensure that
+SAS keys are valid for longer periods of time.
 * (optional) `use_shipyard_docker_image` property is used to direct the toolkit
 to use the Batch Shipyard docker image instead of installing software manually
 in order to run the backend portion on the compute nodes. It is strongly

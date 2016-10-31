@@ -22,8 +22,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# compat imports
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
+from builtins import str
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
 import base64
 import getpass
 import logging

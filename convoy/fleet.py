@@ -22,8 +22,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# compat imports
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
+from builtins import (int, str, next)
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
 import logging
 try:
     import pathlib
@@ -135,8 +139,12 @@ def populate_global_settings(config, pool_add_action):
         saep = config['credentials']['storage'][ssel]['endpoint']
     except KeyError:
         saep = 'core.windows.net'
+    try:
+        sasexpiry = config['batch_shipyard']['generated_sas_expiry_days']
+    except KeyError:
+        sasexpiry = None
     convoy.storage.set_storage_configuration(
-        sep, postfix, sa, sakey, saep)
+        sep, postfix, sa, sakey, saep, sasexpiry)
     if not pool_add_action:
         return
     try:
