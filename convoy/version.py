@@ -22,4 +22,4 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from .version import __version__  # noqa
+__version__ = '2.0.0rc1'

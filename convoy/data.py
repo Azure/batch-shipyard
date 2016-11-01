@@ -44,18 +44,27 @@ except ImportError:
 import threading
 import time
 # local imports
-import convoy.batch
-import convoy.crypto
-import convoy.storage
-import convoy.util
+from . import crypto
+from . import storage
+from . import util
 
 # create logger
 logger = logging.getLogger(__name__)
-convoy.util.setup_logger(logger)
+util.setup_logger(logger)
 # global defines
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
+_GLUSTER_VOLUME = '.gluster/gv0'
+
+
+def get_gluster_volume():
+    # type: (None) -> str
+    """Get gluster volume mount suffix
+    :rtype: str
+    :return: gluster volume mount
+    """
+    return _GLUSTER_VOLUME
 
 
 def _process_storage_input_data(config, input_data, on_task):
@@ -104,14 +113,14 @@ def _process_storage_input_data(config, input_data, on_task):
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
             # create saskey for file share with rl perm
-            saskey = convoy.storage.create_file_share_saskey(
+            saskey = storage.create_file_share_saskey(
                 storage_settings, fshare, 'ingress')
             # set container as fshare
             container = fshare
             del fshare
         else:
             # create saskey for container with rl perm
-            saskey = convoy.storage.create_blob_container_saskey(
+            saskey = storage.create_blob_container_saskey(
                 storage_settings, container, 'ingress')
         try:
             include = xfer['include']
@@ -145,7 +154,7 @@ def _process_storage_input_data(config, input_data, on_task):
                 storage_settings['account'], storage_settings['endpoint'],
                 saskey, container)
             args.append('"ingress:true:{}:{}:{}:{}"'.format(
-                convoy.crypto.encrypt_string(encrypt, encstorage, config),
+                crypto.encrypt_string(encrypt, encstorage, config),
                 include, eo, dst))
         else:
             args.append('"ingress:false:{}:{}:{}:{}:{}:{}:{}"'.format(
@@ -200,7 +209,7 @@ def _process_batch_input_data(config, input_data, on_task):
                 raise
         if on_task and dst is None or len(dst) == 0:
             dst = '$AZ_BATCH_TASK_WORKING_DIR'
-        creds = convoy.crypto.encrypt_string(encrypt, '{};{};{}'.format(
+        creds = crypto.encrypt_string(encrypt, '{};{};{}'.format(
             config['credentials']['batch']['account'],
             config['credentials']['batch']['account_service_url'],
             config['credentials']['batch']['account_key']), config)
@@ -299,14 +308,14 @@ def _process_storage_output_data(config, output_data):
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
             # create saskey for file share with rwdl perm
-            saskey = convoy.storage.create_file_share_saskey(
+            saskey = storage.create_file_share_saskey(
                 storage_settings, fshare, 'egress', create_share=True)
             # set container as fshare
             container = fshare
             del fshare
         else:
             # create saskey for container with rwdl perm
-            saskey = convoy.storage.create_blob_container_saskey(
+            saskey = storage.create_blob_container_saskey(
                 storage_settings, container, 'egress', create_container=True)
         try:
             include = xfer['include']
@@ -337,7 +346,7 @@ def _process_storage_output_data(config, output_data):
                 storage_settings['account'], storage_settings['endpoint'],
                 saskey, container)
             args.append('"egress:true:{}:{}:{}:{}"'.format(
-                convoy.crypto.encrypt_string(encrypt, encstorage, config),
+                crypto.encrypt_string(encrypt, encstorage, config),
                 include, eo, src))
         else:
             args.append('"egress:false:{}:{}:{}:{}:{}:{}:{}"'.format(
@@ -411,7 +420,7 @@ def _singlenode_transfer(
     logger.info('begin ingressing data from {} to {}'.format(
         src, dst))
     start = datetime.datetime.now()
-    rc = convoy.util.subprocess_with_output(cmd, shell=True)
+    rc = util.subprocess_with_output(cmd, shell=True)
     diff = datetime.datetime.now() - start
     if rc == 0:
         logger.info(
@@ -468,7 +477,7 @@ def _multinode_transfer(
     # 2. binpack files to different nodes
     total_files = 0
     dirs = set()
-    for entry in convoy.util.scantree(src):
+    for entry in util.scantree(src):
         rel = pathlib.Path(entry.path).relative_to(psrc)
         sparent = str(pathlib.Path(entry.path).relative_to(psrc).parent)
         if sparent != '.':
@@ -537,8 +546,8 @@ def _multinode_transfer(
                 '-o UserKnownHostsFile=/dev/null '
                 '-i {} -p {} {}@{} {}'.format(
                     ssh_private_key, port, username, ip,
-                    convoy.util.wrap_commands_in_shell(dirs)))
-    rc = convoy.util.subprocess_with_output(
+                    util.wrap_commands_in_shell(dirs)))
+    rc = util.subprocess_with_output(
         mkdircmd, shell=True, suppress_output=True)
     if rc == 0:
         logger.info('remote directories created on {}'.format(dst))
@@ -632,9 +641,9 @@ def _spawn_next_transfer(
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
     if begin is None and end is None:
-        procs.append(convoy.util.subprocess_nowait(cmd, shell=True))
+        procs.append(util.subprocess_nowait(cmd, shell=True))
     else:
-        proc = convoy.util.subprocess_attach_stdin(cmd, shell=True)
+        proc = util.subprocess_attach_stdin(cmd, shell=True)
         with open(src, 'rb') as f:
             f.seek(begin, 0)
             curr = begin
@@ -688,7 +697,7 @@ def _multinode_thread_worker(
                 procs, psprocs, psdst)
             xfers = len(procs) + len(psprocs)
             i += 1
-        plist, n, rc = convoy.util.subprocess_wait_multi(psprocs, procs)
+        plist, n, rc = util.subprocess_wait_multi(psprocs, procs)
         if rc != 0:
             logger.error(
                 'data ingress to {} failed with return code: {}'.format(
@@ -715,9 +724,9 @@ def _multinode_thread_worker(
                            '-o UserKnownHostsFile=/dev/null '
                            '-i {} -p {} {}@{} {}'.format(
                                ssh_private_key, port, username, ip,
-                               convoy.util.wrap_commands_in_shell(cmds)))
+                               util.wrap_commands_in_shell(cmds)))
                 procs.append(
-                    convoy.util.subprocess_nowait(joincmd, shell=True))
+                    util.subprocess_nowait(joincmd, shell=True))
             else:
                 completed += 1
         else:
@@ -769,8 +778,8 @@ def _wrap_blobxfer_subprocess(storage_settings, container, src, src_incl, eo):
     ]
     logger.info('begin ingressing data from {} to container {}'.format(
         src, container))
-    proc = convoy.util.subprocess_nowait_pipe_stdout(
-        convoy.util.wrap_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
+    proc = util.subprocess_nowait_pipe_stdout(
+        util.wrap_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
     stdout = proc.communicate()[0]
     if proc.returncode != 0:
         logger.error(stdout.decode('utf8'))
@@ -916,7 +925,7 @@ def ingress_data(batch_client, config, rls=None, kind=None):
             except KeyError:
                 # use default name for private key
                 ssh_private_key = pathlib.Path(
-                    convoy.crypto.get_ssh_key_prefix())
+                    crypto.get_ssh_key_prefix())
             if not ssh_private_key.exists():
                 raise RuntimeError(
                     'ssh private key does not exist at: {}'.format(
@@ -934,10 +943,10 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                 if (config['pool_specification']['offer'].lower() ==
                         'ubuntuserver'):
                     dst = '/mnt/batch/tasks/shared/{}/'.format(
-                        convoy.batch.get_gluster_volume())
+                        _GLUSTER_VOLUME)
                 else:
                     dst = '/mnt/resource/batch/tasks/shared/{}/'.format(
-                        convoy.batch.get_gluster_volume())
+                        _GLUSTER_VOLUME)
             else:
                 raise RuntimeError(
                     'data ingress to {} not supported'.format(driver))

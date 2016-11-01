@@ -39,11 +39,11 @@ except ImportError:
 import tempfile
 import subprocess
 # local imports
-import convoy.util
+from . import util
 
 # create logger
 logger = logging.getLogger(__name__)
-convoy.util.setup_logger(logger)
+util.setup_logger(logger)
 # global defines
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 
@@ -142,7 +142,7 @@ def get_sha1_thumbprint_pfx(pfxfile, passphrase):
     # return just thumbprint (without colons) from the above openssl command
     # in lowercase. Expected openssl output is in the form:
     # SHA1 Fingerprint=<thumbprint>
-    return ''.join(convoy.util.decode_string(
+    return ''.join(util.decode_string(
         sha1_cert_tp).strip().split('=')[1].split(':')).lower()
 
 
@@ -168,10 +168,9 @@ def generate_pem_pfx_certificates(config):
     except KeyError:
         passphrase = None
     if pemfile is None:
-        pemfile = convoy.util.get_input(
-            'Enter public key PEM filename to create: ')
+        pemfile = util.get_input('Enter public key PEM filename to create: ')
     if pfxfile is None:
-        pfxfile = convoy.util.get_input('Enter PFX filename to create: ')
+        pfxfile = util.get_input('Enter PFX filename to create: ')
     if passphrase is None:
         while passphrase is None or len(passphrase) == 0:
             passphrase = getpass.getpass('Enter password for PFX: ')
@@ -229,8 +228,8 @@ def _rsa_encrypt_string(data, config):
     proc = subprocess.Popen(
         ['openssl', 'rsautl', '-encrypt', '-pubin', '-inkey', inkey],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    ciphertext = convoy.util.base64_encode_string(
-        proc.communicate(input=convoy.util.encode_string(data))[0])
+    ciphertext = util.base64_encode_string(
+        proc.communicate(input=util.encode_string(data))[0])
     return ciphertext
 
 

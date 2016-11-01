@@ -42,19 +42,19 @@ except ImportError:
 import uuid
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
-import azure.batch.batch_service_client as batch
+import azure.batch.batch_service_client as batchsc
 import azure.batch.models as batchmodels
 # local imports
-from . import __version__
-import convoy.batch
-import convoy.crypto
-import convoy.data
-import convoy.storage
-import convoy.util
+from . import batch
+from . import crypto
+from . import data
+from . import storage
+from . import util
+from .version import __version__
 
 # create logger
 logger = logging.getLogger(__name__)
-convoy.util.setup_logger(logger)
+util.setup_logger(logger)
 # global defines
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _AZUREFILE_DVD_BIN = {
@@ -143,7 +143,7 @@ def populate_global_settings(config, pool_add_action):
         sasexpiry = config['batch_shipyard']['generated_sas_expiry_days']
     except KeyError:
         sasexpiry = None
-    convoy.storage.set_storage_configuration(
+    storage.set_storage_configuration(
         sep, postfix, sa, sakey, saep, sasexpiry)
     if not pool_add_action:
         return
@@ -176,7 +176,7 @@ def populate_global_settings(config, pool_add_action):
             logger.debug(
                 'attempting to generate docker private registry tarball')
             try:
-                imgid = convoy.util.decode_string(subprocess.check_output(
+                imgid = util.decode_string(subprocess.check_output(
                     'sudo docker images -q registry:2', shell=True)).strip()
             except subprocess.CalledProcessError:
                 rf = None
@@ -194,7 +194,7 @@ def populate_global_settings(config, pool_add_action):
     else:
         regfile = (None, None, None)
     logger.info('private registry settings: {}'.format(regfile))
-    convoy.storage.set_registry_file(regfile)
+    storage.set_registry_file(regfile)
 
 
 def create_clients(config):
@@ -207,11 +207,11 @@ def create_clients(config):
     credentials = batchauth.SharedKeyCredentials(
         config['credentials']['batch']['account'],
         config['credentials']['batch']['account_key'])
-    batch_client = batch.BatchServiceClient(
+    batch_client = batchsc.BatchServiceClient(
         credentials,
         base_url=config['credentials']['batch']['account_service_url'])
     batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
-    blob_client, queue_client, table_client = convoy.storage.create_clients()
+    blob_client, queue_client, table_client = storage.create_clients()
     return batch_client, blob_client, queue_client, table_client
 
 
@@ -231,13 +231,13 @@ def _setup_nvidia_docker_package(blob_client, config):
             offer))
     # check to see if package is downloaded
     if (not pkg.exists() or
-            convoy.util.compute_md5_for_file(pkg, False) !=
+            util.compute_md5_for_file(pkg, False) !=
             _NVIDIA_DOCKER[offer]['md5']):
         response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
         with pkg.open('wb') as f:
             f.write(response.read())
         # check md5
-        if (convoy.util.compute_md5_for_file(pkg, False) !=
+        if (util.compute_md5_for_file(pkg, False) !=
                 _NVIDIA_DOCKER[offer]['md5']):
             raise RuntimeError('md5 mismatch for {}'.format(pkg))
     return pkg
@@ -258,13 +258,13 @@ def _setup_azurefile_volume_driver(blob_client, config):
     # check to see if binary is downloaded
     bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
-            convoy.util.compute_md5_for_file(bin, False) !=
+            util.compute_md5_for_file(bin, False) !=
             _AZUREFILE_DVD_BIN['md5']):
         response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
         with bin.open('wb') as f:
             f.write(response.read())
         # check md5
-        if (convoy.util.compute_md5_for_file(bin, False) !=
+        if (util.compute_md5_for_file(bin, False) !=
                 _AZUREFILE_DVD_BIN['md5']):
             raise RuntimeError('md5 mismatch for {}'.format(bin))
     if (publisher == 'canonical' and offer == 'ubuntuserver' and
@@ -329,7 +329,8 @@ def _setup_azurefile_volume_driver(blob_client, config):
 
 
 def _add_pool(batch_client, blob_client, config):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
+    #        dict) -> None
     """Add a Batch pool to account
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
@@ -341,7 +342,7 @@ def _add_pool(batch_client, blob_client, config):
     try:
         encrypt = config['batch_shipyard']['encryption']['enabled']
         if encrypt:
-            convoy.batch.add_certificate_to_account(batch_client, config)
+            batch.add_certificate_to_account(batch_client, config)
             try:
                 encrypt_sha1tp = config['batch_shipyard']['encryption'][
                     'pfx']['sha1_thumbprint']
@@ -353,7 +354,7 @@ def _add_pool(batch_client, blob_client, config):
                         'pfx']['passphrase']
                 except KeyError:
                     passphrase = None
-                encrypt_sha1tp = convoy.crypto.get_sha1_thumbprint_pfx(
+                encrypt_sha1tp = crypto.get_sha1_thumbprint_pfx(
                     pfxfile, passphrase)
                 config['batch_shipyard']['encryption']['pfx'][
                     'sha1_thumbprint'] = encrypt_sha1tp
@@ -372,7 +373,7 @@ def _add_pool(batch_client, blob_client, config):
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if ingress_files:
-        storage_threads = convoy.data.ingress_data(
+        storage_threads = data.ingress_data(
             batch_client, config, rls=None, kind='storage')
     try:
         maxtasks = config['pool_specification']['max_tasks_per_node']
@@ -427,7 +428,7 @@ def _add_pool(batch_client, blob_client, config):
         preg = False
         pregpubpull = False
     # create private registry flags
-    regfile = convoy.storage.get_registry_file()
+    regfile = storage.get_registry_file()
     if preg:
         preg = ' -r {}:{}:{}'.format(pcont, regfile[0], regfile[2])
     else:
@@ -518,7 +519,7 @@ def _add_pool(batch_client, blob_client, config):
     ]
     sku_to_use, image_ref_to_use = skus_to_use[-1]
     # upload resource files
-    sas_urls = convoy.storage.upload_resource_files(
+    sas_urls = storage.upload_resource_files(
         blob_client, config, _rflist)
     del _rflist
     # create start task commandline
@@ -547,7 +548,7 @@ def _add_pool(batch_client, blob_client, config):
     except KeyError:
         pass
     # digest any input_data
-    addlcmds = convoy.data.process_input_data(
+    addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, config['pool_specification'])
     if addlcmds is not None:
         start_task.append(addlcmds)
@@ -563,7 +564,7 @@ def _add_pool(batch_client, blob_client, config):
         max_tasks_per_node=maxtasks,
         enable_inter_node_communication=internodecomm,
         start_task=batchmodels.StartTask(
-            command_line=convoy.util.wrap_commands_in_shell(
+            command_line=util.wrap_commands_in_shell(
                 start_task, wait=False),
             run_elevated=True,
             wait_for_success=True,
@@ -571,11 +572,11 @@ def _add_pool(batch_client, blob_client, config):
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
                 batchmodels.EnvironmentSetting(
                     'SHIPYARD_STORAGE_ENV',
-                    convoy.crypto.encrypt_string(
+                    crypto.encrypt_string(
                         encrypt, '{}:{}:{}'.format(
-                            convoy.storage.get_storageaccount(),
-                            convoy.storage.get_storageaccount_endpoint(),
-                            convoy.storage.get_storageaccount_key()),
+                            storage.get_storageaccount(),
+                            storage.get_storageaccount_endpoint(),
+                            storage.get_storageaccount_key()),
                         config)
                 )
             ],
@@ -608,7 +609,7 @@ def _add_pool(batch_client, blob_client, config):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
-                convoy.crypto.encrypt_string(
+                crypto.encrypt_string(
                     encrypt, '{}:{}:{}'.format(
                         config['credentials']['storage'][ssel]['account'],
                         config['credentials']['storage'][ssel]['endpoint'],
@@ -625,33 +626,33 @@ def _add_pool(batch_client, blob_client, config):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'DOCKER_LOGIN_PASSWORD',
-                convoy.crypto.encrypt_string(encrypt, dockerpw, config))
+                crypto.encrypt_string(encrypt, dockerpw, config))
         )
     if perf:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
     # create pool
-    nodes = convoy.batch.create_pool(batch_client, config, pool)
+    nodes = batch.create_pool(batch_client, config, pool)
     # set up gluster if specified
     if gluster:
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
     # create admin user on each node if requested
-    convoy.batch.add_ssh_user(batch_client, config, nodes)
+    batch.add_ssh_user(batch_client, config, nodes)
     # log remote login settings
-    rls = convoy.batch.get_remote_login_settings(batch_client, config, nodes)
+    rls = batch.get_remote_login_settings(batch_client, config, nodes)
     # ingress data to shared fs if specified
     if ingress_files:
-        convoy.data.ingress_data(batch_client, config, rls=rls, kind='shared')
+        data.ingress_data(batch_client, config, rls=rls, kind='shared')
     # wait for storage ingress processes
-    convoy.data.wait_for_storage_threads(storage_threads)
+    data.wait_for_storage_threads(storage_threads)
 
 
 def _setup_glusterfs(
         batch_client, blob_client, config, nodes, shell_script, cmdline=None):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService, dict,
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
     #        List[batchmodels.ComputeNode], str, str) -> None
     """Setup glusterfs via multi-instance task
     :param batch_client: The batch client to use.
@@ -689,7 +690,7 @@ def _setup_glusterfs(
             tempdisk = '/mnt'
         else:
             tempdisk = '/mnt/resource'
-        cmdline = convoy.util.wrap_commands_in_shell([
+        cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {}'.format(
                 shell_script[0], voltype.lower(), tempdisk)])
     # create application command line
@@ -700,7 +701,7 @@ def _setup_glusterfs(
         for vo in volopts:
             appcmd.append('gluster volume set gv0 {}'.format(vo))
     # upload script
-    sas_urls = convoy.storage.upload_resource_files(
+    sas_urls = storage.upload_resource_files(
         blob_client, config, [shell_script])
     batchtask = batchmodels.TaskAddParameter(
         id='gluster-setup',
@@ -714,7 +715,7 @@ def _setup_glusterfs(
                     file_mode='0755'),
             ],
         ),
-        command_line=convoy.util.wrap_commands_in_shell(appcmd),
+        command_line=util.wrap_commands_in_shell(appcmd),
         run_elevated=True,
     )
     batch_client.task.add(job_id=job_id, task=batchtask)
@@ -859,7 +860,7 @@ def _adjust_settings_for_pool_creation(config):
     except KeyError:
         pass
     # adjust ssh settings on windows
-    if convoy.util.on_windows():
+    if util.on_windows():
         try:
             ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
         except KeyError:
@@ -911,7 +912,7 @@ def _adjust_settings_for_pool_creation(config):
             if 'shared_data_volume' in fdict['destination']:
                 shared = True
                 break
-        if convoy.util.on_windows() and shared and xfer_files_with_pool:
+        if util.on_windows() and shared and xfer_files_with_pool:
             raise RuntimeError(
                 'cannot transfer files to shared data volume on Windows')
     except KeyError:
@@ -946,7 +947,7 @@ def adjust_general_settings(config):
             'Please update your pool configuration file. See the '
             'configuration doc for more information.')
     # adjust encryption settings on windows
-    if convoy.util.on_windows():
+    if util.on_windows():
         try:
             enc = config['batch_shipyard']['encryption']['enabled']
         except KeyError:
@@ -963,39 +964,39 @@ def action_cert_create(config):
     """Action: Cert Create
     :param dict config: configuration dict
     """
-    sha1tp = convoy.crypto.generate_pem_pfx_certificates(config)
+    sha1tp = crypto.generate_pem_pfx_certificates(config)
     logger.info('SHA1 Thumbprint: {}'.format(sha1tp))
 
 
 def action_cert_add(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Cert Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.add_certificate_to_account(batch_client, config, False)
+    batch.add_certificate_to_account(batch_client, config, False)
 
 
 def action_cert_list(batch_client):
-    # type: (batch.BatchServiceClient) -> None
+    # type: (batchsc.BatchServiceClient) -> None
     """Action: Cert List
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     """
-    convoy.batch.list_certificates_in_account(batch_client)
+    batch.list_certificates_in_account(batch_client)
 
 
 def action_cert_del(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Cert Del
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.del_certificate_from_account(batch_client, config)
+    batch.del_certificate_from_account(batch_client, config)
 
 
 def action_pool_add(
         batch_client, blob_client, queue_client, table_client, config):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azurequeue.QueueService, azuretable.TableService, dict) -> None
     """Action: Pool Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
@@ -1009,27 +1010,27 @@ def action_pool_add(
         raise RuntimeError(
             'attempting to create a pool that already exists: {}'.format(
                 config['pool_specification']['id']))
-    convoy.storage.create_storage_containers(
+    storage.create_storage_containers(
         blob_client, queue_client, table_client, config)
-    convoy.storage.clear_storage_containers(
+    storage.clear_storage_containers(
         blob_client, queue_client, table_client, config)
     _adjust_settings_for_pool_creation(config)
-    convoy.storage.populate_queues(queue_client, table_client, config)
+    storage.populate_queues(queue_client, table_client, config)
     _add_pool(batch_client, blob_client, config)
 
 
 def action_pool_list(batch_client):
-    # type: (batch.BatchServiceClient) -> None
+    # type: (batchsc.BatchServiceClient) -> None
     """Action: Pool List
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     """
-    convoy.batch.list_pools(batch_client)
+    batch.list_pools(batch_client)
 
 
 def action_pool_delete(
         batch_client, blob_client, queue_client, table_client, config,
         wait=False):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azurequeue.QueueService, azuretable.TableService, dict,
     #        bool) -> None
     """Action: Pool Delete
@@ -1042,13 +1043,13 @@ def action_pool_delete(
     """
     deleted = False
     try:
-        deleted = convoy.batch.del_pool(batch_client, config)
+        deleted = batch.del_pool(batch_client, config)
     except batchmodels.BatchErrorException as ex:
         logger.exception(ex)
         if 'The specified pool does not exist' in ex.message.value:
             deleted = True
     if deleted:
-        convoy.storage.cleanup_with_del_pool(
+        storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config)
         if wait:
             pool_id = config['pool_specification']['id']
@@ -1058,7 +1059,7 @@ def action_pool_delete(
 
 
 def action_pool_resize(batch_client, blob_client, config, wait):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        dict, bool) -> None
     """Resize pool that may contain glusterfs
     :param batch_client: The batch client to use.
@@ -1093,7 +1094,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         logger.debug('forcing wait to True due to glusterfs')
         wait = True
     # resize pool
-    nodes = convoy.batch.resize_pool(batch_client, config, wait)
+    nodes = batch.resize_pool(batch_client, config, wait)
     # add brick for new nodes
     if gluster_present:
         # get internal ip addresses of new nodes
@@ -1108,7 +1109,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
             tempdisk = '/mnt/resource'
         # construct cmdline
         vm_count = config['pool_specification']['vm_count']
-        cmdline = convoy.util.wrap_commands_in_shell([
+        cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
                 _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk, vm_count,
                 masterip, ' '.join(new_nodes))])
@@ -1119,83 +1120,84 @@ def action_pool_resize(batch_client, blob_client, config, wait):
 
 
 def action_pool_grls(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Grls
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.get_remote_login_settings(batch_client, config)
+    batch.get_remote_login_settings(batch_client, config)
 
 
 def action_pool_listnodes(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Listnodes
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.list_nodes(batch_client, config)
+    batch.list_nodes(batch_client, config)
 
 
 def action_pool_asu(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Asu
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.add_ssh_user(batch_client, config)
-    convoy.batch.get_remote_login_settings(batch_client, config)
+    batch.add_ssh_user(batch_client, config)
+    batch.get_remote_login_settings(batch_client, config)
 
 
 def action_pool_dsu(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Dsu
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.del_ssh_user(batch_client, config)
+    batch.del_ssh_user(batch_client, config)
 
 
 def action_pool_delnode(batch_client, config, nodeid):
-    # type: (batch.BatchServiceClient, dict, str) -> None
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param str nodeid: nodeid to delete
     """
-    convoy.batch.del_node(batch_client, config, nodeid)
+    batch.del_node(batch_client, config, nodeid)
 
 
 def action_jobs_add(batch_client, blob_client, config):
-    # type: (batch.BatchServiceClient, azureblob.BlockBlobService,dict) -> None
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
+    #        dict) -> None
     """Action: Jobs Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
-    convoy.batch.add_jobs(
+    batch.add_jobs(
         batch_client, blob_client, config, _JOBPREP_FILE, _BLOBXFER_FILE)
 
 
 def action_jobs_list(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Jobs List
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.list_jobs(batch_client, config)
+    batch.list_jobs(batch_client, config)
 
 
 def action_jobs_listtasks(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.list_tasks(batch_client, config)
+    batch.list_tasks(batch_client, config)
 
 
 def action_jobs_termtasks(batch_client, config, jobid, taskid, wait):
-    # type: (batch.BatchServiceClient, dict, str, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Jobs Termtasks
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1207,12 +1209,12 @@ def action_jobs_termtasks(batch_client, config, jobid, taskid, wait):
         raise ValueError(
             'cannot specify a task to terminate without the corresponding '
             'job id')
-    convoy.batch.terminate_tasks(
+    batch.terminate_tasks(
         batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
 
 
 def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
-    # type: (batch.BatchServiceClient, dict, str, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Jobs Deltasks
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1224,12 +1226,12 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
         raise ValueError(
             'cannot specify a task to delete without the corresponding '
             'job id')
-    convoy.batch.del_tasks(
+    batch.del_tasks(
         batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
 
 
 def action_jobs_term(batch_client, config, all, jobid, wait):
-    # type: (batch.BatchServiceClient, dict, bool, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Term
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1240,14 +1242,14 @@ def action_jobs_term(batch_client, config, all, jobid, wait):
     if all:
         if jobid is not None:
             raise ValueError('cannot specify both --all and --jobid')
-        convoy.batch.terminate_all_jobs(batch_client, config, wait=wait)
+        batch.terminate_all_jobs(batch_client, config, wait=wait)
     else:
-        convoy.batch.terminate_jobs(
+        batch.terminate_jobs(
             batch_client, config, jobid=jobid, wait=wait)
 
 
 def action_jobs_del(batch_client, config, all, jobid, wait):
-    # type: (batch.BatchServiceClient, dict, bool, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Del
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1258,23 +1260,23 @@ def action_jobs_del(batch_client, config, all, jobid, wait):
     if all:
         if jobid is not None:
             raise ValueError('cannot specify both --all and --jobid')
-        convoy.batch.del_all_jobs(batch_client, config, wait=wait)
+        batch.del_all_jobs(batch_client, config, wait=wait)
     else:
-        convoy.batch.del_jobs(batch_client, config, jobid=jobid, wait=wait)
+        batch.del_jobs(batch_client, config, jobid=jobid, wait=wait)
 
 
 def action_jobs_cmi(batch_client, config, delete):
-    # type: (batch.BatchServiceClient, dict, bool) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool) -> None
     """Action: Jobs Cmi
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param bool delete: delete all cmi jobs
     """
     if delete:
-        convoy.batch.del_clean_mi_jobs(batch_client, config)
+        batch.del_clean_mi_jobs(batch_client, config)
     else:
-        convoy.batch.clean_mi_jobs(batch_client, config)
-        convoy.batch.del_clean_mi_jobs(batch_client, config)
+        batch.clean_mi_jobs(batch_client, config)
+        batch.del_clean_mi_jobs(batch_client, config)
 
 
 def action_storage_del(blob_client, queue_client, table_client, config):
@@ -1286,7 +1288,7 @@ def action_storage_del(blob_client, queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    convoy.storage.delete_storage_containers(
+    storage.delete_storage_containers(
         blob_client, queue_client, table_client, config)
 
 
@@ -1299,30 +1301,30 @@ def action_storage_clear(blob_client, queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    convoy.storage.clear_storage_containers(
+    storage.clear_storage_containers(
         blob_client, queue_client, table_client, config)
 
 
 def action_data_stream(batch_client, filespec):
-    # type: (batch.BatchServiceClient, str) -> None
+    # type: (batchsc.BatchServiceClient, str) -> None
     """Action: Data Stream
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param str filespec: filespec of file to retrieve
     """
-    convoy.batch.stream_file_and_wait_for_task(batch_client, filespec)
+    batch.stream_file_and_wait_for_task(batch_client, filespec)
 
 
 def action_data_listfiles(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Data Listfiles
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    convoy.batch.list_task_files(batch_client, config)
+    batch.list_task_files(batch_client, config)
 
 
 def action_data_getfile(batch_client, config, all, filespec):
-    # type: (batch.BatchServiceClient, dict, bool, str) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Data Getfile
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1330,13 +1332,13 @@ def action_data_getfile(batch_client, config, all, filespec):
     :param str filespec: filespec of file to retrieve
     """
     if all:
-        convoy.batch.get_all_files_via_task(batch_client, config, filespec)
+        batch.get_all_files_via_task(batch_client, config, filespec)
     else:
-        convoy.batch.get_file_via_task(batch_client, config, filespec)
+        batch.get_file_via_task(batch_client, config, filespec)
 
 
 def action_data_getfilenode(batch_client, config, all, nodeid):
-    # type: (batch.BatchServiceClient, dict, bool, str) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Data Getfilenode
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
@@ -1344,24 +1346,24 @@ def action_data_getfilenode(batch_client, config, all, nodeid):
     :param str nodeid: node id to retrieve file from
     """
     if all:
-        convoy.batch.get_all_files_via_node(batch_client, config, nodeid)
+        batch.get_all_files_via_node(batch_client, config, nodeid)
     else:
-        convoy.batch.get_file_via_node(batch_client, config, nodeid)
+        batch.get_file_via_node(batch_client, config, nodeid)
 
 
 def action_data_ingress(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Data Ingress
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
     try:
         # ensure there are remote login settings
-        rls = convoy.batch.get_remote_login_settings(
+        rls = batch.get_remote_login_settings(
             batch_client, config, nodes=None)
         # ensure nodes are at least idle/running for shared ingress
         kind = 'all'
-        if not convoy.batch.check_pool_nodes_runnable(
+        if not batch.check_pool_nodes_runnable(
                 batch_client, config):
             kind = 'storage'
     except batchmodels.BatchErrorException as ex:
@@ -1370,6 +1372,6 @@ def action_data_ingress(batch_client, config):
             kind = 'storage'
         else:
             raise
-    storage_threads = convoy.data.ingress_data(
+    storage_threads = data.ingress_data(
         batch_client, config, rls=rls, kind=kind)
-    convoy.data.wait_for_storage_threads(storage_threads)
+    data.wait_for_storage_threads(storage_threads)

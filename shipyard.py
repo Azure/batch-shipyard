@@ -246,7 +246,7 @@ def _setup_context(ctx, pool_add_action=False):
 
 
 @click.group(context_settings=_CONTEXT_SETTINGS)
-@click.version_option(version=convoy.fleet.__version__)
+@click.version_option(version=convoy.__version__)
 @click.pass_context
 def cli(ctx):
     """Batch Shipyard: Provision and Execute Docker Workloads on Azure Batch"""

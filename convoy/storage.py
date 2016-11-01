@@ -42,11 +42,11 @@ import azure.storage.file as azurefile
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 # local imports
-import convoy.util
+from . import util
 
 # create logger
 logger = logging.getLogger(__name__)
-convoy.util.setup_logger(logger)
+util.setup_logger(logger)
 # global defines
 _DEFAULT_SAS_EXPIRY_DAYS = 30
 _REGISTRY_FILE = None
@@ -361,7 +361,7 @@ def upload_resource_files(blob_client, config, files):
                 prop = blob_client.get_blob_properties(
                     _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
                 if (prop.properties.content_settings.content_md5 ==
-                        convoy.util.compute_md5_for_file(fp, True)):
+                        util.compute_md5_for_file(fp, True)):
                     logger.debug(
                         'remote file is the same for {}, skipping'.format(
                             file[0]))
@@ -530,7 +530,7 @@ def cleanup_with_del_pool(blob_client, queue_client, table_client, config):
     :param dict config: configuration dict
     """
     pool_id = config['pool_specification']['id']
-    if not convoy.util.confirm_action(
+    if not util.confirm_action(
             config, 'delete/cleanup of Batch Shipyard metadata in storage '
             'containers associated with {} pool'.format(pool_id)):
         return

@@ -43,32 +43,22 @@ import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 # local imports
-import convoy.crypto
-import convoy.data
-import convoy.storage
-import convoy.util
+from . import crypto
+from . import data
+from . import storage
+from . import util
 
 # create logger
 logger = logging.getLogger(__name__)
-convoy.util.setup_logger(logger)
+util.setup_logger(logger)
 # global defines
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
-_GLUSTER_VOLUME = '.gluster/gv0'
 _RDMA_INSTANCES = (
     'standard_a8', 'standard_a9', 'standard_h16r', 'standard_h16mr',
     'standard_nc24r'
 )
-
-
-def get_gluster_volume():
-    # type: (None) -> str
-    """Get gluster volume mount suffix
-    :rtype: str
-    :return: gluster volume mount
-    """
-    return _GLUSTER_VOLUME
 
 
 def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
@@ -94,7 +84,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
         # get thumbprint of pfx
         if pfx_passphrase is None:
             pfx_passphrase = getpass.getpass('Enter password for PFX: ')
-        sha1_cert_tp = convoy.crypto.get_sha1_thumbprint_pfx(
+        sha1_cert_tp = crypto.get_sha1_thumbprint_pfx(
             pfxfile, pfx_passphrase)
         config['batch_shipyard']['encryption']['pfx'][
             'sha1_thumbprint'] = sha1_cert_tp
@@ -114,7 +104,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
         pfx_passphrase = getpass.getpass('Enter password for PFX: ')
     logger.debug('adding pfx cert with thumbprint {} to account'.format(
         sha1_cert_tp))
-    data = convoy.util.decode_string(
+    data = util.decode_string(
         base64.b64encode(open(pfxfile, 'rb').read()))
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
@@ -167,7 +157,7 @@ def del_certificate_from_account(batch_client, config):
             raise KeyError
     except KeyError:
         # get thumbprint of pfx
-        sha1_cert_tp = convoy.crypto.get_sha1_thumbprint_pfx(
+        sha1_cert_tp = crypto.get_sha1_thumbprint_pfx(
             pfxfile, pfx_passphrase)
     batch_client.certificate.delete('sha1', sha1_cert_tp)
 
@@ -482,7 +472,7 @@ def add_ssh_user(batch_client, config, nodes=None):
             export_path = '.'
         # generate ssh key pair if not specified
         if ssh_pub_key is None:
-            ssh_priv_key, ssh_pub_key = convoy.crypto.generate_ssh_keypair(
+            ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
                 export_path)
         # get node list if not provided
         if nodes is None:
@@ -529,7 +519,7 @@ def del_ssh_user(batch_client, config, nodes=None):
         logger.error('not deleting unspecified ssh user on pool {}'.format(
             pool_id))
     else:
-        if not convoy.util.confirm_action(
+        if not util.confirm_action(
                 config, 'delete user {} from pool {}'.format(
                     username, pool_id)):
             return
@@ -609,7 +599,7 @@ def del_pool(batch_client, config):
     :return: if pool was deleted
     """
     pool_id = config['pool_specification']['id']
-    if not convoy.util.confirm_action(
+    if not util.confirm_action(
             config, 'delete {} pool'.format(pool_id)):
         return False
     logger.info('Deleting pool: {}'.format(pool_id))
@@ -628,7 +618,7 @@ def del_node(batch_client, config, node_id):
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
     pool_id = config['pool_specification']['id']
-    if not convoy.util.confirm_action(
+    if not util.confirm_action(
             config, 'delete node {} from {} pool'.format(node_id, pool_id)):
         return
     logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
@@ -657,7 +647,7 @@ def del_jobs(batch_client, config, jobid=None, wait=False):
     nocheck = set()
     for job in jobs:
         job_id = job['id']
-        if not convoy.util.confirm_action(
+        if not util.confirm_action(
                 config, 'delete {} job'.format(job_id)):
             nocheck.add(job_id)
             continue
@@ -691,7 +681,7 @@ def del_all_jobs(batch_client, config, wait=False):
     logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
-        if not convoy.util.confirm_action(
+        if not util.confirm_action(
                 config, 'delete {} job'.format(job.id)):
             continue
         logger.info('Deleting job: {}'.format(job.id))
@@ -737,7 +727,7 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         else:
             tasks = [taskid]
         for task in tasks:
-            if not convoy.util.confirm_action(
+            if not util.confirm_action(
                     config, 'delete {} task in job {}'.format(
                         task, job_id)):
                 nocheck[job_id].add(task)
@@ -808,7 +798,7 @@ def clean_mi_jobs(batch_client, config):
                     multi_instance_settings=batchmodels.MultiInstanceSettings(
                         number_of_instances=task.
                         multi_instance_settings.number_of_instances,
-                        coordination_command_line=convoy.util.
+                        coordination_command_line=util.
                         wrap_commands_in_shell([
                             'docker stop {}'.format(name),
                             'docker rm -v {}'.format(name),
@@ -868,7 +858,7 @@ def terminate_jobs(batch_client, config, jobid=None, wait=False):
     nocheck = set()
     for job in jobs:
         job_id = job['id']
-        if not convoy.util.confirm_action(
+        if not util.confirm_action(
                 config, 'terminate {} job'.format(job_id)):
             nocheck.add(job_id)
             continue
@@ -904,7 +894,7 @@ def terminate_all_jobs(batch_client, config, wait=False):
     logger.debug('Getting list of all jobs...')
     jobs = batch_client.job.list()
     for job in jobs:
-        if not convoy.util.confirm_action(
+        if not util.confirm_action(
                 config, 'terminate {} job'.format(job.id)):
             continue
         logger.info('Terminating job: {}'.format(job.id))
@@ -958,7 +948,7 @@ def _send_docker_kill_signal(
             '{}@{}'.format(username, rls.remote_login_ip_address),
             'sudo', 'docker', 'kill', task_id,
         ]
-        rc = convoy.util.subprocess_with_output(ssh_args, shell=False)
+        rc = util.subprocess_with_output(ssh_args, shell=False)
         if rc != 0:
             logger.error('docker kill failed with return code: {}'.format(rc))
 
@@ -990,7 +980,7 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
     if export_path is None or len(export_path) == 0:
         export_path = '.'
     ssh_private_key = pathlib.Path(
-        export_path, convoy.crypto.get_ssh_key_prefix())
+        export_path, crypto.get_ssh_key_prefix())
     if not ssh_private_key.exists():
         raise RuntimeError('ssh private key at {} not found'.format(
             ssh_private_key))
@@ -1015,7 +1005,7 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                     'job {}'.format(task, job_id))
                 nocheck[job_id].add(task)
                 continue
-            if not convoy.util.confirm_action(
+            if not util.confirm_action(
                     config, 'terminate {} task in job {}'.format(
                         task, job_id)):
                 nocheck[job_id].add(task)
@@ -1120,11 +1110,11 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
     else:
         job_id, task_id, file = filespec.split(',')
     if job_id is None:
-        job_id = convoy.util.get_input('Enter job id: ')
+        job_id = util.get_input('Enter job id: ')
     if task_id is None:
-        task_id = convoy.util.get_input('Enter task id: ')
+        task_id = util.get_input('Enter task id: ')
     if file is None:
-        file = convoy.util.get_input(
+        file = util.get_input(
             'Enter task-relative file path to stream [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
@@ -1199,11 +1189,11 @@ def get_file_via_task(batch_client, config, filespec=None):
     else:
         job_id, task_id, file = filespec.split(',')
     if job_id is None:
-        job_id = convoy.util.get_input('Enter job id: ')
+        job_id = util.get_input('Enter job id: ')
     if task_id is None:
-        task_id = convoy.util.get_input('Enter task id: ')
+        task_id = util.get_input('Enter task id: ')
     if file is None:
-        file = convoy.util.get_input(
+        file = util.get_input(
             'Enter task-relative file path to retrieve [stdout.txt]: ')
     if file == '' or file is None:
         file = 'stdout.txt'
@@ -1229,15 +1219,15 @@ def get_file_via_task(batch_client, config, filespec=None):
     # understood
     fp = pathlib.Path(pathlib.Path(file).name)
     if (fp.exists() and
-            not convoy.util.confirm_action(
+            not util.confirm_action(
                 config, 'file overwrite of {}'.format(file))):
         raise RuntimeError('file already exists: {}'.format(file))
     logger.debug('attempting to retrieve file {} from job={} task={}'.format(
         file, job_id, task_id))
     stream = batch_client.file.get_from_task(job_id, task_id, file)
     with fp.open('wb') as f:
-        for data in stream:
-            f.write(data)
+        for fdata in stream:
+            f.write(fdata)
     logger.debug('file {} retrieved from job={} task={} bytes={}'.format(
         file, job_id, task_id, fp.stat().st_size))
 
@@ -1257,11 +1247,11 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     else:
         job_id, task_id, incl = filespec.split(',')
     if job_id is None:
-        job_id = convoy.util.get_input('Enter job id: ')
+        job_id = util.get_input('Enter job id: ')
     if task_id is None:
-        task_id = convoy.util.get_input('Enter task id: ')
+        task_id = util.get_input('Enter task id: ')
     if incl is None:
-        incl = convoy.util.get_input('Enter filter: ')
+        incl = util.get_input('Enter filter: ')
     if incl is not None and len(incl) == 0:
         incl = None
     # get first running task if specified
@@ -1298,8 +1288,8 @@ def get_all_files_via_task(batch_client, config, filespec=None):
             dirs_created.add(str(fp.parent))
         stream = batch_client.file.get_from_task(job_id, task_id, file.name)
         with fp.open('wb') as f:
-            for data in stream:
-                f.write(data)
+            for fdata in stream:
+                f.write(fdata)
         i += 1
     if i == 0:
         logger.error('no files found for task {} job {} include={}'.format(
@@ -1324,9 +1314,9 @@ def get_all_files_via_node(batch_client, config, filespec=None):
     else:
         node_id, incl = filespec.split(',')
     if node_id is None:
-        node_id = convoy.util.get_input('Enter node id: ')
+        node_id = util.get_input('Enter node id: ')
     if incl is None:
-        incl = convoy.util.get_input('Enter filter: ')
+        incl = util.get_input('Enter filter: ')
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
     if incl is not None and len(incl) == 0:
@@ -1349,8 +1339,8 @@ def get_all_files_via_node(batch_client, config, filespec=None):
         stream = batch_client.file.get_from_compute_node(
             pool_id, node_id, file.name)
         with fp.open('wb') as f:
-            for data in stream:
-                f.write(data)
+            for fdata in stream:
+                f.write(fdata)
         i += 1
     if i == 0:
         logger.error('no files found for pool {} node {} include={}'.format(
@@ -1375,9 +1365,9 @@ def get_file_via_node(batch_client, config, filespec=None):
     else:
         node_id, file = filespec.split(',')
     if node_id is None:
-        node_id = convoy.util.get_input('Enter node id: ')
+        node_id = util.get_input('Enter node id: ')
     if file is None:
-        file = convoy.util.get_input(
+        file = util.get_input(
             'Enter node-relative file path to retrieve: ')
     if node_id is None or len(node_id) == 0:
         raise ValueError('node id is invalid')
@@ -1388,15 +1378,15 @@ def get_file_via_node(batch_client, config, filespec=None):
     # understood
     fp = pathlib.Path(pathlib.Path(file).name)
     if (fp.exists() and
-            not convoy.util.confirm_action(
+            not util.confirm_action(
                 config, 'file overwrite of {}'.format(file))):
         raise RuntimeError('file already exists: {}'.format(file))
     logger.debug('attempting to retrieve file {} from pool={} node={}'.format(
         file, pool_id, node_id))
     stream = batch_client.file.get_from_compute_node(pool_id, node_id, file)
     with fp.open('wb') as f:
-        for data in stream:
-            f.write(data)
+        for fdata in stream:
+            f.write(fdata)
     logger.debug('file {} retrieved from pool={} node={} bytes={}'.format(
         file, pool_id, node_id, fp.stat().st_size))
 
@@ -1546,11 +1536,11 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
         jpfile[0], ' '.join(global_resources))]
     for jobspec in config['job_specifications']:
         # digest any input_data
-        addlcmds = convoy.data.process_input_data(config, bxfile, jobspec)
+        addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
             jpcmd.append(addlcmds)
         del addlcmds
-        jpcmdline = convoy.util.wrap_commands_in_shell(jpcmd)
+        jpcmdline = util.wrap_commands_in_shell(jpcmd)
         del jpcmd
         job = batchmodels.JobAddParameter(
             id=jobspec['id'],
@@ -1605,7 +1595,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
         if multi_instance and mi_ac:
             set_terminate_on_all_tasks_complete = True
             job.job_release_task = batchmodels.JobReleaseTask(
-                command_line=convoy.util.wrap_commands_in_shell(
+                command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
                      'docker rm -v {}'.format(mi_docker_container_name)]),
                 run_elevated=True,
@@ -1724,7 +1714,8 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                         if dvspec['volume_driver'] == 'glusterfs':
                             run_opts.append('-v {}/{}:{}'.format(
                                 '$AZ_BATCH_NODE_SHARED_DIR',
-                                _GLUSTER_VOLUME, dvspec['container_path']))
+                                data.get_gluster_volume(),
+                                dvspec['container_path']))
                         else:
                             run_opts.append('-v {}:{}'.format(
                                 key, dvspec['container_path']))
@@ -1811,7 +1802,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                 if env_vars is None:
                     env_vars = task_ev
                 else:
-                    env_vars = convoy.util.merge_dict(env_vars, task_ev)
+                    env_vars = util.merge_dict(env_vars, task_ev)
             except KeyError:
                 if infiniband:
                     env_vars = []
@@ -1834,7 +1825,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                         f.write(b'MANPATH=/usr/share/man:/usr/local/man\n')
                     # close and upload env var file
                     f.close()
-                    sas_urls = convoy.storage.upload_resource_files(
+                    sas_urls = storage.upload_resource_files(
                         blob_client, config, [(envfileloc, fname)])
                 finally:
                     os.unlink(fname)
@@ -1920,7 +1911,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                              'invalid: {}').format(num_instances))
                 mis = batchmodels.MultiInstanceSettings(
                     number_of_instances=num_instances,
-                    coordination_command_line=convoy.util.
+                    coordination_command_line=util.
                     wrap_commands_in_shell(cc_args, wait=False),
                     common_resource_files=[],
                 )
@@ -1956,12 +1947,12 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
                         '{}'.format(' ' + command) if command else '')
                 ]
             # digest any input_data
-            addlcmds = convoy.data.process_input_data(
+            addlcmds = data.process_input_data(
                 config, bxfile, task, on_task=True)
             if addlcmds is not None:
                 task_commands.insert(0, addlcmds)
             # digest any output data
-            addlcmds = convoy.data.process_output_data(
+            addlcmds = data.process_output_data(
                 config, bxfile, task)
             if addlcmds is not None:
                 task_commands.append(addlcmds)
@@ -1969,7 +1960,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task_id,
-                command_line=convoy.util.wrap_commands_in_shell(task_commands),
+                command_line=util.wrap_commands_in_shell(task_commands),
                 run_elevated=True,
                 resource_files=[],
             )
