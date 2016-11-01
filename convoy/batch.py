@@ -946,16 +946,19 @@ def _send_docker_kill_signal(
             'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
             '-p', str(rls.remote_login_port), '-t',
             '{}@{}'.format(username, rls.remote_login_ip_address),
-            'sudo', 'docker', 'kill', task_id,
+            ('/bin/bash -c "sudo docker kill {tid}; '
+             'sudo docker rm -v {tid}"').format(tid=task_id)
         ]
         rc = util.subprocess_with_output(ssh_args, shell=False)
         if rc != 0:
             logger.error('docker kill failed with return code: {}'.format(rc))
 
 
-def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
+def terminate_tasks(
+        batch_client, config, jobid=None, taskid=None, wait=False,
+        force=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, str, bool) -> None
+    #        str, str, bool, bool) -> None
     """Terminate tasks
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -963,6 +966,7 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
     :param str jobid: job id of task to terminate
     :param str taskid: task id to terminate
     :param bool wait: wait for task to terminate
+    :param bool force: force task docker kill signal regardless of state
     """
     # get ssh login settings
     try:
@@ -999,7 +1003,7 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         for task in tasks:
             _task = batch_client.task.get(job_id, task)
             # if completed, skip
-            if _task.state == batchmodels.TaskState.completed:
+            if _task.state == batchmodels.TaskState.completed and not force:
                 logger.debug(
                     'Skipping termination of completed task {} on '
                     'job {}'.format(task, job_id))
@@ -1012,7 +1016,7 @@ def terminate_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                 continue
             logger.info('Terminating task: {}'.format(task))
             # directly send docker kill signal if running
-            if _task.state == batchmodels.TaskState.running:
+            if _task.state == batchmodels.TaskState.running or force:
                 if (_task.multi_instance_settings is not None and
                         _task.multi_instance_settings.number_of_instances > 1):
                     task_is_mi = True
@@ -1141,6 +1145,7 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
     curr = 0
     end = 0
     completed = False
+    notfound = 0
     while True:
         # get task file properties
         try:
@@ -1151,6 +1156,11 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
                     'state of the resource.' in ex.message):
                 time.sleep(1)
                 continue
+            elif 'The specified file does not exist.' in ex.message:
+                notfound += 1
+                if notfound > 10:
+                    raise
+                time.sleep(1)
             else:
                 raise
         size = int(tfp.response.headers['Content-Length'])
@@ -1515,9 +1525,10 @@ def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
     return '{0}{1:03d}'.format(_GENERIC_DOCKER_TASK_PREFIX, tasknum)
 
 
-def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
+def add_jobs(
+        batch_client, blob_client, config, jpfile, bxfile, recreate=False):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict, tuple, tuple) -> None
+    #        dict, tuple, tuple, bool) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -1525,6 +1536,7 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
     :param dict config: configuration dict
     :param tuple jpfile: jobprep file
     :param tuple bxfile: blobxfer file
+    :param bool recreate: recreate job if completed
     """
     # get the pool inter-node comm setting
     pool_id = config['pool_specification']['id']
@@ -1604,7 +1616,19 @@ def add_jobs(batch_client, blob_client, config, jpfile, bxfile):
         try:
             batch_client.job.add(job)
         except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The specified job already exists' in ex.message.value:
+            if ('The specified job is already in a completed state.' in
+                    ex.message.value):
+                if recreate:
+                    # get job state
+                    _job = batch_client.job.get(job.id)
+                    if _job.state == batchmodels.JobState.completed:
+                        del_jobs(
+                            batch_client, config, jobid=job.id, wait=True)
+                        time.sleep(1)
+                        batch_client.job.add(job)
+                else:
+                    raise
+            elif 'The specified job already exists' in ex.message.value:
                 # cannot re-use an existing job if multi-instance due to
                 # job release requirement
                 if multi_instance and mi_ac:

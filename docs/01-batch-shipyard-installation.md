@@ -1,14 +1,17 @@
 # Batch Shipyard Installation
 Installation is an easy two-step process: fetch the code and run the
-`install.sh` script.
+install script to download and setup dependencies.
 
 ## Installation
-Simply clone the repository:
+#### Step 1: Acquire Batch Shipyard
+Clone the repository:
 ```shell
 git clone https://github.com/Azure/batch-shipyard.git
 ```
-or [download the latest release](https://github.com/Azure/batch-shipyard/releases).
+or [downloading the latest release](https://github.com/Azure/batch-shipyard/releases)
+and unpack the archive.
 
+#### Step 2a: [Linux/Mac] Run the install.sh Script
 Batch Shipyard includes an installation script to simplify installation on
 a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
@@ -30,7 +33,22 @@ will be invoked wherever root access is required for installing system-wide
 packages in the `install.sh` script. Python packages required by Batch
 Shipyard will be installed in the user context.
 
-## Installation With Docker
+Please see the Upgrading section below for information on upgrading to a new
+release of Batch Shipyard.
+
+#### Step 2b: [Windows] Pip Install Dependencies
+Invoke `pip.exe` (or `pip3.exe`) and install using the `requirements.txt`
+file. For example:
+```shell
+# Change directory to where Batch Shipyard was cloned or unpacked to
+cd batch-shipyard
+# Install for Windows on Python 3.5
+C:\Python35\Scripts\pip3.exe install --upgrade -r requirements.txt
+```
+Please see the Upgrading section below for information on upgrading to a new
+release of Batch Shipyard.
+
+## CLI Installation With Docker
 If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then all of the required software is bundled in the image
 itself, however, you will need an installation of the Docker engine on
@@ -48,13 +66,20 @@ on how to execute the cli Docker image.
 
 ## Upgrading to New Releases
 To upgrade to a new release, simply execute `git pull` or download a new
-release archive and unpack. Rerun the `install.sh` script for all upgrades
-as dependencies may have changed between versions.
+release archive and unpack. Next, upgrade the dependencies for your
+respective platform below.
 
-If using the cli Docker image, simply re-issue the `docker pull` command
+#### Linux/Mac
+Rerun the `install.sh` script for all upgrades.
+
+#### Windows
+Reissue the `pip.exe install --upgrade -r requirements.txt` command.
+
+#### CLI Docker
+If using the CLI Docker image, simply re-issue the `docker pull` command
 above.
 
-## Windows and Mac
+## Windows and Mac Support
 Please note that while Batch Shipyard can run on Windows or Mac, these
 platforms are not the primary test environments and are not officially
 supported. Additionally, some functionality is not supported in Windows.
@@ -75,7 +100,7 @@ packages including the [Azure Batch](https://pypi.python.org/pypi/azure-batch)
 and [Azure Storage](https://pypi.python.org/pypi/azure-storage) packages.
 Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --upgrade --user -r requirements.txt`
-(or via `pip3` for python3). If `pip` is not installed on your system,
+(or via `pip3` for Python3). If `pip` is not installed on your system,
 please continue reading below. Note that this `pip` command should be run
 for every Batch Shipyard upgrade if not using `install.sh`.
 

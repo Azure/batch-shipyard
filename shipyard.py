@@ -430,13 +430,16 @@ def jobs(ctx):
 
 
 @jobs.command('add')
+@click.option(
+    '--recreate', is_flag=True,
+    help='Recreate any completed jobs with the same id')
 @common_options
 @pass_cli_context
-def jobs_add(ctx):
+def jobs_add(ctx, recreate):
     """Add jobs"""
     _setup_context(ctx)
     convoy.fleet.action_jobs_add(
-        ctx.batch_client, ctx.blob_client, ctx.config)
+        ctx.batch_client, ctx.blob_client, ctx.config, recreate)
 
 
 @jobs.command('list')
@@ -459,6 +462,9 @@ def jobs_list_tasks(ctx):
 
 @jobs.command('termtasks')
 @click.option(
+    '--force', is_flag=True,
+    help='Force docker kill signal to task regardless of state')
+@click.option(
     '--jobid', help='Terminate tasks in the specified job id')
 @click.option(
     '--taskid', help='Terminate tasks in the specified task id')
@@ -466,11 +472,11 @@ def jobs_list_tasks(ctx):
     '--wait', is_flag=True, help='Wait for task termination to complete')
 @common_options
 @pass_cli_context
-def jobs_termtasks(ctx, jobid, taskid, wait):
+def jobs_termtasks(ctx, force, jobid, taskid, wait):
     """Terminate specified tasks in jobs"""
     _setup_context(ctx)
     convoy.fleet.action_jobs_termtasks(
-        ctx.batch_client, ctx.config, jobid, taskid, wait)
+        ctx.batch_client, ctx.config, jobid, taskid, wait, force)
 
 
 @jobs.command('term')

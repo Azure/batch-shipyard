@@ -1166,16 +1166,18 @@ def action_pool_delnode(batch_client, config, nodeid):
     batch.del_node(batch_client, config, nodeid)
 
 
-def action_jobs_add(batch_client, blob_client, config):
+def action_jobs_add(batch_client, blob_client, config, recreate):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict) -> None
+    #        dict, bool) -> None
     """Action: Jobs Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param bool recreate: recreate jobs if completed
     """
     batch.add_jobs(
-        batch_client, blob_client, config, _JOBPREP_FILE, _BLOBXFER_FILE)
+        batch_client, blob_client, config, _JOBPREP_FILE, _BLOBXFER_FILE,
+        recreate)
 
 
 def action_jobs_list(batch_client, config):
@@ -1196,21 +1198,25 @@ def action_jobs_listtasks(batch_client, config):
     batch.list_tasks(batch_client, config)
 
 
-def action_jobs_termtasks(batch_client, config, jobid, taskid, wait):
-    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool) -> None
     """Action: Jobs Termtasks
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param str jobid: job id
     :param str taskid: task id
     :param bool wait: wait for action to complete
+    :param bool force: force docker kill even if completed
     """
     if taskid is not None and jobid is None:
         raise ValueError(
             'cannot specify a task to terminate without the corresponding '
             'job id')
+    if force and (taskid is None or jobid is None):
+        raise ValueError('cannot force docker kill without task id/job id')
     batch.terminate_tasks(
-        batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
+        batch_client, config, jobid=jobid, taskid=taskid, wait=wait,
+        force=force)
 
 
 def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):

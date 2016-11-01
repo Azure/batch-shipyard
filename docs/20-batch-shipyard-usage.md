@@ -119,6 +119,7 @@ The `jobs` command has the following sub-commands:
 ```
 * `add` will add all jobs and tasks defined in the jobs configuration file
 to the Batch pool
+  * `--recreate` will recreate any completed jobs with the same id
 * `cmi` will cleanup any stale multi-instance tasks and jobs. Note that this
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.
@@ -142,6 +143,7 @@ file
 * `termtasks` will terminate tasks within jobs specified in the jobs
 configuration file. Termination of running tasks requires a valid SSH
 user.
+  * `--force` force send docker kill signal regardless of task state
   * `--jobid` force termination scope to just this job id
   * `--taskid` force termination scope to just this task id
   * `--wait` will wait for termination to complete

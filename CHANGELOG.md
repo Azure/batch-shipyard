@@ -6,6 +6,12 @@
 - `shipyard` execution helper script created via `install.sh`
 - `generated_sas_expiry_days` json property to config json for the ability to
 override the default number of days generated SAS keys are valid for.
+- New options on commands/subcommands:
+  - `jobs add`: `--recreate` recreate any jobs which have completed and use
+    the same id
+  - `jobs termtasks`: `--force` force docker kill to tasks even if they are
+    in completed state
+  - `pool resize`: `--wait` wait for completion of resize
 
 ### Changed
 - Default SAS expiry time used for resource files and data movement changed
