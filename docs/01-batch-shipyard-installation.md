@@ -11,7 +11,7 @@ git clone https://github.com/Azure/batch-shipyard.git
 or [downloading the latest release](https://github.com/Azure/batch-shipyard/releases)
 and unpack the archive.
 
-#### Step 2a: [Linux/Mac] Run the install.sh Script
+#### Step 2a: [Linux] Run the install.sh Script
 Batch Shipyard includes an installation script to simplify installation on
 a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
@@ -48,6 +48,17 @@ C:\Python35\Scripts\pip3.exe install --upgrade -r requirements.txt
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
+#### Step 2c: [Mac] Pip Install Dependencies
+Invoke `pip` and install using the `requirements.txt` file. For example:
+```shell
+# Change directory to where Batch Shipyard was cloned or unpacked to
+cd batch-shipyard
+# Reference correct location of pip below if not found on path
+pip install --upgrade --user -r requirements.txt
+```
+Please see the Upgrading section below for information on upgrading to a new
+release of Batch Shipyard.
+
 ## CLI Installation With Docker
 If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then all of the required software is bundled in the image
@@ -69,11 +80,14 @@ To upgrade to a new release, simply execute `git pull` or download a new
 release archive and unpack. Next, upgrade the dependencies for your
 respective platform below.
 
-#### Linux/Mac
+#### Linux
 Rerun the `install.sh` script for all upgrades.
 
 #### Windows
 Reissue the `pip.exe install --upgrade -r requirements.txt` command.
+
+#### Mac
+Reissue the `pip install --upgrade --user -r requirements.txt` command.
 
 #### CLI Docker
 If using the CLI Docker image, simply re-issue the `docker pull` command

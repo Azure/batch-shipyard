@@ -1095,6 +1095,20 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         wait = True
     # resize pool
     nodes = batch.resize_pool(batch_client, config, wait)
+    # add ssh user to new nodes if present
+    if wait:
+        # get list of new nodes only
+        new_nodes = [
+            node for node in nodes if node.id not in old_nodes
+        ]
+        # create admin user on each new node if requested
+        batch.add_ssh_user(batch_client, config, nodes=new_nodes)
+        # log remote login settings for new ndoes
+        batch.get_remote_login_settings(batch_client, config, nodes=new_nodes)
+        del new_nodes
+    else:
+        logger.warning(
+            'ssh user, if specified, was not added as --wait was not given')
     # add brick for new nodes
     if gluster_present:
         # get internal ip addresses of new nodes

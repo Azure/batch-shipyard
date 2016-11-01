@@ -97,3 +97,9 @@ compute nodes.
 ### [FFmpeg-GPU](./FFmpeg-GPU)
 This recipe contains information on how to use Dockerized
 [FFmpeg](https://ffmpeg.org/) on GPUs for use with the N-series Azure VMs.
+
+## Benchmarks
+### [HPLinpack-Infiniband-IntelMPI](./HPLinpack-Infiniband-IntelMPI)
+This HPLinpack-Infiniband-IntelMPI recipe contains information on how to
+Dockerize [HPLinpack (HPL)](http://www.netlib.org/benchmark/hpl/)
+across Infiniband/RDMA Azure VMs with Intel MPI.

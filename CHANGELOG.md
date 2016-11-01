@@ -12,6 +12,7 @@ override the default number of days generated SAS keys are valid for.
   - `jobs termtasks`: `--force` force docker kill to tasks even if they are
     in completed state
   - `pool resize`: `--wait` wait for completion of resize
+- HPLinpack-Infiniband-IntelMPI recipe
 
 ### Changed
 - Default SAS expiry time used for resource files and data movement changed

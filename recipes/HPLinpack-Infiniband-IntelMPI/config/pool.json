@@ -1,0 +1,16 @@
+{
+    "pool_specification": {
+        "id": "docker-linpack",
+        "vm_size": "STANDARD_A9",
+        "vm_count": 2,
+        "inter_node_communication_enabled": true,
+        "publisher": "OpenLogic",
+        "offer": "CentOS-HPC",
+        "sku": "7.1",
+        "ssh": {
+            "username": "docker"
+        },
+        "reboot_on_start_task_failed": false,
+        "block_until_all_global_resources_loaded": true
+    }
+}
