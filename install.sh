@@ -101,33 +101,31 @@ set -f
 BATCH_SHIPYARD_ROOT_DIR=$PWD
 
 EOF
+cat >> shipyard << 'EOF'
+if [ -z $BATCH_SHIPYARD_ROOT_DIR ]; then
+    echo Batch Shipyard root directory not set.
+    echo Please rerun the install.sh script.
+    exit 1
+fi
+
+EOF
 chmod 755 shipyard
 
 # install required python packages
 if [ $PY3 -eq 0 ]; then
 cat >> shipyard << 'EOF'
-if [ -z $BATCH_SHIPYARD_ROOT_DIR ]; then
-    echo Batch Shipyard root directory not set.
-    echo Please rerun the install.sh script.
-    exit 1
-fi
-
 python $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
     sudo pip install --upgrade pip setuptools
     pip install --upgrade --user -r requirements.txt
-    echo "Install completed for Python2. Please run Batch Shipyard as: $PWD/shipyard"
+    echo ""
+    echo ">> Install completed for Python2. Please run Batch Shipyard as: $PWD/shipyard"
 else
 cat >> shipyard << 'EOF'
-if [ -z $BATCH_SHIPYARD_ROOT_DIR ]; then
-    echo Batch Shipyard root directory not set.
-    echo Please rerun the install.sh script.
-    exit 1
-fi
-
 python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
     sudo pip3 install --upgrade pip setuptools
     pip3 install --upgrade --user -r requirements.txt
-    echo "Install completed for Python3. Please run Batch Shipyard as: $PWD/shipyard"
+    echo ""
+    echo ">> Install completed for Python3. Please run Batch Shipyard as: $PWD/shipyard"
 fi

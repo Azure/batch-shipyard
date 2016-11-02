@@ -39,10 +39,12 @@ size for the machine's available memory. The `run_hplinpack.sh` script has
 many configuration parameters:
   * `-2`: enable `MKL_CBWR=AVX2`. Specify this option for H-series VMs.
   * `-b <block size>`: block size, defaults to 256
-  * `-m <memory size in MB>`: scale problem size to specified memory size in MB
-  * `-n <problem size>`: problem size
-  * `-p <grid row dim>`: grid row dimension, this must be less than `-q`. If
-    not specified, will be automatically determined from the number of nodes.
+  * `-m <memory size in MB>`: scale problem size to specified memory size in
+    MB. Can be specified instead of `-n`.
+  * `-n <problem size>`: problem size. Can be specified instead of `-m`.
+  * `-p <grid row dim>`: grid row dimension, this must be less than or equal
+    to `-q`. If not specified, will be automatically determined from the
+    number of nodes.
   * `-q <grid column dim>`: grid column dimension, this must be greater than
     or equal to `-p`. If not specified, will be automatically determined from
     the number of nodes.
