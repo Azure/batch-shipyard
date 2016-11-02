@@ -8,7 +8,7 @@ Clone the repository:
 ```shell
 git clone https://github.com/Azure/batch-shipyard.git
 ```
-or [downloading the latest release](https://github.com/Azure/batch-shipyard/releases)
+or [download the latest release](https://github.com/Azure/batch-shipyard/releases)
 and unpack the archive.
 
 #### Step 2a: [Linux] Run the install.sh Script

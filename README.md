@@ -46,34 +46,27 @@ for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/): STANDARD\_A8, STANDARD\_A9
   * [H-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#h-series): STANDARD\_H16R, STANDARD\_H16MR
   * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R (not yet available)
-* Automatic setup of SSH tunneling to Docker Hosts on compute nodes if
-specified
+* Automatic setup of SSH users to all nodes in the compute pool and optional
+tunneling to Docker Hosts on compute nodes if specified
 
 ## Installation
-Installation can be performed in any of the following methods:
+Installation is typically an easy two-step process. The CLI is also available
+as a Docker image:
+[alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard).
+Please see [the installation guide](docs/01-batch-shipyard-installation.md)
+for more information regarding installation and requirements.
 
-1. Clone the repository: `git clone https://github.com/Azure/batch-shipyard.git`
-2. [Download the latest release](https://github.com/Azure/batch-shipyard/releases)
-and extract to your local machine
-3. Run the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
-Docker image
+## Documentation
+Please refer to the [Batch Shipyard Guide](./docs) for a complete primer on
+concepts, usage and a quickstart guide.
 
-Please see [this page](docs/01-batch-shipyard-installation.md) for more
-information regarding installation and requirements.
+Please visit the [Batch Shipyard Recipes](./recipes) for various sample Docker
+workloads using Azure Batch and Batch Shipyard after you have completed the
+introductory sections of the Batch Shipyard Guide.
 
 ## Batch Shipyard Compute Node OS Support
 Batch Shipyard is currently only compatible with
 [Azure Batch supported Marketplace Linux VMs](https://azure.microsoft.com/en-us/documentation/articles/batch-linux-nodes/#list-of-virtual-machine-images).
-
-## Documentation
-Please refer to
-[this guide](https://github.com/Azure/batch-shipyard/blob/master/docs)
-for a complete primer on concepts, usage and a quickstart guide.
-
-Please visit the
-[recipes directory](https://github.com/Azure/batch-shipyard/blob/master/recipes)
-for different sample Docker workloads using Azure Batch and Batch Shipyard
-after you have completed the primer.
 
 ## ChangeLog
 See the [CHANGELOG.md](https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md)
