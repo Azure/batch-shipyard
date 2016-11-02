@@ -1,6 +1,6 @@
-# HPLinpack-Infiniband-IntelMPI
-This recipe shows how to run the
-[HPLinpack (HPL)](http://www.netlib.org/benchmark/hpl/) benchmark
+# HPCG-Infiniband-IntelMPI
+This recipe shows how to run the High Performance Conjugate Gradients
+[HPCG](http://www.hpcg-benchmark.org/index.html) benchmark
 on Linux using Intel MPI over Infiniband/RDMA Azure VM instances in an Azure
 Batch compute pool. Execution of this distributed workload requires the use of
 [multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
@@ -21,10 +21,11 @@ The pool configuration should enable the following properties:
 
 ### Global Configuration
 The global configuration should set the following properties:
-* `docker_images` array must have a reference to a valid HPLinpack image
+* `docker_images` array must have a reference to a valid HPCG image
 that can be run with Intel MPI and Infiniband in a Docker container context
 on Azure VM instances. This can be `alfpark/linpack:cpu-intel-mkl` which is
-published on [Docker Hub](https://hub.docker.com/r/alfpark/linpack).
+published on [Docker Hub](https://hub.docker.com/r/alfpark/linpack). HPCG is
+included in the Linpack image.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
@@ -32,22 +33,18 @@ array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation.
 For this example, this can be `alfpark/linpack:cpu-intel-mkl`.
 * `command` should contain the `mpirun` command. If using the sample
-[run\_hplinpack.sh](docker/run_hplinpack.sh) script then the command can be:
-`/sw/run_hplinpack.sh -n <problem size>`. If you do not specify
-`-n <problem size>` then the script will attempt to create the biggest problem
-size for the machine's available memory. The `run_hplinpack.sh` script has
-many configuration parameters:
-  * `-2`: enable `MKL_CBWR=AVX2`. Specify this option for H-series VMs.
-  * `-b <block size>`: block size, defaults to 256
-  * `-m <memory size in MB>`: scale problem size to specified memory size in MB
-  * `-n <problem size>`: problem size
-  * `-p <grid row dim>`: grid row dimension, this must be less than `-q`. If
-    not specified, will be automatically determined from the number of nodes.
-  * `-q <grid column dim>`: grid column dimension, this must be greater than
-    or equal to `-p`. If not specified, will be automatically determined from
-    the number of nodes.
-* `additional_docker_run_options` json array should contain `"--privileged"`
-such that HPL can pin and interleave memory
+[run\_hpcg.sh](docker/run_hpcg.sh) script then the command can be:
+`/sw/run_hpcg.sh -n <problem size> -t <run time>`. `-n <problem size>` should
+be selected such that the problem is large enough to fit in available memory.
+The `run_hpcg.sh` script has many configuration parameters:
+  * `-2`: Use the AVX2 optimized version of the benchmark. Specify this option
+    for H-series VMs.
+  * `-n <problem size>`: nx, ny and nz are set to this value
+  * `-t <run time>`: limit execution time to specified seconds. Official runs
+    must be at least 1800 seconds (30 min).
+  * `-x <nx>`: set nx to this value
+  * `-y <ny>`: set ny to this value
+  * `-z <nz>`: set nz to this value
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count` or
     `pool_current_dedicated`

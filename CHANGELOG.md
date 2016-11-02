@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.0.0rc2] - 2016-11-02
 ### Added
 - `install.sh` install/setup helper script
 - `shipyard` execution helper script created via `install.sh`
@@ -12,7 +14,7 @@ override the default number of days generated SAS keys are valid for.
   - `jobs termtasks`: `--force` force docker kill to tasks even if they are
     in completed state
   - `pool resize`: `--wait` wait for completion of resize
-- HPLinpack-Infiniband-IntelMPI recipe
+- HPCG-Infiniband-IntelMPI and HPLinpack-Infiniband-IntelMPI recipes
 
 ### Changed
 - Default SAS expiry time used for resource files and data movement changed
@@ -177,10 +179,10 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...HEAD
+[2.0.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...2.0.0rc2
 [2.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/1.1.0...2.0.0rc1
 [1.1.0]: https://github.com/Azure/batch-shipyard/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/Azure/batch-shipyard/compare/0.2.0...1.0.0
 [0.2.0]: https://github.com/Azure/batch-shipyard/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/Azure/batch-shipyard/compare/ab1fa4d...0.1.0
-

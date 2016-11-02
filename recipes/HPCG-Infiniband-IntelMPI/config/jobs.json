@@ -1,0 +1,20 @@
+{
+    "job_specifications": [
+        {
+            "id": "hpcg",
+            "multi_instance_auto_complete": true,
+            "tasks": [
+                {
+                    "image": "alfpark/linpack:cpu-intel-mkl",
+                    "remove_container_after_exit": true,
+                    "command": "/sw/run_hpcg.sh -n 256 -t 120",
+                    "infiniband": true,
+                    "multi_instance": {
+                        "num_instances": "pool_specification_vm_count",
+                        "coordination_command": null
+                    }
+                }
+            ]
+        }
+    ]
+}

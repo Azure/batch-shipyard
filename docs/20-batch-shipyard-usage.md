@@ -14,7 +14,7 @@ you can invoke as:
 You can also invoke `shipyard` from any directory if given the full path
 to the script.
 
-If on Windows, you will need to invoke the Python interpreter and pass
+If on Windows or Mac, you will need to invoke the Python interpreter and pass
 the script as an argument. For example:
 ```
 C:\Python35\python.exe shipyard.py
@@ -43,6 +43,35 @@ shipyard -h
 shipyard pool -h
 shipyard pool add -h
 ```
+
+## Shared Options
+There are a set of shared options which are used for every sub-command.
+These options must be specified after the command and sub-command. These are:
+```
+  -y, --yes           Assume yes for all confirmation prompts
+  -v, --verbose       Verbose output
+  --configdir TEXT    Configuration directory where all configuration files
+                      can be found. Each json config file must be named
+                      exactly the same as the regular switch option, e.g.,
+                      pool.json for --pool. Individually specified config
+                      options take precedence over this option.
+  --credentials TEXT  Credentials json config file
+  --config TEXT       Global json config file
+  --pool TEXT         Pool json config file
+  --jobs TEXT         Jobs json config file
+```
+* `--configdir path` can be used instead of the individual config switches
+below if all configuration json files are in one directory and named after
+their switch. For example, if you have a directory named `config` and under
+that directory you have the files `credentials.json`, `config.json`,
+`pool.json` and `jobs.json`, then you can use this argument instead of the
+following:
+  * `--credentials path/to/credentials.json` is required for all actions.
+  * `--config path/to/config.json` is required for all actions.
+  * `--pool path/to/pool.json` is required for most actions.
+  * `--jobs path/to/jobs.json` is required for job-related actions.
+* `-v` or `--verbose` is for verbose output
+* `-y` or `--yes` is to assume yes for all confirmation prompts
 
 ## Commands
 `shipyard` (and `shipyard.py`) script contains the following top-level
@@ -193,35 +222,6 @@ The `storage` command has the following sub-commands:
 for metadata purposes
 * `del` will delete the Azure Storage containers used by Batch Shipyard
 for metadata purposes
-
-## Shared Options
-There are a set of shared options which are used for every sub-command.
-These options must be specified after the command and sub-command. These are:
-```
-  -y, --yes           Assume yes for all confirmation prompts
-  -v, --verbose       Verbose output
-  --configdir TEXT    Configuration directory where all configuration files
-                      can be found. Each json config file must be named
-                      exactly the same as the regular switch option, e.g.,
-                      pool.json for --pool. Individually specified config
-                      options take precedence over this option.
-  --credentials TEXT  Credentials json config file
-  --config TEXT       Global json config file
-  --pool TEXT         Pool json config file
-  --jobs TEXT         Jobs json config file
-```
-* `--configdir path` can be used instead of the individual config switches
-below if all configuration json files are in one directory and named after
-their switch. For example, if you have a directory named `config` and under
-that directory you have the files `credentials.json`, `config.json`,
-`pool.json` and `jobs.json`, then you can use this argument instead of the
-following:
-  * `--credentials path/to/credentials.json` is required for all actions.
-  * `--config path/to/config.json` is required for all actions.
-  * `--pool path/to/pool.json` is required for most actions.
-  * `--jobs path/to/jobs.json` is required for job-related actions.
-* `-v` or `--verbose` is for verbose output
-* `-y` or `--yes` is to assume yes for all confirmation prompts
 
 ## Example Invocations
 ```shell

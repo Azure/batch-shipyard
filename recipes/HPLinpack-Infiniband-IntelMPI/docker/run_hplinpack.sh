@@ -103,5 +103,6 @@ fi
 export HPL_EXE=xhpl_intel64
 
 # execute benchmark
-cd /opt/intel2/mkl/benchmarks/mp_linpack/bin_intel/intel64
-mpirun -hosts $AZ_BATCH_HOST_LIST -perhost 1 -np $nodes /opt/intel2/mkl/benchmarks/mp_linpack/bin_intel/intel64/runme_intel64_prv -p $p -q $q -b $b $psize
+dir=/opt/intel2/mkl/benchmarks/mp_linpack/bin_intel/intel64
+cd $dir
+mpirun -hosts $AZ_BATCH_HOST_LIST -perhost 1 -np $nodes $dir/runme_intel64_prv -p $p -q $q -b $b $psize
