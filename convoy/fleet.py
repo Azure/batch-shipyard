@@ -1069,6 +1069,48 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     :param bool wait: wait for operation to complete
     """
     pool_id = config['pool_specification']['id']
+    # check direction of resize
+    vm_count = int(config['pool_specification']['vm_count'])
+    _pool = batch_client.pool.get(pool_id)
+    if vm_count == _pool.current_dedicated == _pool.target_dedicated:
+        logger.error(
+            'pool {} is already at {} nodes'.format(pool_id, vm_count))
+        return
+    resize_up = True
+    if vm_count < _pool.target_dedicated:
+        resize_up = False
+    del _pool
+    create_ssh_user = False
+    # try to get handle on public key, avoid generating another set
+    # of keys
+    if resize_up:
+        try:
+            username = config['pool_specification']['ssh']['username']
+            if username is None or len(username) == 0:
+                raise KeyError()
+        except KeyError:
+            logger.info('not creating ssh user on new nodes of pool {}'.format(
+                pool_id))
+        else:
+            try:
+                ssh_pub_key = config['pool_specification']['ssh'][
+                    'ssh_public_key']
+            except KeyError:
+                ssh_pub_key = None
+            if ssh_pub_key is None:
+                sfp = pathlib.Path(crypto.get_ssh_key_prefix() + '.pub')
+                if sfp.exists():
+                    logger.debug(
+                        'setting public key for ssh user to: {}'.format(sfp))
+                    config['pool_specification']['ssh'][
+                        'ssh_public_key'] = str(sfp)
+                    create_ssh_user = True
+                else:
+                    logger.warning(
+                        ('not creating ssh user for new nodes of pool {} as '
+                         'an existing ssh public key cannot be found').format(
+                             pool_id))
+                    create_ssh_user = False
     # check if this is a glusterfs-enabled pool
     voltype = 'replica'
     old_nodes = {}
@@ -1089,26 +1131,27 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     logger.debug('glusterfs shared volume present: {}'.format(
         gluster_present))
     if gluster_present:
-        for node in batch_client.compute_node.list(pool_id):
-            old_nodes[node.id] = node.ip_address
         logger.debug('forcing wait to True due to glusterfs')
         wait = True
+    # cache old nodes
+    if gluster_present or create_ssh_user:
+        for node in batch_client.compute_node.list(pool_id):
+            old_nodes[node.id] = node.ip_address
     # resize pool
     nodes = batch.resize_pool(batch_client, config, wait)
     # add ssh user to new nodes if present
-    if wait:
-        # get list of new nodes only
-        new_nodes = [
-            node for node in nodes if node.id not in old_nodes
-        ]
-        # create admin user on each new node if requested
-        batch.add_ssh_user(batch_client, config, nodes=new_nodes)
-        # log remote login settings for new ndoes
-        batch.get_remote_login_settings(batch_client, config, nodes=new_nodes)
-        del new_nodes
-    else:
-        logger.warning(
-            'ssh user, if specified, was not added as --wait was not given')
+    if create_ssh_user and resize_up:
+        if wait:
+            # get list of new nodes only
+            new_nodes = [node for node in nodes if node.id not in old_nodes]
+            # create admin user on each new node if requested
+            batch.add_ssh_user(batch_client, config, nodes=new_nodes)
+            # log remote login settings for new ndoes
+            batch.get_remote_login_settings(
+                batch_client, config, nodes=new_nodes)
+            del new_nodes
+        else:
+            logger.warning('ssh user was not added as --wait was not given')
     # add brick for new nodes
     if gluster_present:
         # get internal ip addresses of new nodes

@@ -21,6 +21,8 @@ from 7 to 30 days.
 stderr.txt to the current working directory under
 `poolid/<node ids>/std{out,err}.txt`. These files can be inspected
 locally and submitted as context for GitHub issues if pertinent.
+- Pool resizing will now attempt to add an SSH user on the new nodes if
+an SSH public key is referenced or found in the invocation directory
 - Improve installation doc
 
 ### Fixed
@@ -45,6 +47,7 @@ and configuration doc for more information.
   - Egress to local machine as actions
     - Single file from compute node
     - Entire task-level directories from compute node
+    - Entire node-level directories from compute node
   - Egress to Azure Blob of File Storage with `output_data` in jobs
     configuration
     - Task-level: to Azure Blob or File Storage on successful completion of a
@@ -78,10 +81,10 @@ to `id` for all task types.
 - `data stream` no longer has an arbitrary max streaming time; the action will
 stream the file indefinitely until the task completes
 - Validate container with `storage_entity_prefix` for length issues
-- `delpool` action now cleans up and deletes some storage containers
+- `pool del` action now cleans up and deletes some storage containers
 immediately afterwards (with confirmation prompts)
 - `/opt/intel` is no longer automatically mounted for infiniband-enabled
-containers on SUES SLES-HPC hosts. Please see the configuration doc
+containers on SUSE SLES-HPC hosts. Please see the configuration doc
 on how to manually map this directory if required. OpenLogic CentOS-HPC
 hosts remain unchanged.
 - Modularized code base
