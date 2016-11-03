@@ -26,7 +26,9 @@
 from __future__ import (
     absolute_import, division, print_function, unicode_literals
 )
-from builtins import (int, list, str, next, open, filter)
+from builtins import (  # noqa
+    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
+    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import base64
 import datetime
@@ -1161,6 +1163,7 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
                 if notfound > 10:
                     raise
                 time.sleep(1)
+                continue
             else:
                 raise
         size = int(tfp.response.headers['Content-Length'])
