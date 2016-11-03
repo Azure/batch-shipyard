@@ -45,6 +45,13 @@ cd batch-shipyard
 # Install for Windows on Python 3.5
 C:\Python35\Scripts\pip3.exe install --upgrade -r requirements.txt
 ```
+If you are installing on Python < 3.5 on Windows, you will need a compiler
+that matches the CRT of CPython version you are using. For Python 2.7, you
+can download the necessary development headers and compiler
+[from Microsoft](http://aka.ms/vcpython27). If you are on Python 3.3 or 3.4
+on Windows, it is recommended to upgrade to Python 3.5 or higher so you do not
+need a compiler to install the dependencies.
+
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 

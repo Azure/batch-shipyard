@@ -7,12 +7,11 @@ import sys
 
 n = int(sys.argv[1])
 
-x = int(math.sqrt(n))
+x = int(math.floor(math.sqrt(n)))
+
 if x * x == n:
     print('{} {}'.format(x, x))
     sys.exit(0)
-
-x = int(math.floor(math.sqrt(n)))
 
 for i in range(x, 0, -1):
     j = n // i
