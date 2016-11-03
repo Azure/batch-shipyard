@@ -129,6 +129,9 @@ The `data` command has the following sub-commands:
 * `ingress` will ingress data as specified in configuration files
 * `listfiles` will list files for all tasks in jobs
 * `stream` will stream a file as text (UTF-8 decoded) to the local console
+or binary if streamed to disk
+  * `--disk` will write the streamed data as binary to disk instead of output
+    to local console
   * `--filespec <jobid>,<taskid>,<filename>` can be given to stream a
     specific file. If `<taskid>` is set to `@FIRSTRUNNING`, then the first
     running task within the job of `<jobid>` will be used to locate the

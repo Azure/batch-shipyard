@@ -1102,12 +1102,15 @@ def get_remote_login_settings(batch_client, config, nodes=None):
     return ret
 
 
-def stream_file_and_wait_for_task(batch_client, filespec=None):
-    # type: (batch.BatchServiceClient, str) -> None
+def stream_file_and_wait_for_task(
+        batch_client, config, filespec=None, disk=False):
+    # type: (batch.BatchServiceClient, dict, str, bool) -> None
     """Stream a file and wait for task to complete
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     :param str filespec: filespec (jobid,taskid,filename)
+    :param bool disk: write to disk instead
     """
     if filespec is None:
         job_id = None
@@ -1148,43 +1151,60 @@ def stream_file_and_wait_for_task(batch_client, filespec=None):
     end = 0
     completed = False
     notfound = 0
-    while True:
-        # get task file properties
-        try:
-            tfp = batch_client.file.get_node_file_properties_from_task(
-                job_id, task_id, file, raw=True)
-        except batchmodels.BatchErrorException as ex:
-            if ('The specified operation is not valid for the current '
-                    'state of the resource.' in ex.message):
-                time.sleep(1)
-                continue
-            elif 'The specified file does not exist.' in ex.message:
-                notfound += 1
-                if notfound > 10:
+    try:
+        fd = None
+        if disk:
+            fp = pathlib.Path(job_id, task_id, file)
+            if (fp.exists() and not util.confirm_action(
+                    config, 'overwrite {}'.format(fp))):
+                return
+            fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+            logger.info('writing streamed data to disk: {}'.format(fp))
+            fd = fp.open('wb', buffering=0)
+        while True:
+            # get task file properties
+            try:
+                tfp = batch_client.file.get_node_file_properties_from_task(
+                    job_id, task_id, file, raw=True)
+            except batchmodels.BatchErrorException as ex:
+                if ('The specified operation is not valid for the current '
+                        'state of the resource.' in ex.message):
+                    time.sleep(1)
+                    continue
+                elif 'The specified file does not exist.' in ex.message:
+                    notfound += 1
+                    if notfound > 10:
+                        raise
+                    time.sleep(1)
+                    continue
+                else:
                     raise
-                time.sleep(1)
-                continue
-            else:
-                raise
-        size = int(tfp.response.headers['Content-Length'])
-        if size != end and curr != size:
-            end = size
-            frag = batch_client.file.get_from_task(
-                job_id, task_id, file,
-                batchmodels.FileGetFromTaskOptions(
-                    ocp_range='bytes={}-{}'.format(curr, end))
-            )
-            for f in frag:
-                print(f.decode('utf8'), end='')
-            curr = end
-        elif completed:
-            print()
-            break
-        if not completed:
-            task = batch_client.task.get(job_id, task_id)
-            if task.state == batchmodels.TaskState.completed:
-                completed = True
-        time.sleep(1)
+            size = int(tfp.response.headers['Content-Length'])
+            if size != end and curr != size:
+                end = size
+                frag = batch_client.file.get_from_task(
+                    job_id, task_id, file,
+                    batchmodels.FileGetFromTaskOptions(
+                        ocp_range='bytes={}-{}'.format(curr, end))
+                )
+                for f in frag:
+                    if fd is not None:
+                        fd.write(f)
+                    else:
+                        print(f.decode('utf8'), end='')
+                curr = end
+            elif completed:
+                if not disk:
+                    print()
+                break
+            if not completed:
+                task = batch_client.task.get(job_id, task_id)
+                if task.state == batchmodels.TaskState.completed:
+                    completed = True
+            time.sleep(1)
+    finally:
+        if fd is not None:
+            fd.close()
 
 
 def get_file_via_task(batch_client, config, filespec=None):

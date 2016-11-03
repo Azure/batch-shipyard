@@ -30,7 +30,6 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
-import click
 import json
 import logging
 try:
@@ -38,6 +37,7 @@ try:
 except ImportError:
     import pathlib2 as pathlib
 # non-stdlib imports
+import click
 # local imports
 import convoy.fleet
 import convoy.util
@@ -558,13 +558,17 @@ def data_listfiles(ctx):
 
 @data.command('stream')
 @click.option(
+    '--disk', is_flag=True,
+    help='Write streamed data to disk and suppress console output')
+@click.option(
     '--filespec', help='File specification as jobid,taskid,filename')
 @common_options
 @pass_cli_context
-def data_stream(ctx, filespec):
-    """Stream a text file to the local console"""
+def data_stream(ctx, disk, filespec):
+    """Stream a file as text to the local console or as binary to disk"""
     _setup_context(ctx)
-    convoy.fleet.action_data_stream(ctx.batch_client, filespec)
+    convoy.fleet.action_data_stream(
+        ctx.batch_client, ctx.config, filespec, disk)
 
 
 @data.command('getfile')

@@ -1370,13 +1370,15 @@ def action_storage_clear(blob_client, queue_client, table_client, config):
         blob_client, queue_client, table_client, config)
 
 
-def action_data_stream(batch_client, filespec):
-    # type: (batchsc.BatchServiceClient, str) -> None
+def action_data_stream(batch_client, config, filespec, disk):
+    # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
     """Action: Data Stream
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
     :param str filespec: filespec of file to retrieve
+    :param bool disk: write streamed data to disk instead
     """
-    batch.stream_file_and_wait_for_task(batch_client, filespec)
+    batch.stream_file_and_wait_for_task(batch_client, config, filespec, disk)
 
 
 def action_data_listfiles(batch_client, config):
