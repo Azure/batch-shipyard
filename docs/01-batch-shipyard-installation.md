@@ -52,6 +52,22 @@ can download the necessary development headers and compiler
 on Windows, it is recommended to upgrade to Python 3.5 or higher so you do not
 need a compiler to install the dependencies.
 
+Although it is recommended to use the Python distribution from
+[python.org](https://www.python.org) for use with Batch Shipyard, if you are
+using the Anaconda distribution, you can use the `install_conda_windows.cmd`
+file to aid in installing dependencies to your conda environment:
+```shell
+# Create environment if you haven't done so yet such that you don't install
+# to the root environment, unless you really want to
+conda create --name batchshipyard
+# Activate the environment
+activate batchshipyard
+# Change directory to where Batch Shipyard was cloned or unpacked to
+cd batch-shipyard
+# Run installer script
+install_conda_windows.cmd
+```
+
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
@@ -92,6 +108,9 @@ Rerun the `install.sh` script for all upgrades.
 
 #### Windows
 Reissue the `pip.exe install --upgrade -r requirements.txt` command.
+
+If using Anaconda, you can rerun the `install_conda_windows.cmd` script
+within the environment that hosts Batch Shipyard.
 
 #### Mac
 Reissue the `pip install --upgrade --user -r requirements.txt` command.
