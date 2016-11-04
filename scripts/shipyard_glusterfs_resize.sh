@@ -26,8 +26,8 @@ domount=0
 for i in "$@"
 do
     if [ $i == $ipaddress ]; then
-		domount=1
-		break
+        domount=1
+        break
     fi
 done
 echo "mount: $domount"
@@ -71,12 +71,12 @@ echo "waiting for gv0 volume..."
 set +e
 while :
 do
-        numbricks=`gluster volume info gv0 | grep -e '^Number of Bricks:' | cut -d' ' -f4`
-        if [ "$numbricks" == "$numnodes" ]; then
-            # delay to wait for subvolumes
-            sleep 5
-            break
-        fi
+    numbricks=`gluster volume info gv0 | grep -e '^Number of Bricks:' | cut -d' ' -f4`
+    if [ "$numbricks" == "$numnodes" ]; then
+        # delay to wait for subvolumes
+        sleep 5
+        break
+    fi
     sleep 1
 done
 set -e

@@ -54,7 +54,7 @@ while getopts "h?ab:de:fg:no:p:r:s:t:w" opt; do
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs cluster"
-            echo "-g [nv-series::driver file:nvidia docker pkg] gpu support"
+            echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
