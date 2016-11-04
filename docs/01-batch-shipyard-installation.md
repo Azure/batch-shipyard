@@ -136,20 +136,20 @@ line-endings (CRLF) then compute nodes will fail to start properly.
 ### Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
 with Python 2.7 or 3.3+. You will also need to install dependent Python
-packages including the [Azure Batch](https://pypi.python.org/pypi/azure-batch)
-and [Azure Storage](https://pypi.python.org/pypi/azure-storage) packages.
-Installation can be performed using the [requirements.txt](../requirements.txt)
-file via the command `pip install --upgrade --user -r requirements.txt`
-(or via `pip3` for Python3). If `pip` is not installed on your system,
-please continue reading below. Note that this `pip` command should be run
-for every Batch Shipyard upgrade if not using `install.sh`.
+packages that Batch Shipyard requires. Installation can be performed using
+the [requirements.txt](../requirements.txt) file via the command
+`pip install --upgrade --user -r requirements.txt` (or via `pip3` for
+Python3). Note that this `pip` command should be run for every Batch Shipyard
+upgrade if not using `install.sh`. The use of `install.sh` is highly
+recommended instead of these manual steps on Linux.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and Python development libraries to be installed due to the
 [cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.
-For Windows, binary wheels will be installed for dependencies, thus no
-development environment is needed. The following are example commands to
-execute (as root or with `sudo`) to install the required dependencies on Linux:
+For Windows, binary wheels will be installed for most dependencies. If
+installing on Python 3.5 for Windows, no development environment is needed.
+The following are example commands to execute (as root or with `sudo`) to
+install the required dependencies on Linux:
 
 ####Ubuntu/Debian
 ```
@@ -184,7 +184,8 @@ would install the proper dependencies for Python3.
 ###Data Movement Support
 Batch Shipyard contains native support for moving files locally accessible
 at the point of script execution. The `install.sh` script ensures that the
-following programs are installed. With a manual installation, the following
+following programs are installed. The Docker CLI image contains all of the
+necessary software as well. With a manual installation, the following
 programs must be installed to take advantage of data movement features of
 Batch Shipyard:
 
@@ -204,7 +205,9 @@ are not supported if invoked from Windows.
 Batch Shipyard supports encrypting credentials that are used by backend
 components within your pool deployment. In order to utilize this feature,
 you must have `openssl` installed. The `install.sh` script ensures that
-OpenSSL is installed. Encryption support is not available on Windows.
+OpenSSL is installed. The Docker CLI image also contains OpenSSL. Encryption
+support is disabled on Windows; if you need this feature, please use
+Linux or Mac.
 
 Note that all commandlines, environment variables and resource file URLs
 which are stored by the Azure Batch Service are encrypted by the service.

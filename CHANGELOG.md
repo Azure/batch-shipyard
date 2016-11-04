@@ -1,6 +1,12 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- `install_conda_windows.cmd` helper script for installing Batch Shipyard
+under Anaconda for Windows
+- New options on commands/subcommands:
+  - `data stream`: `--disk` will stream the file as binary to disk instead
+    of as text to the local console
 
 ## [2.0.0rc2] - 2016-11-02
 ### Added
