@@ -36,9 +36,9 @@ import logging
 import math
 import os
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 try:
     from shlex import quote as shellquote
 except ImportError:

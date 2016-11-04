@@ -34,9 +34,9 @@ import datetime
 import hashlib
 import logging
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 # non-stdlib imports
 import azure.common
 import azure.storage.blob as azureblob

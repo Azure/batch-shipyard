@@ -25,16 +25,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 # stdlib imports
-from __future__ import division, print_function, unicode_literals
 import argparse
 import fnmatch
 import logging
 import logging.handlers
 import os
-try:
-    import pathlib
-except ImportError:
-    import pathlib2 as pathlib
+import pathlib
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batch

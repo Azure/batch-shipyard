@@ -33,9 +33,9 @@ from builtins import (  # noqa
 import json
 import logging
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 # non-stdlib imports
 import click
 # local imports

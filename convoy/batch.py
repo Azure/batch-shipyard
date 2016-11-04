@@ -36,9 +36,9 @@ import fnmatch
 import getpass
 import logging
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 import os
 import tempfile
 import time

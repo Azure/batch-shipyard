@@ -32,9 +32,9 @@ from builtins import (  # noqa
 # stdlib imports
 import logging
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 import subprocess
 import time
 try:

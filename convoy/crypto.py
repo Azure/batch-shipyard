@@ -35,9 +35,9 @@ import getpass
 import logging
 import os
 try:
-    import pathlib
-except ImportError:
     import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 import tempfile
 import subprocess
 # local imports
