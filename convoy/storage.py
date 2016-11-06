@@ -371,7 +371,7 @@ def upload_resource_files(blob_client, config, files):
             except azure.common.AzureMissingResourceHttpError:
                 pass
         if upload:
-            logger.info('uploading file: {}'.format(file[1]))
+            logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
             blob_client.create_blob_from_path(
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0], file[1])
         sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(

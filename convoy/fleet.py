@@ -495,15 +495,15 @@ def _add_pool(batch_client, blob_client, config):
     if azurefile_vd:
         afbin, afsrv, afenv, afvc = _setup_azurefile_volume_driver(
             blob_client, config)
-        _rflist.append((str(afbin.name), str(afbin)))
-        _rflist.append((str(afsrv.name), str(afsrv)))
-        _rflist.append((str(afenv.name), str(afenv)))
-        _rflist.append((str(afvc.name), str(afvc)))
+        _rflist.append((afbin.name, str(afbin)))
+        _rflist.append((afsrv.name, str(afsrv)))
+        _rflist.append((afenv.name, str(afenv)))
+        _rflist.append((afvc.name, str(afvc)))
     # gpu settings
     if (vm_size.lower().startswith('standard_nc') or
             vm_size.lower().startswith('standard_nv')):
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
-        _rflist.append((str(gpupkg.name), str(gpupkg)))
+        _rflist.append((gpupkg.name, str(gpupkg)))
         gpu_env = '{}:{}:{}'.format(
             vm_size.lower().startswith('standard_nv'),
             _NVIDIA_DRIVER,

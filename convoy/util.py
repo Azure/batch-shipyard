@@ -101,18 +101,18 @@ def decode_string(string, encoding=None):
     :rtype: str
     :return: decoded string
     """
+    if isinstance(string, bytes):
+        if encoding is None:
+            encoding = 'utf8'
+        return string.decode(encoding)
     if isinstance(string, str):
         return string
-    if encoding is None:
-        encoding = 'utf8'
-    if isinstance(string, bytes):
-        return string.decode(encoding)
     raise ValueError('invalid string type: {}'.format(type(string)))
 
 
 def encode_string(string, encoding=None):
     # type: (str, str) -> str
-    """Decode a string with specified encoding
+    """Encode a string with specified encoding
     :type string: str or bytes
     :param string: string to decode
     :param str encoding: encoding of string to decode
@@ -121,9 +121,9 @@ def encode_string(string, encoding=None):
     """
     if isinstance(string, bytes):
         return string
-    if encoding is None:
-        encoding = 'utf8'
     if isinstance(string, str):
+        if encoding is None:
+            encoding = 'utf8'
         return string.encode(encoding)
     raise ValueError('invalid string type: {}'.format(type(string)))
 

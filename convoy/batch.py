@@ -255,18 +255,19 @@ def _block_for_nodes_ready(
                     if node.id not in reboot_map:
                         reboot_map[node.id] = 0
                         logger.error(
-                            ('Detected start task failure, retrieving '
-                             'stdout/stderr for error diagnosis for '
-                             'node {}').format(node.id))
+                            ('Detected start task failure, attempting to '
+                             'retrieve stdout/stderr for error diagnosis '
+                             'from node {}').format(node.id))
                         _retrieve_outputs_from_failed_nodes(
                             batch_client, config, nodeid=node.id)
                     if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
                         list_nodes(batch_client, config)
                         raise RuntimeError(
                             ('Ran out of reboot retries for recovery. '
-                             'Please inspect stdout.txt/stderr.txt files '
-                             'within the {}/{}/startup directory in the '
-                             'current working directory. If this error '
+                             'Please inspect both the node status above and '
+                             'stdout.txt/stderr.txt files within the '
+                             '{}/{}/startup directory in the current working '
+                             'directory if available. If this error '
                              'appears non-transient, please submit an '
                              'issue on GitHub').format(
                                  pool.id, node.id))
@@ -277,14 +278,15 @@ def _block_for_nodes_ready(
             else:
                 # fast path check for start task failures in non-reboot mode
                 logger.error(
-                    'Detected start task failure, retrieving stdout/stderr '
-                    'for error diagnosis')
+                    'Detected start task failure, attempting to retrieve '
+                    'stdout/stderr for error diagnosis from nodes')
                 _retrieve_outputs_from_failed_nodes(batch_client, config)
                 list_nodes(batch_client, config)
                 raise RuntimeError(
-                    ('Please inspect stdout.txt/stderr.txt files within '
-                     'the {}/<nodes>/startup directory in the current '
-                     'working directory. If this error appears '
+                    ('Please inspect both the node status above and '
+                     'stdout.txt/stderr.txt files within the '
+                     '{}/<nodes>/startup directory in the current working '
+                     'directory if available. If this error appears '
                      'non-transient, please submit an issue on '
                      'GitHub.').format(pool.id))
         if (len(nodes) >= pool.target_dedicated and
@@ -293,9 +295,10 @@ def _block_for_nodes_ready(
                 # list nodes of pool
                 list_nodes(batch_client, config)
                 raise RuntimeError(
-                    ('Node(s) of pool {} not in {} state. Please inspect '
-                     'the state of nodes in the pool. Please retry pool '
-                     'creation by deleting and recreating the pool.').format(
+                    ('Node(s) of pool {} not in {} state. Please inspect the '
+                     'state of nodes in the pool above. If this appears to '
+                     'be a transient error, please retry pool creation by '
+                     'deleting and recreating the pool.').format(
                          pool.id, end_states))
             else:
                 return nodes
@@ -1070,13 +1073,28 @@ def list_nodes(batch_client, config, nodes=None):
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
     for node in nodes:
+        if node.errors is not None:
+            info = ' error=(code={} message={})'.format(
+                node.errors.code, node.errors.message)
+        else:
+            info = ''
+        if node.start_task_info is not None:
+            if node.start_task_info.scheduling_error is not None:
+                info += (' start_task_scheduling_error=(category={} code={} '
+                         'message={})').format(
+                             node.start_task_info.scheduling_error.category,
+                             node.start_task_info.scheduling_error.code,
+                             node.start_task_info.scheduling_error.message)
+            else:
+                info += ' start_task_exit_code={}'.format(
+                    node.start_task_info.exit_code)
         logger.info(
-            ('node_id={} [state={} scheduling_state={} ip_address={} '
+            ('node_id={} [state={}{} scheduling_state={} ip_address={} '
              'vm_size={} total_tasks_run={} running_tasks_count={} '
              'total_tasks_succeeded={}]').format(
-                 node.id, node.state, node.scheduling_state, node.ip_address,
-                 node.vm_size, node.total_tasks_run, node.running_tasks_count,
-                 node.total_tasks_succeeded))
+                 node.id, node.state, info, node.scheduling_state,
+                 node.ip_address, node.vm_size, node.total_tasks_run,
+                 node.running_tasks_count, node.total_tasks_succeeded))
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):
