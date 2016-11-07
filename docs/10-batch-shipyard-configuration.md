@@ -110,6 +110,7 @@ The global config schema is as follows:
                 },
                 "destination": {
                     "shared_data_volume": "glustervol",
+                    "relative_destination_path": "myfiles",
                     "data_transfer": {
                         "method": "multinode_scp",
                         "ssh_private_key": "id_rsa_shipyard",
@@ -289,6 +290,10 @@ members:
     specify one or the other, but not both in the same object. Please see
     below in the `shared_data_volumes` for information on how to set up a
     GlusterFS share.
+  * (optional) `relative_destination_path` specifies a relative destination
+    path to place the files, with respect to the GlusterFS volume root. If
+    this is not specified, then files will be placed directly in the GlusterFS
+    volume root.
   * (required) `data_transfer` specifies how the transfer should take place.
     The following list contains members for GlusterFS ingress when a GlusterFS
     volume is provided for `shared_data_volume` (see below for ingressing to

@@ -435,16 +435,17 @@ def _singlenode_transfer(
 
 
 def _multinode_transfer(
-        method, src, src_incl, src_excl, dst, username, ssh_private_key, rls,
-        eo, reo, mpt, split):
-    # type: (str, str, list, list, str, str, pathlib.Path, dict, str, str,
-    #        int, int) -> None
+        method, src, src_incl, src_excl, dst, rdp, username, ssh_private_key,
+        rls, eo, reo, mpt, split):
+    # type: (str, str, list, list, str, str, str, pathlib.Path, dict, str,
+    #        str, int, int) -> None
     """Transfer data to multiple destination nodes simultaneously
     :param str method: transfer method
     :param str src: source path
     :param list src_incl: source include
     :param list src_excl: source exclude
     :param str dst: destination path
+    :param str rdp: relative destination path
     :param str username: username
     :param pathlib.Path: ssh private key
     :param dict rls: remote login settings
@@ -479,25 +480,28 @@ def _multinode_transfer(
     # 2. binpack files to different nodes
     total_files = 0
     dirs = set()
+    if rdp is not None:
+        dirs.add(rdp)
     for entry in util.scantree(src):
         rel = pathlib.Path(entry.path).relative_to(psrc)
         sparent = str(pathlib.Path(entry.path).relative_to(psrc).parent)
-        if sparent != '.':
-            dirs.add(sparent)
         if entry.is_file():
+            srel = str(rel)
             # check filters
             if src_excl is not None:
-                inc = not any(
-                    [fnmatch.fnmatch(entry.path, x) for x in src_excl])
+                inc = not any([fnmatch.fnmatch(srel, x) for x in src_excl])
             else:
                 inc = True
             if src_incl is not None:
-                inc = any([fnmatch.fnmatch(entry.path, x) for x in src_incl])
+                inc = any([fnmatch.fnmatch(srel, x) for x in src_incl])
             if not inc:
                 logger.debug('skipping file {} due to filters'.format(
                     entry.path))
                 continue
-            dstpath = '{}{}/{}'.format(dst, psrc.name, rel)
+            if rdp is None:
+                dstpath = '{}{}'.format(dst, rel)
+            else:
+                dstpath = '{}{}/{}'.format(dst, rdp, rel)
             # get key of min bucket values
             fsize = entry.stat().st_size
             if split is not None and fsize > split:
@@ -528,42 +532,46 @@ def _multinode_transfer(
                 buckets[key] += fsize
                 files[key].append((entry.path, dstpath, None, None))
             total_files += 1
+        # add directory to create
+        if sparent != '.':
+            if rdp is None:
+                dirs.add(sparent)
+            else:
+                dirs.add('{}/{}'.format(rdp, sparent))
     total_size = sum(buckets.values())
     if total_files == 0:
         logger.error('no files to ingress')
         return
-    # ensure at least one directory (parent) is created
-    if len(dirs) == 0:
-        dirs.add('')
     # create remote directories via ssh
-    logger.debug('creating remote directories: {} and {}'.format(
-        psrc.name, dirs))
-    dirs = ['mkdir -p {}/{}'.format(psrc.name, x) for x in list(dirs)]
-    dirs.insert(0, 'cd {}'.format(dst))
-    _rls = next(iter(rls.values()))
-    ip = _rls.remote_login_ip_address
-    port = _rls.remote_login_port
-    del _rls
-    mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
-                '-o UserKnownHostsFile=/dev/null '
-                '-i {} -p {} {}@{} {}'.format(
-                    ssh_private_key, port, username, ip,
-                    util.wrap_commands_in_shell(dirs)))
-    rc = util.subprocess_with_output(
-        mkdircmd, shell=True, suppress_output=True)
-    if rc == 0:
-        logger.info('remote directories created on {}'.format(dst))
+    if len(dirs) == 0:
+        logger.debug('no remote directories to create')
     else:
-        logger.error('remote directory creation failed')
-        return
-    del ip
-    del port
+        logger.debug('creating remote directories: {}'.format(dirs))
+        dirs = ['mkdir -p {}'.format(x) for x in list(dirs)]
+        dirs.insert(0, 'cd {}'.format(dst))
+        _rls = next(iter(rls.values()))
+        ip = _rls.remote_login_ip_address
+        port = _rls.remote_login_port
+        del _rls
+        mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
+                    '-o UserKnownHostsFile=/dev/null '
+                    '-i {} -p {} {}@{} {}'.format(
+                        ssh_private_key, port, username, ip,
+                        util.wrap_commands_in_shell(dirs)))
+        rc = util.subprocess_with_output(
+            mkdircmd, shell=True, suppress_output=True)
+        if rc == 0:
+            logger.info('remote directories created on {}'.format(dst))
+        else:
+            logger.error('remote directory creation failed')
+            return
+        del ip
+        del port
     logger.info(
         'ingress data: {0:.4f} MiB in {1} files to transfer, using {2} max '
         'parallel transfers per node'.format(
             total_size / _MEGABYTE, total_files, mpt))
-    logger.info('begin ingressing data from {} to {}'.format(
-        src, dst))
+    logger.info('begin ingressing data from {} to {}'.format(src, dst))
     nodekeys = list(buckets.keys())
     threads = []
     start = datetime.datetime.now()
@@ -881,6 +889,14 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                     'cannot ingress data to shared data volume without a '
                     'valid ssh user')
             try:
+                rdp = fdict['destination']['relative_destination_path']
+                if rdp is not None and len(rdp) == 0:
+                    raise KeyError()
+                else:
+                    rdp = rdp.lstrip('/').rstrip('/')
+            except KeyError:
+                rdp = None
+            try:
                 method = fdict['destination']['data_transfer'][
                     'method'].lower()
             except KeyError:
@@ -959,14 +975,14 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                         src_excl is not None):
                     _multinode_transfer(
                         'multinode_' + method, src, src_incl, src_excl, dst,
-                        username, ssh_private_key, rls, eo, reo, 1, split)
+                        rdp, username, ssh_private_key, rls, eo, reo, 1, split)
                 else:
                     _singlenode_transfer(
                         method, src, dst, username, ssh_private_key, rls, eo,
                         reo)
             elif method == 'multinode_scp' or method == 'multinode_rsync+ssh':
                 _multinode_transfer(
-                    method, src, src_incl, src_excl, dst, username,
+                    method, src, src_incl, src_excl, dst, rdp, username,
                     ssh_private_key, rls, eo, reo, mpt, split)
             else:
                 raise RuntimeError(

@@ -50,6 +50,7 @@
                 },
                 "destination": {
                     "shared_data_volume": "glustervol",
+                    "relative_destination_path": "myfiles",
                     "data_transfer": {
                         "method": "multinode_scp",
                         "ssh_private_key": "id_rsa_shipyard",

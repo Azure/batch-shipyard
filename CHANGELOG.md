@@ -4,9 +4,23 @@
 ### Added
 - `install_conda_windows.cmd` helper script for installing Batch Shipyard
 under Anaconda for Windows
+- Added `relative_destination_path` json property for `files` ingress into
+GlusterFS volumes. This allows arbitrary specification of where ingressed
+files should be placed relative to the GlusterFS volume root.
 - New options on commands/subcommands:
   - `data stream`: `--disk` will stream the file as binary to disk instead
     of as text to the local console
+
+### Changed
+- GlusterFS `files` data ingress no longer creates a directory where files to
+be uploaded exist. For example if uploading from a path `/a/b/c` the directory
+`c` is no longer created on the GlusterFS volume. Instead all files found in
+`/a/b/c` will be immediately placed in the GlusterFS volume root. This
+behavior can be modified with the `relative_destination_path` property.
+
+### Fixed
+- More Python2/3 compatibility issues
+- Ensure pools that employ GlusterFS volumes have more than 1 node
 
 ## [2.0.0rc2] - 2016-11-02
 ### Added

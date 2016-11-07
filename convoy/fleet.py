@@ -814,6 +814,8 @@ def _adjust_settings_for_pool_creation(config):
                  publisher, offer, sku))
     # adjust inter node comm setting
     vm_count = int(config['pool_specification']['vm_count'])
+    if vm_count < 1:
+        raise ValueError('invalid vm_count: {}'.format(vm_count))
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
     except KeyError:
@@ -872,7 +874,7 @@ def _adjust_settings_for_pool_creation(config):
                 'disabling ssh user creation due to script being run '
                 'from Windows and no public key is specified')
             config['pool_specification'].pop('ssh', None)
-    # glusterfs requires internode comms
+    # glusterfs requires internode comms and more than 1 node
     try:
         num_gluster = 0
         shared = config['global_resources']['docker_volumes'][
@@ -886,6 +888,8 @@ def _adjust_settings_for_pool_creation(config):
                     raise ValueError(
                         'inter node communication in pool configuration '
                         'must be enabled for glusterfs')
+                if vm_count <= 1:
+                    raise ValueError('vm_count should exceed 1 for glusterfs')
                 num_gluster += 1
                 try:
                     if shared[sdvkey]['volume_type'] != 'replica':
