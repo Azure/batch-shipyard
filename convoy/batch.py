@@ -289,7 +289,7 @@ def _block_for_nodes_ready(
                      'directory if available. If this error appears '
                      'non-transient, please submit an issue on '
                      'GitHub.').format(pool.id))
-        if (len(nodes) >= pool.target_dedicated and
+        if (len(nodes) == pool.target_dedicated and
                 all(node.state in stopping_states for node in nodes)):
             if any(node.state not in end_states for node in nodes):
                 # list nodes of pool

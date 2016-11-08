@@ -1123,7 +1123,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     try:
         for svkey in config[
                 'global_resources']['docker_volumes']['shared_data_volumes']:
-            conf = ['global_resources']['docker_volumes'][
+            conf = config['global_resources']['docker_volumes'][
                 'shared_data_volumes'][svkey]
             if conf['volume_driver'] == 'glusterfs':
                 gluster_present = True
@@ -1159,7 +1159,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         else:
             logger.warning('ssh user was not added as --wait was not given')
     # add brick for new nodes
-    if gluster_present:
+    if gluster_present and resize_up:
         # get internal ip addresses of new nodes
         new_nodes = [
             node.ip_address for node in nodes if node.id not in old_nodes
