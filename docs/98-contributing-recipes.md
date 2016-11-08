@@ -36,7 +36,7 @@ recipe.
 
 Provide any additional pointers or thinge to look out for when running
 the Docker image and the application. For instance, if running a
-Multi-Instance task with MPI, if the application expects a shared file
+Multi-Instance task with MPI and the application expects a shared file
 system for output files, then explicitly mention this with an example
 or reference on how to set this up properly within Batch Shipyard.
 

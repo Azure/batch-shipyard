@@ -10,6 +10,8 @@ files should be placed relative to the GlusterFS volume root.
 - New options on commands/subcommands:
   - `data stream`: `--disk` will stream the file as binary to disk instead
     of as text to the local console
+  - `data listfiles`: `--jobid` and `--taskid` allows scoping of the list
+    files action
 
 ### Changed
 - GlusterFS `files` data ingress no longer creates a directory where files to

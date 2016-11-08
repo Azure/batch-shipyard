@@ -1503,18 +1503,25 @@ def list_tasks(batch_client, config):
             logger.error('no tasks found for job {}'.format(job['id']))
 
 
-def list_task_files(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+def list_task_files(batch_client, config, jobid=None, taskid=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str) -> None
     """List task files for specified jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param str jobid: job id to list
+    :param str taskid: task id to list
     """
     for job in config['job_specifications']:
+        if jobid is not None and job['id'] != jobid:
+            continue
         i = 0
         try:
             tasks = batch_client.task.list(job['id'])
             for task in tasks:
+                if taskid is not None and taskid != task.id:
+                    continue
                 j = 0
                 files = batch_client.file.list_from_task(
                     job['id'], task.id, recursive=True)

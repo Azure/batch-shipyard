@@ -72,6 +72,11 @@ Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
 #### Step 2c: [Mac] Pip Install Dependencies
+Please follow the steps outlined on
+[this guide](http://docs.python-guide.org/en/latest/starting/install/osx/)
+to ensure that you have a recent version of Python, a compiler and pip. It
+is recommended to use Python 3.5 or later for use with Batch Shipyard.
+
 Invoke `pip` and install using the `requirements.txt` file. For example:
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to

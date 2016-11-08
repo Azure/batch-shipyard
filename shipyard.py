@@ -548,12 +548,17 @@ def data(ctx):
 
 
 @data.command('listfiles')
+@click.option(
+    '--jobid', help='List files from the specified job id')
+@click.option(
+    '--taskid', help='List files from the specified task id')
 @common_options
 @pass_cli_context
-def data_listfiles(ctx):
-    """List files for all tasks in jobs"""
+def data_listfiles(ctx, jobid, taskid):
+    """List files for tasks in jobs"""
     _setup_context(ctx)
-    convoy.fleet.action_data_listfiles(ctx.batch_client, ctx.config)
+    convoy.fleet.action_data_listfiles(
+        ctx.batch_client, ctx.config, jobid, taskid)
 
 
 @data.command('stream')

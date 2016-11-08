@@ -111,23 +111,25 @@ The `data` command has the following sub-commands:
   getfile      Retrieve file(s) from a job/task
   getfilenode  Retrieve file(s) from a compute node
   ingress      Ingress data into Azure
-  listfiles    List files for all tasks in jobs
+  listfiles    List files for tasks in jobs
   stream       Stream a text file to the local console
 ```
 * `getfile` will retrieve a file with job, task, filename semantics
-  * `-all --filespec <jobid>,<taskid>,<include pattern>` can be given to
+  * `--all --filespec <jobid>,<taskid>,<include pattern>` can be given to
     download all files for the job and task with an optional include pattern
   * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
     specific file from the job and task. If `<taskid>` is set to
     `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
     will be used to locate the `<filename>`.
 * `getfilenode` will retrieve a file with node id and filename semantics
-  * `-all --filespec <nodeid>,<include pattern>` can be given to download
+  * `--all --filespec <nodeid>,<include pattern>` can be given to download
     all files from the compute node with the optional include pattern
   * `--filespec <nodeid>,<filename>` can be given to download one
     specific file from compute node
 * `ingress` will ingress data as specified in configuration files
 * `listfiles` will list files for all tasks in jobs
+  * `--jobid` force scope to just this job id
+  * `--taskid` force scope to just this task id
 * `stream` will stream a file as text (UTF-8 decoded) to the local console
 or binary if streamed to disk
   * `--disk` will write the streamed data as binary to disk instead of output

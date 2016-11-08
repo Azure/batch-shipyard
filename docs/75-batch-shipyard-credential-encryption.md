@@ -8,21 +8,21 @@ for Batch Shipyard.
 
 ## Azure Batch Service and Encryption
 Azure Batch naturally must deal with potentially sensitive information that
-customers submit for job scheduling, such as command lines for processes,
+users submit for job scheduling, such as command lines for processes,
 environment variables, and URLs for resource files. All of this information
-is encrypted from the point of origin from the submission machine or Portal
-and stored in the Azure Batch service. All REST API calls are encrypted in
-transit through HTTPS to the Azure Batch service endpoints. Any sensitive
-information as described above is then encrypted. Encryption of this
-information is maintained until it is needed, such as executing the task
-which contains the command line to run.
+is encrypted from the point of origin from the submission machine or Azure
+Portal and stored in the Azure Batch service. All REST API calls are encrypted
+in transit through HTTPS to the Azure Batch service endpoints. Any sensitive
+information as described above is then encrypted by the Azure Batch Service.
+Encryption of this information is maintained until it is needed, such as
+executing the task which contains the command line to run.
 
 If the Azure Batch service takes care of encrypting all of the sensitive
 user information, then why does Batch Shipyard need to encrypt credentials?
 The answer lies in if your scenario requires it. Because Batch Shipyard needs
 credentials for some of its components to work, such as Azure Storage,
 these credentials must be exposed to the compute node through environment
-variables or command line arguments. As explained above due to the strict
+variables or command line arguments. As explained above, due to the strict
 encryption policies enforced by the Azure Batch service, these credentials
 would never pose a risk to be exposed on their own, however, tools such
 as the Azure Portal, Azure Batch Explorer, Azure CLI or Azure PowerShell
@@ -32,25 +32,25 @@ back to the user so that they may be viewable for status monitoring and
 diagnosis. Again, there is no risk for exposure to other parties while
 in-transit, however, they can be viewed once the data reaches the point of
 display - be it the web browser displaying the Azure Portal or the Azure
-Batch Explorer UI.
+Batch Explorer UI for example.
 
 The question for you is, does this matter or not? Is there a risk of
 credential leakage by means of these UI or command line display mechanisms?
-If the answer is no, then no action needs to be taken. However, if you
-believe that credentials may be exposed when displayed through the
-aforementioned mechanisms, then please read on for steps to enable
-credential encryption with Batch Shipyard.
+If the answer is no, then no action needs to be taken with regards to
+credential encryption. However, if you believe that credentials may be
+exposed when displayed through the aforementioned mechanisms, then please
+read on for steps to enable credential encryption with Batch Shipyard.
 
 ## Credential Encryption
 There are various places where credentials are passed from the user from
 configuration input files to the compute nodes. By enabling credential
-encryption, these strings are replaced with encrypted versions rendering
+encryption, these strings are replaced with encrypted text rendering
 viewing of them inconsequential without the private key. The series of
 actions that need to be taken in order to enable credential encryption are:
 
 1. Create certificates and keys locally
 2. Modify the global configuration file to reference these certificates
-3. Add the certificate to your Batch account (optional)
+3. Add the certificate to your Batch account
 
 For step 1, invoke the `cert create` command with `shipyard.py` which will
 create the necessary certificates and keys. The end result should be two files
@@ -79,10 +79,14 @@ members are correctly populated. It is recommended to fill the
 `cert create`) members such that they do not need to be generated each
 time encryption is required.
 
-Step 3 is optional, but one may invoke `cert add` with `shipyard.py` to
-add the certificate to the Batch account specified in the credentials json
-file. If `encryption` is enabled, then this `cert add` action is automatically
-invoked for every subsequent `pool add`.
+Step 3 is optional to perform explicitly, but one may invoke `cert add` with
+`shipyard.py` to add the certificate to the Batch account specified in the
+credentials json file. If `encryption` is enabled, then this `cert add`
+action is automatically invoked for every subsequent `pool add`.
+
+**Note that encryption is not applied retroactively to existing pools.**
+If you are adding encryption to your global configuration file, please make
+sure that you recreate pools for which you wish to schedule jobs to.
 
 ## Encryption Details
 System-installed `openssl` is used in all certificate, encryption and

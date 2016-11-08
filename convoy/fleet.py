@@ -1385,13 +1385,19 @@ def action_data_stream(batch_client, config, filespec, disk):
     batch.stream_file_and_wait_for_task(batch_client, config, filespec, disk)
 
 
-def action_data_listfiles(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_data_listfiles(batch_client, config, jobid, taskid):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Data Listfiles
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
+    :param str jobid: job id to list
+    :param str taskid: task id to list
     """
-    batch.list_task_files(batch_client, config)
+    if taskid is not None and jobid is None:
+        raise ValueError(
+            'cannot specify a task to list files without the corresponding '
+            'job id')
+    batch.list_task_files(batch_client, config, jobid, taskid)
 
 
 def action_data_getfile(batch_client, config, all, filespec):
