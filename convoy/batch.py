@@ -578,7 +578,7 @@ def resize_pool(batch_client, config, wait=False):
     :return: list of nodes if wait or None
     """
     pool_id = config['pool_specification']['id']
-    vm_count = int(config['pool_specification']['vm_count'])
+    vm_count = config['pool_specification']['vm_count']
     logger.info('Resizing pool {} to {} compute nodes'.format(
         pool_id, vm_count))
     batch_client.pool.resize(

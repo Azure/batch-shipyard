@@ -95,15 +95,19 @@ burden for each job and task that references it?
 
 If your answer to these questions is that the data is either short-lived or
 is small enough such that data ingress is not a large burden, then you may
-opt for Batch Shipyard's direct to GlusterFS data ingress feature. With this
-feature, your files accessible on premises will be directly ingressed to
-the compute nodes, bypassing the hops to and from Azure storage. You can
-define these files under the global configuration json file property
-`global_resources`:`files`. The `destination` member should include a property
-named `shared_data_volume` which references your GlusterFS volume. Any files
-in the `source` path (matching the optional `include` and `exclude`) filters
-will then be ingressed into the compute nodes using the `data ingress` command
-or by specifying `transfer_files_on_pool_creation` as `true` in the pool
+opt for Batch Shipyard's direct to GlusterFS or compute node data ingress
+capability. With this feature, your files accessible on premises will be
+directly ingressed to compute node(s), bypassing the hops to and from Azure
+storage. You can define these files under the global configuration json file
+property `global_resources`:`files`. The `destination` member should include
+a property named `shared_data_volume` which references your GlusterFS volume.
+Alternatively, if your pool only contains one compute node, you should not
+define a GlusterFS volume and instead only define a
+`relative_destination_path` property which will ingress data directly to that
+path on the compute node. Any files in the `source` path (matching the
+optional `include` and `exclude`) filters will then be ingressed into the
+compute nodes using the `data ingress` command or by specifying
+`transfer_files_on_pool_creation` as `true` in the pool
 configuration json. There are many configuration options under the
 `data_transfer` member which may help optimize for your particular scenario.
 The following transfer methods from on premises are available:

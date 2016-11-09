@@ -647,7 +647,11 @@ def _add_pool(batch_client, blob_client, config):
     rls = batch.get_remote_login_settings(batch_client, config, nodes)
     # ingress data to shared fs if specified
     if ingress_files:
-        data.ingress_data(batch_client, config, rls=rls, kind='shared')
+        _pool = batch_client.pool.get(pool.id)
+        data.ingress_data(
+            batch_client, config, rls=rls, kind='shared',
+            current_dedicated=_pool.current_dedicated)
+        del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 
@@ -685,7 +689,6 @@ def _setup_glusterfs(
         id=job_id,
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
     )
-    batch_client.job.add(job)
     # create coordination command line
     if cmdline is None:
         if config['pool_specification']['offer'].lower() == 'ubuntuserver':
@@ -705,10 +708,12 @@ def _setup_glusterfs(
     # upload script
     sas_urls = storage.upload_resource_files(
         blob_client, config, [shell_script])
+    # get pool current dedicated
+    pool = batch_client.pool.get(pool_id)
     batchtask = batchmodels.TaskAddParameter(
         id='gluster-setup',
         multi_instance_settings=batchmodels.MultiInstanceSettings(
-            number_of_instances=config['pool_specification']['vm_count'],
+            number_of_instances=pool.current_dedicated,
             coordination_command_line=cmdline,
             common_resource_files=[
                 batchmodels.ResourceFile(
@@ -720,6 +725,8 @@ def _setup_glusterfs(
         command_line=util.wrap_commands_in_shell(appcmd),
         run_elevated=True,
     )
+    # add job and task
+    batch_client.job.add(job)
     batch_client.task.add(job_id=job_id, task=batchtask)
     logger.debug(
         'waiting for glusterfs setup task {} in job {} to complete'.format(
@@ -917,7 +924,7 @@ def _adjust_settings_for_pool_creation(config):
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
     # adjust inter node comm setting
-    vm_count = int(config['pool_specification']['vm_count'])
+    vm_count = config['pool_specification']['vm_count']
     if vm_count < 1:
         raise ValueError('invalid vm_count: {}'.format(vm_count))
     try:
@@ -1180,7 +1187,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     """
     pool_id = config['pool_specification']['id']
     # check direction of resize
-    vm_count = int(config['pool_specification']['vm_count'])
+    vm_count = config['pool_specification']['vm_count']
     _pool = batch_client.pool.get(pool_id)
     if vm_count == _pool.current_dedicated == _pool.target_dedicated:
         logger.error(
@@ -1264,6 +1271,15 @@ def action_pool_resize(batch_client, blob_client, config, wait):
             logger.warning('ssh user was not added as --wait was not given')
     # add brick for new nodes
     if gluster_present and resize_up:
+        # get pool current dedicated
+        _pool = batch_client.pool.get(pool_id)
+        # ensure current dedicated is the target
+        vm_count = config['pool_specification']['vm_count']
+        if vm_count != _pool.current_dedicated:
+            raise RuntimeError(
+                ('cannot perform glusterfs setup on new nodes, unexpected '
+                 'current dedicated {} to vm_count {}').format(
+                     _pool.current_dedicated, vm_count))
         # get internal ip addresses of new nodes
         new_nodes = [
             node.ip_address for node in nodes if node.id not in old_nodes
@@ -1275,7 +1291,6 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         else:
             tempdisk = '/mnt/resource'
         # construct cmdline
-        vm_count = config['pool_specification']['vm_count']
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
                 _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk, vm_count,
@@ -1552,7 +1567,12 @@ def action_data_ingress(batch_client, config):
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
+    pool_cd = None
     try:
+        # get pool current dedicated
+        pool = batch_client.pool.get(config['pool_specification']['id'])
+        pool_cd = pool.current_dedicated
+        del pool
         # ensure there are remote login settings
         rls = batch.get_remote_login_settings(
             batch_client, config, nodes=None)
@@ -1568,5 +1588,5 @@ def action_data_ingress(batch_client, config):
         else:
             raise
     storage_threads = data.ingress_data(
-        batch_client, config, rls=rls, kind=kind)
+        batch_client, config, rls=rls, kind=kind, current_dedicated=pool_cd)
     data.wait_for_storage_threads(storage_threads)

@@ -133,6 +133,22 @@ The global config schema is as follows:
                         "blobxfer_extra_options": "--no-computefilemd5"
                     }
                 }
+            },
+            {
+                "source": {
+                    "path": "/another/local/path/dir",
+                    "include": [],
+                    "exclude": []
+                },
+                "destination": {
+                    "relative_destination_path": "relpath/on/host",
+                    "data_transfer": {
+                        "method": "rsync+ssh",
+                        "ssh_private_key": "id_rsa_shipyard",
+                        "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
+                        "rsync_extra_options": "-v"
+                    }
+                }
             }
         ],
         "docker_volumes": {
@@ -265,8 +281,11 @@ from a location accessible by the local machine (i.e., machine invoking
 `shipyard.py` to a shared file system location accessible by compute nodes
 in the pool or Azure Blob or File Storage). `files` is a json list of objects,
 which allows for multiple sources to destinations to be ingressed during the
-same invocation. Each object within the `files` list contains the following
-members:
+same invocation. Note that no Azure Batch environment variables
+(i.e., `$AZ_BATCH_`-style environment variables) are available as path
+arguments since ingress actions performed within `files` are done locally
+on the machine invoking `shipyard.py`. Each object within the `files` list
+contains the following members:
 * (required) `source` property contains the following members:
   * (required) `path` is a local path. A single file or a directory
     can be specified. Filters below will be ignored if `path` is a file and
@@ -285,15 +304,28 @@ members:
     Storage. In this example, all files ending in `.bak` are skipped for
     ingress.
 * (required) `destination` property contains the following members:
-  * (required) `shared_data_volume` or `storage_account_settings` for data
-    ingress to a GlusterFS volume or Azure Blob or File Storage. You may
-    specify one or the other, but not both in the same object. Please see
-    below in the `shared_data_volumes` for information on how to set up a
-    GlusterFS share.
-  * (optional) `relative_destination_path` specifies a relative destination
-    path to place the files, with respect to the GlusterFS volume root. If
-    this is not specified, then files will be placed directly in the GlusterFS
-    volume root.
+  * (required or optional) `shared_data_volume` or `storage_account_settings`
+    for data ingress to a GlusterFS volume or Azure Blob or File Storage. If
+    you are ingressing to a pool with only one compute node, you may omit
+    `shared_data_volume`. Otherwise, you may specify one or the other, but
+    not both in the same object. Please see below in the
+    `shared_data_volumes` for information on how to set up a GlusterFS share.
+  * (required or optional) `relative_destination_path` specifies a relative
+    destination path to place the files, with respect to the target root.
+    If transferring to a `shared_data_volume` then this is relative to the
+    GlusterFS volume root. If transferring to a pool with one single node in
+    it, thus, no `shared_data_volume` is specified in the prior property, then
+    this is relative to
+    [$AZ_BATCH_NODE_ROOT_DIR](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/#files-and-directories).
+    To place files directly in `$AZ_BATCH_NODE_ROOT_DIR` (not recommended),
+    you can specify this property as empty string when not ingressing to
+    a `shared_data_volume`. Note that if `scp` is selected while attempting
+    to transfer directly to this aforementioned path, then `scp` will fail
+    with exit code of 1 but the transfer will have succeeded (this is due
+    to some of the permission options). If this property is not specified for
+    a `shared_data_volume`, then files will be placed directly in the
+    GlusterFS volume root. This property cannot be specified for a Azure
+    Storage destination (i.e., `storage_account_settings`).
   * (required) `data_transfer` specifies how the transfer should take place.
     The following list contains members for GlusterFS ingress when a GlusterFS
     volume is provided for `shared_data_volume` (see below for ingressing to

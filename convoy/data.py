@@ -389,11 +389,12 @@ def process_output_data(config, bxfile, spec):
 
 
 def _singlenode_transfer(
-        method, src, dst, username, ssh_private_key, rls, eo, reo):
-    # type: (str, str, str, pathlib.Path, dict, str, str) -> None
+        method, src, dst, rdp, username, ssh_private_key, rls, eo, reo):
+    # type: (str, str, str, str, pathlib.Path, dict, str, str) -> None
     """Transfer data to a single node
     :param str src: source path
     :param str dst: destination path
+    :param str rdp: relative destination path
     :param str username: username
     :param pathlib.Path: ssh private key
     :param dict rls: remote login settings
@@ -405,24 +406,44 @@ def _singlenode_transfer(
     ip = _rls.remote_login_ip_address
     port = _rls.remote_login_port
     del _rls
+    # modify dst with relative dest
+    if rdp is not None and len(rdp) > 0:
+        dst = '{}{}'.format(dst, rdp)
+        # create relative path on host
+        logger.debug('creating remote directory: {}'.format(dst))
+        dirs = ['mkdir -p {}'.format(dst)]
+        mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
+                    '-o UserKnownHostsFile=/dev/null '
+                    '-i {} -p {} {}@{} {}'.format(
+                        ssh_private_key, port, username, ip,
+                        util.wrap_commands_in_shell(dirs)))
+        rc = util.subprocess_with_output(
+            mkdircmd, shell=True, suppress_output=True)
+        if rc == 0:
+            logger.info('remote directories created on {}'.format(dst))
+        else:
+            logger.error('remote directory creation failed')
+            return
+        del dirs
+    # transfer data
     if method == 'scp':
         cmd = ('scp -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile=/dev/null -p '
-               '{} {} -i {} -P {} {} {}@{}:"{}"'.format(
-                   eo, recursive, ssh_private_key, port, shellquote(src),
+               '{} {} -i {} -P {} . {}@{}:"{}"'.format(
+                   eo, recursive, ssh_private_key.resolve(), port,
                    username, ip, shellquote(dst)))
     elif method == 'rsync+ssh':
         cmd = ('rsync {} {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile=/dev/null '
-               '{} -i {} -p {}" {} {}@{}:"{}"'.format(
-                   reo, recursive, eo, ssh_private_key, port, shellquote(src),
+               '{} -i {} -p {}" . {}@{}:"{}"'.format(
+                   reo, recursive, eo, ssh_private_key.resolve(), port,
                    username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
     logger.info('begin ingressing data from {} to {}'.format(
         src, dst))
     start = datetime.datetime.now()
-    rc = util.subprocess_with_output(cmd, shell=True)
+    rc = util.subprocess_with_output(cmd, shell=True, cwd=src)
     diff = datetime.datetime.now() - start
     if rc == 0:
         logger.info(
@@ -825,14 +846,16 @@ def wait_for_storage_threads(storage_threads):
             break
 
 
-def ingress_data(batch_client, config, rls=None, kind=None):
-    # type: (batch.BatchServiceClient, dict, dict, str) -> list
+def ingress_data(
+        batch_client, config, rls=None, kind=None, current_dedicated=None):
+    # type: (batch.BatchServiceClient, dict, dict, str, int) -> list
     """Ingresses data into Azure Batch
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
     :param dict config: configuration dict
     :param dict rls: remote login settings
     :param str kind: 'all', 'shared', or 'storage'
+    :param int current_dedicated: current dedicated
     :rtype: list
     :return: list of storage threads
     """
@@ -868,11 +891,39 @@ def ingress_data(batch_client, config, rls=None, kind=None):
             storage = fdict['destination']['storage_account_settings']
         except KeyError:
             storage = None
+        try:
+            rdp = fdict['destination']['relative_destination_path']
+            if rdp is not None:
+                rdp = rdp.lstrip('/').rstrip('/')
+        except KeyError:
+            rdp = None
         if shared is not None and storage is not None:
             raise RuntimeError(
                 'cannot specify both shared data volume and storage for the '
                 'destination for source: {}'.format(src))
-        if shared is not None:
+        direct_single_node = False
+        if rdp is not None:
+            if storage is not None:
+                raise RuntimeError(
+                    'cannot specify a relative destination path for ingress '
+                    'to storage; use the --collate option in blobxfer '
+                    'instead.')
+            # check if this is going to a single vm
+            if shared is None:
+                if current_dedicated == 1:
+                    direct_single_node = True
+                elif current_dedicated is None:
+                    raise ValueError('current_dedicated is not set')
+                else:
+                    raise RuntimeError(
+                        'Cannot ingress data directly into compute node '
+                        'host for pools with more than one node. Please use '
+                        'a shared data volume as the ingress destination '
+                        'instead.')
+            else:
+                if len(rdp) == 0:
+                    rdp = None
+        if shared is not None or direct_single_node:
             if rls is None:
                 logger.warning(
                     'skipping data ingress from {} to {} for pool with no '
@@ -888,14 +939,6 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                 raise RuntimeError(
                     'cannot ingress data to shared data volume without a '
                     'valid ssh user')
-            try:
-                rdp = fdict['destination']['relative_destination_path']
-                if rdp is not None and len(rdp) == 0:
-                    raise KeyError()
-                else:
-                    rdp = rdp.lstrip('/').rstrip('/')
-            except KeyError:
-                rdp = None
             try:
                 method = fdict['destination']['data_transfer'][
                     'method'].lower()
@@ -950,24 +993,25 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                         ssh_private_key))
             logger.debug('using ssh_private_key from: {}'.format(
                 ssh_private_key))
-            # convert shared to actual path
-            shared_data_volumes = config['global_resources'][
-                'docker_volumes']['shared_data_volumes']
-            for key in shared_data_volumes:
-                if key == shared:
-                    driver = shared_data_volumes[key]['volume_driver']
-                    break
-            if driver == 'glusterfs':
-                if (config['pool_specification']['offer'].lower() ==
-                        'ubuntuserver'):
-                    dst = '/mnt/batch/tasks/shared/{}/'.format(
-                        _GLUSTER_VOLUME)
-                else:
-                    dst = '/mnt/resource/batch/tasks/shared/{}/'.format(
-                        _GLUSTER_VOLUME)
+            # set base dst path
+            if (config['pool_specification']['offer'].lower() ==
+                    'ubuntuserver'):
+                dst = '/mnt/batch/tasks/'
             else:
-                raise RuntimeError(
-                    'data ingress to {} not supported'.format(driver))
+                dst = '/mnt/resource/batch/tasks/'
+            # convert shared to actual path
+            if not direct_single_node:
+                shared_data_volumes = config['global_resources'][
+                    'docker_volumes']['shared_data_volumes']
+                for key in shared_data_volumes:
+                    if key == shared:
+                        driver = shared_data_volumes[key]['volume_driver']
+                        break
+                if driver == 'glusterfs':
+                    dst = '{}{}/'.format(dst, _GLUSTER_VOLUME)
+                else:
+                    raise RuntimeError(
+                        'data ingress to {} not supported'.format(driver))
             if method == 'scp' or method == 'rsync+ssh':
                 # split/source include/exclude will force multinode
                 # transfer with mpt=1
@@ -978,8 +1022,8 @@ def ingress_data(batch_client, config, rls=None, kind=None):
                         rdp, username, ssh_private_key, rls, eo, reo, 1, split)
                 else:
                     _singlenode_transfer(
-                        method, src, dst, username, ssh_private_key, rls, eo,
-                        reo)
+                        method, src, dst, rdp, username, ssh_private_key,
+                        rls, eo, reo)
             elif method == 'multinode_scp' or method == 'multinode_rsync+ssh':
                 _multinode_transfer(
                     method, src, src_incl, src_excl, dst, rdp, username,

@@ -5,8 +5,12 @@
 - `install_conda_windows.cmd` helper script for installing Batch Shipyard
 under Anaconda for Windows
 - Added `relative_destination_path` json property for `files` ingress into
-GlusterFS volumes. This allows arbitrary specification of where ingressed
-files should be placed relative to the GlusterFS volume root.
+node destinations. This allows arbitrary specification of where ingressed
+files should be placed relative to the destination path.
+- Added ability to ingress directly into the host without the requirement
+of GlusterFS for pools with one compute node. A GlusterFS shared volume is
+required for pools with more than one compute node for direct to pool data
+ingress.
 - New options on commands/subcommands:
   - `pool udi`: Update docker images on all compute nodes in a pool. `--image`
     and `--digest` options can restrict the scope of the update.
@@ -17,11 +21,12 @@ files should be placed relative to the GlusterFS volume root.
   - `jobs listtasks`: `--jobid` allows scoping of list tasks to a specific job
 
 ### Changed
-- GlusterFS `files` data ingress no longer creates a directory where files to
-be uploaded exist. For example if uploading from a path `/a/b/c`, the directory
-`c` is no longer created on the GlusterFS volume. Instead all files found in
-`/a/b/c` will be immediately placed in the GlusterFS volume root. This
-behavior can be modified with the `relative_destination_path` property.
+- `files` data ingress no longer creates a directory where files to
+be uploaded exist. For example if uploading from a path `/a/b/c`, the
+directory `c` is no longer created at the destination. Instead all files
+found in `/a/b/c` will be immediately placed directly at the destination
+path with sub-directories preserved. This behavior can be modified with
+the `relative_destination_path` property.
 
 ### Fixed
 - Pool resize down with wait

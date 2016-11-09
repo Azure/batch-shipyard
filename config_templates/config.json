@@ -73,6 +73,22 @@
                         "blobxfer_extra_options": "--no-computefilemd5"
                     }
                 }
+            },
+            {
+                "source": {
+                    "path": "/another/local/path/dir",
+                    "include": [],
+                    "exclude": []
+                },
+                "destination": {
+                    "relative_destination_path": "relpath/on/host/test2",
+                    "data_transfer": {
+                        "method": "rsync+ssh",
+                        "ssh_private_key": "id_rsa_shipyard",
+                        "scp_ssh_extra_options": "-c aes256-gcm@openssh.com",
+                        "rsync_extra_options": "-v"
+                    }
+                }
             }
         ],
         "docker_volumes": {
