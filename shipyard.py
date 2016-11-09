@@ -423,6 +423,19 @@ def pool_delnode(ctx, nodeid):
     convoy.fleet.action_pool_delnode(ctx.batch_client, ctx.config, nodeid)
 
 
+@pool.command('udi')
+@click.option(
+    '--image', help='Docker image[:tag] to update')
+@click.option(
+    '--digest', help='Digest to update image to')
+@common_options
+@pass_cli_context
+def pool_udi(ctx, image, digest):
+    """Update Docker images in a pool"""
+    _setup_context(ctx)
+    convoy.fleet.action_pool_udi(ctx.batch_client, ctx.config, image, digest)
+
+
 @cli.group()
 @pass_cli_context
 def jobs(ctx):
@@ -453,12 +466,14 @@ def jobs_list(ctx):
 
 
 @jobs.command('listtasks')
+@click.option(
+    '--jobid', help='List tasks in the specified job id')
 @common_options
 @pass_cli_context
-def jobs_list_tasks(ctx):
+def jobs_list_tasks(ctx, jobid):
     """List tasks within jobs"""
     _setup_context(ctx)
-    convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config)
+    convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config, jobid)
 
 
 @jobs.command('termtasks')

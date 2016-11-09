@@ -697,7 +697,7 @@ def _setup_glusterfs(
                 shell_script[0], voltype.lower(), tempdisk)])
     # create application command line
     appcmd = [
-        '[[ -f $AZ_BATCH_TASK_DIR/.glusterfs_success ]] || exit 1',
+        '[[ -f $AZ_BATCH_TASK_WORKING_DIR/.glusterfs_success ]] || exit 1',
     ]
     if volopts is not None:
         for vo in volopts:
@@ -751,6 +751,110 @@ def _setup_glusterfs(
         raise RuntimeError('glusterfs setup failed')
     logger.info(
         'glusterfs setup task {} in job {} completed'.format(
+            batchtask.id, job_id))
+
+
+def _update_docker_images(batch_client, config, image=None, digest=None):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+    """Update docker images in pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str image: docker image to update
+    :param str digest: digest to update to
+    """
+    # first check that peer-to-peer is disabled for pool
+    pool_id = config['pool_specification']['id']
+    try:
+        p2p = config['data_replication']['peer_to_peer']['enabled']
+    except KeyError:
+        p2p = False
+    if p2p:
+        raise RuntimeError(
+            'cannot update docker images for a pool with peer-to-peer '
+            'image distribution')
+    # if image is specified, check that it exists for this pool
+    if image is not None:
+        if image not in config['global_resources']['docker_images']:
+            raise RuntimeError(
+                ('cannot update docker image {} not specified as a global '
+                 'resource for pool').format(image))
+        else:
+            if digest is None:
+                images = [image]
+            else:
+                images = ['{}@{}'.format(image, digest)]
+    else:
+        images = config['global_resources']['docker_images']
+    # create job for update
+    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
+    job = batchmodels.JobAddParameter(
+        id=job_id,
+        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+    )
+    # create coordination command line
+    coordcmd = ['docker pull {}'.format(x) for x in images]
+    coordcmd.append('touch .udi_success')
+    coordcmd = util.wrap_commands_in_shell(coordcmd)
+    # create task
+    batchtask = batchmodels.TaskAddParameter(
+        id='update-docker-images',
+        command_line=coordcmd,
+        run_elevated=True,
+    )
+    # get pool current dedicated
+    pool = batch_client.pool.get(pool_id)
+    # create multi-instance task for pools with more than 1 node
+    if pool.current_dedicated > 1:
+        batchtask.multi_instance_settings = batchmodels.MultiInstanceSettings(
+            number_of_instances=pool.current_dedicated,
+            coordination_command_line=coordcmd,
+        )
+        # create application command line
+        appcmd = util.wrap_commands_in_shell([
+            '[[ -f $AZ_BATCH_TASK_WORKING_DIR/.udi_success ]] || exit 1'])
+        batchtask.command_line = appcmd
+    # add job and task
+    batch_client.job.add(job)
+    batch_client.task.add(job_id=job_id, task=batchtask)
+    logger.debug(
+        ('waiting for update docker images task {} in job {} '
+         'to complete').format(batchtask.id, job_id))
+    # wait for task to complete
+    while True:
+        batchtask = batch_client.task.get(job_id, batchtask.id)
+        if batchtask.state == batchmodels.TaskState.completed:
+            break
+        time.sleep(1)
+    # ensure all nodes have success file if multi-instance
+    success = True
+    if pool.current_dedicated > 1:
+        nodes = batch_client.compute_node.list(pool_id)
+        for node in nodes:
+            try:
+                batch_client.file.get_node_file_properties_from_compute_node(
+                    pool_id, node.id,
+                    ('workitems/{}/job-1/update-docker-images/wd/'
+                     '.udi_success').format(job_id))
+            except batchmodels.BatchErrorException:
+                logger.error('udi success file absent on node {}'.format(
+                    node.id))
+                success = False
+                break
+    else:
+        task = batch_client.task.get(job_id, batchtask.id)
+        if task.execution_info is None or task.execution_info.exit_code != 0:
+            success = False
+            # stream stderr to console
+            batch.stream_file_and_wait_for_task(
+                batch_client, config,
+                '{},update-docker-images,stderr.txt'.format(job_id))
+    # delete job
+    batch_client.job.delete(job_id)
+    if not success:
+        raise RuntimeError('update docker images job failed')
+    logger.info(
+        'update docker images task {} in job {} completed'.format(
             batchtask.id, job_id))
 
 
@@ -1229,6 +1333,20 @@ def action_pool_delnode(batch_client, config, nodeid):
     batch.del_node(batch_client, config, nodeid)
 
 
+def action_pool_udi(batch_client, config, image, digest):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+    """Action: Pool Udi
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    :param str image: image to update
+    :param str digest: digest to update to
+    """
+    if digest is not None and image is None:
+        raise ValueError(
+            'cannot specify a digest to update to without the image')
+    _update_docker_images(batch_client, config, image, digest)
+
+
 def action_jobs_add(batch_client, blob_client, config, recreate):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        dict, bool) -> None
@@ -1252,13 +1370,13 @@ def action_jobs_list(batch_client, config):
     batch.list_jobs(batch_client, config)
 
 
-def action_jobs_listtasks(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_jobs_listtasks(batch_client, config, jobid):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
-    batch.list_tasks(batch_client, config)
+    batch.list_tasks(batch_client, config, jobid)
 
 
 def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):

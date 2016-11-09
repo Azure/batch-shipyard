@@ -170,6 +170,7 @@ configuration file. Active or running tasks will be terminated first.
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
+  * `--jobid` force scope to just this job id
 * `term` will terminate jobs found in the jobs configuration file
   * `--all` will terminate all jobs found in the Batch account
   * `--jobid` force termination scope to just this job id
@@ -194,6 +195,7 @@ The `pool` command has the following sub-commands:
   list       List all pools in the Batch account
   listnodes  List nodes in pool
   resize     Resize a pool
+  udi        Update Docker images in a pool
 ```
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
@@ -216,6 +218,10 @@ in the specified pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
   * `--wait` will wait for resize to complete
+* `udi` will update Docker images on all compute nodes of the pool
+  * `--image` will restrict the update to just the image or image:tag
+  * `--digest` will restrict the update to just the image or image:tag and
+    a specific digest
 
 ## Storage Command
 The `storage` command has the following sub-commands:

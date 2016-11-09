@@ -8,10 +8,13 @@ under Anaconda for Windows
 GlusterFS volumes. This allows arbitrary specification of where ingressed
 files should be placed relative to the GlusterFS volume root.
 - New options on commands/subcommands:
+  - `pool udi`: Update docker images on all compute nodes in a pool. `--image`
+    and `--digest` options can restrict the scope of the update.
   - `data stream`: `--disk` will stream the file as binary to disk instead
     of as text to the local console
   - `data listfiles`: `--jobid` and `--taskid` allows scoping of the list
     files action
+  - `jobs listtasks`: `--jobid` allows scoping of list tasks to a specific job
 
 ### Changed
 - GlusterFS `files` data ingress no longer creates a directory where files to

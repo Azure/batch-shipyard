@@ -106,6 +106,13 @@ will then be ingressed into the compute nodes using the `data ingress` command
 or by specifying `transfer_files_on_pool_creation` as `true` in the pool
 configuration json. There are many configuration options under the
 `data_transfer` member which may help optimize for your particular scenario.
+The following transfer methods from on premises are available:
+
+* `scp`: secure copy to a single node in the pool
+* `multinode_scp`: secure copy to multiple nodes simultanesouly in the pool
+* `rsync+ssh`: rsync over ssh to a single node in the pool
+* `multinode_rsync+ssh`: rsync over ssh to multiple nodes simultaneously in
+the pool
 
 In the case where your data is long-lived or is too large to be repeatedly
 transferred for each job and task that requires it, you may be better off
