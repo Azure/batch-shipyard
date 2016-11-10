@@ -35,7 +35,6 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
-import subprocess
 import time
 try:
     import urllib.request as urllibreq
@@ -119,11 +118,57 @@ _VM_TCP_NO_TUNE = (
 )
 
 
-def populate_global_settings(config, pool_add_action):
-    # type: (dict, bool) -> None
+def _adjust_general_settings(config):
+    # type: (dict) -> None
+    """Adjust general settings
+    :param dict config: configuration dict
+    """
+    # check for deprecated properties
+    try:
+        config['pool_specification']['ssh_docker_tunnel']
+    except KeyError:
+        pass
+    else:
+        raise ValueError(
+            'Invalid ssh_docker_tunnel property found in pool_specification. '
+            'Please update your pool configuration file. See the '
+            'configuration doc for more information.')
+    try:
+        config['docker_registry']['login']
+    except KeyError:
+        pass
+    else:
+        raise ValueError(
+            'Invalid docker_registry:login property found in global '
+            'configuration. Please update your global configuration file. '
+            'See the configuration doc for more information.')
+    try:
+        config['docker_registry']['storage_account_settings']
+    except KeyError:
+        pass
+    else:
+        raise ValueError(
+            'Invalid docker_registry:storage_account_settings property '
+            'found in global configuration. Please update your global '
+            'configuration file. See the configuration doc for more '
+            'information.')
+    # adjust encryption settings on windows
+    if util.on_windows():
+        try:
+            enc = config['batch_shipyard']['encryption']['enabled']
+        except KeyError:
+            enc = False
+        if enc:
+            logger.warning(
+                'disabling credential encryption due to script being run '
+                'from Windows')
+            config['encryption']['enabled'] = False
+
+
+def _populate_global_settings(config):
+    # type: (dict) -> None
     """Populate global settings from config
     :param dict config: configuration dict
-    :param bool pool_add_action: call from pool add action
     """
     ssel = config['batch_shipyard']['storage_account_settings']
     try:
@@ -145,61 +190,10 @@ def populate_global_settings(config, pool_add_action):
         sasexpiry = config['batch_shipyard']['generated_sas_expiry_days']
     except KeyError:
         sasexpiry = None
-    storage.set_storage_configuration(
-        sep, postfix, sa, sakey, saep, sasexpiry)
-    if not pool_add_action:
-        return
-    try:
-        dpre = config['docker_registry']['private']['enabled']
-    except KeyError:
-        dpre = False
-    # set docker private registry file info
-    if dpre:
-        rf = None
-        imgid = None
-        try:
-            rf = config['docker_registry']['private'][
-                'docker_save_registry_file']
-            imgid = config['docker_registry']['private'][
-                'docker_save_registry_image_id']
-            if rf is not None and len(rf) == 0:
-                rf = None
-            if imgid is not None and len(imgid) == 0:
-                imgid = None
-            if rf is None or imgid is None:
-                raise KeyError()
-        except KeyError:
-            if rf is None:
-                rf = _ROOT_PATH + '/resources/docker-registry-v2.tar.gz'
-            imgid = None
-        prf = pathlib.Path(rf)
-        # attempt to package if registry file doesn't exist
-        if not prf.exists() or prf.stat().st_size == 0 or imgid is None:
-            logger.debug(
-                'attempting to generate docker private registry tarball')
-            try:
-                imgid = util.decode_string(subprocess.check_output(
-                    'sudo docker images -q registry:2', shell=True)).strip()
-            except subprocess.CalledProcessError:
-                rf = None
-                imgid = None
-            else:
-                if len(imgid) == 12:
-                    if rf is None:
-                        rf = (_ROOT_PATH +
-                              '/resources/docker-registry-v2.tar.gz')
-                    prf = pathlib.Path(rf)
-                    subprocess.check_call(
-                        'sudo docker save registry:2 '
-                        '| gzip -c > {}'.format(rf), shell=True)
-        regfile = (prf.name if rf is not None else None, rf, imgid)
-    else:
-        regfile = (None, None, None)
-    logger.info('private registry settings: {}'.format(regfile))
-    storage.set_registry_file(regfile)
+    storage.set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry)
 
 
-def create_clients(config):
+def _create_clients(config):
     # type: (dict) -> tuple
     """Create authenticated clients
     :param dict config: configuration dict
@@ -215,6 +209,18 @@ def create_clients(config):
     batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
     blob_client, queue_client, table_client = storage.create_clients()
     return batch_client, blob_client, queue_client, table_client
+
+
+def initialize(config):
+    # type: (dict) -> tuple
+    """Initialize fleet and create authenticated clients
+    :param dict config: configuration dict
+    :rtype: tuple
+    :return: (batch client, blob client, queue client, table client)
+    """
+    _adjust_general_settings(config)
+    _populate_global_settings(config)
+    return _create_clients(config)
 
 
 def _setup_nvidia_docker_package(blob_client, config):
@@ -420,31 +426,28 @@ def _add_pool(batch_client, blob_client, config):
                 'data_replication']['non_peer_to_peer_concurrent_downloading']
         except KeyError:
             nonp2pcd = True
-    # private registry settings
     try:
-        pcont = config['docker_registry']['private']['container']
         pregpubpull = config['docker_registry']['private'][
             'allow_public_docker_hub_pull_on_missing']
-        preg = config['docker_registry']['private']['enabled']
     except KeyError:
-        preg = False
         pregpubpull = False
-    # create private registry flags
-    regfile = storage.get_registry_file()
-    if preg:
-        preg = ' -r {}:{}:{}'.format(pcont, regfile[0], regfile[2])
-    else:
-        preg = ''
+    # azure blob storage backed private registry settings
+    try:
+        psa = config['docker_registry']['private']['azure_storage'][
+            'storage_account_settings']
+        if psa is None or len(psa) == 0:
+            raise KeyError()
+        pcont = config['docker_registry']['private']['azure_storage'][
+            'container']
+        if pcont is None or len(pcont) == 0:
+            raise KeyError()
+    except KeyError:
+        psa = None
+        pcont = None
     # create torrent flags
     torrentflags = ' -t {}:{}:{}:{}:{}'.format(
         p2p, nonp2pcd, p2psbias, p2pcomp, pregpubpull)
     # docker settings
-    try:
-        dockeruser = config['docker_registry']['login']['username']
-        dockerpw = config['docker_registry']['login']['password']
-    except KeyError:
-        dockeruser = None
-        dockerpw = None
     try:
         use_shipyard_docker_image = config[
             'batch_shipyard']['use_shipyard_docker_image']
@@ -483,7 +486,7 @@ def _add_pool(batch_client, blob_client, config):
     except KeyError:
         prefix = None
     # create resource files list
-    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE, regfile]
+    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE]
     if not use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
@@ -530,7 +533,6 @@ def _add_pool(batch_client, blob_client, config):
             _NODEPREP_FILE[0],
             offer,
             sku,
-            preg,
             torrentflags,
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
@@ -540,6 +542,7 @@ def _add_pool(batch_client, blob_client, config):
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
             ' -p {}'.format(prefix) if prefix else '',
+            ' -r {}'.format(pcont) if pcont else '',
             ' -w' if hpnssh else '',
         ),
     ]
@@ -606,30 +609,34 @@ def _add_pool(batch_client, blob_client, config):
                     'pool_specification']['gpu']['nvidia_driver']['source'],
                 file_mode='0755')
         )
-    if preg:
-        ssel = config['docker_registry']['private']['storage_account_settings']
+    if psa:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
                 crypto.encrypt_string(
                     encrypt, '{}:{}:{}'.format(
-                        config['credentials']['storage'][ssel]['account'],
-                        config['credentials']['storage'][ssel]['endpoint'],
-                        config['credentials']['storage'][ssel]['account_key']),
+                        config['credentials']['storage'][psa]['account'],
+                        config['credentials']['storage'][psa]['endpoint'],
+                        config['credentials']['storage'][psa]['account_key']),
                     config)
             )
         )
-        del ssel
-    if (dockeruser is not None and len(dockeruser) > 0 and
-            dockerpw is not None and len(dockerpw) > 0):
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting('DOCKER_LOGIN_USERNAME', dockeruser)
-        )
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_PASSWORD',
-                crypto.encrypt_string(encrypt, dockerpw, config))
-        )
+    try:
+        dockeruser = config['docker_registry']['hub']['login']['username']
+        dockerpw = config['docker_registry']['hub']['login']['password']
+        if (dockeruser is not None and len(dockeruser) > 0 and
+                dockerpw is not None and len(dockerpw) > 0):
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_HUB_USERNAME', dockeruser)
+            )
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_HUB_PASSWORD',
+                    crypto.encrypt_string(encrypt, dockerpw, config))
+            )
+    except KeyError:
+        pass
     if perf:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
@@ -773,13 +780,27 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     # first check that peer-to-peer is disabled for pool
     pool_id = config['pool_specification']['id']
     try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
+        if config['data_replication']['peer_to_peer']['enabled']:
+            raise RuntimeError(
+                'cannot update docker images for a pool with peer-to-peer '
+                'image distribution')
     except KeyError:
-        p2p = False
-    if p2p:
-        raise RuntimeError(
-            'cannot update docker images for a pool with peer-to-peer '
-            'image distribution')
+        pass
+    # mark if these are private registry images
+    registry = ''
+    try:
+        psa = config['docker_registry']['private']['azure_storage'][
+            'storage_account_settings']
+        if psa is None or len(psa) == 0:
+            raise KeyError()
+    except KeyError:
+        psa = None
+    if psa is not None:
+        registry = 'localhost:5000/'
+    del psa
+
+    # TODO ACR private registry images
+
     # if image is specified, check that it exists for this pool
     if image is not None:
         if image not in config['global_resources']['docker_images']:
@@ -800,7 +821,13 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
     )
     # create coordination command line
-    coordcmd = ['docker pull {}'.format(x) for x in images]
+    coordcmd = ['docker pull {}{}'.format(registry, x) for x in images]
+    if registry != '':
+        coordcmd.extend(
+            ['docker tag {}{} {}'.format(registry, x, x) for x in images])
+    coordcmd.append(
+        'docker images --filter dangling=true -q --no-trunc | '
+        'xargs --no-run-if-empty docker rmi')
     coordcmd.append('touch .udi_success')
     coordcmd = util.wrap_commands_in_shell(coordcmd)
     # create task
@@ -1046,34 +1073,6 @@ def _adjust_settings_for_pool_creation(config):
             'transfer files on pool creation enabled')
         config['pool_specification'][
             'block_until_all_global_resources_loaded'] = False
-
-
-def adjust_general_settings(config):
-    # type: (dict) -> None
-    """Adjust general settings
-    :param dict config: configuration dict
-    """
-    # check for deprecated properties
-    try:
-        config['pool_specification']['ssh_docker_tunnel']
-    except KeyError:
-        pass
-    else:
-        raise ValueError(
-            'Invalid ssh_docker_tunnel property found in pool_specification. '
-            'Please update your pool configuration file. See the '
-            'configuration doc for more information.')
-    # adjust encryption settings on windows
-    if util.on_windows():
-        try:
-            enc = config['batch_shipyard']['encryption']['enabled']
-        except KeyError:
-            enc = False
-        if enc:
-            logger.warning(
-                'disabling credential encryption due to script being run '
-                'from Windows')
-            config['encryption']['enabled'] = False
 
 
 def action_cert_create(config):

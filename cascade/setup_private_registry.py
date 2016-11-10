@@ -99,7 +99,7 @@ async def _start_private_registry_instance_async(
     if stdout[0].strip() != registry_image_id:
         ra = pathlib.Path(
             os.environ['AZ_BATCH_TASK_WORKING_DIR'], registry_archive)
-        if ra.exists():
+        if ra.exists() and ra.is_file():
             print('importing registry from local file: {}'.format(ra))
             proc = await asyncio.subprocess.create_subprocess_shell(
                 'gunzip -c {} | docker load'.format(ra), loop=loop)
@@ -181,7 +181,17 @@ def main():
 
     # get command-line args
     args = parseargs()
-    container, regarchive, regimageid = args.settings.split(':')
+    settings = args.settings.split(':')
+    container = settings[0]
+    if len(settings) == 1:
+        regarchive = ''
+        regimageid = ''
+    elif len(settings) == 3:
+        regarchive = settings[1]
+        regimageid = settings[2]
+    else:
+        raise ValueError('unknown private registry settings arg: {}'.format(
+            args.settings))
 
     # for local testing
     if args.ipaddress is None:

@@ -74,17 +74,18 @@ The global config schema is as follows:
         }
     },
     "docker_registry": {
-        "login": {
-            "username": null,
-            "password": null
+        "hub": {
+            "login": {
+                "username": null,
+                "password": null
+            }
         },
         "private": {
-            "enabled": true,
-            "storage_account_settings": "mystorageaccount",
-            "container": "docker-private-registry",
-            "docker_save_registry_file": "resources/docker-registry-v2.tar.gz",
-            "docker_save_registry_image_id": "c6c14b3960bd",
-            "allow_public_docker_hub_pull_on_missing": false
+            "allow_public_docker_hub_pull_on_missing": true,
+            "azure_storage": {
+                "storage_account_settings": "mystorageaccount",
+                "container": "mydockerregistry"
+            }
         }
     },
     "data_replication": {
@@ -227,29 +228,38 @@ contains the following members:
 
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.
-* (optional) `login` controls docker login settings. This does not need to be
-populated if pulling from public repositories such as Public Docker Hub.
-However, this is required if pulling from authenticated private
-registries such as private repositories on Docker Hub.
-* (optional) `private` property controls settings for private registries that
-are to be run on compute nodes. Please visit
-[this link](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-linux-docker-registry-in-blob-storage/)
-for more information on how to populate a Docker private registry that is
-backed by Azure Storage prior to creating Batch compute pools that require
-them.
-  * `enabled` property enables or disables the private registry
-  * `storage_account_settings` is a link to the alias of the storage account
-    specified that stores the private registry blobs.
-  * `container` property is the name of the Azure Blob container holding the
-    private registry blobs.
-  * `docker_save_registry_file` property represents a filesystem path to
-    a gzipped tarball of the Docker registry:2 image as dumped by
-    `docker save`. This is optional.
-  * `docker_save_registry_image_id` property represents the image id hash
-    of the corresponding Docker registry:2 image. This is optional.
-  * `allow_public_docker_hub_pull_on_missing` property allows pass through
-    of Docker image retrieval to public Docker Hub if it is missing in the
-    private registry.
+* (optional) `hub` contains the following members regarding Docker public hub
+    * (optional) `login` controls docker login settings. This does not need
+      to be populated if pulling from public repositories such as Public
+      Docker Hub. However, this is required if pulling from authenticated
+      private registries such as private repositories on Docker Hub.
+      * (optional) `username` property is the username to log in to Docker Hub.
+      * (optional) `password` property is the password to use for the username.
+* (optional) `private` property controls settings for interacting with private
+registries. There are two kinds of registries that are supported: (1) Azure
+Container Registry (ACR) service and (2) [private registry instances backed to
+Azure Blob Storage](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-linux-docker-registry-in-blob-storage/)
+and are run on compute nodes. To specify an Azure Container Registry, define
+a json object named `azure_container_registry`. To use a private registry
+backed by Azure Blob Storage, define a json object named `azure_storage`.
+Note that a maximum of only one of these types private registries may be
+specified. The following describes members of the two types of private
+registries supported.
+  * (optional) `azure_container_registry` object is to define settings for
+    connecting to a private registry backed by the Azure Container Registry
+    service.
+    * TODO: properties forthcoming
+  * (optional) `azure_storage` object is to define settings for connecting
+    to a private registry backed by Azure Storate blobs and where the
+    private registry instances are hosted on the compute nodes themselves.
+    * (required) `storage_account_settings` is a link to the alias of the
+      storage account specified that stores the private registry blobs.
+    * (required) `container` property is the name of the Azure Blob
+      container holding the private registry blobs.
+  * (optional) `allow_public_docker_hub_pull_on_missing` property allows
+    pass-through of Docker image retrieval to public Docker Hub if it is
+    missing in the private registry. This defaults to `false` if not
+    specified.
 
 The `data_replication` property is used to configure the internal image
 replication mechanism between compute nodes within a compute pool. The

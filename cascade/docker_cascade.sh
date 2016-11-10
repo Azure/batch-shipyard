@@ -26,8 +26,8 @@ if [ ! -z $privatereg ]; then
 fi
 
 # login to docker hub
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
+if [ ! -z ${DOCKER_LOGIN_HUB_USERNAME+x} ]; then
+    docker login -u $DOCKER_LOGIN_HUB_USERNAME -p $DOCKER_LOGIN_HUB_PASSWORD
 fi
 
 # add timing markers
@@ -44,4 +44,3 @@ fi
 
 # execute cascade
 python3 cascade.py $p2p --ipaddress $ipaddress $prefix
-

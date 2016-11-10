@@ -189,8 +189,8 @@ if [ ! -z $encrypted ]; then
     rm -f $pfxfile $pfxfile.pw
     # decrypt creds
     SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-        DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    if [ ! -z ${DOCKER_LOGIN_HUB_USERNAME+x} ]; then
+        DOCKER_LOGIN_HUB_PASSWORD=`echo $DOCKER_LOGIN_HUB_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
     if [ ! -z $privatereg ]; then
         SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
@@ -544,8 +544,8 @@ docker pull alfpark/blobxfer
 docker pull alfpark/batch-shipyard:tfm-latest
 
 # login to docker hub if no private registry
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD
+if [ ! -z ${DOCKER_LOGIN_HUB_USERNAME+x} ]; then
+    docker login -u $DOCKER_LOGIN_HUB_USERNAME -p $DOCKER_LOGIN_HUB_PASSWORD
 fi
 
 # touch node prep finished file to preserve idempotency

@@ -15,17 +15,20 @@
         }
     },
     "docker_registry": {
-        "login": {
-            "username": null,
-            "password": null
+        "hub": {
+            "login": {
+                "username": null,
+                "password": null
+            }
         },
         "private": {
-            "enabled": true,
-            "storage_account_settings": "mystorageaccount",
-            "container": "mydockerregistry",
-            "docker_save_registry_file": "",
-            "docker_save_registry_image_id": "",
-            "allow_public_docker_hub_pull_on_missing": true
+            "allow_public_docker_hub_pull_on_missing": true,
+            "azure_container_registry": {
+            },
+            "azure_storage": {
+                "storage_account_settings": "mystorageaccount",
+                "container": "mydockerregistry"
+            }
         }
     },
     "data_replication": {

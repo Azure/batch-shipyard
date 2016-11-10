@@ -60,6 +60,12 @@ class CliContext(object):
         self.queue_client = None
         self.table_client = None
 
+    def initialize(self):
+        """Initialize context"""
+        self._init_config()
+        clients = convoy.fleet.initialize(self.config)
+        self._set_clients(*clients)
+
     def _read_json_file(self, json_file):
         # type: (CliContext, pathlib.Path) -> None
         """Read a json file into self.config, while checking for invalid
@@ -80,7 +86,7 @@ class CliContext(object):
                  'is valid and is encoded UTF-8 without BOM.'.format(
                      json_file)))
 
-    def init_config(self):
+    def _init_config(self):
         """Initializes configuration of the context"""
         # use configdir if available
         if self.configdir is not None:
@@ -126,13 +132,13 @@ class CliContext(object):
         del self.verbose
         del self.yes
 
-    def init_clients(self):
-        """Initializes clients for the context"""
-        clients = convoy.fleet.create_clients(self.config)
-        self.batch_client = clients[0]
-        self.blob_client = clients[1]
-        self.queue_client = clients[2]
-        self.table_client = clients[3]
+    def _set_clients(
+            self, batch_client, blob_client, queue_client, table_client):
+        """Sets clients for the context"""
+        self.batch_client = batch_client
+        self.blob_client = blob_client
+        self.queue_client = queue_client
+        self.table_client = table_client
 
 
 # create a pass decorator for shared context between commands
@@ -239,13 +245,6 @@ def common_options(f):
     return f
 
 
-def _setup_context(ctx, pool_add_action=False):
-    ctx.init_config()
-    convoy.fleet.populate_global_settings(ctx.config, pool_add_action)
-    ctx.init_clients()
-    convoy.fleet.adjust_general_settings(ctx.config)
-
-
 @click.group(context_settings=_CONTEXT_SETTINGS)
 @click.version_option(version=convoy.__version__)
 @click.pass_context
@@ -266,7 +265,7 @@ def storage(ctx):
 @pass_cli_context
 def storage_del(ctx):
     """Delete Azure Storage containers used by Batch Shipyard"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_storage_del(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
 
@@ -276,7 +275,7 @@ def storage_del(ctx):
 @pass_cli_context
 def storage_clear(ctx):
     """Clear Azure Storage containers used by Batch Shipyard"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_storage_clear(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
 
@@ -293,7 +292,7 @@ def cert(ctx):
 @pass_cli_context
 def cert_create(ctx):
     """Create a certificate to use with a Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_cert_create(ctx.config)
 
 
@@ -302,7 +301,7 @@ def cert_create(ctx):
 @pass_cli_context
 def cert_add(ctx):
     """Add a certificate to a Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_cert_add(ctx.batch_client, ctx.config)
 
 
@@ -311,7 +310,7 @@ def cert_add(ctx):
 @pass_cli_context
 def cert_list(ctx):
     """List all certificates in a Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_cert_list(ctx.batch_client)
 
 
@@ -320,7 +319,7 @@ def cert_list(ctx):
 @pass_cli_context
 def cert_del(ctx):
     """Delete a certificate from a Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_cert_del(ctx.batch_client, ctx.config)
 
 
@@ -336,7 +335,7 @@ def pool(ctx):
 @pass_cli_context
 def pool_add(ctx):
     """Add a pool to the Batch account"""
-    _setup_context(ctx, True)
+    ctx.initialize()
     convoy.fleet.action_pool_add(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
         ctx.table_client, ctx.config)
@@ -347,7 +346,7 @@ def pool_add(ctx):
 @pass_cli_context
 def pool_list(ctx):
     """List all pools in the Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_list(ctx.batch_client)
 
 
@@ -358,7 +357,7 @@ def pool_list(ctx):
 @pass_cli_context
 def pool_del(ctx, wait):
     """Delete a pool from the Batch account"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_delete(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
         ctx.table_client, ctx.config, wait=wait)
@@ -371,7 +370,7 @@ def pool_del(ctx, wait):
 @pass_cli_context
 def pool_resize(ctx, wait):
     """Resize a pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_resize(
         ctx.batch_client, ctx.blob_client, ctx.config, wait=wait)
 
@@ -381,7 +380,7 @@ def pool_resize(ctx, wait):
 @pass_cli_context
 def pool_grls(ctx):
     """Get remote login settings for all nodes in pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_grls(ctx.batch_client, ctx.config)
 
 
@@ -390,7 +389,7 @@ def pool_grls(ctx):
 @pass_cli_context
 def pool_listnodes(ctx):
     """List nodes in pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_listnodes(ctx.batch_client, ctx.config)
 
 
@@ -399,7 +398,7 @@ def pool_listnodes(ctx):
 @pass_cli_context
 def pool_asu(ctx):
     """Add an SSH user to all nodes in pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_asu(ctx.batch_client, ctx.config)
 
 
@@ -408,7 +407,7 @@ def pool_asu(ctx):
 @pass_cli_context
 def pool_dsu(ctx):
     """Delete an SSH user from all nodes in pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_dsu(ctx.batch_client, ctx.config)
 
 
@@ -419,7 +418,7 @@ def pool_dsu(ctx):
 @pass_cli_context
 def pool_delnode(ctx, nodeid):
     """Delete a node from a pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_delnode(ctx.batch_client, ctx.config, nodeid)
 
 
@@ -432,7 +431,7 @@ def pool_delnode(ctx, nodeid):
 @pass_cli_context
 def pool_udi(ctx, image, digest):
     """Update Docker images in a pool"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_pool_udi(ctx.batch_client, ctx.config, image, digest)
 
 
@@ -451,7 +450,7 @@ def jobs(ctx):
 @pass_cli_context
 def jobs_add(ctx, recreate):
     """Add jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_add(
         ctx.batch_client, ctx.blob_client, ctx.config, recreate)
 
@@ -461,7 +460,7 @@ def jobs_add(ctx, recreate):
 @pass_cli_context
 def jobs_list(ctx):
     """List jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_list(ctx.batch_client, ctx.config)
 
 
@@ -472,7 +471,7 @@ def jobs_list(ctx):
 @pass_cli_context
 def jobs_list_tasks(ctx, jobid):
     """List tasks within jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config, jobid)
 
 
@@ -490,7 +489,7 @@ def jobs_list_tasks(ctx, jobid):
 @pass_cli_context
 def jobs_termtasks(ctx, force, jobid, taskid, wait):
     """Terminate specified tasks in jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_termtasks(
         ctx.batch_client, ctx.config, jobid, taskid, wait, force)
 
@@ -506,7 +505,7 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @pass_cli_context
 def jobs_term(ctx, all, jobid, wait):
     """Terminate jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_term(
         ctx.batch_client, ctx.config, all, jobid, wait)
 
@@ -522,7 +521,7 @@ def jobs_term(ctx, all, jobid, wait):
 @pass_cli_context
 def jobs_del(ctx, all, jobid, wait):
     """Delete jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_del(
         ctx.batch_client, ctx.config, all, jobid, wait)
 
@@ -538,7 +537,7 @@ def jobs_del(ctx, all, jobid, wait):
 @pass_cli_context
 def jobs_deltasks(ctx, jobid, taskid, wait):
     """Delete specified tasks in jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_deltasks(
         ctx.batch_client, ctx.config, jobid, taskid, wait)
 
@@ -551,7 +550,7 @@ def jobs_deltasks(ctx, jobid, taskid, wait):
 @pass_cli_context
 def jobs_cmi(ctx, delete):
     """Cleanup multi-instance jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
 
 
@@ -571,7 +570,7 @@ def data(ctx):
 @pass_cli_context
 def data_listfiles(ctx, jobid, taskid):
     """List files for tasks in jobs"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_data_listfiles(
         ctx.batch_client, ctx.config, jobid, taskid)
 
@@ -586,7 +585,7 @@ def data_listfiles(ctx, jobid, taskid):
 @pass_cli_context
 def data_stream(ctx, disk, filespec):
     """Stream a file as text to the local console or as binary to disk"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_data_stream(
         ctx.batch_client, ctx.config, filespec, disk)
 
@@ -602,7 +601,7 @@ def data_stream(ctx, disk, filespec):
 @pass_cli_context
 def data_getfile(ctx, all, filespec):
     """Retrieve file(s) from a job/task"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_data_getfile(
         ctx.batch_client, ctx.config, all, filespec)
 
@@ -617,7 +616,7 @@ def data_getfile(ctx, all, filespec):
 @pass_cli_context
 def data_getfilenode(ctx, all, filespec):
     """Retrieve file(s) from a compute node"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_data_getfilenode(
         ctx.batch_client, ctx.config, all, filespec)
 
@@ -627,7 +626,7 @@ def data_getfilenode(ctx, all, filespec):
 @pass_cli_context
 def data_ingress(ctx):
     """Ingress data into Azure"""
-    _setup_context(ctx)
+    ctx.initialize()
     convoy.fleet.action_data_ingress(ctx.batch_client, ctx.config)
 
 if __name__ == '__main__':

@@ -51,7 +51,6 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _DEFAULT_SAS_EXPIRY_DAYS = 30
-_REGISTRY_FILE = None
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
@@ -111,15 +110,6 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         _DEFAULT_SAS_EXPIRY_DAYS = sasexpiry
 
 
-def set_registry_file(rf):
-    # type: (tuple) -> None
-    """Set registry file
-    :param tuple rf: registry file
-    """
-    global _REGISTRY_FILE
-    _REGISTRY_FILE = rf
-
-
 def get_storageaccount():
     # type: (None) -> str
     """Get storage account
@@ -145,15 +135,6 @@ def get_storageaccount_endpoint():
     :return: storage account endpoint
     """
     return _STORAGEACCOUNTEP
-
-
-def get_registry_file():
-    # type: (None) -> str
-    """Get registry file
-    :rtype: tuple
-    :return: registry file
-    """
-    return _REGISTRY_FILE
 
 
 def create_clients():
@@ -297,7 +278,11 @@ def populate_queues(queue_client, table_client, config):
     :param dict config: configuration dict
     """
     try:
-        preg = config['docker_registry']['private']['enabled']
+        _st = config['docker_registry']['private']['azure_storage'][
+            'storage_account_settings']
+        if _st is not None and len(_st) > 0:
+            preg = True
+        del _st
     except KeyError:
         preg = False
     pk = '{}${}'.format(
@@ -352,24 +337,18 @@ def upload_resource_files(blob_client, config, files):
             continue
         upload = True
         fp = pathlib.Path(file[1])
-        if (_REGISTRY_FILE is not None and fp.name == _REGISTRY_FILE[0] and
-                not fp.exists()):
-            logger.debug('skipping optional docker registry image: {}'.format(
-                _REGISTRY_FILE[0]))
-            continue
-        else:
-            # check if blob exists
-            try:
-                prop = blob_client.get_blob_properties(
-                    _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
-                if (prop.properties.content_settings.content_md5 ==
-                        util.compute_md5_for_file(fp, True)):
-                    logger.debug(
-                        'remote file is the same for {}, skipping'.format(
-                            file[0]))
-                    upload = False
-            except azure.common.AzureMissingResourceHttpError:
-                pass
+        # check if blob exists
+        try:
+            prop = blob_client.get_blob_properties(
+                _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
+            if (prop.properties.content_settings.content_md5 ==
+                    util.compute_md5_for_file(fp, True)):
+                logger.debug(
+                    'remote file is the same for {}, skipping'.format(
+                        file[0]))
+                upload = False
+        except azure.common.AzureMissingResourceHttpError:
+            pass
         if upload:
             logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
             blob_client.create_blob_from_path(
