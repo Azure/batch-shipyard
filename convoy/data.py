@@ -401,7 +401,7 @@ def _singlenode_transfer(
     :param str eo: ssh extra options
     :param str reo: rsync extra options
     """
-    recursive = '-r' if pathlib.Path(src).is_dir() else ''
+    # get remote settings
     _rls = next(iter(rls.values()))
     ip = _rls.remote_login_ip_address
     port = _rls.remote_login_port
@@ -425,25 +425,34 @@ def _singlenode_transfer(
             logger.error('remote directory creation failed')
             return
         del dirs
+    # determine if recursive flag must be set
+    psrc = pathlib.Path(src)
+    recursive = '-r' if psrc.is_dir() else ''
+    # set command source path and adjust dst path
+    if recursive:
+        cmdsrc = '.'
+    else:
+        cmdsrc = shellquote(src)
     # transfer data
     if method == 'scp':
         cmd = ('scp -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile=/dev/null -p '
-               '{} {} -i {} -P {} . {}@{}:"{}"'.format(
-                   eo, recursive, ssh_private_key.resolve(), port,
+               '{} {} -i {} -P {} {} {}@{}:"{}"'.format(
+                   eo, recursive, ssh_private_key.resolve(), port, cmdsrc,
                    username, ip, shellquote(dst)))
     elif method == 'rsync+ssh':
         cmd = ('rsync {} {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile=/dev/null '
-               '{} -i {} -p {}" . {}@{}:"{}"'.format(
+               '{} -i {} -p {}" {} {}@{}:"{}"'.format(
                    reo, recursive, eo, ssh_private_key.resolve(), port,
-                   username, ip, shellquote(dst)))
+                   cmdsrc, username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
     logger.info('begin ingressing data from {} to {}'.format(
         src, dst))
     start = datetime.datetime.now()
-    rc = util.subprocess_with_output(cmd, shell=True, cwd=src)
+    rc = util.subprocess_with_output(
+        cmd, shell=True, cwd=src if recursive else None)
     diff = datetime.datetime.now() - start
     if rc == 0:
         logger.info(
