@@ -34,6 +34,12 @@ The credentials schema is as follows:
                 "account_key": "storageaccountkey",
                 "endpoint": "core.windows.net"
             }
+        },
+        "docker_registry": {
+            "hub": {
+                "username": "myhublogin",
+                "password": "myhubpassword"
+            }
         }
     }
 }
@@ -48,7 +54,16 @@ under the `batch` property can be found in the
 different Azure Storage account credentials under the `storage` property. This
 may be needed for more flexible configuration in other configuration files. In
 the example above, we only have one storage account defined which is aliased
-by the property name `mystorageaccount`.
+by the property name `mystorageaccount`. The alias (or storage account link
+name) can be the same as the storage account name itself.
+* (optional) `docker_registry` property defines logins for Docker registry
+servers. This property does not need to be defined if you are using only
+public repositories on Docker Hub. However, this is required if pulling from
+authenticated private registries such as a secured Azure Container Registry
+or private repositories on Docker Hub.
+  * `hub` defines the login property to Docker Hub:
+    * (optional) `username` username to log in to Docker Hub
+    * (optional) `password` password associated with the username
 
 An example credential json template can be found
 [here](../config\_templates/credentials.json).
@@ -74,12 +89,6 @@ The global config schema is as follows:
         }
     },
     "docker_registry": {
-        "hub": {
-            "login": {
-                "username": null,
-                "password": null
-            }
-        },
         "private": {
             "allow_public_docker_hub_pull_on_missing": true,
             "azure_storage": {
@@ -228,13 +237,6 @@ contains the following members:
 
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.
-* (optional) `hub` contains the following members regarding Docker public hub
-    * (optional) `login` controls docker login settings. This does not need
-      to be populated if pulling from public repositories such as Public
-      Docker Hub. However, this is required if pulling from authenticated
-      private registries such as private repositories on Docker Hub.
-      * (optional) `username` property is the username to log in to Docker Hub.
-      * (optional) `password` property is the password to use for the username.
 * (optional) `private` property controls settings for interacting with private
 registries. There are two kinds of registries that are supported: (1) Azure
 Container Registry (ACR) service and (2) [private registry instances backed to

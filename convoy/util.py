@@ -128,6 +128,30 @@ def encode_string(string, encoding=None):
     raise ValueError('invalid string type: {}'.format(type(string)))
 
 
+def is_none_or_empty(obj):
+    # type: (any) -> bool
+    """Determine if object is None or empty
+    :type any obj: object
+    :rtype: bool
+    :return: if object is None or empty
+    """
+    if obj is None or len(obj) == 0:
+        return True
+    return False
+
+
+def is_not_empty(obj):
+    # type: (any) -> bool
+    """Determine if object is not None and is length is > 0
+    :type any obj: object
+    :rtype: bool
+    :return: if object is not None and length is > 0
+    """
+    if obj is not None and len(obj) > 0:
+        return True
+    return False
+
+
 def get_input(prompt):
     # type: (str) -> str
     """Get user input from keyboard

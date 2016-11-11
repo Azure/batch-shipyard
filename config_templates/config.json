@@ -15,12 +15,6 @@
         }
     },
     "docker_registry": {
-        "hub": {
-            "login": {
-                "username": null,
-                "password": null
-            }
-        },
         "private": {
             "allow_public_docker_hub_pull_on_missing": true,
             "azure_container_registry": {

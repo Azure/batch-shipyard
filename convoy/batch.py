@@ -71,52 +71,34 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
     :param str sha1_cert_tp: sha1 thumbprint of pfx
     :param bool rm_pfxfile: remove PFX file from local disk
     """
-    pfxfile = config['batch_shipyard']['encryption']['pfx']['filename']
-    try:
-        pfx_passphrase = config['batch_shipyard']['encryption']['pfx'][
-            'passphrase']
-    except KeyError:
-        pfx_passphrase = None
-    try:
-        sha1_cert_tp = config['batch_shipyard']['encryption']['pfx'][
-            'sha1_thumbprint']
-        if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
-            raise KeyError
-    except KeyError:
-        # get thumbprint of pfx
-        if pfx_passphrase is None:
-            pfx_passphrase = getpass.getpass('Enter password for PFX: ')
-        sha1_cert_tp = crypto.get_sha1_thumbprint_pfx(
-            pfxfile, pfx_passphrase)
-        config['batch_shipyard']['encryption']['pfx'][
-            'sha1_thumbprint'] = sha1_cert_tp
+    pfx = crypto.get_encryption_pfx_settings(config)
     # first check if this cert exists
     certs = batch_client.certificate.list()
     for cert in certs:
-        if cert.thumbprint.lower() == sha1_cert_tp:
+        if cert.thumbprint.lower() == pfx.sha1:
             logger.error(
                 'cert with thumbprint {} already exists for account'.format(
-                    sha1_cert_tp))
+                    pfx.sha1))
             # remove pfxfile
             if rm_pfxfile:
-                os.unlink(pfxfile)
+                os.unlink(pfx.filename)
             return
     # add cert to account
-    if pfx_passphrase is None:
-        pfx_passphrase = getpass.getpass('Enter password for PFX: ')
+    if pfx.passphrase is None:
+        pfx.passphrase = getpass.getpass('Enter password for PFX: ')
     logger.debug('adding pfx cert with thumbprint {} to account'.format(
-        sha1_cert_tp))
+        pfx.sha1))
     data = util.decode_string(
-        base64.b64encode(open(pfxfile, 'rb').read()))
+        base64.b64encode(open(pfx.filename, 'rb').read()))
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
-            sha1_cert_tp, 'sha1', data,
+            pfx.sha1, 'sha1', data,
             certificate_format=batchmodels.CertificateFormat.pfx,
-            password=pfx_passphrase)
+            password=pfx.passphrase)
     )
     # remove pfxfile
     if rm_pfxfile:
-        os.unlink(pfxfile)
+        os.unlink(pfx.filename)
 
 
 def list_certificates_in_account(batch_client):
@@ -146,22 +128,8 @@ def del_certificate_from_account(batch_client, config):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
-    pfxfile = config['batch_shipyard']['encryption']['pfx']['filename']
-    try:
-        pfx_passphrase = config['batch_shipyard']['encryption']['pfx'][
-            'passphrase']
-    except KeyError:
-        pfx_passphrase = None
-    try:
-        sha1_cert_tp = config['batch_shipyard']['encryption']['pfx'][
-            'sha1_thumbprint']
-        if sha1_cert_tp is None or len(sha1_cert_tp) == 0:
-            raise KeyError
-    except KeyError:
-        # get thumbprint of pfx
-        sha1_cert_tp = crypto.get_sha1_thumbprint_pfx(
-            pfxfile, pfx_passphrase)
-    batch_client.certificate.delete('sha1', sha1_cert_tp)
+    pfx = crypto.get_encryption_pfx_settings(config)
+    batch_client.certificate.delete('sha1', pfx.sha1)
 
 
 def _reboot_node(batch_client, pool_id, node_id, wait):

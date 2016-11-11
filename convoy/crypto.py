@@ -31,6 +31,7 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import base64
+import collections
 import getpass
 import logging
 import os
@@ -41,6 +42,7 @@ except ImportError:
 import tempfile
 import subprocess
 # local imports
+from . import settings
 from . import util
 
 # create logger
@@ -48,6 +50,9 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
+# named tuples
+PfxSettings = collections.namedtuple(
+    'PfxSettings', ['filename', 'passphrase', 'sha1'])
 
 
 def get_ssh_key_prefix():
@@ -211,6 +216,28 @@ def generate_pem_pfx_certificates(config):
         os.unlink(f.name)
     # get sha1 thumbprint of pfx
     return get_sha1_thumbprint_pfx(pfxfile, passphrase)
+
+
+def get_encryption_pfx_settings(config):
+    # type: (dict) -> tuple
+    """Get PFX encryption settings from configuration
+    :param dict config: configuration settings
+    :rtype: tuple
+    :return: pfxfile, passphrase, sha1 tp
+    """
+    pfxfile = settings.batch_shipyard_encryption_pfx_filename(config)
+    pfx_passphrase = settings.batch_shipyard_encryption_pfx_passphrase(config)
+    sha1_cert_tp = settings.batch_shipyard_encryption_pfx_sha1_thumbprint(
+        config)
+    # manually get thumbprint of pfx if not exists in config
+    if util.is_none_or_empty(sha1_cert_tp):
+        if pfx_passphrase is None:
+            pfx_passphrase = getpass.getpass('Enter password for PFX: ')
+        sha1_cert_tp = get_sha1_thumbprint_pfx(pfxfile, pfx_passphrase)
+        settings.set_batch_shipyard_encryption_pfx_sha1_thumbprint(
+            config, sha1_cert_tp)
+    return PfxSettings(
+        filename=pfxfile, passphrase=pfx_passphrase, sha1=sha1_cert_tp)
 
 
 def _rsa_encrypt_string(data, config):

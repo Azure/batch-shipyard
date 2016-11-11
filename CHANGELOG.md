@@ -23,7 +23,8 @@ ingress.
 ### Changed
 - **Breaking Change:** Properties of `docker_registry` have changed
 significantly to support integration with the Azure Container Registry
-service. Please see the configuration doc for more information.
+service. Credentials for docker logins have moved to the credentials json
+file. Please see the configuration doc for more information.
 - `files` data ingress no longer creates a directory where files to
 be uploaded exist. For example if uploading from a path `/a/b/c`, the
 directory `c` is no longer created at the destination. Instead all files

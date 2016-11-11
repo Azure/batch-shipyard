@@ -49,6 +49,7 @@ import azure.batch.models as batchmodels
 from . import batch
 from . import crypto
 from . import data
+from . import settings
 from . import storage
 from . import util
 from .version import __version__
@@ -345,29 +346,11 @@ def _add_pool(batch_client, blob_client, config):
     :param dict config: configuration dict
     """
     # add encryption cert to account if specified
-    encrypt = False
-    encrypt_sha1tp = None
-    try:
-        encrypt = config['batch_shipyard']['encryption']['enabled']
-        if encrypt:
-            batch.add_certificate_to_account(batch_client, config)
-            try:
-                encrypt_sha1tp = config['batch_shipyard']['encryption'][
-                    'pfx']['sha1_thumbprint']
-            except KeyError:
-                pfxfile = config['batch_shipyard']['encryption']['pfx'][
-                    'filename']
-                try:
-                    passphrase = config['batch_shipyard']['encryption'][
-                        'pfx']['passphrase']
-                except KeyError:
-                    passphrase = None
-                encrypt_sha1tp = crypto.get_sha1_thumbprint_pfx(
-                    pfxfile, passphrase)
-                config['batch_shipyard']['encryption']['pfx'][
-                    'sha1_thumbprint'] = encrypt_sha1tp
-    except KeyError:
-        pass
+    encrypt = settings.batch_shipyard_encryption_enabled(config)
+    if encrypt:
+        pfx = crypto.get_encryption_pfx_settings(config)
+        batch.add_certificate_to_account(batch_client, config)
+    # retrieve settings
     publisher = config['pool_specification']['publisher']
     offer = config['pool_specification']['offer']
     sku = config['pool_specification']['sku']
@@ -537,7 +520,7 @@ def _add_pool(batch_client, blob_client, config):
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
             ' -d' if use_shipyard_docker_image else '',
-            ' -e {}'.format(encrypt_sha1tp) if encrypt else '',
+            ' -e {}'.format(pfx.sha1) if encrypt else '',
             ' -f' if gluster else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
@@ -591,7 +574,7 @@ def _add_pool(batch_client, blob_client, config):
     if encrypt:
         pool.certificate_references = [
             batchmodels.CertificateReference(
-                encrypt_sha1tp, 'sha1',
+                pfx.sha1, 'sha1',
                 visibility=[batchmodels.CertificateVisibility.starttask]
             )
         ]
@@ -621,22 +604,17 @@ def _add_pool(batch_client, blob_client, config):
                     config)
             )
         )
-    try:
-        dockeruser = config['docker_registry']['hub']['login']['username']
-        dockerpw = config['docker_registry']['hub']['login']['password']
-        if (dockeruser is not None and len(dockeruser) > 0 and
-                dockerpw is not None and len(dockerpw) > 0):
-            pool.start_task.environment_settings.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_HUB_USERNAME', dockeruser)
-            )
-            pool.start_task.environment_settings.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_HUB_PASSWORD',
-                    crypto.encrypt_string(encrypt, dockerpw, config))
-            )
-    except KeyError:
-        pass
+    hubuser, hubpw = settings.docker_registry_hub_login(config)
+    if hubuser:
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_HUB_USERNAME', hubuser)
+        )
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_HUB_PASSWORD',
+                crypto.encrypt_string(encrypt, hubpw, config))
+        )
     if perf:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
@@ -821,7 +799,30 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
     )
     # create coordination command line
-    coordcmd = ['docker pull {}{}'.format(registry, x) for x in images]
+    # 1. log in again in case of cred expiry
+    # 2. pull images with respect to registry
+    # 3. tag images that are in a private registry
+    # 4. prune docker images with no tag
+    taskenv = []
+    coordcmd = []
+    encrypt = settings.batch_shipyard_encryption_enabled(config)
+    hubuser, hubpw = settings.docker_registry_hub_login(config)
+    if hubuser:
+        taskenv.append(batchmodels.EnvironmentSetting(
+            'DOCKER_LOGIN_HUB_USERNAME', hubuser))
+        taskenv.append(batchmodels.EnvironmentSetting(
+            'DOCKER_LOGIN_HUB_PASSWORD',
+            crypto.encrypt_string(encrypt, hubpw, config)))
+        if encrypt:
+            coordcmd.append(
+                'DOCKER_LOGIN_HUB_PASSWORD='
+                '`echo $DOCKER_LOGIN_HUB_PASSWORD | base64 -d | '
+                'openssl rsautl -decrypt -inkey '
+                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
+        coordcmd.append(
+            'docker login -u $DOCKER_LOGIN_HUB_USERNAME '
+            '-p $DOCKER_LOGIN_HUB_PASSWORD')
+    coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
     if registry != '':
         coordcmd.extend(
             ['docker tag {}{} {}'.format(registry, x, x) for x in images])
@@ -834,6 +835,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     batchtask = batchmodels.TaskAddParameter(
         id='update-docker-images',
         command_line=coordcmd,
+        environment_settings=taskenv,
         run_elevated=True,
     )
     # get pool current dedicated
