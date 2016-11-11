@@ -1017,7 +1017,7 @@ def ingress_data(
                         driver = shared_data_volumes[key]['volume_driver']
                         break
                 if driver == 'glusterfs':
-                    dst = '{}{}/'.format(dst, _GLUSTER_VOLUME)
+                    dst = '{}shared/{}/'.format(dst, _GLUSTER_VOLUME)
                 else:
                     raise RuntimeError(
                         'data ingress to {} not supported'.format(driver))
