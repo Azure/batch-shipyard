@@ -47,6 +47,7 @@ import azure.batch.models as batchmodels
 # local imports
 from . import crypto
 from . import data
+from . import settings
 from . import storage
 from . import util
 
@@ -57,10 +58,6 @@ util.setup_logger(logger)
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
-_RDMA_INSTANCES = (
-    'standard_a8', 'standard_a9', 'standard_h16r', 'standard_h16mr',
-    'standard_nc24r'
-)
 
 
 def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
@@ -1789,7 +1786,7 @@ def add_jobs(
                         ('cannot initialize an infiniband task on a '
                          'non-internode communication enabled '
                          'pool: {}').format(pool_id))
-                if _pool.vm_size.lower() not in _RDMA_INSTANCES:
+                if settings.is_rdma_pool(_pool.vm_size):
                     raise RuntimeError(
                         ('cannot initialize an infiniband task on nodes '
                          'without RDMA, pool: {} vm_size: {}').format(

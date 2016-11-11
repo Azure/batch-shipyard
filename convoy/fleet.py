@@ -112,11 +112,6 @@ _PERF_FILE = (
     'perf.py',
     str(pathlib.Path(_ROOT_PATH, 'cascade/perf.py'))
 )
-_VM_TCP_NO_TUNE = (
-    'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
-    'standard_a1', 'standard_d1', 'standard_d2', 'standard_d1_v2',
-    'standard_f1'
-)
 
 
 def _adjust_general_settings(config):
@@ -141,8 +136,9 @@ def _adjust_general_settings(config):
     else:
         raise ValueError(
             'Invalid docker_registry:login property found in global '
-            'configuration. Please update your global configuration file. '
-            'See the configuration doc for more information.')
+            'configuration. Please update your global configuration and '
+            'credentials file. See the configuration doc for more '
+            'information.')
     try:
         config['docker_registry']['storage_account_settings']
     except KeyError:
@@ -155,15 +151,12 @@ def _adjust_general_settings(config):
             'information.')
     # adjust encryption settings on windows
     if util.on_windows():
-        try:
-            enc = config['batch_shipyard']['encryption']['enabled']
-        except KeyError:
-            enc = False
+        enc = settings.batch_shipyard_encryption_enabled(config)
         if enc:
             logger.warning(
                 'disabling credential encryption due to script being run '
                 'from Windows')
-            config['encryption']['enabled'] = False
+            settings.set_batch_shipyard_encryption_enabled(config, False)
 
 
 def _populate_global_settings(config):
@@ -351,30 +344,17 @@ def _add_pool(batch_client, blob_client, config):
         pfx = crypto.get_encryption_pfx_settings(config)
         batch.add_certificate_to_account(batch_client, config)
     # retrieve settings
-    publisher = config['pool_specification']['publisher']
-    offer = config['pool_specification']['offer']
-    sku = config['pool_specification']['sku']
-    vm_count = config['pool_specification']['vm_count']
-    vm_size = config['pool_specification']['vm_size']
-    try:
-        ingress_files = config[
-            'pool_specification']['transfer_files_on_pool_creation']
-    except KeyError:
-        ingress_files = False
+    pool_settings = settings.pool_settings(config)
+    if pool_settings.block_until_all_global_resources_loaded:
+        block_for_gr = ','.join(
+            [r for r in config['global_resources']['docker_images']])
+    else:
+        block_for_gr = None
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
-    if ingress_files:
+    if pool_settings.transfer_files_on_pool_creation:
         storage_threads = data.ingress_data(
             batch_client, config, rls=None, kind='storage')
-    try:
-        maxtasks = config['pool_specification']['max_tasks_per_node']
-    except KeyError:
-        maxtasks = 1
-    try:
-        internodecomm = config[
-            'pool_specification']['inter_node_communication_enabled']
-    except KeyError:
-        internodecomm = False
     # cascade settings
     try:
         perf = config['batch_shipyard']['store_timing_metrics']
@@ -393,7 +373,7 @@ def _add_pool(batch_client, blob_client, config):
             if p2psbias is None or p2psbias < 1:
                 raise KeyError()
         except KeyError:
-            p2psbias = vm_count // 10
+            p2psbias = pool_settings.vm_count // 10
             if p2psbias < 1:
                 p2psbias = 1
         try:
@@ -436,18 +416,6 @@ def _add_pool(batch_client, blob_client, config):
             'batch_shipyard']['use_shipyard_docker_image']
     except KeyError:
         use_shipyard_docker_image = True
-    try:
-        block_for_gr = config[
-            'pool_specification']['block_until_all_global_resources_loaded']
-    except KeyError:
-        block_for_gr = True
-    if block_for_gr:
-        block_for_gr = ','.join(
-            [r for r in config['global_resources']['docker_images']])
-    try:
-        hpnssh = config['pool_specification']['ssh']['hpn_server_swap']
-    except KeyError:
-        hpnssh = False
     # check shared data volume mounts
     azurefile_vd = False
     gluster = False
@@ -475,7 +443,7 @@ def _add_pool(batch_client, blob_client, config):
         _rflist.append(_SETUP_PR_FILE)
         if perf:
             _rflist.append(_PERF_FILE)
-    if hpnssh:
+    if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
     # handle azurefile docker volume driver
     if azurefile_vd:
@@ -486,12 +454,11 @@ def _add_pool(batch_client, blob_client, config):
         _rflist.append((afenv.name, str(afenv)))
         _rflist.append((afvc.name, str(afvc)))
     # gpu settings
-    if (vm_size.lower().startswith('standard_nc') or
-            vm_size.lower().startswith('standard_nv')):
+    if settings.is_gpu_pool(pool_settings.vm_size):
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
         _rflist.append((gpupkg.name, str(gpupkg)))
         gpu_env = '{}:{}:{}'.format(
-            vm_size.lower().startswith('standard_nv'),
+            settings.is_gpu_visualization_pool(pool_settings.vm_size),
             _NVIDIA_DRIVER,
             gpupkg.name)
     else:
@@ -501,9 +468,9 @@ def _add_pool(batch_client, blob_client, config):
     skus_to_use = [
         (nas, image_ref) for nas in node_agent_skus for image_ref in sorted(
             nas.verified_image_references, key=lambda item: item.sku)
-        if image_ref.publisher.lower() == publisher.lower() and
-        image_ref.offer.lower() == offer.lower() and
-        image_ref.sku.lower() == sku.lower()
+        if image_ref.publisher.lower() == pool_settings.publisher.lower() and
+        image_ref.offer.lower() == pool_settings.offer.lower() and
+        image_ref.sku.lower() == pool_settings.sku.lower()
     ]
     sku_to_use, image_ref_to_use = skus_to_use[-1]
     # upload resource files
@@ -514,8 +481,8 @@ def _add_pool(batch_client, blob_client, config):
     start_task = [
         '{} -o {} -s {}{}{}{}{}{}{}{}{}{}{}{}'.format(
             _NODEPREP_FILE[0],
-            offer,
-            sku,
+            pool_settings.offer,
+            pool_settings.sku,
             torrentflags,
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
@@ -523,34 +490,31 @@ def _add_pool(batch_client, blob_client, config):
             ' -e {}'.format(pfx.sha1) if encrypt else '',
             ' -f' if gluster else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            ' -n' if vm_size.lower() not in _VM_TCP_NO_TUNE else '',
+            ' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             ' -p {}'.format(prefix) if prefix else '',
             ' -r {}'.format(pcont) if pcont else '',
-            ' -w' if hpnssh else '',
+            ' -w' if pool_settings.ssh.hpn_server_swap else '',
         ),
     ]
     # add additional start task commands
-    try:
-        start_task.extend(
-            config['pool_specification']['additional_node_prep_commands'])
-    except KeyError:
-        pass
-    # digest any input_data
+    start_task.extend(pool_settings.additional_node_prep_commands)
+    # digest any input data
     addlcmds = data.process_input_data(
-        config, _BLOBXFER_FILE, config['pool_specification'])
+        config, _BLOBXFER_FILE, settings.pool_specification(config))
     if addlcmds is not None:
         start_task.append(addlcmds)
     del addlcmds
     # create pool param
     pool = batchmodels.PoolAddParameter(
-        id=config['pool_specification']['id'],
+        id=pool_settings.id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
-        vm_size=vm_size,
-        target_dedicated=vm_count,
-        max_tasks_per_node=maxtasks,
-        enable_inter_node_communication=internodecomm,
+        vm_size=pool_settings.vm_size,
+        target_dedicated=pool_settings.vm_count,
+        max_tasks_per_node=pool_settings.max_tasks_per_node,
+        enable_inter_node_communication=pool_settings.
+        inter_node_communication_enabled,
         start_task=batchmodels.StartTask(
             command_line=util.wrap_commands_in_shell(
                 start_task, wait=False),
@@ -588,8 +552,7 @@ def _add_pool(batch_client, blob_client, config):
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
                 file_path=_NVIDIA_DRIVER,
-                blob_source=config[
-                    'pool_specification']['gpu']['nvidia_driver']['source'],
+                blob_source=pool_settings.gpu_driver,
                 file_mode='0755')
         )
     if psa:
@@ -631,7 +594,7 @@ def _add_pool(batch_client, blob_client, config):
     # log remote login settings
     rls = batch.get_remote_login_settings(batch_client, config, nodes)
     # ingress data to shared fs if specified
-    if ingress_files:
+    if pool_settings.transfer_files_on_pool_creation:
         _pool = batch_client.pool.get(pool.id)
         data.ingress_data(
             batch_client, config, rls=rls, kind='shared',
