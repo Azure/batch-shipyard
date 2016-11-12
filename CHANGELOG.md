@@ -11,7 +11,7 @@ files should be placed relative to the destination path.
 of GlusterFS for pools with one compute node. A GlusterFS shared volume is
 required for pools with more than one compute node for direct to pool data
 ingress.
-- New options on commands/subcommands:
+- New commands and options:
   - `pool udi`: Update docker images on all compute nodes in a pool. `--image`
     and `--digest` options can restrict the scope of the update.
   - `data stream`: `--disk` will stream the file as binary to disk instead
@@ -33,6 +33,7 @@ path with sub-directories preserved. This behavior can be modified with
 the `relative_destination_path` property.
 - `batch_shipyard`:`storage_entity_prefix` is now optional and defaults to
 `shipyard` if not specified.
+- Major internal configuration/settings refactor
 
 ### Fixed
 - Pool resize down with wait

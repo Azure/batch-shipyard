@@ -44,6 +44,7 @@ import azure.storage.file as azurefile
 import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 # local imports
+from . import settings
 from . import util
 
 # create logger
@@ -160,9 +161,9 @@ def create_clients():
 
 def create_blob_container_saskey(
         storage_settings, container, kind, create_container=False):
-    # type: (dict, str, str, bool) -> str
+    # type: (StorageCredentialsSettings, str, str, bool) -> str
     """Create a saskey for a blob container with a 7day expiry time
-    :param dict storage_settings: storage settings
+    :param StorageCredentialsSettings storage_settings: storage settings
     :param str container: container
     :param str kind: ingress or egress
     :param bool create_container: create container
@@ -170,9 +171,9 @@ def create_blob_container_saskey(
     :return: saskey
     """
     blob_client = azureblob.BlockBlobService(
-        account_name=storage_settings['account'],
-        account_key=storage_settings['account_key'],
-        endpoint_suffix=storage_settings['endpoint'])
+        account_name=storage_settings.account,
+        account_key=storage_settings.account_key,
+        endpoint_suffix=storage_settings.endpoint)
     if create_container:
         blob_client.create_container(container, fail_on_exist=False)
     if kind == 'ingress':
@@ -198,9 +199,9 @@ def create_blob_container_saskey(
 
 def create_file_share_saskey(
         storage_settings, file_share, kind, create_share=False):
-    # type: (dict, str, str, bool) -> str
+    # type: (StorageCredentialSettings, str, str, bool) -> str
     """Create a saskey for a file share with a 7day expiry time
-    :param dict storage_settings: storage settings
+    :param StorageCredentialsSettings storage_settings: storage settings
     :param str file_share: file share
     :param str kind: ingress or egress
     :param bool create_share: create file share
@@ -208,9 +209,9 @@ def create_file_share_saskey(
     :return: saskey
     """
     file_client = azurefile.FileService(
-        account_name=storage_settings['account'],
-        account_key=storage_settings['account_key'],
-        endpoint_suffix=storage_settings['endpoint'])
+        account_name=storage_settings.account,
+        account_key=storage_settings.account_key,
+        endpoint_suffix=storage_settings.endpoint)
     if create_share:
         file_client.create_share(file_share, fail_on_exist=False)
     if kind == 'ingress':
@@ -234,6 +235,17 @@ def create_file_share_saskey(
     )
 
 
+def _construct_partition_key_from_config(config):
+    # type: (dict) -> str
+    """Construct partition key from config
+    :param dict config: configuration dict
+    :rtype: str
+    :return: partition key
+    """
+    return '{}${}'.format(
+        settings.credentials_batch(config).account, settings.pool_id(config))
+
+
 def _add_global_resource(
         queue_client, table_client, config, pk, p2pcsd, grtype):
     # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
@@ -247,11 +259,12 @@ def _add_global_resource(
     :param str grtype: global resources type
     """
     try:
-        for gr in config['global_resources'][grtype]:
-            if grtype == 'docker_images':
-                prefix = 'docker'
-            else:
-                raise NotImplementedError()
+        if grtype == 'docker_images':
+            prefix = 'docker'
+            resources = settings.global_resources_docker_images(config)
+        else:
+            raise NotImplementedError()
+        for gr in resources:
             resource = '{}:{}'.format(prefix, gr)
             logger.info('adding global resource: {}'.format(resource))
             table_client.insert_or_replace_entity(
@@ -277,17 +290,15 @@ def populate_queues(queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
+    # TODO other private registry support
     try:
-        _st = config['docker_registry']['private']['azure_storage'][
-            'storage_account_settings']
-        if _st is not None and len(_st) > 0:
+        _st, _ = settings.docker_registry_azure_storage(config)
+        if util.is_not_empty(_st):
             preg = True
         del _st
     except KeyError:
         preg = False
-    pk = '{}${}'.format(
-        config['credentials']['batch']['account'],
-        config['pool_specification']['id'])
+    pk = _construct_partition_key_from_config(config)
     # if using docker public hub, then populate registry table with hub
     if not preg:
         table_client.insert_or_replace_entity(
@@ -299,25 +310,11 @@ def populate_queues(queue_client, table_client, config):
             }
         )
     # get p2pcsd setting
-    try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
-    except KeyError:
-        p2p = False
-    if p2p:
-        try:
-            p2pcsd = config['data_replication']['peer_to_peer'][
-                'concurrent_source_downloads']
-            if p2pcsd is None or p2pcsd < 1:
-                raise KeyError()
-        except KeyError:
-            p2pcsd = config['pool_specification']['vm_count'] // 6
-            if p2pcsd < 1:
-                p2pcsd = 1
-    else:
-        p2pcsd = 1
+    dr = settings.data_replication_settings(config)
     # add global resources
     _add_global_resource(
-        queue_client, table_client, config, pk, p2pcsd, 'docker_images')
+        queue_client, table_client, config, pk,
+        dr.peer_to_peer.concurrent_source_downloads, 'docker_images')
 
 
 def upload_resource_files(blob_client, config, files):
@@ -409,8 +406,8 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
     :param str container: container to clear blobs from
     :param dict config: configuration dict
     """
-    envfileloc = '{}taskrf-'.format(
-        config['batch_shipyard']['storage_entity_prefix'])
+    bs = settings.batch_shipyard_settings(config)
+    envfileloc = '{}taskrf-'.format(bs.storage_entity_prefix)
     logger.info('deleting blobs with prefix: {}'.format(envfileloc))
     blobs = blob_client.list_blobs(container, prefix=envfileloc)
     for blob in blobs:
@@ -424,9 +421,7 @@ def _clear_table(table_client, table_name, config):
     :param dict config: configuration dict
     """
     # type: (azuretable.TableService, str, dict) -> None
-    pk = '{}${}'.format(
-        config['credentials']['batch']['account'],
-        config['pool_specification']['id'])
+    pk = _construct_partition_key_from_config(config)
     logger.debug('clearing table (pk={}): {}'.format(pk, table_name))
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}\''.format(pk))
@@ -455,10 +450,7 @@ def clear_storage_containers(
     :param dict config: configuration dict
     :param bool tables_only: clear only tables
     """
-    try:
-        perf = config['batch_shipyard']['store_timing_metrics']
-    except KeyError:
-        perf = False
+    bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if not tables_only and key.startswith('blob_'):
             _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
@@ -466,7 +458,7 @@ def clear_storage_containers(
             try:
                 _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
             except azure.common.AzureMissingResourceHttpError:
-                if key != 'table_perf' or perf:
+                if key != 'table_perf' or bs.store_timing_metrics:
                     raise
         elif not tables_only and key.startswith('queue_'):
             logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
@@ -482,17 +474,14 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    try:
-        perf = config['batch_shipyard']['store_timing_metrics']
-    except KeyError:
-        perf = False
+    bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
             logger.info('creating container: {}'.format(
                 _STORAGE_CONTAINERS[key]))
             blob_client.create_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
-            if key == 'table_perf' and not perf:
+            if key == 'table_perf' and not bs.store_timing_metrics:
                 continue
             logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.create_table(_STORAGE_CONTAINERS[key])
@@ -510,7 +499,7 @@ def cleanup_with_del_pool(blob_client, queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     if not util.confirm_action(
             config, 'delete/cleanup of Batch Shipyard metadata in storage '
             'containers associated with {} pool'.format(pool_id)):

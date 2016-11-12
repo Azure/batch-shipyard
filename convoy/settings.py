@@ -31,6 +31,10 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 # non-stdlib imports
 # local imports
 from . import util
@@ -98,6 +102,25 @@ PeerToPeerSettings = collections.namedtuple(
         'direct_download_seed_bias',
     ]
 )
+SourceSettings = collections.namedtuple(
+    'SourceSettings', [
+        'path', 'include', 'exclude'
+    ]
+)
+DestinationSettings = collections.namedtuple(
+    'DestinationSettings', [
+        'storage_account_settings', 'shared_data_volume',
+        'relative_destination_path', 'data_transfer'
+    ]
+)
+DataTransferSettings = collections.namedtuple(
+    'DataTransferSettings', [
+        'method', 'ssh_private_key', 'scp_ssh_extra_options',
+        'rsync_extra_options', 'split_files_megabytes',
+        'max_parallel_transfers_per_node',
+        'container', 'file_share', 'blobxfer_extra_options',
+    ]
+)
 
 
 def can_tune_tcp(vm_size):
@@ -148,14 +171,19 @@ def is_rdma_pool(vm_size):
     return False
 
 
-def temp_disk_mountpoint(config):
+def temp_disk_mountpoint(config, offer=None):
     # type: (dict) -> str
     """Get temporary disk mountpoint
     :param dict config: configuration object
+    :param str offer: offer override
     :rtype: str
     :return: temporary disk mount point
     """
-    if pool_offer(config, lower=True) == 'ubuntuserver':
+    if offer is None:
+        offer = pool_offer(config, lower=True)
+    else:
+        offer = offer.lower()
+    if offer == 'ubuntuserver':
         return '/mnt'
     else:
         return '/mnt/resource'
@@ -729,6 +757,136 @@ def is_direct_transfer(filespair):
     return 'storage_account_settings' not in filespair['destination']
 
 
+def files_source_settings(conf):
+    # type: (dict) -> SourceSettings
+    """Get global resources files source
+    :param dict conf: configuration block
+    :rtype: SourceSettings
+    :return: source settings
+    """
+    path = conf['source']['path']
+    if util.is_none_or_empty(path):
+        raise ValueError('global resource files path is invalid')
+    try:
+        include = conf['source']['include']
+        if util.is_none_or_empty(include):
+            raise KeyError()
+    except KeyError:
+        include = None
+    try:
+        exclude = conf['source']['exclude']
+        if util.is_none_or_empty(exclude):
+            raise KeyError()
+    except KeyError:
+        exclude = None
+    return SourceSettings(path=path, include=include, exclude=exclude)
+
+
+def files_destination_settings(fdict):
+    # type: (dict) -> DestinationSettings
+    """Get global resources files destination
+    :param dict fdict: configuration block
+    :rtype: DestinationSettings
+    :return: destination settings
+    """
+    conf = fdict['destination']
+    try:
+        shared = conf['shared_data_volume']
+    except KeyError:
+        shared = None
+    try:
+        storage = conf['storage_account_settings']
+    except KeyError:
+        storage = None
+    try:
+        rdp = conf['relative_destination_path']
+        if rdp is not None:
+            rdp = rdp.lstrip('/').rstrip('/')
+            if len(rdp) == 0:
+                rdp = None
+    except KeyError:
+        rdp = None
+    try:
+        method = conf['data_transfer']['method'].lower()
+    except KeyError:
+        if storage is None:
+            raise RuntimeError(
+                'no transfer method specified for data transfer of '
+                'source: {} to {} rdp={}'.format(
+                    files_source_settings(fdict).path, shared, rdp))
+        else:
+            method = None
+    try:
+        ssh_eo = conf['data_transfer']['scp_ssh_extra_options']
+        if ssh_eo is None:
+            raise KeyError()
+    except KeyError:
+        ssh_eo = ''
+    try:
+        rsync_eo = conf['data_transfer']['rsync_extra_options']
+        if rsync_eo is None:
+            raise KeyError()
+    except KeyError:
+        rsync_eo = ''
+    try:
+        mpt = conf['data_transfer']['max_parallel_transfers_per_node']
+        if mpt is not None and mpt <= 0:
+            raise KeyError()
+    except KeyError:
+        mpt = None
+    # ensure valid mpt number
+    if mpt is None:
+        mpt = 1
+    try:
+        split = conf['data_transfer']['split_files_megabytes']
+        if split is not None and split <= 0:
+            raise KeyError()
+        # convert to bytes
+        if split is not None:
+            split <<= 20
+    except KeyError:
+        split = None
+    try:
+        ssh_private_key = pathlib.Path(
+            conf['data_transfer']['ssh_private_key'])
+    except KeyError:
+        ssh_private_key = None
+    try:
+        container = conf['data_transfer']['container']
+        if util.is_none_or_empty(container):
+            raise KeyError()
+    except KeyError:
+        container = None
+    try:
+        fshare = conf['data_transfer']['file_share']
+        if util.is_none_or_empty(fshare):
+            raise KeyError()
+    except KeyError:
+        fshare = None
+    try:
+        bx_eo = conf['data_transfer']['blobxfer_extra_options']
+        if bx_eo is None:
+            bx_eo = ''
+    except KeyError:
+        bx_eo = ''
+    return DestinationSettings(
+        storage_account_settings=storage,
+        shared_data_volume=shared,
+        relative_destination_path=rdp,
+        data_transfer=DataTransferSettings(
+            container=container,
+            file_share=fshare,
+            blobxfer_extra_options=bx_eo,
+            method=method,
+            ssh_private_key=ssh_private_key,
+            scp_ssh_extra_options=ssh_eo,
+            rsync_extra_options=rsync_eo,
+            split_files_megabytes=split,
+            max_parallel_transfers_per_node=mpt,
+        )
+    )
+
+
 def global_resources_shared_data_volumes(config):
     # type: (dict) -> dict
     """Get shared data volumes dictionary
@@ -859,3 +1017,196 @@ def is_shared_data_volume_gluster(sdv, sdvkey):
     :return: if shared data volume is glusterfs
     """
     return shared_data_volume_driver(sdv, sdvkey).lower() == 'glusterfs'
+
+
+# INPUT DATA SETTINGS
+def input_data(conf):
+    # type: (dict) -> str
+    """Retrieve input data config block
+    :param dict conf: configuration object
+    :rtype: str
+    :return: input data config block
+    """
+    return conf['input_data']
+
+
+def output_data(conf):
+    # type: (dict) -> str
+    """Retrieve output data config block
+    :param dict conf: configuration object
+    :rtype: str
+    :return: output data config block
+    """
+    return conf['output_data']
+
+
+def data_storage_account_settings(conf):
+    # type: (dict) -> str
+    """Retrieve input data storage account settings link
+    :param dict conf: configuration object
+    :rtype: str
+    :return: storage account link
+    """
+    return conf['storage_account_settings']
+
+
+def data_container(conf):
+    # type: (dict) -> str
+    """Retrieve input data blob container name
+    :param dict conf: configuration object
+    :rtype: str
+    :return: container name
+    """
+    try:
+        container = conf['container']
+        if util.is_none_or_empty(container):
+            raise KeyError()
+    except KeyError:
+        container = None
+    return container
+
+
+def data_file_share(conf):
+    # type: (dict) -> str
+    """Retrieve input data file share name
+    :param dict conf: configuration object
+    :rtype: str
+    :return: file share name
+    """
+    try:
+        fshare = conf['file_share']
+        if util.is_none_or_empty(fshare):
+            raise KeyError()
+    except KeyError:
+        fshare = None
+    return fshare
+
+
+def data_blobxfer_extra_options(conf):
+    # type: (dict) -> str
+    """Retrieve input data blobxfer extra options
+    :param dict conf: configuration object
+    :rtype: str
+    :return: blobxfer extra options
+    """
+    try:
+        eo = conf['blobxfer_extra_options']
+        if eo is None:
+            eo = ''
+    except KeyError:
+        eo = ''
+    return eo
+
+
+def data_include(conf, one_allowable):
+    # type: (dict, bool) -> str
+    """Retrieve input data include fileters
+    :param dict conf: configuration object
+    :param bool one_allowable: if only one include filter is allowed
+    :rtype: str
+    :return: include filters
+    """
+    if one_allowable:
+        try:
+            include = conf['include']
+            if include is not None:
+                if len(include) == 0:
+                    include = ''
+                elif len(include) == 1:
+                    include = include[0]
+                else:
+                    raise ValueError(
+                        'include for input_data from {} cannot exceed '
+                        '1 filter'.format(data_storage_account_settings(conf)))
+            else:
+                include = ''
+        except KeyError:
+            include = ''
+    else:
+        try:
+            include = conf['include']
+            if include is not None and len(include) == 0:
+                include = ''
+            else:
+                include = ';'.join(include)
+        except KeyError:
+            include = ''
+        if include is None:
+            include = ''
+    return include
+
+
+def data_exclude(conf):
+    # type: (dict) -> str
+    """Retrieve input data exclude filters
+    :param dict conf: configuration object
+    :rtype: str
+    :return: exclude filters
+    """
+    try:
+        exclude = conf['exclude']
+        if exclude is not None and len(exclude) == 0:
+            exclude = ''
+        else:
+            exclude = ';'.join(exclude)
+    except KeyError:
+        exclude = ''
+    if exclude is None:
+        exclude = ''
+    return exclude
+
+
+def input_data_destination(conf, on_task):
+    # type: (dict, bool) -> str
+    """Retrieve input data destination
+    :param dict conf: configuration object
+    :param bool on_task: if input data is on the task spec
+    :rtype: str
+    :return: destination
+    """
+    try:
+        dst = conf['destination']
+        if util.is_none_or_empty(dst):
+            raise KeyError()
+    except KeyError:
+        if on_task:
+            dst = '$AZ_BATCH_TASK_WORKING_DIR'
+        else:
+            raise
+    return dst
+
+
+def input_data_job_id(conf):
+    # type: (dict) -> str
+    """Retrieve input data job id
+    :param dict conf: configuration object
+    :rtype: str
+    :return: job id
+    """
+    return conf['job_id']
+
+
+def input_data_task_id(conf):
+    # type: (dict) -> str
+    """Retrieve input data task id
+    :param dict conf: configuration object
+    :rtype: str
+    :return: task id
+    """
+    return conf['task_id']
+
+
+def output_data_source(conf):
+    # type: (dict) -> str
+    """Retrieve output data source
+    :param dict conf: configuration object
+    :rtype: str
+    :return: source
+    """
+    try:
+        src = conf['source']
+        if util.is_none_or_empty(src):
+            raise KeyError()
+    except KeyError:
+        src = '$AZ_BATCH_TASK_DIR'
+    return src
