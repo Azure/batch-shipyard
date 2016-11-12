@@ -169,10 +169,7 @@ def _populate_global_settings(config):
     bc = settings.credentials_batch(config)
     storage.set_storage_configuration(
         bs.storage_entity_prefix,
-        '-'.join(
-            (bc.account.lower(),
-             settings.pool_specification_id(config, lower=True))
-        ),
+        '-'.join((bc.account.lower(), settings.pool_id(config, lower=True))),
         sc.account,
         sc.account_key,
         sc.endpoint,
@@ -342,85 +339,34 @@ def _add_pool(batch_client, blob_client, config):
             batch_client, config, rls=None, kind='storage')
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
-    # peer-to-peer settings
-    try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
-    except KeyError:
-        p2p = False
-    if p2p:
-        nonp2pcd = False
-        try:
-            p2psbias = config['data_replication'][
-                'peer_to_peer']['direct_download_seed_bias']
-            if p2psbias is None or p2psbias < 1:
-                raise KeyError()
-        except KeyError:
-            p2psbias = pool_settings.vm_count // 10
-            if p2psbias < 1:
-                p2psbias = 1
-        try:
-            p2pcomp = config[
-                'data_replication']['peer_to_peer']['compression']
-        except KeyError:
-            p2pcomp = True
-    else:
-        p2psbias = 0
-        p2pcomp = False
-        try:
-            nonp2pcd = config[
-                'data_replication']['non_peer_to_peer_concurrent_downloading']
-        except KeyError:
-            nonp2pcd = True
-    try:
-        pregpubpull = config['docker_registry']['private'][
-            'allow_public_docker_hub_pull_on_missing']
-    except KeyError:
-        pregpubpull = False
-    # azure blob storage backed private registry settings
-    try:
-        psa = config['docker_registry']['private']['azure_storage'][
-            'storage_account_settings']
-        if psa is None or len(psa) == 0:
-            raise KeyError()
-        pcont = config['docker_registry']['private']['azure_storage'][
-            'container']
-        if pcont is None or len(pcont) == 0:
-            raise KeyError()
-    except KeyError:
-        psa = None
-        pcont = None
+    # data replication and peer-to-peer settings
+    dr = settings.data_replication_settings(config)
     # create torrent flags
     torrentflags = ' -t {}:{}:{}:{}:{}'.format(
-        p2p, nonp2pcd, p2psbias, p2pcomp, pregpubpull)
-    # docker settings
-    try:
-        use_shipyard_docker_image = config[
-            'batch_shipyard']['use_shipyard_docker_image']
-    except KeyError:
-        use_shipyard_docker_image = True
+        dr.peer_to_peer.enabled, dr.non_peer_to_peer_concurrent_downloading,
+        dr.peer_to_peer.direct_download_seed_bias,
+        dr.peer_to_peer.compression,
+        settings.docker_registry_private_allow_public_pull(config))
+    # azure blob storage backed private registry settings
+    psa, pcont = settings.docker_registry_azure_storage(config)
     # check shared data volume mounts
     azurefile_vd = False
     gluster = False
     try:
-        shared_data_volumes = config[
-            'global_resources']['docker_volumes']['shared_data_volumes']
-        for key in shared_data_volumes:
-            if shared_data_volumes[key]['volume_driver'] == 'azurefile':
+        sdv = settings.global_resources_shared_data_volumes(config)
+        for sdvkey in sdv:
+            if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
                 azurefile_vd = True
-            elif shared_data_volumes[key]['volume_driver'] == 'glusterfs':
+            elif settings.is_shared_data_volume_gluster(sdv, sdvkey):
                 gluster = True
+            else:
+                raise ValueError('Unknown shared data volume: {}'.format(
+                    settings.shared_data_volume_driver(sdv, sdvkey)))
     except KeyError:
         pass
-    # prefix settings
-    try:
-        prefix = config['batch_shipyard']['storage_entity_prefix']
-        if len(prefix) == 0:
-            prefix = None
-    except KeyError:
-        prefix = None
     # create resource files list
     _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE]
-    if not use_shipyard_docker_image:
+    if not bs.use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
         if bs.store_timing_metrics:
@@ -468,12 +414,13 @@ def _add_pool(batch_client, blob_client, config):
             torrentflags,
             ' -a' if azurefile_vd else '',
             ' -b {}'.format(block_for_gr) if block_for_gr else '',
-            ' -d' if use_shipyard_docker_image else '',
+            ' -d' if bs.use_shipyard_docker_image else '',
             ' -e {}'.format(pfx.sha1) if encrypt else '',
             ' -f' if gluster else '',
             ' -g {}'.format(gpu_env) if gpu_env is not None else '',
             ' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
-            ' -p {}'.format(prefix) if prefix else '',
+            ' -p {}'.format(
+                bs.storage_entity_prefix) if bs.storage_entity_prefix else '',
             ' -r {}'.format(pcont) if pcont else '',
             ' -w' if pool_settings.ssh.hpn_server_swap else '',
         ),
@@ -538,15 +485,15 @@ def _add_pool(batch_client, blob_client, config):
                 file_mode='0755')
         )
     if psa:
+        psa = settings.credentials_storage(config, psa)
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
                 crypto.encrypt_string(
                     encrypt, '{}:{}:{}'.format(
-                        config['credentials']['storage'][psa]['account'],
-                        config['credentials']['storage'][psa]['endpoint'],
-                        config['credentials']['storage'][psa]['account_key']),
-                    config)
+                        psa.account, psa.endpoint, psa.account_key),
+                    config
+                )
             )
         )
     hubuser, hubpw = settings.docker_registry_hub_login(config)

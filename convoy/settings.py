@@ -68,14 +68,7 @@ SSHSettings = collections.namedtuple(
     'SSHSettings', [
         'username', 'expiry_days', 'ssh_public_key',
         'generate_docker_tunnel_script', 'generated_file_export_path',
-        'hpn_server_swap'
-    ]
-)
-BatchShipyardSettings = collections.namedtuple(
-    'BatchShipyardSettings', [
-        'storage_account_settings', 'storage_entity_prefix',
-        'generated_sas_expiry_days', 'use_shipyard_docker_image',
-        'store_timing_metrics'
+        'hpn_server_swap',
     ]
 )
 BatchCredentialsSettings = collections.namedtuple(
@@ -86,6 +79,24 @@ BatchCredentialsSettings = collections.namedtuple(
 StorageCredentialsSettings = collections.namedtuple(
     'StorageCredentialsSettings', [
         'account', 'account_key', 'endpoint'
+    ]
+)
+BatchShipyardSettings = collections.namedtuple(
+    'BatchShipyardSettings', [
+        'storage_account_settings', 'storage_entity_prefix',
+        'generated_sas_expiry_days', 'use_shipyard_docker_image',
+        'store_timing_metrics',
+    ]
+)
+DataReplicationSettings = collections.namedtuple(
+    'DataReplicationSettings', [
+        'peer_to_peer', 'non_peer_to_peer_concurrent_downloading',
+    ]
+)
+PeerToPeerSettings = collections.namedtuple(
+    'PeerToPeerSettings', [
+        'enabled', 'compression', 'concurrent_source_downloads',
+        'direct_download_seed_bias',
     ]
 )
 
@@ -255,8 +266,8 @@ def pool_settings(config):
     )
 
 
-def pool_specification_id(config, lower=False):
-    # type: (dict) -> str
+def pool_id(config, lower=False):
+    # type: (dict, bool) -> str
     """Get Pool id
     :param dict config: configuration object
     :param bool lower: lowercase return
@@ -265,6 +276,17 @@ def pool_specification_id(config, lower=False):
     """
     id = config['pool_specification']['id']
     return id.lower() if lower else id
+
+
+def pool_vm_count(config):
+    # type: (dict) -> int
+    """Get Pool vm count
+    :param dict config: configuration object
+    :param bool lower: lowercase return
+    :rtype: int
+    :return: pool vm count
+    """
+    return config['pool_specification']['vm_count']
 
 
 def pool_publisher(config, lower=False):
@@ -373,7 +395,7 @@ def batch_shipyard_settings(config):
         raise ValueError('batch_shipyard:storage_account_settings is invalid')
     try:
         sep = conf['storage_entity_prefix']
-        if util.is_none_or_empty(sep):
+        if sep is None:
             raise KeyError()
     except KeyError:
         sep = 'shipyard'
@@ -472,6 +494,95 @@ def set_batch_shipyard_encryption_pfx_sha1_thumbprint(config, tp):
     :param dict config: configuration object
     """
     config['batch_shipyard']['encryption']['pfx']['sha1_thumbprint'] = tp
+
+
+def docker_registry_private_allow_public_pull(config):
+    # type: (dict) -> bool
+    """Get public docker hub pull on missing setting
+    :param dict config: configuration object
+    :rtype: bool
+    :return: if public pull is allowed on missing
+    """
+    try:
+        pregpubpull = config['docker_registry']['private'][
+            'allow_public_docker_hub_pull_on_missing']
+    except KeyError:
+        pregpubpull = False
+    return pregpubpull
+
+
+def docker_registry_azure_storage(config):
+    # type: (dict) -> tuple
+    """Get docker private registry backed to azure storage settings
+    :param dict config: configuration object
+    :rtype: tuple
+    :return: (storage account name, container)
+    """
+    try:
+        sa = config['docker_registry']['private']['azure_storage'][
+            'storage_account_settings']
+        if util.is_none_or_empty(sa):
+            raise KeyError()
+        cont = config['docker_registry']['private']['azure_storage'][
+            'container']
+        if util.is_none_or_empty(cont):
+            raise KeyError()
+    except KeyError:
+        sa = None
+        cont = None
+    return sa, cont
+
+
+def data_replication_settings(config):
+    # type: (dict) -> DataReplicationSettings
+    """Get data replication settings
+    :param dict config: configuration object
+    :rtype: DataReplicationSettings
+    :return: data replication settings
+    """
+    p2p = PeerToPeerSettings(enabled=False)
+    dr = DataReplicationSettings(
+        peer_to_peer=p2p, non_peer_to_peer_concurrent_downloading=True)
+    try:
+        conf = config['data_replication']
+    except KeyError:
+        return dr
+    try:
+        dr.non_peer_to_peer_concurrent_downloading = conf[
+            'non_peer_to_peer_concurrent_downloading']
+    except KeyError:
+        pass
+    try:
+        conf = config['data_replication']['peer_to_peer']
+    except KeyError:
+        return dr
+    try:
+        p2p.enabled = conf['enabled']
+    except KeyError:
+        p2p.enabled = False
+    try:
+        p2p.compression = conf['compression']
+    except KeyError:
+        p2p.compression = True
+    try:
+        p2p.concurrent_source_downloads = conf['concurrent_source_downloads']
+        if (p2p.concurrent_source_downloads is None or
+                p2p.concurrent_source_downloads < 1):
+            raise KeyError()
+    except KeyError:
+        p2p.concurrent_source_downloads = pool_vm_count(config) // 6
+        if p2p.concurrent_source_downloads < 1:
+            p2p.concurrent_source_downloads = 1
+    try:
+        p2p.direct_download_seed_bias = conf['direct_download_seed_bias']
+        if (p2p.direct_download_seed_bias is None or
+                p2p.direct_download_seed_bias < 1):
+            raise KeyError()
+    except KeyError:
+        p2p.direct_download_seed_bias = pool_vm_count(config) // 10
+        if p2p.direct_download_seed_bias < 1:
+            p2p.direct_download_seed_bias = 1
+    return dr
 
 
 def global_resources_docker_images(config):
