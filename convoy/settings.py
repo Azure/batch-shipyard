@@ -566,6 +566,20 @@ def set_batch_shipyard_encryption_pfx_sha1_thumbprint(config, tp):
     config['batch_shipyard']['encryption']['pfx']['sha1_thumbprint'] = tp
 
 
+def batch_shipyard_encryption_public_key_pem(config):
+    # type: (dict) -> str
+    """Get filename of pem public key
+    :param dict config: configuration object
+    :rtype: str
+    :return: pem filename
+    """
+    try:
+        pem = config['batch_shipyard']['encryption']['public_key_pem']
+    except KeyError:
+        pem = None
+    return pem
+
+
 def docker_registry_private_allow_public_pull(config):
     # type: (dict) -> bool
     """Get public docker hub pull on missing setting
