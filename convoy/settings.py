@@ -71,6 +71,23 @@ SSHSettings = collections.namedtuple(
         'hpn_server_swap'
     ]
 )
+BatchShipyardSettings = collections.namedtuple(
+    'BatchShipyardSettings', [
+        'storage_account_settings', 'storage_entity_prefix',
+        'generated_sas_expiry_days', 'use_shipyard_docker_image',
+        'store_timing_metrics'
+    ]
+)
+BatchCredentialsSettings = collections.namedtuple(
+    'BatchCredentialsSettings', [
+        'account', 'account_key', 'account_service_url'
+    ]
+)
+StorageCredentialsSettings = collections.namedtuple(
+    'StorageCredentialsSettings', [
+        'account', 'account_key', 'endpoint'
+    ]
+)
 
 
 def can_tune_tcp(vm_size):
@@ -238,6 +255,149 @@ def pool_settings(config):
     )
 
 
+def pool_specification_id(config, lower=False):
+    # type: (dict) -> str
+    """Get Pool id
+    :param dict config: configuration object
+    :param bool lower: lowercase return
+    :rtype: str
+    :return: pool id
+    """
+    id = config['pool_specification']['id']
+    return id.lower() if lower else id
+
+
+def pool_publisher(config, lower=False):
+    # type: (dict, bool) -> str
+    """Get Pool publisher
+    :param dict config: configuration object
+    :param bool lower: lowercase return
+    :rtype: str
+    :return: pool publisher
+    """
+    pub = config['pool_specification']['publisher']
+    return pub.lower() if lower else pub
+
+
+def pool_offer(config, lower=False):
+    # type: (dict, bool) -> str
+    """Get Pool offer
+    :param dict config: configuration object
+    :param bool lower: lowercase return
+    :rtype: str
+    :return: pool offer
+    """
+    offer = config['pool_specification']['offer']
+    return offer.lower() if lower else offer
+
+
+def pool_sku(config, lower=False):
+    # type: (dict, bool) -> str
+    """Get Pool sku
+    :param dict config: configuration object
+    :param bool lower: lowercase return
+    :rtype: str
+    :return: pool sku
+    """
+    sku = config['pool_specification']['sku']
+    return sku.lower() if lower else sku
+
+
+# CREDENTIALS SETTINGS
+def credentials_batch(config):
+    # type: (dict) -> BatchCredentialsSettings
+    """Get Batch credentials
+    :param dict config: configuration object
+    :rtype: BatchCredentialsSettings
+    :return: batch creds
+    """
+    conf = config['credentials']['batch']
+    return BatchCredentialsSettings(
+        account=conf['account'],
+        account_key=conf['account_key'],
+        account_service_url=conf['account_service_url']
+    )
+
+
+def credentials_storage(config, ssel):
+    # type: (dict, str) -> StorageCredentialsSettings
+    """Get specific storage credentials
+    :param dict config: configuration object
+    :param str ssel: storage selector link
+    :rtype: StorageCredentialsSettings
+    :return: storage creds
+    """
+    conf = config['credentials']['storage'][ssel]
+    try:
+        ep = conf['endpoint']
+        if util.is_none_or_empty(ep):
+            raise KeyError()
+    except KeyError:
+        ep = 'core.windows.net'
+    return StorageCredentialsSettings(
+        account=conf['account'],
+        account_key=conf['account_key'],
+        endpoint=ep,
+    )
+
+
+def docker_registry_hub_login(config):
+    # type: (dict) -> tuple
+    """Get docker registry hub login settings
+    :param dict config: configuration object
+    :rtype: tuple
+    :return: (user, pw)
+    """
+    try:
+        user = config['credentials']['docker_registry']['hub']['username']
+        pw = config['credentials']['docker_registry']['hub']['password']
+        if util.is_none_or_empty(user) or util.is_none_or_empty(pw):
+            raise KeyError()
+    except KeyError:
+        user = None
+        pw = None
+    return user, pw
+
+
+# GLOBAL SETTINGS
+def batch_shipyard_settings(config):
+    # type: (dict) -> BatchShipyardSettings
+    """Get batch shipyard settings
+    :param dict config: configuration object
+    :rtype: BatchShipyardSettings
+    :return: batch shipyard settings
+    """
+    conf = config['batch_shipyard']
+    stlink = conf['storage_account_settings']
+    if util.is_none_or_empty(stlink):
+        raise ValueError('batch_shipyard:storage_account_settings is invalid')
+    try:
+        sep = conf['storage_entity_prefix']
+        if util.is_none_or_empty(sep):
+            raise KeyError()
+    except KeyError:
+        sep = 'shipyard'
+    try:
+        sasexpiry = conf['generated_sas_expiry_days']
+    except KeyError:
+        sasexpiry = None
+    try:
+        use_shipyard_image = conf['use_shipyard_docker_image']
+    except KeyError:
+        use_shipyard_image = True
+    try:
+        store_timing = conf['store_timing_metrics']
+    except KeyError:
+        store_timing = False
+    return BatchShipyardSettings(
+        storage_account_settings=stlink,
+        storage_entity_prefix=sep,
+        generated_sas_expiry_days=sasexpiry,
+        use_shipyard_docker_image=use_shipyard_image,
+        store_timing_metrics=store_timing,
+    )
+
+
 def batch_shipyard_encryption_enabled(config):
     # type: (dict) -> bool
     """Get credential encryption enabled setting
@@ -314,19 +474,149 @@ def set_batch_shipyard_encryption_pfx_sha1_thumbprint(config, tp):
     config['batch_shipyard']['encryption']['pfx']['sha1_thumbprint'] = tp
 
 
-def docker_registry_hub_login(config):
-    # type: (dict) -> tuple
-    """Get docker registry hub login settings
+def global_resources_docker_images(config):
+    # type: (dict) -> list
+    """Get list of docker images
     :param dict config: configuration object
-    :rtype: tuple
-    :return: (user, pw)
+    :rtype: list
+    :return: docker images
     """
     try:
-        user = config['credentials']['docker_registry']['hub']['username']
-        pw = config['credentials']['docker_registry']['hub']['password']
-        if util.is_none_or_empty(user) or util.is_none_or_empty(pw):
+        images = config['global_resources']['docker_images']
+        if util.is_none_or_empty(images):
             raise KeyError()
     except KeyError:
-        user = None
-        pw = None
-    return user, pw
+        images = []
+    return images
+
+
+def global_resources_shared_data_volumes(config):
+    # type: (dict) -> dict
+    """Get shared data volumes dictionary
+    :param dict config: configuration object
+    :rtype: dict
+    :return: shared data volumes
+    """
+    try:
+        sdv = config['global_resources']['docker_volumes'][
+            'shared_data_volumes']
+        if util.is_none_or_empty(sdv):
+            raise KeyError()
+    except KeyError:
+        sdv = None
+    return sdv
+
+
+def shared_data_volume_driver(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get shared data volume driver
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: volume driver
+    """
+    return sdv[sdvkey]['volume_driver']
+
+
+def shared_data_volume_container_path(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get shared data volume container path
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: container path
+    """
+    return sdv[sdvkey]['container_path']
+
+
+def azure_file_storage_account_settings(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get azure file storage account link
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: storage account link
+    """
+    return sdv[sdvkey]['storage_account_settings']
+
+
+def azure_file_share_name(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get azure file share name
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: azure file share name
+    """
+    return sdv[sdvkey]['azure_file_share_name']
+
+
+def azure_file_mount_options(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get azure file mount options
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: azure file mount options
+    """
+    try:
+        mo = sdv[sdvkey]['mount_options']
+    except KeyError:
+        mo = None
+    return mo
+
+
+def gluster_volume_type(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get gluster volume type
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: gluster volume type
+    """
+    try:
+        vt = sdv[sdvkey]['volume_type']
+        if util.is_none_or_empty(vt):
+            raise KeyError()
+    except KeyError:
+        vt = 'replica'
+    return vt
+
+
+def gluster_volume_options(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get gluster volume options
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: gluster volume options
+    """
+    try:
+        vo = sdv[sdvkey]['volume_options']
+        if util.is_none_or_empty(vo):
+            raise KeyError()
+    except KeyError:
+        vo = None
+    return vo
+
+
+def is_shared_data_volume_azure_file(sdv, sdvkey):
+    # type: (dict, str) -> bool
+    """Determine if shared data volume is an azure file share
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: bool
+    :return: if shared data volume is azure file
+    """
+    return shared_data_volume_driver(sdv, sdvkey).lower() == 'azurefile'
+
+
+def is_shared_data_volume_gluster(sdv, sdvkey):
+    # type: (dict, str) -> bool
+    """Determine if shared data volume is a glusterfs share
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: bool
+    :return: if shared data volume is glusterfs
+    """
+    return shared_data_volume_driver(sdv, sdvkey).lower() == 'glusterfs'

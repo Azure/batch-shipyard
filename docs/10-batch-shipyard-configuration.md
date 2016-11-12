@@ -205,8 +205,9 @@ The `batch_shipyard` property is used to set settings for the tool.
 account specified, in this case, it is `mystorageaccount`. Batch shipyard
 requires a storage account for storing metadata in order to execute across a
 distributed environment.
-* (required) `storage_entity_prefix` property is used as a generic qualifier
-to prefix storage containers (blob containers, tables, queues) with.
+* (optional) `storage_entity_prefix` property is used as a generic qualifier
+to prefix storage containers (blob containers, tables, queues) with. If not
+specified, defaults to `shipyard`.
 * (optional) `generated_sas_expiry_days` property is used to set the number of
 days any generated SAS key by Batch Shipyard is valid for. The default is 30
 days. This is useful if you have long-lived pools and want to ensure that

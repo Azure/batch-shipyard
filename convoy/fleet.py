@@ -164,27 +164,19 @@ def _populate_global_settings(config):
     """Populate global settings from config
     :param dict config: configuration dict
     """
-    ssel = config['batch_shipyard']['storage_account_settings']
-    try:
-        sep = config['batch_shipyard']['storage_entity_prefix']
-    except KeyError:
-        sep = None
-    if sep is None or len(sep) == 0:
-        raise ValueError('storage_entity_prefix is invalid')
-    postfix = '-'.join(
-        (config['credentials']['batch']['account'].lower(),
-         config['pool_specification']['id'].lower()))
-    sa = config['credentials']['storage'][ssel]['account']
-    sakey = config['credentials']['storage'][ssel]['account_key']
-    try:
-        saep = config['credentials']['storage'][ssel]['endpoint']
-    except KeyError:
-        saep = 'core.windows.net'
-    try:
-        sasexpiry = config['batch_shipyard']['generated_sas_expiry_days']
-    except KeyError:
-        sasexpiry = None
-    storage.set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry)
+    bs = settings.batch_shipyard_settings(config)
+    sc = settings.credentials_storage(config, bs.storage_account_settings)
+    bc = settings.credentials_batch(config)
+    storage.set_storage_configuration(
+        bs.storage_entity_prefix,
+        '-'.join(
+            (bc.account.lower(),
+             settings.pool_specification_id(config, lower=True))
+        ),
+        sc.account,
+        sc.account_key,
+        sc.endpoint,
+        bs.generated_sas_expiry_days)
 
 
 def _create_clients(config):
@@ -194,12 +186,10 @@ def _create_clients(config):
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
-    credentials = batchauth.SharedKeyCredentials(
-        config['credentials']['batch']['account'],
-        config['credentials']['batch']['account_key'])
+    bc = settings.credentials_batch(config)
+    credentials = batchauth.SharedKeyCredentials(bc.account, bc.account_key)
     batch_client = batchsc.BatchServiceClient(
-        credentials,
-        base_url=config['credentials']['batch']['account_service_url'])
+        credentials, base_url=bc.account_service_url)
     batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
     blob_client, queue_client, table_client = storage.create_clients()
     return batch_client, blob_client, queue_client, table_client
@@ -225,7 +215,7 @@ def _setup_nvidia_docker_package(blob_client, config):
     :rtype: pathlib.Path
     :return: package path
     """
-    offer = config['pool_specification']['offer'].lower()
+    offer = settings.pool_offer(config, lower=True)
     if offer == 'ubuntuserver':
         pkg = pathlib.Path(_ROOT_PATH, 'resources/nvidia-docker.deb')
     else:
@@ -254,9 +244,9 @@ def _setup_azurefile_volume_driver(blob_client, config):
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
-    publisher = config['pool_specification']['publisher'].lower()
-    offer = config['pool_specification']['offer'].lower()
-    sku = config['pool_specification']['sku'].lower()
+    publisher = settings.pool_publisher(config, lower=True)
+    offer = settings.pool_offer(config, lower=True)
+    sku = settings.pool_sku(config, lower=True)
     # check to see if binary is downloaded
     bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
@@ -278,53 +268,48 @@ def _setup_azurefile_volume_driver(blob_client, config):
             _ROOT_PATH, 'resources/azurefile-dockervolumedriver.service')
     # construct systemd env file
     sa = None
-    sakey = None
-    saep = None
-    for svkey in config[
-            'global_resources']['docker_volumes']['shared_data_volumes']:
-        conf = config[
-            'global_resources']['docker_volumes']['shared_data_volumes'][svkey]
-        if conf['volume_driver'] == 'azurefile':
+    sdv = settings.global_resources_shared_data_volumes(config)
+    for svkey in sdv:
+        if settings.is_shared_data_volume_azure_file(sdv, svkey):
             # check every entry to ensure the same storage account
-            ssel = conf['storage_account_settings']
-            _sa = config['credentials']['storage'][ssel]['account']
-            if sa is not None and sa != _sa:
+            _sa = settings.credentials_storage(
+                config,
+                settings.azure_file_storage_account_settings(sdv, svkey))
+            if sa is not None and sa.account != _sa.account:
                 raise ValueError(
                     'multiple storage accounts are not supported for '
                     'azurefile docker volume driver')
             sa = _sa
-            sakey = config['credentials']['storage'][ssel]['account_key']
-            saep = config['credentials']['storage'][ssel]['endpoint']
-        elif conf['volume_driver'] != 'glusterfs':
+        elif not settings.is_shared_data_volume_gluster(sdv, svkey):
             raise NotImplementedError(
-                'Unsupported volume driver: {}'.format(conf['volume_driver']))
-    if sa is None or sakey is None:
+                'Unsupported volume driver: {}'.format(
+                    settings.shared_data_volume_driver(sdv, svkey)))
+    if sa is None:
         raise RuntimeError(
-            'storage account or storage account key not specified for '
-            'azurefile docker volume driver')
+            'storage account not specified for azurefile docker volume driver')
     srvenv = pathlib.Path(
         _ROOT_PATH, 'resources/azurefile-dockervolumedriver.env')
     with srvenv.open('wb') as f:
-        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa).encode('utf8'))
-        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(sakey).encode('utf8'))
-        f.write('AZURE_STORAGE_BASE={}\n'.format(saep).encode('utf8'))
+        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa.account).encode('utf8'))
+        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(
+            sa.account_key).encode('utf8'))
+        f.write('AZURE_STORAGE_BASE={}\n'.format(sa.endpoint).encode('utf8'))
     # create docker volume mount command script
     volcreate = pathlib.Path(
         _ROOT_PATH, 'resources/azurefile-dockervolume-create.sh')
     with volcreate.open('wb') as f:
         f.write(b'#!/usr/bin/env bash\n\n')
-        for svkey in config[
-                'global_resources']['docker_volumes']['shared_data_volumes']:
-            conf = config[
-                'global_resources']['docker_volumes'][
-                    'shared_data_volumes'][svkey]
-            if conf['volume_driver'] == 'glusterfs':
+        for svkey in sdv:
+            if settings.is_shared_data_volume_gluster(sdv, svkey):
                 continue
             opts = [
-                '-o share={}'.format(conf['azure_file_share_name'])
+                '-o share={}'.format(settings.azure_file_share_name(
+                    sdv, svkey))
             ]
-            for opt in conf['mount_options']:
-                opts.append('-o {}'.format(opt))
+            mo = settings.azure_file_mount_options(sdv, svkey)
+            if mo is not None:
+                for opt in mo:
+                    opts.append('-o {}'.format(opt))
             f.write('docker volume create -d azurefile --name {} {}\n'.format(
                 svkey, ' '.join(opts)).encode('utf8'))
     return bin, srv, srvenv, volcreate
@@ -345,21 +330,18 @@ def _add_pool(batch_client, blob_client, config):
         batch.add_certificate_to_account(batch_client, config)
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    block_for_gr = None
     if pool_settings.block_until_all_global_resources_loaded:
-        block_for_gr = ','.join(
-            [r for r in config['global_resources']['docker_images']])
-    else:
-        block_for_gr = None
+        images = settings.global_resources_docker_images(config)
+        if len(images) > 0:
+            block_for_gr = ','.join([x for x in images])
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
         storage_threads = data.ingress_data(
             batch_client, config, rls=None, kind='storage')
-    # cascade settings
-    try:
-        perf = config['batch_shipyard']['store_timing_metrics']
-    except KeyError:
-        perf = False
+    # shipyard settings
+    bs = settings.batch_shipyard_settings(config)
     # peer-to-peer settings
     try:
         p2p = config['data_replication']['peer_to_peer']['enabled']
@@ -441,7 +423,7 @@ def _add_pool(batch_client, blob_client, config):
     if not use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
-        if perf:
+        if bs.store_timing_metrics:
             _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
@@ -578,7 +560,7 @@ def _add_pool(batch_client, blob_client, config):
                 'DOCKER_LOGIN_HUB_PASSWORD',
                 crypto.encrypt_string(encrypt, hubpw, config))
         )
-    if perf:
+    if bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )

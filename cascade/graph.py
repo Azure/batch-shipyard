@@ -50,7 +50,13 @@ def _create_credentials(config: dict) -> azuretable.TableService:
     _PARTITION_KEY = '{}${}'.format(
         config['credentials']['batch']['account'],
         config['pool_specification']['id'])
-    _TABLE_NAME = config['batch_shipyard']['storage_entity_prefix'] + 'perf'
+    try:
+        sep = config['batch_shipyard']['storage_entity_prefix']
+        if sep is None or len(sep) == 0:
+            raise KeyError()
+    except KeyError:
+        sep = 'shipyard'
+    _TABLE_NAME = sep + 'perf'
     ssel = config['batch_shipyard']['storage_account_settings']
     table_client = azuretable.TableService(
         account_name=config['credentials']['storage'][ssel]['account'],

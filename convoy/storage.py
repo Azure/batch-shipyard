@@ -77,10 +77,10 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     :param str saep: storage account endpoint
     :param int sasexpiry: sas expiry default time in days
     """
+    if util.is_none_or_empty(sep):
+        raise ValueError('storage_entity_prefix is invalid')
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
         _DEFAULT_SAS_EXPIRY_DAYS
-    if sep is None or len(sep) == 0:
-        raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
         (sep + 'rf', postfix))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
