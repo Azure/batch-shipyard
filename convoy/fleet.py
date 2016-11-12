@@ -547,20 +547,19 @@ def _setup_glusterfs(
     :param str cmdline: coordination cmdline
     """
     # get volume type/options
-    voltype = 'replica'
+    voltype = None
     volopts = None
-    shared_data_volumes = config[
-        'global_resources']['docker_volumes']['shared_data_volumes']
-    for key in shared_data_volumes:
+    sdv = settings.global_resources_shared_data_volumes(config)
+    for sdvkey in sdv:
         try:
-            if shared_data_volumes[key]['volume_driver'] == 'glusterfs':
-                voltype = shared_data_volumes[key]['volume_type']
-                volopts = shared_data_volumes[key]['volume_options']
+            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+                voltype = settings.gluster_volume_type(sdv, sdvkey)
+                volopts = settings.gluster_volume_options(sdv, sdvkey)
         except KeyError:
             pass
-    if volopts is not None and len(volopts) == 0:
-        volopts = None
-    pool_id = config['pool_specification']['id']
+    if voltype is None:
+        raise RuntimeError('glusterfs volume not defined')
+    pool_id = settings.pool_id(config)
     job_id = 'shipyard-glusterfs-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
         id=job_id,
@@ -568,7 +567,7 @@ def _setup_glusterfs(
     )
     # create coordination command line
     if cmdline is None:
-        if config['pool_specification']['offer'].lower() == 'ubuntuserver':
+        if settings.pool_offer(config, lower=True) == 'ubuntuserver':
             tempdisk = '/mnt'
         else:
             tempdisk = '/mnt/resource'
@@ -648,9 +647,9 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     :param str digest: digest to update to
     """
     # first check that peer-to-peer is disabled for pool
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     try:
-        if config['data_replication']['peer_to_peer']['enabled']:
+        if settings.data_replication_settings(config).peer_to_peer.enabled:
             raise RuntimeError(
                 'cannot update docker images for a pool with peer-to-peer '
                 'image distribution')
@@ -658,13 +657,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         pass
     # mark if these are private registry images
     registry = ''
-    try:
-        psa = config['docker_registry']['private']['azure_storage'][
-            'storage_account_settings']
-        if psa is None or len(psa) == 0:
-            raise KeyError()
-    except KeyError:
-        psa = None
+    psa, _ = settings.docker_registry_azure_storage(config)
     if psa is not None:
         registry = 'localhost:5000/'
     del psa
@@ -673,7 +666,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
 
     # if image is specified, check that it exists for this pool
     if image is not None:
-        if image not in config['global_resources']['docker_images']:
+        if image not in settings.global_resources_docker_images(config):
             raise RuntimeError(
                 ('cannot update docker image {} not specified as a global '
                  'resource for pool').format(image))
@@ -683,7 +676,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
             else:
                 images = ['{}@{}'.format(image, digest)]
     else:
-        images = config['global_resources']['docker_images']
+        images = settings.global_resources_docker_images(config)
     # create job for update
     job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
@@ -791,10 +784,11 @@ def _adjust_settings_for_pool_creation(config):
     """Adjust settings for pool creation
     :param dict config: configuration dict
     """
-    publisher = config['pool_specification']['publisher'].lower()
-    offer = config['pool_specification']['offer'].lower()
-    sku = config['pool_specification']['sku'].lower()
-    vm_size = config['pool_specification']['vm_size']
+    # get settings
+    pool = settings.pool_settings(config)
+    publisher = pool.publisher.lower()
+    offer = pool.offer.lower()
+    sku = pool.sku.lower()
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
@@ -827,8 +821,7 @@ def _adjust_settings_for_pool_creation(config):
             if sku == '13.2':
                 allowed = True
     # check for valid image if gpu, currently only ubuntu 16.04 is supported
-    if ((vm_size.lower().startswith('standard_nc') or
-         vm_size.lower().startswith('standard_nv')) and
+    if (settings.is_gpu_pool(pool.vm_size) and
             (publisher != 'canonical' and offer != 'ubuntuserver' and
              sku < '16.04.0-lts')):
         allowed = False
@@ -836,95 +829,77 @@ def _adjust_settings_for_pool_creation(config):
     if not allowed:
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '
-             'sku={} vm_size={}').format(publisher, offer, sku, vm_size))
+             'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
     # adjust for shipyard container requirement
     if shipyard_container_required:
-        config['batch_shipyard']['use_shipyard_docker_image'] = True
+        settings.set_use_shipyard_docker_image(config, True)
         logger.warning(
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
     # adjust inter node comm setting
-    vm_count = config['pool_specification']['vm_count']
-    if vm_count < 1:
-        raise ValueError('invalid vm_count: {}'.format(vm_count))
-    try:
-        p2p = config['data_replication']['peer_to_peer']['enabled']
-    except KeyError:
-        p2p = False
-    try:
-        internode = config[
-            'pool_specification']['inter_node_communication_enabled']
-    except KeyError:
-        internode = False
+    if pool.vm_count < 1:
+        raise ValueError('invalid vm_count: {}'.format(pool.vm_count))
+    dr = settings.data_replication_settings(config)
     max_vms = 20 if publisher == 'microsoftwindowsserver' else 40
-    if vm_count > max_vms:
-        if p2p:
+    if pool.vm_count > max_vms:
+        if dr.peer_to_peer.enabled:
             logger.warning(
                 ('disabling peer-to-peer transfer as pool size of {} exceeds '
                  'max limit of {} vms for inter-node communication').format(
-                     vm_count, max_vms))
-            if 'data_replication' not in config:
-                config['data_replication'] = {}
-            if 'peer_to_peer' not in config['data_replication']:
-                config['data_replication']['peer_to_peer'] = {}
-            config['data_replication']['peer_to_peer']['enabled'] = False
-            p2p = False
-        if internode:
-            internode = False
+                     pool.vm_count, max_vms))
+            settings.set_peer_to_peer_enabled(config, False)
+        if pool.inter_node_communication_enabled:
             logger.warning(
                 ('disabling inter-node communication as pool size of {} '
                  'exceeds max limit of {} vms for setting').format(
-                     vm_count, max_vms))
-            config['pool_specification'][
-                'inter_node_communication_enabled'] = internode
+                     pool.vm_count, max_vms))
+            settings.set_inter_node_communication_enabled(config, False)
+    # re-read pool and data replication settings
+    pool = settings.pool_settings(config)
+    dr = settings.data_replication_settings(config)
     # ensure settings p2p/internode settings are compatible
-    if p2p and not internode:
-        internode = True
-        config['pool_specification'][
-            'inter_node_communication_enabled'] = internode
+    if dr.peer_to_peer.enabled and not pool.inter_node_communication_enabled:
         logger.warning(
             'force enabling inter-node communication due to peer-to-peer '
             'transfer')
+        settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
-        if (config['pool_specification']['ssh']['hpn_server_swap'] and
-                publisher != 'canonical' and offer != 'ubuntuserver'):
+        if (pool.ssh.hpn_server_swap and publisher != 'canonical' and
+                offer != 'ubuntuserver'):
             logger.warning('cannot enable HPN SSH swap on {} {} {}'.format(
                 publisher, offer, sku))
-            config['pool_specification']['ssh']['hpn_server_swap'] = False
+            settings.set_hpn_server_swap(config, False)
     except KeyError:
         pass
-    # adjust ssh settings on windows
-    if util.on_windows():
-        try:
-            ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
-        except KeyError:
-            ssh_pub_key = None
-        if ssh_pub_key is None:
-            logger.warning(
-                'disabling ssh user creation due to script being run '
-                'from Windows and no public key is specified')
-            config['pool_specification'].pop('ssh', None)
+    # force disable block for global resources if ingressing data
+    if (pool.transfer_files_on_pool_creation and
+            pool.block_until_all_global_resources_loaded):
+        logger.warning(
+            'disabling block until all global resources loaded with '
+            'transfer files on pool creation enabled')
+        settings.set_block_until_all_global_resources_loaded(config, False)
+    # re-read pool settings
+    pool = settings.pool_settings(config)
     # glusterfs requires internode comms and more than 1 node
     try:
         num_gluster = 0
-        shared = config['global_resources']['docker_volumes'][
-            'shared_data_volumes']
-        for sdvkey in shared:
-            if shared[sdvkey]['volume_driver'] == 'glusterfs':
-                if not internode:
+        sdv = settings.global_resources_shared_data_volumes(config)
+        for sdvkey in sdv:
+            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+                if not pool.inter_node_communication_enabled:
                     # do not modify value and proceed since this interplays
                     # with p2p settings, simply raise exception and force
                     # user to reconfigure
                     raise ValueError(
                         'inter node communication in pool configuration '
                         'must be enabled for glusterfs')
-                if vm_count <= 1:
+                if pool.vm_count <= 1:
                     raise ValueError('vm_count should exceed 1 for glusterfs')
                 num_gluster += 1
                 try:
-                    if shared[sdvkey]['volume_type'] != 'replica':
+                    if settings.gluster_volume_type(sdv, sdvkey) != 'replica':
                         raise ValueError(
                             'only replicated GlusterFS volumes are '
                             'currently supported')
@@ -935,38 +910,28 @@ def _adjust_settings_for_pool_creation(config):
                 'cannot create more than one GlusterFS volume per pool')
     except KeyError:
         pass
-    # ensure file transfer settings
-    try:
-        xfer_files_with_pool = config['pool_specification'][
-            'transfer_files_on_pool_creation']
-    except KeyError:
-        xfer_files_with_pool = False
-        config['pool_specification'][
-            'transfer_files_on_pool_creation'] = xfer_files_with_pool
-    try:
-        files = config['global_resources']['files']
-        shared = False
-        for fdict in files:
-            if 'shared_data_volume' in fdict['destination']:
-                shared = True
-                break
-        if util.on_windows() and shared and xfer_files_with_pool:
-            raise RuntimeError(
-                'cannot transfer files to shared data volume on Windows')
-    except KeyError:
-        pass
-    # force disable block for global resources if ingressing data
-    try:
-        block_for_gr = config[
-            'pool_specification']['block_until_all_global_resources_loaded']
-    except KeyError:
-        block_for_gr = True
-    if xfer_files_with_pool and block_for_gr:
-        logger.warning(
-            'disabling block until all global resources loaded with '
-            'transfer files on pool creation enabled')
-        config['pool_specification'][
-            'block_until_all_global_resources_loaded'] = False
+    # adjust settings on windows
+    if util.on_windows():
+        if pool.ssh.ssh_pub_key is None:
+            logger.warning(
+                'disabling ssh user creation due to script being run '
+                'from Windows and no public key is specified')
+            settings.remove_ssh_settings(config)
+        # ensure file transfer settings
+        if pool.transfer_files_on_pool_creation:
+            try:
+                direct = False
+                files = settings.global_resources_files(config)
+                for fdict in files:
+                    if settings.is_direct_transfer(fdict):
+                        direct = True
+                        break
+                if direct:
+                    raise RuntimeError(
+                        'cannot transfer files directly to compute nodes '
+                        'on Windows')
+            except KeyError:
+                pass
 
 
 def action_cert_create(config):
@@ -1016,10 +981,10 @@ def action_pool_add(
     :param dict config: configuration dict
     """
     # first check if pool exists to prevent accidential metadata clear
-    if batch_client.pool.exists(config['pool_specification']['id']):
+    if batch_client.pool.exists(settings.pool_id(config)):
         raise RuntimeError(
             'attempting to create a pool that already exists: {}'.format(
-                config['pool_specification']['id']))
+                settings.pool_id(config)))
     storage.create_storage_containers(
         blob_client, queue_client, table_client, config)
     storage.clear_storage_containers(
@@ -1062,7 +1027,7 @@ def action_pool_delete(
         storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config)
         if wait:
-            pool_id = config['pool_specification']['id']
+            pool_id = settings.pool_id(config)
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
                 time.sleep(3)
@@ -1078,61 +1043,47 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     :param dict config: configuration dict
     :param bool wait: wait for operation to complete
     """
-    pool_id = config['pool_specification']['id']
+    pool = settings.pool_settings(config)
     # check direction of resize
-    vm_count = config['pool_specification']['vm_count']
-    _pool = batch_client.pool.get(pool_id)
-    if vm_count == _pool.current_dedicated == _pool.target_dedicated:
+    _pool = batch_client.pool.get(pool.id)
+    if pool.vm_count == _pool.current_dedicated == _pool.target_dedicated:
         logger.error(
-            'pool {} is already at {} nodes'.format(pool_id, vm_count))
+            'pool {} is already at {} nodes'.format(pool.id, pool.vm_count))
         return
     resize_up = True
-    if vm_count < _pool.target_dedicated:
+    if pool.vm_count < _pool.target_dedicated:
         resize_up = False
     del _pool
     create_ssh_user = False
     # try to get handle on public key, avoid generating another set
     # of keys
     if resize_up:
-        try:
-            username = config['pool_specification']['ssh']['username']
-            if username is None or len(username) == 0:
-                raise KeyError()
-        except KeyError:
+        if pool.ssh.username is None:
             logger.info('not creating ssh user on new nodes of pool {}'.format(
-                pool_id))
+                pool.id))
         else:
-            try:
-                ssh_pub_key = config['pool_specification']['ssh'][
-                    'ssh_public_key']
-            except KeyError:
-                ssh_pub_key = None
-            if ssh_pub_key is None:
+            if pool.ssh.ssh_public_key is None:
                 sfp = pathlib.Path(crypto.get_ssh_key_prefix() + '.pub')
                 if sfp.exists():
                     logger.debug(
                         'setting public key for ssh user to: {}'.format(sfp))
-                    config['pool_specification']['ssh'][
-                        'ssh_public_key'] = str(sfp)
+                    settings.set_ssh_public_key(config, str(sfp))
                     create_ssh_user = True
                 else:
                     logger.warning(
                         ('not creating ssh user for new nodes of pool {} as '
                          'an existing ssh public key cannot be found').format(
-                             pool_id))
+                             pool.id))
                     create_ssh_user = False
     # check if this is a glusterfs-enabled pool
-    voltype = 'replica'
-    old_nodes = {}
+    voltype = None
     try:
-        for svkey in config[
-                'global_resources']['docker_volumes']['shared_data_volumes']:
-            conf = config['global_resources']['docker_volumes'][
-                'shared_data_volumes'][svkey]
-            if conf['volume_driver'] == 'glusterfs':
+        sdv = settings.global_resources_shared_data_volumes(config)
+        for sdvkey in sdv:
+            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
                 gluster_present = True
                 try:
-                    voltype = conf['volume_type']
+                    voltype = settings.gluster_volume_type(sdv, sdvkey)
                 except KeyError:
                     pass
                 break
@@ -1144,8 +1095,9 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         logger.debug('forcing wait to True due to glusterfs')
         wait = True
     # cache old nodes
+    old_nodes = {}
     if gluster_present or create_ssh_user:
-        for node in batch_client.compute_node.list(pool_id):
+        for node in batch_client.compute_node.list(pool.id):
             old_nodes[node.id] = node.ip_address
     # resize pool
     nodes = batch.resize_pool(batch_client, config, wait)
@@ -1165,29 +1117,26 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     # add brick for new nodes
     if gluster_present and resize_up:
         # get pool current dedicated
-        _pool = batch_client.pool.get(pool_id)
+        _pool = batch_client.pool.get(pool.id)
         # ensure current dedicated is the target
-        vm_count = config['pool_specification']['vm_count']
-        if vm_count != _pool.current_dedicated:
+        if pool.vm_count != _pool.current_dedicated:
             raise RuntimeError(
                 ('cannot perform glusterfs setup on new nodes, unexpected '
                  'current dedicated {} to vm_count {}').format(
-                     _pool.current_dedicated, vm_count))
+                     _pool.current_dedicated, pool.vm_count))
+        del _pool
         # get internal ip addresses of new nodes
         new_nodes = [
             node.ip_address for node in nodes if node.id not in old_nodes
         ]
         masterip = next(iter(old_nodes.values()))
         # get tempdisk mountpoint
-        if config['pool_specification']['offer'].lower() == 'ubuntuserver':
-            tempdisk = '/mnt'
-        else:
-            tempdisk = '/mnt/resource'
+        tempdisk = settings.temp_disk_mountpoint(config)
         # construct cmdline
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
-                _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk, vm_count,
-                masterip, ' '.join(new_nodes))])
+                _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk,
+                pool.vm_count, masterip, ' '.join(new_nodes))])
         # setup gluster
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERRESIZE_FILE,
@@ -1463,7 +1412,7 @@ def action_data_ingress(batch_client, config):
     pool_cd = None
     try:
         # get pool current dedicated
-        pool = batch_client.pool.get(config['pool_specification']['id'])
+        pool = batch_client.pool.get(settings.pool_id(config))
         pool_cd = pool.current_dedicated
         del pool
         # ensure there are remote login settings

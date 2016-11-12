@@ -60,8 +60,7 @@ PoolSettings = collections.namedtuple(
         'reboot_on_start_task_failed',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation',
-        'input_data', 'input_data_azure_storage',
-        'gpu_driver', 'ssh', 'additional_node_prep_commands',
+        'input_data', 'gpu_driver', 'ssh', 'additional_node_prep_commands',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -147,6 +146,19 @@ def is_rdma_pool(vm_size):
     if vm_size.lower() in _RDMA_INSTANCES:
         return True
     return False
+
+
+def temp_disk_mountpoint(config):
+    # type: (dict) -> str
+    """Get temporary disk mountpoint
+    :param dict config: configuration object
+    :rtype: str
+    :return: temporary disk mount point
+    """
+    if pool_offer(config, lower=True) == 'ubuntuserver':
+        return '/mnt'
+    else:
+        return '/mnt/resource'
 
 
 # POOL CONFIG
@@ -264,6 +276,55 @@ def pool_settings(config):
         gpu_driver=gpu_driver,
         additional_node_prep_commands=additional_node_prep_commands,
     )
+
+
+def remove_ssh_settings(config):
+    # type: (dict) -> None
+    """Remove ssh settings from pool specification
+    :param dict config: configuration object
+    """
+    config['pool_specification'].pop('ssh', None)
+
+
+def set_block_until_all_global_resources_loaded(config, flag):
+    # type: (dict, bool) -> None
+    """Set block until all global resources setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    config['pool_specification'][
+        'block_until_all_global_resources_loaded'] = flag
+
+
+def set_inter_node_communication_enabled(config, flag):
+    # type: (dict, bool) -> None
+    """Set inter node comm setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    config['pool_specification']['inter_node_communication_enabled'] = flag
+
+
+def set_ssh_public_key(config, pubkey):
+    # type: (dict, str) -> None
+    """Set SSH public key setting
+    :param dict config: configuration object
+    :param str pubkey: public key to set
+    """
+    if 'ssh' not in config['pool_specification']:
+        config['pool_specification']['ssh'] = {}
+    config['pool_specification']['ssh']['ssh_public_key'] = pubkey
+
+
+def set_hpn_server_swap(config, flag):
+    # type: (dict, bool) -> None
+    """Set SSH HPN server swap setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    if 'ssh' not in config['pool_specification']:
+        config['pool_specification']['ssh'] = {}
+    config['pool_specification']['ssh']['hpn_server_swap'] = flag
 
 
 def pool_id(config, lower=False):
@@ -420,6 +481,15 @@ def batch_shipyard_settings(config):
     )
 
 
+def set_use_shipyard_docker_image(config, flag):
+    # type: (dict, bool) -> None
+    """Set shipyard docker image use
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    config['batch_shipyard']['use_shipyard_docker_image'] = flag
+
+
 def batch_shipyard_encryption_enabled(config):
     # type: (dict) -> bool
     """Get credential encryption enabled setting
@@ -540,49 +610,66 @@ def data_replication_settings(config):
     :rtype: DataReplicationSettings
     :return: data replication settings
     """
-    p2p = PeerToPeerSettings(enabled=False)
-    dr = DataReplicationSettings(
-        peer_to_peer=p2p, non_peer_to_peer_concurrent_downloading=True)
     try:
         conf = config['data_replication']
     except KeyError:
-        return dr
+        conf = {}
     try:
-        dr.non_peer_to_peer_concurrent_downloading = conf[
-            'non_peer_to_peer_concurrent_downloading']
+        nonp2pcd = conf['non_peer_to_peer_concurrent_downloading']
     except KeyError:
-        pass
+        nonp2pcd = True
     try:
         conf = config['data_replication']['peer_to_peer']
     except KeyError:
-        return dr
+        conf = {}
     try:
-        p2p.enabled = conf['enabled']
+        p2p_enabled = conf['enabled']
     except KeyError:
-        p2p.enabled = False
+        p2p_enabled = False
     try:
-        p2p.compression = conf['compression']
+        p2p_compression = conf['compression']
     except KeyError:
-        p2p.compression = True
+        p2p_compression = True
     try:
-        p2p.concurrent_source_downloads = conf['concurrent_source_downloads']
-        if (p2p.concurrent_source_downloads is None or
-                p2p.concurrent_source_downloads < 1):
+        p2p_concurrent_source_downloads = conf['concurrent_source_downloads']
+        if (p2p_concurrent_source_downloads is None or
+                p2p_concurrent_source_downloads < 1):
             raise KeyError()
     except KeyError:
-        p2p.concurrent_source_downloads = pool_vm_count(config) // 6
-        if p2p.concurrent_source_downloads < 1:
-            p2p.concurrent_source_downloads = 1
+        p2p_concurrent_source_downloads = pool_vm_count(config) // 6
+        if p2p_concurrent_source_downloads < 1:
+            p2p_concurrent_source_downloads = 1
     try:
-        p2p.direct_download_seed_bias = conf['direct_download_seed_bias']
-        if (p2p.direct_download_seed_bias is None or
-                p2p.direct_download_seed_bias < 1):
+        p2p_direct_download_seed_bias = conf['direct_download_seed_bias']
+        if (p2p_direct_download_seed_bias is None or
+                p2p_direct_download_seed_bias < 1):
             raise KeyError()
     except KeyError:
-        p2p.direct_download_seed_bias = pool_vm_count(config) // 10
-        if p2p.direct_download_seed_bias < 1:
-            p2p.direct_download_seed_bias = 1
-    return dr
+        p2p_direct_download_seed_bias = pool_vm_count(config) // 10
+        if p2p_direct_download_seed_bias < 1:
+            p2p_direct_download_seed_bias = 1
+    return DataReplicationSettings(
+        peer_to_peer=PeerToPeerSettings(
+            enabled=p2p_enabled,
+            compression=p2p_compression,
+            concurrent_source_downloads=p2p_concurrent_source_downloads,
+            direct_download_seed_bias=p2p_direct_download_seed_bias
+        ),
+        non_peer_to_peer_concurrent_downloading=nonp2pcd
+    )
+
+
+def set_peer_to_peer_enabled(config, flag):
+    # type: (dict, bool) -> None
+    """Set peer to peer enabled setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    if 'data_replication' not in config:
+        config['data_replication'] = {}
+    if 'peer_to_peer' not in config['data_replication']:
+        config['data_replication']['peer_to_peer'] = {}
+    config['data_replication']['peer_to_peer']['enabled'] = flag
 
 
 def global_resources_docker_images(config):
@@ -601,6 +688,33 @@ def global_resources_docker_images(config):
     return images
 
 
+def global_resources_files(config):
+    # type: (dict) -> list
+    """Get list of global files ingress
+    :param dict config: configuration object
+    :rtype: list
+    :return: global files ingress list
+    """
+    try:
+        files = config['global_resources']['files']
+        if util.is_none_or_empty(files):
+            raise KeyError()
+    except KeyError:
+        files = []
+    return files
+
+
+def is_direct_transfer(filespair):
+    # type: (dict) -> bool
+    """Determine if src/dst pair for files ingress is a direct compute node
+    transfer
+    :param dict filespair: src/dst pair
+    :rtype: bool
+    :return: if ingress is direct
+    """
+    return 'storage_account_settings' not in filespair['destination']
+
+
 def global_resources_shared_data_volumes(config):
     # type: (dict) -> dict
     """Get shared data volumes dictionary
@@ -614,7 +728,7 @@ def global_resources_shared_data_volumes(config):
         if util.is_none_or_empty(sdv):
             raise KeyError()
     except KeyError:
-        sdv = None
+        sdv = {}
     return sdv
 
 
