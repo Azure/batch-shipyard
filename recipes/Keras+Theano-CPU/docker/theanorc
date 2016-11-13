@@ -1,0 +1,2 @@
+[blas]
+ldflags = -L/usr/lib/ -lopenblas

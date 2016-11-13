@@ -21,6 +21,8 @@ ingress.
   - `jobs listtasks`: `--jobid` allows scoping of list tasks to a specific job
   - `jobs add`: `--tail` allows tailing the specified file for the last job
     and task added
+- Keras+Theano-CPU and Keras+Theano-GPU recipes
+- Keras+Theano-CPU added as an option in the quickstart guide
 
 ### Changed
 - **Breaking Change:** Properties of `docker_registry` have changed

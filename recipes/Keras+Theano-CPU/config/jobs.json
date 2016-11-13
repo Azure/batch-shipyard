@@ -1,0 +1,14 @@
+{
+    "job_specifications": [
+        {
+            "id": "kerasjob",
+            "tasks": [
+                {
+                    "image": "alfpark/keras:cpu",
+                    "remove_container_after_exit": true,
+                    "command": "python /keras/examples/mnist_cnn.py"
+                }
+            ]
+        }
+    ]
+}

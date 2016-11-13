@@ -65,6 +65,18 @@ This Caffe-GPU recipe contains information on how to Dockerize
 [Caffe](http://caffe.berkeleyvision.org/) on GPUs for use with N-Series Azure
 VMs.
 
+#### [Keras+Theano-CPU](./Keras+Theano-CPU)
+This Keras+Theano-CPU recipe contains information on how to Dockerize
+[Keras](https://keras.io/) with the
+[Theano](http://www.deeplearning.net/software/theano/) backend for use on
+Azure Batch compute nodes.
+
+#### [Keras+Theano-GPU](./Keras+Theano-GPU)
+This Keras+Theano-GPU recipe contains information on how to Dockerize
+[Keras](https://keras.io/) with the
+[Theano](http://www.deeplearning.net/software/theano/) backend for use with
+N-Series Azure VMs.
+
 #### [MXNet-CPU](./MXNet-CPU)
 This MXNet-CPU recipe contains information on how to Dockerize
 [MXNet](http://mxnet.io/) for use on Azure Batch compute nodes, including
