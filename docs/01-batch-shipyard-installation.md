@@ -49,8 +49,8 @@ If you are installing on Python < 3.5 on Windows, you will need a compiler
 that matches the CRT of the CPython version you are using. For Python 2.7,
 you can download the necessary development headers and compiler
 [from Microsoft](http://aka.ms/vcpython27). If you are on Python 3.3 or 3.4
-on Windows, it is recommended to upgrade to Python 3.5 or higher so you do not
-need a compiler to install the dependencies.
+on Windows, it is recommended to upgrade to Python 3.5 or higher so that you
+do not need a compiler to install the dependencies.
 
 Although it is recommended to use the Python distribution from
 [python.org](https://www.python.org) for use with Batch Shipyard, if you are
@@ -132,21 +132,22 @@ For the best experience, please run Batch Shipyard from Linux.
 
 Note that if you are cloning the repository on Windows, please ensure that
 git or any text editor does not modify the Unix line-endings (LF) for any
-file in the `scripts` directory. The repostiory's `.gitattributes` attempts
-to force the line endings for all text files, but could be overridden by
-your local git configuration. If these files are modified with Windows
-line-endings (CRLF) then compute nodes will fail to start properly.
+file in the `scripts` or `resources` directory. The repostiory's
+`.gitattributes` designates line endings for all text files, but can be
+overridden by your local git configuration. If these files are modified
+with Windows line-endings (CRLF) then compute nodes will fail to start
+properly.
 
 ## Manual Installation
 ### Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
-with Python 2.7 or 3.3+. You will also need to install dependent Python
-packages that Batch Shipyard requires. Installation can be performed using
-the [requirements.txt](../requirements.txt) file via the command
-`pip install --upgrade --user -r requirements.txt` (or via `pip3` for
-Python3). Note that this `pip` command should be run for every Batch Shipyard
-upgrade if not using `install.sh`. The use of `install.sh` is highly
-recommended instead of these manual steps on Linux.
+with Python 2.7 or 3.3+, although 3.5+ is highly recommended. You will also
+need to install dependent Python packages that Batch Shipyard requires.
+Installation can be performed using the [requirements.txt](../requirements.txt)
+file via the command `pip install --upgrade --user -r requirements.txt` (or
+via `pip3` for Python3). Note that this `pip` command should be run for every
+Batch Shipyard upgrade if not using `install.sh`. The use of `install.sh` is
+highly recommended instead of these manual steps below on Linux platforms.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and Python development libraries to be installed due to the
