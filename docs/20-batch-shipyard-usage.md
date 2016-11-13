@@ -154,6 +154,8 @@ The `jobs` command has the following sub-commands:
 * `add` will add all jobs and tasks defined in the jobs configuration file
 to the Batch pool
   * `--recreate` will recreate any completed jobs with the same id
+  * `--tail` will tail the specified file of the last job and task added
+    with this command invocation
 * `cmi` will cleanup any stale multi-instance tasks and jobs. Note that this
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.

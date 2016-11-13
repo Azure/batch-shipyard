@@ -19,6 +19,8 @@ ingress.
   - `data listfiles`: `--jobid` and `--taskid` allows scoping of the list
     files action
   - `jobs listtasks`: `--jobid` allows scoping of list tasks to a specific job
+  - `jobs add`: `--tail` allows tailing the specified file for the last job
+    and task added
 
 ### Changed
 - **Breaking Change:** Properties of `docker_registry` have changed

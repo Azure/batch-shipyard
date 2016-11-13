@@ -1505,9 +1505,10 @@ def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
 
 
 def add_jobs(
-        batch_client, blob_client, config, jpfile, bxfile, recreate=False):
+        batch_client, blob_client, config, jpfile, bxfile, recreate=False,
+        tail=None):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict, tuple, tuple, bool) -> None
+    #        dict, tuple, tuple, bool, str) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -1516,6 +1517,7 @@ def add_jobs(
     :param tuple jpfile: jobprep file
     :param tuple bxfile: blobxfer file
     :param bool recreate: recreate job if completed
+    :param str tail: tail specified file of last job/task added
     """
     # get the pool inter-node comm setting
     bs = settings.batch_shipyard_settings(config)
@@ -1526,6 +1528,8 @@ def add_jobs(
         global_resources.append(gr)
     jpcmd = ['$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
         jpfile[0], ' '.join(global_resources))]
+    lastjob = None
+    lasttask = None
     for jobspec in settings.job_specifications(config):
         # digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
@@ -1545,6 +1549,7 @@ def add_jobs(
             ),
             uses_task_dependencies=False,
         )
+        lastjob = job.id
         # perform checks:
         # 1. if tasks have dependencies, set it if so
         # 2. if there are multi-instance tasks
@@ -1753,3 +1758,9 @@ def add_jobs(
                         pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                         on_all_tasks_complete=batchmodels.
                         OnAllTasksComplete.terminate_job))
+            lasttask = task.id
+    # tail file if specified
+    if tail:
+        stream_file_and_wait_for_task(
+            batch_client, config, filespec='{},{},{}'.format(
+                lastjob, lasttask, tail), disk=False)

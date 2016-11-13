@@ -446,13 +446,16 @@ def jobs(ctx):
 @click.option(
     '--recreate', is_flag=True,
     help='Recreate any completed jobs with the same id')
+@click.option(
+    '--tail',
+    help='Tails the specified file of the last job and task added')
 @common_options
 @pass_cli_context
-def jobs_add(ctx, recreate):
+def jobs_add(ctx, recreate, tail):
     """Add jobs"""
     ctx.initialize()
     convoy.fleet.action_jobs_add(
-        ctx.batch_client, ctx.blob_client, ctx.config, recreate)
+        ctx.batch_client, ctx.blob_client, ctx.config, recreate, tail)
 
 
 @jobs.command('list')
