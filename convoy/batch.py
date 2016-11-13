@@ -1634,15 +1634,16 @@ def add_jobs(
                     job_env_vars, task.environment_variables)
             # get and create env var file
             sas_urls = None
-            if task.infiniband or util.is_not_empty(env_vars):
+            if util.is_not_empty(env_vars) or task.infiniband or task.gpu:
                 envfileloc = '{}taskrf-{}/{}{}'.format(
                     bs.storage_entity_prefix, job.id, task.id, task.envfile)
                 f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
                 fname = f.name
                 try:
-                    for key in env_vars:
-                        f.write('{}={}\n'.format(key, env_vars[key]).encode(
-                            'utf8'))
+                    if util.is_not_empty(env_vars):
+                        for key in env_vars:
+                            f.write('{}={}\n'.format(
+                                key, env_vars[key]).encode('utf8'))
                     if task.infiniband:
                         f.write(b'I_MPI_FABRICS=shm:dapl\n')
                         f.write(b'I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
@@ -1650,6 +1651,14 @@ def add_jobs(
                         # create a manpath entry for potentially buggy
                         # intel mpivars.sh
                         f.write(b'MANPATH=/usr/share/man:/usr/local/man\n')
+                    if task.gpu:
+                        f.write(b'CUDA_CACHE_DISABLE=0\n')
+                        f.write(b'CUDA_CACHE_MAXSIZE=1073741824\n')
+                        # use absolute path due to non-expansion
+                        f.write(
+                            ('CUDA_CACHE_PATH={}/batch/tasks/'
+                             '.nv/ComputeCache\n').format(
+                                 settings.temp_disk_mountpoint(config)))
                     # close and upload env var file
                     f.close()
                     sas_urls = storage.upload_resource_files(
@@ -1711,9 +1720,8 @@ def add_jobs(
                 command_line=util.wrap_commands_in_shell(task_commands),
                 run_elevated=True,
                 resource_files=[],
+                multi_instance_settings=mis,
             )
-            if mis is not None:
-                batchtask.multi_instance_settings = mis
             # add envfile
             if sas_urls is not None:
                 batchtask.resource_files.append(

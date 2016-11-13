@@ -1603,9 +1603,6 @@ def task_settings(pool, config, conf):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA, pool: {} vm_size: {}').format(
                      pool.id, pool.vm_size))
-        # ensure env_vars is allocated
-        if util.is_none_or_empty(env_vars):
-            env_vars = []
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
         supported = False

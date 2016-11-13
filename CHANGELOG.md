@@ -35,6 +35,9 @@ directory `c` is no longer created at the destination. Instead all files
 found in `/a/b/c` will be immediately placed directly at the destination
 path with sub-directories preserved. This behavior can be modified with
 the `relative_destination_path` property.
+- `CUDA_CACHE_*` variables are now set for GPU jobs such that compiled targets
+pass-through to the host. This allows subsequent container invocations within
+the same node the ability to reuse cached PTX JIT targets.
 - `batch_shipyard`:`storage_entity_prefix` is now optional and defaults to
 `shipyard` if not specified.
 - Major internal configuration/settings refactor

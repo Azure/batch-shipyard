@@ -743,7 +743,11 @@ for which a multi-task instance is run. This allows automatic cleanup of the
 Docker container in multi-instance tasks. This is defaulted to `true` when
 multi-instance tasks are specified.
 * (optional) `environment_variables` under the job are environment variables
-which will be applied to all tasks operating under the job.
+which will be applied to all tasks operating under the job. Note that
+environment variables are not expanded and are passed as-is. You will need
+to source the environment file `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist`
+in a shell within the docker `command` or `entrypoint` if you want any
+environment variables to be expanded.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -794,7 +798,12 @@ transferred again. This object currently supports `azure_batch` and
     specified, the value of the `id` property will be used for `name`.
   * (optional) `labels` is an array of labels to apply to the container.
   * (optional) `environment_variables` are any additional task-specific
-    environment variables that should be applied to the container.
+    environment variables that should be applied to the container. Note that
+    environment variables are not expanded and are passed as-is. You will
+    need to source the environment file
+    `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist` in a shell within the
+    docker `command` or `entrypoint` if you want any environment variables
+    to be expanded.
   * (optional) `ports` is an array of port specifications that should be
     exposed to the host.
   * (optional) `data_volumes` is an array of `data_volume` aliases as defined
