@@ -13,7 +13,7 @@
                     "command": "/mxnet/run_mxnet.sh cifar-10-py $AZ_BATCH_NODE_SHARED_DIR/gfs --model-prefix $AZ_BATCH_TASK_WORKING_DIR/cifar-10-model",
                     "gpu": true,
                     "multi_instance": {
-                        "num_instances": "pool_specification_vm_count",
+                        "num_instances": "pool_current_dedicated",
                         "coordination_command": null
                     }
                 }

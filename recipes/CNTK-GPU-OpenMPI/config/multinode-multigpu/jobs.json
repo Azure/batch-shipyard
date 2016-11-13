@@ -12,7 +12,7 @@
                     ],
                     "command": "/cntk/run_convnet_mnist_gpu.sh $AZ_BATCH_NODE_SHARED_DIR/gfs",
                     "multi_instance": {
-                        "num_instances": "pool_specification_vm_count",
+                        "num_instances": "pool_current_dedicated",
                         "coordination_command": null
                     },
                     "gpu": true

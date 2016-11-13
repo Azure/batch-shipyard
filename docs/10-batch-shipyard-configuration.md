@@ -716,7 +716,7 @@ The jobs schema is as follows:
                     "infiniband": false,
                     "gpu": false,
                     "multi_instance": {
-                        "num_instances": "pool_specification_vm_count",
+                        "num_instances": "pool_current_dedicated",
                         "coordination_command": null,
                         "resource_files": [
                             {
@@ -903,10 +903,10 @@ transferred again. This object currently supports `azure_batch` and
       instances are required for this multi-instance task. This can be any one
       of the following:
       1. An integral number
-      2. `pool_specification_vm_count` which is the `vm_count` specified in the
-         pool configuration.
-      3. `pool_current_dedicated` which is the instantaneous reading of the
+      2. `pool_current_dedicated` which is the instantaneous reading of the
          target pool's current dedicated count during this function invocation.
+      3. `pool_specification_vm_count` which is the `vm_count` specified in the
+         pool configuration.
     * `coordination_command` is the coordination command this is run by each
       instance (compute node) of this multi-instance task prior to the
       application command. This command must not block and must exit

@@ -58,16 +58,6 @@ util.setup_logger(logger)
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
-_GLUSTER_VOLUME = '.gluster/gv0'
-
-
-def get_gluster_volume():
-    # type: (None) -> str
-    """Get gluster volume mount suffix
-    :rtype: str
-    :return: gluster volume mount
-    """
-    return _GLUSTER_VOLUME
 
 
 def _process_storage_input_data(config, input_data, on_task):
@@ -835,7 +825,8 @@ def ingress_data(
                 for sdvkey in sdv:
                     if sdvkey == dest.shared_data_volume:
                         if settings.is_shared_data_volume_gluster(sdv, sdvkey):
-                            dst = '{}shared/{}/'.format(dst, _GLUSTER_VOLUME)
+                            dst = '{}shared/{}/'.format(
+                                dst, settings.get_gluster_volume())
                         else:
                             raise RuntimeError(
                                 'data ingress to {} not supported'.format(

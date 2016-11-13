@@ -13,7 +13,7 @@
                         "--privileged"
                     ],
                     "multi_instance": {
-                        "num_instances": "pool_specification_vm_count",
+                        "num_instances": "pool_current_dedicated",
                         "coordination_command": null
                     }
                 }

@@ -161,7 +161,7 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     if nodeid is None:
         nodes = batch_client.compute_node.list(pool_id)
     else:
@@ -169,7 +169,7 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
     # for any node in state start task failed, retrieve the stdout and stderr
     for node in nodes:
         if node.state == batchmodels.ComputeNodeState.starttaskfailed:
-            config['_auto_confirm'] = True
+            settings.set_auto_confirm(config, True)
             get_all_files_via_node(
                 batch_client, config,
                 filespec='{},{}'.format(node.id, 'startup/std*.txt'))
@@ -295,11 +295,6 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
         batchmodels.ComputeNodeState.idle
     ]
     base_end_states = [batchmodels.ComputeNodeState.idle]
-    try:
-        reboot_on_failed = config[
-            'pool_specification']['reboot_on_start_task_failed']
-    except KeyError:
-        reboot_on_failed = False
     if addl_end_states is not None and len(addl_end_states) > 0:
         base_stopping_states.extend(addl_end_states)
         base_end_states.extend(addl_end_states)
@@ -307,7 +302,7 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
     end_states = frozenset(base_end_states)
     nodes = _block_for_nodes_ready(
         batch_client, config, stopping_states, end_states, pool_id,
-        reboot_on_failed)
+        settings.pool_settings(config).reboot_on_start_task_failed)
     list_nodes(batch_client, config, nodes=nodes)
     return nodes
 
@@ -321,7 +316,7 @@ def check_pool_nodes_runnable(batch_client, config):
     :rtype: bool
     :return: all pool nodes are runnable
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     node_state = frozenset(
         (batchmodels.ComputeNodeState.idle,
          batchmodels.ComputeNodeState.running)
@@ -348,7 +343,7 @@ def create_pool(batch_client, config, pool):
     # create pool if not exists
     try:
         logger.info('Attempting to create pool: {}'.format(pool.id))
-        if config['_verbose']:
+        if settings.verbose(config):
             logger.debug('node prep commandline: {}'.format(
                 pool.start_task.command_line))
         batch_client.pool.add(pool)
@@ -376,18 +371,14 @@ def _add_admin_user_to_compute_node(
     :param str username: user name
     :param str ssh_public_key: ssh rsa public key
     """
-    pool_id = config['pool_specification']['id']
-    expiry = datetime.datetime.utcnow()
-    try:
-        td = config['pool_specification']['ssh']['expiry_days']
-        expiry += datetime.timedelta(days=td)
-    except KeyError:
-        expiry += datetime.timedelta(days=7)
+    pool = settings.pool_settings(config)
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(
+        pool.ssh.expiry_days)
     logger.info('adding user {} to node {} in pool {}, expiry={}'.format(
-        username, node.id, pool_id, expiry))
+        username, node.id, pool.id, expiry))
     try:
         batch_client.compute_node.add_user(
-            pool_id,
+            pool.id,
             node.id,
             batchmodels.ComputeNodeUser(
                 username,
@@ -415,60 +406,43 @@ def add_ssh_user(batch_client, config, nodes=None):
     :param dict config: configuration dict
     :param list nodes: list of nodes
     """
-    pool_id = config['pool_specification']['id']
-    try:
-        username = config['pool_specification']['ssh']['username']
-        if username is None or len(username) == 0:
-            raise KeyError()
-    except KeyError:
-        logger.info('not creating ssh user on pool {}'.format(pool_id))
+    pool = settings.pool_settings(config)
+    if util.is_none_or_empty(pool.ssh.username):
+        logger.info('not creating ssh user on pool {}'.format(pool.id))
+        return
+    # generate ssh key pair if not specified
+    if pool.ssh.ssh_public_key is None:
+        ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
+            pool.ssh.generated_file_export_path)
     else:
         ssh_priv_key = None
-        try:
-            ssh_pub_key = config['pool_specification']['ssh']['ssh_public_key']
-        except KeyError:
-            ssh_pub_key = None
-        try:
-            gen_tunnel_script = config[
-                'pool_specification']['ssh']['generate_docker_tunnel_script']
-        except KeyError:
-            gen_tunnel_script = False
-        try:
-            export_path = config['pool_specification']['ssh'][
-                'generated_file_export_path']
-        except KeyError:
-            export_path = None
-        if export_path is None or len(export_path) == 0:
-            export_path = '.'
-        # generate ssh key pair if not specified
-        if ssh_pub_key is None:
-            ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
-                export_path)
-        # get node list if not provided
-        if nodes is None:
-            nodes = batch_client.compute_node.list(pool_id)
-        for node in nodes:
-            _add_admin_user_to_compute_node(
-                batch_client, config, node, username, ssh_pub_key)
-        # generate tunnel script if requested
-        if gen_tunnel_script:
-            ssh_args = ['ssh']
-            if ssh_priv_key is not None:
-                ssh_args.append('-i')
-                ssh_args.append(ssh_priv_key)
-            ssh_args.extend([
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'UserKnownHostsFile=/dev/null',
-                '-p', '$2', '-N', '-L', '2375:localhost:2375',
-                '{}@$1'.format(username)])
-            tunnelscript = pathlib.Path(export_path, _SSH_TUNNEL_SCRIPT)
-            with tunnelscript.open('w') as fd:
-                fd.write('#!/usr/bin/env bash\n')
-                fd.write('set -e\n')
-                fd.write(' '.join(ssh_args))
-                fd.write('\n')
-            os.chmod(str(tunnelscript), 0o755)
-            logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
+        ssh_pub_key = pool.ssh.ssh_public_key
+    # get node list if not provided
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool.id)
+    for node in nodes:
+        _add_admin_user_to_compute_node(
+            batch_client, config, node, pool.ssh.username, ssh_pub_key)
+    # generate tunnel script if requested
+    if pool.ssh.generate_docker_tunnel_script:
+        ssh_args = ['ssh']
+        if ssh_priv_key is not None:
+            ssh_args.append('-i')
+            ssh_args.append(ssh_priv_key)
+        ssh_args.extend([
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile=/dev/null',
+            '-p', '$2', '-N', '-L', '2375:localhost:2375',
+            '{}@$1'.format(pool.ssh.username)])
+        tunnelscript = pathlib.Path(
+            pool.ssh.generated_file_export_path, _SSH_TUNNEL_SCRIPT)
+        with tunnelscript.open('w') as fd:
+            fd.write('#!/usr/bin/env bash\n')
+            fd.write('set -e\n')
+            fd.write(' '.join(ssh_args))
+            fd.write('\n')
+        os.chmod(str(tunnelscript), 0o755)
+        logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
 
 
 def del_ssh_user(batch_client, config, nodes=None):
@@ -480,31 +454,27 @@ def del_ssh_user(batch_client, config, nodes=None):
     :param dict config: configuration dict
     :param list nodes: list of nodes
     """
-    pool_id = config['pool_specification']['id']
-    try:
-        username = config['pool_specification']['ssh']['username']
-        if username is None or len(username) == 0:
-            raise KeyError()
-    except KeyError:
+    pool = settings.pool_settings(config)
+    if util.is_none_or_empty(pool.ssh.username):
         logger.error('not deleting unspecified ssh user on pool {}'.format(
-            pool_id))
-    else:
-        if not util.confirm_action(
-                config, 'delete user {} from pool {}'.format(
-                    username, pool_id)):
-            return
-        # get node list if not provided
-        if nodes is None:
-            nodes = batch_client.compute_node.list(pool_id)
-        for node in nodes:
-            try:
-                batch_client.compute_node.delete_user(
-                    pool_id, node.id, username)
-                logger.debug('deleted user {} from node {}'.format(
-                    username, node.id))
-            except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The node user does not exist' not in ex.message.value:
-                    raise
+            pool.id))
+        return
+    if not util.confirm_action(
+            config, 'delete user {} from pool {}'.format(
+                pool.ssh.username, pool.id)):
+        return
+    # get node list if not provided
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool.id)
+    for node in nodes:
+        try:
+            batch_client.compute_node.delete_user(
+                pool.id, node.id, pool.ssh.username)
+            logger.debug('deleted user {} from node {}'.format(
+                pool.ssh.username, node.id))
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The node user does not exist' not in ex.message.value:
+                raise
 
 
 def list_pools(batch_client):
@@ -523,7 +493,7 @@ def list_pools(batch_client):
             re = ''
         logger.info(
             ('pool_id={} [state={} allocation_state={}{} vm_size={}, '
-             'vm_count={} target_vm_count={}])'.format(
+             'vm_count={} target_vm_count={}]'.format(
                  pool.id, pool.state, pool.allocation_state, re, pool.vm_size,
                  pool.current_dedicated, pool.target_dedicated)))
         i += 1
@@ -542,8 +512,8 @@ def resize_pool(batch_client, config, wait=False):
     :rtype: list or None
     :return: list of nodes if wait or None
     """
-    pool_id = config['pool_specification']['id']
-    vm_count = config['pool_specification']['vm_count']
+    pool_id = settings.pool_id(config)
+    vm_count = settings.pool_vm_count(config)
     logger.info('Resizing pool {} to {} compute nodes'.format(
         pool_id, vm_count))
     batch_client.pool.resize(
@@ -568,7 +538,7 @@ def del_pool(batch_client, config):
     :rtype: bool
     :return: if pool was deleted
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     if not util.confirm_action(
             config, 'delete {} pool'.format(pool_id)):
         return False
@@ -585,9 +555,9 @@ def del_node(batch_client, config, node_id):
     :param dict config: configuration dict
     :param str node_id: node id to delete
     """
-    if node_id is None or len(node_id) == 0:
+    if util.is_none_or_empty(node_id):
         raise ValueError('node id is invalid')
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     if not util.confirm_action(
             config, 'delete node {} from {} pool'.format(node_id, pool_id)):
         return
@@ -611,12 +581,12 @@ def del_jobs(batch_client, config, jobid=None, wait=False):
     :param bool wait: wait for jobs to delete
     """
     if jobid is None:
-        jobs = config['job_specifications']
+        jobs = settings.job_specifications(config)
     else:
         jobs = [{'id': jobid}]
     nocheck = set()
     for job in jobs:
-        job_id = job['id']
+        job_id = settings.job_id(job)
         if not util.confirm_action(
                 config, 'delete {} job'.format(job_id)):
             nocheck.add(job_id)
@@ -625,7 +595,7 @@ def del_jobs(batch_client, config, jobid=None, wait=False):
         batch_client.job.delete(job_id)
     if wait:
         for job in jobs:
-            job_id = job['id']
+            job_id = settings.job_id(job)
             if job_id in nocheck:
                 continue
             try:
@@ -685,12 +655,12 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         batch_client, config, jobid=jobid, taskid=taskid, wait=True)
     # proceed with deletion
     if jobid is None:
-        jobs = config['job_specifications']
+        jobs = settings.job_specifications(config)
     else:
         jobs = [{'id': jobid}]
     nocheck = {}
     for job in jobs:
-        job_id = job['id']
+        job_id = settings.job_id(job)
         nocheck[job_id] = set()
         if taskid is None:
             tasks = [x.id for x in batch_client.task.list(job_id)]
@@ -706,7 +676,7 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
             batch_client.task.delete(job_id, task)
     if wait:
         for job in jobs:
-            job_id = job['id']
+            job_id = settings.job_id(job)
             if taskid is None:
                 tasks = [x.id for x in batch_client.task.list(job_id)]
             else:
@@ -736,13 +706,13 @@ def clean_mi_jobs(batch_client, config):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
-    for job in config['job_specifications']:
-        job_id = job['id']
+    for job in settings.job_specifications(config):
+        job_id = settings.job_id(job)
         cleanup_job_id = 'shipyardcleanup-' + job_id
         cleanup_job = batchmodels.JobAddParameter(
             id=cleanup_job_id,
             pool_info=batchmodels.PoolInformation(
-                pool_id=config['pool_specification']['id']),
+                pool_id=settings.pool_id(config)),
         )
         try:
             batch_client.job.add(cleanup_job)
@@ -801,8 +771,8 @@ def del_clean_mi_jobs(batch_client, config):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
-    for job in config['job_specifications']:
-        job_id = job['id']
+    for job in settings.job_specifications(config):
+        job_id = settings.job_id(job)
         cleanup_job_id = 'shipyardcleanup-' + job_id
         logger.info('deleting job: {}'.format(cleanup_job_id))
         try:
@@ -822,12 +792,12 @@ def terminate_jobs(batch_client, config, jobid=None, wait=False):
     :param bool wait: wait for job to terminate
     """
     if jobid is None:
-        jobs = config['job_specifications']
+        jobs = settings.job_specifications(config)
     else:
         jobs = [{'id': jobid}]
     nocheck = set()
     for job in jobs:
-        job_id = job['id']
+        job_id = settings.job_id(job)
         if not util.confirm_action(
                 config, 'terminate {} job'.format(job_id)):
             nocheck.add(job_id)
@@ -836,7 +806,7 @@ def terminate_jobs(batch_client, config, jobid=None, wait=False):
         batch_client.job.terminate(job_id)
     if wait:
         for job in jobs:
-            job_id = job['id']
+            job_id = settings.job_id(job)
             if job_id in nocheck:
                 continue
             try:
@@ -939,32 +909,22 @@ def terminate_tasks(
     :param bool force: force task docker kill signal regardless of state
     """
     # get ssh login settings
-    try:
-        username = config['pool_specification']['ssh']['username']
-    except KeyError:
-        pass
-    if username is None or len(username) == 0:
+    pool = settings.pool_settings(config)
+    if util.is_none_or_empty(pool.ssh.username):
         raise ValueError(
-            'cannot terminate docker container without an ssh username')
-    try:
-        export_path = config['pool_specification']['ssh'][
-            'generated_file_export_path']
-    except KeyError:
-        export_path = None
-    if export_path is None or len(export_path) == 0:
-        export_path = '.'
+            'cannot terminate docker container without an SSH username')
     ssh_private_key = pathlib.Path(
-        export_path, crypto.get_ssh_key_prefix())
+        pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
     if not ssh_private_key.exists():
         raise RuntimeError('ssh private key at {} not found'.format(
             ssh_private_key))
     if jobid is None:
-        jobs = config['job_specifications']
+        jobs = settings.job_specifications(config)
     else:
         jobs = [{'id': jobid}]
     nocheck = {}
     for job in jobs:
-        job_id = job['id']
+        job_id = settings.job_id(job)
         nocheck[job_id] = set()
         if taskid is None:
             tasks = [x.id for x in batch_client.task.list(job_id)]
@@ -993,14 +953,14 @@ def terminate_tasks(
                 else:
                     task_is_mi = False
                 _send_docker_kill_signal(
-                    batch_client, username, ssh_private_key,
+                    batch_client, pool.ssh.username, ssh_private_key,
                     _task.node_info.pool_id, _task.node_info.node_id,
                     job_id, task, task_is_mi)
             else:
                 batch_client.task.terminate(job_id, task)
     if wait:
         for job in jobs:
-            job_id = job['id']
+            job_id = settings.job_id(job)
             if taskid is None:
                 tasks = [x.id for x in batch_client.task.list(job_id)]
             else:
@@ -1033,7 +993,7 @@ def list_nodes(batch_client, config, nodes=None):
     :param dict config: configuration dict
     :param lsit nodes: list of nodes
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     logger.debug('listing nodes for pool {}'.format(pool_id))
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
@@ -1072,7 +1032,7 @@ def get_remote_login_settings(batch_client, config, nodes=None):
     :rtype: dict
     :return: dict of node id -> remote login settings
     """
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
     ret = {}
@@ -1337,7 +1297,7 @@ def get_all_files_via_node(batch_client, config, filespec=None):
         raise ValueError('node id is invalid')
     if incl is not None and len(incl) == 0:
         incl = None
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     logger.debug('downloading files to {}/{}'.format(pool_id, node_id))
     files = batch_client.file.list_from_compute_node(
         pool_id, node_id, recursive=True)
@@ -1389,7 +1349,7 @@ def get_file_via_node(batch_client, config, filespec=None):
         raise ValueError('node id is invalid')
     if file == '' or file is None:
         raise RuntimeError('specified invalid file to retrieve')
-    pool_id = config['pool_specification']['id']
+    pool_id = settings.pool_id(config)
     # check if file exists on disk; a possible race condition here is
     # understood
     fp = pathlib.Path(pathlib.Path(file).name)
@@ -1433,12 +1393,13 @@ def list_tasks(batch_client, config, jobid=None):
     :param dict config: configuration dict
     :param str jobid: job id to list tasks from
     """
-    for job in config['job_specifications']:
-        if jobid is not None and job['id'] != jobid:
+    for job in settings.job_specifications(config):
+        job_id = settings.job_id(job)
+        if jobid is not None and job_id != jobid:
             continue
         i = 0
         try:
-            tasks = batch_client.task.list(job['id'])
+            tasks = batch_client.task.list(job_id)
             for task in tasks:
                 if task.execution_info is not None:
                     if task.execution_info.scheduling_error is not None:
@@ -1461,15 +1422,15 @@ def list_tasks(batch_client, config, jobid=None):
                 logger.info(
                     'job_id={} task_id={} [display_name={} state={} '
                     'pool_id={} node_id={}{}]'.format(
-                        job['id'], task.id, task.display_name, task.state,
+                        job_id, task.id, task.display_name, task.state,
                         task.node_info.pool_id, task.node_info.node_id, ei))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
-                logger.error('{} job does not exist'.format(job['id']))
+                logger.error('{} job does not exist'.format(job_id))
                 continue
         if i == 0:
-            logger.error('no tasks found for job {}'.format(job['id']))
+            logger.error('no tasks found for job {}'.format(job_id))
 
 
 def list_task_files(batch_client, config, jobid=None, taskid=None):
@@ -1482,25 +1443,26 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
     :param str jobid: job id to list
     :param str taskid: task id to list
     """
-    for job in config['job_specifications']:
-        if jobid is not None and job['id'] != jobid:
+    for job in settings.job_specifications(config):
+        job_id = settings.job_id(job)
+        if jobid is not None and job_id != jobid:
             continue
         i = 0
         try:
-            tasks = batch_client.task.list(job['id'])
+            tasks = batch_client.task.list(job_id)
             for task in tasks:
                 if taskid is not None and taskid != task.id:
                     continue
                 j = 0
                 files = batch_client.file.list_from_task(
-                    job['id'], task.id, recursive=True)
+                    job_id, task.id, recursive=True)
                 for file in files:
                     if file.is_directory:
                         continue
                     logger.info(
                         'task_id={} file={} [job_id={} lmt={} '
                         'bytes={}]'.format(
-                            task.id, file.name, job['id'],
+                            task.id, file.name, job_id,
                             file.properties.last_modified,
                             file.properties.content_length))
                     j += 1
@@ -1510,10 +1472,10 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
-                logger.error('{} job does not exist'.format(job['id']))
+                logger.error('{} job does not exist'.format(job_id))
                 continue
         if i == 0:
-            logger.error('no tasks found for job {}'.format(job['id']))
+            logger.error('no tasks found for job {}'.format(job_id))
 
 
 def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
@@ -1556,14 +1518,15 @@ def add_jobs(
     :param bool recreate: recreate job if completed
     """
     # get the pool inter-node comm setting
-    pool_id = config['pool_specification']['id']
-    _pool = batch_client.pool.get(pool_id)
+    bs = settings.batch_shipyard_settings(config)
+    pool = settings.pool_settings(config)
+    _pool = batch_client.pool.get(pool.id)
     global_resources = []
-    for gr in config['global_resources']['docker_images']:
+    for gr in settings.global_resources_docker_images(config):
         global_resources.append(gr)
     jpcmd = ['$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
         jpfile[0], ' '.join(global_resources))]
-    for jobspec in config['job_specifications']:
+    for jobspec in settings.job_specifications(config):
         # digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
@@ -1572,53 +1535,45 @@ def add_jobs(
         jpcmdline = util.wrap_commands_in_shell(jpcmd)
         del jpcmd
         job = batchmodels.JobAddParameter(
-            id=jobspec['id'],
-            pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+            id=settings.job_id(jobspec),
+            pool_info=batchmodels.PoolInformation(pool_id=pool.id),
             job_preparation_task=batchmodels.JobPreparationTask(
                 command_line=jpcmdline,
                 wait_for_success=True,
                 run_elevated=True,
                 rerun_on_node_reboot_after_success=False,
-            )
+            ),
+            uses_task_dependencies=False,
         )
         # perform checks:
         # 1. if tasks have dependencies, set it if so
         # 2. if there are multi-instance tasks
-        try:
-            mi_ac = jobspec['multi_instance_auto_complete']
-        except KeyError:
-            mi_ac = True
-        job.uses_task_dependencies = False
+        mi_ac = settings.job_multi_instance_auto_complete(config)
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
-        for task in jobspec['tasks']:
+        for task in settings.job_tasks(jobspec):
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
-            if 'depends_on' in task and len(task['depends_on']) > 0:
-                if ('id' not in task or task['id'] is None or
-                        len(task['id']) == 0):
-                    raise ValueError(
-                        'task id is not specified, but depends_on is set')
+            if settings.has_depends_on_task(task):
                 job.uses_task_dependencies = True
-            if 'multi_instance' in task:
+            if settings.is_multi_instance_task(task):
                 if multi_instance and mi_ac:
                     raise ValueError(
                         'cannot specify more than one multi-instance task '
                         'per job with auto completion enabled')
                 multi_instance = True
-                try:
-                    mi_docker_container_name = task['name']
-                    if task['name'] is None or len(task['name']) == 0:
-                        raise KeyError()
-                except KeyError:
-                    if ('id' not in task or task['id'] is None or
-                            len(task['id']) == 0):
+                mi_docker_container_name = settings.task_name(task)
+                if util.is_none_or_empty(mi_docker_container_name):
+                    _id = settings.task_id(task)
+                    if util.is_none_or_empty(_id):
                         reserved_task_id = _generate_next_generic_task_id(
                             batch_client, job.id)
-                        task['id'] = reserved_task_id
-                    task['name'] = task['id']
-                    mi_docker_container_name = task['name']
+                        settings.set_task_id(task, reserved_task_id)
+                        _id = reserved_task_id
+                    settings.set_task_name(task, _id)
+                    mi_docker_container_name = settings.task_name(task)
+                    del _id
         # add multi-instance settings
         set_terminate_on_all_tasks_complete = False
         if multi_instance and mi_ac:
@@ -1655,209 +1610,35 @@ def add_jobs(
         del mi_ac
         del multi_instance
         del mi_docker_container_name
+        # get base env vars from job
+        job_env_vars = settings.job_environment_variables(jobspec)
         # add all tasks under job
-        for task in jobspec['tasks']:
-            # get image name
-            image = task['image']
-            # get or generate task id
-            try:
-                task_id = task['id']
-                if task_id is None or len(task_id) == 0:
-                    raise KeyError()
-            except KeyError:
-                task_id = _generate_next_generic_task_id(
+        for _task in settings.job_tasks(jobspec):
+            _task_id = settings.task_id(_task)
+            if util.is_none_or_empty(_task_id):
+                _task_id = _generate_next_generic_task_id(
                     batch_client, job.id, reserved_task_id)
-                task['id'] = task_id
-            # set run and exec commands
-            docker_run_cmd = 'docker run'
-            docker_exec_cmd = 'docker exec'
-            # get generic run opts
-            try:
-                run_opts = task['additional_docker_run_options']
-            except KeyError:
-                run_opts = []
-            # parse remove container option
-            try:
-                rm_container = task['remove_container_after_exit']
-            except KeyError:
-                rm_container = False
+                settings.set_task_id(_task, _task_id)
+            del _task_id
+            task = settings.task_settings(_pool, config, _task)
+            # merge job env vars into task env vars
+            if job_env_vars is None:
+                env_vars = task.environment_variables
             else:
-                if rm_container and '--rm' not in run_opts:
-                    run_opts.append('--rm')
-            # parse name option, if not specified use task id
-            try:
-                name = task['name']
-                if name is None or len(name) == 0:
-                    raise KeyError()
-            except KeyError:
-                name = task['id']
-                task['name'] = name
-            run_opts.append('--name {}'.format(name))
-            # parse labels option
-            try:
-                labels = task['labels']
-                if labels is not None and len(labels) > 0:
-                    for label in labels:
-                        run_opts.append('-l {}'.format(label))
-                del labels
-            except KeyError:
-                pass
-            # parse ports option
-            try:
-                ports = task['ports']
-                if ports is not None and len(ports) > 0:
-                    for port in ports:
-                        run_opts.append('-p {}'.format(port))
-                del ports
-            except KeyError:
-                pass
-            # parse entrypoint
-            try:
-                entrypoint = task['entrypoint']
-                if entrypoint is not None:
-                    run_opts.append('--entrypoint {}'.format(entrypoint))
-                del entrypoint
-            except KeyError:
-                pass
-            # parse data volumes
-            try:
-                data_volumes = task['data_volumes']
-            except KeyError:
-                pass
-            else:
-                if data_volumes is not None and len(data_volumes) > 0:
-                    for key in data_volumes:
-                        dvspec = config[
-                            'global_resources']['docker_volumes'][
-                                'data_volumes'][key]
-                        try:
-                            hostpath = dvspec['host_path']
-                        except KeyError:
-                            hostpath = None
-                        if hostpath is not None and len(hostpath) > 0:
-                            run_opts.append('-v {}:{}'.format(
-                                hostpath, dvspec['container_path']))
-                        else:
-                            run_opts.append('-v {}'.format(
-                                dvspec['container_path']))
-            # parse shared data volumes
-            try:
-                shared_data_volumes = task['shared_data_volumes']
-            except KeyError:
-                pass
-            else:
-                if (shared_data_volumes is not None and
-                        len(shared_data_volumes) > 0):
-                    for key in shared_data_volumes:
-                        dvspec = config[
-                            'global_resources']['docker_volumes'][
-                                'shared_data_volumes'][key]
-                        if dvspec['volume_driver'] == 'glusterfs':
-                            run_opts.append('-v {}/{}:{}'.format(
-                                '$AZ_BATCH_NODE_SHARED_DIR',
-                                data.get_gluster_volume(),
-                                dvspec['container_path']))
-                        else:
-                            run_opts.append('-v {}:{}'.format(
-                                key, dvspec['container_path']))
-            # get command
-            try:
-                command = task['command']
-                if command is not None and len(command) == 0:
-                    raise KeyError()
-            except KeyError:
-                command = None
+                env_vars = util.merge_dict(
+                    job_env_vars, task.environment_variables)
             # get and create env var file
-            envfile = '.shipyard.envlist'
             sas_urls = None
-            try:
-                env_vars = jobspec['environment_variables']
-            except KeyError:
-                env_vars = None
-            try:
-                infiniband = task['infiniband']
-            except KeyError:
-                infiniband = False
-            # ensure we're on HPC VMs with inter node comm enabled
-            sles_hpc = False
-            if infiniband:
-                if not _pool.enable_inter_node_communication:
-                    raise RuntimeError(
-                        ('cannot initialize an infiniband task on a '
-                         'non-internode communication enabled '
-                         'pool: {}').format(pool_id))
-                if settings.is_rdma_pool(_pool.vm_size):
-                    raise RuntimeError(
-                        ('cannot initialize an infiniband task on nodes '
-                         'without RDMA, pool: {} vm_size: {}').format(
-                             pool_id, _pool.vm_size))
-                publisher = _pool.virtual_machine_configuration.\
-                    image_reference.publisher.lower()
-                offer = _pool.virtual_machine_configuration.\
-                    image_reference.offer.lower()
-                sku = _pool.virtual_machine_configuration.\
-                    image_reference.sku.lower()
-                supported = False
-                # only centos-hpc and sles-hpc:12-sp1 are supported
-                # for infiniband
-                if publisher == 'openlogic' and offer == 'centos-hpc':
-                    supported = True
-                elif (publisher == 'suse' and offer == 'sles-hpc' and
-                      sku == '12-sp1'):
-                    supported = True
-                    sles_hpc = True
-                if not supported:
-                    raise ValueError(
-                        ('Unsupported infiniband VM config, publisher={} '
-                         'offer={}').format(publisher, offer))
-                del supported
-            # ensure we're on n-series for gpu
-            try:
-                gpu = task['gpu']
-            except KeyError:
-                gpu = False
-            if gpu:
-                if not (_pool.vm_size.lower().startswith('standard_nc') or
-                        _pool.vm_size.lower().startswith('standard_nv')):
-                    raise RuntimeError(
-                        ('cannot initialize a gpu task on nodes without '
-                         'gpus, pool: {} vm_size: {}').format(
-                             pool_id, _pool.vm_size))
-                publisher = _pool.virtual_machine_configuration.\
-                    image_reference.publisher.lower()
-                offer = _pool.virtual_machine_configuration.\
-                    image_reference.offer.lower()
-                sku = _pool.virtual_machine_configuration.\
-                    image_reference.sku.lower()
-                # TODO other images as they become available with gpu support
-                if (publisher != 'canonical' and offer != 'ubuntuserver' and
-                        sku < '16.04.0-lts'):
-                    raise ValueError(
-                        ('Unsupported gpu VM config, publisher={} offer={} '
-                         'sku={}').format(publisher, offer, sku))
-                # override docker commands with nvidia docker wrapper
-                docker_run_cmd = 'nvidia-docker run'
-                docker_exec_cmd = 'nvidia-docker exec'
-            try:
-                task_ev = task['environment_variables']
-                if env_vars is None:
-                    env_vars = task_ev
-                else:
-                    env_vars = util.merge_dict(env_vars, task_ev)
-            except KeyError:
-                if infiniband:
-                    env_vars = []
-            if infiniband or (env_vars is not None and len(env_vars) > 0):
+            if task.infiniband or util.is_not_empty(env_vars):
                 envfileloc = '{}taskrf-{}/{}{}'.format(
-                    config['batch_shipyard']['storage_entity_prefix'],
-                    job.id, task_id, envfile)
+                    bs.storage_entity_prefix, job.id, task.id, task.envfile)
                 f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
                 fname = f.name
                 try:
                     for key in env_vars:
                         f.write('{}={}\n'.format(key, env_vars[key]).encode(
                             'utf8'))
-                    if infiniband:
+                    if task.infiniband:
                         f.write(b'I_MPI_FABRICS=shm:dapl\n')
                         f.write(b'I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
                         f.write(b'I_MPI_DYNAMIC_CONNECTION=0\n')
@@ -1874,133 +1655,54 @@ def add_jobs(
                     del fname
                 if len(sas_urls) != 1:
                     raise RuntimeError('unexpected number of sas urls')
-            # always add option for envfile
-            run_opts.append('--env-file {}'.format(envfile))
-            # add infiniband run opts
-            if infiniband:
-                run_opts.append('--net=host')
-                run_opts.append('--ulimit memlock=9223372036854775807')
-                run_opts.append('--device=/dev/hvnd_rdma')
-                run_opts.append('--device=/dev/infiniband/rdma_cm')
-                run_opts.append('--device=/dev/infiniband/uverbs0')
-                run_opts.append('-v /etc/rdma:/etc/rdma:ro')
-                if sles_hpc:
-                    run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
-                else:
-                    run_opts.append('-v /opt/intel:/opt/intel:ro')
-            # mount batch root dir
-            run_opts.append(
-                '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
-            # set working directory
-            run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
-            # check if there are multi-instance tasks
+            # check if this is a multi-instance task
             mis = None
-            if 'multi_instance' in task:
-                if not _pool.enable_inter_node_communication:
-                    raise RuntimeError(
-                        ('cannot run a multi-instance task on a '
-                         'non-internode communication enabled '
-                         'pool: {}').format(pool_id))
-                # container must be named
-                if name is None or len(name) == 0:
-                    raise ValueError(
-                        'multi-instance task must be invoked with a named '
-                        'container')
-                # docker exec command cannot be empty/None
-                if command is None or len(command) == 0:
-                    raise ValueError(
-                        'multi-instance task must have an application command')
-                # set docker run as coordination command
-                try:
-                    run_opts.remove('--rm')
-                except ValueError:
-                    pass
-                # run in detached mode
-                run_opts.append('-d')
-                # ensure host networking stack is used
-                if '--net=host' not in run_opts:
-                    run_opts.append('--net=host')
-                # get coordination command
-                try:
-                    coordination_command = task[
-                        'multi_instance']['coordination_command']
-                    if (coordination_command is not None and
-                            len(coordination_command) == 0):
-                        raise KeyError()
-                except KeyError:
-                    coordination_command = None
-                cc_args = [
-                    'env | grep AZ_BATCH_ >> {}'.format(envfile),
-                    '{} {} {}{}'.format(
-                        docker_run_cmd,
-                        ' '.join(run_opts),
-                        image,
-                        '{}'.format(' ' + coordination_command)
-                        if coordination_command else '')
-                ]
-                # create multi-instance settings
-                num_instances = task['multi_instance']['num_instances']
-                if not isinstance(num_instances, int):
-                    if num_instances == 'pool_specification_vm_count':
-                        num_instances = config[
-                            'pool_specification']['vm_count']
-                    elif num_instances == 'pool_current_dedicated':
-                        num_instances = _pool.current_dedicated
-                    else:
-                        raise ValueError(
-                            ('multi instance num instances setting '
-                             'invalid: {}').format(num_instances))
+            if settings.is_multi_instance_task(_task):
                 mis = batchmodels.MultiInstanceSettings(
-                    number_of_instances=num_instances,
-                    coordination_command_line=util.
-                    wrap_commands_in_shell(cc_args, wait=False),
+                    number_of_instances=task.multi_instance.num_instances,
+                    coordination_command_line=util.wrap_commands_in_shell(
+                        task.multi_instance.coordination_command, wait=False),
                     common_resource_files=[],
                 )
                 # add common resource files for multi-instance
-                try:
-                    rfs = task['multi_instance']['resource_files']
-                except KeyError:
-                    pass
-                else:
-                    for rf in rfs:
-                        try:
-                            fm = rf['file_mode']
-                        except KeyError:
-                            fm = None
+                if util.is_not_empty(task.multi_instance.resource_files):
+                    for rf in task.multi_instance.resource_files:
                         mis.common_resource_files.append(
                             batchmodels.ResourceFile(
-                                file_path=rf['file_path'],
-                                blob_source=rf['blob_source'],
-                                file_mode=fm,
+                                file_path=rf.file_path,
+                                blob_source=rf.blob_source,
+                                file_mode=rf.file_mode,
                             )
                         )
                 # set application command
                 task_commands = [
-                    '{} {} {}'.format(docker_exec_cmd, name, command)
+                    '{} {} {}'.format(
+                        task.docker_exec_cmd, task.name, task.command)
                 ]
             else:
                 task_commands = [
-                    'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                    'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
                     '{} {} {}{}'.format(
-                        docker_run_cmd,
-                        ' '.join(run_opts),
-                        image,
-                        '{}'.format(' ' + command) if command else '')
+                        task.docker_run_cmd,
+                        ' '.join(task.docker_run_options),
+                        task.image,
+                        '{}'.format(
+                            ' ' + task.command) if task.command else '')
                 ]
             # digest any input_data
             addlcmds = data.process_input_data(
-                config, bxfile, task, on_task=True)
+                config, bxfile, _task, on_task=True)
             if addlcmds is not None:
                 task_commands.insert(0, addlcmds)
             # digest any output data
             addlcmds = data.process_output_data(
-                config, bxfile, task)
+                config, bxfile, _task)
             if addlcmds is not None:
                 task_commands.append(addlcmds)
             del addlcmds
             # create task
             batchtask = batchmodels.TaskAddParameter(
-                id=task_id,
+                id=task.id,
                 command_line=util.wrap_commands_in_shell(task_commands),
                 run_elevated=True,
                 resource_files=[],
@@ -2011,51 +1713,43 @@ def add_jobs(
             if sas_urls is not None:
                 batchtask.resource_files.append(
                     batchmodels.ResourceFile(
-                        file_path=str(envfile),
+                        file_path=str(task.envfile),
                         blob_source=next(iter(sas_urls.values())),
                         file_mode='0640',
                     )
                 )
                 sas_urls = None
             # add additional resource files
-            try:
-                rfs = task['resource_files']
-            except KeyError:
-                pass
-            else:
-                for rf in rfs:
-                    try:
-                        fm = rf['file_mode']
-                    except KeyError:
-                        fm = None
+            if util.is_not_empty(task.resource_files):
+                for rf in task.resource_files:
                     batchtask.resource_files.append(
                         batchmodels.ResourceFile(
-                            file_path=rf['file_path'],
-                            blob_source=rf['blob_source'],
-                            file_mode=fm,
+                            file_path=rf.file_path,
+                            blob_source=rf.blob_source,
+                            file_mode=rf.file_mode,
                         )
                     )
             # add task dependencies
-            if 'depends_on' in task and len(task['depends_on']) > 0:
+            if util.is_not_empty(task.depends_on):
                 batchtask.depends_on = batchmodels.TaskDependencies(
-                    task_ids=task['depends_on']
+                    task_ids=task.depends_on
                 )
             # create task
-            if config['_verbose']:
+            if settings.verbose(config):
                 if mis is not None:
                     logger.info(
                         'Multi-instance task coordination command: {}'.format(
                             mis.coordination_command_line))
                 logger.info('Adding task: {} command: {}'.format(
-                    task_id, batchtask.command_line))
+                    task.id, batchtask.command_line))
             else:
-                logger.info('Adding task: {}'.format(task_id))
+                logger.info('Adding task: {}'.format(task.id))
             batch_client.task.add(job_id=job.id, task=batchtask)
             # update job if job autocompletion is needed
             if set_terminate_on_all_tasks_complete:
                 batch_client.job.update(
                     job_id=job.id,
                     job_update_parameter=batchmodels.JobUpdateParameter(
-                        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+                        pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                         on_all_tasks_complete=batchmodels.
                         OnAllTasksComplete.terminate_job))

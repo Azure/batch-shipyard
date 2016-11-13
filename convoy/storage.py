@@ -291,13 +291,14 @@ def populate_queues(queue_client, table_client, config):
     :param dict config: configuration dict
     """
     # TODO other private registry support
+    preg = False
     try:
         _st, _ = settings.docker_registry_azure_storage(config)
         if util.is_not_empty(_st):
             preg = True
         del _st
     except KeyError:
-        preg = False
+        pass
     pk = _construct_partition_key_from_config(config)
     # if using docker public hub, then populate registry table with hub
     if not preg:

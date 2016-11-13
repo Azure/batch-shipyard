@@ -40,6 +40,7 @@ except ImportError:
 from . import util
 
 # global defines
+_GLUSTER_VOLUME = '.gluster/gv0'
 _GPU_COMPUTE_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
 ))
@@ -121,6 +122,32 @@ DataTransferSettings = collections.namedtuple(
         'container', 'file_share', 'blobxfer_extra_options',
     ]
 )
+TaskSettings = collections.namedtuple(
+    'TaskSettings', [
+        'id', 'image', 'name', 'docker_run_options', 'environment_variables',
+        'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
+        'depends_on', 'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+    ]
+)
+MultiInstanceSettings = collections.namedtuple(
+    'MultiInstanceSettings', [
+        'num_instances', 'coordination_command', 'resource_files',
+    ]
+)
+ResourceFileSettings = collections.namedtuple(
+    'ResourceFileSettings', [
+        'file_path', 'blob_source', 'file_mode',
+    ]
+)
+
+
+def get_gluster_volume():
+    # type: (None) -> str
+    """Get gluster volume mount suffix
+    :rtype: str
+    :return: gluster volume mount
+    """
+    return _GLUSTER_VOLUME
 
 
 def can_tune_tcp(vm_size):
@@ -187,6 +214,25 @@ def temp_disk_mountpoint(config, offer=None):
         return '/mnt'
     else:
         return '/mnt/resource'
+
+
+def verbose(config):
+    # type: (dict) -> bool
+    """Get verbose setting
+    :param dict config: configuration object
+    :rtype: bool
+    :return: verbose setting
+    """
+    return config['_verbose']
+
+
+def set_auto_confirm(config, flag):
+    # type: (dict, bool) -> None
+    """Set autoconfirm setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    config['_auto_confirm'] = flag
 
 
 # POOL CONFIG
@@ -263,7 +309,7 @@ def pool_settings(config):
         if util.is_none_or_empty(ssh_gen_file_path):
             raise KeyError()
     except KeyError:
-        ssh_gen_file_path = None
+        ssh_gen_file_path = '.'
     try:
         ssh_hpn = conf['ssh']['hpn_server_swap']
     except KeyError:
@@ -887,6 +933,22 @@ def files_destination_settings(fdict):
     )
 
 
+def global_resources_data_volumes(config):
+    # type: (dict) -> dict
+    """Get data volumes dictionary
+    :param dict config: configuration object
+    :rtype: dict
+    :return: data volumes
+    """
+    try:
+        dv = config['global_resources']['docker_volumes']['data_volumes']
+        if util.is_none_or_empty(dv):
+            raise KeyError()
+    except KeyError:
+        dv = {}
+    return dv
+
+
 def global_resources_shared_data_volumes(config):
     # type: (dict) -> dict
     """Get shared data volumes dictionary
@@ -1019,7 +1081,7 @@ def is_shared_data_volume_gluster(sdv, sdvkey):
     return shared_data_volume_driver(sdv, sdvkey).lower() == 'glusterfs'
 
 
-# INPUT DATA SETTINGS
+# INPUT AND OUTPUT DATA SETTINGS
 def input_data(conf):
     # type: (dict) -> str
     """Retrieve input data config block
@@ -1210,3 +1272,472 @@ def output_data_source(conf):
     except KeyError:
         src = '$AZ_BATCH_TASK_DIR'
     return src
+
+
+# JOBS SETTINGS
+def job_specifications(config):
+    # type: (dict) -> dict
+    """Get job specifications config block
+    :param dict config: configuration object
+    :rtype: dict
+    :return: job specifications
+    """
+    return config['job_specifications']
+
+
+def job_tasks(conf):
+    # type: (dict) -> list
+    """Get all tasks for job
+    :param dict config: configuration object
+    :rtype: list
+    :return: list of tasks
+    """
+    return conf['tasks']
+
+
+def job_id(conf):
+    # type: (dict) -> str
+    """Get job id of a job specification
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job id
+    """
+    return conf['id']
+
+
+def job_multi_instance_auto_complete(conf):
+    # type: (dict) -> bool
+    """Get multi-instance job autocompelte setting
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: multi instance job autocomplete
+    """
+    try:
+        mi_ac = conf['multi_instance_auto_complete']
+    except KeyError:
+        mi_ac = True
+    return mi_ac
+
+
+def job_environment_variables(conf):
+    # type: (dict) -> str
+    """Get env vars of a job specification
+    :param dict conf: job configuration object
+    :rtype: list
+    :return: job env vars
+    """
+    try:
+        env_vars = conf['environment_variables']
+        if util.is_none_or_empty(env_vars):
+            raise KeyError()
+    except KeyError:
+        env_vars = None
+    return env_vars
+
+
+def has_depends_on_task(conf):
+    # type: (dict) -> bool
+    """Determines if task has task dependencies
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: task has task dependencies
+    """
+    if 'depends_on' in conf and util.is_not_empty(conf['depends_on']):
+        if 'id' not in conf or util.is_none_or_empty(conf['id']):
+            raise ValueError(
+                'task id is not specified, but depends_on is set')
+        return True
+    return False
+
+
+def is_multi_instance_task(conf):
+    # type: (dict) -> bool
+    """Determines if task is multi-isntance
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: task is multi-instance
+    """
+    return 'multi_instance' in conf
+
+
+def task_name(conf):
+    # type: (dict) -> str
+    """Get task name
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: task name
+    """
+    try:
+        name = conf['name']
+        if util.is_none_or_empty(name):
+            raise KeyError()
+    except KeyError:
+        name = None
+    return name
+
+
+def set_task_name(conf, name):
+    # type: (dict, str) -> None
+    """Set task name
+    :param dict conf: job configuration object
+    :param str name: task name to set
+    """
+    conf['name'] = name
+
+
+def task_id(conf):
+    # type: (dict) -> str
+    """Get task id
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: task id
+    """
+    try:
+        id = conf['id']
+        if util.is_none_or_empty(id):
+            raise KeyError()
+    except KeyError:
+        id = None
+    return id
+
+
+def set_task_id(conf, id):
+    # type: (dict, str) -> None
+    """Set task id
+    :param dict conf: job configuration object
+    :param str id: task id to set
+    """
+    conf['id'] = id
+
+
+def task_settings(pool, config, conf):
+    # type: (azure.batch.models.CloudPool, dict, dict) -> TaskSettings
+    """Get task settings
+    :param azure.batch.models.CloudPool pool: cloud pool object
+    :param dict config: configuration dict
+    :param dict conf: job configuration object
+    :rtype: TaskSettings
+    :return: task settings
+    """
+    # id must be populated by the time this function is invoked
+    task_id = conf['id']
+    if util.is_none_or_empty(task_id):
+        raise ValueError('task id is invalid')
+    image = conf['image']
+    if util.is_none_or_empty(image):
+        raise ValueError('image is invalid')
+    # get some pool props
+    publisher = pool.virtual_machine_configuration.image_reference.\
+        publisher.lower()
+    offer = pool.virtual_machine_configuration.image_reference.offer.lower()
+    sku = pool.virtual_machine_configuration.image_reference.sku.lower()
+    # get depends on
+    try:
+        depends_on = conf['depends_on']
+        if util.is_none_or_empty(depends_on):
+            raise KeyError()
+    except KeyError:
+        depends_on = None
+    # get additional resource files
+    try:
+        rfs = conf['resource_files']
+        if util.is_none_or_empty(rfs):
+            raise KeyError()
+        resource_files = []
+        for rf in rfs:
+            try:
+                fm = rf['file_mode']
+                if util.is_none_or_empty(fm):
+                    raise KeyError()
+            except KeyError:
+                fm = None
+            resource_files.append(
+                ResourceFileSettings(
+                    file_path=rf['file_path'],
+                    blob_source=rf['blob_source'],
+                    file_mode=fm,
+                )
+            )
+    except KeyError:
+        resource_files = None
+    # get generic run opts
+    try:
+        run_opts = conf['additional_docker_run_options']
+    except KeyError:
+        run_opts = []
+    # parse remove container option
+    try:
+        rm_container = conf['remove_container_after_exit']
+    except KeyError:
+        pass
+    else:
+        if rm_container and '--rm' not in run_opts:
+            run_opts.append('--rm')
+    # parse name option, if not specified use task id
+    try:
+        name = conf['name']
+        if util.is_none_or_empty(name):
+            raise KeyError()
+    except KeyError:
+        name = task_id
+        set_task_name(conf, name)
+    run_opts.append('--name {}'.format(name))
+    # parse labels option
+    try:
+        labels = conf['labels']
+        if util.is_not_empty(labels):
+            for label in labels:
+                run_opts.append('-l {}'.format(label))
+        del labels
+    except KeyError:
+        pass
+    # parse ports option
+    try:
+        ports = conf['ports']
+        if util.is_not_empty(ports):
+            for port in ports:
+                run_opts.append('-p {}'.format(port))
+        del ports
+    except KeyError:
+        pass
+    # parse entrypoint
+    try:
+        entrypoint = conf['entrypoint']
+        if util.is_not_empty(entrypoint):
+            run_opts.append('--entrypoint {}'.format(entrypoint))
+        del entrypoint
+    except KeyError:
+        pass
+    # get command
+    try:
+        command = conf['command']
+        if util.is_none_or_empty(command):
+            raise KeyError()
+    except KeyError:
+        command = None
+    # parse data volumes
+    try:
+        data_volumes = conf['data_volumes']
+        if util.is_none_or_empty(data_volumes):
+            raise KeyError()
+    except KeyError:
+        pass
+    else:
+        dv = global_resources_data_volumes(config)
+        for dvkey in data_volumes:
+            try:
+                hostpath = dv[dvkey]['host_path']
+                if util.is_none_or_empty(hostpath):
+                    raise KeyError()
+            except KeyError:
+                hostpath = None
+            if util.is_not_empty(hostpath):
+                run_opts.append('-v {}:{}'.format(
+                    hostpath, dv[dvkey]['container_path']))
+            else:
+                run_opts.append('-v {}'.format(
+                    dv[dvkey]['container_path']))
+    # parse shared data volumes
+    try:
+        shared_data_volumes = conf['shared_data_volumes']
+        if util.is_none_or_empty(shared_data_volumes):
+            raise KeyError()
+    except KeyError:
+        pass
+    else:
+        sdv = global_resources_shared_data_volumes(config)
+        for sdvkey in shared_data_volumes:
+            if is_shared_data_volume_gluster(sdv, sdvkey):
+                run_opts.append('-v {}/{}:{}'.format(
+                    '$AZ_BATCH_NODE_SHARED_DIR',
+                    get_gluster_volume(),
+                    shared_data_volume_container_path(sdv, sdvkey)))
+            else:
+                run_opts.append('-v {}:{}'.format(
+                    sdvkey, shared_data_volume_container_path(sdv, sdvkey)))
+    # env vars
+    try:
+        env_vars = conf['environment_variables']
+        if util.is_none_or_empty(env_vars):
+            raise KeyError()
+    except KeyError:
+        env_vars = None
+    # infiniband
+    try:
+        infiniband = conf['infiniband']
+    except KeyError:
+        infiniband = False
+    # gpu
+    try:
+        gpu = conf['gpu']
+    except KeyError:
+        gpu = False
+    # adjust for gpu settings
+    if gpu:
+        if not is_gpu_pool(pool.vm_size):
+            raise RuntimeError(
+                ('cannot initialize a gpu task on nodes without '
+                 'gpus, pool: {} vm_size: {}').format(pool.id, pool.vm_size))
+        # TODO other images as they become available with gpu support
+        if (publisher != 'canonical' and offer != 'ubuntuserver' and
+                sku < '16.04.0-lts'):
+            raise ValueError(
+                ('Unsupported gpu VM config, publisher={} offer={} '
+                 'sku={}').format(publisher, offer, sku))
+        # set docker commands with nvidia docker wrapper
+        docker_run_cmd = 'nvidia-docker run'
+        docker_exec_cmd = 'nvidia-docker exec'
+    else:
+        # set normal run and exec commands
+        docker_run_cmd = 'docker run'
+        docker_exec_cmd = 'docker exec'
+    # adjust for infiniband
+    if infiniband:
+        if not pool.enable_inter_node_communication:
+            raise RuntimeError(
+                ('cannot initialize an infiniband task on a '
+                 'non-internode communication enabled '
+                 'pool: {}').format(pool.id))
+        if not is_rdma_pool(pool.vm_size):
+            raise RuntimeError(
+                ('cannot initialize an infiniband task on nodes '
+                 'without RDMA, pool: {} vm_size: {}').format(
+                     pool.id, pool.vm_size))
+        # ensure env_vars is allocated
+        if util.is_none_or_empty(env_vars):
+            env_vars = []
+        # only centos-hpc and sles-hpc:12-sp1 are supported
+        # for infiniband
+        supported = False
+        sles_hpc = False
+        if publisher == 'openlogic' and offer == 'centos-hpc':
+            supported = True
+        elif (publisher == 'suse' and offer == 'sles-hpc' and
+              sku == '12-sp1'):
+            supported = True
+            sles_hpc = True
+        if not supported:
+            raise ValueError(
+                ('Unsupported infiniband VM config, publisher={} '
+                 'offer={}').format(publisher, offer))
+        del supported
+        # add infiniband run opts
+        run_opts.append('--net=host')
+        run_opts.append('--ulimit memlock=9223372036854775807')
+        run_opts.append('--device=/dev/hvnd_rdma')
+        run_opts.append('--device=/dev/infiniband/rdma_cm')
+        run_opts.append('--device=/dev/infiniband/uverbs0')
+        run_opts.append('-v /etc/rdma:/etc/rdma:ro')
+        if sles_hpc:
+            run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
+        else:
+            run_opts.append('-v /opt/intel:/opt/intel:ro')
+        del sles_hpc
+    # mount batch root dir
+    run_opts.append(
+        '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
+    # set working directory
+    run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+    # always add option for envfile
+    envfile = '.shipyard.envlist'
+    run_opts.append('--env-file {}'.format(envfile))
+    # populate mult-instance settings
+    if is_multi_instance_task(conf):
+        if not pool.enable_inter_node_communication:
+            raise RuntimeError(
+                ('cannot run a multi-instance task on a '
+                 'non-internode communication enabled '
+                 'pool: {}').format(pool_id))
+        # container must be named
+        if util.is_none_or_empty(name):
+            raise ValueError(
+                'multi-instance task must be invoked with a named '
+                'container')
+        # docker exec command cannot be empty/None
+        if util.is_none_or_empty(command):
+            raise ValueError(
+                'multi-instance task must have an application command')
+        # set docker run as coordination command
+        try:
+            run_opts.remove('--rm')
+        except ValueError:
+            pass
+        # run in detached mode
+        run_opts.append('-d')
+        # ensure host networking stack is used
+        if '--net=host' not in run_opts:
+            run_opts.append('--net=host')
+        # get coordination command
+        try:
+            coordination_command = conf[
+                'multi_instance']['coordination_command']
+            if util.is_none_or_empty(coordination_command):
+                raise KeyError()
+        except KeyError:
+            coordination_command = None
+        cc_args = [
+            'env | grep AZ_BATCH_ >> {}'.format(envfile),
+            '{} {} {}{}'.format(
+                docker_run_cmd,
+                ' '.join(run_opts),
+                image,
+                '{}'.format(' ' + coordination_command)
+                if coordination_command else '')
+        ]
+        # get num instances
+        num_instances = conf['multi_instance']['num_instances']
+        if not isinstance(num_instances, int):
+            if num_instances == 'pool_specification_vm_count':
+                num_instances = pool_vm_count(config)
+            elif num_instances == 'pool_current_dedicated':
+                num_instances = pool.current_dedicated
+            else:
+                raise ValueError(
+                    ('multi instance num instances setting '
+                     'invalid: {}').format(num_instances))
+        # get common resource files
+        try:
+            mi_rfs = conf['multi_instance']['resource_files']
+            if util.is_none_or_empty(mi_rfs):
+                raise KeyError()
+            mi_resource_files = []
+            for rf in mi_rfs:
+                try:
+                    fm = rf['file_mode']
+                    if util.is_none_or_empty(fm):
+                        raise KeyError()
+                except KeyError:
+                    fm = None
+                mi_resource_files.append(
+                    ResourceFileSettings(
+                        file_path=rf['file_path'],
+                        blob_source=rf['blob_source'],
+                        file_mode=fm,
+                    )
+                )
+        except KeyError:
+            mi_resource_files = None
+    else:
+        num_instances = 0
+        cc_args = None
+        mi_resource_files = None
+    return TaskSettings(
+        id=task_id,
+        image=image,
+        name=name,
+        docker_run_options=run_opts,
+        environment_variables=env_vars,
+        envfile=envfile,
+        resource_files=resource_files,
+        command=command,
+        infiniband=infiniband,
+        gpu=gpu,
+        depends_on=depends_on,
+        docker_run_cmd=docker_run_cmd,
+        docker_exec_cmd=docker_exec_cmd,
+        multi_instance=MultiInstanceSettings(
+            num_instances=num_instances,
+            coordination_command=cc_args,
+            resource_files=mi_resource_files,
+        ),
+    )
