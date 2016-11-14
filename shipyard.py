@@ -117,8 +117,11 @@ class CliContext(object):
         self._read_json_file(self.json_credentials)
         self._read_json_file(self.json_config)
         self._read_json_file(self.json_pool)
-        if self.json_jobs is not None and self.json_jobs.exists():
-            self._read_json_file(self.json_jobs)
+        if self.json_jobs is not None:
+            if not isinstance(self.json_jobs, pathlib.Path):
+                self.json_jobs = pathlib.Path(self.json_jobs)
+            if self.json_jobs.exists():
+                self._read_json_file(self.json_jobs)
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
