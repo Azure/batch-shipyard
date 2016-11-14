@@ -1658,7 +1658,8 @@ def add_jobs(
                         f.write(
                             ('CUDA_CACHE_PATH={}/batch/tasks/'
                              '.nv/ComputeCache\n').format(
-                                 settings.temp_disk_mountpoint(config)))
+                                 settings.temp_disk_mountpoint(
+                                     config)).encode('utf8'))
                     # close and upload env var file
                     f.close()
                     sas_urls = storage.upload_resource_files(
