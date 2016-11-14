@@ -171,6 +171,10 @@ RUN cd /cntk/Examples/Image/DataSets/CIFAR-10 && \
 # create convnet mnist config for parallel training
 RUN cd /cntk/Examples/Image/Classification/ConvNet && \
     cp ConvNet_MNIST.cntk ConvNet_MNIST_Parallel.cntk && \
+    sed -i "/# TRAINING CONFIG/i \
+maxEpochs = 40\n\
+minibatchSize = 64\n\
+autoAdjustMinibatch = false\n" ConvNet_MNIST_Parallel.cntk && \
     sed -i "/    SGD = {/a \
     ParallelTrain = {\n\
         parallelizationMethod = DataParallelSGD\n\
@@ -180,9 +184,13 @@ RUN cd /cntk/Examples/Image/Classification/ConvNet && \
         parallelizationStartEpoch = 2\n\
     }\n\
     AutoAdjust = {\n\
-        autoAdjustMinibatch = true\n\
+        autoAdjustMinibatch = x\n\
         minibatchSizeTuningFrequency = 3\n\
-    }\n" ConvNet_MNIST_Parallel.cntk
+    }\n" ConvNet_MNIST_Parallel.cntk && \
+    sed -i 's/        minibatchSize = 64/        minibatchSize = $minibatchSize$/' ConvNet_MNIST_Parallel.cntk && \
+    sed -i 's/        maxEpochs = 40/        maxEpochs = $maxEpochs$/' ConvNet_MNIST_Parallel.cntk && \
+    sed -i 's/        autoAdjustMinibatch = x/        autoAdjustMinibatch = $autoAdjustMinibatch$/' ConvNet_MNIST_Parallel.cntk
+
 # copy script to run convnet mnist
 COPY run_convnet_mnist_gpu.sh /cntk
 

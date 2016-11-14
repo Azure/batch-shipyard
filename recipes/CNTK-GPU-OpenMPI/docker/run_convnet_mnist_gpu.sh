@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+shared=$1
+shift
+
 # get number of GPUs on machine
 ngpus=`nvidia-smi -L | wc -l`
 echo "num gpus: $ngpus"
@@ -15,7 +18,7 @@ elif [ $ngpus -eq 1 ]; then
     cntkfile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST.cntk
     # execute job
     /cntk/build-mkl/gpu/release/bin/cntk configFile=$cntkfile rootDir=. \
-        dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=.
+        dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=. $*
 else
     # set cntk file
     cntkfile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST_Parallel.cntk
@@ -43,6 +46,6 @@ else
     mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 -np $np \
         --hostfile hostfile -x LD_LIBRARY_PATH \
         /cntk/build-mkl/gpu/release/bin/cntk configFile=$cntkfile rootDir=. \
-        dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$1/Output \
-        parallelTrain=true
+        dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$shared/Output \
+        parallelTrain=true $*
 fi
