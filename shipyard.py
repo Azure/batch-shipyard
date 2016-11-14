@@ -635,6 +635,7 @@ def data_ingress(ctx):
     ctx.initialize()
     convoy.fleet.action_data_ingress(ctx.batch_client, ctx.config)
 
+
 if __name__ == '__main__':
     convoy.util.setup_logger(logger)
     cli()

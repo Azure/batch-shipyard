@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.0.0rc3] - 2016-11-14 (SC16 Edition)
 ### Added
 - `install_conda_windows.cmd` helper script for installing Batch Shipyard
 under Anaconda for Windows
@@ -26,9 +28,9 @@ ingress.
 
 ### Changed
 - **Breaking Change:** Properties of `docker_registry` have changed
-significantly to support integration with the Azure Container Registry
-service. Credentials for docker logins have moved to the credentials json
-file. Please see the configuration doc for more information.
+significantly to support eventual integration with the Azure Container
+Registry service. Credentials for docker logins have moved to the credentials
+json file. Please see the configuration doc for more information.
 - `files` data ingress no longer creates a directory where files to
 be uploaded exist. For example if uploading from a path `/a/b/c`, the
 directory `c` is no longer created at the destination. Instead all files
@@ -224,7 +226,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...HEAD
+[2.0.0rc3]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...2.0.0rc3
 [2.0.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...2.0.0rc2
 [2.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/1.1.0...2.0.0rc1
 [1.1.0]: https://github.com/Azure/batch-shipyard/compare/1.0.0...1.1.0
