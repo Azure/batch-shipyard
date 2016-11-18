@@ -53,16 +53,19 @@ tunneling to Docker Hosts on compute nodes if specified
 Installation is typically an easy two-step process. The CLI is also available
 as a Docker image:
 [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard).
-Please see [the installation guide](docs/01-batch-shipyard-installation.md)
+Please see [the installation guide](https://github.com/Azure/batch-shipyard/blob/master/docs/01-batch-shipyard-installation.md)
 for more information regarding installation and requirements.
 
 ## Documentation
-Please refer to the [Batch Shipyard Guide](./docs) for a complete primer on
-concepts, usage and a quickstart guide.
+Please refer to the
+[Batch Shipyard Guide](https://github.com/Azure/batch-shipyard/blob/master/docs)
+for a complete primer on concepts, usage and a quickstart guide.
 
-Please visit the [Batch Shipyard Recipes](./recipes) for various sample Docker
-workloads using Azure Batch and Batch Shipyard after you have completed the
-introductory sections of the Batch Shipyard Guide.
+Please visit the
+[Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
+for various sample Docker workloads using Azure Batch and Batch Shipyard
+after you have completed the introductory sections of the Batch Shipyard
+Guide.
 
 ## Batch Shipyard Compute Node OS Support
 Batch Shipyard is currently only compatible with

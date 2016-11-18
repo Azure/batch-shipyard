@@ -19,9 +19,10 @@ Most popular MPI runtimes can operate with or without an integrated
 distributed resource manager (launcher). In the case of Azure Batch on Linux,
 the launcher is via remote shell. As the use of `rsh` is generally deprecated,
 launchers typically default to `ssh`. The master node (i.e., the node from
-where `mpirun` was invoked), will remote shell to all of the other compute
-node hosts in the compute pool. In order for the master node to know which
-nodes to connect to, runtimes typically require a host or node list.
+where `mpirun` or `mpiexec` was invoked), will remote shell to all of the
+other compute node hosts in the compute pool. In order for the master node to
+know which nodes to connect to, runtimes typically require a host or node
+list.
 
 Once all of the nodes have been contacted and initialization of the MPI runtime
 is complete across all of the nodes, then the MPI application can execute.
@@ -32,8 +33,9 @@ applications. Outside of installing the necessary software required for
 MPI to run, the difference is that images that use MPI must also install
 SSH client/server software and enable the SSH server as the `CMD` with a
 port exposed to the host. Remember, the container will be running isolated
-from the host, so the SSH server running on the host will attempt to
-initialize with an MPI runtime that doesn't exist.
+from the host, so if you attempt to connect to the SSH server running on the
+host, the launcher will attempt to initialize on the host with an MPI runtime
+that doesn't exist.
 
 ### Mental Model
 With the basics reviewed above, we can construct a mental model of the layout
@@ -68,8 +70,8 @@ to connect to other identical containers on other compute nodes.
 
 Dockerized multi-instance tasks will use a combination of `docker run` and
 `docker exec`. `docker run` will create a running instance of the Docker image
-and detach it with the SSH server running. Then the `mpirun` command will
-be executed inside the running container using `docker exec`.
+and detach it with the SSH server running. Then the `mpirun` or `mpiexec`
+command will be executed inside the running container using `docker exec`.
 
 ### Azure Batch Compute Nodes and SSH
 By default Azure Batch compute nodes have an SSH server running on them so
@@ -132,7 +134,7 @@ command should be supplied to Batch Shipyard.
 ### Multi-Instance Task Application Command
 The application command is the `docker exec` portion of the Docker MPI
 job execution with Batch Shipyard. This is typically a call to `mpirun`
-or a wrapper script that launches `mpirun`.
+or `mpiexec` or a wrapper script that launches either `mpirun` or `mpiexec`.
 
 ### Cleanup
 As the Docker image is run in detached mode with `docker run`, the container
@@ -156,7 +158,7 @@ in the [Batch Shipyard Usage](20-batch-shipyard-usage.md) doc.
 ### Automation!
 Nearly all of the Docker runtime complexities are taken care of by the Batch
 Shipyard tooling. The user just needs to ensure that their MPI Docker images
-are either constructed with the aforementioned accommodations or are able
+are either constructed with the aforementioned accommodations and/or are able
 to provide sufficient commands to the coordination/application commands to
 work with the Azure Batch compute node environment.
 

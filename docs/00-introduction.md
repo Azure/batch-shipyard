@@ -11,8 +11,10 @@ them, where to run them, and on what VM resources they are run on. The Azure
 Batch service takes care of the rest including: compute resource provisioning,
 task scheduling, automatic task recovery and retry on failure, automatic
 scaling of resources if specified, and many other complexities that exist
-at cloud-scale. Costs are incurred only for compute resources consumed, i.e.,
-the same baseline prices for
+at cloud-scale. **There is no extra cost to use Azure Batch** - Azure Batch
+is provided as a value-added service on top of compute resources in Azure.
+Costs are incurred only for compute resources consumed, i.e., the same
+baseline prices for
 [Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
 or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/).
 

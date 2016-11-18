@@ -113,7 +113,7 @@ configuration json. There are many configuration options under the
 The following transfer methods from on premises are available:
 
 * `scp`: secure copy to a single node in the pool
-* `multinode_scp`: secure copy to multiple nodes simultanesouly in the pool
+* `multinode_scp`: secure copy to multiple nodes simultaneously in the pool
 * `rsync+ssh`: rsync over ssh to a single node in the pool
 * `multinode_rsync+ssh`: rsync over ssh to multiple nodes simultaneously in
 the pool
