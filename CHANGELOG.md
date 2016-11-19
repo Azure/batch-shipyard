@@ -1,6 +1,9 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Support for any Internet accessible container registry, including
+[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
 
 ## [2.0.0rc3] - 2016-11-14 (SC16 Edition)
 ### Added

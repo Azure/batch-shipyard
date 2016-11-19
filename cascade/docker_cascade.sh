@@ -25,9 +25,9 @@ if [ ! -z $privatereg ]; then
     python3 setup_private_registry.py $privatereg $ipaddress $prefix
 fi
 
-# login to docker hub
-if [ ! -z ${DOCKER_LOGIN_HUB_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_HUB_USERNAME -p $DOCKER_LOGIN_HUB_PASSWORD
+# login to registry server
+if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
+    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
 fi
 
 # add timing markers

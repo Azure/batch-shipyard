@@ -17,8 +17,7 @@
     "docker_registry": {
         "private": {
             "allow_public_docker_hub_pull_on_missing": true,
-            "azure_container_registry": {
-            },
+            "server": "myserver-myorg.azurecr.io",
             "azure_storage": {
                 "storage_account_settings": "mystorageaccount",
                 "container": "mydockerregistry"

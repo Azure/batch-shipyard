@@ -1094,6 +1094,33 @@ def distribute_global_resources(
         loop, blob_client, queue_client, table_client, ipaddress, nentities))
 
 
+def _set_registry(table_client: azure.storage.table.TableService) -> None:
+    """Set registry to use
+    :param azure.storage.table.TableService table_client: table client
+    """
+    global _REGISTRY
+    if pathlib.Path(
+            os.environ['AZ_BATCH_TASK_WORKING_DIR'],
+            '.cascade_private_registry.txt').exists():
+        _REGISTRY = 'localhost:5000'
+    else:
+        # get registry from table
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_registry'],
+            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
+        i = 0
+        for ent in entities:
+            _port = ent['Port']
+            _REGISTRY = '{}{}'.format(
+                ent['RowKey'], ':{}'.format(_port) if _port != 80 else '')
+            i += 1
+        if i != 1:
+            raise RuntimeError(
+                ('registry table contains an invalid number of entities ({}) '
+                 'for pk={}').format(i, _PARTITION_KEY))
+    logger.info('docker registry: {}'.format(_REGISTRY))
+
+
 async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
     """Get IP address
     :param asyncio.BaseEventLoop loop: event loop
@@ -1161,14 +1188,7 @@ def main():
     blob_client, queue_client, table_client = _create_credentials()
 
     # set registry
-    global _REGISTRY
-    if pathlib.Path(
-            os.environ['AZ_BATCH_TASK_WORKING_DIR'],
-            '.cascade_private_registry.txt').exists():
-        _REGISTRY = 'localhost:5000'
-    else:
-        _REGISTRY = 'registry.hub.docker.com'
-    logger.info('docker registry: {}'.format(_REGISTRY))
+    _set_registry(table_client)
 
     del args
 

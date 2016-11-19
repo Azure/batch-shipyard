@@ -290,24 +290,25 @@ def populate_queues(queue_client, table_client, config):
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    # TODO other private registry support
-    preg = False
-    try:
-        _st, _ = settings.docker_registry_azure_storage(config)
-        if util.is_not_empty(_st):
-            preg = True
-        del _st
-    except KeyError:
-        pass
     pk = _construct_partition_key_from_config(config)
-    # if using docker public hub, then populate registry table with hub
-    if not preg:
+    preg = settings.docker_registry_private_settings(config)
+    # populate registry table now if not a azure storage backed registry
+    if util.is_none_or_empty(preg.storage_account):
+        if util.is_not_empty(preg.server):
+            # populate registry table with private registry server
+            rk = preg.server
+            port = preg.port
+        else:
+            # populate registry table with public docker hub
+            rk = 'registry.hub.docker.com'
+            port = 80
+        # add entity to table
         table_client.insert_or_replace_entity(
             _STORAGE_CONTAINERS['table_registry'],
             {
                 'PartitionKey': pk,
-                'RowKey': 'registry.hub.docker.com',
-                'Port': 80,
+                'RowKey': rk,
+                'Port': port,
             }
         )
     # get p2pcsd setting

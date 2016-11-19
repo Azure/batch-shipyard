@@ -1,9 +1,9 @@
 # Batch Shipyard Configuration
 This page contains in-depth details on how to configure the Batch Shipyard
-tool.
+toolkit.
 
 ## Configuration Files
-The Batch Shipyard tool is driven by json configuration files:
+Batch Shipyard is driven by the following json configuration files:
 
 1. [Credentials](#cred) - credentials for Azure Batch and Storage accounts
 2. [Global config](#global) - Batch Shipyard and Docker-specific configuration
@@ -11,11 +11,17 @@ settings
 3. [Pool](#pool) - Azure Batch pool configuration
 4. [Jobs](#jobs) - Azure Batch jobs and tasks configuration
 
+Note that all potential properties are described here and that specifying
+all such properties may result in invalid configuration as some properties
+may be mutually exclusive. Please read the following document carefully when
+crafting your configuration files.
+
 Each property is marked with required or optional. Properties marked with
 experimental should be considered as features for testing only.
 
 Example config templates can be found in [this directory](../config\_templates)
-of the repository.
+of the repository. Each sample recipe also has a set of configuration files
+that can be modified to your particular scenario.
 
 ### <a name="cred"></a>Credentials
 The credentials schema is as follows:
@@ -39,6 +45,10 @@ The credentials schema is as follows:
             "hub": {
                 "username": "myhublogin",
                 "password": "myhubpassword"
+            },
+            "myserver-myorg.azurecr.io": {
+                "username": "azurecruser",
+                "password": "mypassword"
             }
         }
     }
@@ -61,9 +71,17 @@ servers. This property does not need to be defined if you are using only
 public repositories on Docker Hub. However, this is required if pulling from
 authenticated private registries such as a secured Azure Container Registry
 or private repositories on Docker Hub.
-  * `hub` defines the login property to Docker Hub:
+  * (optional) `hub` defines the login property to Docker Hub:
     * (optional) `username` username to log in to Docker Hub
     * (optional) `password` password associated with the username
+  * (optional) `myserver-myorg.azurecr.io` is an example property that
+    defines a private container registry to connect to. This is an example to
+    connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
+    The private registry defined here should be defined as the `server`
+    property in the `docker_registry`:`private` json object in the global
+    configuration.
+    * (optional) `username` username to log in to this registry
+    * (optional) `password` password associated with this username
 
 An example credential json template can be found
 [here](../config\_templates/credentials.json).
@@ -91,6 +109,7 @@ The global config schema is as follows:
     "docker_registry": {
         "private": {
             "allow_public_docker_hub_pull_on_missing": true,
+            "server": "myserver-myorg.azurecr.io",
             "azure_storage": {
                 "storage_account_settings": "mystorageaccount",
                 "container": "mydockerregistry"
@@ -239,19 +258,26 @@ contains the following members:
 The `docker_registry` property is used to configure Docker image distribution
 options from public/private Docker hub and private registries.
 * (optional) `private` property controls settings for interacting with private
-registries. There are two kinds of registries that are supported: (1) Azure
-Container Registry (ACR) service and (2) [private registry instances backed to
+registries. There are three kinds of private registries that are supported:
+(1) private registries hosted on Docker Hub, (2) Internet accessible
+registries such as those hosted by the
+[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
+service and (3) [private registry instances backed to
 Azure Blob Storage](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-linux-docker-registry-in-blob-storage/)
-and are run on compute nodes. To specify an Azure Container Registry, define
-a json object named `azure_container_registry`. To use a private registry
-backed by Azure Blob Storage, define a json object named `azure_storage`.
-Note that a maximum of only one of these types private registries may be
-specified. The following describes members of the two types of private
-registries supported.
-  * (optional) `azure_container_registry` object is to define settings for
-    connecting to a private registry backed by the Azure Container Registry
-    service.
-    * TODO: properties forthcoming
+and are run on compute nodes. To use private registries hosted on Docker Hub,
+no additional properties need to be specified here, instead, specify your
+Docker Hub login information in the credentials json. To specify a private
+registry other than on Docker Hub, a json property named `server` should be
+defined. To use a private registry backed by Azure Blob Storage, define a
+json object named `azure_storage`. Note that a maximum of only one of these
+three types private registries may be specified at once. The following
+describes members of the non-Docker Hub private registries supported:
+  * (optional) `server` object is a property that is the fully-qualified host
+    name to a private registry server. A specific port other than 80 can be
+    specified using a `:` separator, e.g.,
+    `mydockerregistry.com:8080`. Port 80 is the default if no port is
+    specified. The value of this property should have an associated login
+    in the credentials json file.
   * (optional) `azure_storage` object is to define settings for connecting
     to a private registry backed by Azure Storate blobs and where the
     private registry instances are hosted on the compute nodes themselves.

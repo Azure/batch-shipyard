@@ -341,14 +341,14 @@ def _add_pool(batch_client, blob_client, config):
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
     dr = settings.data_replication_settings(config)
+    # private registry settings
+    preg = settings.docker_registry_private_settings(config)
     # create torrent flags
     torrentflags = ' -t {}:{}:{}:{}:{}'.format(
         dr.peer_to_peer.enabled, dr.non_peer_to_peer_concurrent_downloading,
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression,
-        settings.docker_registry_private_allow_public_pull(config))
-    # azure blob storage backed private registry settings
-    psa, pcont = settings.docker_registry_azure_storage(config)
+        preg.allow_public_docker_hub_pull_on_missing)
     # check shared data volume mounts
     azurefile_vd = False
     gluster = False
@@ -421,7 +421,7 @@ def _add_pool(batch_client, blob_client, config):
             ' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             ' -p {}'.format(
                 bs.storage_entity_prefix) if bs.storage_entity_prefix else '',
-            ' -r {}'.format(pcont) if pcont else '',
+            ' -r {}'.format(preg.container) if preg.container else '',
             ' -w' if pool_settings.ssh.hpn_server_swap else '',
         ),
     ]
@@ -484,8 +484,8 @@ def _add_pool(batch_client, blob_client, config):
                 blob_source=pool_settings.gpu_driver,
                 file_mode='0755')
         )
-    if psa:
-        psa = settings.credentials_storage(config, psa)
+    if preg.storage_account:
+        psa = settings.credentials_storage(config, preg.storage_account)
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
@@ -496,21 +496,14 @@ def _add_pool(batch_client, blob_client, config):
                 )
             )
         )
-    hubuser, hubpw = settings.docker_registry_hub_login(config)
-    if hubuser:
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_HUB_USERNAME', hubuser)
-        )
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_HUB_PASSWORD',
-                crypto.encrypt_string(encrypt, hubpw, config))
-        )
+        del psa
+    # add optional environment variables
     if bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
+    pool.start_task.environment_settings.extend(
+        _generate_docker_login_environment_variables(config, preg, encrypt)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
     # set up gluster if specified
@@ -531,6 +524,65 @@ def _add_pool(batch_client, blob_client, config):
         del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
+
+
+def _generate_docker_login_environment_variables(config, preg, encrypt):
+    # type: (dict, DockerRegistrySettings, bool) -> tuple
+    """Generate docker login environment variables and command line
+    for re-login
+    :param dict config: configuration object
+    :param DockerRegistrySettings: docker registry settings
+    :param bool encrypt: encryption flag
+    :rtype: tuple
+    :return: (env vars, login cmds)
+    """
+    cmd = []
+    env = []
+    if preg.server:
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_SERVER', preg.server)
+        )
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_USERNAME', preg.user)
+        )
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_PASSWORD',
+                crypto.encrypt_string(encrypt, preg.password, config))
+        )
+        if encrypt:
+            cmd.append(
+                'DOCKER_LOGIN_PASSWORD='
+                '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
+                'openssl rsautl -decrypt -inkey '
+                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
+        cmd.append(
+            'docker login -u $DOCKER_LOGIN_USERNAME '
+            '-p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER')
+    else:
+        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+        if hubuser:
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_USERNAME', hubuser)
+            )
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_PASSWORD',
+                    crypto.encrypt_string(encrypt, hubpw, config))
+            )
+            if encrypt:
+                cmd.append(
+                    'DOCKER_LOGIN_PASSWORD='
+                    '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
+                    'openssl rsautl -decrypt -inkey '
+                    '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
+            cmd.append(
+                'docker login -u $DOCKER_LOGIN_USERNAME '
+                '-p $DOCKER_LOGIN_PASSWORD')
+    return env, cmd
 
 
 def _setup_glusterfs(
@@ -655,15 +707,14 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
                 'image distribution')
     except KeyError:
         pass
-    # mark if these are private registry images
-    registry = ''
-    psa, _ = settings.docker_registry_azure_storage(config)
-    if psa is not None:
+    # get private registry settings
+    preg = settings.docker_registry_private_settings(config)
+    if util.is_not_empty(preg.storage_account):
         registry = 'localhost:5000/'
-    del psa
-
-    # TODO ACR private registry images
-
+    elif util.is_not_empty(preg.server):
+        registry = '{}/'.format(preg.server)
+    else:
+        registry = ''
     # if image is specified, check that it exists for this pool
     if image is not None:
         if image not in settings.global_resources_docker_images(config):
@@ -688,25 +739,9 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     # 2. pull images with respect to registry
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
-    taskenv = []
-    coordcmd = []
     encrypt = settings.batch_shipyard_encryption_enabled(config)
-    hubuser, hubpw = settings.docker_registry_hub_login(config)
-    if hubuser:
-        taskenv.append(batchmodels.EnvironmentSetting(
-            'DOCKER_LOGIN_HUB_USERNAME', hubuser))
-        taskenv.append(batchmodels.EnvironmentSetting(
-            'DOCKER_LOGIN_HUB_PASSWORD',
-            crypto.encrypt_string(encrypt, hubpw, config)))
-        if encrypt:
-            coordcmd.append(
-                'DOCKER_LOGIN_HUB_PASSWORD='
-                '`echo $DOCKER_LOGIN_HUB_PASSWORD | base64 -d | '
-                'openssl rsautl -decrypt -inkey '
-                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-        coordcmd.append(
-            'docker login -u $DOCKER_LOGIN_HUB_USERNAME '
-            '-p $DOCKER_LOGIN_HUB_PASSWORD')
+    taskenv, coordcmd = _generate_docker_login_environment_variables(
+        config, preg, encrypt)
     coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
     if registry != '':
         coordcmd.extend(

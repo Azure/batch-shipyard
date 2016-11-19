@@ -19,14 +19,16 @@ a large number of VMs via private peer-to-peer distribution of Docker images
 among the compute nodes
 * Comprehensive data movement support: move data easily between locally
 accessible storage systems, Azure Blob or File Storage, and compute nodes
-* Automated Docker Private Registry instance creation on compute nodes with
-Docker images backed to Azure Storage if specified
-* Automatic shared data volume support:
+* Docker Private Registry support
+  * [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
+  * Any internet accessible Docker container registry
+  * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
+    instance creation on compute nodes
+* Automatic shared data volume support
   * [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
-    installation and share setup for SMB/CIFS backed to Azure Storage if
-    specified
+    installation and share setup for SMB/CIFS backed to Azure Storage
   * [GlusterFS](https://www.gluster.org/) distributed network file system
-    installation and setup if specified
+    installation and setup
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
@@ -47,7 +49,7 @@ for MPI on HPC low-latency Azure VM instances:
   * [H-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#h-series): STANDARD\_H16R, STANDARD\_H16MR
   * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R (not yet available)
 * Automatic setup of SSH users to all nodes in the compute pool and optional
-tunneling to Docker Hosts on compute nodes if specified
+tunneling to Docker Hosts on compute nodes
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available

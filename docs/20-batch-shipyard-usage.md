@@ -220,7 +220,8 @@ in the specified pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
   * `--wait` will wait for resize to complete
-* `udi` will update Docker images on all compute nodes of the pool
+* `udi` will update Docker images on all compute nodes of the pool. This
+command requires a valid SSH user.
   * `--image` will restrict the update to just the image or image:tag
   * `--digest` will restrict the update to just the image or image:tag and
     a specific digest
