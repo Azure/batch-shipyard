@@ -3,7 +3,13 @@
 ## [Unreleased]
 ### Added
 - Support for any Internet accessible container registry, including
-[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
+[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/).
+Please see the configuration doc for information on how to integrate with
+a private container registry.
+
+### Fixed
+- Cascade thread exceptions will terminate with non-zero exit code
+- Some improvements with node prep and reboots
 
 ## [2.0.0rc3] - 2016-11-14 (SC16 Edition)
 ### Added

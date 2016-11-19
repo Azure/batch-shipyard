@@ -161,7 +161,7 @@ def process_input_data(config, bxfile, spec, on_task=False):
                     args = _process_storage_input_data(
                         config, input_data[key], on_task)
                     ret.append(
-                        ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
                          'set +f').format(bxfile[0], ' '.join(args)))
                 elif key == 'azure_batch':
                     args = _process_batch_input_data(
@@ -254,7 +254,7 @@ def process_output_data(config, bxfile, spec):
                     args = _process_storage_output_data(
                         config, output_data[key])
                     ret.append(
-                        ('set -f; $AZ_BATCH_NODE_SHARED_DIR/{} {}; '
+                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
                          'set +f').format(bxfile[0], ' '.join(args)))
                 else:
                     raise ValueError(

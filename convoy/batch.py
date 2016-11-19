@@ -1526,7 +1526,7 @@ def add_jobs(
     global_resources = []
     for gr in settings.global_resources_docker_images(config):
         global_resources.append(gr)
-    jpcmd = ['$AZ_BATCH_NODE_SHARED_DIR/{} {}'.format(
+    jpcmd = ['$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
         jpfile[0], ' '.join(global_resources))]
     lastjob = None
     lasttask = None

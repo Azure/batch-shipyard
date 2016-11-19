@@ -99,6 +99,7 @@ _DIRECTDL = []
 _DIRECTDL_DOWNLOADING = []
 _GR_DONE = False
 _LAST_DHT_INFO_DUMP = None
+_THREAD_EXCEPTIONS = []
 
 
 class StandardStreamLogger:
@@ -372,6 +373,7 @@ class DockerSaveThread(threading.Thread):
             success = True
         except Exception as ex:
             logger.exception(ex)
+            _THREAD_EXCEPTIONS.append(ex)
         finally:
             # cancel callback
             if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
@@ -806,6 +808,14 @@ class DockerLoadThread(threading.Thread):
 
     def run(self) -> None:
         """Main thread run logic"""
+        try:
+            self._load_image()
+        except Exception as ex:
+            logger.exception(ex)
+            _THREAD_EXCEPTIONS.append(ex)
+
+    def _load_image(self) -> None:
+        """Load docker image"""
         logger.debug('loading resource: {}'.format(self.resource))
         resource_hash = compute_resource_hash(self.resource)
         image = get_docker_image_name_from_resource(self.resource)
@@ -945,6 +955,11 @@ async def download_monitor_async(
         # if not in peer-to-peer mode, allow exit
         if not _ENABLE_P2P and _GR_DONE:
             break
+        # check for any thread exceptions
+        if len(_THREAD_EXCEPTIONS) > 0:
+            logger.critical('Thread exceptions encountered, terminating')
+            # raise first exception
+            raise _THREAD_EXCEPTIONS[0]
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
 

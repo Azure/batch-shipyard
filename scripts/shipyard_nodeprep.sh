@@ -140,8 +140,9 @@ else
     npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
 fi
 
-# set node prep finished file
+# set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
+cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
 # set python env vars
 LC_ALL=en_US.UTF-8
@@ -150,7 +151,41 @@ PYTHONASYNCIODEBUG=1
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
-# one time setup of ssh/tcp tuning
+# decrypt encrypted creds
+if [ ! -z $encrypted ]; then
+    # convert pfx to pem
+    pfxfile=$AZ_BATCH_CERTIFICATES_DIR/sha1-$encrypted.pfx
+    privatekey=$AZ_BATCH_CERTIFICATES_DIR/key.pem
+    openssl pkcs12 -in $pfxfile -out $privatekey -nodes -password file:$pfxfile.pw
+    # remove pfx-related files
+    rm -f $pfxfile $pfxfile.pw
+    # decrypt creds
+    SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
+        DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    fi
+    if [ ! -z $privatereg ]; then
+        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    fi
+fi
+
+# set iptables rules
+if [ $p2penabled -eq 1 ]; then
+    # disable DHT connection tracking
+    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
+    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
+fi
+
+# check if we're coming up from a reboot
+if [ -f $cascadefailed ]; then
+    echo "$cascadefailed file exists, assuming cascade failure during node prep"
+    exit 1
+elif [ -f $nodeprepfinished ]; then
+    echo "$nodeprepfinished file exists, assuming successful completion of node prep"
+    exit 0
+fi
+
+# one-time setup
 if [ ! -f $nodeprepfinished ]; then
     # set up hpn-ssh
     if [ $hpnssh -eq 1 ]; then
@@ -178,34 +213,6 @@ EOF
         fi
     fi
 fi
-
-# decrypt encrypted creds
-if [ ! -z $encrypted ]; then
-    # convert pfx to pem
-    pfxfile=$AZ_BATCH_CERTIFICATES_DIR/sha1-$encrypted.pfx
-    privatekey=$AZ_BATCH_CERTIFICATES_DIR/key.pem
-    openssl pkcs12 -in $pfxfile -out $privatekey -nodes -password file:$pfxfile.pw
-    # remove pfx-related files
-    rm -f $pfxfile $pfxfile.pw
-    # decrypt creds
-    SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-        DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    fi
-    if [ ! -z $privatereg ]; then
-        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    fi
-fi
-
-# set iptables rules
-if [ $p2penabled -eq 1 ]; then
-    # disable DHT connection tracking
-    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
-    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
-fi
-
-# copy required shell scripts to shared
-cp docker_jp_block.sh shipyard_blobxfer.sh $AZ_BATCH_NODE_SHARED_DIR
 
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
@@ -550,8 +557,12 @@ fi
 
 # touch node prep finished file to preserve idempotency
 touch $nodeprepfinished
+# touch cascade failed file, this will be removed once cascade is successful
+touch $cascadefailed
 
 # execute cascade
+set +e
+cascadepid=
 envfile=
 if [ $cascadecontainer -eq 1 ]; then
     detached=
@@ -588,6 +599,7 @@ EOF
         -w $AZ_BATCH_TASK_WORKING_DIR \
         -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
         alfpark/batch-shipyard:cascade-latest
+    cascadepid=$!
 else
     # backfill node prep start
     if [ ! -z ${SHIPYARD_TIMING+x} ]; then
@@ -614,12 +626,23 @@ else
         ./perf.py cascade start $prefix
     fi
     ./cascade.py $p2p --ipaddress $ipaddress $prefix &
+    cascadepid=$!
 fi
 
 # if not in p2p mode, then wait for cascade exit
 if [ $p2penabled -eq 0 ]; then
-    wait
+    wait $cascadepid
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "cascade exited with non-zero exit code: $rc"
+        rm -f $nodeprepfinished
+        exit $rc
+    fi
 fi
+set -e
+
+# remove cascade failed file
+rm -f $cascadefailed
 
 # block until images ready if specified
 if [ ! -z $block ]; then
