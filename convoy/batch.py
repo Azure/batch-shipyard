@@ -843,7 +843,7 @@ def terminate_all_jobs(batch_client, config, wait=False):
     if wait:
         for job_id in check:
             try:
-                logger.debug('waiting for job {} to termiante'.format(job_id))
+                logger.debug('waiting for job {} to terminate'.format(job_id))
                 while True:
                     _job = batch_client.job.get(job_id)
                     if _job.state == batchmodels.JobState.completed:
@@ -886,8 +886,10 @@ def _send_docker_kill_signal(
             'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
             '-p', str(rls.remote_login_port), '-t',
             '{}@{}'.format(username, rls.remote_login_ip_address),
-            ('/bin/bash -c "sudo docker kill {tid}; '
-             'sudo docker rm -v {tid}"').format(tid=task_id)
+            ('sudo /bin/bash -c "docker kill {jid}-{tid}; '
+             'docker ps -qa -f name={jid}-{tid} | '
+             'xargs --no-run-if-empty docker rm -v"').format(
+                 jid=job_id, tid=task_id)
         ]
         rc = util.subprocess_with_output(ssh_args, shell=False)
         if rc != 0:
@@ -1575,7 +1577,7 @@ def add_jobs(
                         reserved_task_id = _generate_next_generic_task_id(
                             batch_client, job.id)
                         settings.set_task_id(task, reserved_task_id)
-                        _id = reserved_task_id
+                        _id = '{}-{}'.format(job.id, reserved_task_id)
                     settings.set_task_name(task, _id)
                     mi_docker_container_name = settings.task_name(task)
                     del _id
@@ -1624,6 +1626,8 @@ def add_jobs(
                 _task_id = _generate_next_generic_task_id(
                     batch_client, job.id, reserved_task_id)
                 settings.set_task_id(_task, _task_id)
+            if util.is_none_or_empty(settings.task_name(_task)):
+                settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
             del _task_id
             task = settings.task_settings(_pool, config, _task)
             # merge job env vars into task env vars

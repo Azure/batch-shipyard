@@ -5,7 +5,7 @@
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/tensorflow:0.10.0-gpu",
+                    "image": "alfpark/tensorflow:0.11.0-gpu",
                     "remove_container_after_exit": true,
                     "command": "/bin/bash /sw/launcher.sh",
                     "gpu": true,

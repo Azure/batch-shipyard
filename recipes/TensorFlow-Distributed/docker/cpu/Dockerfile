@@ -1,6 +1,6 @@
 # Dockerfile for TensorFlow-CPU-Distributed for use with Batch Shipyard on Azure Batch
 
-FROM gcr.io/tensorflow/tensorflow:0.10.0
+FROM gcr.io/tensorflow/tensorflow:0.11.0
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 COPY ssh_config /root/.ssh/config

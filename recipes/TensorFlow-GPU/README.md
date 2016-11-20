@@ -29,15 +29,17 @@ available for N-series VMs.
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
 Docker image. The
-[gcr.io/tensorflow/tensorflow:0.10.0-gpu](https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html#docker-installation)
-is an official Google TensorFlow GPU Docker image and can be used for this
-recipe.
+[alfpark/tensorflow:0.11.0-gpu](https://hub.docker.com/r/alfpark/tensorflow/)
+image contains TensorFlow optimized for Azure N-Series VMs (NVIDIA K80 and
+M60). The official Google TensorFlow GPU docker image can also be used, but
+note that image may not provide optimal performance on `STANDARD_NC` series
+VMs (NVIDIA K80).
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `gcr.io/tensorflow/tensorflow:0.10.0-gpu`
+e.g., `alfpark/tensorflow:0.11.0-gpu`
 * `command` should contain the command to pass to the Docker run invocation.
 To run the example MNIST convolutional example, the `command` would look like:
 `"python -m tensorflow.models.image.mnist.convolutional"`

@@ -6,16 +6,21 @@
 [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/).
 Please see the configuration doc for information on how to integrate with
 a private container registry.
+- Update TensorFlow docker images to 0.11.0 and optimize GPU images for use
+with NVIDIA K80/M60
 
 ### Changed
 - GPU driver for `STANDARD_NC` instances defined in the
 `gpu`:`nvidia_driver`:`source` property is no longer required. If omitted,
 an NVIDIA driver will be downloaded automatically with an NVIDIA License
 agreement prompt. For `STANDARD_NV` instances, a driver URL is still required.
+- Docker container name auto-tagging now prepends the job id in order to
+prevent conflicts in case of un-named simultaneous tasks from multiple jobs
 
 ### Fixed
 - Cascade thread exceptions will terminate with non-zero exit code
 - Some improvements with node prep and reboots
+- Task termination will only issue `docker rm` if the container exists
 
 ## [2.0.0rc3] - 2016-11-14 (SC16 Edition)
 ### Added

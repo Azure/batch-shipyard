@@ -39,14 +39,15 @@ The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow Docker
 image that can work with multi-instance tasks. The
 [alfpark/tensorflow](https://hub.docker.com/r/alfpark/tensorflow)
-images have been prepared by extending Google's official TensorFlow image to
-work with Batch Shipyard.
+images have been prepared by using Google's TensorFlow Dockerfile as a base
+and extending the image to work with Batch Shipyard along with optimizations
+for `STANDARD_NC` VMs (NVIDIA K80).
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `alfpark/tensorflow/0.10.0-gpu` or `alfpark/tensorflow/0.10.0-cpu`
+e.g., `alfpark/tensorflow/0.11.0-gpu` or `alfpark/tensorflow/0.11.0-cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 To run the example MNIST replica example, the `command` would look
 like: `"/bin/bash /sw/launcher.sh"`. The launcher will automatically detect

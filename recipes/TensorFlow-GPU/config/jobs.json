@@ -4,7 +4,7 @@
             "id": "tensorflowjob",
             "tasks": [
                 {
-                    "image": "gcr.io/tensorflow/tensorflow:0.10.0-gpu",
+                    "image": "alfpark/tensorflow:0.11.0-gpu",
                     "remove_container_after_exit": true,
                     "command": "python -m tensorflow.models.image.mnist.convolutional",
                     "gpu": true
