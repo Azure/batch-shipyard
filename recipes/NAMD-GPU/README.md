@@ -27,9 +27,6 @@ are available for N-series VMs.
 * `sku` should be `16.04.0-LTS`. Other skus will be supported once they are
 available for N-series VMs.
 * `max_tasks_per_node` must be set to 1 or omitted
-* `gpu` property should be specified with the following members:
-  * `nvidia_driver` property contains the following members:
-    * `source` is a URL for the driver installer .run file
 
 ### Global Configuration
 The global configuration should set the following properties:

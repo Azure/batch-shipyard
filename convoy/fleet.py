@@ -72,10 +72,24 @@ _NVIDIA_DOCKER = {
             'https://github.com/NVIDIA/nvidia-docker/releases'
             '/download/v1.0.0-rc.3/nvidia-docker_1.0.0.rc.3-1_amd64.deb'
         ),
-        'md5': '49990712ebf3778013fae81ee67f6c79'
+        'md5': '49990712ebf3778013fae81ee67f6c79',
+        'target': 'resources/nvidia-docker.deb'
     }
 }
-_NVIDIA_DRIVER = 'nvidia-driver.run'
+_NVIDIA_DRIVER = {
+    'compute': {
+        'url': (
+            'http://us.download.nvidia.com/XFree86/Linux-x86_64/367.55'
+            '/NVIDIA-Linux-x86_64-367.55.run'
+        ),
+        'md5': '6966e50ac3e30b8a128d496bac157ecb',
+    },
+    'license': (
+        'http://www.nvidia.com/content/DriverDownload-March2009'
+        '/licence.php?lang=us'
+    ),
+    'target': 'resources/nvidia-driver.run'
+}
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh'))
@@ -204,6 +218,49 @@ def initialize(config):
     return _create_clients(config)
 
 
+def _setup_nvidia_driver_package(blob_client, config, vm_size):
+    # type: (azure.storage.blob.BlockBlobService, dict, str) -> pathlib.Path
+    """Set up the nvidia driver package
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param str vm_size: vm size
+    :rtype: pathlib.Path
+    :return: package path
+    """
+    if settings.is_gpu_compute_pool(vm_size):
+        gpu_type = 'compute'
+    elif settings.is_gpu_visualization_pool(vm_size):
+        gpu_type = 'visualization'
+        raise RuntimeError(
+            ('pool consisting of {} nodes require gpu driver '
+             'configuration').format(vm_size))
+    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER['target'])
+    # check to see if package is downloaded
+    if (not pkg.exists() or
+            util.compute_md5_for_file(pkg, False) !=
+            _NVIDIA_DRIVER[gpu_type]['md5']):
+        # display license link
+        if not util.confirm_action(
+                config,
+                msg=('agreement with License for Customer Use of NVIDIA '
+                     'Software @ {}').format(_NVIDIA_DRIVER['license']),
+                allow_auto=False):
+            raise RuntimeError(
+                'Cannot proceed with deployment due to non-agreement with '
+                'license for NVIDIA driver')
+        # download driver
+        logger.debug('downloading NVIDIA driver to {}'.format(
+            _NVIDIA_DRIVER['target']))
+        response = urllibreq.urlopen(_NVIDIA_DRIVER[gpu_type]['url'])
+        with pkg.open('wb') as f:
+            f.write(response.read())
+        # check md5
+        if (util.compute_md5_for_file(pkg, False) !=
+                _NVIDIA_DRIVER[gpu_type]['md5']):
+            raise RuntimeError('md5 mismatch for {}'.format(pkg))
+    return pkg
+
+
 def _setup_nvidia_docker_package(blob_client, config):
     # type: (azure.storage.blob.BlockBlobService, dict) -> pathlib.Path
     """Set up the nvidia docker package
@@ -213,15 +270,17 @@ def _setup_nvidia_docker_package(blob_client, config):
     :return: package path
     """
     offer = settings.pool_offer(config, lower=True)
-    if offer == 'ubuntuserver':
-        pkg = pathlib.Path(_ROOT_PATH, 'resources/nvidia-docker.deb')
-    else:
+    if offer != 'ubuntuserver':
         raise ValueError('Offer {} is unsupported with nvidia docker'.format(
             offer))
+    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DOCKER[offer]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
             util.compute_md5_for_file(pkg, False) !=
             _NVIDIA_DOCKER[offer]['md5']):
+        # download package
+        logger.debug('downloading NVIDIA docker to {}'.format(
+            _NVIDIA_DOCKER[offer]['target']))
         response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
         with pkg.open('wb') as f:
             f.write(response.read())
@@ -249,6 +308,8 @@ def _setup_azurefile_volume_driver(blob_client, config):
     if (not bin.exists() or
             util.compute_md5_for_file(bin, False) !=
             _AZUREFILE_DVD_BIN['md5']):
+        # download package
+        logger.debug('downloading Azure File Docker Volume Driver')
         response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
         with bin.open('wb') as f:
             f.write(response.read())
@@ -383,11 +444,17 @@ def _add_pool(batch_client, blob_client, config):
         _rflist.append((afvc.name, str(afvc)))
     # gpu settings
     if settings.is_gpu_pool(pool_settings.vm_size):
+        if pool_settings.gpu_driver is None:
+            gpu_driver = _setup_nvidia_driver_package(
+                blob_client, config, pool_settings.vm_size)
+            _rflist.append((gpu_driver.name, str(gpu_driver)))
+        else:
+            gpu_driver = pathlib.Path(_NVIDIA_DRIVER['target'])
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
         _rflist.append((gpupkg.name, str(gpupkg)))
         gpu_env = '{}:{}:{}'.format(
             settings.is_gpu_visualization_pool(pool_settings.vm_size),
-            _NVIDIA_DRIVER,
+            gpu_driver.name,
             gpupkg.name)
     else:
         gpu_env = None
@@ -477,10 +544,10 @@ def _add_pool(batch_client, blob_client, config):
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if gpu_env:
+    if pool_settings.gpu_driver:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
-                file_path=_NVIDIA_DRIVER,
+                file_path=gpu_driver.name,
                 blob_source=pool_settings.gpu_driver,
                 file_mode='0755')
         )

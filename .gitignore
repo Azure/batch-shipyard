@@ -100,3 +100,4 @@ resources/azurefile-dockervolumedriver
 resources/azurefile-dockervolumedriver.env
 resources/docker-registry-v2.tar.gz
 resources/nvidia-docker.deb
+resources/nvidia-driver.run

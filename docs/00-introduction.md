@@ -12,9 +12,9 @@ Batch service takes care of the rest including: compute resource provisioning,
 task scheduling, automatic task recovery and retry on failure, automatic
 scaling of resources if specified, and many other complexities that exist
 at cloud-scale. **There is no extra cost to use Azure Batch** - Azure Batch
-is provided as a value-added service on top of compute resources in Azure.
-Costs are incurred only for compute resources consumed, i.e., the same
-baseline prices for
+is provided as a free value-added service on top of compute resources in
+Azure. Costs are incurred only for compute resources consumed and datacenter
+data egress, i.e., the same baseline prices for
 [Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
 or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/).
 
@@ -34,8 +34,11 @@ Azure Subscription --> Batch Account --> Compute Pool --> Compute Nodes
 Batch accounts are provisioned from a valid Azure Subscription. With a
 Batch account, users can provision Compute Pools of varying type such as
 Windows or Linux. Pools are comprised of a target number of compute nodes
-which are identical VMs provisioned from the Azure cloud. Multiple compute
-pools can be provisioned per Batch account.
+which are identical VMs provisioned from the Azure cloud. Multiple Batch
+accounts can be provisioned per Azure Subscription, and multiple compute
+pools can be provisioned per Batch account. Please refer to
+[this page](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
+for default service limits.
 
 Compute jobs:
 ```

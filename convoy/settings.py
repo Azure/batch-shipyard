@@ -181,6 +181,18 @@ def is_gpu_pool(vm_size):
     return False
 
 
+def is_gpu_compute_pool(vm_size):
+    # type: (str) -> bool
+    """Check if pool is for GPU compute
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if compute gpus are present
+    """
+    if vm_size.lower() in _GPU_COMPUTE_INSTANCES:
+        return True
+    return False
+
+
 def is_gpu_visualization_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is for GPU visualization

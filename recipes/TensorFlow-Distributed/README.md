@@ -27,10 +27,6 @@ supported once they are available for N-series VMs.
 supported once they are available for N-series VMs.
 * `sku` should be `16.04.0-LTS` if using GPUs. Other skus will be supported
 once they are available for N-series VMs.
-* `gpu` property should be specified (if using GPUs) with the following
-members:
-  * `nvidia_driver` property contains the following members:
-    * `source` is a URL for the driver installer .run file
 
 If on multiple CPUs:
 * `max_tasks_per_node` must be set to 1 or omitted

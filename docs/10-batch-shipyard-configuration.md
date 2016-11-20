@@ -636,8 +636,8 @@ created with pool creation.
     [HPN patches](http://www.psc.edu/index.php/hpn-ssh) to be swapped with the
     standard distribution OpenSSH server. This is not supported on all
     Linux distributions and may be force disabled.
-* (required for N-Series VM instances) `gpu` property defines additional
-information for nVidia GPU-enabled VMs:
+* (required for `STANDARD_NV` instances, optional for `STANDARD_NC` instances)
+`gpu` property defines additional information for NVIDIA GPU-enabled VMs:
   * `nvidia_driver` property contains the following required members:
     * `source` is the source url to download the driver.
 * (optional) `additional_node_prep_commands` is an array of additional commands

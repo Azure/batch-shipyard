@@ -162,14 +162,16 @@ def get_input(prompt):
     return raw_input(prompt)
 
 
-def confirm_action(config, msg=None):
-    # type: (dict) -> bool
+def confirm_action(config, msg=None, allow_auto=True):
+    # type: (dict, str, bool) -> bool
     """Confirm action with user before proceeding
     :param dict config: configuration dict
+    :param msg str: confirmation message
+    :param bool allow_auto: allow auto confirmation
     :rtype: bool
     :return: if user confirmed or not
     """
-    if config['_auto_confirm']:
+    if allow_auto and config['_auto_confirm']:
         return True
     if msg is None:
         msg = 'action'

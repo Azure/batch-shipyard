@@ -7,6 +7,12 @@
 Please see the configuration doc for information on how to integrate with
 a private container registry.
 
+### Changed
+- GPU driver for `STANDARD_NC` instances defined in the
+`gpu`:`nvidia_driver`:`source` property is no longer required. If omitted,
+an NVIDIA driver will be downloaded automatically with an NVIDIA License
+agreement prompt. For `STANDARD_NV` instances, a driver URL is still required.
+
 ### Fixed
 - Cascade thread exceptions will terminate with non-zero exit code
 - Some improvements with node prep and reboots
