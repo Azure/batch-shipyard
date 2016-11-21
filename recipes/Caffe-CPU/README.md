@@ -26,8 +26,7 @@ array which should have a task definition containing:
 e.g., `alfpark/caffe:cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/caffe:cpu` Docker image and to run the MNIST convolutional
-example, the `command` would simply be:
-`"/opt/run_mnist.sh"`
+example, the `command` would simply be: `"/caffe/run_mnist.sh"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

@@ -39,7 +39,7 @@ e.g., `alfpark/caffe:gpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/caffe:gpu` Docker image and to run the MNIST convolutional
 example on all available GPUs, the `command` would simply be:
-`"/opt/run_mnist.sh -gpu all"`
+`"/caffe/run_mnist.sh -gpu all"`
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
 

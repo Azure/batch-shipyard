@@ -6,7 +6,7 @@
                 {
                     "image": "alfpark/caffe:cpu",
                     "remove_container_after_exit": true,
-                    "command": "/opt/run_mnist.sh"
+                    "command": "/caffe/run_mnist.sh"
                 }
             ]
         }
