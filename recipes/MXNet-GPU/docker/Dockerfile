@@ -46,6 +46,8 @@ RUN git clone --recursive https://github.com/dmlc/mxnet/ && \
     echo "USE_CUDA=1" >> config.mk && \
     echo "USE_CUDNN=1" >> config.mk && \
     echo "USE_CUDA_PATH=/usr/local/cuda" >> config.mk && \
+    echo "CUDA_ARCH=-gencode arch=compute_37,code=sm_37 -gencode arch=compute_37,code=compute_37 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_52,code=compute_52" >> config.mk && \
+    sed -i -e 's/$(MSHADOW_NVCCFLAGS)/$(MSHADOW_NVCCFLAGS) $(CUDA_ARCH)/g' Makefile && \
     make -j$(nproc) ADD_LDFLAGS=-L/usr/local/cuda/lib64/stubs && \
     cd R-package && \
     Rscript -e "library(devtools); library(methods); options(repos=c(CRAN='https://cran.rstudio.com')); install_deps(dependencies = TRUE)" && \

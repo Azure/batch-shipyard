@@ -18,6 +18,7 @@ prevent conflicts in case of un-named simultaneous tasks from multiple jobs
 with NVIDIA K80/M60
 - Update Caffe docker image, default to using OpenBLAS over ATLAS, and
 optimize GPU images for use with NVIDIA K80/M60
+- Update MXNet GPU docker image optimized for use with NVIDIA K80/M60
 - Update TensorFlow docker images to 0.11.0 and optimize GPU images for use
 with NVIDIA K80/M60
 

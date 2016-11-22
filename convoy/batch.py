@@ -872,6 +872,7 @@ def _send_docker_kill_signal(
     :param bool task_is_mi: task is multi-instance
     """
     targets = [(pool_id, node_id)]
+    task_name = None
     # if this task is multi-instance, get all subtasks
     if task_is_mi:
         subtasks = batch_client.task.list_subtasks(job_id, task_id)
@@ -879,7 +880,6 @@ def _send_docker_kill_signal(
             targets.append(
                 (subtask.node_info.pool_id, subtask.node_info.node_id))
         # fetch container name
-        task_name = None
         try:
             jobs = settings.job_specifications(config)
             for job in jobs:
