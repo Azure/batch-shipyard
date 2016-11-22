@@ -4,9 +4,9 @@
             "id": "cntkjob",
             "tasks": [
                 {
-                    "image": "alfpark/cntk:1.7.2-gpu-openmpi-refdata",
+                    "image": "alfpark/cntk:2.0beta4-gpu-openmpi-refdata",
                     "remove_container_after_exit": true,
-                    "command": "/bin/bash -c \"/cntk/build-mkl/gpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST\"",
+                    "command": "/cntk/run_convnet_mnist_gpu.sh",
                     "gpu": true
                 }
             ]

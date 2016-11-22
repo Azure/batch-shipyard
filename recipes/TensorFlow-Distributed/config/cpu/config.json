@@ -4,7 +4,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "alfpark/tensorflow:0.10.0-cpu"
+            "alfpark/tensorflow:0.11.0-cpu"
         ]
     }
 }

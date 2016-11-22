@@ -5,15 +5,14 @@
             "multi_instance_auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/cntk:1.7.2-cpu-openmpi-refdata",
+                    "image": "alfpark/cntk:2.0beta4-cpu-openmpi-refdata",
                     "remove_container_after_exit": true,
                     "shared_data_volumes": [
                         "glustervol"
                     ],
-                    "command": "mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 --host $AZ_BATCH_HOST_LIST /cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST_Parallel.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$AZ_BATCH_NODE_SHARED_DIR/gfs parallelTrain=true",
+                    "command": "mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 --host $AZ_BATCH_HOST_LIST /cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/BrainScript/ConvNet_MNIST_Parallel.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$AZ_BATCH_NODE_SHARED_DIR/gfs/$AZ_BATCH_JOB_ID-$AZ_BATCH_TASK_ID parallelTrain=true",
                     "multi_instance": {
-                        "num_instances": "pool_current_dedicated",
-                        "coordination_command": null
+                        "num_instances": "pool_current_dedicated"
                     }
                 }
             ]

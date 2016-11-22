@@ -60,7 +60,7 @@ if run on CPUs.
   * `num_instances` should be set to `pool_specification_vm_count` or
     `pool_current_dedicated`
   * `coordination_command` should be unset or `null`
-  * `resource_files` array can be empty
+  * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker images can be found [here](./docker).

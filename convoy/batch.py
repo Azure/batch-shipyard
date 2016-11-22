@@ -855,13 +855,14 @@ def terminate_all_jobs(batch_client, config, wait=False):
 
 
 def _send_docker_kill_signal(
-        batch_client, username, ssh_private_key, pool_id, node_id, job_id,
-        task_id, task_is_mi):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, str,
+        batch_client, config, username, ssh_private_key, pool_id, node_id,
+        job_id, task_id, task_is_mi):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict, str,
     #        pathlib.Path, str, str, str, str, bool) -> None
     """Send docker kill signal via SSH
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     :param str username: SSH username
     :param pathlib.Path ssh_private_key: SSH private key
     :param str pool_id: pool_id of node
@@ -877,6 +878,20 @@ def _send_docker_kill_signal(
         for subtask in subtasks.value:
             targets.append(
                 (subtask.node_info.pool_id, subtask.node_info.node_id))
+        # fetch container name
+        task_name = None
+        try:
+            jobs = settings.job_specifications(config)
+            for job in jobs:
+                if job_id == settings.job_id(job):
+                    tasks = settings.job_tasks(job)
+                    task_name = settings.task_name(tasks[0])
+                    break
+        except KeyError:
+            pass
+    # TODO get task names for non-mi tasks?
+    if task_name is None:
+        task_name = '{}-{}'.format(job_id, task_id)
     # for each task node target, issue docker kill
     for target in targets:
         rls = batch_client.compute_node.get_remote_login_settings(
@@ -886,10 +901,9 @@ def _send_docker_kill_signal(
             'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
             '-p', str(rls.remote_login_port), '-t',
             '{}@{}'.format(username, rls.remote_login_ip_address),
-            ('sudo /bin/bash -c "docker kill {jid}-{tid}; '
-             'docker ps -qa -f name={jid}-{tid} | '
-             'xargs --no-run-if-empty docker rm -v"').format(
-                 jid=job_id, tid=task_id)
+            ('sudo /bin/bash -c "docker kill {tn}; '
+             'docker ps -qa -f name={tn} | '
+             'xargs --no-run-if-empty docker rm -v"').format(tn=task_name)
         ]
         rc = util.subprocess_with_output(ssh_args, shell=False)
         if rc != 0:
@@ -955,7 +969,7 @@ def terminate_tasks(
                 else:
                     task_is_mi = False
                 _send_docker_kill_signal(
-                    batch_client, pool.ssh.username, ssh_private_key,
+                    batch_client, config, pool.ssh.username, ssh_private_key,
                     _task.node_info.pool_id, _task.node_info.node_id,
                     job_id, task, task_is_mi)
             else:

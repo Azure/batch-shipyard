@@ -14,6 +14,8 @@ an NVIDIA driver will be downloaded automatically with an NVIDIA License
 agreement prompt. For `STANDARD_NV` instances, a driver URL is still required.
 - Docker container name auto-tagging now prepends the job id in order to
 prevent conflicts in case of un-named simultaneous tasks from multiple jobs
+- Update CNTK docker images to 2.0beta4 and optimize GPU images for use
+with NVIDIA K80/M60
 - Update Caffe docker image, default to using OpenBLAS over ATLAS, and
 optimize GPU images for use with NVIDIA K80/M60
 - Update TensorFlow docker images to 0.11.0 and optimize GPU images for use

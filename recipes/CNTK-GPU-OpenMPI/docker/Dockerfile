@@ -1,6 +1,6 @@
 # Dockerfile for CNTK-GPU-OpenMPI for use with Batch Shipyard on Azure Batch
 
-FROM nvidia/cuda:7.5-cudnn5-devel
+FROM nvidia/cuda:8.0-cudnn5-devel
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # install base system
@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         cmake \
         git \
+        g++-multilib \
+        gcc-multilib \
         gfortran-multilib \
         libavcodec-dev \
         libavformat-dev \
@@ -20,24 +22,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libswscale-dev \
         libtiff-dev \
         pkg-config \
-        python-dev \
-        python-numpy \
-        python-pip \
-        python-yaml \
         wget \
         zlib1g-dev \
-        openssh-server \
-        openssh-client \
-        #For Kaldi
+        # Protobuf
+        ca-certificates \
+        curl \
+        unzip \
+        # For Kaldi
+        autoconf \
         automake \
         libtool \
-        autoconf \
+        python-dev \
         subversion \
-        #For Kaldi's dependencies
-        libapr1 libaprutil1 libltdl-dev libltdl7 libserf-1-1 libsigsegv2 libsvn1 m4 && \
+        # For Kaldi's dependencies
+        libapr1 libaprutil1 libltdl-dev libltdl7 libserf-1-1 libsigsegv2 libsvn1 m4 \
+        # For SWIG
+        libpcre++-dev \
+        # batch-shipyard deps
+        openssh-server \
+        openssh-client && \
     rm -rf /var/lib/apt/lists/* && \
-    pip install pytest sphinx-rtd-theme Pillow && \
-    # configure ssh server and keys
+    curl -fSsL https://bootstrap.pypa.io/get-pip.py | python && \
     mkdir /var/run/sshd && \
     ssh-keygen -A && \
     sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
@@ -47,7 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chmod 700 /root/.ssh && \
     cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
-# install libzip, openmpi, boost, opencv, and openblas
+# build and install libzip, openmpi, boost, opencv, openblas, protobuf
 RUN LIBZIP_VERSION=1.1.3 && \
     wget -q -O - http://nih.at/libzip/libzip-${LIBZIP_VERSION}.tar.gz | tar -xzf - && \
     cd libzip-${LIBZIP_VERSION} && \
@@ -75,15 +80,6 @@ RUN LIBZIP_VERSION=1.1.3 && \
     ldconfig /usr/local/lib && \
     cd .. && \
     rm -rf /boost_${BOOST_VERSION} && \
-    # opencv
-    OPENCV_VERSION=3.1.0 && \
-    wget -q -O - https://github.com/Itseez/opencv/archive/${OPENCV_VERSION}.tar.gz | tar -xzf - && \
-    cd opencv-${OPENCV_VERSION} && \
-    cmake -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=/usr/local/opencv-${OPENCV_VERSION} . && \
-    make -j"$(nproc)" install && \
-    ldconfig /usr/local/lib && \
-    cd .. && \
-    rm -rf /opencv-${OPENCV_VERSION} && \
     # openblas
     OPENBLAS_VERSION=0.2.19 && \
     wget -q -O - https://github.com/xianyi/OpenBLAS/archive/v${OPENBLAS_VERSION}.tar.gz | tar -xzf - && \
@@ -94,36 +90,52 @@ RUN LIBZIP_VERSION=1.1.3 && \
     make PREFIX=/usr/local/openblas install && \
     ldconfig /usr/local/openblas && \
     cd .. && \
-    rm -rf /OpenBLAS-${OPENBLAS_VERSION}
+    rm -rf /OpenBLAS-${OPENBLAS_VERSION} && \
+    # opencv
+    OPENCV_VERSION=3.1.0 && \
+    wget -q -O - https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz | tar -xzf - && \
+    cd opencv-${OPENCV_VERSION} && \
+    # fix graphcuts and CUDA8
+    sed -i -e 's/^#if !defined (HAVE_CUDA) || defined (CUDA_DISABLER)/#if !defined (HAVE_CUDA) || defined (CUDA_DISABLER) || (CUDART_VERSION >= 8000)/' modules/cudalegacy/src/graphcuts.cpp && \
+    cmake -DCUDA_ARCH_BIN="3.7 5.2" -DCUDA_ARCH_PTX="3.7 5.2" -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=/usr/local/opencv-${OPENCV_VERSION} . && \
+    make -j"$(nproc)" install && \
+    ldconfig /usr/local/lib && \
+    cd .. && \
+    rm -rf /opencv-${OPENCV_VERSION} && \
+    # protocol buffers
+    PROTOBUF_VERSION=3.1.0 \
+    PROTOBUF_STRING=protobuf-$PROTOBUF_VERSION && \
+    wget -O - --no-verbose https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz | tar -xzf - && \
+    cd $PROTOBUF_STRING && \
+    ./autogen.sh && \
+    ./configure CFLAGS=-fPIC CXXFLAGS=-fPIC --disable-shared --prefix=/usr/local/$PROTOBUF_STRING && \
+    make -j $(nproc) install && \
+    cd .. && \
+    rm -rf $PROTOBUF_STRING
 
 # set env vars
 ENV KALDI_VERSION=c024e8aa
-ENV PATH=${PATH}:/usr/local/bin:/cntk/build/gpu/release/bin \
+ENV PATH=/root/anaconda3/envs/cntk-py34/bin:/usr/local/bin:/usr/local/mpi/bin:/cntk/build/gpu-mkl/release/bin:${PATH} \
     KALDI_PATH=/usr/local/kaldi-$KALDI_VERSION \
     BLAS=/usr/local/openblas/lib/libopenblas.so \
     LAPACK=/usr/local/openblas/lib/libopenblas.so \
-    LD_LIBRARY_PATH=/usr/local/openblas/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+    PYTHONPATH=/cntk/bindings/python:$PYTHONPATH \
+    LD_LIBRARY_PATH=/usr/local/openblas/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:/cntk/bindings/python/cntk/libs:$LD_LIBRARY_PATH
+ENV CNTK_CUDA_CODEGEN_RELEASE="\
+        -gencode arch=compute_37,code=sm_37 \
+        -gencode arch=compute_37,code=compute_37 \
+        -gencode arch=compute_52,code=sm_52 \
+        -gencode arch=compute_52,code=compute_52"
 
-# install cub, create cudnn links, install cntk custom mkl, scipy and kaldi
+# install cub, fix symlinks, install cntk custom mkl, kaldi, swig and anaconda
 RUN CUB_VERSION=1.4.1 && \
     wget -q -O - https://codeload.github.com/NVlabs/cub/tar.gz/${CUB_VERSION} | tar -xzf - -C /usr/local && \
-    # symlink cudnn
-    mkdir -p /usr/local/cudnn/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn/cuda/lib64/libcudnn.so && \
+    # fix symlinks
+    ln -s /usr/local/cuda/lib64/stubs/libnvidia-ml.so /usr/local/cuda/lib64/stubs/libnvidia-ml.so.1 && \
     # custom mkl
     mkdir /usr/local/CNTKCustomMKL && \
     wget --no-verbose -O - https://www.cntk.ai/mkl/CNTKCustomMKL-Linux-2.tgz | \
     tar -xzf - -C /usr/local/CNTKCustomMKL && \
-    # scipy
-    SCIPY_VERSION=0.18.0 && \
-    wget -q -O - https://github.com/scipy/scipy/releases/download/v${SCIPY_VERSION}/scipy-${SCIPY_VERSION}.tar.gz | tar -zxf - && \
-    cd scipy-${SCIPY_VERSION} && \
-    python setup.py build && \
-    python setup.py install && \
-    cd .. && \
-    rm -rf scipy-${SCIPY_VERSION} && \
     # kaldi
     mkdir $KALDI_PATH && \
     wget --no-verbose -O - https://github.com/kaldi-asr/kaldi/archive/$KALDI_VERSION.tar.gz | tar -xzf - --strip-components=1 -C $KALDI_PATH && \
@@ -136,60 +148,47 @@ RUN CUB_VERSION=1.4.1 && \
     make -j $(nproc) depend && \
     make -j $(nproc) all && \
     find $KALDI_PATH -name '*.o' -print0 | xargs -0 rm && \
-    for dir in $KALDI_PATH/src/*bin; do make -C $dir clean; done
+    for dir in $KALDI_PATH/src/*bin; do make -C $dir clean; done && \
+    # SWIG
+    SWIG_VERSION=3.0.10 && \
+    cd /root && \
+    wget -q http://prdownloads.sourceforge.net/swig/swig-${SWIG_VERSION}.tar.gz -O - | tar xvfz - && \
+    cd swig-${SWIG_VERSION} && \
+    ./configure --without-java --without-perl5 && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && \
+    rm -rf swig-${SWIG_VERSION} && \
+    # Anaconda
+    wget -q https://repo.continuum.io/archive/Anaconda3-4.2.0-Linux-x86_64.sh && \
+    bash Anaconda3-4.2.0-Linux-x86_64.sh -b && \
+    rm -f Anaconda3-4.2.0-Linux-x86_64.sh && \
+    # update ldconfig
+    ldconfig /usr/local/lib
 
 # build cntk
 WORKDIR /cntk
-RUN git clone --recursive https://github.com/Microsoft/cntk/ . && \
-    ldconfig /usr/local/lib && CONFIGURE_OPTS="\
+RUN CNTK_VERSION=v2.0.beta4.0 && \
+    git clone --depth=1 --recursive -b ${CNTK_VERSION} https://github.com/Microsoft/CNTK.git . && \
+	# set Anaconda environment
+    /root/anaconda3/bin/conda env create -p /root/anaconda3/envs/cntk-py34/ \
+		--file /cntk/Scripts/install/linux/conda-linux-cntk-py34-environment.yml && \
+    # build gpu-mkl only
+    CONFIGURE_OPTS="\
+      --1bitsgd=yes \
       --with-cuda=/usr/local/cuda \
       --with-gdk-include=/usr/local/cuda/include \
       --with-gdk-nvml-lib=/usr/local/cuda/lib64/stubs \
       --with-kaldi=${KALDI_PATH} \
-      --with-cudnn=/usr/local/cudnn \
-      --1bitsgd=yes" && \
-    mkdir -p build/gpu/release && \
-    cd build/gpu/release && \
-    ../../../configure $CONFIGURE_OPTS --with-openblas=/usr/local/openblas && \
-    make -j"$(nproc)" all && \
-    cd ../../.. && \
+      --with-py34-path=/root/anaconda3/envs/cntk-py34 \
+      --with-cudnn=/usr/local" && \
     mkdir -p build-mkl/gpu/release && \
     cd build-mkl/gpu/release && \
     ../../../configure $CONFIGURE_OPTS --with-mkl=/usr/local/CNTKCustomMKL && \
     make -j"$(nproc)" all && \
-    rm -rf /cntk/build/gpu/release/.build && \
     rm -rf /cntk/build-mkl/gpu/release/.build && \
     # add LD_LIBRARY_PATH to root
     echo LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:'$LD_LIBRARY_PATH' >> /root/.bashrc
-
-# retrieve cifar-10/mnist datasets
-RUN cd /cntk/Examples/Image/DataSets/CIFAR-10 && \
-    python install_cifar10.py && \
-    cd /cntk/Examples/Image/DataSets/MNIST && \
-    python install_mnist.py
-
-# create convnet mnist config for parallel training
-RUN cd /cntk/Examples/Image/Classification/ConvNet && \
-    cp ConvNet_MNIST.cntk ConvNet_MNIST_Parallel.cntk && \
-    sed -i "/# TRAINING CONFIG/i \
-maxEpochs = 40\n\
-minibatchSize = 64\n\
-autoAdjustMinibatch = false\n" ConvNet_MNIST_Parallel.cntk && \
-    sed -i "/    SGD = {/a \
-    ParallelTrain = {\n\
-        parallelizationMethod = DataParallelSGD\n\
-        DataParallelSGD = {\n\
-        gradientBits = 1\n\
-        }\n\
-        parallelizationStartEpoch = 2\n\
-    }\n\
-    AutoAdjust = {\n\
-        autoAdjustMinibatch = x\n\
-        minibatchSizeTuningFrequency = 3\n\
-    }\n" ConvNet_MNIST_Parallel.cntk && \
-    sed -i 's/        minibatchSize = 64/        minibatchSize = $minibatchSize$/' ConvNet_MNIST_Parallel.cntk && \
-    sed -i 's/        maxEpochs = 40/        maxEpochs = $maxEpochs$/' ConvNet_MNIST_Parallel.cntk && \
-    sed -i 's/        autoAdjustMinibatch = x/        autoAdjustMinibatch = $autoAdjustMinibatch$/' ConvNet_MNIST_Parallel.cntk
 
 # copy script to run convnet mnist
 COPY run_convnet_mnist_gpu.sh /cntk

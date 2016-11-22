@@ -14,11 +14,12 @@ The pool configuration should enable the following properties:
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid CNTK CPU-enabled
-Docker image.
-[alfpark/cntk:1.7.2-cpu-openmpi-refdata](https://hub.docker.com/r/alfpark/cntk/)
-can be used for this recipe which contains reference data for MNIST and CIFAR
-examples. If you do not need this reference data then you can use the
-`alfpark/cntk:1.7.2-cpu-openmpi` image instead.
+Docker image. Images denoted with `refdata` tag suffixes found in
+[alfpark/cntk](https://hub.docker.com/r/alfpark/cntk/)
+can be used for this recipe which contains reference data for MNIST and
+CIFAR-10 examples. If you do not need this reference data then you can use
+the images without the `refdata` suffix on the image tag. For this example,
+`alfpark/cntk:2.0beta4-cpu-openmpi-refdata` can be used.
 * `docker_volumes` must be populated with the following if running a CNTK MPI
 job (multi-node):
   * `shared_data_volumes` should contain an Azure File Docker volume driver,
@@ -30,33 +31,33 @@ job (multi-node):
 ### Non-MPI Jobs Configuration (SingleNode)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
-e.g., `alfpark/cntk:1.7.2-cpu-openmpi-refdata`
+* `image` should be the name of the Docker image for this container
+invocation, e.g., `alfpark/cntk:2.0beta4-cpu-openmpi-refdata`
 * `command` should contain the command to pass to the Docker run invocation.
-For the `alfpark/cntk:1.7.2-cpu-openmpi-refdata` Docker image and to run the
-MNIST convolutional example on a single CPU, the `command` would simply
+For the `alfpark/cntk:2.0beta4-cpu-openmpi-refdata` Docker image and to run
+the MNIST convolutional example on a single CPU, the `command` would simply
 be:
-`"/bin/bash -c \"/cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST\""`
+`"/bin/bash -c \"/cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/BrainScript/ConvNet_MNIST.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST\""`
 
 ### MPI Jobs Configuration (MultiNode)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation.
-Since we are not using either the MNIST or CIFAR examples, this can simply
-be `alfpark/cntk:1.7.2-cpu-openmpi`. Please note that the `docker_images` in
-the Global Configuration should match this image name.
+For this example, this should be `alfpark/cntk:2.0beta4-cpu-openmpi-refdata`.
+Please note that the `docker_images` in the Global Configuration should match
+this image name.
 * `command` should contain the command to pass to the Docker run invocation.
 For this example, we will run the ConvNet MNIST Example that has been modified
-to run in parallel in the `alfpark/cntk:1.7.2-cpu-openmpi-refdata` Docker
+to run in parallel in the `alfpark/cntk:2.0beta4-cpu-openmpi-refdata` Docker
 image. The application `command` to run would be:
-`"mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 --host $AZ_BATCH_HOST_LIST /cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/ConvNet_MNIST_Parallel.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$AZ_BATCH_NODE_SHARED_DIR/gfs parallelTrain=true"`
+`"mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 --host $AZ_BATCH_HOST_LIST /cntk/build-mkl/cpu/release/bin/cntk configFile=/cntk/Examples/Image/Classification/ConvNet/BrainScript/ConvNet_MNIST_Parallel.cntk rootDir=. dataDir=/cntk/Examples/Image/DataSets/MNIST outputDir=$AZ_BATCH_NODE_SHARED_DIR/gfs parallelTrain=true"`
   * **NOTE:** tasks that span multiple compute nodes will need their output
     stored on a shared file system, otherwise CNTK will fail during test
-    as individual ranks perform test after training which require access to
-    the trained model which is only written by one rank. To override the
-    output directory for the example above, add `OutputDir=/some/path` to a
-    shared file system location such as Azure File Docker Volume, NFS,
-    GlusterFS, etc. The example above already is writing to a GlusterFS share.
+    as the checkpoints and model are written to the specified output directory
+    only by the first rank. To override the output directory for the example
+    above, add `OutputDir=/some/path` to a shared file system location such
+    as Azure File Docker Volume, NFS, GlusterFS, etc. The example above
+    already is writing to a GlusterFS share.
   * `mpirun` requires the following flags:
     * `--alow-run-as-root` allows OpenMPI to run as root, as container is run
       as root.
@@ -78,11 +79,11 @@ for details.
   * `num_instances` should be set to `pool_specification_vm_count` or
     `pool_current_dedicated`
   * `coordination_command` should be unset or `null`
-  * `resource_files` array can be empty
+  * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).
 
 You must agree to the following licenses prior to use:
 * [CNTK License](https://github.com/Microsoft/CNTK/blob/master/LICENSE.md)
-* [CNTK 1-bit SGD Non-Commercial License](https://cntk1bitsgd.codeplex.com/SourceControl/latest#LICENSE-NON-COMMERCIAL.md)
+* [CNTK 1-bit SGD License](https://github.com/microsoft/cntk/wiki/CNTK-1bit-SGD-License)

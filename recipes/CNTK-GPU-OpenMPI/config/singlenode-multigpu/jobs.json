@@ -4,7 +4,7 @@
             "id": "cntkjob",
             "tasks": [
                 {
-                    "image": "alfpark/cntk:1.7.2-gpu-openmpi-refdata",
+                    "image": "alfpark/cntk:2.0beta4-gpu-openmpi-refdata",
                     "remove_container_after_exit": true,
                     "command": "/cntk/run_convnet_mnist_gpu.sh .",
                     "gpu": true
