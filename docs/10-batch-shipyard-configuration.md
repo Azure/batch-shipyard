@@ -309,11 +309,17 @@ simultaneous downloads allowed to each image.
 * `direct_download_seed_bias` property sets the number of direct download
 seeds to prefer per image before switching to peer-to-peer transfer.
 
-The `global_resources` is a required property that contains the Docker image
-and volume configuration. `docker_images` is an array of docker images that
-should be installed on every compute node when this configuration file is
-supplied with the tool for creating a compute pool. Note that tags are
-supported.
+The `global_resources` is property that contains Docker image, volume
+configuration and data ingress information. This property is required.
+
+`docker_images` is an array of docker images that should be installed on
+every compute node when this configuration file is supplied while creating
+a compute pool. Image tags are supported. Image names should not include
+private registry server names, as these will be automatically prepended. For
+instance, if you have an image `abc/mytag` on your private registry
+`myregistry-myorg.azurecr.io`, your image should be named in the
+`docker_images` array as `abc/mytag` and not
+`myregistry-myorg.azurecr.io/abc/mytag`.
 
 `files` is an optional property that specifies data that should be ingressed
 from a location accessible by the local machine (i.e., machine invoking
