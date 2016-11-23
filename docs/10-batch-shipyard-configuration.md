@@ -309,8 +309,9 @@ simultaneous downloads allowed to each image.
 * `direct_download_seed_bias` property sets the number of direct download
 seeds to prefer per image before switching to peer-to-peer transfer.
 
-The `global_resources` is property that contains Docker image, volume
-configuration and data ingress information. This property is required.
+The `global_resources` property contains information regarding required
+Docker images, volume configuration and data ingress information. This
+property is required.
 
 `docker_images` is an array of docker images that should be installed on
 every compute node when this configuration file is supplied while creating
