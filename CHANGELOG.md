@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.0.0] - 2016-11-23
 ### Added
 - Support for any Internet accessible container registry, including
 [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/).
@@ -251,7 +253,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...2.0.0
 [2.0.0rc3]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...2.0.0rc3
 [2.0.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...2.0.0rc2
 [2.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/1.1.0...2.0.0rc1

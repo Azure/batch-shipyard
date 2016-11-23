@@ -1428,18 +1428,25 @@ def list_tasks(batch_client, config, jobid=None):
                                   task.execution_info.
                                   scheduling_error.message)
                     else:
-                        ei = (' start_time={} end_time={} '
+                        if (task.execution_info.end_time is not None and
+                                task.execution_info.start_time is not None):
+                            duration = (task.execution_info.end_time -
+                                        task.execution_info.start_time)
+                        else:
+                            duration = 'n/a'
+                        ei = (' start_time={} end_time={} duration={} '
                               'exit_code={}').format(
                                   task.execution_info.start_time,
                                   task.execution_info.end_time,
+                                  duration,
                                   task.execution_info.exit_code)
                 else:
                     ei = ''
                 logger.info(
-                    'job_id={} task_id={} [display_name={} state={} '
-                    'pool_id={} node_id={}{}]'.format(
-                        job_id, task.id, task.display_name, task.state,
-                        task.node_info.pool_id, task.node_info.node_id, ei))
+                    'job_id={} task_id={} [state={} pool_id={} '
+                    'node_id={}{}]'.format(
+                        job_id, task.id, task.state, task.node_info.pool_id,
+                        task.node_info.node_id, ei))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:

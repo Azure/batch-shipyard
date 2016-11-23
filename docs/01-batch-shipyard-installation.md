@@ -25,7 +25,7 @@ To install required software:
 cd batch-shipyard
 # Install for Python2
 ./install.sh
-# Or if you prefer Python3
+# Or to install for Python3 (recommended)
 ./install.sh -3
 ```
 Please ensure that you are not invoking the install script as root. `sudo`
