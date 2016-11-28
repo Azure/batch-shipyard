@@ -6,6 +6,9 @@
 options to be specified as environment variables. Please see the usage doc
 for more information.
 
+### Fixed
+- Cascade docker run not propagating exit code
+
 ## [2.0.0] - 2016-11-23
 ### Added
 - Support for any Internet accessible container registry, including
