@@ -73,6 +73,14 @@ following:
 * `-v` or `--verbose` is for verbose output
 * `-y` or `--yes` is to assume yes for all confirmation prompts
 
+Note that all of the configuration options regarding JSON files can be
+specified as environment variables instead:
+* `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
+* `SHIPYARD_CREDENTIALS_JSON` in lieu of `--credentials`
+* `SHIPYARD_CONFIG_JSON` in lieu of `--config`
+* `SHIPYARD_POOL_JSON` in lieu of `--pool`
+* `SHIPYARD_JOBS_JSON` in lieu of `--jobs`
+
 ## Commands
 `shipyard` (and `shipyard.py`) script contains the following top-level
 commands:
@@ -162,7 +170,7 @@ set to `true` in the job specification for the job.
   * `--delete` will delete any stale cleanup jobs
 * `del` will delete jobs specified in the jobs configuration file
   * `--all` will delete all jobs found in the Batch account
-  * `--jobid` force termination scope to just this job id
+  * `--jobid` force deletion scope to just this job id
   * `--wait` will wait for deletion to complete
 * `deltasks` will delete tasks within jobs specified in the jobs
 configuration file. Active or running tasks will be terminated first.

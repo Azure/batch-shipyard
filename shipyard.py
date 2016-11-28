@@ -182,6 +182,7 @@ def configdir_option(f):
     return click.option(
         '--configdir',
         expose_value=False,
+        envvar='SHIPYARD_CONFIGDIR',
         help='Configuration directory where all configuration files can be '
         'found. Each json config file must be named exactly the same as the '
         'regular switch option, e.g., pool.json for --pool. Individually '
@@ -197,6 +198,7 @@ def credentials_option(f):
     return click.option(
         '--credentials',
         expose_value=False,
+        envvar='SHIPYARD_CREDENTIALS_JSON',
         help='Credentials json config file',
         callback=callback)(f)
 
@@ -209,6 +211,7 @@ def config_option(f):
     return click.option(
         '--config',
         expose_value=False,
+        envvar='SHIPYARD_CONFIG_JSON',
         help='Global json config file',
         callback=callback)(f)
 
@@ -221,6 +224,7 @@ def pool_option(f):
     return click.option(
         '--pool',
         expose_value=False,
+        envvar='SHIPYARD_POOL_JSON',
         help='Pool json config file',
         callback=callback)(f)
 
@@ -233,6 +237,7 @@ def jobs_option(f):
     return click.option(
         '--jobs',
         expose_value=False,
+        envvar='SHIPYARD_JOBS_JSON',
         help='Jobs json config file',
         callback=callback)(f)
 

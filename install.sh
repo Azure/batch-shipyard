@@ -3,15 +3,6 @@
 set -e
 set -o pipefail
 
-PY3=
-if [ "$1" == "-3" ]; then
-    PY3=1
-    echo "Installing for Python3."
-else
-    PY3=0
-    echo "Installing for Python2."
-fi
-
 # check to ensure this is not being run directly as root
 if [ $(id -u) -eq 0 ]; then
     echo "Installation cannot be performed as root or via sudo."
@@ -31,6 +22,21 @@ fi
 if [ ! -f $PWD/shipyard.py ]; then
     echo "shipyard.py not found in $PWD."
     echo "Please run install.sh from the same directory as shipyard.py."
+    exit 1
+fi
+
+# check for python version
+if [ "$1" == "-3" ]; then
+    PYTHON=python3
+    PIP=pip3
+else
+    PYTHON=python
+    PIP=pip
+fi
+if hash $PYTHON 2> /dev/null; then
+    echo "Installing for $PYTHON."
+else
+    echo "$PYTHON not found, please install $PYTHON first with your system software installer."
     exit 1
 fi
 
@@ -58,7 +64,7 @@ DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 # install requisite packages from distro repo
 if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
     sudo apt-get update
-    if [ $PY3 -eq 0 ]; then
+    if [ $PYTHON == "python" ]; then
         PYTHON_PKGS="libpython-dev python-dev python-pip"
     else
         PYTHON_PKGS="libpython3-dev python3-dev python3-pip"
@@ -67,22 +73,32 @@ if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
         build-essential libssl-dev libffi-dev openssl \
         openssh-client rsync $PYTHON_PKGS
 elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
-    if [ $PY3 -eq 0 ]; then
+    if [ $PYTHON == "python" ]; then
         PYTHON_PKGS="python-devel"
-        curl https://bootstrap.pypa.io/get-pip.py | sudo python
     else
-        PYTHON_PKGS="python3-devel"
-        curl https://bootstrap.pypa.io/get-pip.py | sudo python3
+        if [ $(yum list installed epel-release) -ne 0 ]; then
+            echo "epel-release package not installed."
+            echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
+            exit 1
+        fi
+        if [ $(yum list installed python34) -ne 0 ]; then
+            echo "python34 epel package not installed."
+            echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
+            exit 1
+        fi
+        PYTHON_PKGS="python34-devel"
     fi
+    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
     sudo yum install -y gcc openssl-devel libffi-devel openssl \
         openssh-clients rsync $PYTHON_PKGS
 elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
     sudo zypper ref
-    if [ $PY3 -eq 0 ]; then
-        PYTHON_PKGS="python-devel python-pip"
+    if [ $PYTHON == "python" ]; then
+        PYTHON_PKGS="python-devel"
     else
-        PYTHON_PKGS="python3-devel python3-pip"
+        PYTHON_PKGS="python3-devel"
     fi
+    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
     sudo zypper -n in gcc libopenssl-devel libffi48-devel openssl \
         openssh rsync $PYTHON_PKGS
 else
@@ -109,23 +125,21 @@ if [ -z $BATCH_SHIPYARD_ROOT_DIR ]; then
 fi
 
 EOF
-chmod 755 shipyard
 
-# install required python packages
-if [ $PY3 -eq 0 ]; then
+if [ $PYTHON == "python" ]; then
 cat >> shipyard << 'EOF'
 python $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
-    sudo pip install --upgrade pip setuptools
-    pip install --upgrade --user -r requirements.txt
-    echo ""
-    echo ">> Install completed for Python2. Please run Batch Shipyard as: $PWD/shipyard"
 else
 cat >> shipyard << 'EOF'
 python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
-    sudo pip3 install --upgrade pip setuptools
-    pip3 install --upgrade --user -r requirements.txt
-    echo ""
-    echo ">> Install completed for Python3. Please run Batch Shipyard as: $PWD/shipyard"
 fi
+
+chmod 755 shipyard
+
+# install required python packages
+sudo $PIP install --upgrade pip setuptools
+$PIP install --upgrade --user -r requirements.txt
+echo ""
+echo ">> Install completed for $PYTHON. Please run Batch Shipyard as: $PWD/shipyard"

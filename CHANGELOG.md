@@ -1,6 +1,10 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Allow `--configdir`, `--credentials`, `--config`, `--jobs`, `--pool` config
+options to be specified as environment variables. Please see the usage doc
+for more information.
 
 ## [2.0.0] - 2016-11-23
 ### Added

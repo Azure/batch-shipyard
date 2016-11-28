@@ -3,7 +3,7 @@ Installation is an easy two-step process: fetch the code and run the
 install script to download and setup dependencies.
 
 ## Installation
-#### Step 1: Acquire Batch Shipyard
+### Step 1: Acquire Batch Shipyard
 Clone the repository:
 ```shell
 git clone https://github.com/Azure/batch-shipyard.git
@@ -11,38 +11,77 @@ git clone https://github.com/Azure/batch-shipyard.git
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases)
 and unpack the archive.
 
-#### Step 2a: [Linux] Run the install.sh Script
+### Step 2a: [Linux] Run the install.sh Script
 Batch Shipyard includes an installation script to simplify installation on
 a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
-To install required software:
+Please ensure that your target Python distribution is 2.7 or 3.3+. It is
+recommended to install Batch Shipyard on Python 3.5 or higher.
+
+Install required software as follows:
 ```shell
 # Ensure you are not root
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python2
+# Install for Python 2.7
 ./install.sh
-# Or to install for Python3 (recommended)
+# Or to install for Python 3.3+ (recommended)
 ./install.sh -3
+# Add $HOME/.local/bin to your PATH in your shell rc file
+# For example, the following line can be added to ~/.bashrc for bash shells:
+export PATH=$PATH:$HOME/.local/bin
+# Reload .bashrc for bash shells
+. ~/.bashrc
 ```
 Please ensure that you are not invoking the install script as root. `sudo`
 will be invoked wherever root access is required for installing system-wide
 packages in the `install.sh` script. Python packages required by Batch
 Shipyard will be installed in the user context.
 
+A helper script named `shipyard` will be generated with a successful
+installation. This helper script can be invoked in lieu of `shipyard.py`
+which will invoke the python script with the appropriate version of
+the interpreter.
+
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
-#### Step 2b: [Windows] Pip Install Dependencies
+#### Installation on CentOS 6.x / RHEL 6.x / Fedora 13 to 18
+The default python interpreter distributed with 6.x series releases is
+incompatible with Batch Shipyard. To install on these distributions, you must
+install `epel-release` package first then the `python34` epel package. Once
+these packages are installed, then invoke the installer in the following
+manner:
+
+```shell
+DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh -3
+```
+
+#### Unsupported Linux Distributions
+The following distributions will not work with the `install.sh` script:
+* CentOS < 6.0
+* Debian < 8
+* Fedora < 12
+* OpenSUSE < 13.1
+* RHEL < 6.0
+* SLES < 12
+* Ubuntu < 14.04
+
+Please follow the manual installation instructions found later in this
+document for these distributions.
+
+### Step 2b: [Windows] Pip Install Dependencies
 Invoke `pip.exe` (or `pip3.exe`) and install using the `requirements.txt`
 file. For example:
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
 # Install for Windows on Python 3.5
+pip3.exe install --upgrade -r requirements.txt
+# Or invoke directly from the installation directory
 C:\Python35\Scripts\pip3.exe install --upgrade -r requirements.txt
 ```
 If you are installing on Python < 3.5 on Windows, you will need a compiler
@@ -71,7 +110,7 @@ install_conda_windows.cmd
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
-#### Step 2c: [Mac] Pip Install Dependencies
+### Step 2c: [Mac] Pip Install Dependencies
 Please follow the steps outlined on
 [this guide](http://docs.python-guide.org/en/latest/starting/install/osx/)
 to ensure that you have a recent version of Python, a compiler and pip. It
@@ -202,7 +241,9 @@ side to further accelerate `scp` to Azure Batch compute nodes where
 2. `rsync` if `rsync` functionality is needed.
 3. [blobxfer](https://github.com/Azure/blobxfer) if transfering to Azure
 storage. This is automatically installed if `pip install` is used with
-`requirements.txt` as per above.
+`requirements.txt` as per above. If installed with `--user` flag, this is
+typically placed in `~/.local/bin`. This path will need to be added to your
+`PATH` environment variable.
 
 Note that data movement which involves programs required in from 1 or 2 above
 are not supported if invoked from Windows.
