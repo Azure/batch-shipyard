@@ -5,6 +5,8 @@
 - Allow `--configdir`, `--credentials`, `--config`, `--jobs`, `--pool` config
 options to be specified as environment variables. Please see the usage doc
 for more information.
+- Added subcommand `listskus` to the `pool` command to list available
+VM configurations (publisher, offer, sku) for the Batch account
 
 ### Fixed
 - Cascade docker run not propagating exit code

@@ -252,6 +252,10 @@ shipyard pool add --credentials credentials.json --config config.json --pool poo
 # ... or if all config files are in the current working directory named as above ...
 
 shipyard pool add --configdir .
+
+# ... or use environment variables instead
+
+SHIPYARD_CONFIGDIR=. shipyard pool add
 ```
 The above invocation will add the pool specified to the Batch account. Notice
 that the options and shared options are given after the command and
@@ -259,12 +263,20 @@ sub-command and not before.
 
 ```shell
 shipyard jobs add --configdir .
+
+# ... or use environment variables instead
+
+SHIPYARD_CONFIGDIR=. shipyard jobs add
 ```
 The above invocation will add the jobs specified in the jobs.json file to
 the designated pool.
 
 ```shell
 shipyard data stream --configdir . --filespec job1,dockertask-000,stdout.txt
+
+# ... or use environment variables instead
+
+SHIPYARD_CONFIGDIR=. shipyard data stream --filespec job1,dockertask-000,stdout.txt
 ```
 The above invocation will stream the stdout.txt file from the job `job1` and
 task `task1` from a live compute node. Because all portions of the
@@ -290,11 +302,11 @@ For example, if your Batch Shipyard configs are stored in the host path
 as:
 
 ```shell
-docker run --rm -it -v /home/user/batch-shipyard-configs:/configs alfpark/batch-shipyard:cli-latest <command> <subcommand> --configdir /configs <options...>
+docker run --rm -it -v /home/user/batch-shipyard-configs:/configs -e SHIPYARD_CONFIGDIR=/configs alfpark/batch-shipyard:cli-latest <command> <subcommand> <options...>
 ```
 
-Notice that we specified the `--configdir` argument to match the container
-path of the volume mount.
+Notice that we specified a Docker environment variable via
+`-e SHIPYARD_CONFIGDIR` to match the container path of the volume mount.
 
 Additionally, if you wish to ingress data from locally accessible file
 systems using Batch Shipyard, then you will need to map additional volume

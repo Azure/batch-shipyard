@@ -60,7 +60,22 @@ _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
 
 
+def list_node_agent_skus(batch_client):
+    # type: (batch.BatchServiceClient) -> None
+    """List all node agent skus
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    """
+    node_agent_skus = batch_client.account.list_node_agent_skus()
+    for sku in node_agent_skus:
+        for img in sku.verified_image_references:
+            logger.info(
+                'os_type={} publisher={} offer={} sku={} node_agent={}'.format(
+                    sku.os_type, img.publisher, img.offer, img.sku, sku.id))
+
+
 def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
+    # type: (batch.BatchServiceClient, dict, bool) -> None
     """Adds a certificate to a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -99,6 +114,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
 
 
 def list_certificates_in_account(batch_client):
+    # type: (batch.BatchServiceClient) -> None
     """List all certificates in a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -120,6 +136,7 @@ def list_certificates_in_account(batch_client):
 
 
 def del_certificate_from_account(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
     """Delete a certificate from a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`

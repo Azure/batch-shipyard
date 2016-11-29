@@ -53,6 +53,9 @@ account.
 
 # create the compute pool
 ./shipyard pool add --configdir config
+# alternatively, you can specify the configdir parameter as an environment
+# variable which some may find as more convenient
+SHIPYARD_CONFIGDIR=config ./shipyard pool add
 
 # ... wait for pool to allocate ...
 

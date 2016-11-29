@@ -1071,6 +1071,14 @@ def action_cert_del(batch_client, config):
     batch.del_certificate_from_account(batch_client, config)
 
 
+def action_pool_listskus(batch_client):
+    # type: (batchsc.BatchServiceClient) -> None
+    """Action: Pool Listskus
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    """
+    batch.list_node_agent_skus(batch_client)
+
+
 def action_pool_add(
         batch_client, blob_client, queue_client, table_client, config):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,

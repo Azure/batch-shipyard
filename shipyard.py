@@ -338,6 +338,15 @@ def pool(ctx):
     pass
 
 
+@pool.command('listskus')
+@common_options
+@pass_cli_context
+def pool_listskus(ctx):
+    """List available VM configurations available to the Batch account"""
+    ctx.initialize()
+    convoy.fleet.action_pool_listskus(ctx.batch_client)
+
+
 @pool.command('add')
 @common_options
 @pass_cli_context
