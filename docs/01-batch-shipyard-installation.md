@@ -206,14 +206,14 @@ pip install --upgrade pip
 ####CentOS/RHEL/Fedora
 ```
 yum install -y gcc openssl-dev libffi-devel python-devel
-curl https://bootstrap.pypa.io/get-pip.py | python
+curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
 ####SLES/OpenSUSE
 ```
 zypper ref
-zypper -n in gcc libopenssl-devel libffi48-devel python-devel python-pip
-pip install --upgrade pip
+zypper -n in gcc libopenssl-devel libffi48-devel python-devel
+curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
 ####Note about Python 3.3+
@@ -222,7 +222,7 @@ the python dependencies. For example, on Ubuntu/Debian:
 ```
 apt-get update
 apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-pip install --upgrade pip
+pip3 install --upgrade pip
 ```
 would install the proper dependencies for Python3.
 
