@@ -1,6 +1,11 @@
 # Change Log
 
 ## [Unreleased]
+### Fixed
+- Fix masked KeyErrors on `input_data` and `output_data`
+- Fix SAS key generation for data movement
+- Typo in ssh public key check on Windows prevented pool add actions
+- Pin version of tfm docker image on data transfers
 
 ## [2.1.0] - 2016-11-30
 ### Added

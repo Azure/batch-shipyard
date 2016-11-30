@@ -154,32 +154,29 @@ def process_input_data(config, bxfile, spec, on_task=False):
     :return: additonal command
     """
     ret = []
-    try:
-        input_data = settings.input_data(spec)
-        if util.is_not_empty(input_data):
-            for key in input_data:
-                if key == 'azure_storage':
-                    args = _process_storage_input_data(
-                        config, input_data[key], on_task)
-                    ret.append(
-                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
-                         'set +f').format(bxfile[0], ' '.join(args)))
-                elif key == 'azure_batch':
-                    args = _process_batch_input_data(
-                        config, input_data[key], on_task)
-                    ret.append(
-                        ('set -f; docker run --rm -t '
-                         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
-                         '-w $AZ_BATCH_TASK_WORKING_DIR '
-                         '-e "AZ_BATCH_NODE_STARTUP_DIR='
-                         '$AZ_BATCH_NODE_STARTUP_DIR" '
-                         'alfpark/batch-shipyard:tfm-{} {}; '
-                         'set +f'.format(__version__, ' '.join(args))))
-                else:
-                    raise ValueError(
-                        'unknown input_data method: {}'.format(key))
-    except KeyError:
-        pass
+    input_data = settings.input_data(spec)
+    if util.is_not_empty(input_data):
+        for key in input_data:
+            if key == 'azure_storage':
+                args = _process_storage_input_data(
+                    config, input_data[key], on_task)
+                ret.append(
+                    ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
+                     'set +f').format(bxfile[0], ' '.join(args)))
+            elif key == 'azure_batch':
+                args = _process_batch_input_data(
+                    config, input_data[key], on_task)
+                ret.append(
+                    ('set -f; docker run --rm -t '
+                     '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
+                     '-w $AZ_BATCH_TASK_WORKING_DIR '
+                     '-e "AZ_BATCH_NODE_STARTUP_DIR='
+                     '$AZ_BATCH_NODE_STARTUP_DIR" '
+                     'alfpark/batch-shipyard:tfm-{} {}; '
+                     'set +f'.format(__version__, ' '.join(args))))
+            else:
+                raise ValueError(
+                    'unknown input_data method: {}'.format(key))
     if len(ret) > 0:
         return ';'.join(ret)
     else:
@@ -247,21 +244,18 @@ def process_output_data(config, bxfile, spec):
     :return: additonal command
     """
     ret = []
-    try:
-        output_data = settings.output_data(spec)
-        if util.is_not_empty(output_data):
-            for key in output_data:
-                if key == 'azure_storage':
-                    args = _process_storage_output_data(
-                        config, output_data[key])
-                    ret.append(
-                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
-                         'set +f').format(bxfile[0], ' '.join(args)))
-                else:
-                    raise ValueError(
-                        'unknown output_data method: {}'.format(key))
-    except KeyError:
-        pass
+    output_data = settings.output_data(spec)
+    if util.is_not_empty(output_data):
+        for key in output_data:
+            if key == 'azure_storage':
+                args = _process_storage_output_data(
+                    config, output_data[key])
+                ret.append(
+                    ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
+                     'set +f').format(bxfile[0], ' '.join(args)))
+            else:
+                raise ValueError(
+                    'unknown output_data method: {}'.format(key))
     if len(ret) > 0:
         return ';'.join(ret)
     else:

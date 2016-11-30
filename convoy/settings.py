@@ -1134,7 +1134,13 @@ def input_data(conf):
     :rtype: str
     :return: input data config block
     """
-    return conf['input_data']
+    try:
+        id = conf['input_data']
+        if util.is_none_or_empty(id):
+            raise KeyError()
+    except KeyError:
+        id = None
+    return id
 
 
 def output_data(conf):
@@ -1144,7 +1150,13 @@ def output_data(conf):
     :rtype: str
     :return: output data config block
     """
-    return conf['output_data']
+    try:
+        od = conf['output_data']
+        if util.is_none_or_empty(od):
+            raise KeyError()
+    except KeyError:
+        od = None
+    return od
 
 
 def data_storage_account_settings(conf):

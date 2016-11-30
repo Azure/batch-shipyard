@@ -177,17 +177,10 @@ def create_blob_container_saskey(
     if create_container:
         blob_client.create_container(container, fail_on_exist=False)
     if kind == 'ingress':
-        perm = (
-            azureblob.ContainerPermissions.READ |
-            azureblob.ContainerPermissions.LIST
-        )
+        perm = azureblob.ContainerPermissions(read=True, list=True)
     elif kind == 'egress':
-        perm = (
-            azureblob.ContainerPermissions.READ |
-            azureblob.ContainerPermissions.WRITE |
-            azureblob.ContainerPermissions.DELETE |
-            azureblob.ContainerPermissions.LIST
-        )
+        perm = azureblob.ContainerPermissions(
+            read=True, write=True, delete=True, list=True)
     else:
         raise ValueError('{} type of transfer not supported'.format(kind))
     return blob_client.generate_container_shared_access_signature(
@@ -215,17 +208,10 @@ def create_file_share_saskey(
     if create_share:
         file_client.create_share(file_share, fail_on_exist=False)
     if kind == 'ingress':
-        perm = (
-            azurefile.SharePermissions.READ |
-            azurefile.SharePermissions.LIST,
-        )
+        perm = azurefile.SharePermissions(read=True, list=True)
     elif kind == 'egress':
-        perm = (
-            azurefile.SharePermissions.READ |
-            azurefile.SharePermissions.WRITE |
-            azurefile.SharePermissions.DELETE |
-            azurefile.SharePermissions.LIST,
-        )
+        perm = azurefile.SharePermissions(
+            read=True, write=True, delete=True, list=True)
     else:
         raise ValueError('{} type of transfer not supported'.format(kind))
     return file_client.generate_share_shared_access_signature(
