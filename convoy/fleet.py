@@ -1015,7 +1015,7 @@ def _adjust_settings_for_pool_creation(config):
         pass
     # adjust settings on windows
     if util.on_windows():
-        if pool.ssh.ssh_pub_key is None:
+        if pool.ssh.ssh_public_key is None:
             logger.warning(
                 'disabling ssh user creation due to script being run '
                 'from Windows and no public key is specified')
