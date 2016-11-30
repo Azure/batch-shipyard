@@ -50,6 +50,7 @@ from . import crypto
 from . import settings
 from . import storage
 from . import util
+from .version import __version__
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -172,8 +173,8 @@ def process_input_data(config, bxfile, spec, on_task=False):
                          '-w $AZ_BATCH_TASK_WORKING_DIR '
                          '-e "AZ_BATCH_NODE_STARTUP_DIR='
                          '$AZ_BATCH_NODE_STARTUP_DIR" '
-                         'alfpark/batch-shipyard:tfm-latest {}; '
-                         'set +f'.format(' '.join(args))))
+                         'alfpark/batch-shipyard:tfm-{} {}; '
+                         'set +f'.format(__version__, ' '.join(args))))
                 else:
                     raise ValueError(
                         'unknown input_data method: {}'.format(key))
