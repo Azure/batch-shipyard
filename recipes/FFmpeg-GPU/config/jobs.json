@@ -4,7 +4,7 @@
             "id": "ffmpegjob",
             "tasks": [
                 {
-                    "image": "alfpark/ffmpeg:3.1.3-nvenc",
+                    "image": "alfpark/ffmpeg:3.2.1-nvenc",
                     "remove_container_after_exit": true,
                     "resource_files": [
                         {

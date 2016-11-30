@@ -33,14 +33,14 @@ available for N-series VMs.
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid FFmpeg NVENC
 GPU-enabled Docker image. The
-[alfpark/ffmpeg:3.1.3-nvenc](https://hub.docker.com/r/alfpark/ffmpeg)
+[alfpark/ffmpeg:3.2.1-nvenc](https://hub.docker.com/r/alfpark/ffmpeg)
 can be used for this recipe.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `alfpark/ffmpeg:3.1.3-nvenc`
+e.g., `alfpark/ffmpeg:3.2.1-nvenc`
 * `command` should contain the command to pass to the Docker run invocation.
 The following command takes an mp4 video file and transcodes it to H.265/HEVC
 using NVENC transcode offload on to the GPU:
