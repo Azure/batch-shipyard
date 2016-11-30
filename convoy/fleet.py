@@ -405,7 +405,7 @@ def _add_pool(batch_client, blob_client, config):
     # private registry settings
     preg = settings.docker_registry_private_settings(config)
     # create torrent flags
-    torrentflags = ' -t {}:{}:{}:{}:{}'.format(
+    torrentflags = '{}:{}:{}:{}:{}'.format(
         dr.peer_to_peer.enabled, dr.non_peer_to_peer_concurrent_downloading,
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression,
@@ -474,22 +474,23 @@ def _add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{} -o {} -s {}{}{}{}{}{}{}{}{}{}{}{}'.format(
-            _NODEPREP_FILE[0],
-            pool_settings.offer,
-            pool_settings.sku,
-            torrentflags,
-            ' -a' if azurefile_vd else '',
-            ' -b {}'.format(block_for_gr) if block_for_gr else '',
-            ' -d' if bs.use_shipyard_docker_image else '',
-            ' -e {}'.format(pfx.sha1) if encrypt else '',
-            ' -f' if gluster else '',
-            ' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            ' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
-            ' -p {}'.format(
+        '{npf} {a}{b}{d}{e}{f}{g}{n}{o}{p}{r}{s}{t}{v}{w}'.format(
+            npf=_NODEPREP_FILE[0],
+            a=' -a' if azurefile_vd else '',
+            b=' -b {}'.format(block_for_gr) if block_for_gr else '',
+            d=' -d' if bs.use_shipyard_docker_image else '',
+            e=' -e {}'.format(pfx.sha1) if encrypt else '',
+            f=' -f' if gluster else '',
+            g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+            n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
+            o=' -o {}'.format(pool_settings.offer),
+            p=' -p {}'.format(
                 bs.storage_entity_prefix) if bs.storage_entity_prefix else '',
-            ' -r {}'.format(preg.container) if preg.container else '',
-            ' -w' if pool_settings.ssh.hpn_server_swap else '',
+            r=' -r {}'.format(preg.container) if preg.container else '',
+            s=' -s {}'.format(pool_settings.sku),
+            t=' -t {}'.format(torrentflags),
+            v=' -v {}'.format(__version__),
+            w=' -w' if pool_settings.ssh.hpn_server_swap else '',
         ),
     ]
     # add additional start task commands

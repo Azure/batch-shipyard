@@ -43,8 +43,9 @@ p2penabled=0
 prefix=
 privatereg=
 sku=
+version=
 
-while getopts "h?ab:de:fg:no:p:r:s:t:w" opt; do
+while getopts "h?ab:de:fg:no:p:r:s:t:v:w" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -61,6 +62,7 @@ while getopts "h?ab:de:fg:no:p:r:s:t:w" opt; do
             echo "-r [container:archive:image id] private registry"
             echo "-s [sku] VM sku"
             echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
+            echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
             echo ""
             exit 1
@@ -107,6 +109,9 @@ while getopts "h?ab:de:fg:no:p:r:s:t:w" opt; do
                 p2penabled=0
             fi
             ;;
+        v)
+            version=$OPTARG
+            ;;
         w)
             hpnssh=1
             ;;
@@ -121,6 +126,10 @@ if [ -z $offer ]; then
 fi
 if [ -z $sku ]; then
     echo "vm sku not specified"
+    exit 1
+fi
+if [ -z $version ]; then
+    echo "batch-shipyard version not specified"
     exit 1
 fi
 
@@ -548,7 +557,7 @@ fi
 
 # retrieve docker images related to data movement
 docker pull alfpark/blobxfer
-docker pull alfpark/batch-shipyard:tfm-latest
+docker pull alfpark/batch-shipyard:tfm-$version
 
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
@@ -571,7 +580,7 @@ if [ $cascadecontainer -eq 1 ]; then
     else
         detached="--rm"
     fi
-    # store docker run pull start
+    # store docker cascade start
     if command -v python3 > /dev/null 2>&1; then
         drpstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
     else
@@ -598,7 +607,7 @@ EOF
         -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
         -w $AZ_BATCH_TASK_WORKING_DIR \
         -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-        alfpark/batch-shipyard:cascade-latest &
+        alfpark/batch-shipyard:cascade-$version &
     cascadepid=$!
 else
     # backfill node prep start

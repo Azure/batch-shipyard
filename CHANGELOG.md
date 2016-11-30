@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.1.0] - 2016-11-30
 ### Added
 - Allow `--configdir`, `--credentials`, `--config`, `--jobs`, `--pool` config
 options to be specified as environment variables. Please see the usage doc
@@ -8,8 +10,13 @@ for more information.
 - Added subcommand `listskus` to the `pool` command to list available
 VM configurations (publisher, offer, sku) for the Batch account
 
+### Changed
+- Nodeprep now references cascade and tfm docker images by version instead
+of latest to prevent breaking changes affecting older versions. Docker builds
+of cascade and tfm based on latest commits are now disabled.
+
 ### Fixed
-- Cascade docker run not propagating exit code
+- Cascade docker image run not propagating exit code
 
 ## [2.0.0] - 2016-11-23
 ### Added
@@ -262,7 +269,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.1.0...HEAD
+[2.1.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...2.0.0
 [2.0.0rc3]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...2.0.0rc3
 [2.0.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc1...2.0.0rc2
