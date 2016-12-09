@@ -171,7 +171,7 @@ For the best experience, please run Batch Shipyard from Linux.
 
 Note that if you are cloning the repository on Windows, please ensure that
 git or any text editor does not modify the Unix line-endings (LF) for any
-file in the `scripts` or `resources` directory. The repostiory's
+file in the `scripts` or `resources` directory. The repository's
 `.gitattributes` designates line endings for all text files, but can be
 overridden by your local git configuration. If these files are modified
 with Windows line-endings (CRLF) then compute nodes will fail to start

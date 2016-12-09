@@ -1,0 +1,18 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "<storage account specified in credentials.json>"
+    },
+    "global_resources": {
+        "docker_images": [
+            "alfpark/cntk:2.0beta5-cpu-intelmpi-refdata"
+        ],
+        "docker_volumes": {
+            "shared_data_volumes": {
+                "glustervol": {
+                    "volume_driver": "glusterfs",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
+                }
+            }
+        }
+    }
+}

@@ -8,11 +8,6 @@ Please see refer to this [set of sample configuration files](./config) for
 this recipe.
 
 ### Pool Configuration
-**Note: If you are running across multiple GPUs, you must be approved for the
-[Azure N-Series Preview](http://gpu.azure.com/) and have escalated a
-customer service support ticket with your Batch account details to the Azure
-Batch team to enable this feature. Otherwise, your pool allocation will fail.**
-
 The pool configuration should enable the following properties if on multiple
 GPUs:
 * `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,

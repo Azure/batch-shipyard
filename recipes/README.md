@@ -45,6 +45,11 @@ distributed [OpenFOAM](http://www.openfoam.org/) across multiple Azure Batch
 compute nodes.
 
 ## <a name="deeplearning"></a>Deep Learning
+#### [CNTK-CPU-Infiniband-IntelMPI](./CNTK-CPU-Infiniband-IntelMPI)
+This CNTK-CPU-Infiniband-IntelMPI recipe contains information on how to
+Dockerize [CNTK](https://cntk.ai/) for CPUs, including execution across
+multiple Infiniband/RDMA Azure VMs with multi-instance tasks.
+
 #### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
 This CNTK-CPU-OpenMPI recipe contains information on how to Dockerize
 [CNTK](https://cntk.ai/) for CPUs, including execution across multiple

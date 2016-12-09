@@ -279,7 +279,7 @@ describes members of the non-Docker Hub private registries supported:
     specified. The value of this property should have an associated login
     in the credentials json file.
   * (optional) `azure_storage` object is to define settings for connecting
-    to a private registry backed by Azure Storate blobs and where the
+    to a private registry backed by Azure Storage blobs and where the
     private registry instances are hosted on the compute nodes themselves.
     * (required) `storage_account_settings` is a link to the alias of the
       storage account specified that stores the private registry blobs.
@@ -922,15 +922,7 @@ transferred again. This object currently supports `azure_batch` and
     Infiniband/RDMA devices on the host. Note that this will automatically
     force the container to use the host network stack. If this property is
     set to `true`, ensure that the `pool_specification` property
-    `inter_node_communication_enabled` is set to `true`. If you are
-    selecting `SUSE SLES-HPC` Marketplace images, then you will need to
-    ensure that the Intel MPI redistributable that is used to build the
-    application is present in the container. The Intel MPI libraries that
-    are present by default on the `SUSE SLES-HPC` Marketplace images are
-    not current and may cause issues if used directly with Infiniband-enabled
-    Docker images. If you still wish to use the host Intel MPI libraries,
-    then specify `-v /opt/intel:/opt/intel:ro` under
-    `additional_docker_run_options`.
+    `inter_node_communication_enabled` is set to `true`.
   * (optional) `gpu` designates if this container requires access to the GPU
     devices on the host. If this property is set to `true`, Docker containers
     are instantiated via `nvidia-docker`. This requires N-series VM instances.

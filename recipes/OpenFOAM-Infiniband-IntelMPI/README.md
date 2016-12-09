@@ -40,6 +40,7 @@ For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `command` should contain the `mpirun` command. If using the sample
 `run_sample.sh` script then the command should be simply:
 `/opt/OpenFOAM/run_sample.sh`
+* `infiniband` must be set to `true`
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined

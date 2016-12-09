@@ -1,6 +1,15 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.2.0] - 2016-12-09
+### Added
+- CNTK-CPU-Infiniband-IntelMPI recipe
+
+### Changed
+- `/opt/intel` is now automatically mounted once again for infiniband-enabled
+containers on SUSE SLES-HPC hosts.
+
 ### Fixed
 - Fix masked KeyErrors on `input_data` and `output_data`
 - Fix SAS key generation for data movement
@@ -274,7 +283,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.1.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.2.0...HEAD
+[2.2.0]: https://github.com/Azure/batch-shipyard/compare/2.1.0...2.2.0
 [2.1.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...2.0.0
 [2.0.0rc3]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc2...2.0.0rc3

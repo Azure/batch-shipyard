@@ -37,17 +37,16 @@ to containers executed on compute nodes
 [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for
-[GPU accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
-on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-preview-availability/)
-([Preview](http://gpu.azure.com/))
+[GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
+on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-general-availability-on-december-1/)
 * Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
 cluster applications on compute pools with automatic job completion and Docker
 task termination
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on HPC low-latency Azure VM instances:
-  * [A-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-a8-a9-a10-a11-specs/): STANDARD\_A8, STANDARD\_A9
-  * [H-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#h-series): STANDARD\_H16R, STANDARD\_H16MR
-  * [N-Series](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/#n-series-preview): STANDARD\_NC24R (not yet available)
+  * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-a8-a9-a10-a11-specs?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json): STANDARD\_A8, STANDARD\_A9
+  * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-sizes?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json#h-series): STANDARD\_H16R, STANDARD\_H16MR
+  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-sizes?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json#n-series): STANDARD\_NC24R (not yet ready with Linux hosts)
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes
 
@@ -73,7 +72,7 @@ Guide.
 Batch Shipyard is currently only compatible with
 [Azure Batch supported Marketplace Linux VMs](https://azure.microsoft.com/en-us/documentation/articles/batch-linux-nodes/#list-of-virtual-machine-images).
 
-## ChangeLog
+## Change Log
 See the [CHANGELOG.md](https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md)
 file.
 

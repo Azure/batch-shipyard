@@ -1662,31 +1662,24 @@ def task_settings(pool, config, conf):
                      pool.id, pool.vm_size))
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
-        supported = False
-        sles_hpc = False
         if publisher == 'openlogic' and offer == 'centos-hpc':
-            supported = True
+            run_opts.append('-v /etc/rdma:/etc/rdma:ro')
+            run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
         elif (publisher == 'suse' and offer == 'sles-hpc' and
               sku == '12-sp1'):
-            supported = True
-            sles_hpc = True
-        if not supported:
+            run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
+            run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
+        else:
             raise ValueError(
                 ('Unsupported infiniband VM config, publisher={} '
                  'offer={}').format(publisher, offer))
-        del supported
         # add infiniband run opts
+        run_opts.append('-v /opt/intel:/opt/intel:ro')
         run_opts.append('--net=host')
         run_opts.append('--ulimit memlock=9223372036854775807')
         run_opts.append('--device=/dev/hvnd_rdma')
         run_opts.append('--device=/dev/infiniband/rdma_cm')
         run_opts.append('--device=/dev/infiniband/uverbs0')
-        run_opts.append('-v /etc/rdma:/etc/rdma:ro')
-        if sles_hpc:
-            run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
-        else:
-            run_opts.append('-v /opt/intel:/opt/intel:ro')
-        del sles_hpc
     # mount batch root dir
     run_opts.append(
         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
