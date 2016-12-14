@@ -1530,6 +1530,16 @@ def task_settings(pool, config, conf):
     else:
         if rm_container and '--rm' not in run_opts:
             run_opts.append('--rm')
+    # parse /dev/shm option
+    try:
+        shm_size = conf['shm_size']
+        if util.is_none_or_empty(shm_size):
+            raise KeyError()
+    except KeyError:
+        pass
+    else:
+        if not any(x.startswith('--shm-size=') for x in run_opts):
+            run_opts.append('--shm-size={}'.format(shm_size))
     # parse name option, if not specified use task id
     try:
         name = conf['name']

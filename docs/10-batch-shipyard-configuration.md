@@ -744,6 +744,7 @@ The jobs schema is as follows:
                         ]
                     },
                     "remove_container_after_exit": true,
+                    "shm_size": "256m",
                     "additional_docker_run_options": [
                     ],
                     "infiniband": false,
@@ -915,6 +916,12 @@ transferred again. This object currently supports `azure_batch` and
   * (optional) `remove_container_after_exit` property specifies if the
     container should be automatically removed/cleaned up after it exits. This
     defaults to `false`.
+  * (optional) `shm_size` property specifies the size of `/dev/shm` in
+    the container. The default is `64m`. The postfix unit can be designated
+    as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g` (gigabytes). This
+    value may need to be increased from the default of `64m` for certain
+    Docker applications, including those multi-instance tasks using Intel
+    MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
   * (optional) `additional_docker_run_options` is an array of addition Docker
     run options that should be passed to the Docker daemon when starting this
     container.

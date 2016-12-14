@@ -32,9 +32,6 @@
                     "image": "busybox",
                     "name": null,
                     "labels": [],
-                    "remove_container_after_exit": true,
-                    "additional_docker_run_options": [
-                    ],
                     "environment_variables": {
                         "def": "123"
                     },
@@ -84,8 +81,10 @@
                             }
                         ]
                     },
-                    "entrypoint": null,
-                    "command": "",
+                    "remove_container_after_exit": true,
+                    "shm_size": "256m",
+                    "additional_docker_run_options": [
+                    ],
                     "infiniband": false,
                     "gpu": false,
                     "depends_on": [
@@ -100,7 +99,9 @@
                                 "file_mode": ""
                             }
                         ]
-                    }
+                    },
+                    "entrypoint": null,
+                    "command": ""
                 }
             ]
         }
