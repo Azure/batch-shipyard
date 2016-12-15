@@ -1187,6 +1187,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
                              pool.id))
                     create_ssh_user = False
     # check if this is a glusterfs-enabled pool
+    gluster_present = False
     voltype = None
     try:
         sdv = settings.global_resources_shared_data_volumes(config)
@@ -1199,7 +1200,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
                     pass
                 break
     except KeyError:
-        gluster_present = False
+        pass
     logger.debug('glusterfs shared volume present: {}'.format(
         gluster_present))
     if gluster_present:
@@ -1261,6 +1262,8 @@ def action_pool_grls(batch_client, config):
     :param dict config: configuration dict
     """
     batch.get_remote_login_settings(batch_client, config)
+    batch.generate_ssh_tunnel_script(
+        batch_client, settings.pool_settings(config), None, None)
 
 
 def action_pool_listnodes(batch_client, config):
@@ -1279,7 +1282,7 @@ def action_pool_asu(batch_client, config):
     :param dict config: configuration dict
     """
     batch.add_ssh_user(batch_client, config)
-    batch.get_remote_login_settings(batch_client, config)
+    action_pool_grls(batch_client, config)
 
 
 def action_pool_dsu(batch_client, config):
@@ -1289,6 +1292,36 @@ def action_pool_dsu(batch_client, config):
     :param dict config: configuration dict
     """
     batch.del_ssh_user(batch_client, config)
+
+
+def action_pool_ssh(batch_client, config, cardinal, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, int, str) -> None
+    """Action: Pool Ssh
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal node num
+    :param str nodeid: node id
+    """
+    if cardinal is not None and nodeid is not None:
+        raise ValueError('cannot specify both cardinal and nodeid options')
+    if cardinal is None and nodeid is None:
+        raise ValueError('must specify one of cardinal or nodeid option')
+    if cardinal is not None and cardinal < 0:
+            raise ValueError('invalid cardinal option value')
+    pool = settings.pool_settings(config)
+    ssh_priv_key = pathlib.Path(
+        pool.ssh.generated_file_export_path, crypto._SSH_KEY_PREFIX)
+    if not ssh_priv_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_priv_key))
+    ip, port = batch.get_remote_login_setting_for_node(
+        batch_client, config, cardinal, nodeid)
+    logger.info('connecting to node {}:{} with key {}'.format(
+        ip, port, ssh_priv_key))
+    util.subprocess_with_output(
+        ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+         'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key), '-p',
+         str(port), '{}@{}'.format(pool.ssh.username, ip)])
 
 
 def action_pool_delnode(batch_client, config, nodeid):

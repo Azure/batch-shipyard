@@ -95,7 +95,6 @@ The global config schema is as follows:
         "storage_account_settings": "mystorageaccount",
         "storage_entity_prefix": "shipyard",
         "generated_sas_expiry_days": 90,
-        "use_shipyard_docker_image": true,
         "encryption" : {
             "enabled": true,
             "pfx": {
@@ -231,11 +230,6 @@ specified, defaults to `shipyard`.
 days any generated SAS key by Batch Shipyard is valid for. The default is 30
 days. This is useful if you have long-lived pools and want to ensure that
 SAS keys are valid for longer periods of time.
-* (optional) `use_shipyard_docker_image` property is used to direct the toolkit
-to use the Batch Shipyard docker image instead of installing software manually
-in order to run the backend portion on the compute nodes. It is strongly
-recommended to omit this or to set to `true`. This can only be set to `false`
-for Ubuntu 16.04 or higher. This is defaulted to `true`.
 * (optional) `encryption` object is used to define credential encryption which
 contains the following members:
   * (required) `enabled` property enables or disables this feature.
@@ -920,8 +914,8 @@ transferred again. This object currently supports `azure_batch` and
     the container. The default is `64m`. The postfix unit can be designated
     as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g` (gigabytes). This
     value may need to be increased from the default of `64m` for certain
-    Docker applications, including those multi-instance tasks using Intel
-    MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
+    Docker applications, including multi-instance tasks using Intel MPI
+    (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
   * (optional) `additional_docker_run_options` is an array of addition Docker
     run options that should be passed to the Docker daemon when starting this
     container.

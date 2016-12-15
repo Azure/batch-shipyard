@@ -205,6 +205,7 @@ The `pool` command has the following sub-commands:
   list       List all pools in the Batch account
   listnodes  List nodes in pool
   resize     Resize a pool
+  ssh        Interactively login via SSH to a node in the...
   udi        Update Docker images in a pool
 ```
 * `add` will add the pool defined in the pool configuration file to the
@@ -228,6 +229,10 @@ in the specified pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
   * `--wait` will wait for resize to complete
+* `ssh` will interactively log into a compute node via SSH
+  * `--cardinal` is the zero-based cardinal number of the compute node in
+    the pool to connect to as listed by `grls`
+  * `--nodeid` is the node id to connect to in the pool
 * `udi` will update Docker images on all compute nodes of the pool. This
 command requires a valid SSH user.
   * `--image` will restrict the update to just the image or image:tag

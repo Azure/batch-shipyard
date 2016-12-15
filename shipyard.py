@@ -428,6 +428,22 @@ def pool_dsu(ctx):
     convoy.fleet.action_pool_dsu(ctx.batch_client, ctx.config)
 
 
+@pool.command('ssh')
+@click.option(
+    '--cardinal',
+    help='Zero-based cardinal number of compute node in pool to connect to',
+    type=int)
+@click.option(
+    '--nodeid', help='NodeId of compute node in pool to connect to')
+@common_options
+@pass_cli_context
+def pool_ssh(ctx, cardinal, nodeid):
+    """Interactively login via SSH to a node in the pool"""
+    ctx.initialize()
+    convoy.fleet.action_pool_ssh(
+        ctx.batch_client, ctx.config, cardinal, nodeid)
+
+
 @pool.command('delnode')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.3.0] - 2016-12-15
+### Added
+- `pool ssh` command. Please see the usage doc for more information.
+- `shm_size` json property added to the json object within the `tasks` array
+of a job. Please see the configuration doc for more information.
+
+### Changed
+- Improve usability of the generated SSH docker tunnel script
+
 ## [2.2.0] - 2016-12-09
 ### Added
 - CNTK-CPU-Infiniband-IntelMPI recipe
@@ -283,7 +292,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.2.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.3.0...HEAD
+[2.3.0]: https://github.com/Azure/batch-shipyard/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/Azure/batch-shipyard/compare/2.1.0...2.2.0
 [2.1.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0rc3...2.0.0

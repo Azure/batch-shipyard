@@ -441,23 +441,64 @@ def add_ssh_user(batch_client, config, nodes=None):
         _add_admin_user_to_compute_node(
             batch_client, config, node, pool.ssh.username, ssh_pub_key)
     # generate tunnel script if requested
+    generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes)
+
+
+def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
+    # type: (batch.BatchServiceClient, PoolSettings, str,
+    #        List[batchmodels.ComputeNode]) -> None
+    """Generate SSH tunneling script
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param PoolSettings pool: pool settings
+    :param str ssh_priv_key: path to ssh private key
+    :param list nodes: list of nodes
+    """
     if pool.ssh.generate_docker_tunnel_script:
-        ssh_args = ['ssh']
-        if ssh_priv_key is not None:
-            ssh_args.append('-i')
-            ssh_args.append(ssh_priv_key)
-        ssh_args.extend([
-            '-o', 'StrictHostKeyChecking=no',
+        if nodes is None or len(list(nodes)) != pool.vm_count:
+            nodes = batch_client.compute_node.list(pool.id)
+        if ssh_priv_key is None:
+            ssh_priv_key = pathlib.Path(
+                pool.ssh.generated_file_export_path, crypto._SSH_KEY_PREFIX)
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile=/dev/null',
-            '-p', '$2', '-N', '-L', '2375:localhost:2375',
-            '{}@$1'.format(pool.ssh.username)])
+            '-i', str(ssh_priv_key), '-p', '$port', '-N',
+            '-L', '2375:localhost:2375', '{}@$ip'.format(pool.ssh.username)
+        ]
         tunnelscript = pathlib.Path(
             pool.ssh.generated_file_export_path, _SSH_TUNNEL_SCRIPT)
         with tunnelscript.open('w') as fd:
             fd.write('#!/usr/bin/env bash\n')
             fd.write('set -e\n')
+            # populate node arrays
+            fd.write('declare -A nodes\n')
+            fd.write('declare -A ips\n')
+            fd.write('declare -A ports\n')
+            i = 0
+            for node in nodes:
+                rls = batch_client.compute_node.get_remote_login_settings(
+                    pool.id, node.id)
+                fd.write('nodes[{}]={}\n'.format(i, node.id))
+                fd.write('ips[{}]={}\n'.format(i, rls.remote_login_ip_address))
+                fd.write('ports[{}]={}\n'.format(i, rls.remote_login_port))
+                i += 1
+            fd.write(
+                'if [ -z $1 ]; then echo must specify node cardinal; exit 1; '
+                'fi\n')
+            fd.write('node=${nodes[$1]}\n')
+            fd.write('ip=${ips[$1]}\n')
+            fd.write('port=${ports[$1]}\n')
+            fd.write(
+                'echo tunneling to docker daemon on $node at '
+                '$ip:$port\n')
             fd.write(' '.join(ssh_args))
-            fd.write('\n')
+            fd.write(' >/dev/null 2>&1 &\n')
+            fd.write('pid=$!\n')
+            fd.write('echo ssh tunnel pid is $pid\n')
+            fd.write(
+                'echo execute docker commands with option: '
+                '-H localhost:2375\n')
         os.chmod(str(tunnelscript), 0o755)
         logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
 
@@ -1076,6 +1117,32 @@ def get_remote_login_settings(batch_client, config, nodes=None):
             node.id, rls.remote_login_ip_address, rls.remote_login_port))
         ret[node.id] = rls
     return ret
+
+
+def get_remote_login_setting_for_node(batch_client, config, cardinal, node_id):
+    # type: (batch.BatchServiceClient, dict, int, str) -> dict
+    """Get remote login setting for a node
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param int cardinal: node cardinal number
+    :param str node_id: node id
+    :rtype: tuple
+    :return: ip, port
+    """
+    pool_id = settings.pool_id(config)
+    if node_id is None:
+        if cardinal is None:
+            raise ValueError('cardinal is invalid with no node_id specified')
+        nodes = list(batch_client.compute_node.list(pool_id))
+        if cardinal >= len(nodes):
+            raise ValueError(
+                ('cardinal value {} invalid for number of nodes {} in '
+                 'pool {}').format(cardinal, len(nodes), pool_id))
+        node_id = nodes[cardinal].id
+    rls = batch_client.compute_node.get_remote_login_settings(
+        pool_id, node_id)
+    return rls.remote_login_ip_address, rls.remote_login_port
 
 
 def stream_file_and_wait_for_task(
