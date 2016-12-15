@@ -464,7 +464,8 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile=/dev/null',
             '-i', str(ssh_priv_key), '-p', '$port', '-N',
-            '-L', '2375:localhost:2375', '{}@$ip'.format(pool.ssh.username)
+            '-L', '2375:localhost:2375', '-L', '3476:localhost:3476',
+            '{}@$ip'.format(pool.ssh.username)
         ]
         tunnelscript = pathlib.Path(
             pool.ssh.generated_file_export_path, _SSH_TUNNEL_SCRIPT)
@@ -497,8 +498,8 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             fd.write('pid=$!\n')
             fd.write('echo ssh tunnel pid is $pid\n')
             fd.write(
-                'echo execute docker commands with option: '
-                '-H localhost:2375\n')
+                'echo execute docker commands with DOCKER_HOST=: or with '
+                'option: -H :\n')
         os.chmod(str(tunnelscript), 0o755)
         logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
 

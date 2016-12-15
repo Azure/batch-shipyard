@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Add support for nvidia-docker with ssh docker tunnel
 
 ## [2.3.0] - 2016-12-15
 ### Added

@@ -71,7 +71,7 @@ something similar to the following:
 ```
 tunneling to docker daemon on tvm-2522076272_3-20161214t213502z at 1.2.3.4:12345
 ssh tunnel pid is 22204
-execute docker commands with option: -H localhost:2375
+execute docker commands with DOCKER_HOST=: or with option: -H :
 ```
 
 Now you can run the `docker` command locally but have these actions
@@ -79,7 +79,7 @@ work remotely through the tunnel on the compute node with the appropriate
 `-H` option as noted above. For instance:
 
 ```shell
-docker -H localhost:2375 run --rm -it busybox
+docker -H : run --rm -it busybox
 ```
 
 would place the current shell context inside the busybox container running
@@ -90,16 +90,29 @@ which will work for all `docker` invocations until the environment variable
 is unset. For example:
 
 ```shell
-export DOCKER_HOST=localhost:2375
+export DOCKER_HOST=:
 docker run --rm -it busybox
 ```
 
 would create a busybox container on the remote similar to the prior command.
 
-Once you are finished with running your `docker` commands remotely, you can
-terminate the SSH tunnel by sending a SIGTERM to the SSH tunnel process.
-In this example, the pid is 22204 as displayed by the script, thus we would
-terminate the SSH tunnel with the following:
+To run a CUDA/GPU enabled docker image remotely with nvidia-docker, first you
+must install
+[nvidia-docker locally](https://github.com/NVIDIA/nvidia-docker/wiki/Installation)
+in addition to docker as per the initial requirement. You can install
+nvidia-docker locally even without an Nvidia GPU or CUDA installed. It is
+simply required for the local command execution. You can then launch your
+CUDA-enabled Docker image on the remote compute node on N-series the same
+as any other Docker image except invoking with `nvidia-docker` instead:
+
+```shell
+DOCKER_HOST=: nvidia-docker run --rm -it nvidia/cuda nvidia-smi
+```
+
+Once you are finished with running your `docker` and/or `nvidia-docker`
+commands remotely, you can terminate the SSH tunnel by sending a SIGTERM to
+the SSH tunnel process. In this example, the pid is 22204 as displayed by
+the script, thus we would terminate the SSH tunnel with the following:
 
 ```shell
 kill 22204
