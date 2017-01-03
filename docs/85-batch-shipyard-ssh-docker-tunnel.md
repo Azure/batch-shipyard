@@ -10,15 +10,16 @@ specific instances (i.e., compute nodes).
 
 For instance, port 12345 may map to port 22 of the first instance of a
 compute node in the pool for the public IP address 1.2.3.4. The next compute
-node in the pool may have port 22 mapped to 12346 on the load balancer.
+node in the pool may have port 22 mapped to port 12346 on the load balancer.
 
 This allows many compute nodes to sit behind one public IP address.
 
 ## Interactive SSH
 By adding an SSH user to the pool (which can be automatically done for you
-via the `ssh` block in the pool config), you can interactively log in to
-compute nodes in the pool and execute any command on the remote machine,
-including Docker commands via `sudo`.
+via the `ssh` block in the pool config upon pool creation or through the
+`pool asu` command), you can interactively log in to compute nodes in the
+pool and execute any command on the remote machine, including Docker
+commands via `sudo`.
 
 You can utilize the `pool ssh` command to automatically connect to any
 compute node in the pool without having to manually resort to `pool grls`
@@ -31,7 +32,14 @@ created to the compute node specified.
 If using `--cardinal` it requires the natural counting number from zero
 associated with the list of nodes as enumerated by `pool grls`. If using
 `--nodeid`, then the exact compute node id within the pool specified in
-the pool config must be used.
+the pool config must be used. For example:
+
+```shell
+SHIPYARD_CONFIGDIR=. shipyard pool ssh --cardinal 0
+```
+
+would create an interactive SSH session with the first compute node in the
+pool as listed by `pool grls`.
 
 ## Securely Connecting to the Docker Socket Remotely via SSH Tunneling
 To take advantage of this feature, you must install Docker locally on your
@@ -94,16 +102,20 @@ export DOCKER_HOST=:
 docker run --rm -it busybox
 ```
 
-would create a busybox container on the remote similar to the prior command.
+would create a busybox container on the remote compute node similar to
+the prior command.
 
 To run a CUDA/GPU enabled docker image remotely with nvidia-docker, first you
 must install
 [nvidia-docker locally](https://github.com/NVIDIA/nvidia-docker/wiki/Installation)
 in addition to docker as per the initial requirement. You can install
 nvidia-docker locally even without an Nvidia GPU or CUDA installed. It is
-simply required for the local command execution. You can then launch your
-CUDA-enabled Docker image on the remote compute node on N-series the same
-as any other Docker image except invoking with `nvidia-docker` instead:
+simply required for the local command execution. If you do not have an Nvidia
+GPU available and install `nvidia-docker` you will most likely encounter an
+error with the nvidia docker service failing to start, but this is ok. You
+can then launch your CUDA-enabled Docker image on the remote compute node
+on Azure N-series VMs the same as any other Docker image except invoking
+with the `nvidia-docker` command instead:
 
 ```shell
 DOCKER_HOST=: nvidia-docker run --rm -it nvidia/cuda nvidia-smi
@@ -121,6 +133,6 @@ unset DOCKER_HOST
 ```
 
 Finally, please remember that the `ssh_docker_tunnel_shipyard.sh` script
-is refreshed and is specific for the pool at the time of pool creation,
-resize, when an SSH user is added or when the remote login settings are
-listed.
+is generated and is specific for the pool as specified in the pool
+configuration file at the time of pool creation, resize, when an SSH user
+is added or when the remote login settings are listed.

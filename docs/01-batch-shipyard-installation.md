@@ -64,7 +64,7 @@ DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh -3
 The following distributions will not work with the `install.sh` script:
 * CentOS < 6.0
 * Debian < 8
-* Fedora < 12
+* Fedora < 13
 * OpenSUSE < 13.1
 * RHEL < 6.0
 * SLES < 12

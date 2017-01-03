@@ -1,14 +1,20 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.3.1] - 2017-01-03
 ### Added
 - Add support for nvidia-docker with ssh docker tunnel
+
+### Fixed
+- Fix multi-job bug with jpcmd
 
 ## [2.3.0] - 2016-12-15
 ### Added
 - `pool ssh` command. Please see the usage doc for more information.
 - `shm_size` json property added to the json object within the `tasks` array
 of a job. Please see the configuration doc for more information.
+- SSH, Interactive Sessions and Docker SSH Tunnel guide
 
 ### Changed
 - Improve usability of the generated SSH docker tunnel script
