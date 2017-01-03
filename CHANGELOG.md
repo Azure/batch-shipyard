@@ -300,7 +300,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.3.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.3.1...HEAD
+[2.3.1]: https://github.com/Azure/batch-shipyard/compare/2.3.0...2.3.1
 [2.3.0]: https://github.com/Azure/batch-shipyard/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/Azure/batch-shipyard/compare/2.1.0...2.2.0
 [2.1.0]: https://github.com/Azure/batch-shipyard/compare/2.0.0...2.1.0
