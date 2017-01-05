@@ -480,6 +480,16 @@ def pool_sku(config, lower=False):
 
 
 # CREDENTIALS SETTINGS
+def raw_credentials(config):
+    # type: (dict) -> dict
+    """Get raw credentials dictionary
+    :param dict config: configuration object
+    :rtype: dict
+    :return: credentials dict
+    """
+    return config['credentials']
+
+
 def credentials_batch(config):
     # type: (dict) -> BatchCredentialsSettings
     """Get Batch credentials
@@ -493,6 +503,32 @@ def credentials_batch(config):
         account_key=conf['account_key'],
         account_service_url=conf['account_service_url']
     )
+
+
+def credentials_batch_account_key_secret_id(config):
+    # type: (dict) -> str
+    """Get Batch account key KeyVault Secret Id
+    :param dict config: configuration object
+    :rtype: str
+    :return: keyvault secret id
+    """
+    try:
+        secid = config[
+            'credentials']['batch']['account_key_keyvault_secret_id']
+        if util.is_none_or_empty(secid):
+            raise KeyError()
+    except KeyError:
+        return None
+    return secid
+
+
+def set_credentials_batch_account_key(config, bakey):
+    # type: (dict, str) -> None
+    """Set Batch account key
+    :param dict config: configuration object
+    :param str bakey: batch account key
+    """
+    config['credentials']['batch']['account_key'] = bakey
 
 
 def credentials_storage(config, ssel):
@@ -517,6 +553,45 @@ def credentials_storage(config, ssel):
     )
 
 
+def iterate_storage_credentials(config):
+    # type: (dict) -> str
+    """Iterate storage credential storage select links
+    :param dict config: configuration object
+    :rtype: str
+    :return: storage selector link
+    """
+    for conf in config['credentials']['storage']:
+        yield conf
+
+
+def credentials_storage_account_key_secret_id(config, ssel):
+    # type: (dict, str) -> str
+    """Get Storage account key KeyVault Secret Id
+    :param dict config: configuration object
+    :param str ssel: storage selector link
+    :rtype: str
+    :return: keyvault secret id
+    """
+    try:
+        secid = config[
+            'credentials']['storage'][ssel]['account_key_keyvault_secret_id']
+        if util.is_none_or_empty(secid):
+            raise KeyError()
+    except KeyError:
+        return None
+    return secid
+
+
+def set_credentials_storage_account_key(config, ssel, sakey):
+    # type: (dict, str, str) -> None
+    """Set Storage account key
+    :param dict config: configuration object
+    :param str ssel: storage selector link
+    :param str sakey: storage account key
+    """
+    config['credentials']['storage'][ssel]['account_key'] = sakey
+
+
 def docker_registry_login(config, server):
     # type: (dict, str) -> tuple
     """Get docker registry login settings
@@ -534,6 +609,48 @@ def docker_registry_login(config, server):
         user = None
         pw = None
     return user, pw
+
+
+def iterate_docker_registry_servers(config):
+    # type: (dict) -> str
+    """Iterate docker registry servers
+    :param dict config: configuration object
+    :rtype: str
+    :return: docker registry name
+    """
+    try:
+        for conf in config['credentials']['docker_registry']:
+            yield conf
+    except KeyError:
+        pass
+
+
+def credentials_docker_registry_password_secret_id(config, dr):
+    # type: (dict, str) -> str
+    """Get Docker registry password KeyVault Secret Id
+    :param dict config: configuration object
+    :param str dr: docker registry link
+    :rtype: str
+    :return: keyvault secret id
+    """
+    try:
+        secid = config['credentials'][
+            'docker_registry'][dr]['password_keyvault_secret_id']
+        if util.is_none_or_empty(secid):
+            raise KeyError()
+    except KeyError:
+        return None
+    return secid
+
+
+def set_credentials_docker_registry_password(config, dr, password):
+    # type: (dict, str, str) -> None
+    """Set Docker registry password
+    :param dict config: configuration object
+    :param str dr: docker registry link
+    :param str password: password
+    """
+    config['credentials']['docker_registry'][dr]['password'] = password
 
 
 # GLOBAL SETTINGS

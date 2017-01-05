@@ -30,7 +30,6 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
-import base64
 import datetime
 import fnmatch
 import getpass
@@ -100,8 +99,7 @@ def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
         pfx.passphrase = getpass.getpass('Enter password for PFX: ')
     logger.debug('adding pfx cert with thumbprint {} to account'.format(
         pfx.sha1))
-    data = util.decode_string(
-        base64.b64encode(open(pfx.filename, 'rb').read()))
+    data = util.base64_encode_string(open(pfx.filename, 'rb').read())
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
             pfx.sha1, 'sha1', data,

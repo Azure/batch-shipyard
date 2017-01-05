@@ -1,4 +1,5 @@
 azure-batch==1.1.0
+azure-keyvault==0.1.0
 azure-storage==0.33.0
 blobxfer==0.12.1
 click==6.6

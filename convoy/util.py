@@ -247,6 +247,16 @@ def base64_encode_string(string):
         return str(base64.b64encode(string), 'ascii')
 
 
+def base64_decode_string(string):
+    # type: (str) -> str
+    """Base64 decode a string
+    :param str string: string to decode
+    :rtype: str
+    :return: decoded string
+    """
+    return base64.b64decode(string)
+
+
 def compute_md5_for_file(file, as_base64, blocksize=65536):
     # type: (pathlib.Path, bool, int) -> str
     """Compute MD5 hash for file

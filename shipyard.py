@@ -39,6 +39,7 @@ except ImportError:
 # non-stdlib imports
 import click
 # local imports
+import convoy.keyvault
 import convoy.fleet
 import convoy.util
 
@@ -59,12 +60,37 @@ class CliContext(object):
         self.blob_client = None
         self.queue_client = None
         self.table_client = None
+        self.keyvault_client = None
+        # aad/keyvault options
+        self.keyvault_uri = None
+        self.keyvault_credentials_secret_id = None
+        self.aad_directory_id = None
+        self.aad_application_id = None
+        self.aad_auth_key = None
+        self.aad_user = None
+        self.aad_password = None
 
-    def initialize(self):
-        """Initialize context"""
-        self._init_config()
-        clients = convoy.fleet.initialize(self.config)
-        self._set_clients(*clients)
+    def initialize(self, creds_only=False, no_config=False):
+        # type: (CliContext, bool, bool) -> None
+        """Initialize context
+        :param CliContext self: this
+        :param bool creds_only: credentials only initialization
+        :param bool no_config: do not configure context
+        """
+        self.keyvault_client = convoy.keyvault.create_client(
+            self.aad_directory_id, self.aad_application_id,
+            self.aad_auth_key, self.aad_user, self.aad_password)
+        del self.aad_directory_id
+        del self.aad_application_id
+        del self.aad_auth_key
+        del self.aad_user
+        del self.aad_password
+        if no_config:
+            return
+        self._init_config(creds_only)
+        if not creds_only:
+            clients = convoy.fleet.initialize(self.config)
+            self._set_clients(*clients)
 
     def _read_json_file(self, json_file):
         # type: (CliContext, pathlib.Path) -> None
@@ -86,8 +112,12 @@ class CliContext(object):
                  'is valid and is encoded UTF-8 without BOM.'.format(
                      json_file)))
 
-    def _init_config(self):
-        """Initializes configuration of the context"""
+    def _init_config(self, creds_only=False):
+        # type: (CliContext, bool) -> None
+        """Initializes configuration of the context
+        :param CliContext self: this
+        :param bool creds_only: credentials only initialization
+        """
         # use configdir if available
         if self.configdir is not None:
             if self.json_credentials is None:
@@ -101,27 +131,44 @@ class CliContext(object):
             if self.json_jobs is None:
                 self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
         # check for required json files
-        if self.json_credentials is None:
-            raise ValueError('credentials json was not specified')
-        elif not isinstance(self.json_credentials, pathlib.Path):
+        if (self.json_credentials is not None and
+                not isinstance(self.json_credentials, pathlib.Path)):
             self.json_credentials = pathlib.Path(self.json_credentials)
-        if self.json_config is None:
-            raise ValueError('config json was not specified')
-        elif not isinstance(self.json_config, pathlib.Path):
-            self.json_config = pathlib.Path(self.json_config)
-        if self.json_pool is None:
-            raise ValueError('pool json was not specified')
-        elif not isinstance(self.json_pool, pathlib.Path):
-            self.json_pool = pathlib.Path(self.json_pool)
+        kvcreds = None
+        if self.json_credentials is None or not self.json_credentials.exists():
+            if self.keyvault_uri is None:
+                raise ValueError('credentials json was not specified')
+            else:
+                # fetch credentials from keyvault
+                kvcreds = convoy.keyvault.fetch_credentials_json(
+                    self.keyvault_client, self.keyvault_uri,
+                    self.keyvault_credentials_secret_id)
+        if not creds_only:
+            if self.json_config is None:
+                raise ValueError('config json was not specified')
+            elif not isinstance(self.json_config, pathlib.Path):
+                self.json_config = pathlib.Path(self.json_config)
+            if self.json_pool is None:
+                raise ValueError('pool json was not specified')
+            elif not isinstance(self.json_pool, pathlib.Path):
+                self.json_pool = pathlib.Path(self.json_pool)
         # load json files into memory
-        self._read_json_file(self.json_credentials)
-        self._read_json_file(self.json_config)
-        self._read_json_file(self.json_pool)
-        if self.json_jobs is not None:
-            if not isinstance(self.json_jobs, pathlib.Path):
-                self.json_jobs = pathlib.Path(self.json_jobs)
-            if self.json_jobs.exists():
-                self._read_json_file(self.json_jobs)
+        if kvcreds is None:
+            self._read_json_file(self.json_credentials)
+        else:
+            self.config = kvcreds
+        del kvcreds
+        # parse any keyvault secret ids from credentials
+        convoy.keyvault.parse_secret_ids(self.keyvault_client, self.config)
+        # read rest of config files
+        if not creds_only:
+            self._read_json_file(self.json_config)
+            self._read_json_file(self.json_pool)
+            if self.json_jobs is not None:
+                if not isinstance(self.json_jobs, pathlib.Path):
+                    self.json_jobs = pathlib.Path(self.json_jobs)
+                if self.json_jobs.exists():
+                    self._read_json_file(self.json_jobs)
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
@@ -148,7 +195,7 @@ class CliContext(object):
 pass_cli_context = click.make_pass_decorator(CliContext, ensure=True)
 
 
-def verbose_option(f):
+def _verbose_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.verbose = value
@@ -161,7 +208,7 @@ def verbose_option(f):
         callback=callback)(f)
 
 
-def confirm_option(f):
+def _confirm_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.yes = value
@@ -174,7 +221,98 @@ def confirm_option(f):
         callback=callback)(f)
 
 
-def configdir_option(f):
+def _azure_keyvault_uri_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.keyvault_uri = value
+        return value
+    return click.option(
+        '--keyvault-uri',
+        expose_value=False,
+        envvar='SHIPYARD_KEYVAULT_URI',
+        help='Azure KeyVault URI',
+        callback=callback)(f)
+
+
+def _azure_keyvault_credentials_secret_id_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.keyvault_credentials_secret_id = value
+        return value
+    return click.option(
+        '--keyvault-credentials_secret_id',
+        expose_value=False,
+        envvar='SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID',
+        help='Azure KeyVault credentials secret id',
+        callback=callback)(f)
+
+
+def _aad_directory_id_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_directory_id = value
+        return value
+    return click.option(
+        '--aad-directory-id',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_DIRECTORY_ID',
+        help='Azure Active Directory directory (tenant) id',
+        callback=callback)(f)
+
+
+def _aad_application_id_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_application_id = value
+        return value
+    return click.option(
+        '--aad-application-id',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_APPLICATION_ID',
+        help='Azure Active Directory application (client) id',
+        callback=callback)(f)
+
+
+def _aad_auth_key_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_auth_key = value
+        return value
+    return click.option(
+        '--aad-auth-key',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_AUTH_KEY',
+        help='Azure Active Directory authentication key',
+        callback=callback)(f)
+
+
+def _aad_user_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_user = value
+        return value
+    return click.option(
+        '--aad-user',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_USER',
+        help='Azure Active Directory user',
+        callback=callback)(f)
+
+
+def _aad_password_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_password = value
+        return value
+    return click.option(
+        '--aad-password',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_PASSWORD',
+        help='Azure Active Directory password',
+        callback=callback)(f)
+
+
+def _configdir_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.configdir = value
@@ -190,7 +328,7 @@ def configdir_option(f):
         callback=callback)(f)
 
 
-def credentials_option(f):
+def _credentials_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.json_credentials = value
@@ -203,7 +341,7 @@ def credentials_option(f):
         callback=callback)(f)
 
 
-def config_option(f):
+def _config_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.json_config = value
@@ -216,7 +354,7 @@ def config_option(f):
         callback=callback)(f)
 
 
-def pool_option(f):
+def _pool_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.json_pool = value
@@ -229,7 +367,7 @@ def pool_option(f):
         callback=callback)(f)
 
 
-def jobs_option(f):
+def _jobs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.json_jobs = value
@@ -243,13 +381,20 @@ def jobs_option(f):
 
 
 def common_options(f):
-    f = jobs_option(f)
-    f = pool_option(f)
-    f = config_option(f)
-    f = credentials_option(f)
-    f = configdir_option(f)
-    f = verbose_option(f)
-    f = confirm_option(f)
+    f = _aad_password_option(f)
+    f = _aad_user_option(f)
+    f = _aad_auth_key_option(f)
+    f = _aad_application_id_option(f)
+    f = _aad_directory_id_option(f)
+    f = _azure_keyvault_credentials_secret_id_option(f)
+    f = _azure_keyvault_uri_option(f)
+    f = _jobs_option(f)
+    f = _pool_option(f)
+    f = _config_option(f)
+    f = _credentials_option(f)
+    f = _configdir_option(f)
+    f = _verbose_option(f)
+    f = _confirm_option(f)
     return f
 
 
@@ -286,6 +431,44 @@ def storage_clear(ctx):
     ctx.initialize()
     convoy.fleet.action_storage_clear(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
+
+
+@cli.group()
+@pass_cli_context
+def keyvault(ctx):
+    """KeyVault actions"""
+    pass
+
+
+@keyvault.command('add')
+@click.argument('name')
+@common_options
+@pass_cli_context
+def keyvault_add(ctx, name):
+    """Add a credentials json as a secret to Azure KeyVault"""
+    ctx.initialize(creds_only=True)
+    convoy.keyvault.store_credentials_json(
+        ctx.keyvault_client, ctx.config, ctx.keyvault_uri, name)
+
+
+@keyvault.command('del')
+@click.argument('name')
+@common_options
+@pass_cli_context
+def keyvault_del(ctx, name):
+    """Delete a secret from Azure KeyVault"""
+    ctx.initialize(no_config=True)
+    convoy.keyvault.delete_secret(
+        ctx.keyvault_client, ctx.keyvault_uri, name)
+
+
+@keyvault.command('list')
+@common_options
+@pass_cli_context
+def keyvault_list(ctx):
+    """List secret ids and metadata in an Azure KeyVault"""
+    ctx.initialize(no_config=True)
+    convoy.keyvault.list_secrets(ctx.keyvault_client, ctx.keyvault_uri)
 
 
 @cli.group()
