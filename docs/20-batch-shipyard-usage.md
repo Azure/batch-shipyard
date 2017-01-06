@@ -48,52 +48,88 @@ shipyard pool add -h
 There are a set of shared options which are used for every sub-command.
 These options must be specified after the command and sub-command. These are:
 ```
-  -y, --yes           Assume yes for all confirmation prompts
-  -v, --verbose       Verbose output
-  --configdir TEXT    Configuration directory where all configuration files
-                      can be found. Each json config file must be named
-                      exactly the same as the regular switch option, e.g.,
-                      pool.json for --pool. Individually specified config
-                      options take precedence over this option.
-  --credentials TEXT  Credentials json config file
-  --config TEXT       Global json config file
-  --pool TEXT         Pool json config file
-  --jobs TEXT         Jobs json config file
+  -y, --yes                       Assume yes for all confirmation prompts
+  -v, --verbose                   Verbose output
+  --configdir TEXT                Configuration directory where all
+                                  configuration files can be found. Each json
+                                  config file must be named exactly the same
+                                  as the regular switch option, e.g.,
+                                  pool.json for --pool. Individually specified
+                                  config options take precedence over this
+                                  option.
+  --credentials TEXT              Credentials json config file
+  --config TEXT                   Global json config file
+  --pool TEXT                     Pool json config file
+  --jobs TEXT                     Jobs json config file
+  --keyvault-uri TEXT             Azure KeyVault URI
+  --keyvault-credentials-secret-id TEXT
+                                  Azure KeyVault credentials secret id
+  --aad-directory-id TEXT         Azure Active Directory directory (tenant) id
+  --aad-application-id TEXT       Azure Active Directory application (client)
+                                  id
+  --aad-auth-key TEXT             Azure Active Directory authentication key
+  --aad-user TEXT                 Azure Active Directory user
+  --aad-password TEXT             Azure Active Directory password
 ```
+* `-y` or `--yes` is to assume yes for all confirmation prompts
+* `-v` or `--verbose` is for verbose output
 * `--configdir path` can be used instead of the individual config switches
 below if all configuration json files are in one directory and named after
 their switch. For example, if you have a directory named `config` and under
 that directory you have the files `credentials.json`, `config.json`,
 `pool.json` and `jobs.json`, then you can use this argument instead of the
 following:
-  * `--credentials path/to/credentials.json` is required for all actions.
+  * `--credentials path/to/credentials.json` is required for all actions
+    except for a select few `keyvault` commands.
   * `--config path/to/config.json` is required for all actions.
   * `--pool path/to/pool.json` is required for most actions.
   * `--jobs path/to/jobs.json` is required for job-related actions.
-* `-v` or `--verbose` is for verbose output
-* `-y` or `--yes` is to assume yes for all confirmation prompts
+* `--keyvault-uri` is required for all `keyvault` commands.
+* `--keyvault-credentials-secret-id` is required if utilizing a credentials
+  json stored in Azure KeyVault
+* `--aad-directory-id` is the Active Directory Directory Id (or Tenant Id)
+* `--aad-application-id` is the Active Directory Application Id (or Client Id)
+* `--aad-auth-key` is the authentication key for the application (or client)
+* `--aad-user` is the Azure Active Directory user
+* `--aad-password` is the Azure Active Directory password for the user
 
-Note that all of the configuration options regarding JSON files can be
-specified as environment variables instead:
+Note that only one of Active Directory Service Principal or User/Password can
+be specified at once, i.e., `--aad-directory-id`, `--aad-application-id`,
+`--aad-auth-key` options are mutually exclusive from `--aad-user` and
+`--aad-password`.
+
+Note that the following options can be specified as environment variables
+instead:
 * `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
 * `SHIPYARD_CREDENTIALS_JSON` in lieu of `--credentials`
 * `SHIPYARD_CONFIG_JSON` in lieu of `--config`
 * `SHIPYARD_POOL_JSON` in lieu of `--pool`
 * `SHIPYARD_JOBS_JSON` in lieu of `--jobs`
+* `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
+* `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
+`--keyvault-credentials-secret-id`
+* `SHIPYARD_AAD_DIRECTORY_ID` in lieu of `--aad-directory-id`
+* `SHIPYARD_AAD_APPLICATION_ID` in lieu of `--aad-application-id`
+* `SHIPYARD_AAD_AUTH_KEY` in lieu of `--aad-auth-key`
+* `SHIPYARD_AAD_USER` in lieu of `--aad-user`
+* `SHIPYARD_AAD_PASSWORD` in lieu of `--aad-password`
 
 ## Commands
 `shipyard` (and `shipyard.py`) script contains the following top-level
 commands:
 ```
-  cert     Certificate actions
-  data     Data actions
-  jobs     Jobs actions
-  pool     Pool actions
-  storage  Storage actions
+  cert      Certificate actions
+  data      Data actions
+  jobs      Jobs actions
+  keyvault  KeyVault actions
+  pool      Pool actions
+  storage   Storage actions
 ```
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
 * `jobs` commands deal with Azure Batch jobs and tasks
+* `keyvault` commands deal with Azure KeyVault secrets for use with Batch
+Shipyard
 * `pool` commands deal with Azure Batch pools
 * `storage` commands deal with Batch Shipyard metadata on Azure Storage
 
@@ -192,6 +228,26 @@ user.
   * `--jobid` force termination scope to just this job id
   * `--taskid` force termination scope to just this task id
   * `--wait` will wait for termination to complete
+
+## KeyVault Command
+The `keyvault` command has the following sub-commands:
+```
+  add   Add a credentials json as a secret to Azure...
+  del   Delete a secret from Azure KeyVault
+  list  List secret ids and metadata in an Azure...
+```
+The following subcommands require `--keyvault-*` and `--aad-*` options in
+order to work. Please refer to the
+[Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
+for more information.
+* `add` will add the specified credentials json as a secret to an Azure
+KeyVault. A valid credentials json must be specified as an option.
+  * `NAME` argument is required which is the name of the secret associated
+    with the credentials json to store in the KeyVault
+* `del` will delete a secret from the Azure KeyVault
+  * `NAME` argument is required which is the name of the secret to delete
+    from the KeyVault
+* `list` will list all secret ids and metadata in an Azure KeyVault
 
 ## Pool Command
 The `pool` command has the following sub-commands:

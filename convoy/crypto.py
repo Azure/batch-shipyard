@@ -30,7 +30,6 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
-import base64
 import collections
 import getpass
 import logging
@@ -321,7 +320,7 @@ def _rsa_decrypt_string_with_pfx(ciphertext, config):
         raise RuntimeError('cannot decrypt without valid private key')
     cleartext = None
     try:
-        data = base64.b64decode(ciphertext)
+        data = util.base64_decode_string(ciphertext)
         proc = subprocess.Popen(
             ['openssl', 'rsautl', '-decrypt', '-inkey', pemfile],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE)

@@ -240,7 +240,7 @@ def _azure_keyvault_credentials_secret_id_option(f):
         clictx.keyvault_credentials_secret_id = value
         return value
     return click.option(
-        '--keyvault-credentials_secret_id',
+        '--keyvault-credentials-secret-id',
         expose_value=False,
         envvar='SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID',
         help='Azure KeyVault credentials secret id',

@@ -32,23 +32,27 @@ The credentials schema is as follows:
         "batch": {
             "account": "awesomebatchaccountname",
             "account_key": "batchaccountkey",
+            "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey",
             "account_service_url": "https://awesomebatchaccountname.<region>.batch.azure.com/"
         },
         "storage": {
             "mystorageaccount": {
                 "account": "awesomestorageaccountname",
                 "account_key": "storageaccountkey",
+                "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/storagekey",
                 "endpoint": "core.windows.net"
             }
         },
         "docker_registry": {
             "hub": {
                 "username": "myhublogin",
-                "password": "myhubpassword"
+                "password": "myhubpassword",
+                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/docker-hub-password"
             },
             "myserver-myorg.azurecr.io": {
                 "username": "azurecruser",
-                "password": "mypassword"
+                "password": "mypassword",
+                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myserver-myorg-azurecr-io-password"
             }
         }
     }
@@ -60,12 +64,20 @@ are defined.
 * (required) The `batch` property defines the Azure Batch account. Members
 under the `batch` property can be found in the
 [Azure Portal](https://portal.azure.com) under your Batch account.
+  * (optional) `account_key_keyvault_secret_id` property can be used to
+    reference an Azure KeyVault secret id. Batch Shipyard will contact the
+    specified KeyVault and replace the `account_key` value as returned by
+    Azure KeyVault.
 * (required) Multiple storage properties can be defined which references
 different Azure Storage account credentials under the `storage` property. This
 may be needed for more flexible configuration in other configuration files. In
 the example above, we only have one storage account defined which is aliased
 by the property name `mystorageaccount`. The alias (or storage account link
 name) can be the same as the storage account name itself.
+  * (optional) `account_key_keyvault_secret_id` property can be used to
+    reference an Azure KeyVault secret id. Batch Shipyard will contact the
+    specified KeyVault and replace the `account_key` value as returned by
+    Azure KeyVault.
 * (optional) `docker_registry` property defines logins for Docker registry
 servers. This property does not need to be defined if you are using only
 public repositories on Docker Hub. However, this is required if pulling from
@@ -74,6 +86,10 @@ or private repositories on Docker Hub.
   * (optional) `hub` defines the login property to Docker Hub:
     * (optional) `username` username to log in to Docker Hub
     * (optional) `password` password associated with the username
+    * (optional) `password_keyvault_secret_id` property can be used to
+      reference an Azure KeyVault secret id. Batch Shipyard will contact the
+      specified KeyVault and replace the `password` value as returned by
+      Azure KeyVault.
   * (optional) `myserver-myorg.azurecr.io` is an example property that
     defines a private container registry to connect to. This is an example to
     connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
@@ -82,6 +98,15 @@ or private repositories on Docker Hub.
     configuration.
     * (optional) `username` username to log in to this registry
     * (optional) `password` password associated with this username
+    * (optional) `password_keyvault_secret_id` property can be used to
+      reference an Azure KeyVault secret id. Batch Shipyard will contact the
+      specified KeyVault and replace the `password` value as returned by
+      Azure KeyVault.
+
+Please refer to the
+[Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
+for more information regarding `*_keyvault_secret_id` properties and how
+they are used for credential management with Azure KeyVault.
 
 An example credential json template can be found
 [here](../config\_templates/credentials.json).
