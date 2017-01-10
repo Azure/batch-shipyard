@@ -29,6 +29,19 @@ The credentials schema is as follows:
 ```json
 {
     "credentials": {
+        "keyvault": {
+            "uri": "https://myvault.vault.azure.net/",
+            "credentials_secret_id": "https://myvault.vault.azure.net/secrets/credentialsjson",
+            "aad": {
+                "directory_id": "01234567-89ab-cdef-0123-456789abcdef",
+                "application_id": "01234567-89ab-cdef-0123-456789abcdef",
+                "auth_key": "01234...",
+                "rsa_private_key_pem": "/path/to/privkey.pem",
+                "x509_cert_sha1_thumbprint": "01AB02CD...",
+                "user": "me@domain.com",
+                "password": "password"
+            }
+        },
         "batch": {
             "account": "awesomebatchaccountname",
             "account_key": "batchaccountkey",
@@ -61,6 +74,31 @@ The credentials schema is as follows:
 
 The `credentials` property is where Azure Batch and Storage credentials
 are defined.
+* (optional) The `keyvault` property defines the required members for
+accessing Azure KeyVault with Azure Active Directory credentials. Note that
+this property is *mutually exclusive* of all other properties in this file.
+If you need to define other members in this config file while using Azure
+KeyVault, then you will need to use environment variables or cli parameters
+instead for AAD and KeyVault credentials.
+  * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
+  * (optional) `credentials_secret_id` property defines the KeyVault secret
+    id containing an entire credentials.json file.
+  * (optional) `aad` property contains members for Azure Active Directory
+    credentials. Note that some options are mutually exclusive of each other
+    depending upon authentication type: `auth_key`, `rsa_private_key_pem` and
+    `password` cannot be defined at the same time. Please see the
+    [Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
+    for more information. Note that any of the following can be specified as
+    a CLI option or environment variable instead. For example, if you do not
+    want to store the `auth_key` in the file, it can be specified at runtime.
+    * (optional) `directory_id` AAD directory (tenant) id
+    * (optional) `application_id` AAD application (client) id
+    * (optional) `auth_key` Service Principal authentication key
+    * (optional) `rsa_private_key_pem` path to RSA private key PEM file
+    * (optional) `x509_cert_sha1_thumbprint` thumbprint of the X.509
+      certificate for use with Certificate-based authentication
+    * (optional) `user` AAD username
+    * (optional) `password` AAD password associated with the user
 * (required) The `batch` property defines the Azure Batch account. Members
 under the `batch` property can be found in the
 [Azure Portal](https://portal.azure.com) under your Batch account.

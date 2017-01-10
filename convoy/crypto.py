@@ -157,6 +157,20 @@ def derive_public_key_pem_from_pfx(pfxfile, passphrase=None, pemfile=None):
     return pemfile
 
 
+def _parse_sha1_thumbprint_openssl(output):
+    # type: (str) -> str
+    """Get SHA1 thumbprint from buffer
+    :param str buffer: buffer to parse
+    :rtype: str
+    :return: sha1 thumbprint of buffer
+    """
+    # return just thumbprint (without colons) from the above openssl command
+    # in lowercase. Expected openssl output is in the form:
+    # SHA1 Fingerprint=<thumbprint>
+    return ''.join(util.decode_string(
+        output).strip().split('=')[1].split(':')).lower()
+
+
 def get_sha1_thumbprint_pfx(pfxfile, passphrase):
     # type: (str, str) -> str
     """Get SHA1 thumbprint of PFX
@@ -178,12 +192,21 @@ def get_sha1_thumbprint_pfx(pfxfile, passphrase):
         ['openssl', 'x509', '-noout', '-fingerprint'], stdin=subprocess.PIPE,
         stdout=subprocess.PIPE
     )
-    sha1_cert_tp = proc.communicate(input=pfxdump)[0]
-    # return just thumbprint (without colons) from the above openssl command
-    # in lowercase. Expected openssl output is in the form:
-    # SHA1 Fingerprint=<thumbprint>
-    return ''.join(util.decode_string(
-        sha1_cert_tp).strip().split('=')[1].split(':')).lower()
+    return _parse_sha1_thumbprint_openssl(proc.communicate(input=pfxdump)[0])
+
+
+def get_sha1_thumbprint_pem(pemfile):
+    # type: (str) -> str
+    """Get SHA1 thumbprint of PEM
+    :param str pfxfile: name of the pfx file to export
+    :rtype: str
+    :return: sha1 thumbprint of pem
+    """
+    proc = subprocess.Popen(
+        ['openssl', 'x509', '-noout', '-fingerprint', '-in', pemfile],
+        stdout=subprocess.PIPE
+    )
+    return _parse_sha1_thumbprint_openssl(proc.communicate()[0])
 
 
 def generate_pem_pfx_certificates(config):

@@ -39,8 +39,8 @@ except ImportError:
 # non-stdlib imports
 import click
 # local imports
-import convoy.keyvault
 import convoy.fleet
+import convoy.settings
 import convoy.util
 
 # create logger
@@ -69,6 +69,8 @@ class CliContext(object):
         self.aad_auth_key = None
         self.aad_user = None
         self.aad_password = None
+        self.aad_cert_private_key = None
+        self.add_cert_thumbprint = None
 
     def initialize(self, creds_only=False, no_config=False):
         # type: (CliContext, bool, bool) -> None
@@ -77,17 +79,20 @@ class CliContext(object):
         :param bool creds_only: credentials only initialization
         :param bool no_config: do not configure context
         """
-        self.keyvault_client = convoy.keyvault.create_client(
-            self.aad_directory_id, self.aad_application_id,
-            self.aad_auth_key, self.aad_user, self.aad_password)
+        self._read_credentials_config()
+        self.keyvault_client = convoy.fleet.create_keyvault_client(
+            self, self.config)
         del self.aad_directory_id
         del self.aad_application_id
         del self.aad_auth_key
         del self.aad_user
         del self.aad_password
+        del self.aad_cert_private_key
+        del self.aad_cert_thumbprint
+        self.config = None
+        self._init_config(creds_only)
         if no_config:
             return
-        self._init_config(creds_only)
         if not creds_only:
             clients = convoy.fleet.initialize(self.config)
             self._set_clients(*clients)
@@ -112,6 +117,21 @@ class CliContext(object):
                  'is valid and is encoded UTF-8 without BOM.'.format(
                      json_file)))
 
+    def _read_credentials_config(self):
+        # type: (CliContext) -> None
+        """Read credentials config file only
+        :param CliContext self: this
+        """
+        # use configdir if available
+        if self.configdir is not None and self.json_credentials is None:
+            self.json_credentials = pathlib.Path(
+                self.configdir, 'credentials.json')
+        if (self.json_credentials is not None and
+                not isinstance(self.json_credentials, pathlib.Path)):
+            self.json_credentials = pathlib.Path(self.json_credentials)
+        if self.json_credentials.exists():
+            self._read_json_file(self.json_credentials)
+
     def _init_config(self, creds_only=False):
         # type: (CliContext, bool) -> None
         """Initializes configuration of the context
@@ -134,15 +154,6 @@ class CliContext(object):
         if (self.json_credentials is not None and
                 not isinstance(self.json_credentials, pathlib.Path)):
             self.json_credentials = pathlib.Path(self.json_credentials)
-        kvcreds = None
-        if self.json_credentials is None or not self.json_credentials.exists():
-            if self.keyvault_uri is None:
-                raise ValueError('credentials json was not specified')
-            else:
-                # fetch credentials from keyvault
-                kvcreds = convoy.keyvault.fetch_credentials_json(
-                    self.keyvault_client, self.keyvault_uri,
-                    self.keyvault_credentials_secret_id)
         if not creds_only:
             if self.json_config is None:
                 raise ValueError('config json was not specified')
@@ -152,14 +163,40 @@ class CliContext(object):
                 raise ValueError('pool json was not specified')
             elif not isinstance(self.json_pool, pathlib.Path):
                 self.json_pool = pathlib.Path(self.json_pool)
-        # load json files into memory
+        # fetch credentials from keyvault, if json file is missing
+        kvcreds = None
+        if self.json_credentials is None or not self.json_credentials.exists():
+            kvcreds = convoy.fleet.fetch_credentials_json_from_keyvault(
+                self.keyvault_client, self.keyvault_uri,
+                self.keyvault_credentials_secret_id)
+        # read credentials json, perform special keyvault processing if
+        # required sections are missing
         if kvcreds is None:
             self._read_json_file(self.json_credentials)
+            kv = convoy.settings.credentials_keyvault(self.config)
+            self.keyvault_uri = self.keyvault_uri or kv.keyvault_uri
+            self.keyvault_credentials_secret_id = (
+                self.keyvault_credentials_secret_id or
+                kv.keyvault_credentials_secret_id
+            )
+            try:
+                convoy.settings.credentials_batch(self.config)
+                if len(list(convoy.settings.iterate_storage_credentials(
+                        self.config))) == 0:
+                    raise KeyError()
+            except KeyError:
+                # fetch credentials from keyvault
+                self.config = \
+                    convoy.fleet.fetch_credentials_json_from_keyvault(
+                        self.keyvault_client, self.keyvault_uri,
+                        self.keyvault_credentials_secret_id)
         else:
             self.config = kvcreds
         del kvcreds
+        del self.keyvault_credentials_secret_id
         # parse any keyvault secret ids from credentials
-        convoy.keyvault.parse_secret_ids(self.keyvault_client, self.config)
+        convoy.fleet.fetch_secrets_from_keyvault(
+            self.keyvault_client, self.config)
         # read rest of config files
         if not creds_only:
             self._read_json_file(self.json_config)
@@ -312,6 +349,32 @@ def _aad_password_option(f):
         callback=callback)(f)
 
 
+def _aad_cert_private_key_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_cert_private_key = value
+        return value
+    return click.option(
+        '--aad-cert-private-key',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_CERT_PRIVATE_KEY',
+        help='Azure Active Directory private key certificate',
+        callback=callback)(f)
+
+
+def _aad_cert_thumbprint_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_cert_thumbprint = value
+        return value
+    return click.option(
+        '--aad-cert-thumbprint',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_CERT_THUMBPRINT',
+        help='Azure Active Directory certificate SHA1 thumbprint',
+        callback=callback)(f)
+
+
 def _configdir_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -381,6 +444,8 @@ def _jobs_option(f):
 
 
 def common_options(f):
+    f = _aad_cert_thumbprint_option(f)
+    f = _aad_cert_private_key_option(f)
     f = _aad_password_option(f)
     f = _aad_user_option(f)
     f = _aad_auth_key_option(f)
@@ -447,7 +512,7 @@ def keyvault(ctx):
 def keyvault_add(ctx, name):
     """Add a credentials json as a secret to Azure KeyVault"""
     ctx.initialize(creds_only=True)
-    convoy.keyvault.store_credentials_json(
+    convoy.fleet.action_keyvault_add(
         ctx.keyvault_client, ctx.config, ctx.keyvault_uri, name)
 
 
@@ -457,8 +522,8 @@ def keyvault_add(ctx, name):
 @pass_cli_context
 def keyvault_del(ctx, name):
     """Delete a secret from Azure KeyVault"""
-    ctx.initialize(no_config=True)
-    convoy.keyvault.delete_secret(
+    ctx.initialize(creds_only=True, no_config=True)
+    convoy.fleet.action_keyvault_del(
         ctx.keyvault_client, ctx.keyvault_uri, name)
 
 
@@ -467,8 +532,8 @@ def keyvault_del(ctx, name):
 @pass_cli_context
 def keyvault_list(ctx):
     """List secret ids and metadata in an Azure KeyVault"""
-    ctx.initialize(no_config=True)
-    convoy.keyvault.list_secrets(ctx.keyvault_client, ctx.keyvault_uri)
+    ctx.initialize(creds_only=True, no_config=True)
+    convoy.fleet.action_keyvault_list(ctx.keyvault_client, ctx.keyvault_uri)
 
 
 @cli.group()

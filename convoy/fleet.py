@@ -49,6 +49,7 @@ import azure.batch.models as batchmodels
 from . import batch
 from . import crypto
 from . import data
+from . import keyvault
 from . import settings
 from . import storage
 from . import util
@@ -206,6 +207,34 @@ def _create_clients(config):
     return batch_client, blob_client, queue_client, table_client
 
 
+def create_keyvault_client(ctx, config):
+    # type: (CliContext, dict) -> azure.keyvault.KeyVaultClient
+    """Create KeyVault client
+    :param CliContext ctx: Cli Context
+    :param dict config: configuration dict
+    :rtype: azure.keyvault.KeyVaultClient
+    :return: key vault client
+    """
+    kv = settings.credentials_keyvault(config)
+    aad_directory_id = ctx.aad_directory_id or kv.aad_directory_id
+    aad_application_id = ctx.aad_application_id or kv.aad_application_id
+    aad_auth_key = ctx.aad_auth_key or kv.aad_auth_key
+    aad_user = ctx.aad_user or kv.aad_user
+    aad_password = ctx.aad_password or kv.aad_password
+    aad_cert_private_key = ctx.aad_cert_private_key or kv.aad_cert_private_key
+    aad_cert_thumbprint = ctx.aad_cert_thumbprint or kv.aad_cert_thumbprint
+    # check if no keyvault/aad params were specified at all
+    if (aad_directory_id is None and aad_application_id is None and
+            aad_auth_key is None and aad_user is None and
+            aad_password is None and aad_cert_private_key is None and
+            aad_cert_thumbprint is None):
+        return None
+    else:
+        return keyvault.create_client(
+            aad_directory_id, aad_application_id, aad_auth_key, aad_user,
+            aad_password, aad_cert_private_key, aad_cert_thumbprint)
+
+
 def initialize(config):
     # type: (dict) -> tuple
     """Initialize fleet and create authenticated clients
@@ -216,6 +245,35 @@ def initialize(config):
     _adjust_general_settings(config)
     _populate_global_settings(config)
     return _create_clients(config)
+
+
+def fetch_credentials_json_from_keyvault(
+        keyvault_client, keyvault_uri, keyvault_credentials_secret_id):
+    # type: (azure.keyvault.KeyVaultClient, str, str) -> dict
+    """Fetch a credentials json from keyvault
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
+    :param str keyvault_uri: keyvault uri
+    :param str keyvault_credentials_secret_id: keyvault cred secret id
+    :rtype: dict
+    :return: credentials json
+    """
+    if keyvault_uri is None:
+        raise ValueError('credentials json was not specified or is invalid')
+    if keyvault_client is None:
+        raise ValueError('no Azure KeyVault or AAD credentials specified')
+    return keyvault.fetch_credentials_json(
+        keyvault_client, keyvault_uri, keyvault_credentials_secret_id)
+
+
+def fetch_secrets_from_keyvault(keyvault_client, config):
+    # type: (azure.keyvault.KeyVaultClient, dict) -> None
+    """Fetch secrets with secret ids in config from keyvault
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
+    :param dict config: configuration dict
+    """
+    if keyvault_client is None:
+        raise ValueError('no Azure KeyVault or AAD credentials specified')
+    keyvault.parse_secret_ids(keyvault_client, config)
 
 
 def _setup_nvidia_driver_package(blob_client, config, vm_size):
@@ -1035,6 +1093,37 @@ def _adjust_settings_for_pool_creation(config):
                         'on Windows')
             except KeyError:
                 pass
+
+
+def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
+    # type: (azure.keyvault.KeyVaultClient, dict, str, str) -> None
+    """Action: Keyvault Add
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
+    :param dict config: configuration dict
+    :param str keyvault_uri: keyvault uri
+    :param str name: secret name
+    """
+    keyvault.store_credentials_json(
+        keyvault_client, config, keyvault_uri, name)
+
+
+def action_keyvault_del(keyvault_client, keyvault_uri, name):
+    # type: (azure.keyvault.KeyVaultClient, str, str) -> None
+    """Action: Keyvault Del
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
+    :param str keyvault_uri: keyvault uri
+    :param str name: secret name
+    """
+    keyvault.delete_secret(keyvault_client, keyvault_uri, name)
+
+
+def action_keyvault_list(keyvault_client, keyvault_uri):
+    # type: (azure.keyvault.KeyVaultClient, str) -> None
+    """Action: Keyvault List
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
+    :param str keyvault_uri: keyvault uri
+    """
+    keyvault.list_secrets(keyvault_client, keyvault_uri)
 
 
 def action_cert_create(config):

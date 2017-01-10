@@ -30,7 +30,7 @@ is useful for managing sensitive data such as secrets.
 The following setup sections will guide you through setting up Azure
 Active Directory and KeyVault for use with Batch Shipyard.
 
-### Azure Active Directory Setup
+### Azure Active Directory Setup with Service Principal Key-based Authentication
 If you will use your login for accessing your Azure subscription (e.g., your
 login to Azure Portal loads your subscription) as credentials to access your
 KeyVault in your subscription, then you can skip this section and proceed
@@ -38,17 +38,24 @@ to the Azure KeyVault Setup below. If not, or if you prefer to use an Active
 Directory Service Principal, then please continue following the directions
 below.
 
+If you prefer to use asymmetric X.509 certificate-based authentication, then
+please see the next section. You can also augment the Key-based Authentication
+with Certificate authentication by following the Certificate guide immediately
+after the Key-based authentication guide.
+
 #### Step 0: Get or Create a Directory
 First, you will need to create a directory if you do not have any existing
 directories (you should have a default directory) or if you are a user of a
 directory that does not allow you to register an Application. You will need
 to use the [Classic Azure Portal](https://manage.windowsazure.com/) to create
-a directory.
+a directory, however, it is recommended to use the default directory that
+is associated with your subscription if possible.
 
 #### Step 1: Retrieve the Directory ID
-Retrieve the Directory ID of the Active Directory from the Azure Portal.
-Click on `Azure Active Directory` on the left menu and then `Properties`. You
-will see the `Directory ID` displayed on the next blade on the right.
+Retrieve the Directory ID of the Active Directory from the
+[Azure Portal](https://portal.azure.com). Click on `Azure Active Directory`
+on the left menu and then `Properties`. You will see the `Directory ID`
+displayed on the next blade on the right.
 
 ![74-aad-step1-0.png](https://azurebatchshipyard.blob.core.windows.net/github/74-aad-step1-0.png)
 
@@ -67,13 +74,13 @@ the Create blade.
 
 ![74-aad-step2-0.png](https://azurebatchshipyard.blob.core.windows.net/github/74-aad-step2-0.png)
 
-Ensure that the Application Type is set as `Native`. The `Redirect URI` does
-not have to exist, you can fill in anything you'd like here. Once completed,
-hit the Create button at the bottom.
+Ensure that the Application Type is set as `Web app / API`. The `Redirect URI`
+does not have to exist, you can fill in anything you'd like here. Once
+completed, hit the `Create` button at the bottom.
 
 #### Step 3: Retrieve the Application ID
 Retrieve the `Application ID` for the application you just registered by
-refreshing the App registrations blade. You will see the `Application ID`
+refreshing the `App registrations` blade. You will see the `Application ID`
 on the top right of the blade.
 
 ![74-aad-step3-0.png](https://azurebatchshipyard.blob.core.windows.net/github/74-aad-step3-0.png)
@@ -94,9 +101,121 @@ blade (if not, click the `All settings ->` button). Click on `Keys` under
 
 Add a description for the key and select an appropriate expiration interval.
 Click on the `Save` button at the top left of the blade. After you save
-the key, the key `VALUE` will be displayed. Copy this value. This is the
-argument to pass to the option `--aad-auth-key` or set as the environment
-variable `SHIPYARD_AAD_AUTH_KEY`.
+the key, the key `VALUE` will be displayed. Copy this value and ensure this
+value is stored somewhere safe. This is the argument to pass to the option
+`--aad-auth-key` or set as the environment variable `SHIPYARD_AAD_AUTH_KEY`.
+Once you navigate away from this blade, the value of the key cannot be
+retrieved again.
+
+### Azure Active Directory Setup with Service Principal Certificate-based Authentication
+The following describes how to set up Azure Active Directory with asymmetric
+X.509 certificate-based authentication. The
+[Azure CLI](https://docs.microsoft.com/en-us/azure/xplat-cli-install) will
+be used in this guide to perform setup. Other tools such as Azure PowerShell
+can also be used.
+
+#### Step 0: Login to Azure subscription and get Directory ID
+Log in to your Azure subscription with Azure cli:
+
+```shell
+azure login
+azure account set "<subscription name or id>"
+```
+
+Ensure that `azure` is running in ARM mode.
+
+Retrieve the Directory ID with the following command:
+
+```shell
+azure account show
+```
+
+You will see a line starting with `Tenant ID`. This is the Directory ID.
+This is the argument to pass to the option `--aad-directory-id` or set as
+the environment variable `SHIPYARD_AAD_DIRECTORY_ID`.
+
+#### Step 1: Create X.509 Certificate with Asymmetric Keys
+Execute the following `openssl` command, replacing the `-days` and
+`-subj` parameters with the appropriate values:
+
+```shell
+openssl req -x509 -days 3650 -newkey rsa:2048 -out cert.pem -nodes -subj '/CN=mykeyvault'
+```
+
+This command will create two files: `cert.pem` and `privkey.pem`. The
+`cert.pem` file contains the X.509 certificate with public key. This
+certificate will be attached to the Active Directory Application.
+
+The `privkey.pem` file contains the RSA private key that will be used to
+authenticate with Azure Active Directory for the Service Principal. This
+file path is the argument to pass to the option `--aad-cert-private-key` or
+set as the environment variable `SHIPYARD_AAD_CERT_PRIVATE_KEY`.
+
+You will also need to get the SHA1 thumbprint of the certificate created.
+This can be done with the following command:
+
+```shell
+openssl x509 -in cert.pem -fingerprint -noout | sed 's/SHA1 Fingerprint=//g'  | sed 's/://g'
+```
+
+This value output is the argument to pass to the option
+`--aad-cert-thumbprint` or set as the environment variable
+`SHIPYARD_AAD_CERT_THUMBPRINT`.
+
+#### Step 2: Create an Active Directory Application and Service Principal with Certificate
+Execute the following command to create the AAD application and Service
+Principal together with the Certificate data, replacing the `-n` value
+with the name of the application as desired:
+
+```shell
+azure ad sp create -n mykeyvault --cert-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
+```
+
+You can specify an optional `--end-date` parameter to change the validity
+period of the certificate.
+
+This action will output something similar to the following:
+```
+data:    Object Id:               abcdef01-2345-6789-abcd-ef0123456789
+data:    Display Name:            mykeyvault
+data:    Service Principal Names:
+data:                             01234567-89ab-cdef-0123-456789abcdef
+data:                             http://mykeyvault
+```
+
+Note the ID under `Service Prinipal Names:`. This is the Application ID.
+This is the argument to pass to the option `--aad-application-id` or set
+as the environment variable `SHIPYARD_AAD_APPLICATION_ID`.
+
+#### Step 3: Create a Role for the Service Principal
+Execute the following command to create a role for the service principal.
+You will need the `Object Id` as displayed in the previous step and your
+Azure Subscription ID. Replace the `-o` role name with one of `Owner`,
+`Contributor`, or `Reader` (if this Service Principal will only read
+from KeyVault).
+
+```shell
+azure role assignment create --objectId abcdef01-2345-6789-abcd-ef0123456789 -o Contributor -c /subscriptions/11111111-2222-3333-4444-555555555555/
+```
+
+You should receive a message output that the role assignment has been
+completed successfully.
+
+You can now assign this Service Principal with Certificate-based
+authentication to an Azure KeyVault as per instructions below.
+
+#### [Optional] Set Certificate Data for Existing Service Principal
+If you followed the prior section for creating a Service Principal with
+Key-based authentication, you can augment the Service Principal with
+Certificate-based authentication by executing the following command,
+replacing the `-o` parameter with the Object Id of the AAD Application:
+
+```shell
+azure ad app set -o abcdef01-2345-6789-abcd-ef0123456789 --cert-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
+```
+
+You can specify an optional `--end-date` parameter to change the validity
+period of the certificate.
 
 ### Azure KeyVault Setup
 The following describes how to set up a new KeyVault for use with Batch
@@ -116,7 +235,7 @@ the blade that follows.
 
 ![74-akv-step0-1.png](https://azurebatchshipyard.blob.core.windows.net/github/74-akv-step0-1.png)
 
-#### Step 1: Create KeyVault
+#### Step 1: Create the KeyVault
 In the Create Key Vault blade, fill in the `Name`, select the `Subscription`
 to use, set the `Resource Group` and `Location` of the KeyVault to be created.
 
@@ -127,12 +246,12 @@ Service Principal, then skip to the next step, but follow the instructions for
 the specific Active Directory User. If you are using an Active Directory
 Service Principal, then hit the `Add new` button, then `Select principal`. In
 the next blade, type the name of the Application added in the prior section
-to Active Directory. Select this application by clicking on it and the Select
-button on the bottom of the blade.
+to Active Directory. Select this application by clicking on it and the
+`Select` button on the bottom of the blade.
 
 #### Step 2: Set Secret Permissions
 From the `Configure from template (optional)` pulldown, select either
-`Key & Secret Management` or `Secret Management`, then hit OK.
+`Key & Secret Management` or `Secret Management`, then click the `OK` button.
 
 ![74-akv-step2-0.png](https://azurebatchshipyard.blob.core.windows.net/github/74-akv-step2-0.png)
 
@@ -155,10 +274,27 @@ with Batch Shipyard with Azure KeyVault using Azure Active Directory
 credentials.
 
 ### Authenticating with AAD and Azure KeyVault
-You will need to provide *either* an AAD Service Principal or AAD
-User/Password to authenticate for access to your KeyVault. These options
-are mutually exclusive. For an AAD Service Principal, you would need to
-provide the following options to your `shipyard` invocation:
+You will need to provide one of the following:
+
+1. an AAD Service Principal with an authentication key
+2. an AAD Service Principal with a RSA private key and X.509 certificate
+thumbprint
+3. an AAD User/Password
+
+in order to authenticate for access to your KeyVault. These options
+are mutually exclusive.
+
+You can either provide the required parameters through CLI options,
+environment variables, or the `credentials.json` file.
+
+Please see the [configuration guide](10-batch-shipyard-configuration.md) for
+the appropriate json properties to populate that correlate with the following
+options below. Note that the `keyvault add` command must use a
+`credentials.json` file that does not have KeyVault and AAD credentials.
+For this command, you will need to use CLI options or environment variables.
+
+For an AAD Service Principal with Key-based authentication, you will need
+to provide the following options to your `shipyard` invocation:
 
 ```
 --aad-directory-id <DIRECTORY-ID> --aad-application-id <APPLICATION-ID> --aad-auth-key <AUTH-KEY>
@@ -168,6 +304,27 @@ or as environment variables:
 
 ```
 SHIPYARD_AAD_DIRECTORY_ID=<DIRECTORY-ID> SHIPYARD_AAD_APPLICATION_ID=<APPLICATION-ID> SHIPYARD_AAD_AUTH_KEY=<AUTH-KEY>
+```
+
+For an AAD Service Principal with Certificate-based authentication, you will
+need to provide the following options to your `shipyard` invocation:
+
+```
+--aad-directory-id <DIRECTORY-ID> --aad-application-id <APPLICATION-ID> --aad-cert-private-key <RSA-PRIVATE-KEY-FILE> --aad-cert-thumbprint <CERT-SHA1-THUMBPRINT>
+```
+
+or as environment variables:
+
+```
+SHIPYARD_AAD_DIRECTORY_ID=<DIRECTORY-ID> SHIPYARD_AAD_APPLICATION_ID=<APPLICATION-ID> SHIPYARD_AAD_CERT_PRIVATE_KEY=<RSA-PRIVATE-KEY-FILE> SHIPYARD_AAD_CERT_THUMBPRINT=<CERT-SHA1-THUMBPRINT>
+```
+
+To retrieve the SHA1 thumbprint for the X.509 certificate (not the RSA
+private key) associated with your Service Principal, you can run the
+following `openssl` command against your certificate file:
+
+```shell
+openssl x509 -in cert.pem -fingerprint -noout | sed 's/SHA1 Fingerprint=//g' | sed 's/://g'
 ```
 
 To use an AAD User/Password to authenticate for access to your KeyVault, you
@@ -203,11 +360,16 @@ it is recommended to use the Batch Shipyard CLI to store your
 and can allow for potentially very large credential files as compression
 is applied to the file prior to placing the secret in KeyVault. To create
 a credentials secret, pass all of the required AAD and KeyVault URI options
-to `keyvault add`. For example:
+to `keyvault add`. Note that you cannot use AAD/KeyVault credential options
+in a `credentials.json` file to authenticate with KeyVault to store the
+same json file. You must use CLI options or environment variables to pass
+the appropriate Azure Keyvault and AAD credentials to `shipyard` for this
+command. For example:
 
 ```shell
 # add the appropriate AAD and KeyVault URI options or environment variables
-# to the below invocation
+# to the below invocation. These AAD/KeyVault authentication options cannot
+# be present in credentials.json.
 shipyard keyvault add mycreds --credentials credentials.json
 ```
 
@@ -228,7 +390,9 @@ https://myvault.vault.azure.net/secrets/mycreds
 ```
 
 This secret id is required for retrieving your `credentials.json` contents
-for latter invocations that require valid credentials to use Batch Shipyard.
+for later invocations that require these particular credentials to interact
+with Batch Shipyard. How to pass this secret id will be explained in the next
+section.
 
 You can also store individual keys as secrets in your KeyVault and reference
 them within your `credentials.json` file. For example:
@@ -249,20 +413,23 @@ options to the invocation and then populate the `account_key` property from
 the value of the secret.
 
 These `*_keyvault_secret_id` properties can be used in lieu of batch account
-keys, storage account keys, and private docker registry passwords. Please
-see the [configuration guide](10-batch-shipyard-configuration.md) for more
+keys, storage account keys, and private Docker Registry passwords. You will
+need to populate the associated KeyVault with these secrets manually and
+set the json properties in the `credentials.json` file with the corresponding
+secret ids. Please see the
+[configuration guide](10-batch-shipyard-configuration.md) for more
 information.
 
 Finally, Batch Shipyard does support nested KeyVault secrets. In other words,
 the `credentials.json` file can be a secret in KeyVault and there can be
 `*_keyvault_secret_id` properties within the json file stored in KeyVault
-which will then be fetched.
+which subsequently will be fetched automatically.
 
 ### Fetching Credentials from KeyVault
 To specify a `credentials.json` as a secret in KeyVault, you can omit the
 `--credentials` option (or specify a `--configdir` option without a
-`credentials.json` file in the path pointed to by `--configdir`) and instead
-specify the option:
+`credentials.json` file on disk in the path pointed to by `--configdir`) and
+instead specify the option:
 
 ```
 --keyvault-credentials-secret-id <SECRET-ID>
@@ -274,14 +441,29 @@ SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID=<SECRET-ID>
 ```
 
 If you have a physical `credentials.json` file on disk, but with
-`*_keyvault_secret_id` properties then you do not need to specify the above
+`*_keyvault_secret_id` properties then you must not specify the above
 option as Batch Shipyard will parse the credentials file and perform
-the lookup and secret retrieval.
+the lookup and secret retrieval automatically.
 
-## Configuration Documentation
-Please see [this page](10-batch-shipyard-configuration.md) for a full
-explanation of each configuration option.
+## More Documentation
+You can perform many Azure Active Directory setup steps through the Azure CLI.
+This [document](https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal-cli)
+explains how to create a Service Principal among other topics. To create
+an Azure KeyVault with the Azure CLI, this
+[document](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-manage-with-cli#register-an-application-with-azure-active-directory)
+explains the steps involved. Additionally, it shows how to authorize an AAD
+Application for use with KeyVault.
 
-## Usage Documentation
-Please see [this page](20-batch-shipyard-usage.md) for a full
+Securing your KeyVault can be handled through the Azure Portal or through
+the Azure CLI. This
+[document](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-secure-your-key-vault)
+explains concepts and how to secure your KeyVault. A general overview of
+Role-Based Access Control (RBAC) and how to manage access to various
+resources can be found in this
+[document](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-what-is).
+
+For further Batch Shipyard documentation, please see
+[this page](10-batch-shipyard-configuration.md) for a full
+explanation of each property in the configuration files. Please see
+[this page](20-batch-shipyard-usage.md) for a full
 explanation of all commands and options for `shipyard`.

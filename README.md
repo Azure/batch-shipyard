@@ -49,6 +49,8 @@ for MPI on HPC low-latency Azure VM instances:
   * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-sizes?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json#n-series): STANDARD\_NC24R (not yet ready with Linux hosts)
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes
+* Support for credential management through
+[Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available

@@ -34,9 +34,11 @@ import json
 import logging
 import zlib
 # non-stdlib imports
+import adal
 import azure.common.credentials
 import azure.keyvault
 import azure.mgmt.resource.resources
+import msrestazure.azure_active_directory
 # local imports
 from . import settings
 from . import util
@@ -52,8 +54,8 @@ _SECRET_ENCODED_FORMAT_VALUE = 'zlib+base64'
 
 def _create_aad_credentials(
         aad_directory_id, aad_application_id, aad_auth_key, aad_user,
-        aad_password):
-    # type: (str, str, str, str, str) ->
+        aad_password, aad_cert_private_key, aad_cert_thumbprint):
+    # type: (str, str, str, str, str, str, str) ->
     #       azure.common.credentials.ServicePrincipalCredentials or
     #       azure.common.credentials.UserPassCredentials
     """Create Azure Active Directory credentials
@@ -62,46 +64,67 @@ def _create_aad_credentials(
     :param str aad_auth_key: aad auth key
     :param str aad_user: aad user
     :param str aad_password: aad_password
+    :param str aad_cert_private_key: path to rsa private key
+    :param str aad_cert_thumbprint: sha1 thumbprint
     :rtype: azure.common.credentials.ServicePrincipalCredentials or
             azure.common.credentials.UserPassCredentials
     :return: aad credentials object
     """
-    if aad_directory_id is not None and aad_user is not None:
-        raise ValueError(
-            'cannot specify both an AAD Service Principal and User')
-    if aad_directory_id is not None:
+    if aad_application_id is not None and aad_cert_private_key is not None:
+        if aad_auth_key is not None:
+            raise ValueError('cannot specify both cert auth and auth key')
+        if aad_password is not None:
+            raise ValueError('cannot specify both cert auth and password')
+        context = adal.AuthenticationContext(
+            'https://login.microsoftonline.com/{}'.format(aad_directory_id))
+        return msrestazure.azure_active_directory.AdalAuthentication(
+            lambda: context.acquire_token_with_client_certificate(
+                _KEYVAULT_RESOURCE,
+                aad_application_id,
+                util.decode_string(open(aad_cert_private_key, 'rb').read()),
+                aad_cert_thumbprint
+            )
+        )
+    elif aad_auth_key is not None:
+        if aad_password is not None:
+            raise ValueError(
+                'cannot specify both an AAD Service Principal and User')
         return azure.common.credentials.ServicePrincipalCredentials(
             aad_application_id,
             aad_auth_key,
             tenant=aad_directory_id,
             resource=_KEYVAULT_RESOURCE,
         )
-    elif aad_user is not None:
+    elif aad_password is not None:
         return azure.common.credentials.UserPassCredentials(
             username=aad_user,
             password=aad_password,
             resource=_KEYVAULT_RESOURCE,
         )
     else:
-        raise ValueError('neither AAD Service Principal or User specified')
+        raise ValueError(
+            'AAD Service Principal, User or Certificate not specified')
 
 
 def create_client(
         aad_directory_id, aad_application_id, aad_auth_key, aad_user,
-        aad_password):
-    # type: (str, str, str, str, str) -> azure.keyvault.KeyVaultClient
+        aad_password, aad_cert_private_key, aad_cert_thumbprint):
+    # type: (str, str, str, str, str, str, str) ->
+    #       azure.keyvault.KeyVaultClient
     """Create KeyVault client
     :param str aad_directory_id: aad directory/tenant id
     :param str aad_application_id: aad application/client id
     :param str aad_auth_key: aad auth key
     :param str aad_user: aad user
     :param str aad_password: aad_password
+    :param str aad_cert_private_key: path to rsa private key
+    :param str aad_cert_thumbprint: sha1 thumbprint
     :rtype: azure.keyvault.KeyVaultClient
     :return: keyvault client
     """
     credentials = _create_aad_credentials(
         aad_directory_id, aad_application_id, aad_auth_key, aad_user,
-        aad_password)
+        aad_password, aad_cert_private_key, aad_cert_thumbprint)
     return azure.keyvault.KeyVaultClient(credentials)
 
 
@@ -145,7 +168,9 @@ def store_credentials_json(client, config, keyvault_uri, secret_name):
     :param str keyvault_uri: keyvault uri
     :param str secret_name: secret name for creds json
     """
-    creds = {'credentials': settings.raw_credentials(config)}
+    creds = {
+        'credentials': settings.raw_credentials(config, True)
+    }
     creds = json.dumps(creds).encode('utf8')
     # first zlib compress and encode as base64
     encoded = util.base64_encode_string(zlib.compress(creds))

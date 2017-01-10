@@ -146,6 +146,13 @@ ResourceFileSettings = collections.namedtuple(
         'file_path', 'blob_source', 'file_mode',
     ]
 )
+KeyVaultSettings = collections.namedtuple(
+    'KeyVaultSettings', [
+        'keyvault_uri', 'keyvault_credentials_secret_id', 'aad_directory_id',
+        'aad_application_id', 'aad_auth_key', 'aad_user', 'aad_password',
+        'aad_cert_private_key', 'aad_cert_thumbprint',
+    ]
+)
 
 
 def get_gluster_volume():
@@ -480,14 +487,96 @@ def pool_sku(config, lower=False):
 
 
 # CREDENTIALS SETTINGS
-def raw_credentials(config):
-    # type: (dict) -> dict
+def raw_credentials(config, omit_keyvault):
+    # type: (dict, bool) -> dict
     """Get raw credentials dictionary
     :param dict config: configuration object
+    :param bool omit_keyvault: omit keyvault settings if present
     :rtype: dict
     :return: credentials dict
     """
-    return config['credentials']
+    conf = config['credentials']
+    if omit_keyvault:
+        conf.pop('keyvault', None)
+    return conf
+
+
+def credentials_keyvault(config):
+    # type: (dict) -> KeyVaultSettings
+    """Get KeyVault settings
+    :param dict config: configuration object
+    :rtype: KeyVaultSettings
+    :return: Key Vault settings
+    """
+    try:
+        conf = config['credentials']['keyvault']
+    except (KeyError, TypeError):
+        conf = {}
+    try:
+        keyvault_uri = conf['uri']
+        if util.is_none_or_empty(keyvault_uri):
+            raise KeyError()
+    except KeyError:
+        keyvault_uri = None
+    try:
+        keyvault_credentials_secret_id = conf['credentials_secret_id']
+        if util.is_none_or_empty(keyvault_credentials_secret_id):
+            raise KeyError()
+    except KeyError:
+        keyvault_credentials_secret_id = None
+    try:
+        aad_directory_id = conf['aad']['directory_id']
+        if util.is_none_or_empty(aad_directory_id):
+            raise KeyError()
+    except KeyError:
+        aad_directory_id = None
+    try:
+        aad_application_id = conf['aad']['application_id']
+        if util.is_none_or_empty(aad_application_id):
+            raise KeyError()
+    except KeyError:
+        aad_application_id = None
+    try:
+        aad_auth_key = conf['aad']['auth_key']
+        if util.is_none_or_empty(aad_auth_key):
+            raise KeyError()
+    except KeyError:
+        aad_auth_key = None
+    try:
+        aad_user = conf['aad']['user']
+        if util.is_none_or_empty(aad_user):
+            raise KeyError()
+    except KeyError:
+        aad_user = None
+    try:
+        aad_password = conf['aad']['password']
+        if util.is_none_or_empty(aad_password):
+            raise KeyError()
+    except KeyError:
+        aad_password = None
+    try:
+        aad_cert_private_key = conf['aad']['rsa_private_key_pem']
+        if util.is_none_or_empty(aad_cert_private_key):
+            raise KeyError()
+    except KeyError:
+        aad_cert_private_key = None
+    try:
+        aad_cert_thumbprint = conf['aad']['x509_cert_sha1_thumbprint']
+        if util.is_none_or_empty(aad_cert_thumbprint):
+            raise KeyError()
+    except KeyError:
+        aad_cert_thumbprint = None
+    return KeyVaultSettings(
+        keyvault_uri=keyvault_uri,
+        keyvault_credentials_secret_id=keyvault_credentials_secret_id,
+        aad_directory_id=aad_directory_id,
+        aad_application_id=aad_application_id,
+        aad_auth_key=aad_auth_key,
+        aad_user=aad_user,
+        aad_password=aad_password,
+        aad_cert_private_key=aad_cert_private_key,
+        aad_cert_thumbprint=aad_cert_thumbprint,
+    )
 
 
 def credentials_batch(config):

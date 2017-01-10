@@ -13,6 +13,8 @@ current limitation of the underlying Azure Batch service.
 This is a current limitation of the underlying VM and host drivers.
 * On-premise Docker private registries are not supported at this time due to
 VNet requirements.
+* Credential storage using Azure Active Directory and KeyVault is only
+supported for Azure Public Cloud regions.
 
 The following Azure Batch actions should only be performed through Batch
 Shipyard when deploying your workload through this toolkit, as Batch
