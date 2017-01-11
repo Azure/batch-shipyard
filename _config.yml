@@ -1,0 +1,8 @@
+title: batch-shipyard
+description: Provision and execute Dockerized workloads on Azure Batch
+google_analytics: 
+show_downloads: true
+theme: jekyll-theme-architect
+
+gems:
+  - jekyll-mentions
