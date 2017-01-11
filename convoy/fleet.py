@@ -80,10 +80,10 @@ _NVIDIA_DOCKER = {
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
-            'http://us.download.nvidia.com/XFree86/Linux-x86_64/367.55'
-            '/NVIDIA-Linux-x86_64-367.55.run'
+            'http://us.download.nvidia.com/XFree86/Linux-x86_64/375.20'
+            '/NVIDIA-Linux-x86_64-375.20.run'
         ),
-        'md5': '6966e50ac3e30b8a128d496bac157ecb',
+        'md5': '874ec6d875f532ee9995082176cf9074',
     },
     'license': (
         'http://www.nvidia.com/content/DriverDownload-March2009'
@@ -271,9 +271,8 @@ def fetch_secrets_from_keyvault(keyvault_client, config):
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     """
-    if keyvault_client is None:
-        raise ValueError('no Azure KeyVault or AAD credentials specified')
-    keyvault.parse_secret_ids(keyvault_client, config)
+    if keyvault_client is not None:
+        keyvault.parse_secret_ids(keyvault_client, config)
 
 
 def _setup_nvidia_driver_package(blob_client, config, vm_size):

@@ -109,30 +109,40 @@ retrieved again.
 
 ### Azure Active Directory Setup with Service Principal Certificate-based Authentication
 The following describes how to set up Azure Active Directory with asymmetric
-X.509 certificate-based authentication. The
-[Azure CLI](https://docs.microsoft.com/en-us/azure/xplat-cli-install) will
-be used in this guide to perform setup. Other tools such as Azure PowerShell
-can also be used.
+X.509 certificate-based authentication. You will need either
+[Azure CLI](https://docs.microsoft.com/en-us/azure/xplat-cli-install) or
+[Azure CLI 2.0](https://docs.microsoft.com/en-us/cli/azure/install-az-cli2)
+to perform the actions in this section. Other tools such as Azure PowerShell
+can also be used with the analogs found in the Azure PowerShell cmdlets.
 
 #### Step 0: Login to Azure subscription and get Directory ID
-Log in to your Azure subscription with Azure cli:
+Log in to your Azure subscription with Azure CLI:
 
 ```shell
+# Azure CLI
 azure login
 azure account set "<subscription name or id>"
+# Azure CLI 2.0
+az login
+az account set --subscription "<subscription name or id>"
 ```
 
-Ensure that `azure` is running in ARM mode.
+If using Azure CLI, ensure that `azure` is running in ARM mode.
+Azure CLI 2.0 only operates in ARM mode.
 
 Retrieve the Directory ID with the following command:
 
 ```shell
+# Azure CLI
 azure account show
+# Azure CLI 2.0
+az account show
 ```
 
-You will see a line starting with `Tenant ID`. This is the Directory ID.
-This is the argument to pass to the option `--aad-directory-id` or set as
-the environment variable `SHIPYARD_AAD_DIRECTORY_ID`.
+You will see a line starting with `Tenant ID` (Azure CLI) or a json with
+a property of `tenantId`. This is the Directory ID. This is the argument to
+pass to the option `--aad-directory-id` or set as the environment variable
+`SHIPYARD_AAD_DIRECTORY_ID`.
 
 #### Step 1: Create X.509 Certificate with Asymmetric Keys
 Execute the following `openssl` command, replacing the `-days` and
@@ -155,7 +165,7 @@ You will also need to get the SHA1 thumbprint of the certificate created.
 This can be done with the following command:
 
 ```shell
-openssl x509 -in cert.pem -fingerprint -noout | sed 's/SHA1 Fingerprint=//g'  | sed 's/://g'
+openssl x509 -in cert.pem -fingerprint -noout | sed 's/SHA1 Fingerprint=//g' | sed 's/://g'
 ```
 
 This value output is the argument to pass to the option
@@ -164,17 +174,23 @@ This value output is the argument to pass to the option
 
 #### Step 2: Create an Active Directory Application and Service Principal with Certificate
 Execute the following command to create the AAD application and Service
-Principal together with the Certificate data, replacing the `-n` value
-with the name of the application as desired:
+Principal together with the Certificate data, replacing the `-n` or
+`--display-name` value depending upon the CLI used with the name of the
+application as desired. If using Azure CLI 2.0, there are additional
+parameters to be modified, including `--homepage` and `--identifier-uris`.
 
 ```shell
+# Azure CLI
 azure ad sp create -n mykeyvault --cert-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
+# Azure CLI 2.0, this will only create the Application. Follow the
+# Service Principal creation steps next.
+az ad app create --display-name mykeyvault --homepage http://mykeyvault --identifier-uris http://mykeyvault --key-type AsymmetricX509Cert --key-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
 ```
 
 You can specify an optional `--end-date` parameter to change the validity
-period of the certificate.
+period of the certificate for both Azure CLI and Azure CLI 2.0.
 
-This action will output something similar to the following:
+This action will output something similar to the following if using Azure CLI:
 ```
 data:    Object Id:               abcdef01-2345-6789-abcd-ef0123456789
 data:    Display Name:            mykeyvault
@@ -183,23 +199,79 @@ data:                             01234567-89ab-cdef-0123-456789abcdef
 data:                             http://mykeyvault
 ```
 
-Note the ID under `Service Prinipal Names:`. This is the Application ID.
-This is the argument to pass to the option `--aad-application-id` or set
-as the environment variable `SHIPYARD_AAD_APPLICATION_ID`.
+or, if using Azure CLI 2.0 the output will be similar to the following:
+
+```json
+{
+  "appId": "01234567-89ab-cdef-0123-456789abcdef",
+  "appPermissions": null,
+  "availableToOtherTenants": false,
+  "displayName": "mykeyvault",
+  "homepage": "http://mykeyvault",
+  "identifierUris": [
+    "http://mykeyvault"
+  ],
+  "objectId": "abcdef01-2345-6789-abcd-ef0123456789",
+  "objectType": "Application",
+  "replyUrls": []
+}
+```
+
+Note the ID under `Service Prinipal Names:` (Azure CLI) or
+`appId` (Azure CLI 2.0). This is the Application ID. This is the argument
+to pass to the option `--aad-application-id` or set as the environment
+variable `SHIPYARD_AAD_APPLICATION_ID`.
+
+If using Azure CLI 2.0, we will need to create a Service Principal
+for the Application since it is not created together in the prior command.
+For the `--id` parameter, you can use either the `appId` or the `objectId`
+found in the prior json output:
+
+```shell
+# Azure CLI 2.0 only
+az ad sp create --id abcdef01-2345-6789-abcd-ef0123456789
+```
+
+You will see some json output where under `servicePrincipalNames`, you
+should see the `appId` in addition to the uri similar to the following:
+
+```json
+{
+  "appId": "01234567-89ab-cdef-0123-456789abcdef",
+  "displayName": "mykeyvault",
+  "objectId": "abcdef01-2345-6789-abcd-ef0123456789",
+  "objectType": "ServicePrincipal",
+  "servicePrincipalNames": [
+    "01234567-89ab-cdef-0123-456789abcdef",
+    "http://mykeyvault"
+  ]
+}
+```
+
+Take note of this `objectId` returned (which is different than the
+Application objectId prior), as this will be used in the next step.
 
 #### Step 3: Create a Role for the Service Principal
 Execute the following command to create a role for the service principal.
-You will need the `Object Id` as displayed in the previous step and your
-Azure Subscription ID. Replace the `-o` role name with one of `Owner`,
-`Contributor`, or `Reader` (if this Service Principal will only read
-from KeyVault).
+You will need the `Object Id` (Azure CLI) or `objectId` (Azure CLI 2.0 with
+`az ad sp create` command) as displayed in the previous step for use with
+the parameter `--objectId` with Azure CLI or `--assignee` with Azure CLI 2.0.
+Replace the `-o` (Azure CLI) or `--role` (Azure CLI 2.0) role name with one
+of `Owner`, `Contributor`, or `Reader` (if this Service Principal will only
+read from KeyVault). You will also need to scope your assignment using
+your subscription and any resource providers to reduce permission scope
+(if you wish) with the `-c` (Azure CLI) or `--scope` (Azure CLI 2.0)
+parameter.
 
 ```shell
+# Azure CLI
 azure role assignment create --objectId abcdef01-2345-6789-abcd-ef0123456789 -o Contributor -c /subscriptions/11111111-2222-3333-4444-555555555555/
+# Azure CLI 2.0
+az role assignment create --assignee abcdef01-2345-6789-abcd-ef0123456789 --role Contributor --scope /subscriptions/11111111-2222-3333-4444-555555555555/
 ```
 
 You should receive a message output that the role assignment has been
-completed successfully.
+completed successfully in Azure CLI or a json blob for Azure CLI 2.0.
 
 You can now assign this Service Principal with Certificate-based
 authentication to an Azure KeyVault as per instructions below.
@@ -208,14 +280,18 @@ authentication to an Azure KeyVault as per instructions below.
 If you followed the prior section for creating a Service Principal with
 Key-based authentication, you can augment the Service Principal with
 Certificate-based authentication by executing the following command,
-replacing the `-o` parameter with the Object Id of the AAD Application:
+replacing the `-o` (Azure CLI) or `--id` (Azure CLI 2.0) parameter with the
+Object Id of the AAD Application:
 
 ```shell
+# Azure CLI
 azure ad app set -o abcdef01-2345-6789-abcd-ef0123456789 --cert-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
+# Azure CLI 2.0
+az ad app update --id abcdef01-2345-6789-abcd-ef0123456789 --key-type AsymmetricX509Cert --key-value "$(tail -n+2 cert.pem | head -n-1 | tr -d '\n')"
 ```
 
 You can specify an optional `--end-date` parameter to change the validity
-period of the certificate.
+period of the certificate for both Azure CLI and Azure CLI 2.0.
 
 ### Azure KeyVault Setup
 The following describes how to set up a new KeyVault for use with Batch

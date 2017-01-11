@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.4.0] - 2017-01-11
+### Added
+- Support for credentials stored in Azure KeyVault
+  - `keyvault` command added. Please see the usage doc for more information.
+  - `*_keyvault_secret_id` properties added for keys and passwords in
+    credentials json. Please see the configuration doc for more information.
+- Using Azure KeyVault with Batch Shipyard guide
+
+### Changed
+- Updated NC-series Tesla driver to 375.20
+
 ## [2.3.1] - 2017-01-03
 ### Added
 - Add support for nvidia-docker with ssh docker tunnel
@@ -300,7 +311,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.3.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.4.0...HEAD
+[2.4.0]: https://github.com/Azure/batch-shipyard/compare/2.3.1...2.4.0
 [2.3.1]: https://github.com/Azure/batch-shipyard/compare/2.3.0...2.3.1
 [2.3.0]: https://github.com/Azure/batch-shipyard/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/Azure/batch-shipyard/compare/2.1.0...2.2.0
