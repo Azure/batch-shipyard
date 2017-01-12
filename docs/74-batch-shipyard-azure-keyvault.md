@@ -140,9 +140,9 @@ az account show
 ```
 
 You will see a line starting with `Tenant ID` (Azure CLI) or a json with
-a property of `tenantId`. This is the Directory ID. This is the argument to
-pass to the option `--aad-directory-id` or set as the environment variable
-`SHIPYARD_AAD_DIRECTORY_ID`.
+a property of `tenantId` (Azure CLI 2.0). This is the Directory ID. This is
+the argument to pass to the option `--aad-directory-id` or set as the
+environment variable `SHIPYARD_AAD_DIRECTORY_ID`.
 
 #### Step 1: Create X.509 Certificate with Asymmetric Keys
 Execute the following `openssl` command, replacing the `-days` and

@@ -70,6 +70,10 @@ These options must be specified after the command and sub-command. These are:
   --aad-auth-key TEXT             Azure Active Directory authentication key
   --aad-user TEXT                 Azure Active Directory user
   --aad-password TEXT             Azure Active Directory password
+  --aad-cert-private-key TEXT     Azure Active Directory private key for X.509
+                                  certificate
+  --aad-cert-thumbprint TEXT      Azure Active Directory certificate SHA1
+                                  thumbprint
 ```
 * `-y` or `--yes` is to assume yes for all confirmation prompts
 * `-v` or `--verbose` is for verbose output
@@ -86,17 +90,21 @@ following:
   * `--jobs path/to/jobs.json` is required for job-related actions.
 * `--keyvault-uri` is required for all `keyvault` commands.
 * `--keyvault-credentials-secret-id` is required if utilizing a credentials
-  json stored in Azure KeyVault
+json stored in Azure KeyVault
 * `--aad-directory-id` is the Active Directory Directory Id (or Tenant Id)
 * `--aad-application-id` is the Active Directory Application Id (or Client Id)
 * `--aad-auth-key` is the authentication key for the application (or client)
 * `--aad-user` is the Azure Active Directory user
 * `--aad-password` is the Azure Active Directory password for the user
+* `--aad-cert-private-key` is the Azure Active Directory Service Principal
+RSA private key corresponding to the X.509 certificate for certificate-based
+auth
+* `--aad-cert-thumbprint` is the X.509 certificate thumbprint for Azure Active
+Directory certificate-based auth
 
 Note that only one of Active Directory Service Principal or User/Password can
-be specified at once, i.e., `--aad-directory-id`, `--aad-application-id`,
-`--aad-auth-key` options are mutually exclusive from `--aad-user` and
-`--aad-password`.
+be specified at once, i.e., `--aad-auth-key`, `--aad-password`, and
+`--aad-cert-private-key` are mutually exclusive.
 
 Note that the following options can be specified as environment variables
 instead:
@@ -113,6 +121,8 @@ instead:
 * `SHIPYARD_AAD_AUTH_KEY` in lieu of `--aad-auth-key`
 * `SHIPYARD_AAD_USER` in lieu of `--aad-user`
 * `SHIPYARD_AAD_PASSWORD` in lieu of `--aad-password`
+* `SHIPYARD_AAD_CERT_PRIVATE_KEY` in lieu of `--aad-cert-private-key`
+* `SHIPYARD_AAD_CERT_THUMBPRINT` in lieu of `--aad-cert-thumbprint`
 
 ## Commands
 `shipyard` (and `shipyard.py`) script contains the following top-level
@@ -237,7 +247,9 @@ The `keyvault` command has the following sub-commands:
   list  List secret ids and metadata in an Azure...
 ```
 The following subcommands require `--keyvault-*` and `--aad-*` options in
-order to work. Please refer to the
+order to work. Alternatively, you can specify these in the `credentials.json`
+file, but these options are mutually exclusive of other properties.
+Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
 for more information.
 * `add` will add the specified credentials json as a secret to an Azure

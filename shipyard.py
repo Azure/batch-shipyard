@@ -358,7 +358,7 @@ def _aad_cert_private_key_option(f):
         '--aad-cert-private-key',
         expose_value=False,
         envvar='SHIPYARD_AAD_CERT_PRIVATE_KEY',
-        help='Azure Active Directory private key certificate',
+        help='Azure Active Directory private key for X.509 certificate',
         callback=callback)(f)
 
 
