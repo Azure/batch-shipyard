@@ -747,6 +747,10 @@ The jobs schema is as follows:
                 {
                     "id": null,
                     "depends_on": [
+                        "taskid-a", "taskid-b", "taskid-c"
+                    ],
+                    "depends_on_range": [
+                        1, 10
                     ],
                     "image": "busybox",
                     "name": null,
@@ -884,6 +888,16 @@ transferred again. This object currently supports `azure_batch` and
   * (optional) `depends_on` is an array of task ids for which this container
     invocation (task) depends on and must run to successful completion prior
     to this task executing.
+  * (optional) `depends_on_range` is an array with exactly two integral
+    elements containing a task `id` range for which this task is dependent
+    upon, i.e., the start `id` and the end `id` for which this task depends
+    on. Although task `id`s are always strings, the dependent task `id`s for
+    ranges must be expressed by their integral representation for this
+    property. This also implies that task `id`s for which this task depends
+    on must be integral in nature. For example, if `depends_on_range` is set
+    to `[1, 10]` (note the integral members), then there should be task
+    `id`s of `"1"`, `"2"`, ... `"10"` within the job. Once these dependent
+    tasks complete successfully, then this specified task will execute.
   * (required) `image` is the Docker image to use for this task
   * (optional) `name` is the name to assign to the container. If not
     specified, the value of the `id` property will be used for `name`.

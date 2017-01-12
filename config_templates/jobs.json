@@ -88,6 +88,10 @@
                     "infiniband": false,
                     "gpu": false,
                     "depends_on": [
+                        "taskid-a", "taskid-b", "taskid-c"
+                    ],
+                    "depends_on_range": [
+                        1, 10
                     ],
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",

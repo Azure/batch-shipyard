@@ -133,7 +133,8 @@ TaskSettings = collections.namedtuple(
     'TaskSettings', [
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
-        'depends_on', 'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+        'depends_on', 'depends_on_range', 'docker_run_cmd', 'docker_exec_cmd',
+        'multi_instance',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1605,10 +1606,13 @@ def has_depends_on_task(conf):
     :rtype: bool
     :return: task has task dependencies
     """
-    if 'depends_on' in conf and util.is_not_empty(conf['depends_on']):
+    if ('depends_on' in conf and util.is_not_empty(conf['depends_on']) or
+            'depends_on_range' in conf and
+            util.is_not_empty(conf['depends_on_range'])):
         if 'id' not in conf or util.is_none_or_empty(conf['id']):
             raise ValueError(
-                'task id is not specified, but depends_on is set')
+                'task id is not specified, but depends_on or '
+                'depends_on_range is set')
         return True
     return False
 
@@ -1701,6 +1705,17 @@ def task_settings(pool, config, conf):
             raise KeyError()
     except KeyError:
         depends_on = None
+    try:
+        depends_on_range = conf['depends_on_range']
+        if util.is_none_or_empty(depends_on_range):
+            raise KeyError()
+        if len(depends_on_range) != 2:
+            raise ValueError('depends_on_range requires 2 elements exactly')
+        if (type(depends_on_range[0]) is not int or
+                type(depends_on_range[1]) is not int):
+            raise ValueError('depends_on_range requires integral members only')
+    except KeyError:
+        depends_on_range = None
     # get additional resource files
     try:
         rfs = conf['resource_files']
@@ -1996,6 +2011,7 @@ def task_settings(pool, config, conf):
         infiniband=infiniband,
         gpu=gpu,
         depends_on=depends_on,
+        depends_on_range=depends_on_range,
         docker_run_cmd=docker_run_cmd,
         docker_exec_cmd=docker_exec_cmd,
         multi_instance=MultiInstanceSettings(

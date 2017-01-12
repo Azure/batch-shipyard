@@ -1852,9 +1852,16 @@ def add_jobs(
                         )
                     )
             # add task dependencies
-            if util.is_not_empty(task.depends_on):
+            if (util.is_not_empty(task.depends_on) or
+                    util.is_not_empty(task.depends_on_range)):
+                if util.is_not_empty(task.depends_on_range):
+                    task_id_ranges = [batchmodels.TaskIdRange(
+                        task.depends_on_range[0], task.depends_on_range[1])]
+                else:
+                    task_id_ranges = None
                 batchtask.depends_on = batchmodels.TaskDependencies(
-                    task_ids=task.depends_on
+                    task_ids=task.depends_on,
+                    task_id_ranges=task_id_ranges,
                 )
             # create task
             if settings.verbose(config):

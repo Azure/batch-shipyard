@@ -1,6 +1,12 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Support for
+[Task Dependency Id Ranges](https://docs.microsoft.com/en-us/azure/batch/batch-task-dependencies#task-id-range)
+with the `depends_on_range` property under each task json property in `tasks`
+in the jobs configuration file. Please see the configuration doc for more
+information.
 
 ## [2.4.0] - 2017-01-11
 ### Added
