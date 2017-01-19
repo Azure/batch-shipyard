@@ -134,7 +134,8 @@ TaskSettings = collections.namedtuple(
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'environment_variables_secret_id', 'envfile', 'resource_files',
         'command', 'infiniband', 'gpu', 'depends_on', 'depends_on_range',
-        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance', 'max_task_retry_count',
+        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+        'max_task_retry_count',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1624,7 +1625,7 @@ def job_max_task_retry_count(conf):
     """
     try:
         max_task_retry_count = int(conf['max_task_retry_count'])
-        if util.is_none_or_empty(max_task_retry_count):
+        if max_task_retry_count is None:
             raise KeyError()
     except KeyError:
         max_task_retry_count = None
@@ -2040,7 +2041,7 @@ def task_settings(pool, config, conf):
     # max_task_retry_count
     try:
         max_task_retry_count = int(conf['max_task_retry_count'])
-        if util.is_none_or_empty(max_task_retry_count):
+        if max_task_retry_count is None:
             raise KeyError()
     except KeyError:
         max_task_retry_count = None

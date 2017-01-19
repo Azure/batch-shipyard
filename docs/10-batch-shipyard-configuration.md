@@ -853,7 +853,7 @@ under the job. The secret stored in KeyVault must be a valid json string,
 e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `max_task_retry_count` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
-does not retry tasks that fail (i.e. `max_task_retry_count` is 1).
+does not retry tasks that fail (i.e. `max_task_retry_count` is 0).
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -1022,7 +1022,7 @@ transferred again. This object currently supports `azure_batch` and
   * (optional) `max_task_retry_count` sets the maximum number of times that
     Azure Batch should retry this task for. This overrides the job-level task
     retry count. By default, Azure Batch does not retry tasks that fail
-    (i.e. `max_task_retry_count` is 1).
+    (i.e. `max_task_retry_count` is 0).
   * (optional) `multi_instance` is a property indicating that this task is a
     multi-instance task. This is required if the Docker image is an MPI
     program. Additional information about multi-instance tasks and Batch
