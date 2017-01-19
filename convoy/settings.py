@@ -134,7 +134,7 @@ TaskSettings = collections.namedtuple(
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'environment_variables_secret_id', 'envfile', 'resource_files',
         'command', 'infiniband', 'gpu', 'depends_on', 'depends_on_range',
-        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance', 'max_task_retry_count',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1615,6 +1615,22 @@ def job_environment_variables_secret_id(conf):
     return secid
 
 
+def job_max_task_retry_count(conf):
+    # type: (dict) -> int
+    """Get number of times a task should be retried in a particular job
+    :param dict conf: job configuration object
+    :rtype: int
+    :return: max task retry count
+    """
+    try:
+        max_task_retry_count = int(conf['max_task_retry_count'])
+        if util.is_none_or_empty(max_task_retry_count):
+            raise KeyError()
+    except KeyError:
+        max_task_retry_count = None
+    return max_task_retry_count
+
+
 def has_depends_on_task(conf):
     # type: (dict) -> bool
     """Determines if task has task dependencies
@@ -2021,6 +2037,13 @@ def task_settings(pool, config, conf):
         num_instances = 0
         cc_args = None
         mi_resource_files = None
+    # max_task_retry_count
+    try:
+        max_task_retry_count = int(conf['max_task_retry_count'])
+        if util.is_none_or_empty(max_task_retry_count):
+            raise KeyError()
+    except KeyError:
+        max_task_retry_count = None
     return TaskSettings(
         id=task_id,
         image=image,
@@ -2042,4 +2065,5 @@ def task_settings(pool, config, conf):
             coordination_command=cc_args,
             resource_files=mi_resource_files,
         ),
+        max_task_retry_count=max_task_retry_count,
     )
