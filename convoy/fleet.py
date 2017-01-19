@@ -71,9 +71,9 @@ _NVIDIA_DOCKER = {
     'ubuntuserver': {
         'url': (
             'https://github.com/NVIDIA/nvidia-docker/releases'
-            '/download/v1.0.0-rc.3/nvidia-docker_1.0.0.rc.3-1_amd64.deb'
+            '/download/v1.0.0/nvidia-docker_1.0.0-1_amd64.deb'
         ),
-        'md5': '49990712ebf3778013fae81ee67f6c79',
+        'md5': '4572a32fe599949381f83c44f8fc57f9',
         'target': 'resources/nvidia-docker.deb'
     }
 }
