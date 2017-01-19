@@ -37,7 +37,6 @@ import zlib
 import adal
 import azure.common.credentials
 import azure.keyvault
-import azure.mgmt.resource.resources
 import msrestazure.azure_active_directory
 # local imports
 from . import settings
