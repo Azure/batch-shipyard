@@ -737,7 +737,8 @@ def jobs_add(ctx, recreate, tail):
     """Add jobs"""
     ctx.initialize()
     convoy.fleet.action_jobs_add(
-        ctx.batch_client, ctx.blob_client, ctx.config, recreate, tail)
+        ctx.batch_client, ctx.blob_client, ctx.keyvault_client, ctx.config,
+        recreate, tail)
 
 
 @jobs.command('list')

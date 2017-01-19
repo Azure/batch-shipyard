@@ -723,6 +723,7 @@ The jobs schema is as follows:
             "environment_variables": {
                 "abc": "xyz"
             },
+            "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "input_data": {
                 "azure_batch": [
                     {
@@ -758,6 +759,7 @@ The jobs schema is as follows:
                     "environment_variables": {
                         "def": "123"
                     },
+                    "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/mytaskenv",
                     "ports": [],
                     "data_volumes": [
                         "contdatavol",
@@ -843,6 +845,10 @@ environment variables are not expanded and are passed as-is. You will need
 to source the environment file `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist`
 in a shell within the docker `command` or `entrypoint` if you want any
 environment variables to be expanded.
+* (optional) `environment_variables_secret_id` under the job are environment
+variables stored in KeyVault that should be applied to all tasks operating
+under the job. The secret stored in KeyVault must be a valid json string,
+e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -909,6 +915,10 @@ transferred again. This object currently supports `azure_batch` and
     `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist` in a shell within the
     docker `command` or `entrypoint` if you want any environment variables
     to be expanded.
+  * (optional) `environment_variables_secret_id` are any additional
+    task-specific environment variables that should be applied to the
+    container but are stored in KeyVault. The secret stored in KeyVault must
+    be a valid json string, e.g., `{ "env_var_name": "env_var_value" }`.
   * (optional) `ports` is an array of port specifications that should be
     exposed to the host.
   * (optional) `data_volumes` is an array of `data_volume` aliases as defined

@@ -46,6 +46,7 @@ import azure.batch.models as batchmodels
 # local imports
 from . import crypto
 from . import data
+from . import keyvault
 from . import settings
 from . import storage
 from . import util
@@ -1611,14 +1612,16 @@ def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
 
 
 def add_jobs(
-        batch_client, blob_client, config, jpfile, bxfile, recreate=False,
-        tail=None):
+        batch_client, blob_client, keyvault_client, config, jpfile, bxfile,
+        recreate=False, tail=None):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict, tuple, tuple, bool, str) -> None
+    #        azure.keyvault.KeyVaultClient, dict, tuple, tuple, bool,
+    #        str) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param tuple jpfile: jobprep file
     :param tuple bxfile: blobxfer file
@@ -1723,6 +1726,14 @@ def add_jobs(
         del mi_docker_container_name
         # get base env vars from job
         job_env_vars = settings.job_environment_variables(jobspec)
+        _job_env_vars_secid = settings.job_environment_variables_secret_id(
+            jobspec)
+        if util.is_not_empty(_job_env_vars_secid):
+            jevs = keyvault.get_secret(
+                keyvault_client, _job_env_vars_secid, value_is_json=True)
+            job_env_vars = util.merge_dict(job_env_vars, jevs or {})
+            del jevs
+        del _job_env_vars_secid
         # add all tasks under job
         for _task in settings.job_tasks(jobspec):
             _task_id = settings.task_id(_task)
@@ -1734,9 +1745,18 @@ def add_jobs(
                 settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
             del _task_id
             task = settings.task_settings(_pool, config, _task)
+            # retrieve keyvault task env vars
+            if util.is_not_empty(task.environment_variables_secret_id):
+                task_env_vars = keyvault.get_secret(
+                    keyvault_client, task.environment_variables_secret_id,
+                    value_is_json=True)
+                task_env_vars = util.merge_dict(
+                    task.environment_variables, task_env_vars or {})
+            else:
+                task_env_vars = task.environment_variables
             # merge job and task env vars
-            env_vars = util.merge_dict(
-                job_env_vars or {}, task.environment_variables or {})
+            env_vars = util.merge_dict(job_env_vars, task_env_vars)
+            del task_env_vars
             # get and create env var file
             sas_urls = None
             if util.is_not_empty(env_vars) or task.infiniband or task.gpu:

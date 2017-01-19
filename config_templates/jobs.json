@@ -6,6 +6,7 @@
             "environment_variables": {
                 "abc": "xyz"
             },
+            "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "input_data": {
                 "azure_batch": [
                     {
@@ -35,6 +36,7 @@
                     "environment_variables": {
                         "def": "123"
                     },
+                    "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/mytaskenv",
                     "ports": [],
                     "data_volumes": [
                         "contdatavol",

@@ -132,9 +132,9 @@ DataTransferSettings = collections.namedtuple(
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
-        'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
-        'depends_on', 'depends_on_range', 'docker_run_cmd', 'docker_exec_cmd',
-        'multi_instance',
+        'environment_variables_secret_id', 'envfile', 'resource_files',
+        'command', 'infiniband', 'gpu', 'depends_on', 'depends_on_range',
+        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1595,8 +1595,24 @@ def job_environment_variables(conf):
         if util.is_none_or_empty(env_vars):
             raise KeyError()
     except KeyError:
-        env_vars = None
+        env_vars = {}
     return env_vars
+
+
+def job_environment_variables_secret_id(conf):
+    # type: (dict) -> str
+    """Get keyvault env vars of a job specification
+    :param dict conf: job configuration object
+    :rtype: list
+    :return: job env vars
+    """
+    try:
+        secid = conf['environment_variables_secret_id']
+        if util.is_none_or_empty(secid):
+            raise KeyError()
+    except KeyError:
+        secid = None
+    return secid
 
 
 def has_depends_on_task(conf):
@@ -1849,7 +1865,13 @@ def task_settings(pool, config, conf):
         if util.is_none_or_empty(env_vars):
             raise KeyError()
     except KeyError:
-        env_vars = None
+        env_vars = {}
+    try:
+        ev_secid = conf['environment_variables_secret_id']
+        if util.is_none_or_empty(ev_secid):
+            raise KeyError()
+    except KeyError:
+        ev_secid = None
     # infiniband
     try:
         infiniband = conf['infiniband']
@@ -2005,6 +2027,7 @@ def task_settings(pool, config, conf):
         name=name,
         docker_run_options=run_opts,
         environment_variables=env_vars,
+        environment_variables_secret_id=ev_secid,
         envfile=envfile,
         resource_files=resource_files,
         command=command,

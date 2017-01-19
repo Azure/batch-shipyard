@@ -1,17 +1,25 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.5.0] - 2017-01-19
 ### Added
 - Support for
 [Task Dependency Id Ranges](https://docs.microsoft.com/en-us/azure/batch/batch-task-dependencies#task-id-range)
 with the `depends_on_range` property under each task json property in `tasks`
 in the jobs configuration file. Please see the configuration doc for more
 information.
+- Support for `environment_variables_secret_id` in job and task definitions.
+Specifying these properties will fetch manually added secrets (in the form of
+a string representation of a json key-value dictionary) from the specified
+KeyVault using AAD credentials. Please see the configuration doc for more
+information.
 
 ### Fixed
 - Remove extraneous import (#12)
 - Defect in handling per key secret ids (#13)
 - Defect in environment variable dict merge (#17)
+- Update Nvidia Docker to 1.0.0 (#21)
 
 ## [2.4.0] - 2017-01-11
 ### Added
@@ -322,7 +330,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.4.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.0...HEAD
+[2.5.0]: https://github.com/Azure/batch-shipyard/compare/2.4.0...2.5.0
 [2.4.0]: https://github.com/Azure/batch-shipyard/compare/2.3.1...2.4.0
 [2.3.1]: https://github.com/Azure/batch-shipyard/compare/2.3.0...2.3.1
 [2.3.0]: https://github.com/Azure/batch-shipyard/compare/2.2.0...2.3.0

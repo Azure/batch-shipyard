@@ -138,6 +138,10 @@ def fetch_credentials_json(
     :return: credentials dict
     """
     logger.debug('fetching credentials json from keyvault')
+    if util.is_none_or_empty(keyvault_credentials_secret_id):
+        raise RuntimeError(
+            'cannot fetch credentials json from keyvault without a valid '
+            'keyvault credentials secret id')
     cred = client.get_secret(keyvault_credentials_secret_id)
     if util.is_none_or_empty(cred.value):
         raise ValueError(
@@ -211,6 +215,26 @@ def list_secrets(client, keyvault_uri):
             secret.content_type))
 
 
+def get_secret(client, secret_id, value_is_json=False):
+    # type: (azure.keyvault.KeyVaultClient, str, bool) -> str
+    """Get secret from KeyVault
+    :param azure.keyvault.KeyVaultClient client: keyvault client
+    :param str secret_id: secret id to retrieve
+    :param bool value_is_json: expected value is json
+    :rtype: str
+    :return: secret value
+    """
+    if client is None:
+        raise RuntimeError(
+            'cannot retrieve secret {} with invalid KeyVault client'.format(
+                secret_id))
+    value = client.get_secret(secret_id).value
+    if value_is_json and util.is_not_empty(value):
+        return json.loads(value)
+    else:
+        return value
+
+
 def parse_secret_ids(client, config):
     # type: (azure.keyvault.KeyVaultClient, dict) -> None
     """Parse secret ids in credentials, fetch values from KeyVault, and add
@@ -222,7 +246,7 @@ def parse_secret_ids(client, config):
     secid = settings.credentials_batch_account_key_secret_id(config)
     if secid is not None:
         logger.debug('fetching batch account key from keyvault')
-        bakey = client.get_secret(secid).value
+        bakey = get_secret(client, secid)
         if util.is_none_or_empty(bakey):
             raise ValueError(
                 'batch account key retrieved for secret id {} is '
@@ -237,7 +261,7 @@ def parse_secret_ids(client, config):
         logger.debug(
             'fetching storage account key for link {} from keyvault'.format(
                 ssel))
-        sakey = client.get_secret(secid).value
+        sakey = get_secret(client, secid)
         if util.is_none_or_empty(sakey):
             raise ValueError(
                 'storage account key retrieved for secret id {} is '
@@ -252,7 +276,7 @@ def parse_secret_ids(client, config):
         logger.debug(
             ('fetching docker registry password for registry {} '
              'from keyvault').format(reg))
-        password = client.get_secret(secid).value
+        password = get_secret(client, secid)
         if util.is_none_or_empty(password):
             raise ValueError(
                 'docker registry password retrieved for secret id {} is '

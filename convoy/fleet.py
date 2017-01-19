@@ -1436,19 +1436,21 @@ def action_pool_udi(batch_client, config, image, digest):
     _update_docker_images(batch_client, config, image, digest)
 
 
-def action_jobs_add(batch_client, blob_client, config, recreate, tail):
+def action_jobs_add(
+        batch_client, blob_client, keyvault_client, config, recreate, tail):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict, bool, str) -> None
+    #        azure.keyvault.KeyVaultClient, dict, bool, str) -> None
     """Action: Jobs Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param bool recreate: recreate jobs if completed
     :param str tail: file to tail or last job and task added
     """
     batch.add_jobs(
-        batch_client, blob_client, config, _JOBPREP_FILE, _BLOBXFER_FILE,
-        recreate, tail)
+        batch_client, blob_client, keyvault_client, config, _JOBPREP_FILE,
+        _BLOBXFER_FILE, recreate, tail)
 
 
 def action_jobs_list(batch_client, config):
