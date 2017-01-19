@@ -1737,6 +1737,8 @@ def add_jobs(
             # merge job env vars into task env vars
             if job_env_vars is None:
                 env_vars = task.environment_variables
+            elif task.environment_variables is None:
+                env_vars = job_env_vars
             else:
                 env_vars = util.merge_dict(
                     job_env_vars, task.environment_variables)
