@@ -8,6 +8,11 @@ with the `depends_on_range` property under each task json property in `tasks`
 in the jobs configuration file. Please see the configuration doc for more
 information.
 
+### Fixed
+- Remove extraneous import (#12)
+- Defect in handling per key secret ids (#13)
+- Defect in environment variable dict merge (#17)
+
 ## [2.4.0] - 2017-01-11
 ### Added
 - Support for credentials stored in Azure KeyVault

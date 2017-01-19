@@ -179,17 +179,18 @@ class CliContext(object):
                 self.keyvault_credentials_secret_id or
                 kv.keyvault_credentials_secret_id
             )
-            try:
-                convoy.settings.credentials_batch(self.config)
-                if len(list(convoy.settings.iterate_storage_credentials(
-                        self.config))) == 0:
-                    raise KeyError()
-            except KeyError:
-                # fetch credentials from keyvault
-                self.config = \
-                    convoy.fleet.fetch_credentials_json_from_keyvault(
-                        self.keyvault_client, self.keyvault_uri,
-                        self.keyvault_credentials_secret_id)
+            if self.keyvault_credentials_secret_id is not None:
+                try:
+                    convoy.settings.credentials_batch(self.config)
+                    if len(list(convoy.settings.iterate_storage_credentials(
+                            self.config))) == 0:
+                        raise KeyError()
+                except KeyError:
+                    # fetch credentials from keyvault
+                    self.config = \
+                        convoy.fleet.fetch_credentials_json_from_keyvault(
+                            self.keyvault_client, self.keyvault_uri,
+                            self.keyvault_credentials_secret_id)
         else:
             self.config = kvcreds
         del kvcreds

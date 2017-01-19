@@ -1734,12 +1734,9 @@ def add_jobs(
                 settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
             del _task_id
             task = settings.task_settings(_pool, config, _task)
-            # merge job env vars into task env vars
-            if job_env_vars is None:
-                env_vars = task.environment_variables
-            else:
-                env_vars = util.merge_dict(
-                    job_env_vars, task.environment_variables)
+            # merge job and task env vars
+            env_vars = util.merge_dict(
+                job_env_vars or {}, task.environment_variables or {})
             # get and create env var file
             sas_urls = None
             if util.is_not_empty(env_vars) or task.infiniband or task.gpu:
