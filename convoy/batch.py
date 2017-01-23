@@ -1649,10 +1649,10 @@ def add_jobs(
         del jpcmd
         # define max task retry count constraint for this task if set
         job_constraints = None
-        max_task_retry_count = settings.job_max_task_retry_count(jobspec)
-        if max_task_retry_count is not None:
+        max_task_retries = settings.job_max_task_retries(jobspec)
+        if max_task_retries is not None:
             job_constraints = batchmodels.JobConstraints(
-                max_task_retry_count=max_task_retry_count
+                max_task_retry_count=max_task_retries
             )
         # create job
         job = batchmodels.JobAddParameter(
@@ -1851,9 +1851,9 @@ def add_jobs(
             del addlcmds
             # define max task retry count constraint for this task if set
             task_constraints = None
-            if task.max_task_retry_count is not None:
+            if task.max_task_retries is not None:
                 task_constraints = batchmodels.TaskConstraints(
-                    max_task_retry_count=task.max_task_retry_count
+                    max_task_retry_count=task.max_task_retries
                 )
             # create task
             batchtask = batchmodels.TaskAddParameter(

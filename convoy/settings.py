@@ -135,7 +135,7 @@ TaskSettings = collections.namedtuple(
         'environment_variables_secret_id', 'envfile', 'resource_files',
         'command', 'infiniband', 'gpu', 'depends_on', 'depends_on_range',
         'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
-        'max_task_retry_count',
+        'max_task_retries',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1616,7 +1616,7 @@ def job_environment_variables_secret_id(conf):
     return secid
 
 
-def job_max_task_retry_count(conf):
+def job_max_task_retries(conf):
     # type: (dict) -> int
     """Get number of times a task should be retried in a particular job
     :param dict conf: job configuration object
@@ -1624,12 +1624,12 @@ def job_max_task_retry_count(conf):
     :return: max task retry count
     """
     try:
-        max_task_retry_count = int(conf['max_task_retry_count'])
-        if max_task_retry_count is None:
+        max_task_retries = conf['max_task_retries']
+        if max_task_retries is None:
             raise KeyError()
     except KeyError:
-        max_task_retry_count = None
-    return max_task_retry_count
+        max_task_retries = None
+    return max_task_retries
 
 
 def has_depends_on_task(conf):
@@ -2038,13 +2038,13 @@ def task_settings(pool, config, conf):
         num_instances = 0
         cc_args = None
         mi_resource_files = None
-    # max_task_retry_count
+    # max_task_retries
     try:
-        max_task_retry_count = int(conf['max_task_retry_count'])
-        if max_task_retry_count is None:
+        max_task_retries = conf['max_task_retries']
+        if max_task_retries is None:
             raise KeyError()
     except KeyError:
-        max_task_retry_count = None
+        max_task_retries = None
     return TaskSettings(
         id=task_id,
         image=image,
@@ -2066,5 +2066,5 @@ def task_settings(pool, config, conf):
             coordination_command=cc_args,
             resource_files=mi_resource_files,
         ),
-        max_task_retry_count=max_task_retry_count,
+        max_task_retries=max_task_retries,
     )

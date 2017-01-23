@@ -724,7 +724,7 @@ The jobs schema is as follows:
                 "abc": "xyz"
             },
             "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
-            "max_task_retry_count": 3,
+            "max_task_retries": 3,
             "input_data": {
                 "azure_batch": [
                     {
@@ -813,7 +813,7 @@ The jobs schema is as follows:
                     ],
                     "infiniband": false,
                     "gpu": false,
-                    "max_task_retry_count": 3,
+                    "max_task_retries": 3,
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
                         "coordination_command": null,
@@ -851,9 +851,9 @@ environment variables to be expanded.
 variables stored in KeyVault that should be applied to all tasks operating
 under the job. The secret stored in KeyVault must be a valid json string,
 e.g., `{ "env_var_name": "env_var_value" }`.
-* (optional) `max_task_retry_count` sets the maximum number of times that
+* (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
-does not retry tasks that fail (i.e. `max_task_retry_count` is 0).
+does not retry tasks that fail (i.e. `max_task_retries` is 0).
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -1019,10 +1019,10 @@ transferred again. This object currently supports `azure_batch` and
   * (optional) `gpu` designates if this container requires access to the GPU
     devices on the host. If this property is set to `true`, Docker containers
     are instantiated via `nvidia-docker`. This requires N-series VM instances.
-  * (optional) `max_task_retry_count` sets the maximum number of times that
+  * (optional) `max_task_retries` sets the maximum number of times that
     Azure Batch should retry this task for. This overrides the job-level task
     retry count. By default, Azure Batch does not retry tasks that fail
-    (i.e. `max_task_retry_count` is 0).
+    (i.e. `max_task_retries` is 0).
   * (optional) `multi_instance` is a property indicating that this task is a
     multi-instance task. This is required if the Docker image is an MPI
     program. Additional information about multi-instance tasks and Batch
