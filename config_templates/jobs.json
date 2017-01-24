@@ -6,7 +6,7 @@
             "environment_variables": {
                 "abc": "xyz"
             },
-            "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
+            "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 1,
             "input_data": {
                 "azure_batch": [
@@ -37,7 +37,7 @@
                     "environment_variables": {
                         "def": "123"
                     },
-                    "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/mytaskenv",
+                    "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/mytaskenv",
                     "ports": [],
                     "data_volumes": [
                         "contdatavol",

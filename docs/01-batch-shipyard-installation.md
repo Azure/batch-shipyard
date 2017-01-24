@@ -18,7 +18,7 @@ regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
 Please ensure that your target Python distribution is 2.7 or 3.3+. It is
-recommended to install Batch Shipyard on Python 3.5 or higher.
+recommended to install Batch Shipyard on Python 3.5 or later.
 
 Install required software as follows:
 ```shell
@@ -28,7 +28,7 @@ Install required software as follows:
 cd batch-shipyard
 # Install for Python 2.7
 ./install.sh
-# Or to install for Python 3.3+ (recommended)
+# Or to install for Python 3.5+ (recommended)
 ./install.sh -3
 # Add $HOME/.local/bin to your PATH in your shell rc file
 # For example, the following line can be added to ~/.bashrc for bash shells:
@@ -79,16 +79,16 @@ file. For example:
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Windows on Python 3.5
+# Install for Windows on Python 3.5+
 pip3.exe install --upgrade -r requirements.txt
 # Or invoke directly from the installation directory
-C:\Python35\Scripts\pip3.exe install --upgrade -r requirements.txt
+C:\Python36\Scripts\pip3.exe install --upgrade -r requirements.txt
 ```
 If you are installing on Python < 3.5 on Windows, you will need a compiler
 that matches the CRT of the CPython version you are using. For Python 2.7,
 you can download the necessary development headers and compiler
 [from Microsoft](http://aka.ms/vcpython27). If you are on Python 3.3 or 3.4
-on Windows, it is recommended to upgrade to Python 3.5 or higher so that you
+on Windows, it is recommended to upgrade to Python 3.5 or later so that you
 do not need a compiler to install the dependencies.
 
 Although it is recommended to use the Python distribution from
@@ -192,9 +192,9 @@ Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and Python development libraries to be installed due to the
 [cryptography](https://pypi.python.org/pypi/cryptography) dependency on Linux.
 For Windows, binary wheels will be installed for most dependencies. If
-installing on Python 3.5 for Windows, no development environment is needed.
-The following are example commands to execute (as root or with `sudo`) to
-install the required dependencies on Linux:
+installing on Python 3.5 or later for Windows, no development environment
+is needed. The following are example commands to execute (as root or with
+`sudo`) to install the required dependencies on Linux:
 
 ####Ubuntu/Debian
 ```

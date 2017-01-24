@@ -1,6 +1,18 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Support for max task retries (#23). See configuration doc for more
+information.
+
+### Changed
+- **Breaking Change:** `environment_variables_secret_id` was erroneously
+named and has been renamed to `environment_variables_keyvault_secret_id` to
+follow the other properties with similar behavior.
+- Include Python 3.6 Travis CI target
+
+### Fixed
+- Docker temporary directory not being set properly
 
 ## [2.5.0] - 2017-01-19
 ### Added

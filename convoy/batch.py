@@ -1735,8 +1735,8 @@ def add_jobs(
         del mi_docker_container_name
         # get base env vars from job
         job_env_vars = settings.job_environment_variables(jobspec)
-        _job_env_vars_secid = settings.job_environment_variables_secret_id(
-            jobspec)
+        _job_env_vars_secid = \
+            settings.job_environment_variables_keyvault_secret_id(jobspec)
         if util.is_not_empty(_job_env_vars_secid):
             jevs = keyvault.get_secret(
                 keyvault_client, _job_env_vars_secid, value_is_json=True)
@@ -1755,9 +1755,11 @@ def add_jobs(
             del _task_id
             task = settings.task_settings(_pool, config, _task)
             # retrieve keyvault task env vars
-            if util.is_not_empty(task.environment_variables_secret_id):
+            if util.is_not_empty(
+                    task.environment_variables_keyvault_secret_id):
                 task_env_vars = keyvault.get_secret(
-                    keyvault_client, task.environment_variables_secret_id,
+                    keyvault_client,
+                    task.environment_variables_keyvault_secret_id,
                     value_is_json=True)
                 task_env_vars = util.merge_dict(
                     task.environment_variables, task_env_vars or {})

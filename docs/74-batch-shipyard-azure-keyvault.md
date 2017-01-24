@@ -217,7 +217,7 @@ or, if using Azure CLI 2.0 the output will be similar to the following:
 }
 ```
 
-Note the ID under `Service Prinipal Names:` (Azure CLI) or
+Note the ID under `Service Principal Names:` (Azure CLI) or
 `appId` (Azure CLI 2.0). This is the Application ID. This is the argument
 to pass to the option `--aad-application-id` or set as the environment
 variable `SHIPYARD_AAD_APPLICATION_ID`.
