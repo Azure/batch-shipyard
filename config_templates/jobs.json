@@ -7,6 +7,7 @@
                 "abc": "xyz"
             },
             "environment_variables_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
+            "max_task_retries": 1,
             "input_data": {
                 "azure_batch": [
                     {
@@ -95,6 +96,7 @@
                     "depends_on_range": [
                         1, 10
                     ],
+                    "max_task_retries": 1,
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
                         "coordination_command": null,

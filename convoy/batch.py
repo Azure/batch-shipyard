@@ -1647,6 +1647,14 @@ def add_jobs(
         del addlcmds
         jpcmdline = util.wrap_commands_in_shell(jpcmd)
         del jpcmd
+        # define max task retry count constraint for this task if set
+        job_constraints = None
+        max_task_retries = settings.job_max_task_retries(jobspec)
+        if max_task_retries is not None:
+            job_constraints = batchmodels.JobConstraints(
+                max_task_retry_count=max_task_retries
+            )
+        # create job
         job = batchmodels.JobAddParameter(
             id=settings.job_id(jobspec),
             pool_info=batchmodels.PoolInformation(pool_id=pool.id),
@@ -1657,6 +1665,7 @@ def add_jobs(
                 rerun_on_node_reboot_after_success=False,
             ),
             uses_task_dependencies=False,
+            constraints=job_constraints,
         )
         lastjob = job.id
         # perform checks:
@@ -1840,6 +1849,12 @@ def add_jobs(
             if addlcmds is not None:
                 task_commands.append(addlcmds)
             del addlcmds
+            # define max task retry count constraint for this task if set
+            task_constraints = None
+            if task.max_task_retries is not None:
+                task_constraints = batchmodels.TaskConstraints(
+                    max_task_retry_count=task.max_task_retries
+                )
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
@@ -1847,6 +1862,7 @@ def add_jobs(
                 run_elevated=True,
                 resource_files=[],
                 multi_instance_settings=mis,
+                constraints=task_constraints,
             )
             # add envfile
             if sas_urls is not None:
