@@ -18,7 +18,10 @@ regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
 Please ensure that your target Python distribution is 2.7 or 3.3+. It is
-recommended to install Batch Shipyard on Python 3.5 or later.
+recommended to install Batch Shipyard on Python 3.5 or later. Although Python
+3.5 or later is recommended, if you cannot easily install Python 3.5+ on
+your system but Python 2.7 is available, then please use that version of
+Python to avoid installation hassles with a Python interpreter.
 
 Install required software as follows:
 ```shell

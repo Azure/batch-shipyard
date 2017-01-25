@@ -12,5 +12,6 @@ and effectively running your batch-style Docker workloads on Azure Batch.
 8. [Credential Encryption](75-batch-shipyard-credential-encryption.md)
 9. [Batch Shipyard and Multi-Instance Tasks](80-batch-shipyard-multi-instance-tasks.md)
 10. [Interactive SSH Sessions and Docker Tunnels](85-batch-shipyard-ssh-docker-tunnel.md)
-11. [Contributing Recipes](98-contributing-recipes.md)
-12. [Current Limitations](99-current-limitations.md)
+11. [FAQ](97-faq.md)
+12. [Contributing Recipes](98-contributing-recipes.md)
+13. [Current Limitations](99-current-limitations.md)

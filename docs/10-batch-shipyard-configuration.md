@@ -894,8 +894,10 @@ transferred again. This object currently supports `azure_batch` and
 * (required) `tasks` is an array of tasks to add to the job.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is
-    formatted as `dockertask-NNN` where `NNN` starts from `000` and is
-    increased by 1 for each task added to the same job.
+    formatted as `dockertask-NNNNN` where `NNNNN` starts from `00000` and is
+    increased by 1 for each task added to the same job. If there are more
+    than `99999` autonamed tasks in a job then the numbering is not
+    padded for tasks exceeding 5 digits.
   * (optional) `depends_on` is an array of task ids for which this container
     invocation (task) depends on and must run to successful completion prior
     to this task executing.

@@ -12,6 +12,9 @@ follow the other properties with similar behavior.
 - Include Python 3.6 Travis CI target
 
 ### Fixed
+- Automatically assigned task ids are now in the format `dockertask-NNNNN`
+and will increment properly past 99999 but will not be padded after that (#27)
+- Defect in list tasks for non-running tasks (#28)
 - Docker temporary directory not being set properly
 
 ## [2.5.0] - 2017-01-19

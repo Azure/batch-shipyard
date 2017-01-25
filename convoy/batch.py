@@ -1602,17 +1602,23 @@ def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
     """
     # get filtered, sorted list of generic docker task ids
     try:
-        tasklist = sorted(filter(
-            lambda x: x.id.startswith(_GENERIC_DOCKER_TASK_PREFIX),
-            (batch_client.task.list(job_id))), key=lambda y: y.id)
-        tasknum = int(tasklist[-1].id.split('-')[-1]) + 1
+        tasklist = batch_client.task.list(
+            job_id,
+            task_list_options=batchmodels.TaskListOptions(
+                filter='startswith(id, \'{}\')'.format(
+                    _GENERIC_DOCKER_TASK_PREFIX),
+                select='id'))
+        tasknum = sorted([int(x.id.split('-')[-1]) for x in tasklist])[-1] + 1
     except (batchmodels.batch_error.BatchErrorException, IndexError):
         tasknum = 0
     if reserved is not None:
         tasknum_reserved = int(reserved.split('-')[-1])
         while tasknum == tasknum_reserved:
             tasknum += 1
-    return '{0}{1:03d}'.format(_GENERIC_DOCKER_TASK_PREFIX, tasknum)
+    if tasknum > 99999:
+        return '{}{}'.format(_GENERIC_DOCKER_TASK_PREFIX, tasknum)
+    else:
+        return '{0}{1:05d}'.format(_GENERIC_DOCKER_TASK_PREFIX, tasknum)
 
 
 def add_jobs(
