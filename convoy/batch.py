@@ -1526,9 +1526,10 @@ def list_tasks(batch_client, config, jobid=None):
                                   task.execution_info.exit_code)
                 else:
                     ei = ''
-                some_extra_info = ('none','none',ei)
+                some_extra_info = ('none', 'none', ei)
                 if task.node_info is not None:
-                    some_extra_info = (task.node_info.pool_id,task.node_info.node_id,ei)
+                    some_extra_info = (task.node_info.pool_id, 
+                            task.node_info.node_id, ei)
                 logger.info(
                     'job_id={} task_id={} [state={} pool_id={} '
                     'node_id={}{}]'.format(
