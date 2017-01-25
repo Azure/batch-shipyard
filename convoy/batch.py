@@ -1526,11 +1526,13 @@ def list_tasks(batch_client, config, jobid=None):
                                   task.execution_info.exit_code)
                 else:
                     ei = ''
+                some_extra_info = ('none','none',ei)
+                if task.node_info is not None:
+                    some_extra_info = (task.node_info.pool_id,task.node_info.node_id,ei)
                 logger.info(
                     'job_id={} task_id={} [state={} pool_id={} '
                     'node_id={}{}]'.format(
-                        job_id, task.id, task.state, task.node_info.pool_id,
-                        task.node_info.node_id, ei))
+                        job_id, task.id, task.state, *some_extra_info))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
