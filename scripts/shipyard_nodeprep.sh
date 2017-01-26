@@ -545,7 +545,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 exit 1
             fi
             zypper -n in lsb
-            rpm -Uvh /opt/intelMPI/intel_mpi_packages/intel-mpi-rt-intel64-5.0.3p-048.x86_64.rpm
+            rpm -Uvh --nodeps /opt/intelMPI/intel_mpi_packages/*.rpm
             mkdir -p /opt/intel/compilers_and_libraries/linux
             ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
         fi

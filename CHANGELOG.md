@@ -16,6 +16,7 @@ follow the other properties with similar behavior.
 and will increment properly past 99999 but will not be padded after that (#27)
 - Defect in list tasks for non-running tasks (#28)
 - Docker temporary directory not being set properly
+- SLES-HPC will now install all Intel MPI related rpms
 
 ## [2.5.0] - 2017-01-19
 ### Added
