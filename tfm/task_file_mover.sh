@@ -10,8 +10,8 @@ cd /opt/batch-shipyard
 privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
 
 for spec in "$@"; do
-    IFS=':' read -ra parts <<< "$spec"
-    # encrypt:creds:jobid:taskid:include:exclude:dst
+    IFS=',' read -ra parts <<< "$spec"
+    # encrypt,creds,jobid,taskid,include,exclude,dst
     encrypt=${parts[0],,}
     if [ $encrypt == "true" ]; then
         SHIPYARD_BATCH_ENV=`echo ${parts[1]} | base64 -d | openssl rsautl -decrypt -inkey $privatekey`

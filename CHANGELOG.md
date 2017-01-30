@@ -17,6 +17,7 @@ and will increment properly past 99999 but will not be padded after that (#27)
 - Defect in list tasks for non-running tasks (#28)
 - Docker temporary directory not being set properly
 - SLES-HPC will now install all Intel MPI related rpms
+- Defect in task file mover for unencrypted credentials (#29)
 
 ## [2.5.0] - 2017-01-19
 ### Added

@@ -22,7 +22,7 @@ is dependent upon a lot of factors that Batch Shipyard has no control over.
 * How do I contribute a recipe?
   * Please see this [guide](98-contributing-recipes.md).
 * Does Batch Shipyard support Windows Server Containers?
-  * Not at this time, we are tracking issue
+  * Not at this time, we are tracking the issue
     [here](https://github.com/Azure/batch-shipyard/issues/7).
 * Does Batch Shipyard support Clear Linux?
   * Not at this time. We are investigating bringing support for Clear Linux

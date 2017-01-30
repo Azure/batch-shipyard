@@ -137,8 +137,8 @@ def _process_batch_input_data(config, input_data, on_task):
                 bc.account, bc.account_service_url, bc.account_key),
             config)
         # construct argument
-        # encrypt:creds:jobid:taskid:incl:excl:dst
-        args.append('"{}:{}:{}:{}:{}:{}:{}"'.format(
+        # encrypt,creds,jobid,taskid,incl,excl,dst
+        args.append('"{},{},{},{},{},{},{}"'.format(
             encrypt, creds, jobid, taskid, include, exclude, dst))
     return args
 
