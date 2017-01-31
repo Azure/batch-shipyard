@@ -4,6 +4,8 @@
 ### Added
 - Support for max task retries (#23). See configuration doc for more
 information.
+- Support for task data retention time (#30). See configuration doc for
+more information.
 
 ### Changed
 - **Breaking Change:** `environment_variables_secret_id` was erroneously

@@ -814,6 +814,7 @@ The jobs schema is as follows:
                     "infiniband": false,
                     "gpu": false,
                     "max_task_retries": 3,
+                    "retention_time": "1.12:00:00",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
                         "coordination_command": null,
@@ -1025,6 +1026,13 @@ transferred again. This object currently supports `azure_batch` and
     Azure Batch should retry this task for. This overrides the job-level task
     retry count. By default, Azure Batch does not retry tasks that fail
     (i.e. `max_task_retries` is 0).
+  * (optional) `retention_time` sets the timedelta to retain the task
+    directory on the compute node where it ran after the task completes.
+    The format for this property is a timedelta with a string representation
+    of "d.HH:mm:ss". For example, "1.12:00:00" would allow the compute node
+    to clean up this task's directory 36 hours after the task completed. The
+    default, if unspecified, is effectively infinite - i.e., task data is
+    retained forever on the compute node that ran the task.
   * (optional) `multi_instance` is a property indicating that this task is a
     multi-instance task. This is required if the Docker image is an MPI
     program. Additional information about multi-instance tasks and Batch

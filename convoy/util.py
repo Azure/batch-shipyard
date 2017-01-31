@@ -32,6 +32,7 @@ from builtins import (  # noqa
 # stdlib imports
 import base64
 import copy
+import datetime
 import hashlib
 import logging
 import logging.handlers
@@ -255,6 +256,48 @@ def base64_decode_string(string):
     :return: decoded string
     """
     return base64.b64decode(string)
+
+
+def convert_timedelta_to_string(td):
+    # type: (datetime.timedelta) -> str
+    """Convert a time delta to string
+    :param datetime.timedelta td: time delta to convert
+    :rtype: str
+    :return: string representation
+    """
+    days = td.days
+    hours = td.seconds // 3600
+    minutes = (td.seconds - (hours * 3600)) // 60
+    seconds = (td.seconds - (hours * 3600) - (minutes * 60))
+    return '{0}.{1:02d}:{2:02d}:{3:02d}'.format(days, hours, minutes, seconds)
+
+
+def convert_string_to_timedelta(string):
+    # type: (str) -> datetime.timedelta
+    """Convert string to time delta. strptime() does not support time deltas
+    greater than 24 hours.
+    :param str string: string representation of time delta
+    :rtype: datetime.timedelta
+    :return: time delta
+    """
+    if is_none_or_empty(string):
+        raise ValueError('{} is not a valid timedelta string'.format(string))
+    # get days
+    tmp = string.split('.')
+    if len(tmp) == 2:
+        days = int(tmp[0])
+        tmp = tmp[1]
+    elif len(tmp) == 1:
+        days = 0
+        tmp = tmp[0]
+    else:
+        raise ValueError('{} is not a valid timedelta string'.format(string))
+    # get total seconds
+    tmp = tmp.split(':')
+    if len(tmp) != 3:
+        raise ValueError('{} is not a valid timedelta string'.format(string))
+    totsec = int(tmp[2]) + int(tmp[1]) * 60 + int(tmp[0]) * 3600
+    return datetime.timedelta(days, totsec)
 
 
 def compute_md5_for_file(file, as_base64, blocksize=65536):

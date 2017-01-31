@@ -134,8 +134,8 @@ TaskSettings = collections.namedtuple(
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'environment_variables_keyvault_secret_id', 'envfile',
         'resource_files', 'command', 'infiniband', 'gpu', 'depends_on',
-        'depends_on_range', 'max_task_retries', 'docker_run_cmd',
-        'docker_exec_cmd', 'multi_instance',
+        'depends_on_range', 'max_task_retries', 'retention_time',
+        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1889,6 +1889,21 @@ def task_settings(pool, config, conf):
             raise KeyError()
     except KeyError:
         ev_secid = None
+    # max_task_retries
+    try:
+        max_task_retries = conf['max_task_retries']
+        if max_task_retries is None:
+            raise KeyError()
+    except KeyError:
+        max_task_retries = None
+    # retention time
+    try:
+        retention_time = conf['retention_time']
+        if util.is_none_or_empty(retention_time):
+            raise KeyError()
+        retention_time = util.convert_string_to_timedelta(retention_time)
+    except KeyError:
+        retention_time = None
     # infiniband
     try:
         infiniband = conf['infiniband']
@@ -2038,13 +2053,6 @@ def task_settings(pool, config, conf):
         num_instances = 0
         cc_args = None
         mi_resource_files = None
-    # max_task_retries
-    try:
-        max_task_retries = conf['max_task_retries']
-        if max_task_retries is None:
-            raise KeyError()
-    except KeyError:
-        max_task_retries = None
     return TaskSettings(
         id=task_id,
         image=image,
@@ -2054,6 +2062,8 @@ def task_settings(pool, config, conf):
         environment_variables_keyvault_secret_id=ev_secid,
         envfile=envfile,
         resource_files=resource_files,
+        max_task_retries=max_task_retries,
+        retention_time=retention_time,
         command=command,
         infiniband=infiniband,
         gpu=gpu,
@@ -2066,5 +2076,4 @@ def task_settings(pool, config, conf):
             coordination_command=cc_args,
             resource_files=mi_resource_files,
         ),
-        max_task_retries=max_task_retries,
     )

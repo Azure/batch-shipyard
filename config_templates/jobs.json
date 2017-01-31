@@ -97,6 +97,7 @@
                         1, 10
                     ],
                     "max_task_retries": 1,
+                    "retention_time": "1.12:00:00",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
                         "coordination_command": null,

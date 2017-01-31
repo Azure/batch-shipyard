@@ -1532,9 +1532,11 @@ def list_tasks(batch_client, config, jobid=None):
                                 task.node_info.pool_id,
                                 task.node_info.node_id, ei)
                 logger.info(
-                    'job_id={} task_id={} [state={} pool_id={} '
-                    'node_id={}{}]'.format(
-                        job_id, task.id, task.state, *some_extra_info))
+                    'job_id={} task_id={} [state={} max_retries={} '
+                    'retention_time={} pool_id={} node_id={}{}]'.format(
+                        job_id, task.id, task.state,
+                        task.constraints.max_task_retry_count,
+                        task.constraints.retention_time, *some_extra_info))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
@@ -1861,12 +1863,11 @@ def add_jobs(
             if addlcmds is not None:
                 task_commands.append(addlcmds)
             del addlcmds
-            # define max task retry count constraint for this task if set
-            task_constraints = None
-            if task.max_task_retries is not None:
-                task_constraints = batchmodels.TaskConstraints(
-                    max_task_retry_count=task.max_task_retries
-                )
+            # set task constraints
+            task_constraints = batchmodels.TaskConstraints(
+                retention_time=task.retention_time,
+                max_task_retry_count=task.max_task_retries,
+            )
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
