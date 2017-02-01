@@ -38,7 +38,8 @@ which are identical VMs provisioned from the Azure cloud. Multiple Batch
 accounts can be provisioned per Azure Subscription, and multiple compute
 pools can be provisioned per Batch account. Please refer to
 [this page](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
-for default service limits.
+for default service limits, including separate core quota limits that only
+apply to the Batch service.
 
 Compute jobs:
 ```

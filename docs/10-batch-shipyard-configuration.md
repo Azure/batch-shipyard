@@ -697,9 +697,9 @@ created with pool creation.
     generated RSA keypair and docker tunnel script to. If omitted, the
     current directory is used.
   * (experimental) `hpn_server_swap` property enables an OpenSSH server with
-    [HPN patches](http://www.psc.edu/index.php/hpn-ssh) to be swapped with the
-    standard distribution OpenSSH server. This is not supported on all
-    Linux distributions and may be force disabled.
+    [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
+    to be swapped with the standard distribution OpenSSH server. This is not
+    supported on all Linux distributions and may be force disabled.
 * (required for `STANDARD_NV` instances, optional for `STANDARD_NC` instances)
 `gpu` property defines additional information for NVIDIA GPU-enabled VMs:
   * `nvidia_driver` property contains the following required members:

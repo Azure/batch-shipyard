@@ -238,9 +238,10 @@ programs must be installed to take advantage of data movement features of
 Batch Shipyard:
 
 1. An SSH client that provides `scp`. OpenSSH with
-[HPN patches](http://www.psc.edu/index.php/hpn-ssh) can be used on the client
-side to further accelerate `scp` to Azure Batch compute nodes where
-`hpn_server_swap` has been set to `true` in the `pool_specification`.
+[HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
+can be used on the client side to further accelerate `scp` to Azure Batch
+compute nodes where `hpn_server_swap` has been set to `true` in the
+`pool_specification`.
 2. `rsync` if `rsync` functionality is needed.
 3. [blobxfer](https://github.com/Azure/blobxfer) if transfering to Azure
 storage. This is automatically installed if `pip install` is used with
