@@ -5,7 +5,8 @@ on Linux using the
 (as opposed to pure MPI) over TCP/IP-connected machines in an Azure Batch
 compute pool. Regardless of the underlying parallel/distributed programming
 paradigm, execution of this distributed workload requires the use of
-[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
+[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md)
+when run across multiple nodes.
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for
@@ -35,11 +36,15 @@ to run the included benchmarks:
   * `<ppn>` is the number of cores on each compute node. This is optional
     and, if omitted, will be determined dynamically.
 * `infiniband` must be set to `false`
-* `multi_instance` property must be defined
+* `multi_instance` property must be defined for NAMD tasks spanning multiple
+nodes.
   * `num_instances` should be set to `pool_specification_vm_count` or
     `pool_current_dedicated`
   * `coordination_command` should be unset or `null`
-  * `resource_files` array can be empty
+  * `resource_files` array can be unset or empty
+
+To run this example on just one node, you can omit the `multi_instance`
+property altogether.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please
