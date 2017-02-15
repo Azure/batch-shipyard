@@ -13,10 +13,12 @@ task scheduling, automatic task recovery and retry on failure, automatic
 scaling of resources if specified, and many other complexities that exist
 at cloud-scale. **There is no extra cost to use Azure Batch** - Azure Batch
 is provided as a free value-added service on top of compute resources in
-Azure. Costs are incurred only for compute resources consumed and datacenter
-data egress, i.e., the same baseline prices for
+Azure. Costs are incurred only for compute resources consumed and any
+assoicated datacenter data egress and storage costs, i.e., the same cost
+as if consuming
 [Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
-or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/).
+or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/)
+directly.
 
 Azure Batch can handle workloads on any point of the parallel and distributed
 processing spectrum, from embarassingly parallel workloads all the way to
