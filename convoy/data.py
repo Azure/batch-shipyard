@@ -701,7 +701,7 @@ def _wrap_blobxfer_subprocess(storage_settings, container, source, eo):
     logger.info('begin ingressing data from {} to container {}'.format(
         source.path, container))
     proc = util.subprocess_nowait_pipe_stdout(
-        util.wrap_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
+        util.wrap_local_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
     stdout = proc.communicate()[0]
     if proc.returncode != 0:
         logger.error(stdout.decode('utf8'))
