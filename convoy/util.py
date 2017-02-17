@@ -235,6 +235,22 @@ def wrap_commands_in_shell(commands, wait=True):
         '; '.join(commands), '; wait' if wait else '')
 
 
+def wrap_local_commands_in_shell(commands, wait=True):
+    # type: (List[str], bool) -> str
+    """Wrap local commands in a shell, i.e. commands
+    that will be executed on the client machine.
+    :param list commands: list of commands to wrap
+    :param bool wait: add wait for background processes
+    :rtype: str
+    :return: wrapped commands
+    """
+    if os.name == 'nt':
+        return 'cmd.exe /c {}'.format(
+            '& '.join(commands))
+    return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
+        '; '.join(commands), '; wait' if wait else '')
+
+
 def base64_encode_string(string):
     # type: (str or bytes) -> str
     """Base64 encode a string
