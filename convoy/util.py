@@ -244,7 +244,7 @@ def wrap_local_commands_in_shell(commands, wait=True):
     :rtype: str
     :return: wrapped commands
     """
-    if os.name == 'nt':
+    if _ON_WINDOWS:
         return 'cmd.exe /c "{}"'.format(
             '& '.join(commands))
     return wrap_commands_in_shell(commands, wait)
