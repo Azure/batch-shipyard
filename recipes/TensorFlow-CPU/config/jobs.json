@@ -4,9 +4,9 @@
             "id": "tensorflowjob",
             "tasks": [
                 {
-                    "image": "gcr.io/tensorflow/tensorflow",
+                    "image": "gcr.io/tensorflow/tensorflow:1.0.0",
                     "remove_container_after_exit": true,
-                    "command": "python -m tensorflow.models.image.mnist.convolutional"
+                    "command": "/bin/bash -c \"curl -fSsL https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py | python\""
                 }
             ]
         }

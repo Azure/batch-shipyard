@@ -4,9 +4,9 @@
             "id": "tensorflowjob",
             "tasks": [
                 {
-                    "image": "alfpark/tensorflow:0.11.0-gpu",
+                    "image": "alfpark/tensorflow:1.0.0-gpu",
                     "remove_container_after_exit": true,
-                    "command": "python -m tensorflow.models.image.mnist.convolutional",
+                    "command": "/bin/bash -c \"curl -fSsL https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py | python\"",
                     "gpu": true
                 }
             ]

@@ -64,7 +64,9 @@ do
         python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=./worker-$ti --num_gpus=$ngpus $* > worker-$ti.log 2>&1 &
         waitpids=("${waitpids[@]}" "$!")
     else
-        ssh $node "python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti --num_gpus=$ngpus $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1" &
+        # note that we need to export LD_LIBRARY_PATH since the environment
+        # will not be inherited with ssh sessions to worker nodes
+        ssh $node "/bin/bash -c \"export LD_LIBRARY_PATH=$LD_LIBRARY_PATH; python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti --num_gpus=$ngpus $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1\"" &
         waitpids=("${waitpids[@]}" "$!")
     fi
 done
