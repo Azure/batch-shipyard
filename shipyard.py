@@ -70,7 +70,7 @@ class CliContext(object):
         self.aad_user = None
         self.aad_password = None
         self.aad_cert_private_key = None
-        self.add_cert_thumbprint = None
+        self.aad_cert_thumbprint = None
 
     def initialize(self, creds_only=False, no_config=False):
         # type: (CliContext, bool, bool) -> None
