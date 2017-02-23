@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Added
 - Chainer-CPU and Chainer-GPU recipes
+- [Troubleshooting guide](docs/96-troubleshooting-guide.md)
 
 ### Changed
 - Allow NAMD-TCP recipe to be run on a single node
@@ -11,6 +12,7 @@
 - CNTK-GPU-OpenMPI recipe to allow multinode singlegpu executions
 - TensorFlow recipes fixed for 1.0.0 release
 - blobxfer data ingress on Windows (#39)
+- Minor delete job and terminate tasks fixes
 
 ## [2.5.1] - 2017-02-01
 ### Added

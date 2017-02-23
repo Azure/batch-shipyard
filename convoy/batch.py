@@ -650,7 +650,13 @@ def del_jobs(batch_client, config, jobid=None, wait=False):
             nocheck.add(job_id)
             continue
         logger.info('Deleting job: {}'.format(job_id))
-        batch_client.job.delete(job_id)
+        try:
+            batch_client.job.delete(job_id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The specified job does not exist' in ex.message.value:
+                logger.error('{} job does not exist'.format(job_id))
+                nocheck.add(job_id)
+                continue
     if wait:
         for job in jobs:
             job_id = settings.job_id(job)
@@ -1001,7 +1007,13 @@ def terminate_tasks(
         job_id = settings.job_id(job)
         nocheck[job_id] = set()
         if taskid is None:
-            tasks = [x.id for x in batch_client.task.list(job_id)]
+            tasks = [
+                x.id for x in batch_client.task.list(
+                    job_id,
+                    task_list_options=batchmodels.TaskListOptions(
+                        select='id'
+                    )
+                )]
         else:
             tasks = [taskid]
         for task in tasks:
@@ -1036,7 +1048,13 @@ def terminate_tasks(
         for job in jobs:
             job_id = settings.job_id(job)
             if taskid is None:
-                tasks = [x.id for x in batch_client.task.list(job_id)]
+                tasks = [
+                    x.id for x in batch_client.task.list(
+                        job_id,
+                        task_list_options=batchmodels.TaskListOptions(
+                            select='id'
+                        )
+                    )]
             else:
                 tasks = [taskid]
             for task in tasks:
