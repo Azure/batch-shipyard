@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.5.2] - 2017-02-23
 ### Added
 - Chainer-CPU and Chainer-GPU recipes
 - [Troubleshooting guide](docs/96-troubleshooting-guide.md)
@@ -11,8 +13,8 @@ GlusterFS data ingress/egress from/to Azure Storage (#37)
 - Allow NAMD-TCP recipe to be run on a single node
 
 ### Fixed
-- CNTK-GPU-OpenMPI recipe to allow multinode singlegpu executions
-- TensorFlow recipes fixed for 1.0.0 release
+- CNTK-GPU-OpenMPI run script fixed to allow multinode+singlegpu executions
+- TensorFlow recipes updated for 1.0.0 release
 - blobxfer data ingress on Windows (#39)
 - Minor delete job and terminate tasks fixes
 
@@ -364,7 +366,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.2...HEAD
+[2.5.2]: https://github.com/Azure/batch-shipyard/compare/2.5.1...2.5.2
 [2.5.1]: https://github.com/Azure/batch-shipyard/compare/2.5.0...2.5.1
 [2.5.0]: https://github.com/Azure/batch-shipyard/compare/2.4.0...2.5.0
 [2.4.0]: https://github.com/Azure/batch-shipyard/compare/2.3.1...2.4.0
