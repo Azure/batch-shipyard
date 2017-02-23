@@ -61,6 +61,26 @@ _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
 
 
+def _get_gluster_paths(config):
+    # type: (dict) -> Tuple[str, str]
+    """Get Gluster paths
+    :param dict config: configuration dict
+    :rtype: tuple
+    :return: (gluster host path, gluster container path)
+    """
+    gluster_host = None
+    gluster_container = None
+    sdv = settings.global_resources_shared_data_volumes(config)
+    for sdvkey in sdv:
+        if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+            gluster_host = '$AZ_BATCH_NODE_SHARED_DIR/{}'.format(
+                settings.get_gluster_volume())
+            gluster_container = settings.shared_data_volume_container_path(
+                sdv, sdvkey).rstrip('/')
+            break
+    return (gluster_host, gluster_container)
+
+
 def _process_storage_input_data(config, input_data, on_task):
     # type: (dict, dict, bool) -> str
     """Process Azure storage input data to ingress
@@ -70,6 +90,9 @@ def _process_storage_input_data(config, input_data, on_task):
     :rtype: list
     :return: args to pass to blobxfer script
     """
+    # get gluster host/container paths
+    gluster_host, gluster_container = _get_gluster_paths(config)
+    # parse storage input data blocks
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     args = []
     for xfer in input_data:
@@ -100,6 +123,10 @@ def _process_storage_input_data(config, input_data, on_task):
                 storage_settings, container, 'ingress')
         include = settings.data_include(xfer, True)
         dst = settings.input_data_destination(xfer, on_task)
+        # auto replace container path for gluster with host path
+        if (util.is_not_empty(gluster_container) and
+                dst.startswith(gluster_container)):
+            dst = dst.replace(gluster_container, gluster_host, 1)
         # construct argument
         # kind:encrypted:<sa:ep:saskey:container>:include:eo:dst
         creds = crypto.encrypt_string(
@@ -191,6 +218,9 @@ def _process_storage_output_data(config, output_data):
     :rtype: list
     :return: args to pass to blobxfer script
     """
+    # get gluster host/container paths
+    gluster_host, gluster_container = _get_gluster_paths(config)
+    # parse storage output data blocks
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     args = []
     for xfer in output_data:
@@ -221,6 +251,10 @@ def _process_storage_output_data(config, output_data):
                 storage_settings, container, 'egress', create_container=True)
         include = settings.data_include(xfer, True)
         src = settings.output_data_source(xfer)
+        # auto replace container path for gluster with host path
+        if (util.is_not_empty(gluster_container) and
+                src.startswith(gluster_container)):
+            src = src.replace(gluster_container, gluster_host, 1)
         # construct argument
         # kind:encrypted:<sa:ep:saskey:container>:include:eo:src
         creds = crypto.encrypt_string(

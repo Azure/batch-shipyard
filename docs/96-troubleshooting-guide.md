@@ -5,7 +5,7 @@ that do not fall in to the categories below.
 
 ## Table of Contents
 1. [Installation Issues](#install)
-2. [Batch Service Issues](#batchservice)
+2. [Azure Batch Service Issues](#batchservice)
 3. [Compute Node Issues](#computenode)
 4. [Job/Task Execution Issues](#task)
 5. [Docker Issues](#docker)
@@ -15,14 +15,14 @@ that do not fall in to the categories below.
 [Anaconda](https://continuum.io) Python environments are structured
 differently than standard [CPython](https://python.org) environments.
 Anaconda has isolated environments which are conceptually equivalent to
-[Virtual Environemnts](https://pypi.python.org/pypi/virtualenv) and also
+[Virtual Environments](https://pypi.python.org/pypi/virtualenv) and also
 have separate packaging mechanisms than packages traditionally found on
 PyPI. As such, special attention should be given when installing Batch
 Shipyard into an Anaconda environment. On Windows, you can use the provided
 `install_conda_windows.cmd` script to aid in installation to Anaconda
 environments on Windows.
 
-## <a name="batchservice"></a>Batch Service Issues
+## <a name="batchservice"></a>Azure Batch Service Issues
 #### Check Azure Batch Service Status
 If you suspect possible Azure Batch service issues, you can check the status
 of Azure services [at this website](https://azure.microsoft.com/en-us/status/).
@@ -48,10 +48,10 @@ mitigate the issue on your behalf in the `pool.json` config file.
 If the compute node fails to start properly, Batch Shipyard will automatically
 download the compute node's stdout and stderr files for the start task into
 the directory where you ran `shipyard`. The files will be placed in
-`<pool name>/<node id>/std{err,out}.txt`. You can examine these files to
-see what the possible culprit for the issue is. If it appears to be transient,
-you can try to create the pool again. If it appears to be a Batch Shipyard
-issue, please report the issue on GitHub.
+`<pool name>/<node id>/startup/std{err,out}.txt`. You can examine these files
+to see what the possible culprit for the issue is. If it appears to be
+transient, you can try to create the pool again. If it appears to be a Batch
+Shipyard issue, please report the issue on GitHub.
 
 #### Compute Node does not start or is unusable
 If the compute node is "stuck" in starting state or enters unusable state,

@@ -542,6 +542,11 @@ Currently, `replica` is the only supported type.
 * (optional) `volume_options` property defines additional GlusterFS volume
 options to set.
 
+GlusterFS volumes are mounted on the host at
+`$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0`. Batch Shipyard will automatically
+replace container path references in direct and storage-based data
+ingress/egress with their host path equivalents.
+
 Note that when resizing a pool with a GlusterFS shared file system, that
 you must resize with the `pool resize` command in `shipyard.py` and not with
 Azure Portal, Batch Explorer or any other tool.

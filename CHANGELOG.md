@@ -6,6 +6,8 @@
 - [Troubleshooting guide](docs/96-troubleshooting-guide.md)
 
 ### Changed
+- Perform automatic container path substitution with host path for
+GlusterFS data ingress/egress from/to Azure Storage (#37)
 - Allow NAMD-TCP recipe to be run on a single node
 
 ### Fixed
