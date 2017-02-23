@@ -1,0 +1,15 @@
+{
+    "job_specifications": [
+        {
+            "id": "chainerjob",
+            "tasks": [
+                {
+                    "image": "chainer/chainer",
+                    "remove_container_after_exit": true,
+                    "command": "/bin/bash -c \"python -c \\\"import requests; print(requests.get(\\\\\\\"https://raw.githubusercontent.com/pfnet/chainer/master/examples/mnist/train_mnist.py\\\\\\\").text)\\\" > train_mnist.py && python -u train_mnist.py -g 0\"",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+{
+    "pool_specification": {
+        "id": "chainer-gpu",
+        "vm_size": "STANDARD_NC6",
+        "vm_count": 1,
+        "publisher": "Canonical",
+        "offer": "UbuntuServer",
+        "sku": "16.04.0-LTS",
+        "ssh": {
+            "username": "docker"
+        },
+        "reboot_on_start_task_failed": false,
+        "block_until_all_global_resources_loaded": true
+    }
+}

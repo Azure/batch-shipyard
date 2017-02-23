@@ -1,0 +1,10 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "<storage account specified in credentials.json>"
+    },
+    "global_resources": {
+        "docker_images": [
+            "chainer/chainer"
+        ]
+    }
+}
