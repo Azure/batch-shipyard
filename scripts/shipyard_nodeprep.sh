@@ -30,6 +30,7 @@ install_azurefile_docker_volume_driver() {
 }
 
 azurefile=0
+blobxferversion=latest
 block=
 cascadecontainer=0
 encrypted=
@@ -45,7 +46,7 @@ privatereg=
 sku=
 version=
 
-while getopts "h?ab:de:fg:no:p:r:s:t:v:w" opt; do
+while getopts "h?ab:de:fg:no:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -64,6 +65,7 @@ while getopts "h?ab:de:fg:no:p:r:s:t:v:w" opt; do
             echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
             echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
+            echo "-x [blobxfer version] blobxfer version"
             echo ""
             exit 1
             ;;
@@ -114,6 +116,9 @@ while getopts "h?ab:de:fg:no:p:r:s:t:v:w" opt; do
             ;;
         w)
             hpnssh=1
+            ;;
+        x)
+            blobxferversion=$OPTARG
             ;;
     esac
 done
@@ -271,12 +276,26 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
                 linux-image-extra-$(uname -r) linux-image-extra-virtual
         fi
-        apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+        set +e
+        retries=100
+        while [ $retries -gt 0 ]; do
+            apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+            if [ $? -eq 0 ]; then
+                break
+            fi
+            let retries=retries-1
+            if [ $retries -eq 0 ]; then
+                echo "Could not add key for docker repo"
+                exit 1
+            fi
+            sleep 1
+        done
+        set -e
         echo deb https://apt.dockerproject.org/repo $name main > /etc/apt/sources.list.d/docker.list
-        # update package index with docker repo and purge old docker if it exists
-        apt-get update
-        apt-get purge -y -q lxc-docker
     fi
+    # update package index with docker repo and purge old docker if it exists
+    apt-get update
+    apt-get purge -y -q lxc-docker
     # ensure docker opts service modifications are idempotent
     set +e
     grep '^DOCKER_OPTS=' /etc/default/docker
@@ -556,7 +575,7 @@ else
 fi
 
 # retrieve docker images related to data movement
-docker pull alfpark/blobxfer
+docker pull alfpark/blobxfer:$blobxferversion
 docker pull alfpark/batch-shipyard:tfm-$version
 
 # login to registry server

@@ -358,7 +358,8 @@ thumbprint
 3. an AAD User/Password
 
 in order to authenticate for access to your KeyVault. These options
-are mutually exclusive.
+are mutually exclusive. In addition to one of these authentication options,
+you must provide the KeyVault URI as a parameter.
 
 You can either provide the required parameters through CLI options,
 environment variables, or the `credentials.json` file.
@@ -416,8 +417,9 @@ or as environment variables:
 SHIPYARD_AAD_USER=<USER> SHIPYARD_AAD_PASSWORD=<PASSWORD>
 ```
 
-Additionally, you will need to provide the Azure KeyVault URI (i.e., the
-DNS name of the KeyVault resource) as an option:
+Finally, regardless of which authentication mechanism you have set up, you
+will need to provide the Azure KeyVault URI (i.e., the DNS name of the
+KeyVault resource) as an option:
 
 ```
 --keyvault-uri <DNS-NAME>

@@ -22,6 +22,22 @@ C:\Python35\python.exe shipyard.py
 The `-h` or `--help` option will list the available options, which are
 explained below.
 
+## Note about interoperability with Azure Tooling and Azure Batch APIs
+Nearly all REST calls or commands that are issued against the normal Azure
+Batch APIs and tooling such as the Azure Portal or Azure CLI will work fine
+against Azure Batch Shipyard created resources. However, there are some
+notable exceptions:
+
+1. All pools must be created with Batch Shipyard if you intend to use any
+Batch Shipyard functionality.
+2. Please note all of the
+[current limitations for other actions](99-current-limitations.md).
+3. Batch Shipyard pools that are deleted outside of Batch Shipyard will not
+have their associated metadata (in Azure Storage) cleaned up. Please use
+the `pool del` functionality. You can use the `storage` command to clean up
+orphaned data if you accidentially deleted Batch Shipyard pools outside of
+Batch Shipyard.
+
 ## Commands and Sub-commands
 `shipyard` (and `shipyard.py`) is invoked with a command and a sub-command as
 positional arguments, i.e.:
@@ -217,6 +233,8 @@ set to `true` in the job specification for the job.
 * `del` will delete jobs specified in the jobs configuration file
   * `--all` will delete all jobs found in the Batch account
   * `--jobid` force deletion scope to just this job id
+  * `--termtasks` will manually terminate tasks prior to deletion. Termination
+    of running tasks requires a valid SSH user.
   * `--wait` will wait for deletion to complete
 * `deltasks` will delete tasks within jobs specified in the jobs
 configuration file. Active or running tasks will be terminated first.
@@ -230,6 +248,8 @@ file
 * `term` will terminate jobs found in the jobs configuration file
   * `--all` will terminate all jobs found in the Batch account
   * `--jobid` force termination scope to just this job id
+  * `--termtasks` will manually terminate tasks prior to termination.
+    Termination of running tasks requires a valid SSH user.
   * `--wait` will wait for termination to complete
 * `termtasks` will terminate tasks within jobs specified in the jobs
 configuration file. Termination of running tasks requires a valid SSH

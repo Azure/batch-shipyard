@@ -690,7 +690,7 @@ sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation.
   * (required) `username` is the user to create on the compute nodes.
   * (optional) `expiry_days` is the number of days from now for the account on
-    the compute nodes to expire. The default is 7 days from invocation time.
+    the compute nodes to expire. The default is 30 days from invocation time.
   * (optional) `ssh_public_key` is the path to an existing SSH public key to
     use. If not specified, an RSA public/private keypair will be automatically
     generated only on Linux. If this is `null` or not specified on Windows,

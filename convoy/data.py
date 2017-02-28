@@ -56,6 +56,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
+_BLOBXFER_VERSION = '0.12.1'
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
@@ -135,8 +136,8 @@ def _process_storage_input_data(config, input_data, on_task):
                 storage_settings.account, storage_settings.endpoint,
                 saskey, container),
             config)
-        args.append('"ingress:{}:{}:{}:{}:{}"'.format(
-            encrypt, creds, include, eo, dst))
+        args.append('"{}:i:{}:{}:{}:{}:{}"'.format(
+            _BLOBXFER_VERSION, encrypt, creds, include, eo, dst))
     return args
 
 
@@ -263,8 +264,8 @@ def _process_storage_output_data(config, output_data):
                 storage_settings.account, storage_settings.endpoint,
                 saskey, container),
             config)
-        args.append('"egress:{}:{}:{}:{}:{}"'.format(
-            encrypt, creds, include, eo, src))
+        args.append('"{}:e:{}:{}:{}:{}:{}"'.format(
+            _BLOBXFER_VERSION, encrypt, creds, include, eo, src))
     return args
 
 

@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2.5.3] - 2017-02-28
+### Added
+- `jobs del` and `jobs term` now provide a `--termtasks` option to
+allow the logic of `jobs termtasks` to precede the delete or terminate
+action to the job. This option requires a valid SSH user to the remote nodes
+as specified in the `ssh` configuration property in `pool.json`. This new
+option is normally not needed if all tasks within the jobs have completed.
+
+### Changed
+- The Docker image used for blobxfer is now tied to the specific Batch
+Shipyard release
+- Default SSH user expiry time if not specified is now 30 days
+- All recipes now have the default config.json storage account set to the
+link as named in the provided credentials.json file. Only the credentials
+files need to be modified to get run a recipe.
+
 ## [2.5.2] - 2017-02-23
 ### Added
 - Chainer-CPU and Chainer-GPU recipes
@@ -366,7 +382,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.3...HEAD
+[2.5.3]: https://github.com/Azure/batch-shipyard/compare/2.5.2...2.5.3
 [2.5.2]: https://github.com/Azure/batch-shipyard/compare/2.5.1...2.5.2
 [2.5.1]: https://github.com/Azure/batch-shipyard/compare/2.5.0...2.5.1
 [2.5.0]: https://github.com/Azure/batch-shipyard/compare/2.4.0...2.5.0

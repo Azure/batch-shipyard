@@ -531,7 +531,7 @@ def _add_pool(batch_client, blob_client, config):
     del _rflist
     # create start task commandline
     start_task = [
-        '{npf} {a}{b}{d}{e}{f}{g}{n}{o}{p}{r}{s}{t}{v}{w}'.format(
+        '{npf} {a}{b}{d}{e}{f}{g}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
             npf=_NODEPREP_FILE[0],
             a=' -a' if azurefile_vd else '',
             b=' -b {}'.format(block_for_gr) if block_for_gr else '',
@@ -548,6 +548,7 @@ def _add_pool(batch_client, blob_client, config):
             t=' -t {}'.format(torrentflags),
             v=' -v {}'.format(__version__),
             w=' -w' if pool_settings.ssh.hpn_server_swap else '',
+            x=' -x {}'.format(data._BLOBXFER_VERSION),
         ),
     ]
     # add additional start task commands
@@ -1509,39 +1510,44 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
         batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
 
 
-def action_jobs_term(batch_client, config, all, jobid, wait):
-    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
+def action_jobs_term(batch_client, config, all, jobid, termtasks, wait):
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
     """Action: Jobs Term
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param bool all: all jobs
     :param str jobid: job id
+    :param bool termtasks: terminate tasks prior
     :param bool wait: wait for action to complete
     """
     if all:
         if jobid is not None:
             raise ValueError('cannot specify both --all and --jobid')
-        batch.terminate_all_jobs(batch_client, config, wait=wait)
+        batch.terminate_all_jobs(
+            batch_client, config, termtasks=termtasks, wait=wait)
     else:
         batch.terminate_jobs(
-            batch_client, config, jobid=jobid, wait=wait)
+            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
 
 
-def action_jobs_del(batch_client, config, all, jobid, wait):
-    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
+def action_jobs_del(batch_client, config, all, jobid, termtasks, wait):
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
     """Action: Jobs Del
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     :param bool all: all jobs
     :param str jobid: job id
+    :param bool termtasks: terminate tasks prior
     :param bool wait: wait for action to complete
     """
     if all:
         if jobid is not None:
             raise ValueError('cannot specify both --all and --jobid')
-        batch.del_all_jobs(batch_client, config, wait=wait)
+        batch.del_all_jobs(
+            batch_client, config, termtasks=termtasks, wait=wait)
     else:
-        batch.del_jobs(batch_client, config, jobid=jobid, wait=wait)
+        batch.del_jobs(
+            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
 
 
 def action_jobs_cmi(batch_client, config, delete):

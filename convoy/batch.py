@@ -628,16 +628,19 @@ def del_node(batch_client, config, node_id):
     )
 
 
-def del_jobs(batch_client, config, jobid=None, wait=False):
+def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, bool) -> None
+    #        str, bool, bool) -> None
     """Delete jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to delete
+    :param bool termtasks: terminate tasks manually prior
     :param bool wait: wait for jobs to delete
     """
+    if termtasks:
+        terminate_tasks(batch_client, config, jobid=jobid, wait=True)
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -672,13 +675,14 @@ def del_jobs(batch_client, config, jobid=None, wait=False):
                     continue
 
 
-def del_all_jobs(batch_client, config, wait=False):
+def del_all_jobs(batch_client, config, termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool) -> None
+    #        bool, bool) -> None
     """Delete all jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool termtasks: terminate tasks prior
     :param bool wait: wait for jobs to delete
     """
     check = set()
@@ -688,6 +692,8 @@ def del_all_jobs(batch_client, config, wait=False):
         if not util.confirm_action(
                 config, 'delete {} job'.format(job.id)):
             continue
+        if termtasks:
+            terminate_tasks(batch_client, config, jobid=job.id, wait=True)
         logger.info('Deleting job: {}'.format(job.id))
         batch_client.job.delete(job.id)
         check.add(job.id)
@@ -845,16 +851,20 @@ def del_clean_mi_jobs(batch_client, config):
             pass
 
 
-def terminate_jobs(batch_client, config, jobid=None, wait=False):
+def terminate_jobs(
+        batch_client, config, jobid=None, termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, bool) -> None
+    #        str, bool, bool) -> None
     """Terminate jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to terminate
+    :param bool termtasks: terminate tasks manually prior
     :param bool wait: wait for job to terminate
     """
+    if termtasks:
+        terminate_tasks(batch_client, config, jobid=jobid, wait=True)
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -885,13 +895,14 @@ def terminate_jobs(batch_client, config, jobid=None, wait=False):
                     continue
 
 
-def terminate_all_jobs(batch_client, config, wait=False):
+def terminate_all_jobs(batch_client, config, termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool) -> None
+    #        bool, bool) -> None
     """Terminate all jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool termtasks: terminate tasks prior
     :param bool wait: wait for jobs to terminate
     """
     check = set()
@@ -901,6 +912,8 @@ def terminate_all_jobs(batch_client, config, wait=False):
         if not util.confirm_action(
                 config, 'terminate {} job'.format(job.id)):
             continue
+        if termtasks:
+            terminate_tasks(batch_client, config, jobid=job.id, wait=True)
         logger.info('Terminating job: {}'.format(job.id))
         batch_client.job.terminate(job.id)
         check.add(job.id)

@@ -786,14 +786,16 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @click.option(
     '--jobid', help='Terminate just the specified job id')
 @click.option(
+    '--termtasks', is_flag=True, help='Terminate tasks running in job first')
+@click.option(
     '--wait', is_flag=True, help='Wait for jobs termination to complete')
 @common_options
 @pass_cli_context
-def jobs_term(ctx, all, jobid, wait):
+def jobs_term(ctx, all, jobid, termtasks, wait):
     """Terminate jobs"""
     ctx.initialize()
     convoy.fleet.action_jobs_term(
-        ctx.batch_client, ctx.config, all, jobid, wait)
+        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
 
 
 @jobs.command('del')
@@ -802,14 +804,16 @@ def jobs_term(ctx, all, jobid, wait):
 @click.option(
     '--jobid', help='Delete just the specified job id')
 @click.option(
+    '--termtasks', is_flag=True, help='Terminate tasks running in job first')
+@click.option(
     '--wait', is_flag=True, help='Wait for jobs deletion to complete')
 @common_options
 @pass_cli_context
-def jobs_del(ctx, all, jobid, wait):
+def jobs_del(ctx, all, jobid, termtasks, wait):
     """Delete jobs"""
     ctx.initialize()
     convoy.fleet.action_jobs_del(
-        ctx.batch_client, ctx.config, all, jobid, wait)
+        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
 
 
 @jobs.command('deltasks')

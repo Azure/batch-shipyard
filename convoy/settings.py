@@ -321,7 +321,7 @@ def pool_settings(config):
         if ssh_expiry_days is not None and ssh_expiry_days <= 0:
             raise KeyError()
     except KeyError:
-        ssh_expiry_days = 7
+        ssh_expiry_days = 30
     try:
         ssh_public_key = conf['ssh']['ssh_public_key']
         if util.is_none_or_empty(ssh_public_key):
