@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [2.5.3] - 2017-XX-YY
+## [2.5.3] - 2017-03-01
 ### Added
 - `pool rebootnode` command added which allows single node reboot control.
 Additionally an option `--all-start-task-failed` will reboot all nodes in
