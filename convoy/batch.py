@@ -58,6 +58,12 @@ util.setup_logger(logger)
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
+_RUN_ELEVATED = batchmodels.UserIdentity(
+    auto_user=batchmodels.AutoUserSpecification(
+        scope=batchmodels.AutoUserScope.pool,
+        elevation_level=batchmodels.ElevationLevel.admin,
+    )
+)
 
 
 def list_node_agent_skus(batch_client):
@@ -184,7 +190,7 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
         nodes = [batch_client.compute_node.get(pool_id, nodeid)]
     # for any node in state start task failed, retrieve the stdout and stderr
     for node in nodes:
-        if node.state == batchmodels.ComputeNodeState.starttaskfailed:
+        if node.state == batchmodels.ComputeNodeState.start_task_failed:
             settings.set_auto_confirm(config, True)
             get_all_files_via_node(
                 batch_client, config,
@@ -225,13 +231,13 @@ def _block_for_nodes_ready(
                     pool.resize_error.message))
         nodes = list(batch_client.compute_node.list(pool.id))
         # check if any nodes are in start task failed state
-        if (any(node.state == batchmodels.ComputeNodeState.starttaskfailed
+        if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
                 for node in nodes)):
             # attempt reboot if enabled for potentially transient errors
             if reboot_on_failed:
                 for node in nodes:
                     if (node.state !=
-                            batchmodels.ComputeNodeState.starttaskfailed):
+                            batchmodels.ComputeNodeState.start_task_failed):
                         continue
                     if node.id not in reboot_map:
                         reboot_map[node.id] = 0
@@ -306,7 +312,7 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
     :return: list of nodes
     """
     base_stopping_states = [
-        batchmodels.ComputeNodeState.starttaskfailed,
+        batchmodels.ComputeNodeState.start_task_failed,
         batchmodels.ComputeNodeState.unusable,
         batchmodels.ComputeNodeState.idle
     ]
@@ -844,7 +850,7 @@ def clean_mi_jobs(batch_client, config):
                         ], wait=False),
                     ),
                     command_line='/bin/sh -c "exit 0"',
-                    run_elevated=True,
+                    user_identity=_RUN_ELEVATED,
                 )
                 batch_client.task.add(job_id=cleanup_job_id, task=batchtask)
                 logger.debug(
@@ -1266,7 +1272,7 @@ def stream_file_and_wait_for_task(
         while True:
             # get task file properties
             try:
-                tfp = batch_client.file.get_node_file_properties_from_task(
+                tfp = batch_client.file.get_properties_from_task(
                     job_id, task_id, file, raw=True)
             except batchmodels.BatchErrorException as ex:
                 if ('The specified operation is not valid for the current '
@@ -1732,7 +1738,7 @@ def add_jobs(
             job_preparation_task=batchmodels.JobPreparationTask(
                 command_line=jpcmdline,
                 wait_for_success=True,
-                run_elevated=True,
+                user_identity=_RUN_ELEVATED,
                 rerun_on_node_reboot_after_success=False,
             ),
             uses_task_dependencies=False,
@@ -1776,7 +1782,7 @@ def add_jobs(
                 command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
                      'docker rm -v {}'.format(mi_docker_container_name)]),
-                run_elevated=True,
+                user_identity=_RUN_ELEVATED,
             )
         logger.info('Adding job: {}'.format(job.id))
         try:
@@ -1931,7 +1937,7 @@ def add_jobs(
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
                 command_line=util.wrap_commands_in_shell(task_commands),
-                run_elevated=True,
+                user_identity=_RUN_ELEVATED,
                 resource_files=[],
                 multi_instance_settings=mis,
                 constraints=task_constraints,

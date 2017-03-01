@@ -1,6 +1,9 @@
 # Change Log
 
 ## [Unreleased]
+### Changed
+- All dependencies updated to latest versions
+- Update Batch API call compatibility for `azure-batch 2.0.0`
 
 ## [2.5.4] - 2017-03-08
 ### Changed
@@ -13,7 +16,7 @@
 ## [2.5.3] - 2017-03-01
 ### Added
 - `pool rebootnode` command added which allows single node reboot control.
-Additionally an option `--all-start-task-failed` will reboot all nodes in
+Additionally, the option `--all-start-task-failed` will reboot all nodes in
 the specified pool with the start task failed state.
 - `jobs del` and `jobs term` now provide a `--termtasks` option to
 allow the logic of `jobs termtasks` to precede the delete or terminate
@@ -26,8 +29,8 @@ option is normally not needed if all tasks within the jobs have completed.
 Shipyard release
 - Default SSH user expiry time if not specified is now 30 days
 - All recipes now have the default config.json storage account set to the
-link as named in the provided credentials.json file. Only the credentials
-files need to be modified to get run a recipe.
+link as named in the provided credentials.json file. Now, only the credentials
+file needs to be modified to run a recipe.
 
 ## [2.5.2] - 2017-02-23
 ### Added

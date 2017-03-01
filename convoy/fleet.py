@@ -579,7 +579,7 @@ def _add_pool(batch_client, blob_client, config):
         start_task=batchmodels.StartTask(
             command_line=util.wrap_commands_in_shell(
                 start_task, wait=False),
-            run_elevated=True,
+            user_identity=batch._RUN_ELEVATED,
             wait_for_success=True,
             environment_settings=[
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
@@ -783,7 +783,7 @@ def _setup_glusterfs(
             ],
         ),
         command_line=util.wrap_commands_in_shell(appcmd),
-        run_elevated=True,
+        user_identity=batch._RUN_ELEVATED,
     )
     # add job and task
     batch_client.job.add(job)
@@ -888,7 +888,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         id='update-docker-images',
         command_line=coordcmd,
         environment_settings=taskenv,
-        run_elevated=True,
+        user_identity=batch._RUN_ELEVATED,
     )
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
