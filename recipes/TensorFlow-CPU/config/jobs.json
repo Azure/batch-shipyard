@@ -6,7 +6,13 @@
                 {
                     "image": "gcr.io/tensorflow/tensorflow:1.0.0",
                     "remove_container_after_exit": true,
-                    "command": "/bin/bash -c \"curl -fSsL https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py | python\""
+                    "resource_files": [
+                        {
+                            "file_path": "convolutional.py",
+                            "blob_source": "https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py"
+                        }
+                    ],
+                    "command": "python -u convolutional.py"
                 }
             ]
         }

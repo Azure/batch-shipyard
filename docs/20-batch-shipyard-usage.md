@@ -284,17 +284,19 @@ KeyVault. A valid credentials json must be specified as an option.
 ## Pool Command
 The `pool` command has the following sub-commands:
 ```
-  add        Add a pool to the Batch account
-  asu        Add an SSH user to all nodes in pool
-  del        Delete a pool from the Batch account
-  delnode    Delete a node from a pool
-  dsu        Delete an SSH user from all nodes in pool
-  grls       Get remote login settings for all nodes in...
-  list       List all pools in the Batch account
-  listnodes  List nodes in pool
-  resize     Resize a pool
-  ssh        Interactively login via SSH to a node in the...
-  udi        Update Docker images in a pool
+  add         Add a pool to the Batch account
+  asu         Add an SSH user to all nodes in pool
+  del         Delete a pool from the Batch account
+  delnode     Delete a node from a pool
+  dsu         Delete an SSH user from all nodes in pool
+  grls        Get remote login settings for all nodes in...
+  list        List all pools in the Batch account
+  listnodes   List nodes in pool
+  listskus    List available VM configurations available to...
+  rebootnode  Reboot a node or nodes in a pool
+  resize      Resize a pool
+  ssh         Interactively login via SSH to a node in the...
+  udi         Update Docker images in a pool
 ```
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
@@ -314,6 +316,10 @@ from all nodes in the specified pool
 in the specified pool
 * `list` will list all pools in the Batch account
 * `listnodes` will list all nodes in the specified pool
+* `rebootnode` will reboot a specified node in the pool
+  * `--all-start-task-failed` will reboot all nodes in the start task
+    failed state
+  * `--nodeid` is the node id to reboot
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
   * `--wait` will wait for resize to complete

@@ -37,7 +37,7 @@ of your choice to the `config` directory:
 Batch and Azure Storage credentials. If you do not have an Azure Batch account,
 you can create one via the
 [Azure Portal](https://azure.microsoft.com/en-us/documentation/articles/batch-account-create-portal/),
-[Azure CLI](https://azure.microsoft.com/en-us/documentation/articles/xplat-cli-install/), or
+[Azure CLI 2.0](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli), or
 [Azure PowerShell](https://azure.microsoft.com/en-us/documentation/articles/batch-powershell-cmdlets-get-started/).
 You can create a standard general purpose
 [Azure Storage account](https://docs.microsoft.com/en-us/azure/storage/storage-create-storage-account#create-a-storage-account)

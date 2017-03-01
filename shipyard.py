@@ -704,6 +704,22 @@ def pool_delnode(ctx, nodeid):
     convoy.fleet.action_pool_delnode(ctx.batch_client, ctx.config, nodeid)
 
 
+@pool.command('rebootnode')
+@click.option(
+    '--all-start-task-failed',
+    is_flag=True,
+    help='Reboot all nodes with start task failed state')
+@click.option(
+    '--nodeid', help='NodeId of compute node in pool to reboot')
+@common_options
+@pass_cli_context
+def pool_rebootnode(ctx, all_start_task_failed, nodeid):
+    """Reboot a node or nodes in a pool"""
+    ctx.initialize()
+    convoy.fleet.action_pool_rebootnode(
+        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
+
+
 @pool.command('udi')
 @click.option(
     '--image', help='Docker image[:tag] to update')

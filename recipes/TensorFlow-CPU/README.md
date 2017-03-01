@@ -22,11 +22,17 @@ can work with this recipe.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
-array which should have a task definition containing:
+array to run the
+[MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
+This array should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
 e.g., `gcr.io/tensorflow/tensorflow`
+* `resource_files` array should be populated if you want Azure Batch to handle
+the download of the training file from the web endpoint:
+  * `file_path` is the local file path which should be set to
+    `train_mnist.py`
+  * `blob_source` is the remote URL of the file to retrieve:
+    `https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py`
 * `command` should contain the command to pass to the Docker run invocation.
-To run the
-[MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist),
-the `command` would look like:
-`"/bin/bash -c \"curl -fSsL https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py | python\""`
+To run the MNIST convolutional example, the `command` would be:
+`python -u convolutional.py`

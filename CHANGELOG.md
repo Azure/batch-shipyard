@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
-## [2.5.3] - 2017-02-28
+## [2.5.3] - 2017-XX-YY
 ### Added
+- `pool rebootnode` command added which allows single node reboot control.
+Additionally an option `--all-start-task-failed` will reboot all nodes in
+the specified pool with the start task failed state.
 - `jobs del` and `jobs term` now provide a `--termtasks` option to
 allow the logic of `jobs termtasks` to precede the delete or terminate
 action to the job. This option requires a valid SSH user to the remote nodes

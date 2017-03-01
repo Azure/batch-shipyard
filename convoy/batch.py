@@ -154,7 +154,7 @@ def _reboot_node(batch_client, pool_id, node_id, wait):
     :param str node_id: node id to delete
     :param bool wait: wait for node to enter rebooting state
     """
-    logger.info('Rebooting node {} from pool {}'.format(node_id, pool_id))
+    logger.info('Rebooting node {} in pool {}'.format(node_id, pool_id))
     batch_client.compute_node.reboot(
         pool_id=pool_id,
         node_id=node_id,
@@ -603,6 +603,34 @@ def del_pool(batch_client, config):
     logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
     return True
+
+
+def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
+    # type: (batch.BatchServiceClient, dict, bool, str) -> None
+    """Reboot nodes in a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param bool all_start_task_failed: reboot all start task failed nodes
+    :param str node_id: node id to delete
+    """
+    pool_id = settings.pool_id(config)
+    if all_start_task_failed:
+        nodes = list(
+            batch_client.compute_node.list(
+                pool_id=pool_id,
+                compute_node_list_options=batchmodels.ComputeNodeListOptions(
+                    filter='state eq \'starttaskfailed\'',
+                ),
+            ))
+        for node in nodes:
+            if not util.confirm_action(
+                    config, 'reboot node {} from {} pool'.format(
+                        node.id, pool_id)):
+                continue
+            _reboot_node(batch_client, pool_id, node.id, False)
+    else:
+        _reboot_node(batch_client, pool_id, node_id, False)
 
 
 def del_node(batch_client, config, node_id):

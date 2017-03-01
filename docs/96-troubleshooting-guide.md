@@ -44,6 +44,9 @@ when the compute node starts. There is a possibility for the start task to
 fail due to transient network faults when issuing system software updates.
 You can turn on automatic rebooting where Batch Shipyard can attempt to
 mitigate the issue on your behalf in the `pool.json` config file.
+Alternatively, you can issue the command
+`pool rebootnode --all-start-task-failed` which will attempt to reboot the
+nodes that have entered this state.
 
 If the compute node fails to start properly, Batch Shipyard will automatically
 download the compute node's stdout and stderr files for the start task into
@@ -58,7 +61,8 @@ If the compute node is "stuck" in starting state or enters unusable state,
 this indicates that there was an issue allocating the node from the Azure
 Cloud. Azure Batch automatically tries to recover from such situations, but
 may not be able to on occasion. In these circumstances, it is best
-to delete the specific node with `pool delnode` or recreate the pool.
+to delete the specific node with `pool delnode` and then resize back up with
+`pool resize` or recreate the pool.
 
 #### Compute Node is stuck in waiting for start task
 Compute nodes that appear to be "stuck" in waiting for start task may not be

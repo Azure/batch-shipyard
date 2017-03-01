@@ -1423,6 +1423,22 @@ def action_pool_delnode(batch_client, config, nodeid):
     batch.del_node(batch_client, config, nodeid)
 
 
+def action_pool_rebootnode(
+        batch_client, config, all_start_task_failed, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
+    """Action: Pool Rebootnode
+    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
+    :param bool all_start_task_failed: reboot all start task failed nodes
+    :param str nodeid: nodeid to reboot
+    """
+    if all_start_task_failed and nodeid is not None:
+        raise ValueError(
+            'cannot specify all start task failed nodes and a specific '
+            'node id')
+    batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
+
+
 def action_pool_udi(batch_client, config, image, digest):
     # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Pool Udi
