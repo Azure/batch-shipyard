@@ -250,15 +250,16 @@ def _create_managed_disk_async(compute_client, rfs, disk_name):
     )
 
 
-def create_disks(resource_client, compute_client, config):
+def create_disks(resource_client, compute_client, config, wait=True):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
-    #        azure.mgmt.compute.ComputeManagementClient, dict) -> None
+    #        azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
     """Create managed disks
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -284,7 +285,7 @@ def create_disks(resource_client, compute_client, config):
             disk = compute_client.disks.get(
                 resource_group_name=rfs.resource_group,
                 disk_name=disk_name)
-            logger.debug('{} exists [created: {} size: {} GB]'.format(
+            logger.debug('{} exists [created={} size={} GB]'.format(
                 disk.id, disk.time_created, disk.disk_size_gb))
             existing_disk_sizes.add(disk.disk_size_gb)
         except msrestazure.azure_exceptions.CloudError as e:
@@ -303,14 +304,84 @@ def create_disks(resource_client, compute_client, config):
                 )
             else:
                 raise
-    # block for all ops to complete
-    if len(async_ops) > 0:
-        logger.debug('waiting for all {} disks to be created'.format(
-            len(async_ops)))
-    for op in async_ops:
-        disk = op.result()
-        logger.info('{} created with size of {} GB'.format(
-            disk.id, disk.disk_size_gb))
+    # block for all ops to complete if specified
+    # note that if wait is not specified and there is no delay, the request
+    # may not get acknowledged...
+    if wait:
+        if len(async_ops) > 0:
+            logger.debug('waiting for all {} disks to be created'.format(
+                len(async_ops)))
+        for op in async_ops:
+            disk = op.result()
+            logger.info('{} created with size of {} GB'.format(
+                disk.id, disk.disk_size_gb))
+
+
+def delete_disks(compute_client, config, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Delete managed disks
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # iterate disks and delete them
+    async_ops = []
+    for disk_name in rfs.managed_disks.disk_ids:
+        if not util.confirm_action(
+                config,
+                'delete managed disk {} from resource group {}'.format(
+                    disk_name, rfs.resource_group)):
+            continue
+        logger.info('deleting managed disk {} in resource group {}'.format(
+            disk_name, rfs.resource_group))
+        async_ops.append(
+            compute_client.disks.delete(
+                resource_group_name=rfs.resource_group,
+                disk_name=disk_name)
+        )
+    # block for all ops to complete if specified
+    if wait:
+        if len(async_ops) > 0:
+            logger.debug('waiting for all {} disks to be deleted'.format(
+                len(async_ops)))
+        for op in async_ops:
+            op.result()
+
+
+def list_disks(compute_client, config, restrict_scope=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """List managed disks
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool restrict_scope: restrict scope to config
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    confdisks = frozenset(rfs.managed_disks.disk_ids)
+    # list disks in resource group
+    logger.debug(
+        ('listing all managed disks in resource group {} '
+         '[restrict_scope={}]').format(
+             rfs.resource_group, restrict_scope))
+    disks = compute_client.disks.list_by_resource_group(
+        resource_group_name=rfs.resource_group)
+    i = 0
+    for disk in disks:
+        if restrict_scope and disk.name not in confdisks:
+            continue
+        logger.info(
+            '{} [provisioning_state={} created={} size={} type={}]'.format(
+                disk.id, disk.provisioning_state, disk.time_created,
+                disk.disk_size_gb, disk.account_type))
+        i += 1
+    if i == 0:
+        logger.error(
+            ('no managed disks found in resource group {} '
+             '[restrict_scope={}]').format(rfs.resource_group, restrict_scope))
 
 
 def create_storage_cluster(

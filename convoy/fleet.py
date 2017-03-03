@@ -1144,6 +1144,28 @@ def action_remotefs_disk_add(resource_client, compute_client, config):
     remotefs.create_disks(resource_client, compute_client, config)
 
 
+def action_remotefs_disk_del(compute_client, config, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Remotefs Disk Del
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
+    """
+    remotefs.delete_disks(compute_client, config, wait)
+
+
+def action_remotefs_disk_list(compute_client, config, restrict_scope):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Remotefs Disk List
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool restrict_scope: restrict scope to config
+    """
+    remotefs.list_disks(compute_client, config, restrict_scope)
+
+
 def action_remotefs_cluster_add(
         resource_client, compute_client, network_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,

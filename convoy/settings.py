@@ -2250,7 +2250,7 @@ def remotefs_settings(config):
     sc_ssh_gen_file_path = _kv_read_checked(
         conf, 'generated_file_export_path', '.')
     conf = config['remote_fs']['storage_cluster']['vm_disk_map']
-    _disk_set = set(md_disk_ids)
+    _disk_set = frozenset(md_disk_ids)
     disk_map = {}
     for vmkey in conf:
         # ensure all disks in disk array are specified in managed disks

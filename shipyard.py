@@ -623,6 +623,32 @@ def remotefs_disk_add(ctx):
         ctx.resource_client, ctx.compute_client, ctx.config)
 
 
+@disk.command('del')
+@click.option(
+    '--wait', is_flag=True, help='Wait for disk deletion to complete')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_disk_del(ctx, wait):
+    """Delete managed disks in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_disk_del(ctx.compute_client, ctx.config, wait)
+
+
+@disk.command('list')
+@click.option(
+    '--restrict-scope', is_flag=True,
+    help='List disks present only in configuration')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_disk_list(ctx, restrict_scope):
+    """List managed disks in resource group"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_disk_list(
+        ctx.compute_client, ctx.config, restrict_scope)
+
+
 @cli.group()
 @pass_cli_context
 def storage(ctx):
