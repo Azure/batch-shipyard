@@ -1,0 +1,35 @@
+{
+    "remote_fs": {
+        "resource_group": "",
+        "location": "",
+        "managed_disks": {
+            "premium": false,
+            "disk_size_gb": 20,
+            "disk_ids": ["disk0", "disk1"]
+        },
+        "storage_cluster": {
+            "id": "",
+            "vnet": {
+                "id": "",
+                "subnet_mask": ""
+            },
+            "fs_type": "nfs",
+            "vm_count": 1,
+            "vm_size": "STANDARD_F4",
+            "static_ip": false,
+            "hostname_prefix": "shipyard-nfs",
+            "ssh": {
+                "username": "shipyard",
+                "ssh_public_key": null,
+                "generated_file_export_path": null
+            },
+            "vm_disk_map": {
+                "0": {
+                    "disk_array": ["disk0", "disk1"],
+                    "format_as": "btrfs",
+                    "raid_type": 0
+                }
+            }
+        }
+    }
+}

@@ -39,10 +39,12 @@ import os
 import adal
 import azure.common.credentials
 import azure.mgmt.compute
-import azure.mgmt.compute.models
+import azure.mgmt.compute.models as computemodels
 import azure.mgmt.network
 import azure.mgmt.resource
+import azure.mgmt.resource.resources.models as rgmodels
 import msrest.authentication
+import msrestazure.azure_exceptions
 # local imports
 from . import settings
 from . import util
@@ -77,7 +79,7 @@ class DeviceCodeAuthentication(msrest.authentication.Authentication):
         """
         session = super(DeviceCodeAuthentication, self).signed_session()
         # try to get cached token
-        if self._token is None:
+        if self._token is None and util.is_not_empty(self._token_cache_file):
             try:
                 with open(self._token_cache_file, 'r') as fd:
                     self._token = json.load(fd)
@@ -89,6 +91,7 @@ class DeviceCodeAuthentication(msrest.authentication.Authentication):
                         self._token_cache_file))
         # get token
         try:
+            cache_token = True
             if self._token is None:
                 # get token through selected method
                 code = self._context.acquire_user_code(
@@ -119,25 +122,32 @@ class DeviceCodeAuthentication(msrest.authentication.Authentication):
                             client_id=self._client_id,
                             resource=self._resource,
                         )
+                else:
+                    cache_token = False
             # set session authorization header
             session.headers['Authorization'] = '{} {}'.format(
                 self._token['tokenType'], self._token['accessToken'])
             # cache token
-            logger.debug('storing token to local cache: {}'.format(
-                self._token_cache_file))
-            with open(self._token_cache_file, 'w') as fd:
-                json.dump(self._token, fd, indent=4, sort_keys=False)
+            if cache_token and util.is_not_empty(self._token_cache_file):
+                logger.debug('storing token to local cache: {}'.format(
+                    self._token_cache_file))
+                with open(self._token_cache_file, 'w') as fd:
+                    json.dump(self._token, fd, indent=4, sort_keys=False)
         except adal.AdalError as err:
             if (hasattr(err, 'error_response') and
                     'error_description' in err.error_response and
                     'AADSTS70008:' in err.error_response['error_description']):
-                logger.error('Credentials have expired due to inactivity.')
-            try:
-                logger.debug('invalidating local token cache: {}'.format(
-                    self._token_cache_file))
-                os.unlink(self._token_cache_file)
-            except OSError:
-                pass
+                logger.error(
+                    'Credentials have expired due to inactivity. Please '
+                    'retry your command.')
+            # clear token cache file due to expiration
+            if util.is_not_empty(self._token_cache_file):
+                try:
+                    os.unlink(self._token_cache_file)
+                    logger.debug('invalidated local token cache: {}'.format(
+                        self._token_cache_file))
+                except OSError:
+                    pass
             raise
         return session
 
@@ -185,7 +195,7 @@ def create_clients(
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient]
-    """Create compute and network clients
+    """Create resource, compute and network clients
     :param str subscription_id: subscription id
     :param str aad_directory_id: aad directory/tenant id
     :param str aad_user: aad user
@@ -209,6 +219,37 @@ def create_clients(
     return (resource_client, compute_client, network_client)
 
 
+def _create_managed_disk_async(compute_client, rfs, disk_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        settings.RemoteFsSettings, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create a managed disk
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param str disk_name: disk name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async operation handle
+    """
+    if rfs.managed_disks.premium:
+        account_type = computemodels.StorageAccountTypes.premium_lrs
+    else:
+        account_type = computemodels.StorageAccountTypes.standard_lrs
+    logger.info('creating managed disk: {}'.format(disk_name))
+    return compute_client.disks.create_or_update(
+        resource_group_name=rfs.resource_group,
+        disk_name=disk_name,
+        disk=computemodels.Disk(
+            location=rfs.location,
+            account_type=account_type,
+            disk_size_gb=rfs.managed_disks.disk_size_gb,
+            creation_data=computemodels.CreationData(
+                create_option=computemodels.DiskCreateOption.empty
+            ),
+        ),
+    )
+
+
 def create_disks(resource_client, compute_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict) -> None
@@ -219,12 +260,57 @@ def create_disks(resource_client, compute_client, config):
         compute client
     :param dict config: configuration dict
     """
-    # TODO
     # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
     # check if resource group exists
+    exists = resource_client.resource_groups.check_existence(
+        rfs.resource_group)
     # create resource group if it doesn't exist
-    # create managed disks
-    pass
+    if not exists:
+        logger.info('creating resource group: {}'.format(rfs.resource_group))
+        resource_client.resource_groups.create_or_update(
+            resource_group_name=rfs.resource_group,
+            parameters=rgmodels.ResourceGroup(
+                location=rfs.location,
+            )
+        )
+    else:
+        logger.debug('resource group {} exists'.format(rfs.resource_group))
+    # iterate disks and create disks if they don't exist
+    existing_disk_sizes = set()
+    async_ops = []
+    for disk_name in rfs.managed_disks.disk_ids:
+        try:
+            disk = compute_client.disks.get(
+                resource_group_name=rfs.resource_group,
+                disk_name=disk_name)
+            logger.debug('{} exists [created: {} size: {} GB]'.format(
+                disk.id, disk.time_created, disk.disk_size_gb))
+            existing_disk_sizes.add(disk.disk_size_gb)
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                existing_disk_sizes.add(rfs.managed_disks.disk_size_gb)
+                if len(existing_disk_sizes) != 1:
+                    existing_disk_sizes.discard(rfs.managed_disks.disk_size_gb)
+                    raise RuntimeError(
+                        ('Inconsistent disk sizes for newly created disks '
+                         '({} GB) to existing disks ({} GB)').format(
+                             rfs.managed_disks.disk_size_gb,
+                             existing_disk_sizes)
+                    )
+                async_ops.append(
+                    _create_managed_disk_async(compute_client, rfs, disk_name)
+                )
+            else:
+                raise
+    # block for all ops to complete
+    if len(async_ops) > 0:
+        logger.debug('waiting for all {} disks to be created'.format(
+            len(async_ops)))
+    for op in async_ops:
+        disk = op.result()
+        logger.info('{} created with size of {} GB'.format(
+            disk.id, disk.disk_size_gb))
 
 
 def create_storage_cluster(

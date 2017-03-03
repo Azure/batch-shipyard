@@ -54,8 +54,10 @@ _RDMA_INSTANCES = frozenset((
 ))
 _VM_TCP_NO_TUNE = (
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
-    'standard_a1', 'standard_d1', 'standard_d2', 'standard_d1_v2',
-    'standard_f1'
+    'standard_a1', 'standard_a2', 'standard_a3', 'standard_a5', 'standard_a6',
+    'standard_a1_v2', 'standard_a2_v2', 'standard_a3_v2', 'standard_a4_v2',
+    'standard_a2m_v2', 'standard_a4m_v2', 'standard_d1', 'standard_d2',
+    'standard_d1_v2', 'standard_f1'
 )
 # named tuples
 PoolSettings = collections.namedtuple(
@@ -85,7 +87,7 @@ KeyVaultCredentialsSettings = collections.namedtuple(
 ManagementCredentialsSettings = collections.namedtuple(
     'ManagementCredentialsSettings', [
         'subscription_id', 'aad_directory_id', 'aad_user', 'aad_password',
-        'endpoint', 'token_cache_file',
+        'endpoint', 'token_cache_enabled', 'token_cache_file'
     ]
 )
 BatchCredentialsSettings = collections.namedtuple(
@@ -161,6 +163,66 @@ ResourceFileSettings = collections.namedtuple(
         'file_path', 'blob_source', 'file_mode',
     ]
 )
+ManagedDisksSettings = collections.namedtuple(
+    'ManagedDisksSettings', [
+        'premium', 'disk_size_gb', 'disk_ids',
+    ]
+)
+VNetSettings = collections.namedtuple(
+    'VNetSettings', [
+        'id', 'subnet_mask',
+    ]
+)
+MappedVmDiskSettings = collections.namedtuple(
+    'MappedVmDiskSettings', [
+        'disk_array', 'format_as', 'raid_type'
+    ]
+)
+StorageClusterSettings = collections.namedtuple(
+    'StorageClusterSettings', [
+        'id', 'vnet', 'fs_type', 'vm_count', 'vm_size', 'static_ip',
+        'hostname_prefix', 'ssh', 'vm_disk_map',
+    ]
+)
+RemoteFsSettings = collections.namedtuple(
+    'RemoteFsSettings', [
+        'resource_group', 'location', 'managed_disks', 'storage_cluster',
+    ]
+)
+
+
+def _kv_read_checked(conf, key, default=None):
+    # type: (dict, str, obj) -> obj
+    """Read a key as some value with a check against None and length
+    :param dict conf: configuration dict
+    :param str key: conf key
+    :param obj default: default to assign
+    :rtype: obj or None
+    :return: value of key
+    """
+    try:
+        ret = conf[key]
+        if util.is_none_or_empty(ret):
+            raise KeyError()
+    except KeyError:
+        ret = default
+    return ret
+
+
+def _kv_read(conf, key, default=None):
+    # type: (dict, str, obj) ->w obj
+    """Read a key as some value
+    :param dict conf: configuration dict
+    :param str key: conf key
+    :param obj default: default to assign
+    :rtype: obj or None
+    :return: value of key
+    """
+    try:
+        ret = conf[key]
+    except KeyError:
+        ret = default
+    return ret
 
 
 def get_gluster_volume():
@@ -611,11 +673,17 @@ def credentials_management(config):
     except KeyError:
         endpoint = 'https://management.core.windows.net/'
     try:
-        token_cache_file = conf['token_cache_file']
+        token_cache_enabled = conf['token_cache']['enabled']
+    except KeyError:
+        token_cache_enabled = True
+    try:
+        token_cache_file = conf['token_cache']['filename']
         if util.is_none_or_empty(token_cache_file):
             raise KeyError()
     except KeyError:
-        token_cache_file = '.azbatch_aad_management_token.json'
+        token_cache_file = '.batch_shipyard_aad_management_token.json'
+    if not token_cache_enabled:
+        token_cache_file = None
     try:
         aad_directory_id = conf['aad']['directory_id']
         if util.is_none_or_empty(aad_directory_id):
@@ -640,6 +708,7 @@ def credentials_management(config):
         aad_user=aad_user,
         aad_password=aad_password,
         endpoint=endpoint,
+        token_cache_enabled=token_cache_enabled,
         token_cache_file=token_cache_file,
     )
 
@@ -2138,5 +2207,97 @@ def task_settings(pool, config, conf):
             num_instances=num_instances,
             coordination_command=cc_args,
             resource_files=mi_resource_files,
+        ),
+    )
+
+
+# REMOTEFS SETTINGS
+def remotefs_settings(config):
+    # type: (dict) -> RemoteFsSettings
+    """Get remote fs settings
+    :param dict config: configuration dict
+    :rtype: RemoteFsSettings
+    :return: remote fs settings
+    """
+    # general settings
+    conf = config['remote_fs']
+    resource_group = conf['resource_group']
+    if util.is_none_or_empty(resource_group):
+        raise ValueError('invalid resource_group in remote_fs')
+    location = conf['location']
+    if util.is_none_or_empty(location):
+        raise ValueError('invalid location in remote_fs')
+    # managed disk settings
+    conf = config['remote_fs']['managed_disks']
+    md_premium = _kv_read(conf, 'premium', False)
+    md_disk_size_gb = _kv_read(conf, 'disk_size_gb')
+    md_disk_ids = _kv_read_checked(conf, 'disk_ids')
+    # storage cluster settings
+    conf = config['remote_fs']['storage_cluster']
+    sc_id = conf['id']
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('invalid id in remote_fs:storage_cluster')
+    sc_vnet_id = _kv_read_checked(conf['vnet'], 'id')
+    sc_vnet_subnet_mask = _kv_read_checked(conf['vnet'], 'subnet_mask')
+    sc_fs_type = _kv_read_checked(conf, 'fs_type', 'nfs')
+    sc_vm_count = _kv_read(conf, 'vm_count', 1)
+    sc_vm_size = _kv_read_checked(conf, 'vm_size')
+    sc_static_ip = _kv_read(conf, 'static_ip', False)
+    sc_hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    conf = config['remote_fs']['storage_cluster']['ssh']
+    sc_ssh_username = _kv_read_checked(conf, 'username')
+    sc_ssh_public_key = _kv_read_checked(conf, 'ssh_public_key')
+    sc_ssh_gen_file_path = _kv_read_checked(
+        conf, 'generated_file_export_path', '.')
+    conf = config['remote_fs']['storage_cluster']['vm_disk_map']
+    _disk_set = set(md_disk_ids)
+    disk_map = {}
+    for vmkey in conf:
+        # ensure all disks in disk array are specified in managed disks
+        disk_array = conf[vmkey]['disk_array']
+        if not _disk_set.issuperset(set(disk_array)):
+            raise ValueError(
+                ('All disks {} for vm {} are not specified in '
+                 'managed_disks:disk_ids ({})').format(
+                     disk_array, vmkey, _disk_set))
+        if len(disk_array) == 1:
+            raid_type = None
+        else:
+            raid_type = conf[vmkey]['raid_type']
+            if raid_type != 0:
+                raise ValueError('Unsupported raid type {}'.format(raid_type))
+        disk_map[int(vmkey)] = MappedVmDiskSettings(
+            disk_array=disk_array,
+            format_as=conf[vmkey]['format_as'],
+            raid_type=raid_type,
+        )
+    return RemoteFsSettings(
+        resource_group=resource_group,
+        location=location,
+        managed_disks=ManagedDisksSettings(
+            premium=md_premium,
+            disk_size_gb=md_disk_size_gb,
+            disk_ids=md_disk_ids,
+        ),
+        storage_cluster=StorageClusterSettings(
+            id=sc_id,
+            vnet=VNetSettings(
+                id=sc_vnet_id,
+                subnet_mask=sc_vnet_subnet_mask,
+            ),
+            fs_type=sc_fs_type,
+            vm_count=sc_vm_count,
+            vm_size=sc_vm_size,
+            static_ip=sc_static_ip,
+            hostname_prefix=sc_hostname_prefix,
+            ssh=SSHSettings(
+                username=sc_ssh_username,
+                expiry_days=9999,
+                ssh_public_key=sc_ssh_public_key,
+                generate_docker_tunnel_script=False,
+                generated_file_export_path=sc_ssh_gen_file_path,
+                hpn_server_swap=False,
+            ),
+            vm_disk_map=disk_map,
         ),
     )

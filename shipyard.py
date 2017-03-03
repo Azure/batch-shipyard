@@ -86,7 +86,9 @@ class CliContext(object):
         self.resource_client, self.compute_client, self.network_client = \
             convoy.fleet.create_remotefs_clients(self, self.config)
         self._cleanup_during_initialize()
-        self._init_config(skip_global_config=True, skip_pool_config=True)
+        self._init_config(
+            skip_global_config=True, skip_pool_config=True,
+            skip_remotefs_config=False)
 
     def initialize_for_storage(self):
         # type: (CliContext) -> None
@@ -105,7 +107,9 @@ class CliContext(object):
         self.keyvault_client = convoy.fleet.create_keyvault_client(
             self, self.config)
         self._cleanup_during_initialize()
-        self._init_config(skip_global_config=True, skip_pool_config=True)
+        self._init_config(
+            skip_global_config=True, skip_pool_config=True,
+            skip_remotefs_config=True)
 
     def initialize_for_batch(self):
         # type: (CliContext) -> None
@@ -116,7 +120,9 @@ class CliContext(object):
         self.keyvault_client = convoy.fleet.create_keyvault_client(
             self, self.config)
         self._cleanup_during_initialize()
-        self._init_config(skip_global_config=False, skip_pool_config=False)
+        self._init_config(
+            skip_global_config=False, skip_pool_config=False,
+            skip_remotefs_config=True)
         clients = convoy.fleet.initialize(self.config)
         self._set_clients(*clients)
 
@@ -170,12 +176,15 @@ class CliContext(object):
         if self.json_credentials.exists():
             self._read_json_file(self.json_credentials)
 
-    def _init_config(self, skip_global_config=False, skip_pool_config=False):
-        # type: (CliContext, bool, bool) -> None
+    def _init_config(
+            self, skip_global_config=False, skip_pool_config=False,
+            skip_remotefs_config=False):
+        # type: (CliContext, bool, bool, bool) -> None
         """Initializes configuration of the context
         :param CliContext self: this
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
+        :param bool skip_remotefs_config: skip remote fs config
         """
         # use configdir if available
         if self.configdir is not None:
@@ -190,6 +199,10 @@ class CliContext(object):
                     self.json_pool = pathlib.Path(self.configdir, 'pool.json')
                 if self.json_jobs is None:
                     self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
+            if not skip_remotefs_config:
+                if self.json_remotefs is None:
+                    self.json_remotefs = pathlib.Path(
+                        self.configdir, 'remotefs.json')
         # check for required json files
         if (self.json_credentials is not None and
                 not isinstance(self.json_credentials, pathlib.Path)):
@@ -204,6 +217,11 @@ class CliContext(object):
                 raise ValueError('pool json was not specified')
             elif not isinstance(self.json_pool, pathlib.Path):
                 self.json_pool = pathlib.Path(self.json_pool)
+        if not skip_remotefs_config:
+            if self.json_remotefs is None:
+                raise ValueError('remotefs json was not specified')
+            elif not isinstance(self.json_remotefs, pathlib.Path):
+                self.json_remotefs = pathlib.Path(self.json_remotefs)
         # fetch credentials from keyvault, if json file is missing
         kvcreds = None
         if self.json_credentials is None or not self.json_credentials.exists():
@@ -242,6 +260,8 @@ class CliContext(object):
         # read rest of config files
         if not skip_global_config:
             self._read_json_file(self.json_config)
+        if not skip_remotefs_config:
+            self._read_json_file(self.json_remotefs)
         if not skip_pool_config:
             self._read_json_file(self.json_pool)
             if self.json_jobs is not None:
@@ -504,7 +524,7 @@ def _jobs_option(f):
 def _remotefs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.remotefs_jobs = value
+        clictx.json_remotefs = value
         return value
     return click.option(
         '--remotefs',
