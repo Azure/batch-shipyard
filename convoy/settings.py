@@ -75,6 +75,19 @@ SSHSettings = collections.namedtuple(
         'hpn_server_swap',
     ]
 )
+KeyVaultCredentialsSettings = collections.namedtuple(
+    'KeyVaultCredentialsSettings', [
+        'keyvault_uri', 'keyvault_credentials_secret_id', 'aad_directory_id',
+        'aad_application_id', 'aad_auth_key', 'aad_user', 'aad_password',
+        'aad_cert_private_key', 'aad_cert_thumbprint',
+    ]
+)
+ManagementCredentialsSettings = collections.namedtuple(
+    'ManagementCredentialsSettings', [
+        'subscription_id', 'aad_directory_id', 'aad_user', 'aad_password',
+        'endpoint', 'token_cache_file',
+    ]
+)
 BatchCredentialsSettings = collections.namedtuple(
     'BatchCredentialsSettings', [
         'account', 'account_key', 'account_service_url'
@@ -146,13 +159,6 @@ MultiInstanceSettings = collections.namedtuple(
 ResourceFileSettings = collections.namedtuple(
     'ResourceFileSettings', [
         'file_path', 'blob_source', 'file_mode',
-    ]
-)
-KeyVaultSettings = collections.namedtuple(
-    'KeyVaultSettings', [
-        'keyvault_uri', 'keyvault_credentials_secret_id', 'aad_directory_id',
-        'aad_application_id', 'aad_auth_key', 'aad_user', 'aad_password',
-        'aad_cert_private_key', 'aad_cert_thumbprint',
     ]
 )
 
@@ -504,10 +510,10 @@ def raw_credentials(config, omit_keyvault):
 
 
 def credentials_keyvault(config):
-    # type: (dict) -> KeyVaultSettings
+    # type: (dict) -> KeyVaultCredentialsSettings
     """Get KeyVault settings
     :param dict config: configuration object
-    :rtype: KeyVaultSettings
+    :rtype: KeyVaultCredentialsSettings
     :return: Key Vault settings
     """
     try:
@@ -568,7 +574,7 @@ def credentials_keyvault(config):
             raise KeyError()
     except KeyError:
         aad_cert_thumbprint = None
-    return KeyVaultSettings(
+    return KeyVaultCredentialsSettings(
         keyvault_uri=keyvault_uri,
         keyvault_credentials_secret_id=keyvault_credentials_secret_id,
         aad_directory_id=aad_directory_id,
@@ -578,6 +584,63 @@ def credentials_keyvault(config):
         aad_password=aad_password,
         aad_cert_private_key=aad_cert_private_key,
         aad_cert_thumbprint=aad_cert_thumbprint,
+    )
+
+
+def credentials_management(config):
+    # type: (dict) -> ManagementCredentialsSettings
+    """Get Management settings
+    :param dict config: configuration object
+    :rtype: ManagementCredentialsSettings
+    :return: Management settings
+    """
+    try:
+        conf = config['credentials']['management']
+    except (KeyError, TypeError):
+        conf = {}
+    try:
+        subscription_id = conf['subscription_id']
+        if util.is_none_or_empty(subscription_id):
+            raise KeyError()
+    except KeyError:
+        subscription_id = None
+    try:
+        endpoint = conf['endpoint']
+        if util.is_none_or_empty(endpoint):
+            raise KeyError()
+    except KeyError:
+        endpoint = 'https://management.core.windows.net/'
+    try:
+        token_cache_file = conf['token_cache_file']
+        if util.is_none_or_empty(token_cache_file):
+            raise KeyError()
+    except KeyError:
+        token_cache_file = '.azbatch_aad_management_token.json'
+    try:
+        aad_directory_id = conf['aad']['directory_id']
+        if util.is_none_or_empty(aad_directory_id):
+            raise KeyError()
+    except KeyError:
+        aad_directory_id = None
+    try:
+        aad_user = conf['aad']['user']
+        if util.is_none_or_empty(aad_user):
+            raise KeyError()
+    except KeyError:
+        aad_user = None
+    try:
+        aad_password = conf['aad']['password']
+        if util.is_none_or_empty(aad_password):
+            raise KeyError()
+    except KeyError:
+        aad_password = None
+    return ManagementCredentialsSettings(
+        subscription_id=subscription_id,
+        aad_directory_id=aad_directory_id,
+        aad_user=aad_user,
+        aad_password=aad_password,
+        endpoint=endpoint,
+        token_cache_file=token_cache_file,
     )
 
 

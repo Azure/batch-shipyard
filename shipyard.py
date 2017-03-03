@@ -61,6 +61,9 @@ class CliContext(object):
         self.queue_client = None
         self.table_client = None
         self.keyvault_client = None
+        self.resource_client = None
+        self.compute_client = None
+        self.network_client = None
         # aad/keyvault options
         self.keyvault_uri = None
         self.keyvault_credentials_secret_id = None
@@ -71,17 +74,57 @@ class CliContext(object):
         self.aad_password = None
         self.aad_cert_private_key = None
         self.aad_cert_thumbprint = None
+        # management options
+        self.subscription_id = None
 
-    def initialize(self, creds_only=False, no_config=False):
-        # type: (CliContext, bool, bool) -> None
-        """Initialize context
+    def initialize_for_remotefs(self):
+        # type: (CliContext) -> None
+        """Initialize context for remotefs commands
         :param CliContext self: this
-        :param bool creds_only: credentials only initialization
-        :param bool no_config: do not configure context
+        """
+        self._read_credentials_config()
+        self.resource_client, self.compute_client, self.network_client = \
+            convoy.fleet.create_remotefs_clients(self, self.config)
+        self._cleanup_during_initialize()
+        self._init_config(skip_global_config=True, skip_pool_config=True)
+
+    def initialize_for_storage(self):
+        # type: (CliContext) -> None
+        """Initialize context for storage commands
+        :param CliContext self: this
+        """
+        # path is identical to batch
+        self.initialize_for_batch()
+
+    def initialize_for_keyvault(self):
+        # type: (CliContext) -> None
+        """Initialize context for keyvault commands
+        :param CliContext self: this
         """
         self._read_credentials_config()
         self.keyvault_client = convoy.fleet.create_keyvault_client(
             self, self.config)
+        self._cleanup_during_initialize()
+        self._init_config(skip_global_config=True, skip_pool_config=True)
+
+    def initialize_for_batch(self):
+        # type: (CliContext) -> None
+        """Initialize context for batch commands
+        :param CliContext self: this
+        """
+        self._read_credentials_config()
+        self.keyvault_client = convoy.fleet.create_keyvault_client(
+            self, self.config)
+        self._cleanup_during_initialize()
+        self._init_config(skip_global_config=False, skip_pool_config=False)
+        clients = convoy.fleet.initialize(self.config)
+        self._set_clients(*clients)
+
+    def _cleanup_during_initialize(self):
+        # type: (CliContext) -> None
+        """Cleanup and free memory during initialize_for_* funcs
+        :param CliContext self: this
+        """
         del self.aad_directory_id
         del self.aad_application_id
         del self.aad_auth_key
@@ -89,13 +132,8 @@ class CliContext(object):
         del self.aad_password
         del self.aad_cert_private_key
         del self.aad_cert_thumbprint
+        del self.subscription_id
         self.config = None
-        self._init_config(creds_only)
-        if no_config:
-            return
-        if not creds_only:
-            clients = convoy.fleet.initialize(self.config)
-            self._set_clients(*clients)
 
     def _read_json_file(self, json_file):
         # type: (CliContext, pathlib.Path) -> None
@@ -132,33 +170,36 @@ class CliContext(object):
         if self.json_credentials.exists():
             self._read_json_file(self.json_credentials)
 
-    def _init_config(self, creds_only=False):
-        # type: (CliContext, bool) -> None
+    def _init_config(self, skip_global_config=False, skip_pool_config=False):
+        # type: (CliContext, bool, bool) -> None
         """Initializes configuration of the context
         :param CliContext self: this
-        :param bool creds_only: credentials only initialization
+        :param bool skip_global_config: skip global config
+        :param bool skip_pool_config: skip pool config
         """
         # use configdir if available
         if self.configdir is not None:
             if self.json_credentials is None:
                 self.json_credentials = pathlib.Path(
                     self.configdir, 'credentials.json')
-            if self.json_config is None:
+            if not skip_global_config and self.json_config is None:
                 self.json_config = pathlib.Path(
                     self.configdir, 'config.json')
-            if self.json_pool is None:
-                self.json_pool = pathlib.Path(self.configdir, 'pool.json')
-            if self.json_jobs is None:
-                self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
+            if not skip_pool_config:
+                if self.json_pool is None:
+                    self.json_pool = pathlib.Path(self.configdir, 'pool.json')
+                if self.json_jobs is None:
+                    self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
         # check for required json files
         if (self.json_credentials is not None and
                 not isinstance(self.json_credentials, pathlib.Path)):
             self.json_credentials = pathlib.Path(self.json_credentials)
-        if not creds_only:
+        if not skip_global_config:
             if self.json_config is None:
                 raise ValueError('config json was not specified')
             elif not isinstance(self.json_config, pathlib.Path):
                 self.json_config = pathlib.Path(self.json_config)
+        if not skip_pool_config:
             if self.json_pool is None:
                 raise ValueError('pool json was not specified')
             elif not isinstance(self.json_pool, pathlib.Path):
@@ -199,8 +240,9 @@ class CliContext(object):
         convoy.fleet.fetch_secrets_from_keyvault(
             self.keyvault_client, self.config)
         # read rest of config files
-        if not creds_only:
+        if not skip_global_config:
             self._read_json_file(self.json_config)
+        if not skip_pool_config:
             self._read_json_file(self.json_pool)
             if self.json_jobs is not None:
                 if not isinstance(self.json_jobs, pathlib.Path):
@@ -214,9 +256,11 @@ class CliContext(object):
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
         # free mem
         del self.json_credentials
-        del self.json_config
-        del self.json_pool
-        del self.json_jobs
+        if not skip_global_config:
+            del self.json_config
+        if not skip_pool_config:
+            del self.json_pool
+            del self.json_jobs
         del self.verbose
         del self.yes
 
@@ -376,6 +420,19 @@ def _aad_cert_thumbprint_option(f):
         callback=callback)(f)
 
 
+def _azure_management_subscription_id_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.subscription_id = value
+        return value
+    return click.option(
+        '--management-subscription-id',
+        expose_value=False,
+        envvar='SHIPYARD_MANAGEMENT_SUBSCRIPTION_ID',
+        help='Azure Management Subscription Id',
+        callback=callback)(f)
+
+
 def _configdir_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -444,7 +501,35 @@ def _jobs_option(f):
         callback=callback)(f)
 
 
+def _remotefs_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.remotefs_jobs = value
+        return value
+    return click.option(
+        '--remotefs',
+        expose_value=False,
+        envvar='SHIPYARD_REMOTEFS_JSON',
+        help='RemoteFS json config file',
+        callback=callback)(f)
+
+
 def common_options(f):
+    f = _config_option(f)
+    f = _credentials_option(f)
+    f = _configdir_option(f)
+    f = _verbose_option(f)
+    f = _confirm_option(f)
+    return f
+
+
+def batch_options(f):
+    f = _jobs_option(f)
+    f = _pool_option(f)
+    return f
+
+
+def keyvault_options(f):
     f = _aad_cert_thumbprint_option(f)
     f = _aad_cert_private_key_option(f)
     f = _aad_password_option(f)
@@ -454,13 +539,15 @@ def common_options(f):
     f = _aad_directory_id_option(f)
     f = _azure_keyvault_credentials_secret_id_option(f)
     f = _azure_keyvault_uri_option(f)
-    f = _jobs_option(f)
-    f = _pool_option(f)
-    f = _config_option(f)
-    f = _credentials_option(f)
-    f = _configdir_option(f)
-    f = _verbose_option(f)
-    f = _confirm_option(f)
+    return f
+
+
+def remotefs_options(f):
+    f = _aad_password_option(f)
+    f = _aad_user_option(f)
+    f = _aad_directory_id_option(f)
+    f = _azure_management_subscription_id_option(f)
+    f = _remotefs_option(f)
     return f
 
 
@@ -474,6 +561,50 @@ def cli(ctx):
 
 @cli.group()
 @pass_cli_context
+def remotefs(ctx):
+    """Remote Filesystem actions"""
+    pass
+
+
+@remotefs.group()
+@pass_cli_context
+def cluster(ctx):
+    """Cluster actions"""
+    pass
+
+
+@cluster.command('add')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_add(ctx):
+    """Create a cluster for a Remote Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_add(
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.config)
+
+
+@remotefs.group()
+@pass_cli_context
+def disk(ctx):
+    """Managed disk actions"""
+    pass
+
+
+@disk.command('add')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_disk_add(ctx):
+    """Create managed disks for Remote Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_disk_add(
+        ctx.resource_client, ctx.compute_client, ctx.config)
+
+
+@cli.group()
+@pass_cli_context
 def storage(ctx):
     """Storage actions"""
     pass
@@ -481,20 +612,24 @@ def storage(ctx):
 
 @storage.command('del')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def storage_del(ctx):
     """Delete Azure Storage containers used by Batch Shipyard"""
-    ctx.initialize()
+    ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
 
 
 @storage.command('clear')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def storage_clear(ctx):
     """Clear Azure Storage containers used by Batch Shipyard"""
-    ctx.initialize()
+    ctx.initialize_for_storage()
     convoy.fleet.action_storage_clear(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
 
@@ -509,10 +644,11 @@ def keyvault(ctx):
 @keyvault.command('add')
 @click.argument('name')
 @common_options
+@keyvault_options
 @pass_cli_context
 def keyvault_add(ctx, name):
     """Add a credentials json as a secret to Azure KeyVault"""
-    ctx.initialize(creds_only=True)
+    ctx.initialize_for_keyvault()
     convoy.fleet.action_keyvault_add(
         ctx.keyvault_client, ctx.config, ctx.keyvault_uri, name)
 
@@ -520,20 +656,22 @@ def keyvault_add(ctx, name):
 @keyvault.command('del')
 @click.argument('name')
 @common_options
+@keyvault_options
 @pass_cli_context
 def keyvault_del(ctx, name):
     """Delete a secret from Azure KeyVault"""
-    ctx.initialize(creds_only=True, no_config=True)
+    ctx.initialize_for_keyvault()
     convoy.fleet.action_keyvault_del(
         ctx.keyvault_client, ctx.keyvault_uri, name)
 
 
 @keyvault.command('list')
 @common_options
+@keyvault_options
 @pass_cli_context
 def keyvault_list(ctx):
     """List secret ids and metadata in an Azure KeyVault"""
-    ctx.initialize(creds_only=True, no_config=True)
+    ctx.initialize_for_keyvault()
     convoy.fleet.action_keyvault_list(ctx.keyvault_client, ctx.keyvault_uri)
 
 
@@ -546,37 +684,45 @@ def cert(ctx):
 
 @cert.command('create')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def cert_create(ctx):
     """Create a certificate to use with a Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_cert_create(ctx.config)
 
 
 @cert.command('add')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def cert_add(ctx):
     """Add a certificate to a Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_cert_add(ctx.batch_client, ctx.config)
 
 
 @cert.command('list')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def cert_list(ctx):
     """List all certificates in a Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_cert_list(ctx.batch_client)
 
 
 @cert.command('del')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def cert_del(ctx):
     """Delete a certificate from a Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_cert_del(ctx.batch_client, ctx.config)
 
 
@@ -589,19 +735,23 @@ def pool(ctx):
 
 @pool.command('listskus')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_listskus(ctx):
     """List available VM configurations available to the Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_listskus(ctx.batch_client)
 
 
 @pool.command('add')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_add(ctx):
     """Add a pool to the Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_add(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
         ctx.table_client, ctx.config)
@@ -609,10 +759,12 @@ def pool_add(ctx):
 
 @pool.command('list')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_list(ctx):
     """List all pools in the Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_list(ctx.batch_client)
 
 
@@ -620,10 +772,12 @@ def pool_list(ctx):
 @click.option(
     '--wait', is_flag=True, help='Wait for pool deletion to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_del(ctx, wait):
     """Delete a pool from the Batch account"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_delete(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
         ctx.table_client, ctx.config, wait=wait)
@@ -633,47 +787,57 @@ def pool_del(ctx, wait):
 @click.option(
     '--wait', is_flag=True, help='Wait for pool resize to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_resize(ctx, wait):
     """Resize a pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_resize(
         ctx.batch_client, ctx.blob_client, ctx.config, wait=wait)
 
 
 @pool.command('grls')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_grls(ctx):
     """Get remote login settings for all nodes in pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_grls(ctx.batch_client, ctx.config)
 
 
 @pool.command('listnodes')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_listnodes(ctx):
     """List nodes in pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_listnodes(ctx.batch_client, ctx.config)
 
 
 @pool.command('asu')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_asu(ctx):
     """Add an SSH user to all nodes in pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_asu(ctx.batch_client, ctx.config)
 
 
 @pool.command('dsu')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_dsu(ctx):
     """Delete an SSH user from all nodes in pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_dsu(ctx.batch_client, ctx.config)
 
 
@@ -685,10 +849,12 @@ def pool_dsu(ctx):
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to connect to')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_ssh(ctx, cardinal, nodeid):
     """Interactively login via SSH to a node in the pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_ssh(
         ctx.batch_client, ctx.config, cardinal, nodeid)
 
@@ -697,10 +863,12 @@ def pool_ssh(ctx, cardinal, nodeid):
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_delnode(ctx, nodeid):
     """Delete a node from a pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_delnode(ctx.batch_client, ctx.config, nodeid)
 
 
@@ -712,10 +880,12 @@ def pool_delnode(ctx, nodeid):
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to reboot')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_rebootnode(ctx, all_start_task_failed, nodeid):
     """Reboot a node or nodes in a pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_rebootnode(
         ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
 
@@ -726,10 +896,12 @@ def pool_rebootnode(ctx, all_start_task_failed, nodeid):
 @click.option(
     '--digest', help='Digest to update image to')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def pool_udi(ctx, image, digest):
     """Update Docker images in a pool"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_udi(ctx.batch_client, ctx.config, image, digest)
 
 
@@ -748,10 +920,12 @@ def jobs(ctx):
     '--tail',
     help='Tails the specified file of the last job and task added')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_add(ctx, recreate, tail):
     """Add jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_add(
         ctx.batch_client, ctx.blob_client, ctx.keyvault_client, ctx.config,
         recreate, tail)
@@ -759,10 +933,12 @@ def jobs_add(ctx, recreate, tail):
 
 @jobs.command('list')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_list(ctx):
     """List jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_list(ctx.batch_client, ctx.config)
 
 
@@ -770,10 +946,12 @@ def jobs_list(ctx):
 @click.option(
     '--jobid', help='List tasks in the specified job id')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_list_tasks(ctx, jobid):
     """List tasks within jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config, jobid)
 
 
@@ -788,10 +966,12 @@ def jobs_list_tasks(ctx, jobid):
 @click.option(
     '--wait', is_flag=True, help='Wait for task termination to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_termtasks(ctx, force, jobid, taskid, wait):
     """Terminate specified tasks in jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_termtasks(
         ctx.batch_client, ctx.config, jobid, taskid, wait, force)
 
@@ -806,10 +986,12 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @click.option(
     '--wait', is_flag=True, help='Wait for jobs termination to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_term(ctx, all, jobid, termtasks, wait):
     """Terminate jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_term(
         ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
 
@@ -824,10 +1006,12 @@ def jobs_term(ctx, all, jobid, termtasks, wait):
 @click.option(
     '--wait', is_flag=True, help='Wait for jobs deletion to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_del(ctx, all, jobid, termtasks, wait):
     """Delete jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_del(
         ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
 
@@ -840,10 +1024,12 @@ def jobs_del(ctx, all, jobid, termtasks, wait):
 @click.option(
     '--wait', is_flag=True, help='Wait for task deletion to complete')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_deltasks(ctx, jobid, taskid, wait):
     """Delete specified tasks in jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_deltasks(
         ctx.batch_client, ctx.config, jobid, taskid, wait)
 
@@ -853,10 +1039,12 @@ def jobs_deltasks(ctx, jobid, taskid, wait):
     '--delete', is_flag=True,
     help='Delete all cleanup multi-instance jobs in Batch account')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def jobs_cmi(ctx, delete):
     """Cleanup multi-instance jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
 
 
@@ -873,10 +1061,12 @@ def data(ctx):
 @click.option(
     '--taskid', help='List files from the specified task id')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def data_listfiles(ctx, jobid, taskid):
     """List files for tasks in jobs"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_data_listfiles(
         ctx.batch_client, ctx.config, jobid, taskid)
 
@@ -888,10 +1078,12 @@ def data_listfiles(ctx, jobid, taskid):
 @click.option(
     '--filespec', help='File specification as jobid,taskid,filename')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def data_stream(ctx, disk, filespec):
     """Stream a file as text to the local console or as binary to disk"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_data_stream(
         ctx.batch_client, ctx.config, filespec, disk)
 
@@ -904,10 +1096,12 @@ def data_stream(ctx, disk, filespec):
     help='File specification as jobid,taskid,filename or '
     'jobid,taskid,include_pattern if invoked with --all')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def data_getfile(ctx, all, filespec):
     """Retrieve file(s) from a job/task"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_data_getfile(
         ctx.batch_client, ctx.config, all, filespec)
 
@@ -919,20 +1113,24 @@ def data_getfile(ctx, all, filespec):
     '--filespec', help='File specification as nodeid,filename or '
     'nodeid,include_pattern if invoked with --all')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def data_getfilenode(ctx, all, filespec):
     """Retrieve file(s) from a compute node"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_data_getfilenode(
         ctx.batch_client, ctx.config, all, filespec)
 
 
 @data.command('ingress')
 @common_options
+@batch_options
+@keyvault_options
 @pass_cli_context
 def data_ingress(ctx):
     """Ingress data into Azure"""
-    ctx.initialize()
+    ctx.initialize_for_batch()
     convoy.fleet.action_data_ingress(ctx.batch_client, ctx.config)
 
 

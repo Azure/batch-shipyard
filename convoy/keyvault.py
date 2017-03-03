@@ -137,6 +137,10 @@ def fetch_credentials_json(
     :rtype: dict
     :return: credentials dict
     """
+    if client is None:
+        raise RuntimeError(
+            'KeyVault client not initialized, please ensure proper AAD '
+            'credentials and KeyVault parameters have been provided')
     logger.debug('fetching credentials json from keyvault')
     if util.is_none_or_empty(keyvault_credentials_secret_id):
         raise RuntimeError(
@@ -171,6 +175,10 @@ def store_credentials_json(client, config, keyvault_uri, secret_name):
     :param str keyvault_uri: keyvault uri
     :param str secret_name: secret name for creds json
     """
+    if client is None:
+        raise RuntimeError(
+            'KeyVault client not initialized, please ensure proper AAD '
+            'credentials and KeyVault parameters have been provided')
     creds = {
         'credentials': settings.raw_credentials(config, True)
     }
@@ -196,6 +204,10 @@ def delete_secret(client, keyvault_uri, secret_name):
     :param str keyvault_uri: keyvault uri
     :param str secret_name: secret name for creds json
     """
+    if client is None:
+        raise RuntimeError(
+            'KeyVault client not initialized, please ensure proper AAD '
+            'credentials and KeyVault parameters have been provided')
     logger.info('deleting secret in keyvault {} with name {}'.format(
         keyvault_uri, secret_name))
     client.delete_secret(keyvault_uri, secret_name)
@@ -207,6 +219,10 @@ def list_secrets(client, keyvault_uri):
     :param azure.keyvault.KeyVaultClient client: keyvault client
     :param str keyvault_uri: keyvault uri
     """
+    if client is None:
+        raise RuntimeError(
+            'KeyVault client not initialized, please ensure proper AAD '
+            'credentials and KeyVault parameters have been provided')
     logger.debug('listing secret ids in keyvault {}'.format(keyvault_uri))
     secrets = client.get_secrets(keyvault_uri)
     for secret in secrets:

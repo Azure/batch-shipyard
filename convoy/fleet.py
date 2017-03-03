@@ -50,6 +50,7 @@ from . import batch
 from . import crypto
 from . import data
 from . import keyvault
+from . import remotefs
 from . import settings
 from . import storage
 from . import util
@@ -239,6 +240,35 @@ def create_keyvault_client(ctx, config):
         return keyvault.create_client(
             aad_directory_id, aad_application_id, aad_auth_key, aad_user,
             aad_password, aad_cert_private_key, aad_cert_thumbprint)
+
+
+def create_remotefs_clients(ctx, config):
+    # type: (CliContext, dict) ->
+    #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
+    #              azure.mgmt.compute.ComputeManagementClient,
+    #              azure.mgmt.network.NetworkManagementClient]
+    """Create clients needed for remotefs: client, network
+    :param CliContext ctx: Cli Context
+    :param dict config: configuration dict
+    :rtype: tuple
+    :return: (
+        azure.mgmt.resource.resources.ResourceManagementClient,
+        azure.mgmt.compute.ComputeManagementClient,
+        azure.mgmt.network.NetworkManagementClient)
+    """
+    mgmt = settings.credentials_management(config)
+    aad_directory_id = ctx.aad_directory_id or mgmt.aad_directory_id
+    aad_user = ctx.aad_user or mgmt.aad_user
+    aad_password = ctx.aad_password or mgmt.aad_password
+    subscription_id = ctx.subscription_id or mgmt.subscription_id
+    # check if no management/aad params were specified at all
+    if (aad_directory_id is None and aad_user is None and
+            subscription_id is None):
+        return (None, None, None)
+    else:
+        return remotefs.create_clients(
+            subscription_id, aad_directory_id, aad_user, aad_password,
+            mgmt.endpoint, mgmt.token_cache_file)
 
 
 def initialize(config):
@@ -1099,6 +1129,37 @@ def _adjust_settings_for_pool_creation(config):
                         'on Windows')
             except KeyError:
                 pass
+
+
+def action_remotefs_disk_add(resource_client, compute_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient, dict) -> None
+    """Action: Remotefs Disk Add
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    """
+    remotefs.create_disks(resource_client, compute_client, config)
+
+
+def action_remotefs_cluster_add(
+        resource_client, compute_client, network_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    """Action: Remotefs Cluster Add
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    """
+    remotefs.create_storage_cluster(
+        resource_client, compute_client, network_client, config)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
