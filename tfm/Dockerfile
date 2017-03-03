@@ -17,5 +17,8 @@ RUN apk update \
 # copy in files
 COPY task_file_mover.py task_file_mover.sh /opt/batch-shipyard/
 
+# pre-compile files
+RUN python3 -m compileall -f /opt/batch-shipyard
+
 # set entrypoint
 ENTRYPOINT ["/opt/batch-shipyard/task_file_mover.sh"]
