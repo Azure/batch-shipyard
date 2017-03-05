@@ -1213,6 +1213,41 @@ def action_remotefs_cluster_del(
         delete_resource_group=delete_all_resources, wait=wait)
 
 
+def action_remotefs_cluster_suspend(compute_client, config, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Remotefs Cluster Suspend
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for suspension to complete
+    """
+    remotefs.suspend_storage_cluster(compute_client, config, wait)
+
+
+def action_remotefs_cluster_start(compute_client, config, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Remotefs Cluster Start
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for restart to complete
+    """
+    remotefs.start_storage_cluster(compute_client, config, wait)
+
+
+def action_remotefs_cluster_status(compute_client, network_client, config):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    """Action: Remotefs Cluster Status
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    """
+    remotefs.stat_storage_cluster(compute_client, network_client, config)
+
+
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
     # type: (azure.keyvault.KeyVaultClient, dict, str, str) -> None
     """Action: Keyvault Add

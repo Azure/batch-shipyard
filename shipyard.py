@@ -608,10 +608,10 @@ def remotefs_add(ctx):
 @cluster.command('del')
 @click.option(
     '--delete-all-resources', is_flag=True,
-    help='Delete all resources used by storage cluster')
+    help='Delete all resources used by storage cluster via resource group')
 @click.option(
     '--delete-data-disks', is_flag=True,
-    help='Delete attached managed data disks')
+    help='Delete all attached managed data disks')
 @click.option(
     '--delete-virtual-network', is_flag=True, help='Delete virtual network')
 @click.option(
@@ -628,6 +628,45 @@ def remotefs_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.config, delete_all_resources, delete_data_disks,
         delete_virtual_network, wait)
+
+
+@cluster.command('suspend')
+@click.option(
+    '--wait', is_flag=True, help='Wait for suspension to complete')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_suspend(ctx, wait):
+    """Suspend a storage cluster used for a Remote Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_suspend(
+        ctx.compute_client, ctx.config, wait)
+
+
+@cluster.command('start')
+@click.option(
+    '--wait', is_flag=True, help='Wait for restart to complete')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_start(ctx, wait):
+    """Starts a previously suspended storage cluster used for a Remote
+    Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_start(
+        ctx.compute_client, ctx.config, wait)
+
+
+@cluster.command('status')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_status(ctx):
+    """Query status of a storage cluster used for a Remote
+    Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_status(
+        ctx.compute_client, ctx.network_client, ctx.config)
 
 
 @remotefs.group()

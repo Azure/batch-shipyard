@@ -832,9 +832,10 @@ def create_storage_cluster(
             public_ip_address_name=pips[offset].name,
         )
         logger.info(
-            'virtual machine: {} [provisioning_state={} public_ip_address={} '
-            'vm_size={}]'.format(
-                vm.id, vm.provisioning_state, pip.ip_address,
+            'virtual machine: {} [provisioning_state={} fqdn={} '
+            'public_ip_address={} vm_size={}]'.format(
+                vm.id, vm.provisioning_state,
+                pip.dns_settings.fqdn, pip.ip_address,
                 vm.hardware_profile.vm_size))
         vms[offset] = vm
 
@@ -1204,3 +1205,181 @@ def delete_storage_cluster(
             logger.info('{} managed data disks deleted'.format(
                 len(data_disk_async_ops)))
             data_disk_async_ops.clear()
+
+
+def _deallocate_virtual_machine(compute_client, rg_name, vm_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Deallocate a virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param str rg_name: resource group name
+    :param str vm_name: vm name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deallocating virtual machine {}'.format(vm_name))
+    return compute_client.virtual_machines.deallocate(
+        resource_group_name=rg_name,
+        vm_name=vm_name,
+    )
+
+
+def _start_virtual_machine(compute_client, rg_name, vm_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Start a deallocated virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param str rg_name: resource group name
+    :param str vm_name: vm name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('starting virtual machine {}'.format(vm_name))
+    return compute_client.virtual_machines.start(
+        resource_group_name=rg_name,
+        vm_name=vm_name,
+    )
+
+
+def suspend_storage_cluster(compute_client, config, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Suspend a storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for suspension to complete
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    if not util.confirm_action(
+            config, 'suspend storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
+    vms = []
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                logger.error('virtual machine {} not found'.format(vm_name))
+                continue
+            else:
+                raise
+        else:
+            vms.append(vm)
+    if len(vms) == 0:
+        logger.warning('no virtual machines to suspend')
+        return
+    # deallocate each vm
+    async_ops = []
+    for vm in vms:
+        async_ops.append(_deallocate_virtual_machine(
+            compute_client, rfs.resource_group, vm.name))
+    if wait:
+        logger.debug('waiting for virtual machines to deallocate')
+        for op in async_ops:
+            op.result()
+        logger.info('{} virtual machines deallocated'.format(len(async_ops)))
+        async_ops.clear()
+
+
+def start_storage_cluster(compute_client, config, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Starts a suspended storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for restart to complete
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    if not util.confirm_action(
+            config, 'start suspended storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
+    vms = []
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                raise RuntimeError(
+                    'virtual machine {} not found'.format(vm_name))
+            else:
+                raise
+        else:
+            vms.append(vm)
+    if len(vms) == 0:
+        logger.error('no virtual machines to restart')
+        return
+    # start each vm
+    async_ops = []
+    for vm in vms:
+        async_ops.append(_start_virtual_machine(
+            compute_client, rfs.resource_group, vm.name))
+    if wait:
+        logger.debug('waiting for virtual machines to start')
+        for op in async_ops:
+            op.result()
+        logger.info('{} virtual machines started'.format(len(async_ops)))
+        async_ops.clear()
+        # TODO stat storage cluster for new ips
+
+
+def stat_storage_cluster(compute_client, network_client, config):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    """Retrieve status of a storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # retrieve all vms
+    vms = []
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+                expand=computemodels.InstanceViewTypes.instance_view,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                logger.error('virtual machine {} not found'.format(vm_name))
+            else:
+                raise
+        else:
+            vms.append(vm)
+    if len(vms) == 0:
+        logger.error('no virtual machines to query')
+        return
+    # TODO vm status
+    for vm in vms:
+        for status in vm.instance_view.statuses:
+            if status.code.startswith('PowerState'):
+                print(status.display_status)
+        if util.is_not_empty(vm.instance_view.disks):
+            for disk in vm.instance_view.disks:
+                for status in disk.statuses:
+                    print(status)
+
+    # TODO stat data disks
+
+    # TODO stat ip/fqdn
+
+    # TODO stat status
