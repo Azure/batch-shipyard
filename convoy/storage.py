@@ -58,6 +58,7 @@ _STORAGEACCOUNTEP = None
 _STORAGE_CONTAINERS = {
     'blob_resourcefiles': None,
     'blob_torrents': None,
+    'blob_remotefs': None,
     'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
@@ -86,6 +87,8 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'rf', postfix))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', postfix))
+    _STORAGE_CONTAINERS['blob_remotefs'] = '-'.join(
+        (sep + 'remotefs', postfix))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
@@ -351,6 +354,41 @@ def upload_resource_files(blob_client, config, files):
     return sas_urls
 
 
+def upload_for_remotefs(blob_client, files):
+    # type: (azure.storage.blob.BlockBlobService, List[tuple]) -> List[str]
+    """Upload files to blob storage for remote fs
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param list files: files to upload
+    :rtype: list
+    :return: list of file urls
+    """
+    ret = []
+    for file in files:
+        upload = True
+        fp = pathlib.Path(file[1])
+        # check if blob exists
+        try:
+            prop = blob_client.get_blob_properties(
+                _STORAGE_CONTAINERS['blob_remotefs'], file[0])
+            if (prop.properties.content_settings.content_md5 ==
+                    util.compute_md5_for_file(fp, True)):
+                logger.debug(
+                    'remote file is the same for {}, skipping'.format(
+                        file[0]))
+                upload = False
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+        if upload:
+            logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
+            blob_client.create_blob_from_path(
+                _STORAGE_CONTAINERS['blob_remotefs'], file[0], file[1])
+        ret.append('https://{}.blob.{}/{}/{}'.format(
+            _STORAGEACCOUNT, _STORAGEACCOUNTEP,
+            _STORAGE_CONTAINERS['blob_remotefs'], file[0]))
+    return ret
+
+
 def delete_storage_containers(
         blob_client, queue_client, table_client, config, skip_tables=False):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
@@ -476,6 +514,28 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
         elif key.startswith('queue_'):
             logger.info('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
+
+
+def create_storage_containers_remotefs(blob_client, config):
+    # type: (azureblob.BlockBlobService, dict) -> None
+    """Create storage containers used for remotefs
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    logger.info('creating container: {}'.format(
+        _STORAGE_CONTAINERS['blob_remotefs']))
+    blob_client.create_container(_STORAGE_CONTAINERS['blob_remotefs'])
+
+
+def delete_storage_containers_remotefs(blob_client, config):
+    # type: (azureblob.BlockBlobService, dict) -> None
+    """Delete storage containers used for remotefs
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    logger.info('deleting container: {}'.format(
+        _STORAGE_CONTAINERS['blob_remotefs']))
+    blob_client.delete_container(_STORAGE_CONTAINERS['blob_remotefs'])
 
 
 def cleanup_with_del_pool(blob_client, queue_client, table_client, config):

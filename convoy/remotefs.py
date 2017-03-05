@@ -34,7 +34,10 @@ import datetime
 import dateutil.parser
 import json
 import logging
-import os
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 # non-stdlib imports
 import adal
 import azure.common.credentials
@@ -49,6 +52,7 @@ import msrestazure.azure_exceptions
 # local imports
 from . import crypto
 from . import settings
+from . import storage
 from . import util
 
 # create logger
@@ -56,6 +60,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _CLIENT_ID = '04b07795-8ddb-461a-bbee-02f9e1bf7b46'  # xplat-cli
+_SSH_KEY_PREFIX = 'id_rsa_shipyard_remotefs'
 
 
 class DeviceCodeAuthentication(msrest.authentication.Authentication):
@@ -145,7 +150,7 @@ class DeviceCodeAuthentication(msrest.authentication.Authentication):
             # clear token cache file due to expiration
             if util.is_not_empty(self._token_cache_file):
                 try:
-                    os.unlink(self._token_cache_file)
+                    pathlib.Path(self._token_cache_file).unlink()
                     logger.debug('invalidated local token cache: {}'.format(
                         self._token_cache_file))
                 except OSError:
@@ -643,39 +648,29 @@ def _create_network_interface(network_client, rfs, subnet, nsg, pips, offset):
     )
 
 
-def _create_virtual_machine(compute_client, rfs, nics, disks, offset):
+def _create_virtual_machine(
+        compute_client, rfs, availset, nics, disks, offset):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.RemoteFsSettings, dict, dict, int) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
+    #        settings.RemoteFsSettings, computemodels.AvailabilitySet,
+    #        dict, dict, int) ->
+    #        Tuple[int, msrestazure.azure_operation.AzureOperationPoller]
     """Create a virtual machine
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param computemodels.AvailabilitySet availset: availability set
     :param dict nics: network interface map
     :param dict disks: data disk map
     :param int offset: vm number
     :rtype: tuple
-    :return: (offset int, networkmodels.PublicIPAddress,
-        msrestazure.azure_operation.AzureOperationPoller)
+    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
     """
     vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, offset)
-    # check if vm exists
-    try:
-        vm = compute_client.virtual_machines.get(
-            resource_group_name=rfs.resource_group,
-            vm_name=vm_name,
-        )
-        raise RuntimeError('virtual machine {} already exists'.format(vm.id))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
     # create ssh key if not specified
     if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
         ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
             rfs.storage_cluster.ssh.generated_file_export_path,
-            'id_rsa_shipyard_remotefs')
+            _SSH_KEY_PREFIX)
     else:
         ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
     with open(ssh_pub_key, 'rb') as fd:
@@ -707,6 +702,7 @@ def _create_virtual_machine(compute_client, rfs, nics, disks, offset):
             hardware_profile={
                 'vm_size': rfs.storage_cluster.vm_size,
             },
+            availability_set=availset,
             storage_profile=computemodels.StorageProfile(
                 image_reference=computemodels.ImageReference(
                     publisher='Canonical',
@@ -742,11 +738,84 @@ def _create_virtual_machine(compute_client, rfs, nics, disks, offset):
     )
 
 
+def _create_virtual_machine_extension(
+        compute_client, rfs, bootstrap_file, blob_urls, vm_name, offset):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        settings.RemoteFsSettings, str, List[str], str, int) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create a virtual machine extension
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param str bootstrap_file: bootstrap file
+    :param list blob_urls: blob urls
+    :param str vm_name: vm name
+    :param int offset: vm number
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: msrestazure.azure_operation.AzureOperationPoller
+    """
+    # construct vm extensions
+    vm_ext_name = '{}-vmext{}'.format(
+        rfs.storage_cluster.hostname_prefix, offset)
+    logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
+    return compute_client.virtual_machine_extensions.create_or_update(
+        resource_group_name=rfs.resource_group,
+        vm_name=vm_name,
+        vm_extension_name=vm_ext_name,
+        extension_parameters=computemodels.VirtualMachineExtension(
+            location=rfs.location,
+            publisher='Microsoft.Azure.Extensions',
+            virtual_machine_extension_type='CustomScript',
+            type_handler_version='2.0',
+            auto_upgrade_minor_version=True,
+            settings={
+                'fileUris': blob_urls,
+            },
+            protected_settings={
+                'commandToExecute': './{}'.format(bootstrap_file),
+                'storageAccountName': storage.get_storageaccount(),
+                'storageAccountKey': storage.get_storageaccount_key(),
+            },
+        ),
+    )
+
+
+def _create_availability_set(compute_client, rfs):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        settings.RemoteFsSettings) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create an availability set
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :rtype: msrestazure.azure_operation.AzureOperationPoller or None
+    :return: msrestazure.azure_operation.AzureOperationPoller
+    """
+    if rfs.storage_cluster.vm_count <= 1:
+        logger.warning('insufficient vm_count for availability set')
+        return None
+    as_name = '{}-as'.format(rfs.storage_cluster.hostname_prefix)
+    logger.debug('creating availability set: {}'.format(as_name))
+    return compute_client.availbility_sets.create_or_update(
+        resource_group_name=rfs.resource_group,
+        name=as_name,
+        parameters=computemodels.AvailabilitySet(
+            location=rfs.location,
+            platform_update_domain_count=5,
+            platform_fault_domain_count=2,
+            managed=True,
+        )
+    )
+
+
 def create_storage_cluster(
-        resource_client, compute_client, network_client, config):
+        resource_client, compute_client, network_client, blob_client, config,
+        bootstrap_file, remotefs_files):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService, dict, str,
+    #        List[tuple]) -> None
     """Create a storage cluster
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -754,13 +823,31 @@ def create_storage_cluster(
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str bootstrap_file: customscript bootstrap file
+    :param list remotefs_files: remotefs shell scripts
     :param dict config: configuration dict
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
-
-    # TODO check if cluster already exists
-
+    # check if cluster already exists
+    logger.debug('checking if storage cluster {} exists'.format(
+        rfs.storage_cluster.id))
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+            raise RuntimeError(
+                'existing virtual machine {} found, cannot add this '
+                'storage cluster'.format(vm.id))
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                pass
+            else:
+                raise
     # check if all referenced managed disks exist
     disk_ids = list_disks(compute_client, config, restrict_scope=True)
     diskname_map = {}
@@ -770,11 +857,15 @@ def create_storage_cluster(
         for disk in rfs.storage_cluster.vm_disk_map[key].disk_array:
             if disk not in diskname_map:
                 raise RuntimeError(
-                    'referenced disk {} unavailable in set {}'.format(
+                    'referenced managed disk {} unavailable in set {}'.format(
                         disk, diskname_map))
     del disk_ids
     # create nsg
     nsg_async_op = _create_network_security_group(network_client, rfs)
+    # create availability set if vm_count > 1
+    as_async_op = _create_availability_set(compute_client, rfs)
+    # upload scripts to blob storage for customscript
+    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # create virtual network
     vnet, subnet = _create_virtual_network(network_client, rfs)
 
@@ -818,26 +909,42 @@ def create_storage_cluster(
                  nic.enable_accelerated_networking))
         nics[offset] = nic
     async_ops.clear()
+    # wait for availability set
+    if as_async_op is not None:
+        availset = as_async_op.result()
+    else:
+        availset = None
     # create vms
     for i in range(rfs.storage_cluster.vm_count):
         async_ops.append(_create_virtual_machine(
-            compute_client, rfs, nics, diskname_map, i))
+            compute_client, rfs, availset, nics, diskname_map, i))
     logger.debug('waiting for virtual machines to be created')
+    vm_ext_async_ops = {}
     vms = {}
     for offset, op in async_ops:
         vm = op.result()
+        # install vm extension
+        vm_ext_async_ops[offset] = _create_virtual_machine_extension(
+            compute_client, rfs, bootstrap_file, blob_urls,
+            vm.name, offset)
+        # cache vm
+        vms[offset] = vm
+    async_ops.clear()
+    logger.debug('waiting for virtual machine extensions to be created')
+    for offset in vm_ext_async_ops:
+        vm_ext = vm_ext_async_ops[offset].result()
+        vm = vms[offset]
         # refresh public ip for vm
         pip = network_client.public_ip_addresses.get(
             resource_group_name=rfs.resource_group,
             public_ip_address_name=pips[offset].name,
         )
         logger.info(
-            'virtual machine: {} [provisioning_state={} fqdn={} '
+            'virtual machine: {} [provisioning_state={}/{} fqdn={} '
             'public_ip_address={} vm_size={}]'.format(
-                vm.id, vm.provisioning_state,
+                vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 pip.dns_settings.fqdn, pip.ip_address,
                 vm.hardware_profile.vm_size))
-        vms[offset] = vm
 
 
 def _get_resources_from_virtual_machine(
@@ -911,6 +1018,24 @@ def _delete_virtual_machine(compute_client, rg_name, vm_name):
     return compute_client.virtual_machines.delete(
         resource_group_name=rg_name,
         vm_name=vm_name,
+    )
+
+
+def _delete_availability_set(compute_client, rg_name, as_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete an availability set
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param str rg_name: resource group name
+    :param str as_name: availability set name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting availability set {}'.format(as_name))
+    return compute_client.availability_sets.delete(
+        resource_group_name=rg_name,
+        availability_set_name=as_name,
     )
 
 
@@ -1070,6 +1195,7 @@ def delete_storage_cluster(
                     compute_client, network_client, rfs, vm)
             resources[i] = {
                 'vm': vm.name,
+                'as': None,
                 'nic': nic,
                 'pip': pip,
                 'subnet': subnet,
@@ -1079,6 +1205,9 @@ def delete_storage_cluster(
                 'os_disk': vm.storage_profile.os_disk.name,
                 'data_disks': [],
             }
+            # populate availability set
+            if vm.availability_set is not None:
+                resources[i]['as'] = vm.availability_set.name
             # populate data disks
             if delete_data_disks:
                 for disk in vm.storage_profile.data_disks:
@@ -1118,6 +1247,17 @@ def delete_storage_cluster(
         if len(data_disks) > 0:
             data_disk_async_ops.extend(delete_managed_disks(
                 compute_client, config, data_disks, wait=False))
+    # delete availability set
+    deleted = set()
+    as_async_ops = []
+    for key in resources:
+        as_name = resources[key]['as']
+        if util.is_none_or_empty(as_name) or as_name in deleted:
+            continue
+        deleted.add(as_name)
+        as_async_ops.extend(_delete_availability_set(
+            compute_client, rfs.resource_group, as_name))
+    deleted.clear()
     # delete nics
     for key in resources:
         nic = resources[key]['nic']
@@ -1130,7 +1270,6 @@ def delete_storage_cluster(
     async_ops.clear()
     # delete nsg
     nsg_async_ops = []
-    deleted = set()
     for key in resources:
         nsg_name = resources[key]['nsg']
         if nsg_name in deleted:
@@ -1152,10 +1291,8 @@ def delete_storage_cluster(
     # delete subnets
     for key in resources:
         subnet_name = resources[key]['subnet']
-        if subnet_name is None:
-            continue
         vnet_name = resources[key]['vnet']
-        if subnet_name in deleted:
+        if util.is_none_or_empty(subnet_name) or subnet_name in deleted:
             continue
         deleted.add(subnet_name)
         async_ops.append(_delete_subnet(
@@ -1170,7 +1307,7 @@ def delete_storage_cluster(
     vnet_async_ops = []
     for key in resources:
         vnet_name = resources[key]['vnet']
-        if vnet_name in deleted:
+        if util.is_none_or_empty(vnet_name) or vnet_name in deleted:
             continue
         deleted.add(vnet_name)
         vnet_async_ops.append(_delete_virtual_network(
@@ -1181,6 +1318,12 @@ def delete_storage_cluster(
 
     # wait for nsgs and os disks to delete
     if wait:
+        logger.debug('waiting for availability sets to delete')
+        for op in as_async_ops:
+            op.result()
+        logger.info('{} availability sets deleted'.format(
+            len(as_async_ops)))
+        as_async_ops.clear()
         logger.debug('waiting for network security groups to delete')
         for op in nsg_async_ops:
             op.result()
@@ -1333,18 +1476,19 @@ def start_storage_cluster(compute_client, config, wait=False):
             op.result()
         logger.info('{} virtual machines started'.format(len(async_ops)))
         async_ops.clear()
-        # TODO stat storage cluster for new ips
 
 
-def stat_storage_cluster(compute_client, network_client, config):
+def stat_storage_cluster(
+        compute_client, network_client, config, status_script):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str) -> None
     """Retrieve status of a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str status_script: status script
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -1366,20 +1510,166 @@ def stat_storage_cluster(compute_client, network_client, config):
         else:
             vms.append(vm)
     if len(vms) == 0:
-        logger.error('no virtual machines to query')
+        logger.error(
+            'no virtual machines to query for storage cluster {}'.format(
+                rfs.storage_cluster.id))
         return
-    # TODO vm status
+    # fetch vm status
+    vmstatus = {}
     for vm in vms:
+        powerstate = None
         for status in vm.instance_view.statuses:
             if status.code.startswith('PowerState'):
-                print(status.display_status)
+                powerstate = status.code
+        diskstates = []
         if util.is_not_empty(vm.instance_view.disks):
             for disk in vm.instance_view.disks:
                 for status in disk.statuses:
-                    print(status)
+                    diskstates.append(status.code)
+        # get resources connected to vm
+        nic, pip, subnet, vnet, nsg, slb = \
+            _get_resources_from_virtual_machine(
+                compute_client, network_client, rfs, vm)
+        # refresh public ip/nic
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=rfs.resource_group,
+            public_ip_address_name=pip,
+        )
+        nic = network_client.network_interfaces.get(
+            resource_group_name=rfs.resource_group,
+            network_interface_name=nic,
+        )
+        # stat data disks
+        disks = {}
+        total_size_gb = 0
+        for dd in vm.storage_profile.data_disks:
+            total_size_gb += dd.disk_size_gb
+            disks[dd.name] = {
+                'lun': dd.lun,
+                'caching': str(dd.caching),
+                'disk_size_gb': dd.disk_size_gb,
+                'type': str(dd.managed_disk.storage_account_type),
+            }
+        disks['disk_array_size_gb'] = total_size_gb
+        # fs-specific stat
+        fs_stat = None
+        if rfs.storage_cluster.fs_type == 'nfs':
+            # run stat script via ssh
+            ssh_priv_key, port, username, ip = _get_ssh_info(
+                compute_client, network_client, config, None, vm.name)
+            cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+                   'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key),
+                   '-p', str(port), '{}@{}'.format(username, ip),
+                   'sudo', '/opt/batch-shipyard/shipyard_remotefs_stat.sh',
+                   '-t', 'nfs']
+            proc = util.subprocess_nowait_pipe_stdout(cmd)
+            stdout = proc.communicate()[0]
+            if proc.returncode == 0:
+                fs_stat = stdout.decode('utf8')
 
-    # TODO stat data disks
+                # TODO parse fs_stat final codes
 
-    # TODO stat ip/fqdn
+        else:
+            raise NotImplementedError('{} fs type invalid'.format(
+                rfs.storage_cluster.fs_type))
+        vmstatus[vm.name] = {
+            'vm_size': vm.hardware_profile.vm_size,
+            'powerstate': powerstate,
+            'provisioning_state': vm.provisioning_state,
+            'availability_set':
+            vm.availability_set.name if vm.availability_set is not None
+            else None,
+            'update_domain/fault_domain': '{}/{}'.format(
+                vm.instance_view.platform_update_domain,
+                vm.instance_view.platform_fault_domain),
+            'fqdn': pip.dns_settings.fqdn,
+            'public_ip_address': pip.ip_address,
+            'private_ip_address': nic.ip_configurations[0].private_ip_address,
+            'admin_username': vm.os_profile.admin_username,
+            'accelerated_networking': nic.enable_accelerated_networking,
+            'virtual_network': vnet,
+            'subnet': subnet,
+            'network_security_group': nsg,
+            'data_disks': disks,
+            'file_system_status': fs_stat,
+        }
+    logger.info('storage cluster {} virtual machine status:\n{}'.format(
+        rfs.storage_cluster.id,
+        json.dumps(vmstatus, sort_keys=True, indent=4)))
 
-    # TODO stat status
+
+def _get_ssh_info(compute_client, network_client, config, cardinal, hostname):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, int,
+    #        str) -> None
+    """SSH to a node in storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal number
+    :param str hostname: hostname
+    :rtype: tuple
+    :return (ssh private key, port, username, ip)
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # retrieve specific vm
+    if cardinal is not None:
+        vm_name = '{}-vm{}'.format(
+            rfs.storage_cluster.hostname_prefix, cardinal)
+    else:
+        vm_name = hostname
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=rfs.resource_group,
+            vm_name=vm_name,
+            expand=computemodels.InstanceViewTypes.instance_view,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            raise RuntimeError('virtual machine {} not found'.format(vm_name))
+        else:
+            raise
+    # get resources connected to vm
+    nic, pip, subnet, vnet, nsg, slb = \
+        _get_resources_from_virtual_machine(
+            compute_client, network_client, rfs, vm)
+    # refresh public ip
+    pip = network_client.public_ip_addresses.get(
+        resource_group_name=rfs.resource_group,
+        public_ip_address_name=pip,
+    )
+    # connect to vm
+    ssh_priv_key = pathlib.Path(
+        rfs.storage_cluster.ssh.generated_file_export_path, _SSH_KEY_PREFIX)
+    if not ssh_priv_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_priv_key))
+    return ssh_priv_key, 22, vm.os_profile.admin_username, pip.ip_address
+
+
+def ssh_storage_cluster(
+        compute_client, network_client, config, cardinal, hostname):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, int,
+    #        str) -> None
+    """SSH to a node in storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal number
+    :param str hostname: hostname
+    """
+    ssh_priv_key, port, username, ip = _get_ssh_info(
+        compute_client, network_client, config, cardinal, hostname)
+    # connect to vm
+    logger.info('connecting to virtual machine {}:{} with key {}'.format(
+        ip, port, ssh_priv_key))
+    util.subprocess_with_output(
+        ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+         'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key), '-p',
+         str(port), '{}@{}'.format(username, ip)])

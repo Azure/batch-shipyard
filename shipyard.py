@@ -87,8 +87,10 @@ class CliContext(object):
             convoy.fleet.create_remotefs_clients(self, self.config)
         self._cleanup_during_initialize()
         self._init_config(
-            skip_global_config=True, skip_pool_config=True,
+            skip_global_config=False, skip_pool_config=True,
             skip_remotefs_config=False)
+        clients = convoy.fleet.initialize(self.config, remotefs_context=True)
+        self._set_clients(*clients)
 
     def initialize_for_storage(self):
         # type: (CliContext) -> None
@@ -602,7 +604,7 @@ def remotefs_add(ctx):
     ctx.initialize_for_remotefs()
     convoy.fleet.action_remotefs_cluster_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
-        ctx.config)
+        ctx.blob_client, ctx.config)
 
 
 @cluster.command('del')
@@ -626,7 +628,7 @@ def remotefs_del(
     ctx.initialize_for_remotefs()
     convoy.fleet.action_remotefs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
-        ctx.config, delete_all_resources, delete_data_disks,
+        ctx.blob_client, ctx.config, delete_all_resources, delete_data_disks,
         delete_virtual_network, wait)
 
 
@@ -654,7 +656,7 @@ def remotefs_start(ctx, wait):
     Filesystem in Azure"""
     ctx.initialize_for_remotefs()
     convoy.fleet.action_remotefs_cluster_start(
-        ctx.compute_client, ctx.config, wait)
+        ctx.compute_client, ctx.network_client, ctx.config, wait)
 
 
 @cluster.command('status')
@@ -669,25 +671,43 @@ def remotefs_status(ctx):
         ctx.compute_client, ctx.network_client, ctx.config)
 
 
+@cluster.command('ssh')
+@click.option(
+    '--cardinal',
+    help='Zero-based cardinal number of remote fs vm to connect to',
+    type=int)
+@click.option(
+    '--hostname', help='Hostname of remote fs vm to connect to')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_ssh(ctx, cardinal, hostname):
+    """Interactively login via SSH to a virtual machine in the Remote
+    Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_ssh(
+        ctx.compute_client, ctx.network_client, ctx.config, cardinal, hostname)
+
+
 @remotefs.group()
 @pass_cli_context
-def disk(ctx):
+def disks(ctx):
     """Managed disk actions"""
     pass
 
 
-@disk.command('add')
+@disks.command('add')
 @common_options
 @remotefs_options
 @pass_cli_context
-def remotefs_disk_add(ctx):
+def remotefs_disks_add(ctx):
     """Create managed disks for Remote Filesystem in Azure"""
     ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disk_add(
+    convoy.fleet.action_remotefs_disks_add(
         ctx.resource_client, ctx.compute_client, ctx.config)
 
 
-@disk.command('del')
+@disks.command('del')
 @click.option(
     '--name', help='Delete disk with specified name only')
 @click.option(
@@ -695,24 +715,24 @@ def remotefs_disk_add(ctx):
 @common_options
 @remotefs_options
 @pass_cli_context
-def remotefs_disk_del(ctx, name, wait):
+def remotefs_disks_del(ctx, name, wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disk_del(
+    convoy.fleet.action_remotefs_disks_del(
         ctx.compute_client, ctx.config, name, wait)
 
 
-@disk.command('list')
+@disks.command('list')
 @click.option(
     '--restrict-scope', is_flag=True,
     help='List disks present only in configuration if they exist')
 @common_options
 @remotefs_options
 @pass_cli_context
-def remotefs_disk_list(ctx, restrict_scope):
+def remotefs_disks_list(ctx, restrict_scope):
     """List managed disks in resource group"""
     ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disk_list(
+    convoy.fleet.action_remotefs_disks_list(
         ctx.compute_client, ctx.config, restrict_scope)
 
 
