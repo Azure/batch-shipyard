@@ -170,7 +170,12 @@ ManagedDisksSettings = collections.namedtuple(
 )
 VNetSettings = collections.namedtuple(
     'VNetSettings', [
-        'id', 'subnet_mask',
+        'id', 'address_space', 'subnet_id', 'subnet_mask', 'existing_ok',
+    ]
+)
+NetworkSecuritySettings = collections.namedtuple(
+    'NetworkSecuritySettings', [
+        'inbound', 'outbound',
     ]
 )
 MappedVmDiskSettings = collections.namedtuple(
@@ -180,8 +185,8 @@ MappedVmDiskSettings = collections.namedtuple(
 )
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
-        'id', 'vnet', 'fs_type', 'vm_count', 'vm_size', 'static_ip',
-        'hostname_prefix', 'ssh', 'vm_disk_map',
+        'id', 'vnet', 'network_security', 'fs_type', 'vm_count', 'vm_size',
+        'static_public_ip', 'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
 RemoteFsSettings = collections.namedtuple(
@@ -2238,17 +2243,33 @@ def remotefs_settings(config):
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
     sc_vnet_id = _kv_read_checked(conf['vnet'], 'id')
-    sc_vnet_subnet_mask = _kv_read_checked(conf['vnet'], 'subnet_mask')
+    sc_vnet_address_space = _kv_read_checked(conf['vnet'], 'address_space')
+    sc_vnet_subnet_id = _kv_read_checked(conf['vnet']['subnet'], 'id')
+    sc_vnet_subnet_mask = _kv_read_checked(conf['vnet']['subnet'], 'mask')
+    sc_vnet_existing_ok = _kv_read(conf['vnet'], 'existing_ok', False)
+    sc_network_security_inbound = _kv_read(
+        conf['network_security'], 'inbound', {})
+    sc_network_security_outbound = _kv_read(
+        conf['network_security'], 'outbound', {})
     sc_fs_type = _kv_read_checked(conf, 'fs_type', 'nfs')
     sc_vm_count = _kv_read(conf, 'vm_count', 1)
+    if sc_fs_type == 'nfs' and sc_vm_count != 1:
+        raise ValueError(
+            'invalid combination of fs_type {} and vm_count {}'.format(
+                sc_fs_type, sc_vm_count))
     sc_vm_size = _kv_read_checked(conf, 'vm_size')
-    sc_static_ip = _kv_read(conf, 'static_ip', False)
+    sc_static_public_ip = _kv_read(conf, 'static_public_ip', False)
     sc_hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
     conf = config['remote_fs']['storage_cluster']['ssh']
     sc_ssh_username = _kv_read_checked(conf, 'username')
     sc_ssh_public_key = _kv_read_checked(conf, 'ssh_public_key')
     sc_ssh_gen_file_path = _kv_read_checked(
         conf, 'generated_file_export_path', '.')
+    # ensure ssh inbound rule is set
+    if 'ssh' not in sc_network_security_inbound:
+        raise ValueError(
+            'cannot specify an SSH user without an SSH inbound allow '
+            'network security rule')
     conf = config['remote_fs']['storage_cluster']['vm_disk_map']
     _disk_set = frozenset(md_disk_ids)
     disk_map = {}
@@ -2283,12 +2304,19 @@ def remotefs_settings(config):
             id=sc_id,
             vnet=VNetSettings(
                 id=sc_vnet_id,
+                address_space=sc_vnet_address_space,
+                subnet_id=sc_vnet_subnet_id,
                 subnet_mask=sc_vnet_subnet_mask,
+                existing_ok=sc_vnet_existing_ok,
+            ),
+            network_security=NetworkSecuritySettings(
+                inbound=sc_network_security_inbound,
+                outbound=sc_network_security_outbound,
             ),
             fs_type=sc_fs_type,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
-            static_ip=sc_static_ip,
+            static_public_ip=sc_static_public_ip,
             hostname_prefix=sc_hostname_prefix,
             ssh=SSHSettings(
                 username=sc_ssh_username,

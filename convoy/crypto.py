@@ -62,15 +62,18 @@ def get_ssh_key_prefix():
     return _SSH_KEY_PREFIX
 
 
-def generate_ssh_keypair(export_path):
-    # type: (str) -> tuple
+def generate_ssh_keypair(export_path, prefix=None):
+    # type: (str, str) -> tuple
     """Generate an ssh keypair for use with user logins
     :param str export_path: keypair export path
+    :param str prefix: key prefix
     :rtype: tuple
     :return: (private key filename, public key filename)
     """
-    privkey = pathlib.Path(export_path, _SSH_KEY_PREFIX)
-    pubkey = pathlib.Path(export_path, _SSH_KEY_PREFIX + '.pub')
+    if util.is_none_or_empty(prefix):
+        prefix = _SSH_KEY_PREFIX
+    privkey = pathlib.Path(export_path, prefix)
+    pubkey = pathlib.Path(export_path, prefix + '.pub')
     sprivkey = str(privkey)
     if privkey.exists():
         old = pathlib.Path(sprivkey + '.old')

@@ -589,7 +589,7 @@ def remotefs(ctx):
 @remotefs.group()
 @pass_cli_context
 def cluster(ctx):
-    """Cluster actions"""
+    """Storage cluster actions"""
     pass
 
 
@@ -598,11 +598,36 @@ def cluster(ctx):
 @remotefs_options
 @pass_cli_context
 def remotefs_add(ctx):
-    """Create a cluster for a Remote Filesystem in Azure"""
+    """Create a storage cluster for a Remote Filesystem in Azure"""
     ctx.initialize_for_remotefs()
     convoy.fleet.action_remotefs_cluster_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.config)
+
+
+@cluster.command('del')
+@click.option(
+    '--delete-all-resources', is_flag=True,
+    help='Delete all resources used by storage cluster')
+@click.option(
+    '--delete-data-disks', is_flag=True,
+    help='Delete attached managed data disks')
+@click.option(
+    '--delete-virtual-network', is_flag=True, help='Delete virtual network')
+@click.option(
+    '--wait', is_flag=True, help='Wait for deletion to complete')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_del(
+        ctx, delete_all_resources, delete_data_disks, delete_virtual_network,
+        wait):
+    """Delete a storage cluster used for a Remote Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_del(
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.config, delete_all_resources, delete_data_disks,
+        delete_virtual_network, wait)
 
 
 @remotefs.group()
@@ -625,20 +650,23 @@ def remotefs_disk_add(ctx):
 
 @disk.command('del')
 @click.option(
+    '--name', help='Delete disk with specified name only')
+@click.option(
     '--wait', is_flag=True, help='Wait for disk deletion to complete')
 @common_options
 @remotefs_options
 @pass_cli_context
-def remotefs_disk_del(ctx, wait):
+def remotefs_disk_del(ctx, name, wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disk_del(ctx.compute_client, ctx.config, wait)
+    convoy.fleet.action_remotefs_disk_del(
+        ctx.compute_client, ctx.config, name, wait)
 
 
 @disk.command('list')
 @click.option(
     '--restrict-scope', is_flag=True,
-    help='List disks present only in configuration')
+    help='List disks present only in configuration if they exist')
 @common_options
 @remotefs_options
 @pass_cli_context

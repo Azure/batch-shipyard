@@ -41,11 +41,13 @@ import azure.common.credentials
 import azure.mgmt.compute
 import azure.mgmt.compute.models as computemodels
 import azure.mgmt.network
+import azure.mgmt.network.models as networkmodels
 import azure.mgmt.resource
 import azure.mgmt.resource.resources.models as rgmodels
 import msrest.authentication
 import msrestazure.azure_exceptions
 # local imports
+from . import crypto
 from . import settings
 from . import util
 
@@ -250,19 +252,14 @@ def _create_managed_disk_async(compute_client, rfs, disk_name):
     )
 
 
-def create_disks(resource_client, compute_client, config, wait=True):
+def _create_resource_group(resource_client, rfs):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
-    #        azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
-    """Create managed disks
+    #        settings.RemoteFsSettings) -> None
+    """Create a resource group if it doesn't exist
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param dict config: configuration dict
-    :param bool wait: wait for operation to complete
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
     """
-    # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
     # check if resource group exists
     exists = resource_client.resource_groups.check_existence(
         rfs.resource_group)
@@ -277,6 +274,23 @@ def create_disks(resource_client, compute_client, config, wait=True):
         )
     else:
         logger.debug('resource group {} exists'.format(rfs.resource_group))
+
+
+def create_managed_disks(resource_client, compute_client, config, wait=True):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Create managed disks
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for operation to complete
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # create resource group if it doesn't exist
+    _create_resource_group(resource_client, rfs)
     # iterate disks and create disks if they don't exist
     existing_disk_sizes = set()
     async_ops = []
@@ -317,23 +331,34 @@ def create_disks(resource_client, compute_client, config, wait=True):
                 disk.id, disk.disk_size_gb))
 
 
-def delete_disks(compute_client, config, wait=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def delete_managed_disks(
+        compute_client, config, name, wait=False, confirm_override=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str or list,
+    #        bool, bool) -> None
     """Delete managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str or list name: specific disk name or list of names
     :param bool wait: wait for operation to complete
+    :param bool confirm_override: override confirmation of delete
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
     # iterate disks and delete them
     async_ops = []
-    for disk_name in rfs.managed_disks.disk_ids:
-        if not util.confirm_action(
+    if util.is_none_or_empty(name):
+        disks = rfs.managed_disks.disk_ids
+    else:
+        if isinstance(name, list):
+            disks = name
+        else:
+            disks = [name]
+    for disk_name in disks:
+        if (not confirm_override and not util.confirm_action(
                 config,
                 'delete managed disk {} from resource group {}'.format(
-                    disk_name, rfs.resource_group)):
+                    disk_name, rfs.resource_group))):
             continue
         logger.info('deleting managed disk {} in resource group {}'.format(
             disk_name, rfs.resource_group))
@@ -349,15 +374,20 @@ def delete_disks(compute_client, config, wait=False):
                 len(async_ops)))
         for op in async_ops:
             op.result()
+    else:
+        return async_ops
 
 
 def list_disks(compute_client, config, restrict_scope=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) ->
+    #        List[str]
     """List managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param bool restrict_scope: restrict scope to config
+    :rtype: list
+    :return list of disk ids
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -369,6 +399,7 @@ def list_disks(compute_client, config, restrict_scope=False):
              rfs.resource_group, restrict_scope))
     disks = compute_client.disks.list_by_resource_group(
         resource_group_name=rfs.resource_group)
+    ret = []
     i = 0
     for disk in disks:
         if restrict_scope and disk.name not in confdisks:
@@ -377,13 +408,799 @@ def list_disks(compute_client, config, restrict_scope=False):
             '{} [provisioning_state={} created={} size={} type={}]'.format(
                 disk.id, disk.provisioning_state, disk.time_created,
                 disk.disk_size_gb, disk.account_type))
+        ret.append(disk.id)
         i += 1
     if i == 0:
         logger.error(
             ('no managed disks found in resource group {} '
              '[restrict_scope={}]').format(rfs.resource_group, restrict_scope))
+    return ret
+
+
+def _create_network_security_group(network_client, rfs):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create a network security group
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    nsg_name = '{}-nsg'.format(rfs.storage_cluster.hostname_prefix)
+    # TODO check and fail if nsg exists
+    # create security rules as found in settings
+    priority = 100
+    security_rules = []
+    for nsi in rfs.storage_cluster.network_security.inbound:
+        if nsi == 'ssh':
+            dpr = '22'
+        elif nsi == 'nfs':
+            dpr = '2049'
+        else:
+            raise ValueError(
+                'Unknown network service {} for network security'.format(nsi))
+        i = 0
+        for sap in rfs.storage_cluster.network_security.inbound[nsi]:
+            security_rules.append(networkmodels.SecurityRule(
+                name='{}_in-{}'.format(nsi, i),
+                description='{} inbound ({})'.format(nsi, i),
+                protocol=networkmodels.SecurityRuleProtocol.tcp,
+                source_port_range='*',
+                destination_port_range=dpr,
+                source_address_prefix=sap,
+                destination_address_prefix='*',
+                access=networkmodels.SecurityRuleAccess.allow,
+                priority=priority,
+                direction=networkmodels.SecurityRuleDirection.inbound)
+            )
+            priority += 1
+            i += 1
+    for nsi in rfs.storage_cluster.network_security.outbound:
+        i = 0
+        for dap in rfs.storage_cluster.network_security.outbound[nsi]:
+            security_rules.append(networkmodels.SecurityRule(
+                name='{}_out-{}'.format(nsi, i),
+                description='{} outbound ({})'.format(nsi, i),
+                protocol=networkmodels.SecurityRuleProtocol.tcp,
+                source_port_range='*',
+                destination_port_range='*',
+                source_address_prefix='10.0.0.0/8',
+                destination_address_prefix=dap,
+                access=networkmodels.SecurityRuleAccess.allow,
+                priority=priority,
+                direction=networkmodels.SecurityRuleDirection.outbound)
+            )
+            priority += 1
+            i += 1
+    if len(security_rules) == 0:
+        logger.warning(
+            'no security rules to apply, not creating a network '
+            'security group')
+        return None
+    logger.debug('creating network security group: {}'.format(nsg_name))
+    return network_client.network_security_groups.create_or_update(
+        resource_group_name=rfs.resource_group,
+        network_security_group_name=nsg_name,
+        parameters=networkmodels.NetworkSecurityGroup(
+            location=rfs.location,
+            security_rules=security_rules,
+        ),
+    )
+
+
+def _create_virtual_network(network_client, rfs):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings) ->
+    #        Tuple[networkmodels.VirtualNetwork, networkmodels.Subnet]
+    """Create a Virtual network
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :rtype: tuple
+    :return: (virtual network, subnet)
+    """
+    vnet_id = rfs.storage_cluster.vnet.id
+    # check if vnet already exists
+    exists = False
+    try:
+        vnet = network_client.virtual_networks.get(
+            resource_group_name=rfs.resource_group,
+            virtual_network_name=vnet_id,
+        )
+        if rfs.storage_cluster.vnet.existing_ok:
+            logger.debug('virtual network {} already exists'.format(vnet.id))
+            exists = True
+        else:
+            raise RuntimeError(
+                'virtual network {} already exists'.format(vnet.id))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
+    if not exists:
+        logger.info('creating virtual network: {}'.format(vnet_id))
+        async_create = network_client.virtual_networks.create_or_update(
+            resource_group_name=rfs.resource_group,
+            virtual_network_name=vnet_id,
+            parameters=networkmodels.VirtualNetwork(
+                location=rfs.location,
+                address_space=networkmodels.AddressSpace(
+                    address_prefixes=[rfs.storage_cluster.vnet.address_space],
+                ),
+            ),
+        )
+        vnet = async_create.result()
+    # attach subnet
+    exists = False
+    try:
+        subnet = network_client.subnets.get(
+            resource_group_name=rfs.resource_group,
+            virtual_network_name=vnet_id,
+            subnet_name=rfs.storage_cluster.vnet.subnet_id,
+        )
+        if rfs.storage_cluster.vnet.existing_ok:
+            logger.debug('subnet {} already exists'.format(subnet.id))
+            exists = True
+        else:
+            raise RuntimeError(
+                'subnet {} already exists'.format(subnet.id))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
+    if not exists:
+        logger.info('attaching subnet {} to virtual network {}'.format(
+            rfs.storage_cluster.vnet.subnet_id, vnet.name))
+        async_create = network_client.subnets.create_or_update(
+            resource_group_name=rfs.resource_group,
+            virtual_network_name=vnet_id,
+            subnet_name=rfs.storage_cluster.vnet.subnet_id,
+            subnet_parameters=networkmodels.Subnet(
+                address_prefix=rfs.storage_cluster.vnet.subnet_mask
+            )
+        )
+        subnet = async_create.result()
+    logger.info(
+        ('virtual network: {} [provisioning_state={} address_space={} '
+         'subnet={} address_prefix={}]').format(
+             vnet.id, vnet.provisioning_state,
+             vnet.address_space.address_prefixes,
+             rfs.storage_cluster.vnet.subnet_id, subnet.address_prefix))
+    return (vnet, subnet)
+
+
+def _create_public_ip(network_client, rfs, offset):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings, networkmodels.Subnet, int) ->
+    #        Tuple[int, msrestazure.azure_operation.AzureOperationPoller]
+    """Create a network interface
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param int offset: public ip number
+    :rtype: tuple
+    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
+    """
+    pip_name = '{}-pip{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    hostname = '{}{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    # TODO check and fail if pip exists
+    logger.debug('creating public ip: {}'.format(pip_name))
+    return offset, network_client.public_ip_addresses.create_or_update(
+        resource_group_name=rfs.resource_group,
+        public_ip_address_name=pip_name,
+        parameters=networkmodels.PublicIPAddress(
+            location=rfs.location,
+            idle_timeout_in_minutes=30,
+            dns_settings=networkmodels.PublicIPAddressDnsSettings(
+                domain_name_label=hostname,
+            ),
+            public_ip_allocation_method=(
+                networkmodels.IPAllocationMethod.static if
+                rfs.storage_cluster.static_public_ip else
+                networkmodels.IPAllocationMethod.dynamic
+            ),
+            public_ip_address_version=networkmodels.IPVersion.ipv4,
+        ),
+    )
+
+
+def _create_network_interface(network_client, rfs, subnet, nsg, pips, offset):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings, networkmodels.Subnet, dict, int) ->
+    #        Tuple[int, networkmodels.PublicIPAddress,
+    #              msrestazure.azure_operation.AzureOperationPoller]
+    """Create a network interface
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param networkmodels.Subnet subnet: virtual network subnet
+    :param dict pips: public ip map
+    :param int offset: network interface number
+    :rtype: tuple
+    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
+    """
+    nic_name = '{}-ni{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    # TODO check and fail if nic exists
+    logger.debug('creating network interface: {}'.format(nic_name))
+    return offset, network_client.network_interfaces.create_or_update(
+        resource_group_name=rfs.resource_group,
+        network_interface_name=nic_name,
+        parameters=networkmodels.NetworkInterface(
+            location=rfs.location,
+            network_security_group=nsg,
+            ip_configurations=[
+                networkmodels.NetworkInterfaceIPConfiguration(
+                    name=rfs.storage_cluster.hostname_prefix,
+                    subnet=subnet,
+                    public_ip_address=pips[offset],
+                ),
+            ],
+        ),
+    )
+
+
+def _create_virtual_machine(compute_client, rfs, nics, disks, offset):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        settings.RemoteFsSettings, dict, dict, int) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create a virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param settings.RemoteFsSettings rfs: remote filesystem settings
+    :param dict nics: network interface map
+    :param dict disks: data disk map
+    :param int offset: vm number
+    :rtype: tuple
+    :return: (offset int, networkmodels.PublicIPAddress,
+        msrestazure.azure_operation.AzureOperationPoller)
+    """
+    vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    # check if vm exists
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=rfs.resource_group,
+            vm_name=vm_name,
+        )
+        raise RuntimeError('virtual machine {} already exists'.format(vm.id))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
+    # create ssh key if not specified
+    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+        ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
+            rfs.storage_cluster.ssh.generated_file_export_path,
+            'id_rsa_shipyard_remotefs')
+    else:
+        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+    with open(ssh_pub_key, 'rb') as fd:
+        key_data = fd.read().decode('utf8')
+    key_path = '/home/{}/.ssh/authorized_keys'.format(
+        rfs.storage_cluster.ssh.username)
+    # construct data disks array
+    lun = 3
+    data_disks = []
+    for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
+        data_disks.append(
+            computemodels.DataDisk(
+                lun=lun,
+                name=diskname,
+                create_option=computemodels.DiskCreateOption.attach,
+                managed_disk=computemodels.ManagedDiskParameters(
+                    id=disks[diskname],
+                ),
+            )
+        )
+        lun += 1
+    # create vm
+    logger.debug('creating virtual machine: {}'.format(vm_name))
+    return offset, compute_client.virtual_machines.create_or_update(
+        resource_group_name=rfs.resource_group,
+        vm_name=vm_name,
+        parameters=computemodels.VirtualMachine(
+            location=rfs.location,
+            hardware_profile={
+                'vm_size': rfs.storage_cluster.vm_size,
+            },
+            storage_profile=computemodels.StorageProfile(
+                image_reference=computemodels.ImageReference(
+                    publisher='Canonical',
+                    offer='UbuntuServer',
+                    sku='16.04-LTS',
+                    version='latest',
+                ),
+                data_disks=data_disks,
+            ),
+            network_profile=computemodels.NetworkProfile(
+                network_interfaces=[
+                    computemodels.NetworkInterfaceReference(
+                        id=nics[offset].id,
+                    ),
+                ],
+            ),
+            os_profile=computemodels.OSProfile(
+                computer_name=vm_name,
+                admin_username=rfs.storage_cluster.ssh.username,
+                linux_configuration=computemodels.LinuxConfiguration(
+                    disable_password_authentication=True,
+                    ssh=computemodels.SshConfiguration(
+                        public_keys=[
+                            computemodels.SshPublicKey(
+                                path=key_path,
+                                key_data=key_data,
+                            ),
+                        ],
+                    ),
+                ),
+            ),
+        ),
+    )
 
 
 def create_storage_cluster(
         resource_client, compute_client, network_client, config):
-    raise NotImplementedError()
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    """Create a storage cluster
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+
+    # TODO check if cluster already exists
+
+    # check if all referenced managed disks exist
+    disk_ids = list_disks(compute_client, config, restrict_scope=True)
+    diskname_map = {}
+    for disk_id in disk_ids:
+        diskname_map[disk_id.split('/')[-1]] = disk_id
+    for key in rfs.storage_cluster.vm_disk_map:
+        for disk in rfs.storage_cluster.vm_disk_map[key].disk_array:
+            if disk not in diskname_map:
+                raise RuntimeError(
+                    'referenced disk {} unavailable in set {}'.format(
+                        disk, diskname_map))
+    del disk_ids
+    # create nsg
+    nsg_async_op = _create_network_security_group(network_client, rfs)
+    # create virtual network
+    vnet, subnet = _create_virtual_network(network_client, rfs)
+
+    # TODO create slb
+
+    # create public ips
+    async_ops = []
+    for i in range(rfs.storage_cluster.vm_count):
+        async_ops.append(_create_public_ip(network_client, rfs, i))
+    logger.debug('waiting for public ips to be created')
+    pips = {}
+    for offset, op in async_ops:
+        pip = op.result()
+        logger.info(
+            ('public ip: {} [provisioning_state={} ip_address={} '
+             'public_ip_allocation={}]').format(
+                 pip.id, pip.provisioning_state,
+                 pip.ip_address, pip.public_ip_allocation_method))
+        pips[offset] = pip
+    async_ops.clear()
+    # get nsg
+    if nsg_async_op is None:
+        nsg = None
+    else:
+        logger.debug('waiting for network security group to be created')
+        nsg = nsg_async_op.result()
+    # create nics
+    nics = {}
+    for i in range(rfs.storage_cluster.vm_count):
+        async_ops.append(_create_network_interface(
+            network_client, rfs, subnet, nsg, pips, i))
+    logger.debug('waiting for network interfaces to be created')
+    for offset, op in async_ops:
+        nic = op.result()
+        logger.info(
+            ('network interface: {} [provisioning_state={} private_ip={} '
+             'network_security_group={} accelerated={}]').format(
+                 nic.id, nic.provisioning_state,
+                 nic.ip_configurations[0].private_ip_address,
+                 nsg.name if nsg is not None else None,
+                 nic.enable_accelerated_networking))
+        nics[offset] = nic
+    async_ops.clear()
+    # create vms
+    for i in range(rfs.storage_cluster.vm_count):
+        async_ops.append(_create_virtual_machine(
+            compute_client, rfs, nics, diskname_map, i))
+    logger.debug('waiting for virtual machines to be created')
+    vms = {}
+    for offset, op in async_ops:
+        vm = op.result()
+        # refresh public ip for vm
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=rfs.resource_group,
+            public_ip_address_name=pips[offset].name,
+        )
+        logger.info(
+            'virtual machine: {} [provisioning_state={} public_ip_address={} '
+            'vm_size={}]'.format(
+                vm.id, vm.provisioning_state, pip.ip_address,
+                vm.hardware_profile.vm_size))
+        vms[offset] = vm
+
+
+def _get_resources_from_virtual_machine(
+        compute_client, network_client, rfs, vm):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings, computemodels.VirtualMachine) ->
+    #        Tuple[str, str, str, str, str, str]
+    """Get resources from virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param rfs settings.RemoteFsSettings: remote fs settings
+    :param vm computemodels.VirtualMachine: vm
+    :rtype: tuple
+    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name, slb_name)
+    """
+    # get nic
+    nic_id = vm.network_profile.network_interfaces[0].id
+    tmp = nic_id.split('/')
+    if tmp[-2] != 'networkInterfaces':
+        raise RuntimeError('could not parse network interface id')
+    nic_name = tmp[-1]
+    nic = network_client.network_interfaces.get(
+        resource_group_name=rfs.resource_group,
+        network_interface_name=nic_name,
+    )
+    # get public ip
+    pip_id = nic.ip_configurations[0].public_ip_address.id
+    tmp = pip_id.split('/')
+    if tmp[-2] != 'publicIPAddresses':
+        raise RuntimeError('could not parse public ip address id')
+    pip_name = tmp[-1]
+    # get subnet and vnet
+    subnet_id = nic.ip_configurations[0].subnet.id
+    tmp = subnet_id.split('/')
+    if tmp[-2] != 'subnets' and tmp[-4] != 'virtualNetworks':
+        raise RuntimeError('could not parse subnet id')
+    subnet_name = tmp[-1]
+    vnet_name = tmp[-3]
+    # get nsg
+    if nic.network_security_group is not None:
+        nsg_id = nic.network_security_group.id
+        tmp = nsg_id.split('/')
+        if tmp[-2] != 'networkSecurityGroups':
+            raise RuntimeError('could not parse network security group id')
+        nsg_name = tmp[-1]
+    else:
+        nsg_name = None
+
+    # TODO get SLB
+
+    return (
+        nic_name, pip_name, subnet_name, vnet_name, nsg_name, None,
+    )
+
+
+def _delete_virtual_machine(compute_client, rg_name, vm_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param str rg_name: resource group name
+    :param str vm_name: vm name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting virtual machine {}'.format(vm_name))
+    return compute_client.virtual_machines.delete(
+        resource_group_name=rg_name,
+        vm_name=vm_name,
+    )
+
+
+def _delete_network_interface(network_client, rg_name, nic_name):
+    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a network interface
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str rg_name: resource group name
+    :param str nic_name: network interface name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting network interface {}'.format(nic_name))
+    return network_client.network_interfaces.delete(
+        resource_group_name=rg_name,
+        network_interface_name=nic_name,
+    )
+
+
+def _delete_network_security_group(network_client, rg_name, nsg_name):
+    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a network security group
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str rg_name: resource group name
+    :param str nsg_name: network security group name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting network security group {}'.format(nsg_name))
+    return network_client.network_security_groups.delete(
+        resource_group_name=rg_name,
+        network_security_group_name=nsg_name,
+    )
+
+
+def _delete_public_ip(network_client, rg_name, pip_name):
+    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a public ip
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str rg_name: resource group name
+    :param str pip_name: public ip name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting public ip {}'.format(pip_name))
+    return network_client.public_ip_addresses.delete(
+        resource_group_name=rg_name,
+        public_ip_address_name=pip_name,
+    )
+
+
+def _delete_subnet(network_client, rg_name, vnet_name, subnet_name):
+    # type: (azure.mgmt.network.NetworkManagementClient, str, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a subnet
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str rg_name: resource group name
+    :param str vnet_name: virtual network name
+    :param str subnet_name: subnet name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting subnet {} on virtual network {}'.format(
+        subnet_name, vnet_name))
+    return network_client.subnets.delete(
+        resource_group_name=rg_name,
+        virtual_network_name=vnet_name,
+        subnet_name=subnet_name,
+    )
+
+
+def _delete_virtual_network(network_client, rg_name, vnet_name):
+    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete a virtual network
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str rg_name: resource group name
+    :param str vnet_name: virtual network name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting virtual network {}'.format(vnet_name))
+    return network_client.virtual_networks.delete(
+        resource_group_name=rg_name,
+        virtual_network_name=vnet_name,
+    )
+
+
+def delete_storage_cluster(
+        resource_client, compute_client, network_client, config,
+        delete_data_disks=False, delete_virtual_network=False,
+        delete_resource_group=False, wait=False):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool, bool,
+    #        bool, bool) -> None
+    """Delete a storage cluster
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param bool delete_data_disks: delete managed data disks
+    :param bool delete_virtual_network: delete vnet
+    :param bool delete_resource_group: delete resource group
+    :param bool wait: wait for completion
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # delete rg if specified
+    if delete_resource_group:
+        if util.confirm_action(
+                config, 'delete resource group {}'.format(rfs.resource_group)):
+            logger.info('deleting resource group {}'.format(
+                rfs.resource_group))
+            async_delete = resource_client.resource_groups.delete(
+                resource_group_name=rfs.resource_group)
+            if wait:
+                logger.debug('waiting for resource group {} to delete'.format(
+                    rfs.resource_group))
+                async_delete.result()
+                logger.info('resource group {} deleted'.format(
+                    rfs.resource_group))
+        return
+    # get vms and cache for concurent async ops
+    resources = {}
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                logger.warning('virtual machine {} not found'.format(vm_name))
+                continue
+            else:
+                raise
+        else:
+            if not util.confirm_action(
+                    config, 'delete virtual machine {}'.format(vm.name)):
+                continue
+            # get resources connected to vm
+            nic, pip, subnet, vnet, nsg, slb = \
+                _get_resources_from_virtual_machine(
+                    compute_client, network_client, rfs, vm)
+            resources[i] = {
+                'vm': vm.name,
+                'nic': nic,
+                'pip': pip,
+                'subnet': subnet,
+                'nsg': nsg,
+                'vnet': vnet,
+                'slb': slb,
+                'os_disk': vm.storage_profile.os_disk.name,
+                'data_disks': [],
+            }
+            # populate data disks
+            if delete_data_disks:
+                for disk in vm.storage_profile.data_disks:
+                    resources[i]['data_disks'].append(disk.name)
+            # unset virtual network if not specified to delete
+            if not delete_virtual_network:
+                resources[i]['subnet'] = None
+                resources[i]['vnet'] = None
+    if len(resources) == 0:
+        logger.warning('no resources deleted')
+        return
+    if settings.verbose:
+        logger.debug('deleting the following resources:\n{}'.format(
+            json.dumps(resources, sort_keys=True, indent=4)))
+    # delete vms
+    async_ops = []
+    for key in resources:
+        vm_name = resources[key]['vm']
+        async_ops.append(_delete_virtual_machine(
+            compute_client, rfs.resource_group, vm_name))
+    logger.debug('waiting for virtual machines to delete')
+    for op in async_ops:
+        op.result()
+    logger.info('{} virtual machines deleted'.format(len(async_ops)))
+    async_ops.clear()
+    # delete os disks
+    os_disk_async_ops = []
+    for key in resources:
+        os_disk = resources[key]['os_disk']
+        os_disk_async_ops.extend(delete_managed_disks(
+            compute_client, config, os_disk, wait=False,
+            confirm_override=True))
+    # delete data disks
+    data_disk_async_ops = []
+    for key in resources:
+        data_disks = resources[key]['data_disks']
+        if len(data_disks) > 0:
+            data_disk_async_ops.extend(delete_managed_disks(
+                compute_client, config, data_disks, wait=False))
+    # delete nics
+    for key in resources:
+        nic = resources[key]['nic']
+        async_ops.append(_delete_network_interface(
+            network_client, rfs.resource_group, nic))
+    logger.debug('waiting for network interfaces to delete')
+    for op in async_ops:
+        op.result()
+    logger.info('{} network interfaces deleted'.format(len(async_ops)))
+    async_ops.clear()
+    # delete nsg
+    nsg_async_ops = []
+    deleted = set()
+    for key in resources:
+        nsg_name = resources[key]['nsg']
+        if nsg_name in deleted:
+            continue
+        deleted.add(nsg_name)
+        nsg_async_ops.append(_delete_network_security_group(
+            network_client, rfs.resource_group, nsg_name))
+    deleted.clear()
+    # delete public ips
+    for key in resources:
+        pip = resources[key]['pip']
+        async_ops.append(_delete_public_ip(
+            network_client, rfs.resource_group, pip))
+    logger.debug('waiting for public ips to delete')
+    for op in async_ops:
+        op.result()
+    logger.info('{} public ips deleted'.format(len(async_ops)))
+    async_ops.clear()
+    # delete subnets
+    for key in resources:
+        subnet_name = resources[key]['subnet']
+        if subnet_name is None:
+            continue
+        vnet_name = resources[key]['vnet']
+        if subnet_name in deleted:
+            continue
+        deleted.add(subnet_name)
+        async_ops.append(_delete_subnet(
+            network_client, rfs.resource_group, vnet_name, subnet_name))
+        logger.debug('waiting for subnets to delete')
+        for op in async_ops:
+            op.result()
+        logger.info('{} subnets deleted'.format(len(async_ops)))
+        async_ops.clear()
+    deleted.clear()
+    # delete vnet
+    vnet_async_ops = []
+    for key in resources:
+        vnet_name = resources[key]['vnet']
+        if vnet_name in deleted:
+            continue
+        deleted.add(vnet_name)
+        vnet_async_ops.append(_delete_virtual_network(
+            network_client, rfs.resource_group, vnet_name))
+    deleted.clear()
+
+    # TODO delete slb
+
+    # wait for nsgs and os disks to delete
+    if wait:
+        logger.debug('waiting for network security groups to delete')
+        for op in nsg_async_ops:
+            op.result()
+        logger.info('{} network security groups deleted'.format(
+            len(nsg_async_ops)))
+        nsg_async_ops.clear()
+        logger.debug('waiting for virtual networks to delete')
+        for op in vnet_async_ops:
+            op.result()
+        logger.info('{} virtual networks deleted'.format(len(vnet_async_ops)))
+        vnet_async_ops.clear()
+        logger.debug('waiting for managed os disks to delete')
+        for op in os_disk_async_ops:
+            op.result()
+        logger.info('{} managed os disks deleted'.format(
+            len(os_disk_async_ops)))
+        os_disk_async_ops.clear()
+        if len(data_disk_async_ops) > 0:
+            logger.debug('waiting for managed data disks to delete')
+            for op in data_disk_async_ops:
+                op.result()
+            logger.info('{} managed data disks deleted'.format(
+                len(data_disk_async_ops)))
+            data_disk_async_ops.clear()

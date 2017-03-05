@@ -11,12 +11,23 @@
             "id": "",
             "vnet": {
                 "id": "",
-                "subnet_mask": ""
+                "address_space": "",
+                "subnet": {
+                    "id": "",
+                    "mask": ""
+                },
+                "existing_ok": false
+            },
+            "network_security": {
+                "inbound": {
+                    "nfs": ["1.2.3.4"],
+                    "ssh": ["*"]
+                }
             },
             "fs_type": "nfs",
             "vm_count": 1,
             "vm_size": "STANDARD_F4",
-            "static_ip": false,
+            "static_public_ip": false,
             "hostname_prefix": "shipyard-nfs",
             "ssh": {
                 "username": "shipyard",

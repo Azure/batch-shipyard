@@ -1141,18 +1141,20 @@ def action_remotefs_disk_add(resource_client, compute_client, config):
         compute client
     :param dict config: configuration dict
     """
-    remotefs.create_disks(resource_client, compute_client, config)
+    remotefs.create_managed_disks(resource_client, compute_client, config)
 
 
-def action_remotefs_disk_del(compute_client, config, wait):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def action_remotefs_disk_del(compute_client, config, name, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        bool) -> None
     """Action: Remotefs Disk Del
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str name: disk name
     :param bool wait: wait for operation to complete
     """
-    remotefs.delete_disks(compute_client, config, wait)
+    remotefs.delete_managed_disks(compute_client, config, name, wait)
 
 
 def action_remotefs_disk_list(compute_client, config, restrict_scope):
@@ -1182,6 +1184,33 @@ def action_remotefs_cluster_add(
     """
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, config)
+
+
+def action_remotefs_cluster_del(
+        resource_client, compute_client, network_client, config,
+        delete_all_resources, delete_data_disks, delete_virtual_network, wait):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool, bool,
+    #        bool, bool) -> None
+    """Action: Remotefs Cluster Add
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param bool delete_all_resources: delete all resources
+    :param bool delete_data_disks: delete data disks
+    :param bool delete_virtual_network: delete virtual network
+    :param bool wait: wait for deletion to complete
+    """
+    remotefs.delete_storage_cluster(
+        resource_client, compute_client, network_client, config,
+        delete_data_disks=delete_data_disks,
+        delete_virtual_network=delete_virtual_network,
+        delete_resource_group=delete_all_resources, wait=wait)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
