@@ -385,14 +385,14 @@ def delete_managed_disks(
 
 def list_disks(compute_client, config, restrict_scope=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) ->
-    #        List[str]
+    #        List[str, computemodels.StorageAccountTypes]
     """List managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param bool restrict_scope: restrict scope to config
     :rtype: list
-    :return list of disk ids
+    :return list of (disk ids, disk account type)
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -413,7 +413,7 @@ def list_disks(compute_client, config, restrict_scope=False):
             '{} [provisioning_state={} created={} size={} type={}]'.format(
                 disk.id, disk.provisioning_state, disk.time_created,
                 disk.disk_size_gb, disk.account_type))
-        ret.append(disk.id)
+        ret.append((disk.id, disk.account_type))
         i += 1
     if i == 0:
         logger.error(
@@ -687,7 +687,7 @@ def _create_virtual_machine(
                 name=diskname,
                 create_option=computemodels.DiskCreateOption.attach,
                 managed_disk=computemodels.ManagedDiskParameters(
-                    id=disks[diskname],
+                    id=disks[diskname][0],
                 ),
             )
         )
@@ -739,9 +739,10 @@ def _create_virtual_machine(
 
 
 def _create_virtual_machine_extension(
-        compute_client, rfs, bootstrap_file, blob_urls, vm_name, offset):
+        compute_client, rfs, bootstrap_file, blob_urls, vm_name, disks,
+        offset):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.RemoteFsSettings, str, List[str], str, int) ->
+    #        settings.RemoteFsSettings, str, List[str], str, dict, int) ->
     #        msrestazure.azure_operation.AzureOperationPoller
     """Create a virtual machine extension
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -750,6 +751,7 @@ def _create_virtual_machine_extension(
     :param str bootstrap_file: bootstrap file
     :param list blob_urls: blob urls
     :param str vm_name: vm name
+    :param dict disks: data disk map
     :param int offset: vm number
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: msrestazure.azure_operation.AzureOperationPoller
@@ -757,6 +759,12 @@ def _create_virtual_machine_extension(
     # construct vm extensions
     vm_ext_name = '{}-vmext{}'.format(
         rfs.storage_cluster.hostname_prefix, offset)
+    # get premium storage settings
+    premium = False
+    for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
+        if disks[diskname][1] == computemodels.StorageAccountTypes.premium_lrs:
+            premium = True
+            break
     logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
     return compute_client.virtual_machine_extensions.create_or_update(
         resource_group_name=rfs.resource_group,
@@ -772,7 +780,21 @@ def _create_virtual_machine_extension(
                 'fileUris': blob_urls,
             },
             protected_settings={
-                'commandToExecute': './{}'.format(bootstrap_file),
+                'commandToExecute': './{bsf} {b}{d}{f}{m}{n}{p}{r}{t}'.format(
+                    bsf=bootstrap_file,
+                    b=' -b',  # always allow rebalance on btrfs (for now)
+                    d=' -d {}'.format(len(
+                        rfs.storage_cluster.vm_disk_map[offset].disk_array)),
+                    f=' -f {}'.format(
+                        rfs.storage_cluster.vm_disk_map[offset].format_as),
+                    m=' -m {}'.format(rfs.storage_cluster.mountpoint),
+                    n=' -n' if settings.can_tune_tcp(
+                        rfs.storage_cluster.vm_size) else '',
+                    p=' -p' if premium else '',
+                    r=' -r {}'.format(
+                        rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                    t=' -t {}'.format(rfs.storage_cluster.fs_type),
+                ),
                 'storageAccountName': storage.get_storageaccount(),
                 'storageAccountKey': storage.get_storageaccount_key(),
             },
@@ -851,8 +873,8 @@ def create_storage_cluster(
     # check if all referenced managed disks exist
     disk_ids = list_disks(compute_client, config, restrict_scope=True)
     diskname_map = {}
-    for disk_id in disk_ids:
-        diskname_map[disk_id.split('/')[-1]] = disk_id
+    for disk_id, sat in disk_ids:
+        diskname_map[disk_id.split('/')[-1]] = (disk_id, sat)
     for key in rfs.storage_cluster.vm_disk_map:
         for disk in rfs.storage_cluster.vm_disk_map[key].disk_array:
             if disk not in diskname_map:
@@ -926,7 +948,7 @@ def create_storage_cluster(
         # install vm extension
         vm_ext_async_ops[offset] = _create_virtual_machine_extension(
             compute_client, rfs, bootstrap_file, blob_urls,
-            vm.name, offset)
+            vm.name, diskname_map, offset)
         # cache vm
         vms[offset] = vm
     async_ops.clear()

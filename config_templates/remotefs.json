@@ -25,6 +25,7 @@
                 }
             },
             "fs_type": "nfs",
+            "mountpoint": "/data",
             "vm_count": 1,
             "vm_size": "STANDARD_F4",
             "static_public_ip": false,

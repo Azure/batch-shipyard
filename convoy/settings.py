@@ -187,6 +187,7 @@ StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'vnet', 'network_security', 'fs_type', 'vm_count', 'vm_size',
         'static_public_ip', 'hostname_prefix', 'ssh', 'vm_disk_map',
+        'mountpoint'
     ]
 )
 RemoteFsSettings = collections.namedtuple(
@@ -2242,6 +2243,9 @@ def remotefs_settings(config):
     sc_id = conf['id']
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
+    sc_mountpoint = _kv_read_checked(conf, 'mountpoint')
+    if util.is_none_or_empty(sc_mountpoint):
+        raise ValueError('invalid mountpoint in remote_fs:storage_cluster')
     sc_vnet_id = _kv_read_checked(conf['vnet'], 'id')
     sc_vnet_address_space = _kv_read_checked(conf['vnet'], 'address_space')
     sc_vnet_subnet_id = _kv_read_checked(conf['vnet']['subnet'], 'id')
@@ -2282,11 +2286,17 @@ def remotefs_settings(config):
                  'managed_disks:disk_ids ({})').format(
                      disk_array, vmkey, _disk_set))
         if len(disk_array) == 1:
-            raid_type = None
+            # disable raid
+            raid_type = -1
         else:
             raid_type = conf[vmkey]['raid_type']
+            if raid_type == 0 and len(disk_array) < 2:
+                raise ValueError('RAID-0 arrays require at least two disks')
             if raid_type != 0:
                 raise ValueError('Unsupported raid type {}'.format(raid_type))
+        format_as = conf[vmkey]['format_as']
+        if format_as != 'btrfs' and not format_as.startswith('ext'):
+            raise ValueError('Unsupported format as type {}'.format(format_as))
         disk_map[int(vmkey)] = MappedVmDiskSettings(
             disk_array=disk_array,
             format_as=conf[vmkey]['format_as'],
@@ -2314,6 +2324,7 @@ def remotefs_settings(config):
                 outbound=sc_network_security_outbound,
             ),
             fs_type=sc_fs_type,
+            mountpoint=sc_mountpoint,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
             static_public_ip=sc_static_public_ip,
