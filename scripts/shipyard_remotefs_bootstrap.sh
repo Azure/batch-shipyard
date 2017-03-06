@@ -13,14 +13,14 @@ cp shipyard_remotefs_*.sh /opt/batch-shipyard
 rebalance_btrfs=0
 numdisks_verify=
 format_as=
+server_type=
 mountpath=
 optimize_tcp=0
 premium_storage=0
 raid_type=-1
-fs_type=
 
 # begin processing
-while getopts "h?bd:f:m:npr:t:" opt; do
+while getopts "h?bd:f:m:npr:s:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
@@ -32,7 +32,7 @@ while getopts "h?bd:f:m:npr:t:" opt; do
             echo "-n Tune TCP parameters"
             echo "-p premium storage disks"
             echo "-r [raid type] raid type"
-            echo "-t [fs type] fs type"
+            echo "-s [server type] server type"
             echo ""
             exit 1
             ;;
@@ -57,8 +57,8 @@ while getopts "h?bd:f:m:npr:t:" opt; do
         r)
             raid_type=$OPTARG
             ;;
-        t)
-            fs_type=${OPTARG,,}
+        s)
+            server_type=${OPTARG,,}
             ;;
     esac
 done
@@ -73,7 +73,7 @@ echo "  Mountpath: $mountpath"
 echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
 echo "  RAID type: $raid_type"
-echo "  Filesystem type: $fs_type"
+echo "  Server type: $server_type"
 
 # optimize network TCP settings
 if [ $optimize_tcp -eq 1 ]; then
@@ -99,22 +99,21 @@ EOF
     service procps reload
 fi
 
-# install required fs_type software
+# install required server_type software
 apt-get update
-if [ $fs_type == "nfs" ]; then
+if [ $server_type == "nfs" ]; then
     apt-get install -y --no-install-recommends nfs-kernel-server
     systemctl enable nfs-kernel-server.service
     systemctl start nfs-kernel-server.service
 else
-    echo "fs_type $fs_type not supported."
+    echo "server_type $server_type not supported."
     exit 1
 fi
 
 # get all data disks
 declare -a data_disks
 all_disks=($(lsblk -l -d -n -p -I 8 -o NAME))
-for disk in "${all_disks[@]}"
-do
+for disk in "${all_disks[@]}"; do
     # ignore os and ephemeral disks
 	if [ $disk != "/dev/sda" ] && [ $disk != "/dev/sdb" ]; then
         data_disks=("${data_disks[@]}" "$disk")
@@ -133,8 +132,7 @@ unset numdisks_verify
 
 # check if data disks are already partitioned
 declare -a skipped_part
-for disk in "${data_disks[@]}"
-do
+for disk in "${data_disks[@]}"; do
     part1=$(partprobe -d -s $disk | cut -d' ' -f4)
     if [ -z $part1 ]; then
         echo "$disk: partition 1 not found. Partitioning $disk..."
@@ -173,8 +171,7 @@ if [ $raid_type -ge 0 ]; then
     declare -a raid_array
     declare -a all_raid_disks
     set +e
-    for disk in "${data_disks[@]}"
-    do
+    for disk in "${data_disks[@]}"; do
         if [ $format_as == "btrfs" ]; then
             btrfs device scan "${disk}1"
         else
@@ -230,7 +227,6 @@ if [ $raid_type -ge 0 ]; then
     fi
     if [ $format_as == "btrfs" ]; then
         read target_uuid < <(blkid ${all_raid_disks[0]} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
-        btrfs device scan
         btrfs filesystem show
     else
         read target_uuid < <(blkid ${target} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
@@ -320,8 +316,8 @@ fi
 # log mount
 mount | grep $mountpath
 
-# set up fs_type software
-if [ $fs_type == "nfs" ]; then
+# set up server_type software
+if [ $server_type == "nfs" ]; then
     # edit /etc/exports
     add_exports=0
     set +e
@@ -344,6 +340,6 @@ if [ $fs_type == "nfs" ]; then
     fi
     set -e
 else
-    echo "fs_type $fs_type not supported."
+    echo "server_type $server_type not supported."
     exit 1
 fi

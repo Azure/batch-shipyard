@@ -168,9 +168,14 @@ ManagedDisksSettings = collections.namedtuple(
         'premium', 'disk_size_gb', 'disk_ids',
     ]
 )
-VNetSettings = collections.namedtuple(
-    'VNetSettings', [
+VirtualNetworkSettings = collections.namedtuple(
+    'VirtualNetworkSettings', [
         'id', 'address_space', 'subnet_id', 'subnet_mask', 'existing_ok',
+    ]
+)
+FileServerSettings = collections.namedtuple(
+    'FileServerSettings', [
+        'type', 'mountpoint',
     ]
 )
 NetworkSecuritySettings = collections.namedtuple(
@@ -185,9 +190,9 @@ MappedVmDiskSettings = collections.namedtuple(
 )
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
-        'id', 'vnet', 'network_security', 'fs_type', 'vm_count', 'vm_size',
-        'static_public_ip', 'hostname_prefix', 'ssh', 'vm_disk_map',
-        'mountpoint'
+        'id', 'virtual_network', 'network_security', 'file_server', 'vm_count',
+        'vm_size', 'static_public_ip', 'hostname_prefix', 'ssh',
+        'vm_disk_map'
     ]
 )
 RemoteFsSettings = collections.namedtuple(
@@ -2243,27 +2248,37 @@ def remotefs_settings(config):
     sc_id = conf['id']
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
-    sc_mountpoint = _kv_read_checked(conf, 'mountpoint')
-    if util.is_none_or_empty(sc_mountpoint):
-        raise ValueError('invalid mountpoint in remote_fs:storage_cluster')
-    sc_vnet_id = _kv_read_checked(conf['vnet'], 'id')
-    sc_vnet_address_space = _kv_read_checked(conf['vnet'], 'address_space')
-    sc_vnet_subnet_id = _kv_read_checked(conf['vnet']['subnet'], 'id')
-    sc_vnet_subnet_mask = _kv_read_checked(conf['vnet']['subnet'], 'mask')
-    sc_vnet_existing_ok = _kv_read(conf['vnet'], 'existing_ok', False)
     sc_network_security_inbound = _kv_read(
         conf['network_security'], 'inbound', {})
     sc_network_security_outbound = _kv_read(
         conf['network_security'], 'outbound', {})
-    sc_fs_type = _kv_read_checked(conf, 'fs_type', 'nfs')
     sc_vm_count = _kv_read(conf, 'vm_count', 1)
-    if sc_fs_type == 'nfs' and sc_vm_count != 1:
-        raise ValueError(
-            'invalid combination of fs_type {} and vm_count {}'.format(
-                sc_fs_type, sc_vm_count))
     sc_vm_size = _kv_read_checked(conf, 'vm_size')
     sc_static_public_ip = _kv_read(conf, 'static_public_ip', False)
     sc_hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    # sc virtual network settings
+    conf = config['remote_fs']['storage_cluster']['virtual_network']
+    sc_vnet_id = _kv_read_checked(conf, 'id')
+    sc_vnet_address_space = _kv_read_checked(conf, 'address_space')
+    sc_vnet_existing_ok = _kv_read(conf, 'existing_ok', False)
+    sc_vnet_subnet_id = _kv_read_checked(conf['subnet'], 'id')
+    sc_vnet_subnet_mask = _kv_read_checked(conf['subnet'], 'mask')
+    # sc file server settings
+    conf = config['remote_fs']['storage_cluster']['file_server']
+    sc_fs_type = _kv_read_checked(conf, 'type')
+    if util.is_none_or_empty(sc_fs_type):
+        raise ValueError(
+            'remote_fs:storage_cluster:file_server:type must be specified')
+    # cross check against number of vms
+    if sc_fs_type == 'nfs' and sc_vm_count != 1:
+        raise ValueError(
+            ('invalid combination of file_server:type {} and '
+             'vm_count {}').format(sc_fs_type, sc_vm_count))
+    sc_fs_mountpoint = _kv_read_checked(conf, 'mountpoint')
+    if util.is_none_or_empty(sc_fs_mountpoint):
+        raise ValueError(
+            'remote_fs:storage_cluster:file_server must be specified')
+    # sc ssh settings
     conf = config['remote_fs']['storage_cluster']['ssh']
     sc_ssh_username = _kv_read_checked(conf, 'username')
     sc_ssh_public_key = _kv_read_checked(conf, 'ssh_public_key')
@@ -2274,6 +2289,7 @@ def remotefs_settings(config):
         raise ValueError(
             'cannot specify an SSH user without an SSH inbound allow '
             'network security rule')
+    # sc vm disk map settings
     conf = config['remote_fs']['storage_cluster']['vm_disk_map']
     _disk_set = frozenset(md_disk_ids)
     disk_map = {}
@@ -2312,7 +2328,7 @@ def remotefs_settings(config):
         ),
         storage_cluster=StorageClusterSettings(
             id=sc_id,
-            vnet=VNetSettings(
+            virtual_network=VirtualNetworkSettings(
                 id=sc_vnet_id,
                 address_space=sc_vnet_address_space,
                 subnet_id=sc_vnet_subnet_id,
@@ -2323,8 +2339,10 @@ def remotefs_settings(config):
                 inbound=sc_network_security_inbound,
                 outbound=sc_network_security_outbound,
             ),
-            fs_type=sc_fs_type,
-            mountpoint=sc_mountpoint,
+            file_server=FileServerSettings(
+                type=sc_fs_type,
+                mountpoint=sc_fs_mountpoint,
+            ),
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
             static_public_ip=sc_static_public_ip,

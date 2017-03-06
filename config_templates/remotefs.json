@@ -9,14 +9,21 @@
         },
         "storage_cluster": {
             "id": "",
-            "vnet": {
+            "hostname_prefix": "shipyard-nfs",
+            "ssh": {
+                "username": "shipyard",
+                "ssh_public_key": null,
+                "generated_file_export_path": null
+            },
+            "static_public_ip": false,
+            "virtual_network": {
                 "id": "",
+                "existing_ok": false,
                 "address_space": "",
                 "subnet": {
                     "id": "",
                     "mask": ""
-                },
-                "existing_ok": false
+                }
             },
             "network_security": {
                 "inbound": {
@@ -24,17 +31,12 @@
                     "ssh": ["*"]
                 }
             },
-            "fs_type": "nfs",
-            "mountpoint": "/data",
+            "file_server": {
+                "type": "nfs",
+                "mountpoint": "/data"
+            },
             "vm_count": 1,
             "vm_size": "STANDARD_F4",
-            "static_public_ip": false,
-            "hostname_prefix": "shipyard-nfs",
-            "ssh": {
-                "username": "shipyard",
-                "ssh_public_key": null,
-                "generated_file_export_path": null
-            },
             "vm_disk_map": {
                 "0": {
                     "disk_array": ["disk0", "disk1"],

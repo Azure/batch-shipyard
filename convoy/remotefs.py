@@ -34,6 +34,7 @@ import datetime
 import dateutil.parser
 import json
 import logging
+import os
 try:
     import pathlib2 as pathlib
 except ImportError:
@@ -506,7 +507,7 @@ def _create_virtual_network(network_client, rfs):
     :rtype: tuple
     :return: (virtual network, subnet)
     """
-    vnet_id = rfs.storage_cluster.vnet.id
+    vnet_id = rfs.storage_cluster.virtual_network.id
     # check if vnet already exists
     exists = False
     try:
@@ -514,7 +515,7 @@ def _create_virtual_network(network_client, rfs):
             resource_group_name=rfs.resource_group,
             virtual_network_name=vnet_id,
         )
-        if rfs.storage_cluster.vnet.existing_ok:
+        if rfs.storage_cluster.virtual_network.existing_ok:
             logger.debug('virtual network {} already exists'.format(vnet.id))
             exists = True
         else:
@@ -533,7 +534,9 @@ def _create_virtual_network(network_client, rfs):
             parameters=networkmodels.VirtualNetwork(
                 location=rfs.location,
                 address_space=networkmodels.AddressSpace(
-                    address_prefixes=[rfs.storage_cluster.vnet.address_space],
+                    address_prefixes=[
+                        rfs.storage_cluster.virtual_network.address_space,
+                    ],
                 ),
             ),
         )
@@ -544,9 +547,9 @@ def _create_virtual_network(network_client, rfs):
         subnet = network_client.subnets.get(
             resource_group_name=rfs.resource_group,
             virtual_network_name=vnet_id,
-            subnet_name=rfs.storage_cluster.vnet.subnet_id,
+            subnet_name=rfs.storage_cluster.virtual_network.subnet_id,
         )
-        if rfs.storage_cluster.vnet.existing_ok:
+        if rfs.storage_cluster.virtual_network.existing_ok:
             logger.debug('subnet {} already exists'.format(subnet.id))
             exists = True
         else:
@@ -559,13 +562,13 @@ def _create_virtual_network(network_client, rfs):
             raise
     if not exists:
         logger.info('attaching subnet {} to virtual network {}'.format(
-            rfs.storage_cluster.vnet.subnet_id, vnet.name))
+            rfs.storage_cluster.virtual_network.subnet_id, vnet.name))
         async_create = network_client.subnets.create_or_update(
             resource_group_name=rfs.resource_group,
             virtual_network_name=vnet_id,
-            subnet_name=rfs.storage_cluster.vnet.subnet_id,
+            subnet_name=rfs.storage_cluster.virtual_network.subnet_id,
             subnet_parameters=networkmodels.Subnet(
-                address_prefix=rfs.storage_cluster.vnet.subnet_mask
+                address_prefix=rfs.storage_cluster.virtual_network.subnet_mask
             )
         )
         subnet = async_create.result()
@@ -574,7 +577,8 @@ def _create_virtual_network(network_client, rfs):
          'subnet={} address_prefix={}]').format(
              vnet.id, vnet.provisioning_state,
              vnet.address_space.address_prefixes,
-             rfs.storage_cluster.vnet.subnet_id, subnet.address_prefix))
+             rfs.storage_cluster.virtual_network.subnet_id,
+             subnet.address_prefix))
     return (vnet, subnet)
 
 
@@ -780,20 +784,21 @@ def _create_virtual_machine_extension(
                 'fileUris': blob_urls,
             },
             protected_settings={
-                'commandToExecute': './{bsf} {b}{d}{f}{m}{n}{p}{r}{t}'.format(
+                'commandToExecute': './{bsf} {b}{d}{f}{m}{n}{p}{r}{s}'.format(
                     bsf=bootstrap_file,
                     b=' -b',  # always allow rebalance on btrfs (for now)
                     d=' -d {}'.format(len(
                         rfs.storage_cluster.vm_disk_map[offset].disk_array)),
                     f=' -f {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].format_as),
-                    m=' -m {}'.format(rfs.storage_cluster.mountpoint),
+                    m=' -m {}'.format(
+                        rfs.storage_cluster.file_server.mountpoint),
                     n=' -n' if settings.can_tune_tcp(
                         rfs.storage_cluster.vm_size) else '',
                     p=' -p' if premium else '',
                     r=' -r {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].raid_type),
-                    t=' -t {}'.format(rfs.storage_cluster.fs_type),
+                    s=' -s {}'.format(rfs.storage_cluster.file_server.type),
                 ),
                 'storageAccountName': storage.get_storageaccount(),
                 'storageAccountKey': storage.get_storageaccount_key(),
@@ -969,21 +974,18 @@ def create_storage_cluster(
                 vm.hardware_profile.vm_size))
 
 
-def _get_resources_from_virtual_machine(
-        compute_client, network_client, rfs, vm):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient,
+def _get_nic_and_pip_from_virtual_machine(network_client, rfs, vm):
+    # type: (azure.mgmt.network.NetworkManagementClient,
     #        settings.RemoteFsSettings, computemodels.VirtualMachine) ->
-    #        Tuple[str, str, str, str, str, str]
-    """Get resources from virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
+    #        Tuple[networkmodels.NetworkInterface,
+    #        networkmodels.PublicIPAddress]
+    """Get network interface and public ip from a virtual machine
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param rfs settings.RemoteFsSettings: remote fs settings
     :param vm computemodels.VirtualMachine: vm
     :rtype: tuple
-    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name, slb_name)
+    :return: (nic, pip)
     """
     # get nic
     nic_id = vm.network_profile.network_interfaces[0].id
@@ -1001,6 +1003,54 @@ def _get_resources_from_virtual_machine(
     if tmp[-2] != 'publicIPAddresses':
         raise RuntimeError('could not parse public ip address id')
     pip_name = tmp[-1]
+    pip = network_client.public_ip_addresses.get(
+        resource_group_name=rfs.resource_group,
+        public_ip_address_name=pip_name,
+    )
+    return (nic, pip)
+
+
+def _get_resource_names_from_virtual_machine(
+        compute_client, network_client, rfs, vm, nic=None, pip=None):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        settings.RemoteFsSettings, computemodels.VirtualMachine,
+    #        networkmodels.NetworkInterface, networkmodels.PublicIPAddress) ->
+    #        Tuple[str, str, str, str, str, str]
+    """Get resource names from a virtual machine
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param rfs settings.RemoteFsSettings: remote fs settings
+    :param vm computemodels.VirtualMachine: vm
+    :param networkmodels.NetworkInterface nic: network interface
+    :param networkmodels.PublicIPAddress pip: public ip
+    :rtype: tuple
+    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name, slb_name)
+    """
+    # get nic
+    if nic is None:
+        nic_id = vm.network_profile.network_interfaces[0].id
+        tmp = nic_id.split('/')
+        if tmp[-2] != 'networkInterfaces':
+            raise RuntimeError('could not parse network interface id')
+        nic_name = tmp[-1]
+        nic = network_client.network_interfaces.get(
+            resource_group_name=rfs.resource_group,
+            network_interface_name=nic_name,
+        )
+    else:
+        nic_name = nic.name
+    # get public ip
+    if pip is None:
+        pip_id = nic.ip_configurations[0].public_ip_address.id
+        tmp = pip_id.split('/')
+        if tmp[-2] != 'publicIPAddresses':
+            raise RuntimeError('could not parse public ip address id')
+        pip_name = tmp[-1]
+    else:
+        pip_name = pip.name
     # get subnet and vnet
     subnet_id = nic.ip_configurations[0].subnet.id
     tmp = subnet_id.split('/')
@@ -1213,7 +1263,7 @@ def delete_storage_cluster(
                 continue
             # get resources connected to vm
             nic, pip, subnet, vnet, nsg, slb = \
-                _get_resources_from_virtual_machine(
+                _get_resource_names_from_virtual_machine(
                     compute_client, network_client, rfs, vm)
             resources[i] = {
                 'vm': vm.name,
@@ -1242,8 +1292,8 @@ def delete_storage_cluster(
         logger.warning('no resources deleted')
         return
     if settings.verbose:
-        logger.debug('deleting the following resources:\n{}'.format(
-            json.dumps(resources, sort_keys=True, indent=4)))
+        logger.debug('deleting the following resources:{}{}'.format(
+            os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
     # delete vms
     async_ops = []
     for key in resources:
@@ -1537,6 +1587,7 @@ def stat_storage_cluster(
                 rfs.storage_cluster.id))
         return
     # fetch vm status
+    fsstatus = []
     vmstatus = {}
     for vm in vms:
         powerstate = None
@@ -1548,19 +1599,13 @@ def stat_storage_cluster(
             for disk in vm.instance_view.disks:
                 for status in disk.statuses:
                     diskstates.append(status.code)
-        # get resources connected to vm
-        nic, pip, subnet, vnet, nsg, slb = \
-            _get_resources_from_virtual_machine(
-                compute_client, network_client, rfs, vm)
-        # refresh public ip/nic
-        pip = network_client.public_ip_addresses.get(
-            resource_group_name=rfs.resource_group,
-            public_ip_address_name=pip,
-        )
-        nic = network_client.network_interfaces.get(
-            resource_group_name=rfs.resource_group,
-            network_interface_name=nic,
-        )
+        # get nic/pip connected to vm
+        nic, pip = _get_nic_and_pip_from_virtual_machine(
+            network_client, rfs, vm)
+        # get resource names (pass cached data to prevent another lookup)
+        _, _, subnet, vnet, nsg, slb = \
+            _get_resource_names_from_virtual_machine(
+                compute_client, network_client, rfs, vm, nic=nic, pip=pip)
         # stat data disks
         disks = {}
         total_size_gb = 0
@@ -1573,27 +1618,35 @@ def stat_storage_cluster(
                 'type': str(dd.managed_disk.storage_account_type),
             }
         disks['disk_array_size_gb'] = total_size_gb
-        # fs-specific stat
-        fs_stat = None
-        if rfs.storage_cluster.fs_type == 'nfs':
-            # run stat script via ssh
+        # verbose settings: run stat script via ssh
+        if settings.verbose(config):
             ssh_priv_key, port, username, ip = _get_ssh_info(
-                compute_client, network_client, config, None, vm.name)
+                compute_client, network_client, config, None, vm.name, pip=pip)
+            offset = int(vm.name.split('-vm')[-1])
+            script_cmd = '/opt/batch-shipyard/{sf} {m}{r}{s}'.format(
+                sf=status_script,
+                m=' -m {}'.format(
+                    rfs.storage_cluster.file_server.mountpoint),
+                r=' -r {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                s=' -s {}'.format(rfs.storage_cluster.file_server.type),
+            )
             cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
                    'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key),
                    '-p', str(port), '{}@{}'.format(username, ip),
-                   'sudo', '/opt/batch-shipyard/shipyard_remotefs_stat.sh',
-                   '-t', 'nfs']
+                   'sudo']
+            cmd.extend(script_cmd.split())
             proc = util.subprocess_nowait_pipe_stdout(cmd)
             stdout = proc.communicate()[0]
             if proc.returncode == 0:
-                fs_stat = stdout.decode('utf8')
-
-                # TODO parse fs_stat final codes
-
-        else:
-            raise NotImplementedError('{} fs type invalid'.format(
-                rfs.storage_cluster.fs_type))
+                stdout = stdout.decode('utf8')
+                if util.on_windows():
+                    stdout = stdout.replace('\n', os.linesep)
+                fsstatus.append('>> File Server Status for {}:{}{}'.format(
+                    vm.name, os.linesep, stdout))
+            else:
+                fsstatus.append('>> File Server Status for {} FAILED'.format(
+                    vm.name))
         vmstatus[vm.name] = {
             'vm_size': vm.hardware_profile.vm_size,
             'powerstate': powerstate,
@@ -1613,17 +1666,24 @@ def stat_storage_cluster(
             'subnet': subnet,
             'network_security_group': nsg,
             'data_disks': disks,
-            'file_system_status': fs_stat,
         }
-    logger.info('storage cluster {} virtual machine status:\n{}'.format(
-        rfs.storage_cluster.id,
-        json.dumps(vmstatus, sort_keys=True, indent=4)))
+    if settings.verbose(config):
+        log = '{}{}{}{}'.format(
+            json.dumps(vmstatus, sort_keys=True, indent=4),
+            os.linesep, os.linesep,
+            '{}{}'.format(os.linesep, os.linesep).join(
+                fsstatus) if settings.verbose(config) else '')
+    else:
+        log = '{}'.format(json.dumps(vmstatus, sort_keys=True, indent=4))
+    logger.info('storage cluster {} virtual machine status:{}{}'.format(
+        rfs.storage_cluster.id, os.linesep, log))
 
 
-def _get_ssh_info(compute_client, network_client, config, cardinal, hostname):
+def _get_ssh_info(
+        compute_client, network_client, config, cardinal, hostname, pip=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, int,
-    #        str) -> None
+    #        str, networkmodels.PublicIPAddress) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1632,6 +1692,7 @@ def _get_ssh_info(compute_client, network_client, config, cardinal, hostname):
     :param dict config: configuration dict
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param networkmodels.PublicIPAddress pip: public ip
     :rtype: tuple
     :return (ssh private key, port, username, ip)
     """
@@ -1654,15 +1715,9 @@ def _get_ssh_info(compute_client, network_client, config, cardinal, hostname):
             raise RuntimeError('virtual machine {} not found'.format(vm_name))
         else:
             raise
-    # get resources connected to vm
-    nic, pip, subnet, vnet, nsg, slb = \
-        _get_resources_from_virtual_machine(
-            compute_client, network_client, rfs, vm)
-    # refresh public ip
-    pip = network_client.public_ip_addresses.get(
-        resource_group_name=rfs.resource_group,
-        public_ip_address_name=pip,
-    )
+    # get pip connected to vm
+    if pip is None:
+        _, pip = _get_nic_and_pip_from_virtual_machine(network_client, rfs, vm)
     # connect to vm
     ssh_priv_key = pathlib.Path(
         rfs.storage_cluster.ssh.generated_file_export_path, _SSH_KEY_PREFIX)

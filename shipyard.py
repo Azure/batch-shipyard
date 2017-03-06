@@ -53,6 +53,7 @@ class CliContext(object):
     """CliContext class: holds context for CLI commands"""
     def __init__(self):
         """Ctor for CliContext"""
+        self.output_config = False
         self.verbose = False
         self.yes = False
         self.config = None
@@ -274,7 +275,7 @@ class CliContext(object):
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
-        if self.verbose:
+        if self.output_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
         # free mem
         del self.json_credentials
@@ -299,19 +300,6 @@ class CliContext(object):
 pass_cli_context = click.make_pass_decorator(CliContext, ensure=True)
 
 
-def _verbose_option(f):
-    def callback(ctx, param, value):
-        clictx = ctx.ensure_object(CliContext)
-        clictx.verbose = value
-        return value
-    return click.option(
-        '-v', '--verbose',
-        expose_value=False,
-        is_flag=True,
-        help='Verbose output',
-        callback=callback)(f)
-
-
 def _confirm_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -322,6 +310,32 @@ def _confirm_option(f):
         expose_value=False,
         is_flag=True,
         help='Assume yes for all confirmation prompts',
+        callback=callback)(f)
+
+
+def _output_config_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.output_config = value
+        return value
+    return click.option(
+        '--output-config',
+        expose_value=False,
+        is_flag=True,
+        help='Output configuration',
+        callback=callback)(f)
+
+
+def _verbose_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.verbose = value
+        return value
+    return click.option(
+        '-v', '--verbose',
+        expose_value=False,
+        is_flag=True,
+        help='Verbose output',
         callback=callback)(f)
 
 
@@ -541,6 +555,7 @@ def common_options(f):
     f = _credentials_option(f)
     f = _configdir_option(f)
     f = _verbose_option(f)
+    f = _output_config_option(f)
     f = _confirm_option(f)
     return f
 
