@@ -1243,6 +1243,24 @@ def action_remotefs_cluster_del(
     storage.delete_storage_containers_remotefs(blob_client, config)
 
 
+def action_remotefs_cluster_expand(
+        compute_client, network_client, config, rebalance):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
+    """Action: Remotefs Cluster Expand
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param bool rebalance: rebalance filesystem
+    """
+    if remotefs.expand_storage_cluster(
+            compute_client, network_client, config, _REMOTEFSPREP_FILE[0],
+            rebalance):
+        action_remotefs_cluster_status(compute_client, network_client, config)
+
+
 def action_remotefs_cluster_suspend(compute_client, config, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
     """Action: Remotefs Cluster Suspend
@@ -1268,8 +1286,7 @@ def action_remotefs_cluster_start(
     """
     remotefs.start_storage_cluster(compute_client, config, wait)
     if wait:
-        remotefs.stat_storage_cluster(
-            compute_client, network_client, config, _REMOTEFSSTAT_FILE[0])
+        action_remotefs_cluster_status(compute_client, network_client, config)
 
 
 def action_remotefs_cluster_status(compute_client, network_client, config):

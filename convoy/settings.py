@@ -2309,7 +2309,7 @@ def remotefs_settings(config):
             if raid_type == 0 and len(disk_array) < 2:
                 raise ValueError('RAID-0 arrays require at least two disks')
             if raid_type != 0:
-                raise ValueError('Unsupported raid type {}'.format(raid_type))
+                raise ValueError('Unsupported RAID level {}'.format(raid_type))
         format_as = conf[vmkey]['format_as']
         if format_as != 'btrfs' and not format_as.startswith('ext'):
             raise ValueError('Unsupported format as type {}'.format(format_as))
@@ -2318,6 +2318,12 @@ def remotefs_settings(config):
             format_as=conf[vmkey]['format_as'],
             raid_type=raid_type,
         )
+    # check disk map against vm_count
+    if len(disk_map) != sc_vm_count:
+        raise ValueError(
+            ('Number of entries in storage_cluster:vm_disk_map {} '
+             'inconsistent with storage_cluster:vm_count {}').format(
+                 len(disk_map), sc_vm_count))
     return RemoteFsSettings(
         resource_group=resource_group,
         location=location,

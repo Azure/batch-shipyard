@@ -92,7 +92,14 @@ if [ $raid_type -ge 0 ]; then
         echo "/proc/mdstat:"
         cat /proc/mdstat
         echo ""
+        # find md target
+        target=($(find /dev/md* -maxdepth 0 -type b))
+        if [ ${#target[@]} -ne 1 ]; then
+            echo "Could not determine md target"
+            exit 1
+        fi
+        target=${target[0]}
         echo "mdadm detail:"
-        mdadm --detail /dev/md0
+        mdadm --detail $target
     fi
 fi

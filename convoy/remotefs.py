@@ -784,11 +784,8 @@ def _create_virtual_machine_extension(
                 'fileUris': blob_urls,
             },
             protected_settings={
-                'commandToExecute': './{bsf} {b}{d}{f}{m}{n}{p}{r}{s}'.format(
+                'commandToExecute': './{bsf} {f}{m}{n}{p}{r}{s}'.format(
                     bsf=bootstrap_file,
-                    b=' -b',  # always allow rebalance on btrfs (for now)
-                    d=' -d {}'.format(len(
-                        rfs.storage_cluster.vm_disk_map[offset].disk_array)),
                     f=' -f {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].format_as),
                     m=' -m {}'.format(
@@ -860,6 +857,13 @@ def create_storage_cluster(
     # check if cluster already exists
     logger.debug('checking if storage cluster {} exists'.format(
         rfs.storage_cluster.id))
+    # construct disk map
+    disk_map = {}
+    disk_ids = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_ids:
+        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
+    del disk_ids
+    # check vms
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
         try:
@@ -868,25 +872,27 @@ def create_storage_cluster(
                 vm_name=vm_name,
             )
             raise RuntimeError(
-                'existing virtual machine {} found, cannot add this '
+                'Existing virtual machine {} found, cannot add this '
                 'storage cluster'.format(vm.id))
         except msrestazure.azure_exceptions.CloudError as e:
             if e.status_code == 404:
                 pass
             else:
                 raise
-    # check if all referenced managed disks exist
-    disk_ids = list_disks(compute_client, config, restrict_scope=True)
-    diskname_map = {}
-    for disk_id, sat in disk_ids:
-        diskname_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    for key in rfs.storage_cluster.vm_disk_map:
-        for disk in rfs.storage_cluster.vm_disk_map[key].disk_array:
-            if disk not in diskname_map:
+        # check if all referenced managed disks exist and premium sku
+        # is specified if premium disk
+        for disk in rfs.storage_cluster.vm_disk_map[i].disk_array:
+            if disk not in disk_map:
                 raise RuntimeError(
-                    'referenced managed disk {} unavailable in set {}'.format(
-                        disk, diskname_map))
-    del disk_ids
+                    ('Referenced managed disk {} unavailable in set {} for '
+                     'vm offset {}').format(disk, disk_map, i))
+            if (disk_map[disk][1] ==
+                    computemodels.StorageAccountTypes.premium_lrs and
+                    not rfs.storage_cluster.vm_size.lower().endswith('s')):
+                raise RuntimeError(
+                    ('Premium storage requires a DS, DS_V2, FS, GS or LS '
+                     'series vm_size instead of {}'.format(
+                         rfs.storage_cluster.vm_size)))
     # create nsg
     nsg_async_op = _create_network_security_group(network_client, rfs)
     # create availability set if vm_count > 1
@@ -944,7 +950,7 @@ def create_storage_cluster(
     # create vms
     for i in range(rfs.storage_cluster.vm_count):
         async_ops.append(_create_virtual_machine(
-            compute_client, rfs, availset, nics, diskname_map, i))
+            compute_client, rfs, availset, nics, disk_map, i))
     logger.debug('waiting for virtual machines to be created')
     vm_ext_async_ops = {}
     vms = {}
@@ -953,7 +959,7 @@ def create_storage_cluster(
         # install vm extension
         vm_ext_async_ops[offset] = _create_virtual_machine_extension(
             compute_client, rfs, bootstrap_file, blob_urls,
-            vm.name, diskname_map, offset)
+            vm.name, disk_map, offset)
         # cache vm
         vms[offset] = vm
     async_ops.clear()
@@ -1242,6 +1248,10 @@ def delete_storage_cluster(
                 logger.info('resource group {} deleted'.format(
                     rfs.resource_group))
         return
+    if not util.confirm_action(
+            config, 'delete storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
     # get vms and cache for concurent async ops
     resources = {}
     for i in range(rfs.storage_cluster.vm_count):
@@ -1258,9 +1268,6 @@ def delete_storage_cluster(
             else:
                 raise
         else:
-            if not util.confirm_action(
-                    config, 'delete virtual machine {}'.format(vm.name)):
-                continue
             # get resources connected to vm
             nic, pip, subnet, vnet, nsg, slb = \
                 _get_resource_names_from_virtual_machine(
@@ -1420,6 +1427,187 @@ def delete_storage_cluster(
             logger.info('{} managed data disks deleted'.format(
                 len(data_disk_async_ops)))
             data_disk_async_ops.clear()
+
+
+def expand_storage_cluster(
+        compute_client, network_client, config, bootstrap_file,
+        rebalance=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        bool) -> bool
+    """Expand a storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param str bootstrap_file: bootstrap file
+    :param bool rebalance: rebalance filesystem
+    :rtype: bool
+    :return: if cluster was expanded
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    if not util.confirm_action(
+            config, 'expand storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return False
+    # check if cluster exists
+    logger.debug('checking if storage cluster {} exists'.format(
+        rfs.storage_cluster.id))
+    # construct disk map
+    disk_map = {}
+    disk_ids = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_ids:
+        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
+    del disk_ids
+    # check vms
+    vms = {}
+    new_disk_count = 0
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                raise RuntimeError(
+                    'Virtual machine {} not found, cannot expand this '
+                    'storage cluster'.format(vm_name))
+            else:
+                raise
+        # create entry
+        entry = {
+            'vm': vm,
+            'pe_disks': {
+                'names': set(),
+                'luns': [],
+            },
+            'new_disks': [],
+        }
+        # get attached disks
+        for dd in vm.storage_profile.data_disks:
+            entry['pe_disks']['names'].add(dd.name)
+            entry['pe_disks']['luns'].append(dd.lun)
+        # check if all referenced managed disks exist
+        for disk in rfs.storage_cluster.vm_disk_map[i].disk_array:
+            if disk not in disk_map:
+                raise RuntimeError(
+                    ('Referenced managed disk {} unavailable in set {} for '
+                     'vm offset {}. Ensure that this disk has been '
+                     'provisioned first.').format(disk, disk_map, i))
+            if disk not in entry['pe_disks']['names']:
+                entry['new_disks'].append(disk)
+                new_disk_count += 1
+        # check for proper raid setting and number of disks
+        pe_len = len(entry['pe_disks']['names'])
+        if pe_len <= 1 or rfs.storage_cluster.vm_disk_map[i].raid_type != 0:
+            raise RuntimeError(
+                'Cannot expand array from {} disk(s) or RAID level {}'.format(
+                    pe_len, rfs.storage_cluster.vm_disk_map[i].raid_type))
+        # add vm to map
+        vms[i] = entry
+    if len(vms) == 0:
+        logger.warning(
+            'no virtual machines to expand in storage cluster {}'.format(
+                rfs.storage_cluster.id))
+        return False
+    if settings.verbose(config):
+        logger.debug('expand settings:{}{}'.format(os.linesep, vms))
+    if new_disk_count == 0:
+        logger.error(
+            'no new disks detected for storage cluster {}'.format(
+                rfs.storage_cluster.id))
+        return False
+    # attach new data disks to each vm
+    async_ops = []
+    for key in vms:
+        entry = vms[key]
+        if len(entry['new_disks']) == 0:
+            logger.debug('no new disks to attach to virtual machine {}'.format(
+                vm.id))
+            continue
+        vm = entry['vm']
+        premium = False
+        # sort lun array and get last element
+        lun = sorted(entry['pe_disks']['luns'])[-1] + 1
+        for diskname in entry['new_disks']:
+            if (disk_map[diskname][1] ==
+                    computemodels.StorageAccountTypes.premium_lrs):
+                premium = True
+            vm.storage_profile.data_disks.append(
+                computemodels.DataDisk(
+                    lun=lun,
+                    name=diskname,
+                    create_option=computemodels.DiskCreateOption.attach,
+                    managed_disk=computemodels.ManagedDiskParameters(
+                        id=disk_map[diskname][0],
+                    ),
+                )
+            )
+            lun += 1
+        logger.info(
+            'attaching {} additional data disks to virtual machine {}'.format(
+                len(entry['new_disks']), vm.id))
+        # update vm
+        async_ops.append(
+            (key, premium, compute_client.virtual_machines.create_or_update(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm.name,
+                parameters=vm)))
+    # wait for async ops to complete
+    if len(async_ops) == 0:
+        logger.error('no operations started for expansion')
+        return False
+    logger.debug('waiting for disks to attach to virtual machines')
+    for offset, premium, op in async_ops:
+        vm = op.result()
+        vms[offset]['vm'] = vm
+        # execute bootstrap script via ssh
+        script_cmd = \
+            '/opt/batch-shipyard/{bsf} {a}{b}{f}{m}{p}{r}{s}'.format(
+                bsf=bootstrap_file,
+                a=' -a',
+                b=' -b' if rebalance else '',
+                f=' -f {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].format_as),
+                m=' -m {}'.format(
+                    rfs.storage_cluster.file_server.mountpoint),
+                p=' -p' if premium else '',
+                r=' -r {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                s=' -s {}'.format(rfs.storage_cluster.file_server.type),
+            )
+        ssh_priv_key, port, username, ip = _get_ssh_info(
+            compute_client, network_client, config, None, vm.name)
+        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+               'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key),
+               '-p', str(port), '{}@{}'.format(username, ip),
+               'sudo']
+        cmd.extend(script_cmd.split())
+        proc = util.subprocess_nowait_pipe_stdout(cmd)
+        stdout = proc.communicate()[0]
+        if stdout is not None:
+            stdout = stdout.decode('utf8')
+            if util.on_windows():
+                stdout = stdout.replace('\n', os.linesep)
+        vms[offset]['status'] = proc.returncode
+        vms[offset]['stdout'] = '>>stdout>> {}:{}{}'.format(
+            vm.name, os.linesep, stdout)
+    logger.info('disk attach operations completed')
+    for key in vms:
+        entry = vms[key]
+        vm = entry['vm']
+        log = 'bootstrap exit code for virtual machine {}: {}'.format(
+            vm.name, entry['status'])
+        if entry['status'] == 0:
+            logger.info(log)
+        else:
+            logger.error(log)
+            logger.error(entry['stdout'])
+    return True
 
 
 def _deallocate_virtual_machine(compute_client, rg_name, vm_name):
@@ -1639,9 +1827,10 @@ def stat_storage_cluster(
             proc = util.subprocess_nowait_pipe_stdout(cmd)
             stdout = proc.communicate()[0]
             if proc.returncode == 0:
-                stdout = stdout.decode('utf8')
-                if util.on_windows():
-                    stdout = stdout.replace('\n', os.linesep)
+                if stdout is not None:
+                    stdout = stdout.decode('utf8')
+                    if util.on_windows():
+                        stdout = stdout.replace('\n', os.linesep)
                 fsstatus.append('>> File Server Status for {}:{}{}'.format(
                     vm.name, os.linesep, stdout))
             else:

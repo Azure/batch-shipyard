@@ -53,7 +53,7 @@ class CliContext(object):
     """CliContext class: holds context for CLI commands"""
     def __init__(self):
         """Ctor for CliContext"""
-        self.output_config = False
+        self.show_config = False
         self.verbose = False
         self.yes = False
         self.config = None
@@ -275,7 +275,7 @@ class CliContext(object):
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
-        if self.output_config:
+        if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
         # free mem
         del self.json_credentials
@@ -313,16 +313,16 @@ def _confirm_option(f):
         callback=callback)(f)
 
 
-def _output_config_option(f):
+def _show_config_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.output_config = value
+        clictx.show_config = value
         return value
     return click.option(
-        '--output-config',
+        '--show-config',
         expose_value=False,
         is_flag=True,
-        help='Output configuration',
+        help='Show configuration',
         callback=callback)(f)
 
 
@@ -555,7 +555,7 @@ def common_options(f):
     f = _credentials_option(f)
     f = _configdir_option(f)
     f = _verbose_option(f)
-    f = _output_config_option(f)
+    f = _show_config_option(f)
     f = _confirm_option(f)
     return f
 
@@ -645,6 +645,19 @@ def remotefs_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config, delete_all_resources, delete_data_disks,
         delete_virtual_network, wait)
+
+
+@cluster.command('expand')
+@click.option(
+    '--rebalance', is_flag=True, help='Rebalance filesystem, if applicable')
+@common_options
+@remotefs_options
+@pass_cli_context
+def remotefs_expand(ctx, rebalance):
+    """Expand a storage cluster used for a Remote Filesystem in Azure"""
+    ctx.initialize_for_remotefs()
+    convoy.fleet.action_remotefs_cluster_expand(
+        ctx.compute_client, ctx.network_client, ctx.config, rebalance)
 
 
 @cluster.command('suspend')

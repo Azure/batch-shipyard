@@ -4,6 +4,7 @@
 ### Changed
 - All dependencies updated to latest versions
 - Update Batch API call compatibility for `azure-batch 2.0.0`
+- Precompile python files for Docker images
 
 ## [2.5.4] - 2017-03-08
 ### Changed
