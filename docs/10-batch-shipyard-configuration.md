@@ -40,7 +40,8 @@ The credentials schema is as follows:
                 "x509_cert_sha1_thumbprint": "01AB02CD...",
                 "user": "me@domain.com",
                 "password": "password"
-            }
+            },
+            "endpoint": "https://vault.azure.net"
         },
         "batch": {
             "account": "awesomebatchaccountname",
@@ -99,6 +100,11 @@ instead for AAD and KeyVault credentials.
       certificate for use with Certificate-based authentication
     * (optional) `user` AAD username
     * (optional) `password` AAD password associated with the user
+    * (optional) `endpoint` is the KeyVault AAD endpoint
+    * (optional) `token_cache` defines token cache properties for device code
+      auth
+      * (optional) `enabled` enables the token cache for device code auth
+      * (optional) `filename` specifies the file path to cache the signed token
 * (required) The `batch` property defines the Azure Batch account. Members
 under the `batch` property can be found in the
 [Azure Portal](https://portal.azure.com) under your Batch account.

@@ -30,8 +30,6 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
-import datetime
-import dateutil.parser
 import json
 import logging
 import os
@@ -40,7 +38,6 @@ try:
 except ImportError:
     import pathlib
 # non-stdlib imports
-import adal
 import azure.common.credentials
 import azure.mgmt.compute
 import azure.mgmt.compute.models as computemodels
@@ -48,9 +45,9 @@ import azure.mgmt.network
 import azure.mgmt.network.models as networkmodels
 import azure.mgmt.resource
 import azure.mgmt.resource.resources.models as rgmodels
-import msrest.authentication
 import msrestazure.azure_exceptions
 # local imports
+from . import aad
 from . import crypto
 from . import settings
 from . import storage
@@ -60,164 +57,27 @@ from . import util
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_CLIENT_ID = '04b07795-8ddb-461a-bbee-02f9e1bf7b46'  # xplat-cli
 _SSH_KEY_PREFIX = 'id_rsa_shipyard_remotefs'
 
 
-class DeviceCodeAuthentication(msrest.authentication.Authentication):
-    def __init__(self, context, resource, client_id, token_cache_file):
-        self._context = context
-        self._resource = resource
-        self._client_id = client_id
-        self._token_cache_file = token_cache_file
-        self._token = None
-
-    @property
-    def token(self):
-        return self._token
-
-    @token.setter
-    def token(self, value):
-        self._token = value
-
-    def signed_session(self):
-        """Get a signed session for requests.
-        Usually called by the Azure SDKs for you to authenticate queries.
-        :rtype: requests.Session
-        """
-        session = super(DeviceCodeAuthentication, self).signed_session()
-        # try to get cached token
-        if self._token is None and util.is_not_empty(self._token_cache_file):
-            try:
-                with open(self._token_cache_file, 'r') as fd:
-                    self._token = json.load(fd)
-            except OSError:
-                pass
-            except Exception:
-                logger.error(
-                    'Error attempting read of token cache: {}'.format(
-                        self._token_cache_file))
-        # get token
-        try:
-            cache_token = True
-            if self._token is None:
-                # get token through selected method
-                code = self._context.acquire_user_code(
-                    resource=self._resource,
-                    client_id=self._client_id,
-                )
-                logger.info(
-                    'Please follow the instructions below. The requesting '
-                    'application will be: Microsoft Azure Cross-platform '
-                    'Command Line Interface')
-                logger.info(code['message'])
-                self._token = self._context.acquire_token_with_device_code(
-                    resource=self._resource,
-                    user_code_info=code,
-                    client_id=self._client_id,
-                )
-            else:
-                # check for expiry time
-                expiry = dateutil.parser.parse(self._token['expiresOn'])
-                if (datetime.datetime.now() +
-                        datetime.timedelta(minutes=5) >= expiry):
-                    # attempt token refresh
-                    logger.debug('Refreshing token expiring on: {}'.format(
-                        expiry))
-                    self._token = self._context.\
-                        acquire_token_with_refresh_token(
-                            refresh_token=self._token['refreshToken'],
-                            client_id=self._client_id,
-                            resource=self._resource,
-                        )
-                else:
-                    cache_token = False
-            # set session authorization header
-            session.headers['Authorization'] = '{} {}'.format(
-                self._token['tokenType'], self._token['accessToken'])
-            # cache token
-            if cache_token and util.is_not_empty(self._token_cache_file):
-                logger.debug('storing token to local cache: {}'.format(
-                    self._token_cache_file))
-                with open(self._token_cache_file, 'w') as fd:
-                    json.dump(self._token, fd, indent=4, sort_keys=False)
-        except adal.AdalError as err:
-            if (hasattr(err, 'error_response') and
-                    'error_description' in err.error_response and
-                    'AADSTS70008:' in err.error_response['error_description']):
-                logger.error(
-                    'Credentials have expired due to inactivity. Please '
-                    'retry your command.')
-            # clear token cache file due to expiration
-            if util.is_not_empty(self._token_cache_file):
-                try:
-                    pathlib.Path(self._token_cache_file).unlink()
-                    logger.debug('invalidated local token cache: {}'.format(
-                        self._token_cache_file))
-                except OSError:
-                    pass
-            raise
-        return session
-
-
-def _create_aad_credentials(
-        aad_directory_id, aad_user, aad_password, endpoint, token_cache_file):
-    # type: (str, str, str, str,
-    #        str) -> azure.common.credentials.UserPassCredentials
-    """Create Azure Active Directory credentials
-    :param str aad_directory_id: aad directory/tenant id
-    :param str aad_user: aad user
-    :param str aad_password: aad password
-    :param str endpoint: management endpoint
-    :param str token_cache_file: token cache file
-    :rtype: azure.common.credentials.UserPassCredentials
-    :return: aad credentials object
-    """
-    if util.is_not_empty(aad_password):
-        try:
-            return azure.common.credentials.UserPassCredentials(
-                username=aad_user,
-                password=aad_password,
-                resource=endpoint,
-            )
-        except msrest.exceptions.AuthenticationError as e:
-            if 'AADSTS50079' in e.args[0]:
-                raise RuntimeError('{} {}'.format(
-                    e.args[0][2:],
-                    'Do not pass an AAD password to shipyard and try again.'))
-    else:
-        return DeviceCodeAuthentication(
-            context=adal.AuthenticationContext(
-                'https://login.microsoftonline.com/{}'.format(aad_directory_id)
-            ),
-            resource=endpoint,
-            client_id=_CLIENT_ID,
-            token_cache_file=token_cache_file,
-        )
-
-
-def create_clients(
-        subscription_id, aad_directory_id, aad_user, aad_password, endpoint,
-        token_cache_file):
-    # type: (str, str, str, str, str, str) ->
+def create_clients(ctx, mgmt_aad, subscription_id):
+    # type: (CliContext, settings.AADSettings, str) ->
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient]
     """Create resource, compute and network clients
+    :param CliContext ctx: Cli Context
+    :param settings.AADSettings mgmt_aad: AAD settings
     :param str subscription_id: subscription id
-    :param str aad_directory_id: aad directory/tenant id
-    :param str aad_user: aad user
-    :param str aad_password: aad_password
-    :param str endpoint: management endpoint
-    :param str token_cache_file: token cache file
     :rtype: tuple
     :return: (
         azure.mgmt.resource.resources.ResourceManagementClient,
         azure.mgmt.compute.ComputeManagementClient,
         azure.mgmt.network.NetworkManagementClient)
     """
-    credentials = _create_aad_credentials(
-        aad_directory_id, aad_user, aad_password, endpoint, token_cache_file)
+    if subscription_id is None:
+        return (None, None, None)
+    credentials = aad.create_aad_credentials(ctx, mgmt_aad)
     resource_client = azure.mgmt.resource.resources.ResourceManagementClient(
         credentials, subscription_id)
     compute_client = azure.mgmt.compute.ComputeManagementClient(

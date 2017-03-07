@@ -244,23 +244,7 @@ def create_keyvault_client(ctx, config):
     :return: key vault client
     """
     kv = settings.credentials_keyvault(config)
-    aad_directory_id = ctx.aad_directory_id or kv.aad_directory_id
-    aad_application_id = ctx.aad_application_id or kv.aad_application_id
-    aad_auth_key = ctx.aad_auth_key or kv.aad_auth_key
-    aad_user = ctx.aad_user or kv.aad_user
-    aad_password = ctx.aad_password or kv.aad_password
-    aad_cert_private_key = ctx.aad_cert_private_key or kv.aad_cert_private_key
-    aad_cert_thumbprint = ctx.aad_cert_thumbprint or kv.aad_cert_thumbprint
-    # check if no keyvault/aad params were specified at all
-    if (aad_directory_id is None and aad_application_id is None and
-            aad_auth_key is None and aad_user is None and
-            aad_password is None and aad_cert_private_key is None and
-            aad_cert_thumbprint is None):
-        return None
-    else:
-        return keyvault.create_client(
-            aad_directory_id, aad_application_id, aad_auth_key, aad_user,
-            aad_password, aad_cert_private_key, aad_cert_thumbprint)
+    return keyvault.create_client(ctx, kv.aad)
 
 
 def create_remotefs_clients(ctx, config):
@@ -278,18 +262,8 @@ def create_remotefs_clients(ctx, config):
         azure.mgmt.network.NetworkManagementClient)
     """
     mgmt = settings.credentials_management(config)
-    aad_directory_id = ctx.aad_directory_id or mgmt.aad_directory_id
-    aad_user = ctx.aad_user or mgmt.aad_user
-    aad_password = ctx.aad_password or mgmt.aad_password
     subscription_id = ctx.subscription_id or mgmt.subscription_id
-    # check if no management/aad params were specified at all
-    if (aad_directory_id is None and aad_user is None and
-            subscription_id is None):
-        return (None, None, None)
-    else:
-        return remotefs.create_clients(
-            subscription_id, aad_directory_id, aad_user, aad_password,
-            mgmt.endpoint, mgmt.token_cache_file)
+    return remotefs.create_clients(ctx, mgmt.aad, subscription_id)
 
 
 def initialize(config, remotefs_context=False):

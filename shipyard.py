@@ -75,6 +75,7 @@ class CliContext(object):
         self.aad_password = None
         self.aad_cert_private_key = None
         self.aad_cert_thumbprint = None
+        self.aad_endpoint = None
         # management options
         self.subscription_id = None
 
@@ -141,6 +142,7 @@ class CliContext(object):
         del self.aad_password
         del self.aad_cert_private_key
         del self.aad_cert_thumbprint
+        del self.aad_endpoint
         del self.subscription_id
         self.config = None
 
@@ -456,6 +458,19 @@ def _aad_cert_thumbprint_option(f):
         callback=callback)(f)
 
 
+def _aad_endpoint_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_endpoint = value
+        return value
+    return click.option(
+        '--aad-endpoint',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_ENDPOINT',
+        help='Azure Active Directory endpoint',
+        callback=callback)(f)
+
+
 def _azure_management_subscription_id_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -560,13 +575,7 @@ def common_options(f):
     return f
 
 
-def batch_options(f):
-    f = _jobs_option(f)
-    f = _pool_option(f)
-    return f
-
-
-def keyvault_options(f):
+def aad_options(f):
     f = _aad_cert_thumbprint_option(f)
     f = _aad_cert_private_key_option(f)
     f = _aad_password_option(f)
@@ -574,15 +583,25 @@ def keyvault_options(f):
     f = _aad_auth_key_option(f)
     f = _aad_application_id_option(f)
     f = _aad_directory_id_option(f)
+    f = _aad_endpoint_option(f)
+    return f
+
+
+def batch_options(f):
+    f = _jobs_option(f)
+    f = _pool_option(f)
+    return f
+
+
+def keyvault_options(f):
+    f = aad_options(f)
     f = _azure_keyvault_credentials_secret_id_option(f)
     f = _azure_keyvault_uri_option(f)
     return f
 
 
 def remotefs_options(f):
-    f = _aad_password_option(f)
-    f = _aad_user_option(f)
-    f = _aad_directory_id_option(f)
+    f = aad_options(f)
     f = _azure_management_subscription_id_option(f)
     f = _remotefs_option(f)
     return f
