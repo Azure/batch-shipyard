@@ -600,7 +600,7 @@ def _add_pool(batch_client, blob_client, config):
         pool.certificate_references = [
             batchmodels.CertificateReference(
                 pfx.sha1, 'sha1',
-                visibility=[batchmodels.CertificateVisibility.starttask]
+                visibility=[batchmodels.CertificateVisibility.start_task]
             )
         ]
     for rf in sas_urls:
