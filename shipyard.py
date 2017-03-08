@@ -39,6 +39,7 @@ except ImportError:
 # non-stdlib imports
 import click
 # local imports
+import convoy.clients
 import convoy.fleet
 import convoy.settings
 import convoy.util
@@ -57,6 +58,7 @@ class CliContext(object):
         self.verbose = False
         self.yes = False
         self.config = None
+        self.batch_mgmt_client = None
         self.batch_client = None
         self.blob_client = None
         self.queue_client = None
@@ -86,16 +88,14 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.resource_client, self.compute_client, self.network_client = \
-            convoy.fleet.create_fs_clients(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=True,
             skip_fs_config=False)
-        clients = convoy.fleet.initialize(self.config, fs_context=True)
-        self._set_clients(*clients)
+        self.resource_client, self.compute_client, self.network_client, \
+            _, _ = convoy.clients.create_arm_clients(self)
         self._cleanup_after_initialize(
+            skip_global_config=False, skip_pool_config=True,
             skip_fs_config=False)
-        clients = convoy.fleet.initialize(self.config, fs_context=True)
 
     def initialize_for_keyvault(self):
         # type: (CliContext) -> None
@@ -104,7 +104,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.fleet.create_keyvault_client(self)
+        self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
             skip_global_config=True, skip_pool_config=True,
             skip_fs_config=True)
@@ -112,19 +112,23 @@ class CliContext(object):
             skip_global_config=True, skip_pool_config=True,
             skip_fs_config=True)
 
-    def initialize_for_batch(self):
-        # type: (CliContext) -> None
+    def initialize_for_batch(self, init_clients_for_vnet=False):
+        # type: (CliContext, bool) -> None
         """Initialize context for batch commands
         :param CliContext self: this
+        :param bool init_clients_for_vnet: intialize clients for vnet
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.fleet.create_keyvault_client(self)
+        self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=False,
             skip_fs_config=True)
-        clients = convoy.fleet.initialize(self)
-        self._set_clients(*clients)
+        self.resource_client, self.compute_client, self.network_client, \
+            self.batch_mgmt_client, self.batch_client = \
+            convoy.clients.create_arm_clients(self, batch_clients=True)
+        self.blob_client, self.queue_client, self.table_client = \
+            convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=False,
             skip_fs_config=True)
@@ -134,8 +138,17 @@ class CliContext(object):
         """Initialize context for storage commands
         :param CliContext self: this
         """
-        # path is identical to batch
-        self.initialize_for_batch()
+        self._read_credentials_config()
+        self._set_global_cli_options()
+        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        self._init_config(
+            skip_global_config=False, skip_pool_config=False,
+            skip_fs_config=True)
+        self.blob_client, self.queue_client, self.table_client = \
+            convoy.clients.create_storage_clients()
+        self._cleanup_after_initialize(
+            skip_global_config=False, skip_pool_config=False,
+            skip_fs_config=True)
 
     def _set_global_cli_options(self):
         # type: (CliContext) -> None
@@ -310,12 +323,19 @@ class CliContext(object):
                     self.json_jobs = pathlib.Path(self.json_jobs)
                 if self.json_jobs.exists():
                     self._read_json_file(self.json_jobs)
+        # adjust settings
+        if not skip_fs_config:
+            convoy.fleet.adjust_general_settings(self.config)
+        convoy.fleet.populate_global_settings(self.config, not skip_fs_config)
+        # show config if specified
         if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
 
     def _set_clients(
-            self, batch_client, blob_client, queue_client, table_client):
+            self, batch_mgmt_client, batch_client, blob_client, queue_client,
+            table_client):
         """Sets clients for the context"""
+        self.batch_mgmt_client = batch_mgmt_client
         self.batch_client = batch_client
         self.blob_client = blob_client
         self.queue_client = queue_client
@@ -495,16 +515,16 @@ def _aad_endpoint_option(f):
         callback=callback)(f)
 
 
-def _azure_management_subscription_id_option(f):
+def _azure_subscription_id_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.subscription_id = value
         return value
     return click.option(
-        '--management-subscription-id',
+        '--subscription-id',
         expose_value=False,
-        envvar='SHIPYARD_MANAGEMENT_SUBSCRIPTION_ID',
-        help='Azure Management Subscription Id',
+        envvar='SHIPYARD_SUBSCRIPTION_ID',
+        help='Azure Subscription ID',
         callback=callback)(f)
 
 
@@ -612,6 +632,7 @@ def aad_options(f):
 
 
 def batch_options(f):
+    f = _azure_subscription_id_option(f)
     f = _jobs_option(f)
     f = _pool_option(f)
     return f
@@ -624,7 +645,7 @@ def keyvault_options(f):
 
 
 def fs_options(f):
-    f = _azure_management_subscription_id_option(f)
+    f = _azure_subscription_id_option(f)
     f = _fs_option(f)
     return f
 
@@ -970,10 +991,11 @@ def pool_listskus(ctx):
 @pass_cli_context
 def pool_add(ctx):
     """Add a pool to the Batch account"""
-    ctx.initialize_for_batch()
+    ctx.initialize_for_batch(init_clients_for_vnet=True)
     convoy.fleet.action_pool_add(
-        ctx.batch_client, ctx.blob_client, ctx.queue_client,
-        ctx.table_client, ctx.config)
+        ctx.resource_client, ctx.network_client, ctx.batch_mgmt_client,
+        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
+        ctx.config)
 
 
 @pool.command('list')

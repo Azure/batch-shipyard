@@ -97,7 +97,7 @@ ManagementCredentialsSettings = collections.namedtuple(
 BatchCredentialsSettings = collections.namedtuple(
     'BatchCredentialsSettings', [
         'aad', 'account', 'account_key', 'account_service_url',
-        'user_subscription',
+        'user_subscription', 'resource_group', 'subscription_id', 'location',
     ]
 )
 StorageCredentialsSettings = collections.namedtuple(
@@ -176,6 +176,7 @@ ManagedDisksSettings = collections.namedtuple(
 VirtualNetworkSettings = collections.namedtuple(
     'VirtualNetworkSettings', [
         'id', 'address_space', 'subnet_id', 'subnet_mask', 'existing_ok',
+        'create_nonexistant',
     ]
 )
 FileServerSettings = collections.namedtuple(
@@ -696,7 +697,17 @@ def credentials_batch(config):
     """
     conf = config['credentials']['batch']
     account_key = _kv_read_checked(conf, 'account_key')
+    account_service_url = conf['account_service_url']
     user_subscription = _kv_read(conf, 'user_subscription', False)
+    resource_group = _kv_read_checked(conf, 'resource_group')
+    # get subscription id from management section
+    try:
+        subscription_id = _kv_read_checked(
+            config['credentials']['management'], 'subscription_id')
+    except (KeyError, TypeError):
+        subscription_id = None
+    # parse location from url
+    location = account_service_url.split('.')[1]
     return BatchCredentialsSettings(
         aad=_aad_credentials(
             conf, default_endpoint='https://batch.core.windows.net/'),
@@ -704,6 +715,9 @@ def credentials_batch(config):
         account_key=account_key,
         account_service_url=conf['account_service_url'],
         user_subscription=user_subscription,
+        resource_group=resource_group,
+        location=location,
+        subscription_id=subscription_id,
     )
 
 
@@ -2340,6 +2354,7 @@ def remotefs_settings(config):
                 subnet_id=sc_vnet_subnet_id,
                 subnet_mask=sc_vnet_subnet_mask,
                 existing_ok=sc_vnet_existing_ok,
+                create_nonexistant=True,
             ),
             network_security=NetworkSecuritySettings(
                 inbound=sc_ns_inbound,

@@ -31,6 +31,15 @@
                 }
             ]
         },
+        "virtual_network": {
+            "id": "",
+            "create_nonexistant": false,
+            "address_space": "",
+            "subnet": {
+                "id": "",
+                "mask": ""
+            }
+        },
         "ssh": {
             "username": "docker",
             "expiry_days": 7,

@@ -41,7 +41,6 @@ except ImportError:
 import azure.common
 import azure.storage.blob as azureblob
 import azure.storage.file as azurefile
-import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 # local imports
 from . import settings
@@ -139,27 +138,6 @@ def get_storageaccount_endpoint():
     :return: storage account endpoint
     """
     return _STORAGEACCOUNTEP
-
-
-def create_clients():
-    # type: (None) -> tuple
-    """Create storage clients
-    :rtype: tuple
-    :return: blob_client, queue_client, table_client
-    """
-    blob_client = azureblob.BlockBlobService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=_STORAGEACCOUNTEP)
-    queue_client = azurequeue.QueueService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=_STORAGEACCOUNTEP)
-    table_client = azuretable.TableService(
-        account_name=_STORAGEACCOUNT,
-        account_key=_STORAGEACCOUNTKEY,
-        endpoint_suffix=_STORAGEACCOUNTEP)
-    return blob_client, queue_client, table_client
 
 
 def create_blob_container_saskey(

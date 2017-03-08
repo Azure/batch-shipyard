@@ -42,18 +42,14 @@ import os
 import tempfile
 import time
 # non-stdlib imports
-import azure.batch.batch_auth as batchauth
-import azure.batch.batch_service_client as batchsc
 import azure.batch.models as batchmodels
 # local imports
-from . import aad
 from . import crypto
 from . import data
 from . import keyvault
 from . import settings
 from . import storage
 from . import util
-from .version import __version__
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -68,27 +64,6 @@ _RUN_ELEVATED = batchmodels.UserIdentity(
         elevation_level=batchmodels.ElevationLevel.admin,
     )
 )
-
-
-def create_client(ctx):
-    # type: (CliContext) -> azure.batch.batch_service_client.BatchServiceClient
-    """Create batch client
-    :param CliContext ctx: Cli Context
-    :rtype: azure.batch.batch_service_client.BatchServiceClient
-    :return: batch service client
-        """
-    bc = settings.credentials_batch(ctx.config)
-    use_aad = bc.user_subscription or util.is_none_or_empty(bc.account_key)
-    if use_aad:
-        batch_aad = settings.credentials_batch(ctx.config)
-        credentials = aad.create_aad_credentials(ctx, batch_aad.aad)
-    else:
-        credentials = batchauth.SharedKeyCredentials(
-            bc.account, bc.account_key)
-    batch_client = batchsc.BatchServiceClient(
-        credentials, base_url=bc.account_service_url)
-    batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
-    return batch_client
 
 
 def list_node_agent_skus(batch_client):

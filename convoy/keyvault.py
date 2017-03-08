@@ -37,7 +37,6 @@ import zlib
 import azure.common.credentials
 import azure.keyvault
 # local imports
-from . import aad
 from . import settings
 from . import util
 
@@ -47,20 +46,6 @@ util.setup_logger(logger)
 # global defines
 _SECRET_ENCODED_FORMAT_KEY = 'format'
 _SECRET_ENCODED_FORMAT_VALUE = 'zlib+base64'
-
-
-def create_client(ctx, kv_aad):
-    # type: (CliContext, settings.AADSettings) ->
-    #       azure.keyvault.KeyVaultClient
-    """Create KeyVault client
-    :param CliContext ctx: Cli Context
-    :param settings.AADSettings kv_aad: AAD settings
-    :rtype: azure.keyvault.KeyVaultClient
-    :return: keyvault client
-    """
-    return azure.keyvault.KeyVaultClient(
-        aad.create_aad_credentials(ctx, kv_aad)
-    )
 
 
 def fetch_credentials_json(

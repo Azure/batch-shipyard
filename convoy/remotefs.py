@@ -38,16 +38,11 @@ try:
 except ImportError:
     import pathlib
 # non-stdlib imports
-import azure.common.credentials
-import azure.mgmt.compute
 import azure.mgmt.compute.models as computemodels
-import azure.mgmt.network
 import azure.mgmt.network.models as networkmodels
-import azure.mgmt.resource
 import azure.mgmt.resource.resources.models as rgmodels
 import msrestazure.azure_exceptions
 # local imports
-from . import aad
 from . import crypto
 from . import settings
 from . import storage
@@ -58,33 +53,6 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _SSH_KEY_PREFIX = 'id_rsa_shipyard_remotefs'
-
-
-def create_clients(ctx, mgmt_aad, subscription_id):
-    # type: (CliContext, settings.AADSettings, str) ->
-    #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
-    #              azure.mgmt.compute.ComputeManagementClient,
-    #              azure.mgmt.network.NetworkManagementClient]
-    """Create resource, compute and network clients
-    :param CliContext ctx: Cli Context
-    :param settings.AADSettings mgmt_aad: AAD settings
-    :param str subscription_id: subscription id
-    :rtype: tuple
-    :return: (
-        azure.mgmt.resource.resources.ResourceManagementClient,
-        azure.mgmt.compute.ComputeManagementClient,
-        azure.mgmt.network.NetworkManagementClient)
-    """
-    if subscription_id is None:
-        return (None, None, None)
-    credentials = aad.create_aad_credentials(ctx, mgmt_aad)
-    resource_client = azure.mgmt.resource.resources.ResourceManagementClient(
-        credentials, subscription_id)
-    compute_client = azure.mgmt.compute.ComputeManagementClient(
-        credentials, subscription_id)
-    network_client = azure.mgmt.network.NetworkManagementClient(
-        credentials, subscription_id)
-    return (resource_client, compute_client, network_client)
 
 
 def _create_managed_disk_async(compute_client, rfs, disk_name):

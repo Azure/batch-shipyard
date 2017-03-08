@@ -142,7 +142,7 @@ _PERF_FILE = (
 )
 
 
-def _adjust_general_settings(config):
+def adjust_general_settings(config):
     # type: (dict) -> None
     """Adjust general settings
     :param dict config: configuration dict
@@ -187,7 +187,7 @@ def _adjust_general_settings(config):
             settings.set_batch_shipyard_encryption_enabled(config, False)
 
 
-def _populate_global_settings(config, fs_context):
+def populate_global_settings(config, fs_context):
     # type: (dict, bool) -> None
     """Populate global settings from config
     :param dict config: configuration dict
@@ -209,65 +209,6 @@ def _populate_global_settings(config, fs_context):
         sc.account_key,
         sc.endpoint,
         bs.generated_sas_expiry_days)
-
-
-def _create_clients(ctx, fs_context):
-    # type: (CliContext, bool) -> tuple
-    """Create authenticated clients
-    :param CliContext ctx: Cli Context
-    :param bool fs_context: only initialize storage clients
-    :rtype: tuple
-    :return: (batch client, blob client, queue client, table client)
-    """
-    if fs_context:
-        batch_client = None
-    else:
-        batch_client = batch.create_client(ctx)
-    blob_client, queue_client, table_client = storage.create_clients()
-    return batch_client, blob_client, queue_client, table_client
-
-
-def create_keyvault_client(ctx):
-    # type: (CliContext) -> azure.keyvault.KeyVaultClient
-    """Create KeyVault client
-    :param CliContext ctx: Cli Context
-    :rtype: azure.keyvault.KeyVaultClient
-    :return: key vault client
-    """
-    kv = settings.credentials_keyvault(ctx.config)
-    return keyvault.create_client(ctx, kv.aad)
-
-
-def create_fs_clients(ctx):
-    # type: (CliContext) ->
-    #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
-    #              azure.mgmt.compute.ComputeManagementClient,
-    #              azure.mgmt.network.NetworkManagementClient]
-    """Create clients needed for fs: resource management, compute, network
-    :param CliContext ctx: Cli Context
-    :rtype: tuple
-    :return: (
-        azure.mgmt.resource.resources.ResourceManagementClient,
-        azure.mgmt.compute.ComputeManagementClient,
-        azure.mgmt.network.NetworkManagementClient)
-    """
-    mgmt = settings.credentials_management(ctx.config)
-    subscription_id = ctx.subscription_id or mgmt.subscription_id
-    return remotefs.create_clients(ctx, mgmt.aad, subscription_id)
-
-
-def initialize(ctx, fs_context=False):
-    # type: (CliContext, bool) -> tuple
-    """Initialize fleet and create authenticated clients
-    :param CliContext ctx: Cli Context
-    :param bool fs_context: only initialize storage clients
-    :rtype: tuple
-    :return: (batch client, blob client, queue client, table client)
-    """
-    if not fs_context:
-        _adjust_general_settings(ctx.config)
-    _populate_global_settings(ctx.config, fs_context)
-    return _create_clients(ctx, fs_context)
 
 
 def fetch_credentials_json_from_keyvault(
@@ -453,14 +394,42 @@ def _setup_azurefile_volume_driver(blob_client, config):
     return bin, srv, srvenv, volcreate
 
 
-def _add_pool(batch_client, blob_client, config):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict) -> None
+def _add_pool(
+        resource_client, network_client, batch_client, blob_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient,
+    #        azure.batch.batch_service_client.BatchServiceClient,
+    #        azureblob.BlockBlobService, dict) -> None
     """Add a Batch pool to account
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
+    # check shared data volume mounts before proceeding to allocate
+    azurefile_vd = False
+    gluster = False
+    try:
+        sdv = settings.global_resources_shared_data_volumes(config)
+        for sdvkey in sdv:
+            if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
+                azurefile_vd = True
+            elif settings.is_shared_data_volume_gluster(sdv, sdvkey):
+                gluster = True
+            else:
+                raise ValueError('Unknown shared data volume: {}'.format(
+                    settings.shared_data_volume_driver(sdv, sdvkey)))
+    except KeyError:
+        pass
+
+    # TODO check virtual network settings
+
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
@@ -490,21 +459,6 @@ def _add_pool(batch_client, blob_client, config):
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression,
         preg.allow_public_docker_hub_pull_on_missing)
-    # check shared data volume mounts
-    azurefile_vd = False
-    gluster = False
-    try:
-        sdv = settings.global_resources_shared_data_volumes(config)
-        for sdvkey in sdv:
-            if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
-                azurefile_vd = True
-            elif settings.is_shared_data_volume_gluster(sdv, sdvkey):
-                gluster = True
-            else:
-                raise ValueError('Unknown shared data volume: {}'.format(
-                    settings.shared_data_volume_driver(sdv, sdvkey)))
-    except KeyError:
-        pass
     # create resource files list
     _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE]
     if not bs.use_shipyard_docker_image:
@@ -1360,17 +1314,29 @@ def action_cert_del(batch_client, config):
 def action_pool_listskus(batch_client):
     # type: (batchsc.BatchServiceClient) -> None
     """Action: Pool Listskus
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     """
     batch.list_node_agent_skus(batch_client)
 
 
 def action_pool_add(
-        batch_client, blob_client, queue_client, table_client, config):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azurequeue.QueueService, azuretable.TableService, dict) -> None
+        resource_client, network_client, batch_mgmt_client, batch_client,
+        blob_client, queue_client, table_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient,
+    #        azure.batch.batch_service_client.BatchServiceClient,
+    #        azureblob.BlockBlobService, azurequeue.QueueService,
+    #        azuretable.TableService, dict) -> None
     """Action: Pool Add
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
@@ -1387,13 +1353,17 @@ def action_pool_add(
         blob_client, queue_client, table_client, config)
     _adjust_settings_for_pool_creation(config)
     storage.populate_queues(queue_client, table_client, config)
-    _add_pool(batch_client, blob_client, config)
+    _add_pool(
+        resource_client, network_client, batch_mgmt_client, batch_client,
+        blob_client, config
+    )
 
 
 def action_pool_list(batch_client):
     # type: (batchsc.BatchServiceClient) -> None
     """Action: Pool List
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     """
     batch.list_pools(batch_client)
 
@@ -1405,7 +1375,8 @@ def action_pool_delete(
     #        azurequeue.QueueService, azuretable.TableService, dict,
     #        bool) -> None
     """Action: Pool Delete
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
@@ -1433,8 +1404,8 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        dict, bool) -> None
     """Resize pool that may contain glusterfs
-    :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param bool wait: wait for operation to complete
@@ -1543,7 +1514,8 @@ def action_pool_resize(batch_client, blob_client, config, wait):
 def action_pool_grls(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Grls
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.get_remote_login_settings(batch_client, config)
@@ -1554,7 +1526,8 @@ def action_pool_grls(batch_client, config):
 def action_pool_listnodes(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Listnodes
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.list_nodes(batch_client, config)
@@ -1563,7 +1536,8 @@ def action_pool_listnodes(batch_client, config):
 def action_pool_asu(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Asu
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.add_ssh_user(batch_client, config)
@@ -1573,7 +1547,8 @@ def action_pool_asu(batch_client, config):
 def action_pool_dsu(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Dsu
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.del_ssh_user(batch_client, config)
@@ -1582,7 +1557,8 @@ def action_pool_dsu(batch_client, config):
 def action_pool_ssh(batch_client, config, cardinal, nodeid):
     # type: (batchsc.BatchServiceClient, dict, int, str) -> None
     """Action: Pool Ssh
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
@@ -1612,7 +1588,8 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
 def action_pool_delnode(batch_client, config, nodeid):
     # type: (batchsc.BatchServiceClient, dict, str) -> None
     """Action: Pool Delnode
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str nodeid: nodeid to delete
     """
@@ -1623,7 +1600,8 @@ def action_pool_rebootnode(
         batch_client, config, all_start_task_failed, nodeid):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Pool Rebootnode
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool all_start_task_failed: reboot all start task failed nodes
     :param str nodeid: nodeid to reboot
@@ -1638,7 +1616,8 @@ def action_pool_rebootnode(
 def action_pool_udi(batch_client, config, image, digest):
     # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Pool Udi
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str image: image to update
     :param str digest: digest to update to
@@ -1654,7 +1633,8 @@ def action_jobs_add(
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azure.keyvault.KeyVaultClient, dict, bool, str) -> None
     """Action: Jobs Add
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
@@ -1669,7 +1649,8 @@ def action_jobs_add(
 def action_jobs_list(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Jobs List
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.list_jobs(batch_client, config)
@@ -1678,7 +1659,8 @@ def action_jobs_list(batch_client, config):
 def action_jobs_listtasks(batch_client, config, jobid):
     # type: (batchsc.BatchServiceClient, dict, str) -> None
     """Action: Jobs Listtasks
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     batch.list_tasks(batch_client, config, jobid)
@@ -1687,7 +1669,8 @@ def action_jobs_listtasks(batch_client, config, jobid):
 def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool) -> None
     """Action: Jobs Termtasks
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str jobid: job id
     :param str taskid: task id
@@ -1708,7 +1691,8 @@ def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
 def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Jobs Deltasks
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str jobid: job id
     :param str taskid: task id
@@ -1725,7 +1709,8 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
 def action_jobs_term(batch_client, config, all, jobid, termtasks, wait):
     # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
     """Action: Jobs Term
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool all: all jobs
     :param str jobid: job id
@@ -1745,7 +1730,8 @@ def action_jobs_term(batch_client, config, all, jobid, termtasks, wait):
 def action_jobs_del(batch_client, config, all, jobid, termtasks, wait):
     # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
     """Action: Jobs Del
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool all: all jobs
     :param str jobid: job id
@@ -1765,7 +1751,8 @@ def action_jobs_del(batch_client, config, all, jobid, termtasks, wait):
 def action_jobs_cmi(batch_client, config, delete):
     # type: (batchsc.BatchServiceClient, dict, bool) -> None
     """Action: Jobs Cmi
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool delete: delete all cmi jobs
     """
@@ -1805,7 +1792,8 @@ def action_storage_clear(blob_client, queue_client, table_client, config):
 def action_data_stream(batch_client, config, filespec, disk):
     # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
     """Action: Data Stream
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str filespec: filespec of file to retrieve
     :param bool disk: write streamed data to disk instead
@@ -1816,7 +1804,8 @@ def action_data_stream(batch_client, config, filespec, disk):
 def action_data_listfiles(batch_client, config, jobid, taskid):
     # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Data Listfiles
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param str jobid: job id to list
     :param str taskid: task id to list
@@ -1831,7 +1820,8 @@ def action_data_listfiles(batch_client, config, jobid, taskid):
 def action_data_getfile(batch_client, config, all, filespec):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Data Getfile
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool all: retrieve all files
     :param str filespec: filespec of file to retrieve
@@ -1845,7 +1835,8 @@ def action_data_getfile(batch_client, config, all, filespec):
 def action_data_getfilenode(batch_client, config, all, nodeid):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Data Getfilenode
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     :param bool all: retrieve all files
     :param str nodeid: node id to retrieve file from
@@ -1859,7 +1850,8 @@ def action_data_getfilenode(batch_client, config, all, nodeid):
 def action_data_ingress(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Data Ingress
-    :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
     :param dict config: configuration dict
     """
     pool_cd = None
