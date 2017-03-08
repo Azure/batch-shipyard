@@ -393,7 +393,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.4...HEAD
+[2.5.4]: https://github.com/Azure/batch-shipyard/compare/2.5.3...2.5.4
 [2.5.3]: https://github.com/Azure/batch-shipyard/compare/2.5.2...2.5.3
 [2.5.2]: https://github.com/Azure/batch-shipyard/compare/2.5.1...2.5.2
 [2.5.1]: https://github.com/Azure/batch-shipyard/compare/2.5.0...2.5.1
