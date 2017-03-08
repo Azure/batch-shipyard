@@ -42,8 +42,6 @@ except ImportError:
     import urllib as urllibreq
 import uuid
 # non-stdlib imports
-import azure.batch.batch_auth as batchauth
-import azure.batch.batch_service_client as batchsc
 import azure.batch.models as batchmodels
 # local imports
 from . import batch
@@ -213,71 +211,63 @@ def _populate_global_settings(config, fs_context):
         bs.generated_sas_expiry_days)
 
 
-def _create_clients(config, fs_context):
-    # type: (dict, bool) -> tuple
+def _create_clients(ctx, fs_context):
+    # type: (CliContext, bool) -> tuple
     """Create authenticated clients
-    :param dict config: configuration dict
+    :param CliContext ctx: Cli Context
     :param bool fs_context: only initialize storage clients
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
-    bc = settings.credentials_batch(config)
     if fs_context:
         batch_client = None
     else:
-        credentials = batchauth.SharedKeyCredentials(
-            bc.account, bc.account_key)
-        batch_client = batchsc.BatchServiceClient(
-            credentials, base_url=bc.account_service_url)
-        batch_client.config.add_user_agent(
-            'batch-shipyard/{}'.format(__version__))
+        batch_client = batch.create_client(ctx)
     blob_client, queue_client, table_client = storage.create_clients()
     return batch_client, blob_client, queue_client, table_client
 
 
-def create_keyvault_client(ctx, config):
-    # type: (CliContext, dict) -> azure.keyvault.KeyVaultClient
+def create_keyvault_client(ctx):
+    # type: (CliContext) -> azure.keyvault.KeyVaultClient
     """Create KeyVault client
     :param CliContext ctx: Cli Context
-    :param dict config: configuration dict
     :rtype: azure.keyvault.KeyVaultClient
     :return: key vault client
     """
-    kv = settings.credentials_keyvault(config)
+    kv = settings.credentials_keyvault(ctx.config)
     return keyvault.create_client(ctx, kv.aad)
 
 
-def create_fs_clients(ctx, config):
-    # type: (CliContext, dict) ->
+def create_fs_clients(ctx):
+    # type: (CliContext) ->
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient]
     """Create clients needed for fs: resource management, compute, network
     :param CliContext ctx: Cli Context
-    :param dict config: configuration dict
     :rtype: tuple
     :return: (
         azure.mgmt.resource.resources.ResourceManagementClient,
         azure.mgmt.compute.ComputeManagementClient,
         azure.mgmt.network.NetworkManagementClient)
     """
-    mgmt = settings.credentials_management(config)
+    mgmt = settings.credentials_management(ctx.config)
     subscription_id = ctx.subscription_id or mgmt.subscription_id
     return remotefs.create_clients(ctx, mgmt.aad, subscription_id)
 
 
-def initialize(config, fs_context=False):
-    # type: (dict, bool) -> tuple
+def initialize(ctx, fs_context=False):
+    # type: (CliContext, bool) -> tuple
     """Initialize fleet and create authenticated clients
-    :param dict config: configuration dict
+    :param CliContext ctx: Cli Context
     :param bool fs_context: only initialize storage clients
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
     if not fs_context:
-        _adjust_general_settings(config)
-    _populate_global_settings(config, fs_context)
-    return _create_clients(config, fs_context)
+        _adjust_general_settings(ctx.config)
+    _populate_global_settings(ctx.config, fs_context)
+    return _create_clients(ctx, fs_context)
 
 
 def fetch_credentials_json_from_keyvault(

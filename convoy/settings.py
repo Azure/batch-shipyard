@@ -96,12 +96,13 @@ ManagementCredentialsSettings = collections.namedtuple(
 )
 BatchCredentialsSettings = collections.namedtuple(
     'BatchCredentialsSettings', [
-        'account', 'account_key', 'account_service_url'
+        'aad', 'account', 'account_key', 'account_service_url',
+        'user_subscription',
     ]
 )
 StorageCredentialsSettings = collections.namedtuple(
     'StorageCredentialsSettings', [
-        'account', 'account_key', 'endpoint'
+        'account', 'account_key', 'endpoint',
     ]
 )
 BatchShipyardSettings = collections.namedtuple(
@@ -694,10 +695,15 @@ def credentials_batch(config):
     :return: batch creds
     """
     conf = config['credentials']['batch']
+    account_key = _kv_read_checked(conf, 'account_key')
+    user_subscription = _kv_read(conf, 'user_subscription', False)
     return BatchCredentialsSettings(
+        aad=_aad_credentials(
+            conf, default_endpoint='https://batch.core.windows.net/'),
         account=conf['account'],
-        account_key=conf['account_key'],
-        account_service_url=conf['account_service_url']
+        account_key=account_key,
+        account_service_url=conf['account_service_url'],
+        user_subscription=user_subscription,
     )
 
 

@@ -85,22 +85,17 @@ class CliContext(object):
         :param CliContext self: this
         """
         self._read_credentials_config()
+        self._set_global_cli_options()
         self.resource_client, self.compute_client, self.network_client = \
-            convoy.fleet.create_fs_clients(self, self.config)
-        self._cleanup_during_initialize()
+            convoy.fleet.create_fs_clients(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=True,
             skip_fs_config=False)
         clients = convoy.fleet.initialize(self.config, fs_context=True)
         self._set_clients(*clients)
-
-    def initialize_for_storage(self):
-        # type: (CliContext) -> None
-        """Initialize context for storage commands
-        :param CliContext self: this
-        """
-        # path is identical to batch
-        self.initialize_for_batch()
+        self._cleanup_after_initialize(
+            skip_fs_config=False)
+        clients = convoy.fleet.initialize(self.config, fs_context=True)
 
     def initialize_for_keyvault(self):
         # type: (CliContext) -> None
@@ -108,10 +103,12 @@ class CliContext(object):
         :param CliContext self: this
         """
         self._read_credentials_config()
-        self.keyvault_client = convoy.fleet.create_keyvault_client(
-            self, self.config)
-        self._cleanup_during_initialize()
+        self._set_global_cli_options()
+        self.keyvault_client = convoy.fleet.create_keyvault_client(self)
         self._init_config(
+            skip_global_config=True, skip_pool_config=True,
+            skip_fs_config=True)
+        self._cleanup_after_initialize(
             skip_global_config=True, skip_pool_config=True,
             skip_fs_config=True)
 
@@ -121,20 +118,57 @@ class CliContext(object):
         :param CliContext self: this
         """
         self._read_credentials_config()
-        self.keyvault_client = convoy.fleet.create_keyvault_client(
-            self, self.config)
-        self._cleanup_during_initialize()
+        self._set_global_cli_options()
+        self.keyvault_client = convoy.fleet.create_keyvault_client(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=False,
             skip_fs_config=True)
-        clients = convoy.fleet.initialize(self.config)
+        clients = convoy.fleet.initialize(self)
         self._set_clients(*clients)
+        self._cleanup_after_initialize(
+            skip_global_config=False, skip_pool_config=False,
+            skip_fs_config=True)
 
-    def _cleanup_during_initialize(self):
+    def initialize_for_storage(self):
         # type: (CliContext) -> None
-        """Cleanup and free memory during initialize_for_* funcs
+        """Initialize context for storage commands
         :param CliContext self: this
         """
+        # path is identical to batch
+        self.initialize_for_batch()
+
+    def _set_global_cli_options(self):
+        # type: (CliContext) -> None
+        """Set global cli options
+        :param CliContext self: this
+        """
+        if self.config is None:
+            self.config = {}
+        # set internal config kv pairs
+        self.config['_verbose'] = self.verbose
+        self.config['_auto_confirm'] = self.yes
+
+    def _cleanup_after_initialize(
+            self, skip_global_config, skip_pool_config, skip_fs_config):
+        # type: (CliContext) -> None
+        """Cleanup after initialize_for_* funcs
+        :param CliContext self: this
+        :param bool skip_global_config: skip global config
+        :param bool skip_pool_config: skip pool config
+        :param bool skip_fs_config: skip remote fs config
+        """
+        # free json objects
+        del self.json_credentials
+        if not skip_global_config:
+            del self.json_config
+        if not skip_pool_config:
+            del self.json_pool
+            del self.json_jobs
+        if not skip_fs_config:
+            del self.json_fs
+        # free cli options
+        del self.verbose
+        del self.yes
         del self.aad_directory_id
         del self.aad_application_id
         del self.aad_auth_key
@@ -143,8 +177,8 @@ class CliContext(object):
         del self.aad_cert_private_key
         del self.aad_cert_thumbprint
         del self.aad_endpoint
+        del self.keyvault_credentials_secret_id
         del self.subscription_id
-        self.config = None
 
     def _read_json_file(self, json_file):
         # type: (CliContext, pathlib.Path) -> None
@@ -191,6 +225,9 @@ class CliContext(object):
         :param bool skip_pool_config: skip pool config
         :param bool skip_fs_config: skip remote fs config
         """
+        # reset config
+        self.config = None
+        self._set_global_cli_options()
         # use configdir if available
         if self.configdir is not None:
             if self.json_credentials is None:
@@ -258,7 +295,6 @@ class CliContext(object):
         else:
             self.config = kvcreds
         del kvcreds
-        del self.keyvault_credentials_secret_id
         # parse any keyvault secret ids from credentials
         convoy.fleet.fetch_secrets_from_keyvault(
             self.keyvault_client, self.config)
@@ -274,20 +310,8 @@ class CliContext(object):
                     self.json_jobs = pathlib.Path(self.json_jobs)
                 if self.json_jobs.exists():
                     self._read_json_file(self.json_jobs)
-        # set internal config kv pairs
-        self.config['_verbose'] = self.verbose
-        self.config['_auto_confirm'] = self.yes
         if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
-        # free mem
-        del self.json_credentials
-        if not skip_global_config:
-            del self.json_config
-        if not skip_pool_config:
-            del self.json_pool
-            del self.json_jobs
-        del self.verbose
-        del self.yes
 
     def _set_clients(
             self, batch_client, blob_client, queue_client, table_client):
@@ -594,14 +618,12 @@ def batch_options(f):
 
 
 def keyvault_options(f):
-    f = aad_options(f)
     f = _azure_keyvault_credentials_secret_id_option(f)
     f = _azure_keyvault_uri_option(f)
     return f
 
 
 def fs_options(f):
-    f = aad_options(f)
     f = _azure_management_subscription_id_option(f)
     f = _fs_option(f)
     return f
@@ -632,6 +654,7 @@ def cluster(ctx):
 @cluster.command('add')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_add(ctx):
     """Create a filesystem storage cluster in Azure"""
@@ -654,6 +677,7 @@ def fs_add(ctx):
     '--wait', is_flag=True, help='Wait for deletion to complete')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_del(
         ctx, delete_all_resources, delete_data_disks, delete_virtual_network,
@@ -671,6 +695,7 @@ def fs_del(
     '--rebalance', is_flag=True, help='Rebalance filesystem, if applicable')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_expand(ctx, rebalance):
     """Expand a filesystem storage cluster in Azure"""
@@ -684,6 +709,7 @@ def fs_expand(ctx, rebalance):
     '--wait', is_flag=True, help='Wait for suspension to complete')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_suspend(ctx, wait):
     """Suspend a filesystem storage cluster in Azure"""
@@ -697,6 +723,7 @@ def fs_suspend(ctx, wait):
     '--wait', is_flag=True, help='Wait for restart to complete')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_start(ctx, wait):
     """Starts a previously suspended filesystem storage cluster in Azure"""
@@ -708,6 +735,7 @@ def fs_start(ctx, wait):
 @cluster.command('status')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_status(ctx):
     """Query status of a filesystem storage cluster in Azure"""
@@ -725,6 +753,7 @@ def fs_status(ctx):
     '--hostname', help='Hostname of remote fs vm to connect to')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_ssh(ctx, cardinal, hostname):
     """Interactively login via SSH to a filesystem storage cluster virtual
@@ -744,6 +773,7 @@ def disks(ctx):
 @disks.command('add')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_disks_add(ctx):
     """Create managed disks in Azure"""
@@ -759,6 +789,7 @@ def fs_disks_add(ctx):
     '--wait', is_flag=True, help='Wait for disk deletion to complete')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_disks_del(ctx, name, wait):
     """Delete managed disks in Azure"""
@@ -773,6 +804,7 @@ def fs_disks_del(ctx, name, wait):
     help='List disks present only in configuration if they exist')
 @common_options
 @fs_options
+@aad_options
 @pass_cli_context
 def fs_disks_list(ctx, restrict_scope):
     """List managed disks in resource group"""
@@ -823,6 +855,7 @@ def keyvault(ctx):
 @click.argument('name')
 @common_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def keyvault_add(ctx, name):
     """Add a credentials json as a secret to Azure KeyVault"""
@@ -835,6 +868,7 @@ def keyvault_add(ctx, name):
 @click.argument('name')
 @common_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def keyvault_del(ctx, name):
     """Delete a secret from Azure KeyVault"""
@@ -846,6 +880,7 @@ def keyvault_del(ctx, name):
 @keyvault.command('list')
 @common_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def keyvault_list(ctx):
     """List secret ids and metadata in an Azure KeyVault"""
@@ -864,6 +899,7 @@ def cert(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def cert_create(ctx):
     """Create a certificate to use with a Batch account"""
@@ -875,6 +911,7 @@ def cert_create(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def cert_add(ctx):
     """Add a certificate to a Batch account"""
@@ -886,6 +923,7 @@ def cert_add(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def cert_list(ctx):
     """List all certificates in a Batch account"""
@@ -897,6 +935,7 @@ def cert_list(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def cert_del(ctx):
     """Delete a certificate from a Batch account"""
@@ -915,6 +954,7 @@ def pool(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_listskus(ctx):
     """List available VM configurations available to the Batch account"""
@@ -926,6 +966,7 @@ def pool_listskus(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_add(ctx):
     """Add a pool to the Batch account"""
@@ -939,6 +980,7 @@ def pool_add(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_list(ctx):
     """List all pools in the Batch account"""
@@ -952,6 +994,7 @@ def pool_list(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_del(ctx, wait):
     """Delete a pool from the Batch account"""
@@ -967,6 +1010,7 @@ def pool_del(ctx, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_resize(ctx, wait):
     """Resize a pool"""
@@ -979,6 +1023,7 @@ def pool_resize(ctx, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_grls(ctx):
     """Get remote login settings for all nodes in pool"""
@@ -990,6 +1035,7 @@ def pool_grls(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_listnodes(ctx):
     """List nodes in pool"""
@@ -1001,6 +1047,7 @@ def pool_listnodes(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_asu(ctx):
     """Add an SSH user to all nodes in pool"""
@@ -1012,6 +1059,7 @@ def pool_asu(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_dsu(ctx):
     """Delete an SSH user from all nodes in pool"""
@@ -1029,6 +1077,7 @@ def pool_dsu(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_ssh(ctx, cardinal, nodeid):
     """Interactively login via SSH to a node in the pool"""
@@ -1043,6 +1092,7 @@ def pool_ssh(ctx, cardinal, nodeid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_delnode(ctx, nodeid):
     """Delete a node from a pool"""
@@ -1060,6 +1110,7 @@ def pool_delnode(ctx, nodeid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_rebootnode(ctx, all_start_task_failed, nodeid):
     """Reboot a node or nodes in a pool"""
@@ -1076,6 +1127,7 @@ def pool_rebootnode(ctx, all_start_task_failed, nodeid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def pool_udi(ctx, image, digest):
     """Update Docker images in a pool"""
@@ -1100,6 +1152,7 @@ def jobs(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_add(ctx, recreate, tail):
     """Add jobs"""
@@ -1113,6 +1166,7 @@ def jobs_add(ctx, recreate, tail):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_list(ctx):
     """List jobs"""
@@ -1126,6 +1180,7 @@ def jobs_list(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_list_tasks(ctx, jobid):
     """List tasks within jobs"""
@@ -1146,6 +1201,7 @@ def jobs_list_tasks(ctx, jobid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_termtasks(ctx, force, jobid, taskid, wait):
     """Terminate specified tasks in jobs"""
@@ -1166,6 +1222,7 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_term(ctx, all, jobid, termtasks, wait):
     """Terminate jobs"""
@@ -1186,6 +1243,7 @@ def jobs_term(ctx, all, jobid, termtasks, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_del(ctx, all, jobid, termtasks, wait):
     """Delete jobs"""
@@ -1204,6 +1262,7 @@ def jobs_del(ctx, all, jobid, termtasks, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_deltasks(ctx, jobid, taskid, wait):
     """Delete specified tasks in jobs"""
@@ -1219,6 +1278,7 @@ def jobs_deltasks(ctx, jobid, taskid, wait):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def jobs_cmi(ctx, delete):
     """Cleanup multi-instance jobs"""
@@ -1241,6 +1301,7 @@ def data(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def data_listfiles(ctx, jobid, taskid):
     """List files for tasks in jobs"""
@@ -1258,6 +1319,7 @@ def data_listfiles(ctx, jobid, taskid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def data_stream(ctx, disk, filespec):
     """Stream a file as text to the local console or as binary to disk"""
@@ -1276,6 +1338,7 @@ def data_stream(ctx, disk, filespec):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def data_getfile(ctx, all, filespec):
     """Retrieve file(s) from a job/task"""
@@ -1293,6 +1356,7 @@ def data_getfile(ctx, all, filespec):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def data_getfilenode(ctx, all, filespec):
     """Retrieve file(s) from a compute node"""
@@ -1305,6 +1369,7 @@ def data_getfilenode(ctx, all, filespec):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def data_ingress(ctx):
     """Ingress data into Azure"""

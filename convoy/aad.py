@@ -44,6 +44,7 @@ import azure.common.credentials
 import msrest.authentication
 import msrestazure.azure_exceptions
 # local imports
+from . import settings
 from . import util
 
 # create logger
@@ -205,7 +206,8 @@ def create_aad_credentials(ctx, aad_settings):
             raise ValueError('cannot specify both cert auth and auth key')
         if util.is_not_empty(aad_password):
             raise ValueError('cannot specify both cert auth and password')
-        logger.debug('authenticating with certificate')
+        if settings.verbose(ctx.config):
+            logger.debug('authenticating with certificate')
         context = adal.AuthenticationContext(
             '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id))
         return msrestazure.azure_active_directory.AdalAuthentication(
@@ -220,7 +222,8 @@ def create_aad_credentials(ctx, aad_settings):
         if util.is_not_empty(aad_password):
             raise ValueError(
                 'Cannot specify both an AAD Service Principal and User')
-        logger.debug('authenticating with auth key')
+        if settings.verbose(ctx.config):
+            logger.debug('authenticating with auth key')
         return azure.common.credentials.ServicePrincipalCredentials(
             aad_application_id,
             aad_auth_key,
@@ -228,7 +231,8 @@ def create_aad_credentials(ctx, aad_settings):
             resource=endpoint,
         )
     elif util.is_not_empty(aad_password):
-        logger.debug('authenticating with username and password')
+        if settings.verbose(ctx.config):
+            logger.debug('authenticating with username and password')
         try:
             return azure.common.credentials.UserPassCredentials(
                 username=aad_user,
@@ -241,7 +245,8 @@ def create_aad_credentials(ctx, aad_settings):
                     e.args[0][2:],
                     'Do not pass an AAD password and try again.'))
     else:
-        logger.debug('authenticating with device code')
+        if settings.verbose(ctx.config):
+            logger.debug('authenticating with device code')
         return DeviceCodeAuthentication(
             context=adal.AuthenticationContext(
                 '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id)),
