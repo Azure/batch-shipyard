@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.5.4] - 2017-03-08
+### Changed
+- Downloaded files are now verified via SHA256 instead of MD5
+- Updated NC-series Tesla driver to 375.39
+
+### Fixed
+- `nvidia-docker` updated to 1.0.1 for compatibility with Docker CE
+
 ## [2.5.3] - 2017-03-01
 ### Added
 - `pool rebootnode` command added which allows single node reboot control.

@@ -315,6 +315,28 @@ def convert_string_to_timedelta(string):
     return datetime.timedelta(days, totsec)
 
 
+def compute_sha256_for_file(file, as_base64, blocksize=65536):
+    # type: (pathlib.Path, bool, int) -> str
+    """Compute SHA256 hash for file
+    :param pathlib.Path file: file to compute md5 for
+    :param bool as_base64: return as base64 encoded string
+    :param int blocksize: block size in bytes
+    :rtype: str
+    :return: SHA256 for file
+    """
+    hasher = hashlib.sha256()
+    with file.open('rb') as filedesc:
+        while True:
+            buf = filedesc.read(blocksize)
+            if not buf:
+                break
+            hasher.update(buf)
+        if as_base64:
+            return base64_encode_string(hasher.digest())
+        else:
+            return hasher.hexdigest()
+
+
 def compute_md5_for_file(file, as_base64, blocksize=65536):
     # type: (pathlib.Path, bool, int) -> str
     """Compute MD5 hash for file

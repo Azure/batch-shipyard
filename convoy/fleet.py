@@ -62,28 +62,34 @@ util.setup_logger(logger)
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _AZUREFILE_DVD_BIN = {
     'url': (
-        'https://github.com/Azure/azurefile-dockervolumedriver/releases'
-        '/download/v0.5.1/azurefile-dockervolumedriver'
+        'https://github.com/Azure/azurefile-dockervolumedriver/releases/'
+        'download/v0.5.1/azurefile-dockervolumedriver'
     ),
-    'md5': 'ee14da21efdfda4bedd85a67adbadc14'
+    'sha256': (
+        '288f809a1290ea8daf89d222507bda9b3709a9665cec8b70354a50252395e127'
+    ),
 }
 _NVIDIA_DOCKER = {
     'ubuntuserver': {
         'url': (
-            'https://github.com/NVIDIA/nvidia-docker/releases'
-            '/download/v1.0.0/nvidia-docker_1.0.0-1_amd64.deb'
+            'https://github.com/NVIDIA/nvidia-docker/releases/download/'
+            'v1.0.1/nvidia-docker_1.0.1-1_amd64.deb'
         ),
-        'md5': '4572a32fe599949381f83c44f8fc57f9',
+        'sha256': (
+            '9fbfd98f87ef2fd2e2137e3ba59431890dde6caf96f113ea0a1bd15bb3e51afa'
+        ),
         'target': 'resources/nvidia-docker.deb'
-    }
+    },
 }
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
-            'http://us.download.nvidia.com/XFree86/Linux-x86_64/375.20'
-            '/NVIDIA-Linux-x86_64-375.20.run'
+            'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
+            '375.39/NVIDIA-Linux-x86_64-375.39.run'
         ),
-        'md5': '874ec6d875f532ee9995082176cf9074',
+        'sha256': (
+            '91be5a20841678d671f32074e2901791fe12c00ce1f3b6b3c4199ce302da85a7'
+        ),
     },
     'license': (
         'http://www.nvidia.com/content/DriverDownload-March2009'
@@ -294,8 +300,8 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
     pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
-            util.compute_md5_for_file(pkg, False) !=
-            _NVIDIA_DRIVER[gpu_type]['md5']):
+            util.compute_sha256_for_file(pkg, False) !=
+            _NVIDIA_DRIVER[gpu_type]['sha256']):
         # display license link
         if not util.confirm_action(
                 config,
@@ -311,10 +317,10 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
         response = urllibreq.urlopen(_NVIDIA_DRIVER[gpu_type]['url'])
         with pkg.open('wb') as f:
             f.write(response.read())
-        # check md5
-        if (util.compute_md5_for_file(pkg, False) !=
-                _NVIDIA_DRIVER[gpu_type]['md5']):
-            raise RuntimeError('md5 mismatch for {}'.format(pkg))
+        # check sha256
+        if (util.compute_sha256_for_file(pkg, False) !=
+                _NVIDIA_DRIVER[gpu_type]['sha256']):
+            raise RuntimeError('sha256 mismatch for {}'.format(pkg))
     return pkg
 
 
@@ -333,18 +339,18 @@ def _setup_nvidia_docker_package(blob_client, config):
     pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DOCKER[offer]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
-            util.compute_md5_for_file(pkg, False) !=
-            _NVIDIA_DOCKER[offer]['md5']):
+            util.compute_sha256_for_file(pkg, False) !=
+            _NVIDIA_DOCKER[offer]['sha256']):
         # download package
         logger.debug('downloading NVIDIA docker to {}'.format(
             _NVIDIA_DOCKER[offer]['target']))
         response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
         with pkg.open('wb') as f:
             f.write(response.read())
-        # check md5
-        if (util.compute_md5_for_file(pkg, False) !=
-                _NVIDIA_DOCKER[offer]['md5']):
-            raise RuntimeError('md5 mismatch for {}'.format(pkg))
+        # check sha256
+        if (util.compute_sha256_for_file(pkg, False) !=
+                _NVIDIA_DOCKER[offer]['sha256']):
+            raise RuntimeError('sha256 mismatch for {}'.format(pkg))
     return pkg
 
 
@@ -363,17 +369,17 @@ def _setup_azurefile_volume_driver(blob_client, config):
     # check to see if binary is downloaded
     bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
     if (not bin.exists() or
-            util.compute_md5_for_file(bin, False) !=
-            _AZUREFILE_DVD_BIN['md5']):
+            util.compute_sha256_for_file(bin, False) !=
+            _AZUREFILE_DVD_BIN['sha256']):
         # download package
         logger.debug('downloading Azure File Docker Volume Driver')
         response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
         with bin.open('wb') as f:
             f.write(response.read())
-        # check md5
-        if (util.compute_md5_for_file(bin, False) !=
-                _AZUREFILE_DVD_BIN['md5']):
-            raise RuntimeError('md5 mismatch for {}'.format(bin))
+        # check sha256
+        if (util.compute_sha256_for_file(bin, False) !=
+                _AZUREFILE_DVD_BIN['sha256']):
+            raise RuntimeError('sha256 mismatch for {}'.format(bin))
     if (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku.startswith('14.04')):
         srv = pathlib.Path(
