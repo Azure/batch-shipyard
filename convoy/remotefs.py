@@ -240,6 +240,8 @@ def delete_managed_disks(
                 len(async_ops)))
         for op in async_ops:
             op.result()
+        logger.info('{} managed disks deleted in resource group {}'.format(
+            len(async_ops), rfs.resource_group))
     else:
         return async_ops
 
@@ -300,43 +302,30 @@ def _create_network_security_group(network_client, rfs):
     priority = 100
     security_rules = []
     for nsi in rfs.storage_cluster.network_security.inbound:
-        if nsi == 'ssh':
-            dpr = '22'
-        elif nsi == 'nfs':
-            dpr = '2049'
-        else:
-            raise ValueError(
-                'Unknown network service {} for network security'.format(nsi))
         i = 0
-        for sap in rfs.storage_cluster.network_security.inbound[nsi]:
+        ir = rfs.storage_cluster.network_security.inbound[nsi]
+        for sap in ir.source_address_prefix:
+            proto = ir.protocol.lower()
+            if proto == 'tcp':
+                proto = networkmodels.SecurityRuleProtocol.tcp
+            elif proto == 'udp':
+                proto = networkmodels.SecurityRuleProtocol.udp
+            elif proto == '*':
+                proto = networkmodels.SecurityRuleProtocol.asterisk
+            else:
+                raise ValueError('Unknown protocol {} for rule {}'.format(
+                    proto, nsi))
             security_rules.append(networkmodels.SecurityRule(
                 name='{}_in-{}'.format(nsi, i),
                 description='{} inbound ({})'.format(nsi, i),
-                protocol=networkmodels.SecurityRuleProtocol.tcp,
+                protocol=proto,
                 source_port_range='*',
-                destination_port_range=dpr,
+                destination_port_range=str(ir.destination_port_range),
                 source_address_prefix=sap,
                 destination_address_prefix='*',
                 access=networkmodels.SecurityRuleAccess.allow,
                 priority=priority,
                 direction=networkmodels.SecurityRuleDirection.inbound)
-            )
-            priority += 1
-            i += 1
-    for nsi in rfs.storage_cluster.network_security.outbound:
-        i = 0
-        for dap in rfs.storage_cluster.network_security.outbound[nsi]:
-            security_rules.append(networkmodels.SecurityRule(
-                name='{}_out-{}'.format(nsi, i),
-                description='{} outbound ({})'.format(nsi, i),
-                protocol=networkmodels.SecurityRuleProtocol.tcp,
-                source_port_range='*',
-                destination_port_range='*',
-                source_address_prefix='10.0.0.0/8',
-                destination_address_prefix=dap,
-                access=networkmodels.SecurityRuleAccess.allow,
-                priority=priority,
-                direction=networkmodels.SecurityRuleDirection.outbound)
             )
             priority += 1
             i += 1
@@ -1172,13 +1161,6 @@ def delete_storage_cluster(
         op.result()
     logger.info('{} virtual machines deleted'.format(len(async_ops)))
     async_ops.clear()
-    # delete os disks
-    os_disk_async_ops = []
-    for key in resources:
-        os_disk = resources[key]['os_disk']
-        os_disk_async_ops.extend(delete_managed_disks(
-            compute_client, config, os_disk, wait=False,
-            confirm_override=True))
     # delete availability set
     deleted = set()
     as_async_ops = []
@@ -1195,6 +1177,13 @@ def delete_storage_cluster(
         nic = resources[key]['nic']
         async_ops.append(_delete_network_interface(
             network_client, rfs.resource_group, nic))
+    # delete os disks (delay from vm due to potential in use errors)
+    os_disk_async_ops = []
+    for key in resources:
+        os_disk = resources[key]['os_disk']
+        os_disk_async_ops.extend(delete_managed_disks(
+            compute_client, config, os_disk, wait=False,
+            confirm_override=True))
     # delete data disks (delay from vm due to potential in use errors)
     data_disk_async_ops = []
     for key in resources:

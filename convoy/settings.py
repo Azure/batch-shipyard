@@ -182,9 +182,14 @@ FileServerSettings = collections.namedtuple(
         'type', 'mountpoint',
     ]
 )
+InboundNetworkSecurityRule = collections.namedtuple(
+    'InboundNetworkSecurityRule', [
+        'destination_port_range', 'source_address_prefix', 'protocol',
+    ]
+)
 NetworkSecuritySettings = collections.namedtuple(
     'NetworkSecuritySettings', [
-        'inbound', 'outbound',
+        'inbound',
     ]
 )
 MappedVmDiskSettings = collections.namedtuple(
@@ -2205,14 +2210,49 @@ def remotefs_settings(config):
     sc_id = conf['id']
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
-    sc_network_security_inbound = _kv_read(
-        conf['network_security'], 'inbound', {})
-    sc_network_security_outbound = _kv_read(
-        conf['network_security'], 'outbound', {})
     sc_vm_count = _kv_read(conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(conf, 'vm_size')
     sc_static_public_ip = _kv_read(conf, 'static_public_ip', False)
     sc_hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    # sc network security settings
+    conf = config['remote_fs']['storage_cluster']['network_security']
+    sc_ns_inbound = {
+        'ssh': InboundNetworkSecurityRule(
+            destination_port_range='22',
+            source_address_prefix=_kv_read_checked(conf, 'ssh', ['*']),
+            protocol='tcp',
+        ),
+    }
+    if not isinstance(sc_ns_inbound['ssh'].source_address_prefix, list):
+        raise ValueError('expected list for ssh network security rule')
+    if 'nfs' in conf:
+        sc_ns_inbound['nfs'] = InboundNetworkSecurityRule(
+            destination_port_range='2049',
+            source_address_prefix=_kv_read_checked(conf, 'nfs', ['*']),
+            protocol='tcp',
+        )
+        if not isinstance(sc_ns_inbound['nfs'].source_address_prefix, list):
+            raise ValueError('expected list for nfs network security rule')
+    if 'custom_inbound' in conf:
+        _reserved = frozenset(['ssh', 'nfs', 'glusterfs'])
+        for key in conf['custom_inbound']:
+            # ensure key is not reserved
+            if key.lower() in _reserved:
+                raise ValueError(
+                    ('custom inbound rule of name {} conflicts with a '
+                     'reserved name {}').format(key, _reserved))
+            sc_ns_inbound[key] = InboundNetworkSecurityRule(
+                destination_port_range=_kv_read_checked(
+                    conf['custom_inbound'][key], 'destination_port_range'),
+                source_address_prefix=_kv_read_checked(
+                    conf['custom_inbound'][key], 'source_address_prefix'),
+                protocol=_kv_read_checked(
+                    conf['custom_inbound'][key], 'protocol'),
+            )
+            if not isinstance(sc_ns_inbound[key].source_address_prefix, list):
+                raise ValueError(
+                    'expected list for network security rule {} '
+                    'source_address_prefix'.format(key))
     # sc virtual network settings
     conf = config['remote_fs']['storage_cluster']['virtual_network']
     sc_vnet_id = _kv_read_checked(conf, 'id')
@@ -2241,11 +2281,6 @@ def remotefs_settings(config):
     sc_ssh_public_key = _kv_read_checked(conf, 'ssh_public_key')
     sc_ssh_gen_file_path = _kv_read_checked(
         conf, 'generated_file_export_path', '.')
-    # ensure ssh inbound rule is set
-    if 'ssh' not in sc_network_security_inbound:
-        raise ValueError(
-            'cannot specify an SSH user without an SSH inbound allow '
-            'network security rule')
     # sc vm disk map settings
     conf = config['remote_fs']['storage_cluster']['vm_disk_map']
     _disk_set = frozenset(md_disk_ids)
@@ -2301,8 +2336,7 @@ def remotefs_settings(config):
                 existing_ok=sc_vnet_existing_ok,
             ),
             network_security=NetworkSecuritySettings(
-                inbound=sc_network_security_inbound,
-                outbound=sc_network_security_outbound,
+                inbound=sc_ns_inbound,
             ),
             file_server=FileServerSettings(
                 type=sc_fs_type,
