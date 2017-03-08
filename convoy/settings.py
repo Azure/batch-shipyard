@@ -189,7 +189,7 @@ NetworkSecuritySettings = collections.namedtuple(
 )
 MappedVmDiskSettings = collections.namedtuple(
     'MappedVmDiskSettings', [
-        'disk_array', 'format_as', 'raid_type'
+        'disk_array', 'filesystem', 'raid_level'
     ]
 )
 StorageClusterSettings = collections.namedtuple(
@@ -2260,20 +2260,22 @@ def remotefs_settings(config):
                      disk_array, vmkey, _disk_set))
         if len(disk_array) == 1:
             # disable raid
-            raid_type = -1
+            raid_level = -1
         else:
-            raid_type = conf[vmkey]['raid_type']
-            if raid_type == 0 and len(disk_array) < 2:
+            raid_level = conf[vmkey]['raid_level']
+            if raid_level == 0 and len(disk_array) < 2:
                 raise ValueError('RAID-0 arrays require at least two disks')
-            if raid_type != 0:
-                raise ValueError('Unsupported RAID level {}'.format(raid_type))
-        format_as = conf[vmkey]['format_as']
-        if format_as != 'btrfs' and not format_as.startswith('ext'):
-            raise ValueError('Unsupported format as type {}'.format(format_as))
+            if raid_level != 0:
+                raise ValueError('Unsupported RAID level {}'.format(
+                    raid_level))
+        filesystem = conf[vmkey]['filesystem']
+        if filesystem != 'btrfs' and not filesystem.startswith('ext'):
+            raise ValueError('Unsupported filesystem type {}'.format(
+                filesystem))
         disk_map[int(vmkey)] = MappedVmDiskSettings(
             disk_array=disk_array,
-            format_as=conf[vmkey]['format_as'],
-            raid_type=raid_type,
+            filesystem=conf[vmkey]['filesystem'],
+            raid_level=raid_level,
         )
     # check disk map against vm_count
     if len(disk_map) != sc_vm_count:

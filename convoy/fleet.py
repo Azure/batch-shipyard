@@ -189,16 +189,16 @@ def _adjust_general_settings(config):
             settings.set_batch_shipyard_encryption_enabled(config, False)
 
 
-def _populate_global_settings(config, remotefs_context):
+def _populate_global_settings(config, fs_context):
     # type: (dict, bool) -> None
     """Populate global settings from config
     :param dict config: configuration dict
-    :param bool remotefs_context: only initialize storage clients
+    :param bool fs_context: only initialize storage clients
     """
     bs = settings.batch_shipyard_settings(config)
     sc = settings.credentials_storage(config, bs.storage_account_settings)
     bc = settings.credentials_batch(config)
-    if remotefs_context:
+    if fs_context:
         rfs = settings.remotefs_settings(config)
         postfix = rfs.storage_cluster.id
     else:
@@ -213,16 +213,16 @@ def _populate_global_settings(config, remotefs_context):
         bs.generated_sas_expiry_days)
 
 
-def _create_clients(config, remotefs_context):
+def _create_clients(config, fs_context):
     # type: (dict, bool) -> tuple
     """Create authenticated clients
     :param dict config: configuration dict
-    :param bool remotefs_context: only initialize storage clients
+    :param bool fs_context: only initialize storage clients
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
     bc = settings.credentials_batch(config)
-    if remotefs_context:
+    if fs_context:
         batch_client = None
     else:
         credentials = batchauth.SharedKeyCredentials(
@@ -247,12 +247,12 @@ def create_keyvault_client(ctx, config):
     return keyvault.create_client(ctx, kv.aad)
 
 
-def create_remotefs_clients(ctx, config):
+def create_fs_clients(ctx, config):
     # type: (CliContext, dict) ->
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient]
-    """Create clients needed for remotefs: client, network
+    """Create clients needed for fs: resource management, compute, network
     :param CliContext ctx: Cli Context
     :param dict config: configuration dict
     :rtype: tuple
@@ -266,18 +266,18 @@ def create_remotefs_clients(ctx, config):
     return remotefs.create_clients(ctx, mgmt.aad, subscription_id)
 
 
-def initialize(config, remotefs_context=False):
+def initialize(config, fs_context=False):
     # type: (dict, bool) -> tuple
     """Initialize fleet and create authenticated clients
     :param dict config: configuration dict
-    :param bool remotefs_context: only initialize storage clients
+    :param bool fs_context: only initialize storage clients
     :rtype: tuple
     :return: (batch client, blob client, queue client, table client)
     """
-    if not remotefs_context:
+    if not fs_context:
         _adjust_general_settings(config)
-    _populate_global_settings(config, remotefs_context)
-    return _create_clients(config, remotefs_context)
+    _populate_global_settings(config, fs_context)
+    return _create_clients(config, fs_context)
 
 
 def fetch_credentials_json_from_keyvault(
@@ -1128,10 +1128,10 @@ def _adjust_settings_for_pool_creation(config):
                 pass
 
 
-def action_remotefs_disks_add(resource_client, compute_client, config):
+def action_fs_disks_add(resource_client, compute_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict) -> None
-    """Action: Remotefs Disks Add
+    """Action: Fs Disks Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1141,10 +1141,10 @@ def action_remotefs_disks_add(resource_client, compute_client, config):
     remotefs.create_managed_disks(resource_client, compute_client, config)
 
 
-def action_remotefs_disks_del(compute_client, config, name, wait):
+def action_fs_disks_del(compute_client, config, name, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
     #        bool) -> None
-    """Action: Remotefs Disks Del
+    """Action: Fs Disks Del
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
@@ -1154,9 +1154,9 @@ def action_remotefs_disks_del(compute_client, config, name, wait):
     remotefs.delete_managed_disks(compute_client, config, name, wait)
 
 
-def action_remotefs_disks_list(compute_client, config, restrict_scope):
+def action_fs_disks_list(compute_client, config, restrict_scope):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
-    """Action: Remotefs Disks List
+    """Action: Fs Disks List
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
@@ -1165,13 +1165,13 @@ def action_remotefs_disks_list(compute_client, config, restrict_scope):
     remotefs.list_disks(compute_client, config, restrict_scope)
 
 
-def action_remotefs_cluster_add(
+def action_fs_cluster_add(
         resource_client, compute_client, network_client, blob_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService, dict) -> None
-    """Action: Remotefs Cluster Add
+    """Action: Fs Cluster Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1187,7 +1187,7 @@ def action_remotefs_cluster_add(
         _REMOTEFSPREP_FILE[0], [_REMOTEFSPREP_FILE, _REMOTEFSSTAT_FILE])
 
 
-def action_remotefs_cluster_del(
+def action_fs_cluster_del(
         resource_client, compute_client, network_client, blob_client, config,
         delete_all_resources, delete_data_disks, delete_virtual_network, wait):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
@@ -1195,7 +1195,7 @@ def action_remotefs_cluster_del(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService, dict, bool, bool,
     #        bool, bool) -> None
-    """Action: Remotefs Cluster Add
+    """Action: Fs Cluster Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1217,11 +1217,11 @@ def action_remotefs_cluster_del(
     storage.delete_storage_containers_remotefs(blob_client, config)
 
 
-def action_remotefs_cluster_expand(
+def action_fs_cluster_expand(
         compute_client, network_client, config, rebalance):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
-    """Action: Remotefs Cluster Expand
+    """Action: Fs Cluster Expand
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
@@ -1232,12 +1232,12 @@ def action_remotefs_cluster_expand(
     if remotefs.expand_storage_cluster(
             compute_client, network_client, config, _REMOTEFSPREP_FILE[0],
             rebalance):
-        action_remotefs_cluster_status(compute_client, network_client, config)
+        action_fs_cluster_status(compute_client, network_client, config)
 
 
-def action_remotefs_cluster_suspend(compute_client, config, wait):
+def action_fs_cluster_suspend(compute_client, config, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
-    """Action: Remotefs Cluster Suspend
+    """Action: Fs Cluster Suspend
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
@@ -1246,11 +1246,11 @@ def action_remotefs_cluster_suspend(compute_client, config, wait):
     remotefs.suspend_storage_cluster(compute_client, config, wait)
 
 
-def action_remotefs_cluster_start(
+def action_fs_cluster_start(
         compute_client, network_client, config, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
-    """Action: Remotefs Cluster Start
+    """Action: Fs Cluster Start
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
@@ -1260,13 +1260,13 @@ def action_remotefs_cluster_start(
     """
     remotefs.start_storage_cluster(compute_client, config, wait)
     if wait:
-        action_remotefs_cluster_status(compute_client, network_client, config)
+        action_fs_cluster_status(compute_client, network_client, config)
 
 
-def action_remotefs_cluster_status(compute_client, network_client, config):
+def action_fs_cluster_status(compute_client, network_client, config):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict) -> None
-    """Action: Remotefs Cluster Status
+    """Action: Fs Cluster Status
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
@@ -1277,12 +1277,12 @@ def action_remotefs_cluster_status(compute_client, network_client, config):
         compute_client, network_client, config, _REMOTEFSSTAT_FILE[0])
 
 
-def action_remotefs_cluster_ssh(
+def action_fs_cluster_ssh(
         compute_client, network_client, config, cardinal, hostname):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, int,
     #        str) -> None
-    """Action: Remotefs Cluster Ssh
+    """Action: Fs Cluster Ssh
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:

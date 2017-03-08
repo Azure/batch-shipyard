@@ -8,12 +8,12 @@ DEBIAN_FRONTEND=noninteractive
 # vars
 attach_disks=0
 rebalance=0
-format_as=
+filesystem=
 server_type=
 mountpath=
 optimize_tcp=0
 premium_storage=0
-raid_type=-1
+raid_level=-1
 
 # begin processing
 while getopts "h?abf:m:npr:s:" opt; do
@@ -23,11 +23,11 @@ while getopts "h?abf:m:npr:s:" opt; do
             echo ""
             echo "-a attach mode"
             echo "-b rebalance filesystem on resize"
-            echo "-f [format as] format as"
+            echo "-f [filesystem] filesystem"
             echo "-m [mountpoint] mountpoint"
             echo "-n Tune TCP parameters"
             echo "-p premium storage disks"
-            echo "-r [raid type] raid type"
+            echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
             echo ""
             exit 1
@@ -39,7 +39,7 @@ while getopts "h?abf:m:npr:s:" opt; do
             rebalance=1
             ;;
         f)
-            format_as=${OPTARG,,}
+            filesystem=${OPTARG,,}
             ;;
         m)
             mountpath=$OPTARG
@@ -51,7 +51,7 @@ while getopts "h?abf:m:npr:s:" opt; do
             premium_storage=1
             ;;
         r)
-            raid_type=$OPTARG
+            raid_level=$OPTARG
             ;;
         s)
             server_type=${OPTARG,,}
@@ -64,11 +64,11 @@ shift $((OPTIND-1))
 echo "Parameters:"
 echo "  Attach mode: $attach_disks"
 echo "  Rebalance filesystem: $rebalance"
-echo "  Format as: $format_as"
+echo "  Filesystem: $filesystem"
 echo "  Mountpath: $mountpath"
 echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
-echo "  RAID type: $raid_type"
+echo "  RAID level: $raid_level"
 echo "  Server type: $server_type"
 
 # first start prep
@@ -164,24 +164,44 @@ fi
 
 # check if disks are already in raid set
 raid_resized=0
-if [ $raid_type -ge 0 ]; then
+if [ $raid_level -ge 0 ]; then
     format_target=0
-    if [ $format_as == "btrfs" ]; then
-        if [ $raid_type -ne 0 ]; then
+    md_preexist=0
+    if [ $filesystem == "btrfs" ]; then
+        if [ $raid_level -ne 0 ]; then
             echo "btrfs with non-RAID 0 is not supported."
             exit 1
         fi
     else
-        target=/dev/md0
+        # find any pre-existing targets
+        set +e
+        mdadm --detail --scan
+        if [ $? -eq 0 ]; then
+            target=($(find /dev/md* -maxdepth 0 -type b))
+            if [ ${#target[@]} -ne 0 ]; then
+                target=${target[0]}
+                md_preexist=1
+                echo "Existing array found: $target"
+                # refresh target uuid to md target
+                read target_uuid < <(blkid ${target} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
+            else
+                echo "No pre-existing md target could be found"
+            fi
+        fi
+        set -e
+        if [ -z $target ]; then
+            target=/dev/md0
+            echo "Setting default target: $target"
+        fi
     fi
     declare -a raid_array
     declare -a all_raid_disks
     set +e
     for disk in "${data_disks[@]}"; do
-        if [ $format_as == "btrfs" ]; then
+        if [ $filesystem == "btrfs" ]; then
             btrfs device scan "${disk}1"
         else
-            mdadm --detail "${disk}1"
+            mdadm --examine "${disk}1"
         fi
         if [ $? -ne 0 ]; then
             raid_array=("${raid_array[@]}" "${disk}1")
@@ -195,42 +215,38 @@ if [ $raid_type -ge 0 ]; then
         echo "No disks require RAID setup"
     elif [ $no_raid_count -eq $numdisks ]; then
         echo "$numdisks data disks require RAID setup: ${raid_array[@]}"
-        if [ $format_as == "btrfs" ]; then
-            if [ $raid_type -eq 0 ]; then
+        if [ $filesystem == "btrfs" ]; then
+            if [ $raid_level -eq 0 ]; then
                 mkfs.btrfs -d raid0 ${raid_array[@]}
             else
-                mkfs.btrfs -m raid${raid_type} ${raid_array[@]}
+                mkfs.btrfs -m raid${raid_level} ${raid_array[@]}
             fi
         else
             set +e
             # first check if this is a pre-existing array
-            mdadm --detail --scan
-            if [ $? -eq 0 ]; then
-                target=($(find /dev/md* -maxdepth 0 -type b))
-                if [ ${#target[@]} -ne 1 ]; then
+            mdadm_detail=$(mdadm --detail --scan)
+            if [ -z $mdadm_detail ]; then
+                set -e
+                mdadm --create --verbose $target --level=$raid_level --raid-devices=$numdisks ${raid_array[@]}
+                format_target=1
+            else
+                if [ $md_preexist -eq 0 ]; then
                     echo "Could not determine pre-existing md target"
                     exit 1
                 fi
-                target=${target[0]}
-                echo "Existing array found: $target"
-                # refresh target uuid to md target
-                read target_uuid < <(blkid ${target} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
-            else
-                set -e
-                mdadm --create --verbose $target --level=$raid_type --raid-devices=$numdisks ${raid_array[@]}
-                format_target=1
+                echo "Not creating a new array since pre-exsting md target found: $target"
             fi
             set -e
         fi
     else
         echo "Mismatch of non-RAID disks $no_raid_count to total disks $numdisks."
-        echo "Will resize underlying RAID array with devices: ${raid_array[@]}"
-        if [ $raid_type -ne 0 ]; then
-            echo "Cannot resize with RAID type of $raid_type."
+        if [ $raid_level -ne 0 ]; then
+            echo "Cannot resize with RAID level of $raid_level."
             exit 1
         fi
-        if [ $format_as == "btrfs" ]; then
+        if [ $filesystem == "btrfs" ]; then
             # add new block devices first
+            echo "Adding devices ${raid_array[@]} to $mountpath"
             btrfs device add ${raid_array[@]} $mountpath
             # resize btrfs volume
             echo "Resizing filesystem at $mountpath."
@@ -244,14 +260,16 @@ if [ $raid_type -ge 0 ]; then
             raid_resized=0
         else
             # add new block device first
-            mdadm --add --verbose $target ${raid_array[@]}
+            echo "Adding devices ${raid_array[@]} to $target"
+            mdadm --add $target ${raid_array[@]}
             # grow the array
-            mdadm --grow --verbose $target --raid-devices=$numdisks
+            echo "Growing array $target to a total of $numdisks devices"
+            mdadm --grow --raid-devices=$numdisks $target
             raid_resized=1
         fi
     fi
     # dump diagnostic info
-    if [ $format_as == "btrfs" ]; then
+    if [ $filesystem == "btrfs" ]; then
         btrfs filesystem show
     else
         cat /proc/mdstat
@@ -270,12 +288,12 @@ if [ $format_target -eq 1 ]; then
         exit 1
     fi
     echo "Creating filesystem on $target."
-    if [ $format_as == "btrfs" ]; then
+    if [ $filesystem == "btrfs" ]; then
         mkfs.btrfs $target
-    elif [[ $format_as == ext* ]]; then
-        mkfs.${format_as} -m 0 $target
+    elif [[ $filesystem == ext* ]]; then
+        mkfs.${filesystem} -m 0 $target
     else
-        echo "Unknown format as: $format_as"
+        echo "Unknown filesystem: $filesystem"
         exit 1
     fi
     # refresh target uuid
@@ -311,7 +329,7 @@ if [ $attach_disks -eq 0 ]; then
             echo "Adding $target_uuid to mountpoint $mountpath to /etc/fstab"
             if [ $premium_storage -eq 1 ]; then
                 # disable barriers due to RO cache
-                if [ $format_as == "btrfs" ]; then
+                if [ $filesystem == "btrfs" ]; then
                     mo=",nobarrier"
                 else
                     mo=",barrier=0"
@@ -320,7 +338,7 @@ if [ $attach_disks -eq 0 ]; then
                 # enable discard to save cost on standard storage
                 mo=",discard"
             fi
-            echo "UUID=$target_uuid $mountpath $format_as defaults,noatime${mo} 0 2" >> /etc/fstab
+            echo "UUID=$target_uuid $mountpath $filesystem defaults,noatime${mo} 0 2" >> /etc/fstab
         fi
         # create mountpath
         mkdir -p $mountpath
@@ -337,12 +355,12 @@ fi
 # grow underlying filesystem if required
 if [ $raid_resized -eq 1 ]; then
     echo "Resizing filesystem at $mountpath."
-    if [ $format_as == "btrfs" ]; then
+    if [ $filesystem == "btrfs" ]; then
         btrfs filesystem resize max $mountpath
-    elif [[ $format_as == ext* ]]; then
+    elif [[ $filesystem == ext* ]]; then
         resize2fs $mountpath
     else
-        echo "Unknown format as: $format_as"
+        echo "Unknown filesystem: $filesystem"
         exit 1
     fi
 fi

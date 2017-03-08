@@ -6,7 +6,7 @@ DEBIAN_FRONTEND=noninteractive
 
 # vars
 mountpath=
-raid_type=-1
+raid_level=-1
 server_type=
 
 # begin processing
@@ -16,7 +16,7 @@ while getopts "h?m:r:s:" opt; do
             echo "shipyard_remotefs_stat.sh parameters"
             echo ""
             echo "-m [mountpoint] mountpoint"
-            echo "-r [raid type] raid type"
+            echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
             echo ""
             exit 1
@@ -25,7 +25,7 @@ while getopts "h?m:r:s:" opt; do
             mountpath=$OPTARG
             ;;
         r)
-            raid_type=$OPTARG
+            raid_level=$OPTARG
             ;;
         s)
             server_type=${OPTARG,,}
@@ -78,7 +78,7 @@ echo ""
 formatted_as=$(echo $mount | cut -d" " -f5)
 
 # get raid status
-if [ $raid_type -ge 0 ]; then
+if [ $raid_level -ge 0 ]; then
     if [ $formatted_as == "btrfs" ]; then
         echo "btrfs device status:"
         for disk in "${data_disks[@]}"; do

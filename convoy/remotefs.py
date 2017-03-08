@@ -647,14 +647,14 @@ def _create_virtual_machine_extension(
                 'commandToExecute': './{bsf} {f}{m}{n}{p}{r}{s}'.format(
                     bsf=bootstrap_file,
                     f=' -f {}'.format(
-                        rfs.storage_cluster.vm_disk_map[offset].format_as),
+                        rfs.storage_cluster.vm_disk_map[offset].filesystem),
                     m=' -m {}'.format(
                         rfs.storage_cluster.file_server.mountpoint),
                     n=' -n' if settings.can_tune_tcp(
                         rfs.storage_cluster.vm_size) else '',
                     p=' -p' if premium else '',
                     r=' -r {}'.format(
-                        rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                        rfs.storage_cluster.vm_disk_map[offset].raid_level),
                     s=' -s {}'.format(rfs.storage_cluster.file_server.type),
                 ),
                 'storageAccountName': storage.get_storageaccount(),
@@ -1179,13 +1179,6 @@ def delete_storage_cluster(
         os_disk_async_ops.extend(delete_managed_disks(
             compute_client, config, os_disk, wait=False,
             confirm_override=True))
-    # delete data disks
-    data_disk_async_ops = []
-    for key in resources:
-        data_disks = resources[key]['data_disks']
-        if len(data_disks) > 0:
-            data_disk_async_ops.extend(delete_managed_disks(
-                compute_client, config, data_disks, wait=False))
     # delete availability set
     deleted = set()
     as_async_ops = []
@@ -1202,6 +1195,14 @@ def delete_storage_cluster(
         nic = resources[key]['nic']
         async_ops.append(_delete_network_interface(
             network_client, rfs.resource_group, nic))
+    # delete data disks (delay from vm due to potential in use errors)
+    data_disk_async_ops = []
+    for key in resources:
+        data_disks = resources[key]['data_disks']
+        if len(data_disks) > 0:
+            data_disk_async_ops.extend(delete_managed_disks(
+                compute_client, config, data_disks, wait=False))
+    # wait for nics to delete
     logger.debug('waiting for network interfaces to delete')
     for op in async_ops:
         op.result()
@@ -1325,6 +1326,12 @@ def expand_storage_cluster(
     vms = {}
     new_disk_count = 0
     for i in range(rfs.storage_cluster.vm_count):
+        # check if this vm filesystem supports expanding
+        if (rfs.storage_cluster.vm_disk_map[i].filesystem != 'btrfs' and
+                rfs.storage_cluster.vm_disk_map[i].raid_level == 0):
+            raise RuntimeError(
+                'Cannot expand mdadm-based RAID-0 volumes. Please re-create '
+                'your storage cluster with btrfs using new disks.')
         vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
         try:
             vm = compute_client.virtual_machines.get(
@@ -1363,12 +1370,13 @@ def expand_storage_cluster(
                 new_disk_count += 1
         # check for proper raid setting and number of disks
         pe_len = len(entry['pe_disks']['names'])
-        if pe_len <= 1 or rfs.storage_cluster.vm_disk_map[i].raid_type != 0:
+        if pe_len <= 1 or rfs.storage_cluster.vm_disk_map[i].raid_level != 0:
             raise RuntimeError(
                 'Cannot expand array from {} disk(s) or RAID level {}'.format(
-                    pe_len, rfs.storage_cluster.vm_disk_map[i].raid_type))
+                    pe_len, rfs.storage_cluster.vm_disk_map[i].raid_level))
         # add vm to map
         vms[i] = entry
+    # check early return conditions
     if len(vms) == 0:
         logger.warning(
             'no virtual machines to expand in storage cluster {}'.format(
@@ -1432,12 +1440,12 @@ def expand_storage_cluster(
                 a=' -a',
                 b=' -b' if rebalance else '',
                 f=' -f {}'.format(
-                    rfs.storage_cluster.vm_disk_map[offset].format_as),
+                    rfs.storage_cluster.vm_disk_map[offset].filesystem),
                 m=' -m {}'.format(
                     rfs.storage_cluster.file_server.mountpoint),
                 p=' -p' if premium else '',
                 r=' -r {}'.format(
-                    rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                    rfs.storage_cluster.vm_disk_map[offset].raid_level),
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
             )
         ssh_priv_key, port, username, ip = _get_ssh_info(
@@ -1676,7 +1684,7 @@ def stat_storage_cluster(
                 m=' -m {}'.format(
                     rfs.storage_cluster.file_server.mountpoint),
                 r=' -r {}'.format(
-                    rfs.storage_cluster.vm_disk_map[offset].raid_type),
+                    rfs.storage_cluster.vm_disk_map[offset].raid_level),
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
             )
             cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',

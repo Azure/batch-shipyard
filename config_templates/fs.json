@@ -40,8 +40,8 @@
             "vm_disk_map": {
                 "0": {
                     "disk_array": ["disk0", "disk1"],
-                    "format_as": "btrfs",
-                    "raid_type": 0
+                    "filesystem": "btrfs",
+                    "raid_level": 0
                 }
             }
         }

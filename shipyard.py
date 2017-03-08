@@ -79,19 +79,19 @@ class CliContext(object):
         # management options
         self.subscription_id = None
 
-    def initialize_for_remotefs(self):
+    def initialize_for_fs(self):
         # type: (CliContext) -> None
-        """Initialize context for remotefs commands
+        """Initialize context for fs commands
         :param CliContext self: this
         """
         self._read_credentials_config()
         self.resource_client, self.compute_client, self.network_client = \
-            convoy.fleet.create_remotefs_clients(self, self.config)
+            convoy.fleet.create_fs_clients(self, self.config)
         self._cleanup_during_initialize()
         self._init_config(
             skip_global_config=False, skip_pool_config=True,
-            skip_remotefs_config=False)
-        clients = convoy.fleet.initialize(self.config, remotefs_context=True)
+            skip_fs_config=False)
+        clients = convoy.fleet.initialize(self.config, fs_context=True)
         self._set_clients(*clients)
 
     def initialize_for_storage(self):
@@ -113,7 +113,7 @@ class CliContext(object):
         self._cleanup_during_initialize()
         self._init_config(
             skip_global_config=True, skip_pool_config=True,
-            skip_remotefs_config=True)
+            skip_fs_config=True)
 
     def initialize_for_batch(self):
         # type: (CliContext) -> None
@@ -126,7 +126,7 @@ class CliContext(object):
         self._cleanup_during_initialize()
         self._init_config(
             skip_global_config=False, skip_pool_config=False,
-            skip_remotefs_config=True)
+            skip_fs_config=True)
         clients = convoy.fleet.initialize(self.config)
         self._set_clients(*clients)
 
@@ -183,13 +183,13 @@ class CliContext(object):
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
-            skip_remotefs_config=False):
+            skip_fs_config=False):
         # type: (CliContext, bool, bool, bool) -> None
         """Initializes configuration of the context
         :param CliContext self: this
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
-        :param bool skip_remotefs_config: skip remote fs config
+        :param bool skip_fs_config: skip remote fs config
         """
         # use configdir if available
         if self.configdir is not None:
@@ -204,10 +204,10 @@ class CliContext(object):
                     self.json_pool = pathlib.Path(self.configdir, 'pool.json')
                 if self.json_jobs is None:
                     self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
-            if not skip_remotefs_config:
-                if self.json_remotefs is None:
-                    self.json_remotefs = pathlib.Path(
-                        self.configdir, 'remotefs.json')
+            if not skip_fs_config:
+                if self.json_fs is None:
+                    self.json_fs = pathlib.Path(
+                        self.configdir, 'fs.json')
         # check for required json files
         if (self.json_credentials is not None and
                 not isinstance(self.json_credentials, pathlib.Path)):
@@ -222,11 +222,11 @@ class CliContext(object):
                 raise ValueError('pool json was not specified')
             elif not isinstance(self.json_pool, pathlib.Path):
                 self.json_pool = pathlib.Path(self.json_pool)
-        if not skip_remotefs_config:
-            if self.json_remotefs is None:
-                raise ValueError('remotefs json was not specified')
-            elif not isinstance(self.json_remotefs, pathlib.Path):
-                self.json_remotefs = pathlib.Path(self.json_remotefs)
+        if not skip_fs_config:
+            if self.json_fs is None:
+                raise ValueError('fs json was not specified')
+            elif not isinstance(self.json_fs, pathlib.Path):
+                self.json_fs = pathlib.Path(self.json_fs)
         # fetch credentials from keyvault, if json file is missing
         kvcreds = None
         if self.json_credentials is None or not self.json_credentials.exists():
@@ -265,8 +265,8 @@ class CliContext(object):
         # read rest of config files
         if not skip_global_config:
             self._read_json_file(self.json_config)
-        if not skip_remotefs_config:
-            self._read_json_file(self.json_remotefs)
+        if not skip_fs_config:
+            self._read_json_file(self.json_fs)
         if not skip_pool_config:
             self._read_json_file(self.json_pool)
             if self.json_jobs is not None:
@@ -552,16 +552,16 @@ def _jobs_option(f):
         callback=callback)(f)
 
 
-def _remotefs_option(f):
+def _fs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_remotefs = value
+        clictx.json_fs = value
         return value
     return click.option(
-        '--remotefs',
+        '--fs',
         expose_value=False,
-        envvar='SHIPYARD_REMOTEFS_JSON',
-        help='RemoteFS json config file',
+        envvar='SHIPYARD_FS_JSON',
+        help='Filesystem json config file',
         callback=callback)(f)
 
 
@@ -600,10 +600,10 @@ def keyvault_options(f):
     return f
 
 
-def remotefs_options(f):
+def fs_options(f):
     f = aad_options(f)
     f = _azure_management_subscription_id_option(f)
-    f = _remotefs_option(f)
+    f = _fs_option(f)
     return f
 
 
@@ -617,26 +617,26 @@ def cli(ctx):
 
 @cli.group()
 @pass_cli_context
-def remotefs(ctx):
-    """Remote Filesystem actions"""
+def fs(ctx):
+    """Filesystem in Azure actions"""
     pass
 
 
-@remotefs.group()
+@fs.group()
 @pass_cli_context
 def cluster(ctx):
-    """Storage cluster actions"""
+    """Filesystem storage cluster in Azure actions"""
     pass
 
 
 @cluster.command('add')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_add(ctx):
-    """Create a storage cluster for a Remote Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_add(
+def fs_add(ctx):
+    """Create a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config)
 
@@ -653,14 +653,14 @@ def remotefs_add(ctx):
 @click.option(
     '--wait', is_flag=True, help='Wait for deletion to complete')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_del(
+def fs_del(
         ctx, delete_all_resources, delete_data_disks, delete_virtual_network,
         wait):
-    """Delete a storage cluster used for a Remote Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_del(
+    """Delete a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config, delete_all_resources, delete_data_disks,
         delete_virtual_network, wait)
@@ -670,12 +670,12 @@ def remotefs_del(
 @click.option(
     '--rebalance', is_flag=True, help='Rebalance filesystem, if applicable')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_expand(ctx, rebalance):
-    """Expand a storage cluster used for a Remote Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_expand(
+def fs_expand(ctx, rebalance):
+    """Expand a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_expand(
         ctx.compute_client, ctx.network_client, ctx.config, rebalance)
 
 
@@ -683,12 +683,12 @@ def remotefs_expand(ctx, rebalance):
 @click.option(
     '--wait', is_flag=True, help='Wait for suspension to complete')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_suspend(ctx, wait):
-    """Suspend a storage cluster used for a Remote Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_suspend(
+def fs_suspend(ctx, wait):
+    """Suspend a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_suspend(
         ctx.compute_client, ctx.config, wait)
 
 
@@ -696,25 +696,23 @@ def remotefs_suspend(ctx, wait):
 @click.option(
     '--wait', is_flag=True, help='Wait for restart to complete')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_start(ctx, wait):
-    """Starts a previously suspended storage cluster used for a Remote
-    Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_start(
+def fs_start(ctx, wait):
+    """Starts a previously suspended filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_start(
         ctx.compute_client, ctx.network_client, ctx.config, wait)
 
 
 @cluster.command('status')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_status(ctx):
-    """Query status of a storage cluster used for a Remote
-    Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_status(
+def fs_status(ctx):
+    """Query status of a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_status(
         ctx.compute_client, ctx.network_client, ctx.config)
 
 
@@ -726,17 +724,17 @@ def remotefs_status(ctx):
 @click.option(
     '--hostname', help='Hostname of remote fs vm to connect to')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_ssh(ctx, cardinal, hostname):
-    """Interactively login via SSH to a virtual machine in the Remote
-    Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_cluster_ssh(
+def fs_ssh(ctx, cardinal, hostname):
+    """Interactively login via SSH to a filesystem storage cluster virtual
+    machine in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_ssh(
         ctx.compute_client, ctx.network_client, ctx.config, cardinal, hostname)
 
 
-@remotefs.group()
+@fs.group()
 @pass_cli_context
 def disks(ctx):
     """Managed disk actions"""
@@ -745,12 +743,12 @@ def disks(ctx):
 
 @disks.command('add')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_disks_add(ctx):
-    """Create managed disks for Remote Filesystem in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disks_add(
+def fs_disks_add(ctx):
+    """Create managed disks in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_disks_add(
         ctx.resource_client, ctx.compute_client, ctx.config)
 
 
@@ -760,12 +758,12 @@ def remotefs_disks_add(ctx):
 @click.option(
     '--wait', is_flag=True, help='Wait for disk deletion to complete')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_disks_del(ctx, name, wait):
+def fs_disks_del(ctx, name, wait):
     """Delete managed disks in Azure"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disks_del(
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_disks_del(
         ctx.compute_client, ctx.config, name, wait)
 
 
@@ -774,12 +772,12 @@ def remotefs_disks_del(ctx, name, wait):
     '--restrict-scope', is_flag=True,
     help='List disks present only in configuration if they exist')
 @common_options
-@remotefs_options
+@fs_options
 @pass_cli_context
-def remotefs_disks_list(ctx, restrict_scope):
+def fs_disks_list(ctx, restrict_scope):
     """List managed disks in resource group"""
-    ctx.initialize_for_remotefs()
-    convoy.fleet.action_remotefs_disks_list(
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_disks_list(
         ctx.compute_client, ctx.config, restrict_scope)
 
 
