@@ -118,8 +118,9 @@
                 },
                 "mystoragecluster": {
                     "volume_driver": "storage_cluster",
-                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/nfs",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/mystoragecluster",
                     "mount_options": [
+                        "noatime"
                     ]
                 }
             }

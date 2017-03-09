@@ -599,11 +599,13 @@ def raw_credentials(config, omit_keyvault):
     return conf
 
 
-def _aad_credentials(conf, default_endpoint=None):
+def _aad_credentials(
+        conf, default_endpoint=None, default_token_cache_file=None):
     # type: (dict, str) -> AADSettings
     """Retrieve AAD Settings
     :param dict config: configuration object
     :param str default_endpoint: default endpoint
+    :param str default_token_cache_file: default token cache file
     :rtype: AADSettings
     :return: AAD settings
     """
@@ -626,7 +628,7 @@ def _aad_credentials(conf, default_endpoint=None):
         if token_cache_enabled:
             token_cache_file = _kv_read_checked(
                 conf['aad']['token_cache'], 'filename',
-                '.batch_shipyard_aad_management_token.json')
+                default_token_cache_file)
         else:
             token_cache_file = None
         return AADSettings(
@@ -669,7 +671,13 @@ def credentials_keyvault(config):
     keyvault_credentials_secret_id = _kv_read_checked(
         conf, 'credentials_secret_id')
     return KeyVaultCredentialsSettings(
-        aad=_aad_credentials(conf, default_endpoint='https://vault.azure.net'),
+        aad=_aad_credentials(
+            conf,
+            default_endpoint='https://vault.azure.net',
+            default_token_cache_file=(
+                '.batch_shipyard_aad_keyvault_token.json'
+            ),
+        ),
         keyvault_uri=keyvault_uri,
         keyvault_credentials_secret_id=keyvault_credentials_secret_id,
     )
@@ -689,7 +697,12 @@ def credentials_management(config):
     subscription_id = _kv_read_checked(conf, 'subscription_id')
     return ManagementCredentialsSettings(
         aad=_aad_credentials(
-            conf, default_endpoint='https://management.core.windows.net/'),
+            conf,
+            default_endpoint='https://management.core.windows.net/',
+            default_token_cache_file=(
+                '.batch_shipyard_aad_management_token.json'
+            ),
+        ),
         subscription_id=subscription_id,
     )
 
@@ -716,7 +729,12 @@ def credentials_batch(config):
     location = account_service_url.split('.')[1]
     return BatchCredentialsSettings(
         aad=_aad_credentials(
-            conf, default_endpoint='https://batch.core.windows.net/'),
+            conf,
+            default_endpoint='https://batch.core.windows.net/',
+            default_token_cache_file=(
+                '.batch_shipyard_aad_batch_token.json'
+            ),
+        ),
         account=conf['account'],
         account_key=account_key,
         account_service_url=conf['account_service_url'],

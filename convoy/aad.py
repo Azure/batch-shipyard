@@ -207,7 +207,11 @@ def create_aad_credentials(ctx, aad_settings):
         if util.is_not_empty(aad_password):
             raise ValueError('cannot specify both cert auth and password')
         if settings.verbose(ctx.config):
-            logger.debug('authenticating with certificate')
+            logger.debug(
+                ('authenticating with certificate, endpoint={} directoryid={} '
+                 'appid={} cert_thumbprint={}').format(
+                     endpoint, aad_directory_id, aad_application_id,
+                     aad_cert_thumbprint))
         context = adal.AuthenticationContext(
             '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id))
         return msrestazure.azure_active_directory.AdalAuthentication(
@@ -223,7 +227,10 @@ def create_aad_credentials(ctx, aad_settings):
             raise ValueError(
                 'Cannot specify both an AAD Service Principal and User')
         if settings.verbose(ctx.config):
-            logger.debug('authenticating with auth key')
+            logger.debug(
+                ('authenticating with auth key, endpoint={} directoryid={} '
+                 'appid={}').format(
+                     endpoint, aad_directory_id, aad_application_id))
         return azure.common.credentials.ServicePrincipalCredentials(
             aad_application_id,
             aad_auth_key,
@@ -232,7 +239,10 @@ def create_aad_credentials(ctx, aad_settings):
         )
     elif util.is_not_empty(aad_password):
         if settings.verbose(ctx.config):
-            logger.debug('authenticating with username and password')
+            logger.debug(
+                ('authenticating with username and password, endpoint={} '
+                 'directoryid={} username={}').format(
+                     endpoint, aad_directory_id, aad_user))
         try:
             return azure.common.credentials.UserPassCredentials(
                 username=aad_user,
@@ -246,7 +256,9 @@ def create_aad_credentials(ctx, aad_settings):
                     'Do not pass an AAD password and try again.'))
     else:
         if settings.verbose(ctx.config):
-            logger.debug('authenticating with device code')
+            logger.debug(
+                ('authenticating with device code, endpoint={} '
+                 'directoryid={}').format(endpoint, aad_directory_id))
         return DeviceCodeAuthentication(
             context=adal.AuthenticationContext(
                 '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id)),

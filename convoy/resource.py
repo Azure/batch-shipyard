@@ -139,3 +139,39 @@ def create_virtual_network_and_subnet(
              virtual_network.address_space.address_prefixes,
              vnet_settings.subnet_name, subnet.address_prefix))
     return (virtual_network, subnet)
+
+
+def get_nic_and_pip_from_virtual_machine(network_client, resource_group, vm):
+    # type: (azure.mgmt.network.NetworkManagementClient, str,
+    #        computemodels.VirtualMachine) ->
+    #        Tuple[networkmodels.NetworkInterface,
+    #        networkmodels.PublicIPAddress]
+    """Get network interface and public ip from a virtual machine
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str resource_group: resource group name
+    :param vm computemodels.VirtualMachine: vm
+    :rtype: tuple
+    :return: (nic, pip)
+    """
+    # get nic
+    nic_id = vm.network_profile.network_interfaces[0].id
+    tmp = nic_id.split('/')
+    if tmp[-2] != 'networkInterfaces':
+        raise RuntimeError('could not parse network interface id')
+    nic_name = tmp[-1]
+    nic = network_client.network_interfaces.get(
+        resource_group_name=resource_group,
+        network_interface_name=nic_name,
+    )
+    # get public ip
+    pip_id = nic.ip_configurations[0].public_ip_address.id
+    tmp = pip_id.split('/')
+    if tmp[-2] != 'publicIPAddresses':
+        raise RuntimeError('could not parse public ip address id')
+    pip_name = tmp[-1]
+    pip = network_client.public_ip_addresses.get(
+        resource_group_name=resource_group,
+        public_ip_address_name=pip_name,
+    )
+    return (nic, pip)

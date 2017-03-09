@@ -94,6 +94,7 @@ class CliContext(object):
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
             _, _ = convoy.clients.create_arm_clients(self)
+        self.blob_client, _, _ = convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=True)
 

@@ -43,13 +43,14 @@ except ImportError:
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
+import azure.mgmt.network.models as networkmodels
 # local imports
 from . import batch
 from . import crypto
 from . import data
 from . import keyvault
-from . import network
 from . import remotefs
+from . import resource
 from . import settings
 from . import storage
 from . import util
@@ -442,7 +443,8 @@ def _add_pool(
     # retrieve settings
     pool_settings = settings.pool_settings(config)
     bc = settings.credentials_batch(config)
-    vnet_subnet_id = None
+    vnet = None
+    subnet = None
     # check for virtual network settings
     if (pool_settings.virtual_network is not None and
             util.is_not_empty(pool_settings.virtual_network.name)):
@@ -451,7 +453,7 @@ def _add_pool(
                 'Invalid subnet name on virtual network {}'.format(
                     pool_settings.virtual_network.name))
         # create virtual network and subnet if specified
-        vnet, subnet = network.create_virtual_network_and_subnet(
+        vnet, subnet = resource.create_virtual_network_and_subnet(
             network_client, bc.resource_group, bc.location,
             pool_settings.virtual_network)
         # ensure address prefix for subnet is valid
@@ -482,14 +484,88 @@ def _add_pool(
                              pool_settings.vm_count)):
                 raise RuntimeError('Pool deployment rejected by user')
         logger.info('using virtual network subnet id: {}'.format(subnet.id))
-        vnet_subnet_id = subnet.id
     else:
         logger.debug('no virtual network settings specified')
-
-    # TODO construct mounts for storage_cluster_mount
-    import sys
-    sys.exit(1)
-
+    # construct fstab mount for storage_cluster_mount
+    fstab_mount = None
+    if storage_cluster_mount:
+        # ensure usersubscription account
+        if not bc.user_subscription:
+            raise RuntimeError(
+                '{} account is not a UserSubscription account'.format(
+                    bc.account))
+        # check for vnet/subnet presence
+        if vnet is None or subnet is None:
+            raise RuntimeError(
+                'cannot mount a storage cluster without a valid virtual '
+                'network or subnet')
+        # get remotefs settings
+        rfs = settings.remotefs_settings(config)
+        sc = rfs.storage_cluster
+        # iterate through shared data volumes and fine storage clusters
+        sdv = settings.global_resources_shared_data_volumes(config)
+        if (sc.id not in sdv or
+                not settings.is_shared_data_volume_storage_cluster(
+                    sdv, sc.id)):
+            raise RuntimeError(
+                'No storage cluster {} found in configuration'.format(sc.id))
+        # check for same vnet
+        if vnet.name != sc.virtual_network.name:
+            raise RuntimeError(
+                'cannot link storage cluster {} on virtual '
+                'network {} with pool virtual network {}'.format(
+                    sc.id, sc.virtual_network.name, vnet.name))
+        # get vm count
+        if sc.vm_count < 1:
+            raise RuntimeError(
+                'storage cluster {} vm_count {} is invalid'.format(
+                    sc.id, sc.vm_count))
+        # get fileserver type
+        if sc.file_server.type == 'nfs':
+            # query first vm for info
+            vm_name = '{}-vm{}'.format(sc.hostname_prefix, 0)
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.resource_group,
+                vm_name=vm_name,
+            )
+            _, pip = resource.get_nic_and_pip_from_virtual_machine(
+                network_client, rfs.resource_group, vm)
+            # get static ip setting
+            if (pip.public_ip_allocation_method ==
+                    networkmodels.IPAllocationMethod.static):
+                # use ip for mount command
+                remote_ip = pip.ip_address
+            else:
+                # use fqdn dns name for mount command
+                remote_ip = pip.dns_settings.fqdn
+            # construct mount options
+            mo = '_netdev,auto'
+            amo = settings.shared_data_volume_mount_options(sdv, sc.id)
+            if util.is_not_empty(amo):
+                mo = ','.join((mo, ','.join(amo)))
+            # construct mount string for fstab
+            fstab_mount = (
+                '{remoteip}:{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
+                '{fstype} {mo} 0 2').format(
+                    remoteip=remote_ip,
+                    srcpath=sc.file_server.mountpoint,
+                    scid=sc.id,
+                    fstype=sc.file_server.type,
+                    mo=mo,
+                )
+        else:
+            raise NotImplementedError(
+                ('cannot handle file_server type {} for storage '
+                 'cluster {}').format(sc.file_server.type, sc.id))
+        if util.is_none_or_empty(fstab_mount):
+            raise RuntimeError(
+                ('Could not construct an fstab mount entry for storage '
+                 'cluster {}').format(sc.id))
+        # log config
+        if settings.verbose(config):
+            logger.debug('storage cluster {} fstab mount: {}'.format(
+                sc.id, fstab_mount))
+    del storage_cluster_mount
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
@@ -567,7 +643,7 @@ def _add_pool(
     del _rflist
     # create start task commandline
     start_task = [
-        '{npf} {a}{b}{d}{e}{f}{g}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
+        '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
             npf=_NODEPREP_FILE[0],
             a=' -a' if azurefile_vd else '',
             b=' -b {}'.format(block_for_gr) if block_for_gr else '',
@@ -575,6 +651,8 @@ def _add_pool(
             e=' -e {}'.format(pfx.sha1) if encrypt else '',
             f=' -f' if gluster_on_compute else '',
             g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+            m=' -m {}'.format(sc.id) if util.is_not_empty(
+                fstab_mount) else '',
             n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             o=' -o {}'.format(pool_settings.offer),
             p=' -p {}'.format(
@@ -659,6 +737,17 @@ def _add_pool(
             )
         )
         del psa
+    if subnet is not None:
+        pool.network_configuration = batchmodels.NetworkConfiguration(
+            subnet_id=subnet.id,
+        )
+    if util.is_not_empty(fstab_mount):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SHIPYARD_STORAGE_CLUSTER_FSTAB',
+                fstab_mount
+            )
+        )
     # add optional environment variables
     if bs.store_timing_metrics:
         pool.start_task.environment_settings.append(

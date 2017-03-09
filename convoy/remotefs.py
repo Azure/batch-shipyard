@@ -44,7 +44,7 @@ import azure.mgmt.resource.resources.models as rgmodels
 import msrestazure.azure_exceptions
 # local imports
 from . import crypto
-from . import network
+from . import resource
 from . import settings
 from . import storage
 from . import util
@@ -632,7 +632,7 @@ def create_storage_cluster(
     # upload scripts to blob storage for customscript
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # create virtual network and subnet if specified
-    vnet, subnet = network.create_virtual_network_and_subnet(
+    vnet, subnet = resource.create_virtual_network_and_subnet(
         network_client, rfs.resource_group, rfs.location,
         rfs.storage_cluster.virtual_network)
 
@@ -712,42 +712,6 @@ def create_storage_cluster(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 pip.dns_settings.fqdn, pip.ip_address,
                 vm.hardware_profile.vm_size))
-
-
-def _get_nic_and_pip_from_virtual_machine(network_client, rfs, vm):
-    # type: (azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings, computemodels.VirtualMachine) ->
-    #        Tuple[networkmodels.NetworkInterface,
-    #        networkmodels.PublicIPAddress]
-    """Get network interface and public ip from a virtual machine
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param rfs settings.RemoteFsSettings: remote fs settings
-    :param vm computemodels.VirtualMachine: vm
-    :rtype: tuple
-    :return: (nic, pip)
-    """
-    # get nic
-    nic_id = vm.network_profile.network_interfaces[0].id
-    tmp = nic_id.split('/')
-    if tmp[-2] != 'networkInterfaces':
-        raise RuntimeError('could not parse network interface id')
-    nic_name = tmp[-1]
-    nic = network_client.network_interfaces.get(
-        resource_group_name=rfs.resource_group,
-        network_interface_name=nic_name,
-    )
-    # get public ip
-    pip_id = nic.ip_configurations[0].public_ip_address.id
-    tmp = pip_id.split('/')
-    if tmp[-2] != 'publicIPAddresses':
-        raise RuntimeError('could not parse public ip address id')
-    pip_name = tmp[-1]
-    pip = network_client.public_ip_addresses.get(
-        resource_group_name=rfs.resource_group,
-        public_ip_address_name=pip_name,
-    )
-    return (nic, pip)
 
 
 def _get_resource_names_from_virtual_machine(
@@ -1530,8 +1494,8 @@ def stat_storage_cluster(
                 for status in disk.statuses:
                     diskstates.append(status.code)
         # get nic/pip connected to vm
-        nic, pip = _get_nic_and_pip_from_virtual_machine(
-            network_client, rfs, vm)
+        nic, pip = resource.get_nic_and_pip_from_virtual_machine(
+            network_client, rfs.resource_group, vm)
         # get resource names (pass cached data to prevent another lookup)
         _, _, subnet, vnet, nsg, slb = \
             _get_resource_names_from_virtual_machine(
@@ -1589,6 +1553,8 @@ def stat_storage_cluster(
                 vm.instance_view.platform_update_domain,
                 vm.instance_view.platform_fault_domain),
             'fqdn': pip.dns_settings.fqdn,
+            'static_ip': pip.public_ip_allocation_method ==
+            networkmodels.IPAllocationMethod.static,
             'public_ip_address': pip.ip_address,
             'private_ip_address': nic.ip_configurations[0].private_ip_address,
             'admin_username': vm.os_profile.admin_username,
@@ -1648,7 +1614,8 @@ def _get_ssh_info(
             raise
     # get pip connected to vm
     if pip is None:
-        _, pip = _get_nic_and_pip_from_virtual_machine(network_client, rfs, vm)
+        _, pip = resource.get_nic_and_pip_from_virtual_machine(
+            network_client, rfs.resource_group, vm)
     # connect to vm
     ssh_priv_key = pathlib.Path(
         rfs.storage_cluster.ssh.generated_file_export_path, _SSH_KEY_PREFIX)

@@ -44,9 +44,10 @@ p2penabled=0
 prefix=
 privatereg=
 sku=
+sc_id=0
 version=
 
-while getopts "h?ab:de:fg:no:p:r:s:t:v:wx:" opt; do
+while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -57,6 +58,7 @@ while getopts "h?ab:de:fg:no:p:r:s:t:v:wx:" opt; do
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs cluster"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
+            echo "-m [scid] mount storage cluster"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -86,6 +88,9 @@ while getopts "h?ab:de:fg:no:p:r:s:t:v:wx:" opt; do
             ;;
         g)
             gpu=$OPTARG
+            ;;
+        m)
+            sc_id=$OPTARG
             ;;
         n)
             networkopt=1
@@ -581,6 +586,37 @@ docker pull alfpark/batch-shipyard:tfm-$version
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
     docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
+fi
+
+# mount any storage clusters
+if [ ! -z $sc_id ]; then
+    mountpoint=$AZ_BATCH_NODE_SHARED_DIR/$sc_id
+    echo "Creating host directory for storage cluster $sc_id at $mountpoint"
+    mkdir -p $mountpoint
+    chmod 775 $mountpoint
+    echo "Adding $mountpoint to fstab"
+    echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB" >> /etc/fstab
+    tail -n1 /etc/fstab
+    echo "Mounting $mountpoint"
+    START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        mount $mountpoint
+        if [ $? -eq 0 ]; then
+            break
+        else
+            NOW=$(date -u +"%s")
+            DIFF=$((($NOW-$START)/60))
+            # fail after 5 minutes of attempts
+            if [ $DIFF -ge 5 ]; then
+                echo "Could not mount storage cluster $sc_id on: $mountpoint"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
 fi
 
 # touch node prep finished file to preserve idempotency
