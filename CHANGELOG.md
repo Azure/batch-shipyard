@@ -1,14 +1,20 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Support for UserSubscription Batch accounts
+- Azure Active Directory authentication support for Batch accounts
+
 ### Changed
 - **Breaking Change:** `glusterfs` `volume_driver` for `shared_data_volumes`
 should now be named as `glusterfs_on_compute`. This is to distinguish
 co-located glusterfs on compute nodes with possible standalone glusterfs
 `storage_cluster` remote mounted in the future.
+- Batch account (name) is now an optional property in the credentials config
 - All dependencies updated to latest versions
 - Update Batch API call compatibility for `azure-batch 2.0.0`
 - Precompile python files for Docker images
+- Configuration doc broken up into multiple pages
 
 ## [2.5.4] - 2017-03-08
 ### Changed

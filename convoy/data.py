@@ -150,6 +150,13 @@ def _process_batch_input_data(config, input_data, on_task):
     :rtype: list
     :return: args to pass to blobxfer script
     """
+    # get batch creds
+    bc = settings.credentials_batch(config)
+    # fail (for now) if aad is being used
+    if util.is_none_or_empty(bc.account_key):
+        raise RuntimeError(
+            'cannot move Azure Batch task input data without an account key')
+    # construct arg
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     args = []
     for xfer in input_data:
@@ -158,7 +165,6 @@ def _process_batch_input_data(config, input_data, on_task):
         include = settings.data_include(xfer, False)
         exclude = settings.data_exclude(xfer)
         dst = settings.input_data_destination(xfer, on_task)
-        bc = settings.credentials_batch(config)
         creds = crypto.encrypt_string(
             encrypt,
             '{};{};{}'.format(

@@ -381,6 +381,7 @@ if [ $attach_disks -eq 0 ]; then
             # ip addresses as specified in the remotefs.json file
             echo "${mountpath} *(rw,sync,root_squash,no_subtree_check,mountpoint=${mountpath})" >> /etc/exports
             systemctl reload nfs-kernel-server.service
+            exportfs -v
         fi
         systemctl status nfs-kernel-server.service
         if [ $? -ne 0 ]; then

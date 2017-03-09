@@ -44,7 +44,7 @@ p2penabled=0
 prefix=
 privatereg=
 sku=
-sc_id=0
+sc_arg=0
 version=
 
 while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
@@ -58,7 +58,7 @@ while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs cluster"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
-            echo "-m [scid] mount storage cluster"
+            echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
@@ -90,7 +90,7 @@ while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
             gpu=$OPTARG
             ;;
         m)
-            sc_id=$OPTARG
+            sc_arg=$OPTARG
             ;;
         n)
             networkopt=1
@@ -242,7 +242,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
         gfsstart="initctl start glusterfs-server"
-    elif [[ $sku == 16.04.* ]]; then
+    elif [[ $sku == 16.04* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
@@ -322,7 +322,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         fi
 
-        if [[ $sku == 16.04.* ]] || [[ $name == "debian-jessie" ]]; then
+        if [[ $sku == 16.04* ]] || [[ $name == "debian-jessie" ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
             set -e
@@ -407,6 +407,16 @@ EOF
         # create brick directory
         mkdir -p /mnt/gluster
     fi
+    # install dependencies for storage cluster mount
+    if [ ! -z ${sc_arg+x} ]; then
+        IFS=':' read -ra sc <<< "$sc_arg"
+        if [ ${sc[0]} == "nfs" ]; then
+            apt-get install -y -q --no-install-recommends nfs-common
+        else
+            echo "Unknown file server type: $sc_arg"
+            exit 1
+        fi
+    fi
     # install dependencies if not using cascade container
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
@@ -433,9 +443,11 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             gfsenable="systemctl enable glusterd"
+            rpcbindenable="systemctl enable rpcbind"
         else
             srvenable="chkconfig docker on"
             gfsenable="chkconfig glusterd on"
+            rpcbindenable="chkconfig rpcbind on"
         fi
     else
         echo "unsupported sku: $sku for offer: $offer"
@@ -486,10 +498,24 @@ EOF
             yum install -y epel-release centos-release-gluster38
             sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
             yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
+            systemctl daemon-reload
             $gfsenable
             systemctl start glusterd
             # create brick directory
             mkdir -p /mnt/resource/gluster
+        fi
+        # install dependencies for storage cluster mount
+        if [ ! -z ${sc_arg+x} ]; then
+            IFS=':' read -ra sc <<< "$sc_arg"
+            if [ ${sc[0]} == "nfs" ]; then
+                yum install -y nfs-utils
+                systemctl daemon-reload
+                $rpcbindenable
+                systemctl start rpcbind
+            else
+                echo "Unknown file server type: $sc_arg"
+                exit 1
+            fi
         fi
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
@@ -562,6 +588,19 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             # create brick directory
             mkdir -p /mnt/resource/gluster
         fi
+        # install dependencies for storage cluster mount
+        if [ ! -z ${sc_arg+x} ]; then
+            IFS=':' read -ra sc <<< "$sc_arg"
+            if [ ${sc[0]} == "nfs" ]; then
+                zypper -n in nfs-client
+                systemctl daemon-reload
+                systemctl enable rpcbind
+                systemctl start rpcbind
+            else
+                echo "Unknown file server type: $sc_arg"
+                exit 1
+            fi
+        fi
         # if hpc sku, set up intel mpi
         if [[ $offer == sles-hpc* ]]; then
             if [ $sku != "12-sp1" ]; then
@@ -589,13 +628,16 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
 fi
 
 # mount any storage clusters
-if [ ! -z $sc_id ]; then
-    mountpoint=$AZ_BATCH_NODE_SHARED_DIR/$sc_id
-    echo "Creating host directory for storage cluster $sc_id at $mountpoint"
+if [ ! -z ${sc_arg+x} ]; then
+    IFS=':' read -ra sc <<< "$sc_arg"
+    mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
+    echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
     mkdir -p $mountpoint
-    chmod 775 $mountpoint
+    chmod 777 $mountpoint
     echo "Adding $mountpoint to fstab"
-    echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB" >> /etc/fstab
+    # eval fstab var to expand vars (this is ok since it is set by shipyard)
+    fstab_entry=$(eval echo $SHIPYARD_STORAGE_CLUSTER_FSTAB)
+    echo $fstab_entry >> /etc/fstab
     tail -n1 /etc/fstab
     echo "Mounting $mountpoint"
     START=$(date -u +"%s")
@@ -610,13 +652,14 @@ if [ ! -z $sc_id ]; then
             DIFF=$((($NOW-$START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
-                echo "Could not mount storage cluster $sc_id on: $mountpoint"
+                echo "Could not mount storage cluster $sc_arg on: $mountpoint"
                 exit 1
             fi
             sleep 1
         fi
     done
     set -e
+    echo "$mountpoint mounted."
 fi
 
 # touch node prep finished file to preserve idempotency

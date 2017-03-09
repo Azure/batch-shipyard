@@ -43,7 +43,6 @@ except ImportError:
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
-import azure.mgmt.network.models as networkmodels
 # local imports
 from . import batch
 from . import crypto
@@ -488,6 +487,7 @@ def _add_pool(
         logger.debug('no virtual network settings specified')
     # construct fstab mount for storage_cluster_mount
     fstab_mount = None
+    sc_arg = None
     if storage_cluster_mount:
         # ensure usersubscription account
         if not bc.user_subscription:
@@ -528,20 +528,26 @@ def _add_pool(
                 resource_group_name=rfs.resource_group,
                 vm_name=vm_name,
             )
-            _, pip = resource.get_nic_and_pip_from_virtual_machine(
+            nic = resource.get_nic_from_virtual_machine(
                 network_client, rfs.resource_group, vm)
-            # get static ip setting
-            if (pip.public_ip_allocation_method ==
-                    networkmodels.IPAllocationMethod.static):
-                # use ip for mount command
-                remote_ip = pip.ip_address
-            else:
-                # use fqdn dns name for mount command
-                remote_ip = pip.dns_settings.fqdn
+            # get private ip of vm
+            remote_ip = nic.ip_configurations[0].private_ip_address
             # construct mount options
-            mo = '_netdev,auto'
+            mo = '_netdev,auto,nfsvers=4,intr'
             amo = settings.shared_data_volume_mount_options(sdv, sc.id)
             if util.is_not_empty(amo):
+                if 'udp' in mo:
+                    raise RuntimeError(
+                        ('udp cannot be specified as a mount option for '
+                         'storage cluster {}').format(sc.id))
+                if any([x.startswith('nfsvers=') for x in amo]):
+                    raise RuntimeError(
+                        ('nfsvers cannot be specified as a mount option for '
+                         'storage cluster {}').format(sc.id))
+                if any([x.startswith('port=') for x in amo]):
+                    raise RuntimeError(
+                        ('port cannot be specified as a mount option for '
+                         'storage cluster {}').format(sc.id))
                 mo = ','.join((mo, ','.join(amo)))
             # construct mount string for fstab
             fstab_mount = (
@@ -561,6 +567,8 @@ def _add_pool(
             raise RuntimeError(
                 ('Could not construct an fstab mount entry for storage '
                  'cluster {}').format(sc.id))
+        # construct sc_arg
+        sc_arg = '{}:{}'.format(sc.file_server.type, sc.id)
         # log config
         if settings.verbose(config):
             logger.debug('storage cluster {} fstab mount: {}'.format(
@@ -651,8 +659,7 @@ def _add_pool(
             e=' -e {}'.format(pfx.sha1) if encrypt else '',
             f=' -f' if gluster_on_compute else '',
             g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            m=' -m {}'.format(sc.id) if util.is_not_empty(
-                fstab_mount) else '',
+            m=' -m {}'.format(sc_arg) if util.is_not_empty(sc_arg) else '',
             n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             o=' -o {}'.format(pool_settings.offer),
             p=' -p {}'.format(
@@ -741,7 +748,7 @@ def _add_pool(
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet.id,
         )
-    if util.is_not_empty(fstab_mount):
+    if util.is_not_empty(sc_arg):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_STORAGE_CLUSTER_FSTAB',
@@ -1081,10 +1088,11 @@ def _adjust_settings_for_pool_creation(config):
     shipyard_container_required = True
     if publisher == 'canonical':
         if offer == 'ubuntuserver':
-            if sku >= '14.04.0-lts':
+            if sku.startswith('14.04'):
                 allowed = True
-                if sku >= '16.04.0-lts':
-                    shipyard_container_required = False
+            elif sku.startswith('16.04'):
+                allowed = True
+                shipyard_container_required = False
     elif publisher == 'credativ':
         if offer == 'debian':
             if sku >= '8':
@@ -1110,7 +1118,7 @@ def _adjust_settings_for_pool_creation(config):
     # check for valid image if gpu, currently only ubuntu 16.04 is supported
     if (settings.is_gpu_pool(pool.vm_size) and
             (publisher != 'canonical' and offer != 'ubuntuserver' and
-             sku < '16.04.0-lts')):
+             sku < '16.04')):
         allowed = False
     # oracle linux is not supported due to UEKR4 requirement
     if not allowed:

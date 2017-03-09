@@ -17,12 +17,15 @@ The following are general limitations or restrictions:
 * Compute pool resize down (i.e., removing nodes from a pool) is not supported
 when peer-to-peer transfer is enabled.
 * The maximum number of compute nodes with peer-to-peer enabled is currently
-40 for Linux pools. This limit will be removed in a future release.
+40 for Linux pools for non-UserSubscription Batch accounts.
+* Data movement between Batch tasks as defined by `input_data`:`azure_batch`
+is restricted to Batch accounts with keys (non-AAD).
+* Virtual network support in Batch pools can only be used with
+UserSubscription Batch accounts.
+* Custom images with UserSubscription Batch accounts are not supported (yet).
 * Windows Server 2016, Clear Linux, and Oracle Linux are not supported with
 Batch Shipyard at this time.
 * Task dependencies are incompatible with multi-instance tasks. This is a
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
 This is a current limitation of the underlying VM and host drivers.
-* On-premise Docker private registries are not supported at this time due to
-VNet requirements.

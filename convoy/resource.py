@@ -141,20 +141,17 @@ def create_virtual_network_and_subnet(
     return (virtual_network, subnet)
 
 
-def get_nic_and_pip_from_virtual_machine(network_client, resource_group, vm):
+def get_nic_from_virtual_machine(network_client, resource_group, vm):
     # type: (azure.mgmt.network.NetworkManagementClient, str,
-    #        computemodels.VirtualMachine) ->
-    #        Tuple[networkmodels.NetworkInterface,
-    #        networkmodels.PublicIPAddress]
+    #        computemodels.VirtualMachine) -> networkmodels.NetworkInterface
     """Get network interface and public ip from a virtual machine
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param str resource_group: resource group name
     :param vm computemodels.VirtualMachine: vm
-    :rtype: tuple
-    :return: (nic, pip)
+    :rtype: networkmodels.NetworkInterface
+    :return: nic
     """
-    # get nic
     nic_id = vm.network_profile.network_interfaces[0].id
     tmp = nic_id.split('/')
     if tmp[-2] != 'networkInterfaces':
@@ -164,6 +161,27 @@ def get_nic_and_pip_from_virtual_machine(network_client, resource_group, vm):
         resource_group_name=resource_group,
         network_interface_name=nic_name,
     )
+    return nic
+
+
+def get_nic_and_pip_from_virtual_machine(
+        network_client, resource_group, vm, nic=None):
+    # type: (azure.mgmt.network.NetworkManagementClient, str,
+    #        computemodels.VirtualMachine, networkmodels.NetworkInterface) ->
+    #        Tuple[networkmodels.NetworkInterface,
+    #        networkmodels.PublicIPAddress]
+    """Get network interface and public ip from a virtual machine
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param str resource_group: resource group name
+    :param networkmodels.NetworkInterface nic: nic
+    :param vm computemodels.VirtualMachine: vm
+    :rtype: tuple
+    :return: (nic, pip)
+    """
+    # get nic
+    if nic is None:
+        nic = get_nic_from_virtual_machine(network_client, resource_group, vm)
     # get public ip
     pip_id = nic.ip_configurations[0].public_ip_address.id
     tmp = pip_id.split('/')

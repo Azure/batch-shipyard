@@ -1,11 +1,12 @@
 # Batch Shipyard Configuration
-This page contains in-depth details on how to configure the Batch Shipyard
-toolkit.
+This page contains in-depth details on how to configure Batch Shipyard.
 
 ## Configuration Files
 Batch Shipyard is driven by the following json configuration files:
 
-1. [Credentials](#cred) - credentials for Azure Batch and Storage accounts
+1. [Credentials](11-batch-shipyard-configuration-credentials.md) -
+credentials for Azure Batch, Storage, KeyVault, Management and Docker private
+registries
 2. [Global config](#global) - Batch Shipyard and Docker-specific configuration
 settings
 3. [Pool](#pool) - Azure Batch pool configuration
@@ -20,140 +21,10 @@ Each property is marked with required or optional. Properties marked with
 experimental should be considered as features for testing only.
 
 Example config templates can be found in [this directory](../config\_templates)
-of the repository. Each sample recipe also has a set of configuration files
-that can be modified to your particular scenario.
-
-### <a name="cred"></a>Credentials
-The credentials schema is as follows:
-
-```json
-{
-    "credentials": {
-        "keyvault": {
-            "uri": "https://myvault.vault.azure.net/",
-            "credentials_secret_id": "https://myvault.vault.azure.net/secrets/credentialsjson",
-            "aad": {
-                "directory_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "application_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "auth_key": "01234...",
-                "rsa_private_key_pem": "/path/to/privkey.pem",
-                "x509_cert_sha1_thumbprint": "01AB02CD...",
-                "user": "me@domain.com",
-                "password": "password"
-            },
-            "endpoint": "https://vault.azure.net"
-        },
-        "batch": {
-            "account": "awesomebatchaccountname",
-            "account_key": "batchaccountkey",
-            "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey",
-            "account_service_url": "https://awesomebatchaccountname.<region>.batch.azure.com/"
-        },
-        "storage": {
-            "mystorageaccount": {
-                "account": "awesomestorageaccountname",
-                "account_key": "storageaccountkey",
-                "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/storagekey",
-                "endpoint": "core.windows.net"
-            }
-        },
-        "docker_registry": {
-            "hub": {
-                "username": "myhublogin",
-                "password": "myhubpassword",
-                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/docker-hub-password"
-            },
-            "myserver-myorg.azurecr.io": {
-                "username": "azurecruser",
-                "password": "mypassword",
-                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myserver-myorg-azurecr-io-password"
-            }
-        }
-    }
-}
-```
-
-The `credentials` property is where Azure Batch and Storage credentials
-are defined.
-* (optional) The `keyvault` property defines the required members for
-accessing Azure KeyVault with Azure Active Directory credentials. Note that
-this property is *mutually exclusive* of all other properties in this file.
-If you need to define other members in this config file while using Azure
-KeyVault, then you will need to use environment variables or cli parameters
-instead for AAD and KeyVault credentials.
-  * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
-  * (optional) `credentials_secret_id` property defines the KeyVault secret
-    id containing an entire credentials.json file.
-  * (optional) `aad` property contains members for Azure Active Directory
-    credentials. Note that some options are mutually exclusive of each other
-    depending upon authentication type: `auth_key`, `rsa_private_key_pem` and
-    `password` cannot be defined at the same time. Please see the
-    [Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
-    for more information. Note that any of the following can be specified as
-    a CLI option or environment variable instead. For example, if you do not
-    want to store the `auth_key` in the file, it can be specified at runtime.
-    * (optional) `directory_id` AAD directory (tenant) id
-    * (optional) `application_id` AAD application (client) id
-    * (optional) `auth_key` Service Principal authentication key
-    * (optional) `rsa_private_key_pem` path to RSA private key PEM file
-    * (optional) `x509_cert_sha1_thumbprint` thumbprint of the X.509
-      certificate for use with Certificate-based authentication
-    * (optional) `user` AAD username
-    * (optional) `password` AAD password associated with the user
-    * (optional) `endpoint` is the KeyVault AAD endpoint
-    * (optional) `token_cache` defines token cache properties for device code
-      auth
-      * (optional) `enabled` enables the token cache for device code auth
-      * (optional) `filename` specifies the file path to cache the signed token
-* (required) The `batch` property defines the Azure Batch account. Members
-under the `batch` property can be found in the
-[Azure Portal](https://portal.azure.com) under your Batch account.
-  * (optional) `account_key_keyvault_secret_id` property can be used to
-    reference an Azure KeyVault secret id. Batch Shipyard will contact the
-    specified KeyVault and replace the `account_key` value as returned by
-    Azure KeyVault.
-* (required) Multiple storage properties can be defined which references
-different Azure Storage account credentials under the `storage` property. This
-may be needed for more flexible configuration in other configuration files. In
-the example above, we only have one storage account defined which is aliased
-by the property name `mystorageaccount`. The alias (or storage account link
-name) can be the same as the storage account name itself.
-  * (optional) `account_key_keyvault_secret_id` property can be used to
-    reference an Azure KeyVault secret id. Batch Shipyard will contact the
-    specified KeyVault and replace the `account_key` value as returned by
-    Azure KeyVault.
-* (optional) `docker_registry` property defines logins for Docker registry
-servers. This property does not need to be defined if you are using only
-public repositories on Docker Hub. However, this is required if pulling from
-authenticated private registries such as a secured Azure Container Registry
-or private repositories on Docker Hub.
-  * (optional) `hub` defines the login property to Docker Hub:
-    * (optional) `username` username to log in to Docker Hub
-    * (optional) `password` password associated with the username
-    * (optional) `password_keyvault_secret_id` property can be used to
-      reference an Azure KeyVault secret id. Batch Shipyard will contact the
-      specified KeyVault and replace the `password` value as returned by
-      Azure KeyVault.
-  * (optional) `myserver-myorg.azurecr.io` is an example property that
-    defines a private container registry to connect to. This is an example to
-    connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
-    The private registry defined here should be defined as the `server`
-    property in the `docker_registry`:`private` json object in the global
-    configuration.
-    * (optional) `username` username to log in to this registry
-    * (optional) `password` password associated with this username
-    * (optional) `password_keyvault_secret_id` property can be used to
-      reference an Azure KeyVault secret id. Batch Shipyard will contact the
-      specified KeyVault and replace the `password` value as returned by
-      Azure KeyVault.
-
-Please refer to the
-[Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
-for more information regarding `*_keyvault_secret_id` properties and how
-they are used for credential management with Azure KeyVault.
-
-An example credential json template can be found
-[here](../config\_templates/credentials.json).
+of the repository. Note that templates contain every possible property and
+may be invalid if specified as such. They must be modified for your execution
+scenario. All [sample recipe](../recipes) also have a set of configuration
+files that can be modified to fit your needs.
 
 ### <a name="global"></a>Global Config
 The global config schema is as follows:

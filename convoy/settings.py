@@ -715,6 +715,7 @@ def credentials_batch(config):
     :return: batch creds
     """
     conf = config['credentials']['batch']
+    account = _kv_read_checked(conf, 'account')
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
     user_subscription = _kv_read(conf, 'user_subscription', False)
@@ -726,7 +727,17 @@ def credentials_batch(config):
     except (KeyError, TypeError):
         subscription_id = None
     # parse location from url
-    location = account_service_url.split('.')[1]
+    tmp = account_service_url.split('.')
+    location = tmp[1]
+    acct_from_url = tmp[0].split('/')[-1]
+    if util.is_none_or_empty(account):
+        account = acct_from_url
+    else:
+        # ensure url account matches account name
+        if account != acct_from_url:
+            raise ValueError(
+                ('Specified account {} is a mismatch with service '
+                 'url {}').format(account, account_service_url))
     return BatchCredentialsSettings(
         aad=_aad_credentials(
             conf,
@@ -735,7 +746,7 @@ def credentials_batch(config):
                 '.batch_shipyard_aad_batch_token.json'
             ),
         ),
-        account=conf['account'],
+        account=account,
         account_key=account_key,
         account_service_url=conf['account_service_url'],
         user_subscription=user_subscription,
@@ -2083,7 +2094,7 @@ def task_settings(pool, config, conf):
                  'gpus, pool: {} vm_size: {}').format(pool.id, pool.vm_size))
         # TODO other images as they become available with gpu support
         if (publisher != 'canonical' and offer != 'ubuntuserver' and
-                sku < '16.04.0-lts'):
+                sku < '16.04'):
             raise ValueError(
                 ('Unsupported gpu VM config, publisher={} offer={} '
                  'sku={}').format(publisher, offer, sku))

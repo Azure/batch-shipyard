@@ -208,7 +208,7 @@ def create_aad_credentials(ctx, aad_settings):
             raise ValueError('cannot specify both cert auth and password')
         if settings.verbose(ctx.config):
             logger.debug(
-                ('authenticating with certificate, endpoint={} directoryid={} '
+                ('using aad auth with certificate, endpoint={} directoryid={} '
                  'appid={} cert_thumbprint={}').format(
                      endpoint, aad_directory_id, aad_application_id,
                      aad_cert_thumbprint))
@@ -228,7 +228,7 @@ def create_aad_credentials(ctx, aad_settings):
                 'Cannot specify both an AAD Service Principal and User')
         if settings.verbose(ctx.config):
             logger.debug(
-                ('authenticating with auth key, endpoint={} directoryid={} '
+                ('using aad auth with key, endpoint={} directoryid={} '
                  'appid={}').format(
                      endpoint, aad_directory_id, aad_application_id))
         return azure.common.credentials.ServicePrincipalCredentials(
@@ -240,7 +240,7 @@ def create_aad_credentials(ctx, aad_settings):
     elif util.is_not_empty(aad_password):
         if settings.verbose(ctx.config):
             logger.debug(
-                ('authenticating with username and password, endpoint={} '
+                ('using aad auth with username and password, endpoint={} '
                  'directoryid={} username={}').format(
                      endpoint, aad_directory_id, aad_user))
         try:
@@ -257,7 +257,7 @@ def create_aad_credentials(ctx, aad_settings):
     else:
         if settings.verbose(ctx.config):
             logger.debug(
-                ('authenticating with device code, endpoint={} '
+                ('using aad auth with device code, endpoint={} '
                  'directoryid={}').format(endpoint, aad_directory_id))
         return DeviceCodeAuthentication(
             context=adal.AuthenticationContext(

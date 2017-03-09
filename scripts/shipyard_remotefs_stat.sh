@@ -55,8 +55,11 @@ if [ $server_type == "nfs" ]; then
     echo "NFS service status:"
     systemctl status nfs-kernel-server.service
     echo ""
-    echo "/etc/exports last line:"
-    tail -n1 /etc/exports
+    echo "exportfs:"
+    exportfs -v
+    echo ""
+    echo "nfsstat:"
+    nfsstat -s -4
 else
     echo "$server_type not supported."
     exit 1
