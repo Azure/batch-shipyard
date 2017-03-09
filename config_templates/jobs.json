@@ -8,6 +8,7 @@
             },
             "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 1,
+            "allow_run_on_missing_image": false,
             "input_data": {
                 "azure_batch": [
                     {

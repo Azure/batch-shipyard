@@ -2,19 +2,34 @@
 
 ## [Unreleased]
 ### Added
+- Support for provisioning storage clusters via the `fs cluster` command
+- Support for provisioning managed disks via the `fs disks` command
 - Support for UserSubscription Batch accounts
 - Azure Active Directory authentication support for Batch accounts
+- `allow_run_on_missing` option to jobs that allows tasks to execute under
+jobs with Docker images that have not been pre-loaded via the
+`global_resources`:`docker_images` setting in config.json. Note that, if
+possible, you should attempt to specify all Docker images that you intend
+to run in the `global_resources`:`docker_images` property in the global
+configuration to minimize scheduling to task execution latency.
+- Support for Canonical/UbuntuServer/16.04-LTS. This sku should be used over
+the old 16.04.0-LTS sku due to
+[issue #31](https://github.com/Azure/batch-shipyard/issues/31).
 
 ### Changed
 - **Breaking Change:** `glusterfs` `volume_driver` for `shared_data_volumes`
 should now be named as `glusterfs_on_compute`. This is to distinguish
 co-located glusterfs on compute nodes with possible standalone glusterfs
 `storage_cluster` remote mounted in the future.
-- Batch account (name) is now an optional property in the credentials config
+- Pool existance is now checked prior to job submission and can now proceed
+to add without an active pool.
+- Batch `account` (name) is now an optional property in the credentials config
+- Configuration doc broken up into multiple pages
+- Update all recipes using Canonical/UbuntuServer/16.04.0-LTS to use
+Canonical/UbuntuServer/16.04-LTS instead
+- Precompile python files for Docker images
 - All dependencies updated to latest versions
 - Update Batch API call compatibility for `azure-batch 2.0.0`
-- Precompile python files for Docker images
-- Configuration doc broken up into multiple pages
 
 ## [2.5.4] - 2017-03-08
 ### Changed

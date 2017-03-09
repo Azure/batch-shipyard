@@ -36,7 +36,7 @@ The credentials schema is as follows:
                 "rsa_private_key_pem": "/path/to/privkey.pem",
                 "x509_cert_sha1_thumbprint": "01AB02CD...",
                 "user": "me@domain.com",
-                "password": "password"
+                "password": "password",
                 "token_cache": {
                     "enabled": true,
                     "filename": ""
@@ -59,6 +59,7 @@ The credentials schema is as follows:
                     "filename": ""
                 }
             },
+            "resource_group": "",
             "account_key": "batchaccountkey",
             "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey"
         },
@@ -149,9 +150,12 @@ under the `batch` property can be found in the
   * (required) `account_service_url` is the Batch account service URL.
   * (required for UserSubscription accounts, optional otherwise) `aad` AAD
     authentication parameters for Azure Batch.
+  * (optional) `resource_group` is the resource group containing the Batch
+    account. This is only required if using a UserSubscription Batch account
+    with `aad` authentication.
   * (required unless `aad` is specified) `account_key` is the shared
-    key. This is required for non-AAD logins. This is ignored if the `aad`
-    property is specified.
+    key. This is required for non-AAD logins. This option takes precendence
+    over the `aad` property if specified.
   * (optional) `account_key_keyvault_secret_id` property can be used to
     reference an Azure KeyVault secret id. Batch Shipyard will contact the
     specified KeyVault and replace the `account_key` value as returned by

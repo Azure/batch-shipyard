@@ -98,7 +98,7 @@ ManagementCredentialsSettings = collections.namedtuple(
 BatchCredentialsSettings = collections.namedtuple(
     'BatchCredentialsSettings', [
         'aad', 'account', 'account_key', 'account_service_url',
-        'user_subscription', 'resource_group', 'subscription_id', 'location',
+        'resource_group', 'subscription_id', 'location',
     ]
 )
 StorageCredentialsSettings = collections.namedtuple(
@@ -176,8 +176,8 @@ ManagedDisksSettings = collections.namedtuple(
 )
 VirtualNetworkSettings = collections.namedtuple(
     'VirtualNetworkSettings', [
-        'name', 'address_space', 'subnet_name', 'subnet_address_prefix',
-        'existing_ok', 'create_nonexistant',
+        'name', 'resource_group', 'address_space', 'subnet_name',
+        'subnet_address_prefix', 'existing_ok', 'create_nonexistant',
     ]
 )
 FileServerSettings = collections.namedtuple(
@@ -718,7 +718,6 @@ def credentials_batch(config):
     account = _kv_read_checked(conf, 'account')
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
-    user_subscription = _kv_read(conf, 'user_subscription', False)
     resource_group = _kv_read_checked(conf, 'resource_group')
     # get subscription id from management section
     try:
@@ -749,7 +748,6 @@ def credentials_batch(config):
         account=account,
         account_key=account_key,
         account_service_url=conf['account_service_url'],
-        user_subscription=user_subscription,
         resource_group=resource_group,
         location=location,
         subscription_id=subscription_id,
@@ -1804,6 +1802,22 @@ def job_max_task_retries(conf):
     return max_task_retries
 
 
+def job_allow_run_on_missing(conf):
+    # type: (dict) -> int
+    """Get allow task run on missing image
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: allow run on missing image
+    """
+    try:
+        allow = conf['allow_run_on_missing_image']
+        if allow is None:
+            raise KeyError()
+    except KeyError:
+        allow = False
+    return allow
+
+
 def has_depends_on_task(conf):
     # type: (dict) -> bool
     """Determines if task has task dependencies
@@ -1825,7 +1839,7 @@ def has_depends_on_task(conf):
 def is_multi_instance_task(conf):
     # type: (dict) -> bool
     """Determines if task is multi-isntance
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :rtype: bool
     :return: task is multi-instance
     """
@@ -1835,7 +1849,7 @@ def is_multi_instance_task(conf):
 def task_name(conf):
     # type: (dict) -> str
     """Get task name
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :rtype: str
     :return: task name
     """
@@ -1848,10 +1862,26 @@ def task_name(conf):
     return name
 
 
+def task_docker_image(conf):
+    # type: (dict) -> str
+    """Get docker image used by task
+    :param dict conf: task configuration object
+    :rtype: str
+    :return: docker image used by task
+    """
+    try:
+        di = conf['image']
+        if util.is_none_or_empty(di):
+            raise KeyError()
+    except KeyError:
+        di = None
+    return di
+
+
 def set_task_name(conf, name):
     # type: (dict, str) -> None
     """Set task name
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :param str name: task name to set
     """
     conf['name'] = name
@@ -1860,7 +1890,7 @@ def set_task_name(conf, name):
 def task_id(conf):
     # type: (dict) -> str
     """Get task id
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :rtype: str
     :return: task id
     """
@@ -1876,18 +1906,21 @@ def task_id(conf):
 def set_task_id(conf, id):
     # type: (dict, str) -> None
     """Set task id
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :param str id: task id to set
     """
     conf['id'] = id
 
 
-def task_settings(pool, config, conf):
-    # type: (azure.batch.models.CloudPool, dict, dict) -> TaskSettings
+def task_settings(cloud_pool, config, poolconf, conf, missing_images):
+    # type: (azure.batch.models.CloudPool, dict, PoolSettings,
+    #        dict, list) -> TaskSettings
     """Get task settings
-    :param azure.batch.models.CloudPool pool: cloud pool object
+    :param azure.batch.models.CloudPool cloud_pool: cloud pool object
     :param dict config: configuration dict
-    :param dict conf: job configuration object
+    :param PoolSettings poolconf: pool settings
+    :param dict conf: task configuration object
+    :param list missing_images: list of missing docker images on pool
     :rtype: TaskSettings
     :return: task settings
     """
@@ -1898,11 +1931,36 @@ def task_settings(pool, config, conf):
     image = conf['image']
     if util.is_none_or_empty(image):
         raise ValueError('image is invalid')
+    # check if image is in missing image list
+    if image in missing_images:
+        # get private registry settings
+        preg = docker_registry_private_settings(config)
+        if util.is_not_empty(preg.storage_account):
+            registry = 'localhost:5000/'
+        elif util.is_not_empty(preg.server):
+            registry = '{}/'.format(preg.server)
+        else:
+            registry = ''
+        del preg
+        image = '{}{}'.format(registry, image)
     # get some pool props
-    publisher = pool.virtual_machine_configuration.image_reference.\
-        publisher.lower()
-    offer = pool.virtual_machine_configuration.image_reference.offer.lower()
-    sku = pool.virtual_machine_configuration.image_reference.sku.lower()
+    if cloud_pool is None:
+        pool_id = poolconf.id
+        publisher = poolconf.publisher.lower()
+        offer = poolconf.offer.lower()
+        sku = poolconf.sku.lower()
+        vm_size = poolconf.vm_size
+        inter_node_comm = poolconf.inter_node_communication_enabled
+    else:
+        pool_id = cloud_pool.id
+        publisher = cloud_pool.virtual_machine_configuration.image_reference.\
+            publisher.lower()
+        offer = cloud_pool.virtual_machine_configuration.image_reference.\
+            offer.lower()
+        sku = cloud_pool.virtual_machine_configuration.image_reference.sku.\
+            lower()
+        vm_size = cloud_pool.vm_size.lower()
+        inter_node_comm = cloud_pool.enable_inter_node_communication
     # get depends on
     try:
         depends_on = conf['depends_on']
@@ -2088,10 +2146,10 @@ def task_settings(pool, config, conf):
         gpu = False
     # adjust for gpu settings
     if gpu:
-        if not is_gpu_pool(pool.vm_size):
+        if not is_gpu_pool(vm_size):
             raise RuntimeError(
                 ('cannot initialize a gpu task on nodes without '
-                 'gpus, pool: {} vm_size: {}').format(pool.id, pool.vm_size))
+                 'gpus, pool: {} vm_size: {}').format(pool_id, vm_size))
         # TODO other images as they become available with gpu support
         if (publisher != 'canonical' and offer != 'ubuntuserver' and
                 sku < '16.04'):
@@ -2107,16 +2165,16 @@ def task_settings(pool, config, conf):
         docker_exec_cmd = 'docker exec'
     # adjust for infiniband
     if infiniband:
-        if not pool.enable_inter_node_communication:
+        if not inter_node_comm:
             raise RuntimeError(
                 ('cannot initialize an infiniband task on a '
                  'non-internode communication enabled '
-                 'pool: {}').format(pool.id))
-        if not is_rdma_pool(pool.vm_size):
+                 'pool: {}').format(pool_id))
+        if not is_rdma_pool(vm_size):
             raise RuntimeError(
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA, pool: {} vm_size: {}').format(
-                     pool.id, pool.vm_size))
+                     pool_id, vm_size))
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
         if publisher == 'openlogic' and offer == 'centos-hpc':
@@ -2147,7 +2205,7 @@ def task_settings(pool, config, conf):
     run_opts.append('--env-file {}'.format(envfile))
     # populate mult-instance settings
     if is_multi_instance_task(conf):
-        if not pool.enable_inter_node_communication:
+        if not inter_node_comm:
             raise RuntimeError(
                 ('cannot run a multi-instance task on a '
                  'non-internode communication enabled '
@@ -2194,7 +2252,12 @@ def task_settings(pool, config, conf):
             if num_instances == 'pool_specification_vm_count':
                 num_instances = pool_vm_count(config)
             elif num_instances == 'pool_current_dedicated':
-                num_instances = pool.current_dedicated
+                if cloud_pool is None:
+                    raise RuntimeError(
+                        ('Cannot retrieve current dedicated count for '
+                         'pool: {}. Ensure pool exists.)'.format(pool_id)))
+                else:
+                    num_instances = cloud_pool.current_dedicated
             else:
                 raise ValueError(
                     ('multi instance num instances setting '
@@ -2267,6 +2330,7 @@ def virtual_network_settings(
     except KeyError:
         conf = {}
     name = _kv_read_checked(conf, 'name')
+    resource_group = _kv_read_checked(conf, 'resource_group')
     address_space = _kv_read_checked(conf, 'address_space')
     existing_ok = _kv_read(conf, 'existing_ok', default_existing_ok)
     subnet_name = _kv_read_checked(conf['subnet'], 'name')
@@ -2275,6 +2339,7 @@ def virtual_network_settings(
         conf, 'create_nonexistant', default_create_nonexistant)
     return VirtualNetworkSettings(
         name=name,
+        resource_group=resource_group,
         address_space=address_space,
         subnet_name=subnet_name,
         subnet_address_prefix=subnet_address_prefix,
@@ -2331,9 +2396,9 @@ def remotefs_settings(config):
         )
         if not isinstance(sc_ns_inbound['nfs'].source_address_prefix, list):
             raise ValueError('expected list for nfs network security rule')
-    if 'custom_inbound' in ns_conf:
+    if 'custom_inbound_rules' in ns_conf:
         _reserved = frozenset(['ssh', 'nfs', 'glusterfs'])
-        for key in ns_conf['custom_inbound']:
+        for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
             if key.lower() in _reserved:
                 raise ValueError(
@@ -2341,11 +2406,13 @@ def remotefs_settings(config):
                      'reserved name {}').format(key, _reserved))
             sc_ns_inbound[key] = InboundNetworkSecurityRule(
                 destination_port_range=_kv_read_checked(
-                    ns_conf['custom_inbound'][key], 'destination_port_range'),
+                    ns_conf['custom_inbound_rules'][key],
+                    'destination_port_range'),
                 source_address_prefix=_kv_read_checked(
-                    ns_conf['custom_inbound'][key], 'source_address_prefix'),
+                    ns_conf['custom_inbound_rules'][key],
+                    'source_address_prefix'),
                 protocol=_kv_read_checked(
-                    ns_conf['custom_inbound'][key], 'protocol'),
+                    ns_conf['custom_inbound_rules'][key], 'protocol'),
             )
             if not isinstance(sc_ns_inbound[key].source_address_prefix, list):
                 raise ValueError(

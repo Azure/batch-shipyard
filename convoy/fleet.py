@@ -43,6 +43,7 @@ except ImportError:
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
+import azure.mgmt.batch.models as batchmgmtmodels
 # local imports
 from . import batch
 from . import crypto
@@ -451,10 +452,15 @@ def _add_pool(
             raise ValueError(
                 'Invalid subnet name on virtual network {}'.format(
                     pool_settings.virtual_network.name))
+        if util.is_not_empty(pool_settings.virtual_network.resource_group):
+            _vnet_rg = pool_settings.virtual_network.resource_group
+        else:
+            _vnet_rg = bc.resource_group
         # create virtual network and subnet if specified
         vnet, subnet = resource.create_virtual_network_and_subnet(
-            network_client, bc.resource_group, bc.location,
+            network_client, _vnet_rg, bc.location,
             pool_settings.virtual_network)
+        del _vnet_rg
         # ensure address prefix for subnet is valid
         tmp = subnet.address_prefix.split('/')
         if len(tmp) <= 1:
@@ -490,7 +496,9 @@ def _add_pool(
     sc_arg = None
     if storage_cluster_mount:
         # ensure usersubscription account
-        if not bc.user_subscription:
+        ba = batch.get_batch_account(batch_mgmt_client, config)
+        if (not ba.pool_allocation_mode ==
+                batchmgmtmodels.PoolAllocationMode.user_subscription):
             raise RuntimeError(
                 '{} account is not a UserSubscription account'.format(
                     bc.account))
@@ -1135,21 +1143,6 @@ def _adjust_settings_for_pool_creation(config):
     # adjust inter node comm setting
     if pool.vm_count < 1:
         raise ValueError('invalid vm_count: {}'.format(pool.vm_count))
-    dr = settings.data_replication_settings(config)
-    max_vms = 20 if publisher == 'microsoftwindowsserver' else 40
-    if pool.vm_count > max_vms:
-        if dr.peer_to_peer.enabled:
-            logger.warning(
-                ('disabling peer-to-peer transfer as pool size of {} exceeds '
-                 'max limit of {} vms for inter-node communication').format(
-                     pool.vm_count, max_vms))
-            settings.set_peer_to_peer_enabled(config, False)
-        if pool.inter_node_communication_enabled:
-            logger.warning(
-                ('disabling inter-node communication as pool size of {} '
-                 'exceeds max limit of {} vms for setting').format(
-                     pool.vm_count, max_vms))
-            settings.set_inter_node_communication_enabled(config, False)
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)

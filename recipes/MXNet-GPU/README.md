@@ -17,7 +17,7 @@ compute application, it is best to choose `NC` VM instances.
 once they are available for N-series VMs.
 * `offer` should be `UbuntuServer`. Other offers will be supported once they
 are available for N-series VMs.
-* `sku` should be `16.04.0-LTS`. Other skus will be supported once they are
+* `sku` should be `16.04-LTS`. Other skus will be supported once they are
 available for N-series VMs.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted

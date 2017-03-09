@@ -18,6 +18,7 @@
             "static_public_ip": false,
             "virtual_network": {
                 "name": "",
+                "resource_group": "",
                 "existing_ok": false,
                 "address_space": "",
                 "subnet": {
@@ -28,7 +29,7 @@
             "network_security": {
                 "nfs": ["1.2.3.0/24"],
                 "ssh": ["*"],
-                "custom_inbound": {
+                "custom_inbound_rules": {
                     "myrule": {
                         "destination_port_range": "5000-5001",
                         "source_address_prefix": ["1.2.3.4", "5.6.7.0/24"],

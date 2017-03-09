@@ -60,6 +60,9 @@ if [ $server_type == "nfs" ]; then
     echo ""
     echo "nfsstat:"
     nfsstat -s -4
+    echo ""
+    echo "connected clients:"
+    netstat -tn | grep :2049
 else
     echo "$server_type not supported."
     exit 1

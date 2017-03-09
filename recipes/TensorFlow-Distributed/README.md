@@ -20,7 +20,7 @@ If not using GPUs, another appropriate SKU can be selected.
 supported once they are available for N-series VMs.
 * `offer` should be `UbuntuServer` if using GPUs. Other offers will be
 supported once they are available for N-series VMs.
-* `sku` should be `16.04.0-LTS` if using GPUs. Other skus will be supported
+* `sku` should be `16.04-LTS` if using GPUs. Other skus will be supported
 once they are available for N-series VMs.
 
 If on multiple CPUs:

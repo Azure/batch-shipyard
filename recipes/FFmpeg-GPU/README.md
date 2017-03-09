@@ -18,7 +18,7 @@ audio/video, it is best to choose `NV` VM instances.
 once they are available for N-series VMs.
 * `offer` should be `UbuntuServer`. Other offers will be supported once they
 are available for N-series VMs.
-* `sku` should be `16.04.0-LTS`. Other skus will be supported once they are
+* `sku` should be `16.04-LTS`. Other skus will be supported once they are
 available for N-series VMs.
 * `gpu` property should be specified with the following members:
   * `nvidia_driver` property contains the following members:

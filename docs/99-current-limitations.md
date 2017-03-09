@@ -17,7 +17,9 @@ The following are general limitations or restrictions:
 * Compute pool resize down (i.e., removing nodes from a pool) is not supported
 when peer-to-peer transfer is enabled.
 * The maximum number of compute nodes with peer-to-peer enabled is currently
-40 for Linux pools for non-UserSubscription Batch accounts.
+40 for Linux pools for non-UserSubscription Batch accounts. This check is
+no longer performed before a pool is created and will instead result in
+a ResizeError on the pool if not all compute nodes can be allocated.
 * Data movement between Batch tasks as defined by `input_data`:`azure_batch`
 is restricted to Batch accounts with keys (non-AAD).
 * Virtual network support in Batch pools can only be used with

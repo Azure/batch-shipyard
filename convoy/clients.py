@@ -118,6 +118,31 @@ def create_network_client(ctx, credentials=None, subscription_id=None):
         credentials, subscription_id)
 
 
+def create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
+    # type: (CliContext, object, str) ->
+    #        azure.mgmt.batch.BatchManagementClient
+    """Create batch management client
+    :param CliContext ctx: Cli Context
+    :param object credentials: credentials object
+    :param str subscription_id: subscription id
+    :rtype: azure.mgmt.batch.BatchManagementClient
+    :return: batch management client
+    """
+    mgmt_aad = None
+    if credentials is None:
+        mgmt_aad = settings.credentials_management(ctx.config).aad
+        credentials = aad.create_aad_credentials(ctx, mgmt_aad)
+    if util.is_none_or_empty(subscription_id):
+        if mgmt_aad is None:
+            mgmt_aad = settings.credentials_management(ctx.config).aad
+        subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    batch_mgmt_client = azure.mgmt.batch.BatchManagementClient(
+        credentials, subscription_id)
+    batch_mgmt_client.config.add_user_agent(
+        'batch-shipyard/{}'.format(__version__))
+    return batch_mgmt_client
+
+
 def create_arm_clients(ctx, batch_clients=False):
     # type: (CliContext, bool) ->
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
@@ -148,10 +173,16 @@ def create_arm_clients(ctx, batch_clients=False):
     network_client = create_network_client(
         ctx, credentials=credentials, subscription_id=subscription_id)
     if batch_clients:
-        batch_mgmt_client, batch_client = create_batch_clients(ctx)
+        batch_client = create_batch_service_client(ctx)
+        try:
+            batch_mgmt_client = create_batch_mgmt_client(
+                ctx, credentials=credentials, subscription_id=subscription_id)
+        except Exception:
+            logger.warning('could not create batch management client')
+            batch_mgmt_client = None
     else:
-        batch_mgmt_client = None
         batch_client = None
+        batch_mgmt_client = None
     return (
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client
@@ -171,60 +202,25 @@ def create_keyvault_client(ctx):
     )
 
 
-def create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
-    # type: (CliContext, object, str) ->
-    #        azure.mgmt.batch.BatchManagementClient
-    """Create batch management client
+def create_batch_service_client(ctx):
+    # type: (CliContext) -> azure.batch.batch_service_client.BatchServiceClient
+    """Create batch service client
     :param CliContext ctx: Cli Context
-    :param object credentials: credentials object
-    :param str subscription_id: subscription id
-    :rtype: azure.mgmt.batch.BatchManagementClient
-    :return: batch management client
-    """
-    batch_aad = None
-    if credentials is None:
-        batch_aad = settings.credentials_batch(ctx.config).aad
-        credentials = aad.create_aad_credentials(ctx, batch_aad)
-    if util.is_none_or_empty(subscription_id):
-        if batch_aad is None:
-            batch_aad = settings.credentials_batch(ctx.config).aad
-        subscription_id = ctx.subscription_id or batch_aad.subscription_id
-        if util.is_none_or_empty(subscription_id):
-            return None
-    batch_mgmt_client = azure.mgmt.batch.BatchManagementClient(
-        credentials, subscription_id)
-    batch_mgmt_client.config.add_user_agent(
-        'batch-shipyard/{}'.format(__version__))
-    return batch_mgmt_client
-
-
-def create_batch_clients(ctx):
-    # type: (CliContext) ->
-    #        Tuple[azure.mgmt.batch.BatchManagementClient,
-    #              azure.batch.batch_service_client.BatchServiceClient]
-    """Create batch client
-    :param CliContext ctx: Cli Context
-    :rtype: tuple
-    :return: (
-        azure.mgmt.batch.BatchManagementClient,
-        azure.batch.batch_service_client.BatchServiceClient)
+    :rtype: azure.batch.batch_service_client.BatchServiceClient
+    :return: batch service client
     """
     bc = settings.credentials_batch(ctx.config)
-    use_aad = bc.user_subscription or util.is_none_or_empty(bc.account_key)
-    batch_mgmt_client = None
-    if use_aad:
-        subscription_id = ctx.subscription_id or bc.subscription_id
+    if util.is_none_or_empty(bc.account_key):
+        logger.debug('batch account key not specified, using aad auth')
         batch_aad = settings.credentials_batch(ctx.config).aad
         credentials = aad.create_aad_credentials(ctx, batch_aad)
-        batch_mgmt_client = create_batch_mgmt_client(
-            ctx, credentials=credentials, subscription_id=subscription_id)
     else:
         credentials = batchauth.SharedKeyCredentials(
             bc.account, bc.account_key)
     batch_client = batchsc.BatchServiceClient(
         credentials, base_url=bc.account_service_url)
     batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
-    return (batch_mgmt_client, batch_client)
+    return batch_client
 
 
 def create_storage_clients():

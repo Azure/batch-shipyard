@@ -66,6 +66,27 @@ _RUN_ELEVATED = batchmodels.UserIdentity(
 )
 
 
+def get_batch_account(batch_mgmt_client, config):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict) ->
+    #        azure.mgmt.batch.models.BatchAccount
+    """Get Batch account properties from ARM
+    :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
+        batch management client
+    :param dict config: configuration dict
+    :rtype: azure.mgmt.batch.models.BatchAccount
+    :return: Batch account
+    """
+    if batch_mgmt_client is None:
+        raise RuntimeError(
+            'Batch management client is invalid, please specify management '
+            'aad credentials')
+    bc = settings.credentials_batch(config)
+    return batch_mgmt_client.batch_account.get(
+        resource_group_name=bc.resource_group,
+        account_name=bc.account,
+    )
+
+
 def list_node_agent_skus(batch_client):
     # type: (batch.BatchServiceClient) -> None
     """List all node agent skus
@@ -1708,15 +1729,81 @@ def add_jobs(
     # get the pool inter-node comm setting
     bs = settings.batch_shipyard_settings(config)
     pool = settings.pool_settings(config)
-    _pool = batch_client.pool.get(pool.id)
-    global_resources = []
-    for gr in settings.global_resources_docker_images(config):
-        global_resources.append(gr)
+    try:
+        cloud_pool = batch_client.pool.get(pool.id)
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'The specified pool does not exist.' in ex.message.value:
+            logger.error('{} pool does not exist'.format(pool.id))
+            if util.confirm_action(
+                    config, 'add jobs to nonexistant pool {}'.format(pool.id)):
+                cloud_pool = None
+            else:
+                logger.error(
+                    'not submitting jobs to nonexistant pool {}'.format(
+                        pool.id))
+                return
+        else:
+            raise
+    global_resources = settings.global_resources_docker_images(config)
     lastjob = None
     lasttask = None
     for jobspec in settings.job_specifications(config):
-        jpcmd = ['$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
-            jpfile[0], ' '.join(global_resources))]
+        job_id = settings.job_id(jobspec)
+        # perform checks:
+        # 1. check docker images in task against pre-loaded on pool
+        # 2. if tasks have dependencies, set it if so
+        # 3. if there are multi-instance tasks
+        mi_ac = settings.job_multi_instance_auto_complete(config)
+        multi_instance = False
+        mi_docker_container_name = None
+        reserved_task_id = None
+        uses_task_dependencies = False
+        missing_images = []
+        allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
+        for task in settings.job_tasks(jobspec):
+            # check if task docker image is set in config.json
+            di = settings.task_docker_image(task)
+            if di not in global_resources:
+                if allow_run_on_missing:
+                    logger.warning(
+                        ('docker image {} not pre-loaded on pool for a '
+                         'task specified in job {}').format(di, job_id))
+                    missing_images.append(di)
+                else:
+                    raise RuntimeError(
+                        ('not submitting job {} with missing docker image {} '
+                         'pre-load on pool {}').format(job_id, di, pool.id))
+            # do not break, check to ensure ids are set on each task if
+            # task dependencies are set
+            if settings.has_depends_on_task(task):
+                uses_task_dependencies = True
+            if settings.is_multi_instance_task(task):
+                if multi_instance and mi_ac:
+                    raise ValueError(
+                        'cannot specify more than one multi-instance task '
+                        'per job with auto completion enabled')
+                multi_instance = True
+                mi_docker_container_name = settings.task_name(task)
+                if util.is_none_or_empty(mi_docker_container_name):
+                    _id = settings.task_id(task)
+                    if util.is_none_or_empty(_id):
+                        reserved_task_id = _generate_next_generic_task_id(
+                            batch_client, job_id)
+                        settings.set_task_id(task, reserved_task_id)
+                        _id = '{}-{}'.format(job_id, reserved_task_id)
+                    settings.set_task_name(task, _id)
+                    mi_docker_container_name = settings.task_name(task)
+                    del _id
+        # construct job prep
+        if util.is_not_empty(global_resources):
+            if len(missing_images) > 0 and allow_run_on_missing:
+                gr = list(set(global_resources) - set(missing_images))
+            else:
+                gr = global_resources
+            jpcmd = ['$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
+                jpfile[0], ' '.join(gr))]
+        else:
+            jpcmd = []
         # digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
@@ -1741,39 +1828,10 @@ def add_jobs(
                 user_identity=_RUN_ELEVATED,
                 rerun_on_node_reboot_after_success=False,
             ),
-            uses_task_dependencies=False,
+            uses_task_dependencies=uses_task_dependencies,
             constraints=job_constraints,
         )
         lastjob = job.id
-        # perform checks:
-        # 1. if tasks have dependencies, set it if so
-        # 2. if there are multi-instance tasks
-        mi_ac = settings.job_multi_instance_auto_complete(config)
-        multi_instance = False
-        mi_docker_container_name = None
-        reserved_task_id = None
-        for task in settings.job_tasks(jobspec):
-            # do not break, check to ensure ids are set on each task if
-            # task dependencies are set
-            if settings.has_depends_on_task(task):
-                job.uses_task_dependencies = True
-            if settings.is_multi_instance_task(task):
-                if multi_instance and mi_ac:
-                    raise ValueError(
-                        'cannot specify more than one multi-instance task '
-                        'per job with auto completion enabled')
-                multi_instance = True
-                mi_docker_container_name = settings.task_name(task)
-                if util.is_none_or_empty(mi_docker_container_name):
-                    _id = settings.task_id(task)
-                    if util.is_none_or_empty(_id):
-                        reserved_task_id = _generate_next_generic_task_id(
-                            batch_client, job.id)
-                        settings.set_task_id(task, reserved_task_id)
-                        _id = '{}-{}'.format(job.id, reserved_task_id)
-                    settings.set_task_name(task, _id)
-                    mi_docker_container_name = settings.task_name(task)
-                    del _id
         # add multi-instance settings
         set_terminate_on_all_tasks_complete = False
         if multi_instance and mi_ac:
@@ -1784,7 +1842,7 @@ def add_jobs(
                      'docker rm -v {}'.format(mi_docker_container_name)]),
                 user_identity=_RUN_ELEVATED,
             )
-        logger.info('Adding job: {}'.format(job.id))
+        logger.info('Adding job {} to pool {}'.format(job.id, pool.id))
         try:
             batch_client.job.add(job)
         except batchmodels.batch_error.BatchErrorException as ex:
@@ -1810,6 +1868,7 @@ def add_jobs(
         del mi_ac
         del multi_instance
         del mi_docker_container_name
+        del uses_task_dependencies
         # get base env vars from job
         job_env_vars = settings.job_environment_variables(jobspec)
         _job_env_vars_secid = \
@@ -1830,7 +1889,8 @@ def add_jobs(
             if util.is_none_or_empty(settings.task_name(_task)):
                 settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
             del _task_id
-            task = settings.task_settings(_pool, config, _task)
+            task = settings.task_settings(
+                cloud_pool, config, pool, _task, missing_images)
             # retrieve keyvault task env vars
             if util.is_not_empty(
                     task.environment_variables_keyvault_secret_id):

@@ -33,6 +33,7 @@
         },
         "virtual_network": {
             "name": "",
+            "resource_group": "",
             "create_nonexistant": false,
             "address_space": "",
             "subnet": {

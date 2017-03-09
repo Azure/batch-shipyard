@@ -632,9 +632,14 @@ def create_storage_cluster(
     # upload scripts to blob storage for customscript
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # create virtual network and subnet if specified
+    if util.is_not_empty(rfs.storage_cluster.virtual_network.resource_group):
+        _vnet_rg = rfs.storage_cluster.virtual_network.resource_group
+    else:
+        _vnet_rg = rfs.resource_group
     vnet, subnet = resource.create_virtual_network_and_subnet(
-        network_client, rfs.resource_group, rfs.location,
+        network_client, _vnet_rg, rfs.location,
         rfs.storage_cluster.virtual_network)
+    del _vnet_rg
 
     # TODO create slb
 

@@ -5,7 +5,7 @@
         "vm_count": 1,
         "publisher": "Canonical",
         "offer": "UbuntuServer",
-        "sku": "16.04.0-LTS",
+        "sku": "16.04-LTS",
         "ssh": {
             "username": "docker"
         },
