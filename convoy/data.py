@@ -73,7 +73,7 @@ def _get_gluster_paths(config):
     gluster_container = None
     sdv = settings.global_resources_shared_data_volumes(config)
     for sdvkey in sdv:
-        if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+        if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
             gluster_host = '$AZ_BATCH_NODE_SHARED_DIR/{}'.format(
                 settings.get_gluster_volume())
             gluster_container = settings.shared_data_volume_container_path(
@@ -854,7 +854,8 @@ def ingress_data(
                 sdv = settings.global_resources_shared_data_volumes(config)
                 for sdvkey in sdv:
                     if sdvkey == dest.shared_data_volume:
-                        if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+                        if settings.is_shared_data_volume_gluster_on_compute(
+                                sdv, sdvkey):
                             dst = '{}shared/{}/'.format(
                                 dst, settings.get_gluster_volume())
                         else:

@@ -110,10 +110,16 @@
                     ]
                 },
                 "glustervol": {
-                    "volume_driver": "glusterfs",
+                    "volume_driver": "glusterfs_on_compute",
                     "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs",
                     "volume_type": "replica",
                     "volume_options": [
+                    ]
+                },
+                "mystoragecluster": {
+                    "volume_driver": "storage_cluster",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/nfs",
+                    "mount_options": [
                     ]
                 }
             }

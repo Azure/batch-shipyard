@@ -272,7 +272,7 @@ The global config schema is as follows:
                     ]
                 },
                 "glustervol": {
-                    "volume_driver": "glusterfs",
+                    "volume_driver": "glusterfs_on_compute",
                     "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs",
                     "volume_type": "replica",
                     "volume_options": [
@@ -512,9 +512,9 @@ shared storage volumes. In the first shared volume, `shipyardvol` is the alias
 of this volume:
 * `volume_driver` property specifies the Docker Volume Driver to use.
 Currently Batch Shipyard only supports the `volume_driver` as `azurefile` or
-`glusterfs`. Note that `glusterfs` is not a true Docker Volume Driver. For
-this volume (`shipyardvol`), as this is an Azure File shared volume, the
-`volume_driver` should be set as `azurefile`.
+`glusterfs_on_compute`. Note that `glusterfs_on_compute` is not a true Docker
+Volume Driver. For this volume (`shipyardvol`), as this is an Azure File
+shared volume, the `volume_driver` should be set as `azurefile`.
 * `storage_account_settings` is a link to the alias of the storage account
 specified that holds this Azure File Share.
 * `azure_file_share_name` is the name of the share name on Azure Files. Note
@@ -536,26 +536,28 @@ support share level encryption at this time.
 
 The second shared volue, `glustervol`, is a
 [GlusterFS](https://www.gluster.org/) network file system. Please note that
-GlusterFS volumes are located on the VM's temporary local disk space which is
-a shared resource. Sizes of the local temp disk for each VM size can be found
+`glusterfs_on_compute` are GlusterFS volumes co-located on the VM's temporary
+local disk space which is a shared resource. Sizes of the local temp disk for
+each VM size can be found
 [here](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/).
-If specifying a GlusterFS volume, you must enable internode communication
-in the pool configuration file. These volumes have the following properties:
-* (required) `volume_driver` property should be set as `glusterfs`.
+If specifying a `glusterfs_on_compute` volume, you must enable internode
+communication in the pool configuration file. These volumes have the following
+properties:
+* (required) `volume_driver` property should be set as `glusterfs_on_compute`.
 * (required) `container_path` is the path in the container to mount.
 * (optional) `volume_type` property defines the GlusterFS volume type.
 Currently, `replica` is the only supported type.
 * (optional) `volume_options` property defines additional GlusterFS volume
 options to set.
 
-GlusterFS volumes are mounted on the host at
+`glusterfs_on_compute` volumes are mounted on the host at
 `$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0`. Batch Shipyard will automatically
 replace container path references in direct and storage-based data
 ingress/egress with their host path equivalents.
 
-Note that when resizing a pool with a GlusterFS shared file system, that
-you must resize with the `pool resize` command in `shipyard.py` and not with
-Azure Portal, Batch Explorer or any other tool.
+Note that when resizing a pool with a `glusterfs_on_compute` shared file
+systems that you must resize with the `pool resize` command in `shipyard.py`
+and not with Azure Portal, Batch Explorer or any other tool.
 
 Finally, note that all `docker_volumes` can be omitted completely along with
 one or all of `data_volumes` and `shared_data_volumes` if you do not require

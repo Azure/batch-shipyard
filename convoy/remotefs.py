@@ -44,6 +44,7 @@ import azure.mgmt.resource.resources.models as rgmodels
 import msrestazure.azure_exceptions
 # local imports
 from . import crypto
+from . import network
 from . import settings
 from . import storage
 from . import util
@@ -311,92 +312,6 @@ def _create_network_security_group(network_client, rfs):
             security_rules=security_rules,
         ),
     )
-
-
-def _create_virtual_network(network_client, rfs):
-    # type: (azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings) ->
-    #        Tuple[networkmodels.VirtualNetwork, networkmodels.Subnet]
-    """Create a Virtual network
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :rtype: tuple
-    :return: (virtual network, subnet)
-    """
-    vnet_id = rfs.storage_cluster.virtual_network.id
-    # check if vnet already exists
-    exists = False
-    try:
-        vnet = network_client.virtual_networks.get(
-            resource_group_name=rfs.resource_group,
-            virtual_network_name=vnet_id,
-        )
-        if rfs.storage_cluster.virtual_network.existing_ok:
-            logger.debug('virtual network {} already exists'.format(vnet.id))
-            exists = True
-        else:
-            raise RuntimeError(
-                'virtual network {} already exists'.format(vnet.id))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    if not exists:
-        logger.info('creating virtual network: {}'.format(vnet_id))
-        async_create = network_client.virtual_networks.create_or_update(
-            resource_group_name=rfs.resource_group,
-            virtual_network_name=vnet_id,
-            parameters=networkmodels.VirtualNetwork(
-                location=rfs.location,
-                address_space=networkmodels.AddressSpace(
-                    address_prefixes=[
-                        rfs.storage_cluster.virtual_network.address_space,
-                    ],
-                ),
-            ),
-        )
-        vnet = async_create.result()
-    # attach subnet
-    exists = False
-    try:
-        subnet = network_client.subnets.get(
-            resource_group_name=rfs.resource_group,
-            virtual_network_name=vnet_id,
-            subnet_name=rfs.storage_cluster.virtual_network.subnet_id,
-        )
-        if rfs.storage_cluster.virtual_network.existing_ok:
-            logger.debug('subnet {} already exists'.format(subnet.id))
-            exists = True
-        else:
-            raise RuntimeError(
-                'subnet {} already exists'.format(subnet.id))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    if not exists:
-        logger.info('attaching subnet {} to virtual network {}'.format(
-            rfs.storage_cluster.virtual_network.subnet_id, vnet.name))
-        async_create = network_client.subnets.create_or_update(
-            resource_group_name=rfs.resource_group,
-            virtual_network_name=vnet_id,
-            subnet_name=rfs.storage_cluster.virtual_network.subnet_id,
-            subnet_parameters=networkmodels.Subnet(
-                address_prefix=rfs.storage_cluster.virtual_network.subnet_mask
-            )
-        )
-        subnet = async_create.result()
-    logger.info(
-        ('virtual network: {} [provisioning_state={} address_space={} '
-         'subnet={} address_prefix={}]').format(
-             vnet.id, vnet.provisioning_state,
-             vnet.address_space.address_prefixes,
-             rfs.storage_cluster.virtual_network.subnet_id,
-             subnet.address_prefix))
-    return (vnet, subnet)
 
 
 def _create_public_ip(network_client, rfs, offset):
@@ -716,8 +631,10 @@ def create_storage_cluster(
     as_async_op = _create_availability_set(compute_client, rfs)
     # upload scripts to blob storage for customscript
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
-    # create virtual network
-    vnet, subnet = _create_virtual_network(network_client, rfs)
+    # create virtual network and subnet if specified
+    vnet, subnet = network.create_virtual_network_and_subnet(
+        network_client, rfs.resource_group, rfs.location,
+        rfs.storage_cluster.virtual_network)
 
     # TODO create slb
 

@@ -48,6 +48,7 @@ from . import batch
 from . import crypto
 from . import data
 from . import keyvault
+from . import network
 from . import remotefs
 from . import settings
 from . import storage
@@ -187,16 +188,16 @@ def adjust_general_settings(config):
             settings.set_batch_shipyard_encryption_enabled(config, False)
 
 
-def populate_global_settings(config, fs_context):
+def populate_global_settings(config, fs_storage):
     # type: (dict, bool) -> None
     """Populate global settings from config
     :param dict config: configuration dict
-    :param bool fs_context: only initialize storage clients
+    :param bool fs_storage: adjust for fs context
     """
     bs = settings.batch_shipyard_settings(config)
     sc = settings.credentials_storage(config, bs.storage_account_settings)
     bc = settings.credentials_batch(config)
-    if fs_context:
+    if fs_storage:
         rfs = settings.remotefs_settings(config)
         postfix = rfs.storage_cluster.id
     else:
@@ -359,10 +360,6 @@ def _setup_azurefile_volume_driver(blob_client, config):
                     'multiple storage accounts are not supported for '
                     'azurefile docker volume driver')
             sa = _sa
-        elif not settings.is_shared_data_volume_gluster(sdv, svkey):
-            raise NotImplementedError(
-                'Unsupported volume driver: {}'.format(
-                    settings.shared_data_volume_driver(sdv, svkey)))
     if sa is None:
         raise RuntimeError(
             'storage account not specified for azurefile docker volume driver')
@@ -379,13 +376,13 @@ def _setup_azurefile_volume_driver(blob_client, config):
     with volcreate.open('wb') as f:
         f.write(b'#!/usr/bin/env bash\n\n')
         for svkey in sdv:
-            if settings.is_shared_data_volume_gluster(sdv, svkey):
+            if not settings.is_shared_data_volume_azure_file(sdv, svkey):
                 continue
             opts = [
                 '-o share={}'.format(settings.azure_file_share_name(
                     sdv, svkey))
             ]
-            mo = settings.azure_file_mount_options(sdv, svkey)
+            mo = settings.shared_data_volume_mount_options(sdv, svkey)
             if mo is not None:
                 for opt in mo:
                     opts.append('-o {}'.format(opt))
@@ -395,8 +392,10 @@ def _setup_azurefile_volume_driver(blob_client, config):
 
 
 def _add_pool(
-        resource_client, network_client, batch_client, blob_client, config):
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
@@ -404,6 +403,8 @@ def _add_pool(
     """Add a Batch pool to account
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
@@ -414,29 +415,87 @@ def _add_pool(
     """
     # check shared data volume mounts before proceeding to allocate
     azurefile_vd = False
-    gluster = False
+    gluster_on_compute = False
+    storage_cluster_mount = False
     try:
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
             if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
+                if azurefile_vd:
+                    raise ValueError(
+                        'only one Azure File share can be mounted')
                 azurefile_vd = True
-            elif settings.is_shared_data_volume_gluster(sdv, sdvkey):
-                gluster = True
+            elif settings.is_shared_data_volume_gluster_on_compute(
+                    sdv, sdvkey):
+                if gluster_on_compute:
+                    raise ValueError(
+                        'only one glusterfs on compute can be created')
+                gluster_on_compute = True
+            elif settings.is_shared_data_volume_storage_cluster(
+                    sdv, sdvkey):
+                storage_cluster_mount = True
             else:
                 raise ValueError('Unknown shared data volume: {}'.format(
                     settings.shared_data_volume_driver(sdv, sdvkey)))
     except KeyError:
         pass
+    # retrieve settings
+    pool_settings = settings.pool_settings(config)
+    bc = settings.credentials_batch(config)
+    vnet_subnet_id = None
+    # check for virtual network settings
+    if (pool_settings.virtual_network is not None and
+            util.is_not_empty(pool_settings.virtual_network.name)):
+        if util.is_none_or_empty(pool_settings.virtual_network.subnet_name):
+            raise ValueError(
+                'Invalid subnet name on virtual network {}'.format(
+                    pool_settings.virtual_network.name))
+        # create virtual network and subnet if specified
+        vnet, subnet = network.create_virtual_network_and_subnet(
+            network_client, bc.resource_group, bc.location,
+            pool_settings.virtual_network)
+        # ensure address prefix for subnet is valid
+        tmp = subnet.address_prefix.split('/')
+        if len(tmp) <= 1:
+            raise RuntimeError(
+                'subnet address_prefix is invalid for Batch pools: {}'.format(
+                    subnet.address_prefix))
+        mask = int(tmp[-1])
+        # subtract 4 for guideline and Azure numbering start
+        allowable_addresses = (1 << (32 - mask)) - 4
+        logger.debug('subnet {} mask is {} and allows {} addresses'.format(
+            subnet.name, mask, allowable_addresses))
+        if allowable_addresses < pool_settings.vm_count:
+            raise RuntimeError(
+                ('subnet {} mask is {} and allows {} addresses but desired '
+                 'pool vm_count is {}').format(
+                     subnet.name, mask, allowable_addresses,
+                     pool_settings.vm_count))
+        elif int(allowable_addresses * 0.9) <= pool_settings.vm_count:
+            # if within 90% tolerance, warn user due to potential
+            # address shortage if other compute resources are in this subnet
+            if not util.confirm_action(
+                    config,
+                    msg=('subnet {} mask is {} and allows {} addresses '
+                         'but desired pool vm_count is {}, proceed?').format(
+                             subnet.name, mask, allowable_addresses,
+                             pool_settings.vm_count)):
+                raise RuntimeError('Pool deployment rejected by user')
+        logger.info('using virtual network subnet id: {}'.format(subnet.id))
+        vnet_subnet_id = subnet.id
+    else:
+        logger.debug('no virtual network settings specified')
 
-    # TODO check virtual network settings
+    # TODO construct mounts for storage_cluster_mount
+    import sys
+    sys.exit(1)
 
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
         pfx = crypto.get_encryption_pfx_settings(config)
         batch.add_certificate_to_account(batch_client, config)
-    # retrieve settings
-    pool_settings = settings.pool_settings(config)
+    # construct block list
     block_for_gr = None
     if pool_settings.block_until_all_global_resources_loaded:
         images = settings.global_resources_docker_images(config)
@@ -514,7 +573,7 @@ def _add_pool(
             b=' -b {}'.format(block_for_gr) if block_for_gr else '',
             d=' -d' if bs.use_shipyard_docker_image else '',
             e=' -e {}'.format(pfx.sha1) if encrypt else '',
-            f=' -f' if gluster else '',
+            f=' -f' if gluster_on_compute else '',
             g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
             n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             o=' -o {}'.format(pool_settings.offer),
@@ -609,8 +668,8 @@ def _add_pool(
         _generate_docker_login_environment_variables(config, preg, encrypt)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
-    # set up gluster if specified
-    if gluster:
+    # set up gluster on compute if specified
+    if gluster_on_compute:
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
@@ -707,9 +766,10 @@ def _setup_glusterfs(
     sdv = settings.global_resources_shared_data_volumes(config)
     for sdvkey in sdv:
         try:
-            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+            if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 voltype = settings.gluster_volume_type(sdv, sdvkey)
                 volopts = settings.gluster_volume_options(sdv, sdvkey)
+                break
         except KeyError:
             pass
     if voltype is None:
@@ -1025,7 +1085,7 @@ def _adjust_settings_for_pool_creation(config):
         num_gluster = 0
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
-            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+            if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 if not pool.inter_node_communication_enabled:
                     # do not modify value and proceed since this interplays
                     # with p2p settings, simply raise exception and force
@@ -1321,9 +1381,10 @@ def action_pool_listskus(batch_client):
 
 
 def action_pool_add(
-        resource_client, network_client, batch_mgmt_client, batch_client,
-        blob_client, queue_client, table_client, config):
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, queue_client, table_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
@@ -1332,6 +1393,8 @@ def action_pool_add(
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
@@ -1354,8 +1417,8 @@ def action_pool_add(
     _adjust_settings_for_pool_creation(config)
     storage.populate_queues(queue_client, table_client, config)
     _add_pool(
-        resource_client, network_client, batch_mgmt_client, batch_client,
-        blob_client, config
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config
     )
 
 
@@ -1448,7 +1511,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     try:
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
-            if settings.is_shared_data_volume_gluster(sdv, sdvkey):
+            if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 gluster_present = True
                 try:
                     voltype = settings.gluster_volume_type(sdv, sdvkey)

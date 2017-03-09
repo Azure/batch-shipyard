@@ -32,12 +32,12 @@
             ]
         },
         "virtual_network": {
-            "id": "",
+            "name": "",
             "create_nonexistant": false,
             "address_space": "",
             "subnet": {
-                "id": "",
-                "mask": ""
+                "name": "",
+                "address_prefix": ""
             }
         },
         "ssh": {

@@ -68,6 +68,7 @@ PoolSettings = collections.namedtuple(
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation',
         'input_data', 'gpu_driver', 'ssh', 'additional_node_prep_commands',
+        'virtual_network',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -175,8 +176,8 @@ ManagedDisksSettings = collections.namedtuple(
 )
 VirtualNetworkSettings = collections.namedtuple(
     'VirtualNetworkSettings', [
-        'id', 'address_space', 'subnet_id', 'subnet_mask', 'existing_ok',
-        'create_nonexistant',
+        'name', 'address_space', 'subnet_name', 'subnet_address_prefix',
+        'existing_ok', 'create_nonexistant',
     ]
 )
 FileServerSettings = collections.namedtuple(
@@ -201,8 +202,8 @@ MappedVmDiskSettings = collections.namedtuple(
 )
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
-        'id', 'virtual_network', 'network_security', 'file_server', 'vm_count',
-        'vm_size', 'static_public_ip', 'hostname_prefix', 'ssh',
+        'id', 'virtual_network', 'network_security', 'file_server',
+        'vm_count', 'vm_size', 'static_public_ip', 'hostname_prefix', 'ssh',
         'vm_disk_map'
     ]
 )
@@ -467,6 +468,11 @@ def pool_settings(config):
         ),
         gpu_driver=gpu_driver,
         additional_node_prep_commands=additional_node_prep_commands,
+        virtual_network=virtual_network_settings(
+            conf,
+            default_existing_ok=True,
+            default_create_nonexistant=False,
+        ),
     )
 
 
@@ -1366,6 +1372,21 @@ def shared_data_volume_container_path(sdv, sdvkey):
     return sdv[sdvkey]['container_path']
 
 
+def shared_data_volume_mount_options(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get shared data volume mount options
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: shared data volume mount options
+    """
+    try:
+        mo = sdv[sdvkey]['mount_options']
+    except KeyError:
+        mo = None
+    return mo
+
+
 def azure_file_storage_account_settings(sdv, sdvkey):
     # type: (dict, str) -> str
     """Get azure file storage account link
@@ -1386,21 +1407,6 @@ def azure_file_share_name(sdv, sdvkey):
     :return: azure file share name
     """
     return sdv[sdvkey]['azure_file_share_name']
-
-
-def azure_file_mount_options(sdv, sdvkey):
-    # type: (dict, str) -> str
-    """Get azure file mount options
-    :param dict sdv: shared_data_volume configuration object
-    :param str sdvkey: key to sdv
-    :rtype: str
-    :return: azure file mount options
-    """
-    try:
-        mo = sdv[sdvkey]['mount_options']
-    except KeyError:
-        mo = None
-    return mo
 
 
 def gluster_volume_type(sdv, sdvkey):
@@ -1448,15 +1454,27 @@ def is_shared_data_volume_azure_file(sdv, sdvkey):
     return shared_data_volume_driver(sdv, sdvkey).lower() == 'azurefile'
 
 
-def is_shared_data_volume_gluster(sdv, sdvkey):
+def is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
     # type: (dict, str) -> bool
-    """Determine if shared data volume is a glusterfs share
+    """Determine if shared data volume is a glusterfs share on compute
     :param dict sdv: shared_data_volume configuration object
     :param str sdvkey: key to sdv
     :rtype: bool
-    :return: if shared data volume is glusterfs
+    :return: if shared data volume is glusterfs on compute
     """
-    return shared_data_volume_driver(sdv, sdvkey).lower() == 'glusterfs'
+    return shared_data_volume_driver(
+        sdv, sdvkey).lower() == 'glusterfs_on_compute'
+
+
+def is_shared_data_volume_storage_cluster(sdv, sdvkey):
+    # type: (dict, str) -> bool
+    """Determine if shared data volume is a storage cluster
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: bool
+    :return: if shared data volume is storage_cluster
+    """
+    return shared_data_volume_driver(sdv, sdvkey).lower() == 'storage_cluster'
 
 
 # INPUT AND OUTPUT DATA SETTINGS
@@ -1993,7 +2011,7 @@ def task_settings(pool, config, conf):
     else:
         sdv = global_resources_shared_data_volumes(config)
         for sdvkey in shared_data_volumes:
-            if is_shared_data_volume_gluster(sdv, sdvkey):
+            if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 run_opts.append('-v {}/{}:{}'.format(
                     '$AZ_BATCH_NODE_SHARED_DIR',
                     get_gluster_volume(),
@@ -2205,6 +2223,37 @@ def task_settings(pool, config, conf):
 
 
 # REMOTEFS SETTINGS
+def virtual_network_settings(
+        config, default_existing_ok=False, default_create_nonexistant=True):
+    # type: (dict) -> VirtualNetworkSettings
+    """Get virtual network settings
+    :param dict config: configuration dict
+    :param bool default_existing_ok: default existing ok
+    :param bool default_create_nonexistant: default create nonexistant
+    :rtype: VirtualNetworkSettings
+    :return: virtual network settings
+    """
+    try:
+        conf = config['virtual_network']
+    except KeyError:
+        conf = {}
+    name = _kv_read_checked(conf, 'name')
+    address_space = _kv_read_checked(conf, 'address_space')
+    existing_ok = _kv_read(conf, 'existing_ok', default_existing_ok)
+    subnet_name = _kv_read_checked(conf['subnet'], 'name')
+    subnet_address_prefix = _kv_read_checked(conf['subnet'], 'address_prefix')
+    create_nonexistant = _kv_read(
+        conf, 'create_nonexistant', default_create_nonexistant)
+    return VirtualNetworkSettings(
+        name=name,
+        address_space=address_space,
+        subnet_name=subnet_name,
+        subnet_address_prefix=subnet_address_prefix,
+        existing_ok=existing_ok,
+        create_nonexistant=create_nonexistant,
+    )
+
+
 def remotefs_settings(config):
     # type: (dict) -> RemoteFsSettings
     """Get remote fs settings
@@ -2221,41 +2270,41 @@ def remotefs_settings(config):
     if util.is_none_or_empty(location):
         raise ValueError('invalid location in remote_fs')
     # managed disk settings
-    conf = config['remote_fs']['managed_disks']
-    md_premium = _kv_read(conf, 'premium', False)
-    md_disk_size_gb = _kv_read(conf, 'disk_size_gb')
-    md_disk_ids = _kv_read_checked(conf, 'disk_ids')
+    md_conf = conf['managed_disks']
+    md_premium = _kv_read(md_conf, 'premium', False)
+    md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
+    md_disk_ids = _kv_read_checked(md_conf, 'disk_ids')
     # storage cluster settings
-    conf = config['remote_fs']['storage_cluster']
-    sc_id = conf['id']
+    sc_conf = conf['storage_cluster']
+    sc_id = sc_conf['id']
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
-    sc_vm_count = _kv_read(conf, 'vm_count', 1)
-    sc_vm_size = _kv_read_checked(conf, 'vm_size')
-    sc_static_public_ip = _kv_read(conf, 'static_public_ip', False)
-    sc_hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
+    sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
+    sc_static_public_ip = _kv_read(sc_conf, 'static_public_ip', False)
+    sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
     # sc network security settings
-    conf = config['remote_fs']['storage_cluster']['network_security']
+    ns_conf = sc_conf['network_security']
     sc_ns_inbound = {
         'ssh': InboundNetworkSecurityRule(
             destination_port_range='22',
-            source_address_prefix=_kv_read_checked(conf, 'ssh', ['*']),
+            source_address_prefix=_kv_read_checked(ns_conf, 'ssh', ['*']),
             protocol='tcp',
         ),
     }
     if not isinstance(sc_ns_inbound['ssh'].source_address_prefix, list):
         raise ValueError('expected list for ssh network security rule')
-    if 'nfs' in conf:
+    if 'nfs' in ns_conf:
         sc_ns_inbound['nfs'] = InboundNetworkSecurityRule(
             destination_port_range='2049',
-            source_address_prefix=_kv_read_checked(conf, 'nfs', ['*']),
+            source_address_prefix=_kv_read_checked(ns_conf, 'nfs', ['*']),
             protocol='tcp',
         )
         if not isinstance(sc_ns_inbound['nfs'].source_address_prefix, list):
             raise ValueError('expected list for nfs network security rule')
-    if 'custom_inbound' in conf:
+    if 'custom_inbound' in ns_conf:
         _reserved = frozenset(['ssh', 'nfs', 'glusterfs'])
-        for key in conf['custom_inbound']:
+        for key in ns_conf['custom_inbound']:
             # ensure key is not reserved
             if key.lower() in _reserved:
                 raise ValueError(
@@ -2263,26 +2312,19 @@ def remotefs_settings(config):
                      'reserved name {}').format(key, _reserved))
             sc_ns_inbound[key] = InboundNetworkSecurityRule(
                 destination_port_range=_kv_read_checked(
-                    conf['custom_inbound'][key], 'destination_port_range'),
+                    ns_conf['custom_inbound'][key], 'destination_port_range'),
                 source_address_prefix=_kv_read_checked(
-                    conf['custom_inbound'][key], 'source_address_prefix'),
+                    ns_conf['custom_inbound'][key], 'source_address_prefix'),
                 protocol=_kv_read_checked(
-                    conf['custom_inbound'][key], 'protocol'),
+                    ns_conf['custom_inbound'][key], 'protocol'),
             )
             if not isinstance(sc_ns_inbound[key].source_address_prefix, list):
                 raise ValueError(
                     'expected list for network security rule {} '
                     'source_address_prefix'.format(key))
-    # sc virtual network settings
-    conf = config['remote_fs']['storage_cluster']['virtual_network']
-    sc_vnet_id = _kv_read_checked(conf, 'id')
-    sc_vnet_address_space = _kv_read_checked(conf, 'address_space')
-    sc_vnet_existing_ok = _kv_read(conf, 'existing_ok', False)
-    sc_vnet_subnet_id = _kv_read_checked(conf['subnet'], 'id')
-    sc_vnet_subnet_mask = _kv_read_checked(conf['subnet'], 'mask')
     # sc file server settings
-    conf = config['remote_fs']['storage_cluster']['file_server']
-    sc_fs_type = _kv_read_checked(conf, 'type')
+    fs_conf = sc_conf['file_server']
+    sc_fs_type = _kv_read_checked(fs_conf, 'type')
     if util.is_none_or_empty(sc_fs_type):
         raise ValueError(
             'remote_fs:storage_cluster:file_server:type must be specified')
@@ -2291,23 +2333,23 @@ def remotefs_settings(config):
         raise ValueError(
             ('invalid combination of file_server:type {} and '
              'vm_count {}').format(sc_fs_type, sc_vm_count))
-    sc_fs_mountpoint = _kv_read_checked(conf, 'mountpoint')
+    sc_fs_mountpoint = _kv_read_checked(fs_conf, 'mountpoint')
     if util.is_none_or_empty(sc_fs_mountpoint):
         raise ValueError(
             'remote_fs:storage_cluster:file_server must be specified')
     # sc ssh settings
-    conf = config['remote_fs']['storage_cluster']['ssh']
-    sc_ssh_username = _kv_read_checked(conf, 'username')
-    sc_ssh_public_key = _kv_read_checked(conf, 'ssh_public_key')
+    ssh_conf = sc_conf['ssh']
+    sc_ssh_username = _kv_read_checked(ssh_conf, 'username')
+    sc_ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
     sc_ssh_gen_file_path = _kv_read_checked(
-        conf, 'generated_file_export_path', '.')
+        ssh_conf, 'generated_file_export_path', '.')
     # sc vm disk map settings
-    conf = config['remote_fs']['storage_cluster']['vm_disk_map']
+    vmd_conf = sc_conf['vm_disk_map']
     _disk_set = frozenset(md_disk_ids)
     disk_map = {}
-    for vmkey in conf:
+    for vmkey in vmd_conf:
         # ensure all disks in disk array are specified in managed disks
-        disk_array = conf[vmkey]['disk_array']
+        disk_array = vmd_conf[vmkey]['disk_array']
         if not _disk_set.issuperset(set(disk_array)):
             raise ValueError(
                 ('All disks {} for vm {} are not specified in '
@@ -2317,19 +2359,19 @@ def remotefs_settings(config):
             # disable raid
             raid_level = -1
         else:
-            raid_level = conf[vmkey]['raid_level']
+            raid_level = vmd_conf[vmkey]['raid_level']
             if raid_level == 0 and len(disk_array) < 2:
                 raise ValueError('RAID-0 arrays require at least two disks')
             if raid_level != 0:
                 raise ValueError('Unsupported RAID level {}'.format(
                     raid_level))
-        filesystem = conf[vmkey]['filesystem']
+        filesystem = vmd_conf[vmkey]['filesystem']
         if filesystem != 'btrfs' and not filesystem.startswith('ext'):
             raise ValueError('Unsupported filesystem type {}'.format(
                 filesystem))
         disk_map[int(vmkey)] = MappedVmDiskSettings(
             disk_array=disk_array,
-            filesystem=conf[vmkey]['filesystem'],
+            filesystem=vmd_conf[vmkey]['filesystem'],
             raid_level=raid_level,
         )
     # check disk map against vm_count
@@ -2348,13 +2390,10 @@ def remotefs_settings(config):
         ),
         storage_cluster=StorageClusterSettings(
             id=sc_id,
-            virtual_network=VirtualNetworkSettings(
-                id=sc_vnet_id,
-                address_space=sc_vnet_address_space,
-                subnet_id=sc_vnet_subnet_id,
-                subnet_mask=sc_vnet_subnet_mask,
-                existing_ok=sc_vnet_existing_ok,
-                create_nonexistant=True,
+            virtual_network=virtual_network_settings(
+                sc_conf,
+                default_existing_ok=False,
+                default_create_nonexistant=True,
             ),
             network_security=NetworkSecuritySettings(
                 inbound=sc_ns_inbound,

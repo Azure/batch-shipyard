@@ -17,12 +17,12 @@
             },
             "static_public_ip": false,
             "virtual_network": {
-                "id": "",
+                "name": "",
                 "existing_ok": false,
                 "address_space": "",
                 "subnet": {
-                    "id": "",
-                    "mask": ""
+                    "name": "",
+                    "address_prefix": ""
                 }
             },
             "network_security": {

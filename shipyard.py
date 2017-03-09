@@ -58,6 +58,8 @@ class CliContext(object):
         self.verbose = False
         self.yes = False
         self.config = None
+        self.json_fs = None
+        # clients
         self.batch_mgmt_client = None
         self.batch_client = None
         self.blob_client = None
@@ -89,13 +91,11 @@ class CliContext(object):
         self._read_credentials_config()
         self._set_global_cli_options()
         self._init_config(
-            skip_global_config=False, skip_pool_config=True,
-            skip_fs_config=False)
+            skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
             _, _ = convoy.clients.create_arm_clients(self)
         self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=True,
-            skip_fs_config=False)
+            skip_global_config=False, skip_pool_config=True)
 
     def initialize_for_keyvault(self):
         # type: (CliContext) -> None
@@ -106,11 +106,9 @@ class CliContext(object):
         self._set_global_cli_options()
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
-            skip_global_config=True, skip_pool_config=True,
-            skip_fs_config=True)
+            skip_global_config=True, skip_pool_config=True, fs_storage=False)
         self._cleanup_after_initialize(
-            skip_global_config=True, skip_pool_config=True,
-            skip_fs_config=True)
+            skip_global_config=True, skip_pool_config=True)
 
     def initialize_for_batch(self, init_clients_for_vnet=False):
         # type: (CliContext, bool) -> None
@@ -122,16 +120,14 @@ class CliContext(object):
         self._set_global_cli_options()
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
-            skip_global_config=False, skip_pool_config=False,
-            skip_fs_config=True)
+            skip_global_config=False, skip_pool_config=False, fs_storage=False)
         self.resource_client, self.compute_client, self.network_client, \
             self.batch_mgmt_client, self.batch_client = \
             convoy.clients.create_arm_clients(self, batch_clients=True)
         self.blob_client, self.queue_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=False,
-            skip_fs_config=True)
+            skip_global_config=False, skip_pool_config=False)
 
     def initialize_for_storage(self):
         # type: (CliContext) -> None
@@ -142,13 +138,11 @@ class CliContext(object):
         self._set_global_cli_options()
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
-            skip_global_config=False, skip_pool_config=False,
-            skip_fs_config=True)
+            skip_global_config=False, skip_pool_config=False, fs_storage=False)
         self.blob_client, self.queue_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=False,
-            skip_fs_config=True)
+            skip_global_config=False, skip_pool_config=False)
 
     def _set_global_cli_options(self):
         # type: (CliContext) -> None
@@ -162,23 +156,21 @@ class CliContext(object):
         self.config['_auto_confirm'] = self.yes
 
     def _cleanup_after_initialize(
-            self, skip_global_config, skip_pool_config, skip_fs_config):
+            self, skip_global_config, skip_pool_config):
         # type: (CliContext) -> None
         """Cleanup after initialize_for_* funcs
         :param CliContext self: this
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
-        :param bool skip_fs_config: skip remote fs config
         """
         # free json objects
         del self.json_credentials
+        del self.json_fs
         if not skip_global_config:
             del self.json_config
         if not skip_pool_config:
             del self.json_pool
             del self.json_jobs
-        if not skip_fs_config:
-            del self.json_fs
         # free cli options
         del self.verbose
         del self.yes
@@ -230,13 +222,13 @@ class CliContext(object):
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
-            skip_fs_config=False):
+            fs_storage=False):
         # type: (CliContext, bool, bool, bool) -> None
         """Initializes configuration of the context
         :param CliContext self: this
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
-        :param bool skip_fs_config: skip remote fs config
+        :param bool fs_storage: adjust storage settings for fs
         """
         # reset config
         self.config = None
@@ -254,10 +246,8 @@ class CliContext(object):
                     self.json_pool = pathlib.Path(self.configdir, 'pool.json')
                 if self.json_jobs is None:
                     self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
-            if not skip_fs_config:
-                if self.json_fs is None:
-                    self.json_fs = pathlib.Path(
-                        self.configdir, 'fs.json')
+            if self.json_fs is None:
+                self.json_fs = pathlib.Path(self.configdir, 'fs.json')
         # check for required json files
         if (self.json_credentials is not None and
                 not isinstance(self.json_credentials, pathlib.Path)):
@@ -272,11 +262,9 @@ class CliContext(object):
                 raise ValueError('pool json was not specified')
             elif not isinstance(self.json_pool, pathlib.Path):
                 self.json_pool = pathlib.Path(self.json_pool)
-        if not skip_fs_config:
-            if self.json_fs is None:
-                raise ValueError('fs json was not specified')
-            elif not isinstance(self.json_fs, pathlib.Path):
-                self.json_fs = pathlib.Path(self.json_fs)
+        if (self.json_fs is not None and not isinstance(
+                self.json_fs, pathlib.Path)):
+            self.json_fs = pathlib.Path(self.json_fs)
         # fetch credentials from keyvault, if json file is missing
         kvcreds = None
         if self.json_credentials is None or not self.json_credentials.exists():
@@ -314,7 +302,8 @@ class CliContext(object):
         # read rest of config files
         if not skip_global_config:
             self._read_json_file(self.json_config)
-        if not skip_fs_config:
+        # read fs config regardless of skip setting
+        if self.json_fs is not None and self.json_fs.exists():
             self._read_json_file(self.json_fs)
         if not skip_pool_config:
             self._read_json_file(self.json_pool)
@@ -324,9 +313,8 @@ class CliContext(object):
                 if self.json_jobs.exists():
                     self._read_json_file(self.json_jobs)
         # adjust settings
-        if not skip_fs_config:
-            convoy.fleet.adjust_general_settings(self.config)
-        convoy.fleet.populate_global_settings(self.config, not skip_fs_config)
+        convoy.fleet.adjust_general_settings(self.config)
+        convoy.fleet.populate_global_settings(self.config, fs_storage)
         # show config if specified
         if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
@@ -993,9 +981,9 @@ def pool_add(ctx):
     """Add a pool to the Batch account"""
     ctx.initialize_for_batch(init_clients_for_vnet=True)
     convoy.fleet.action_pool_add(
-        ctx.resource_client, ctx.network_client, ctx.batch_mgmt_client,
-        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
-        ctx.config)
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
+        ctx.queue_client, ctx.table_client, ctx.config)
 
 
 @pool.command('list')
