@@ -56,12 +56,12 @@ echo "waiting for gv0 volume..."
 set +e
 while :
 do
-        gluster volume info gv0
-        if [ $? -eq 0 ]; then
-            # delay to wait for subvolumes
-            sleep 5
-            break
-        fi
+    gluster volume info gv0
+    if [ $? -eq 0 ]; then
+        # delay to wait for subvolumes
+        sleep 5
+        break
+    fi
     sleep 1
 done
 set -e

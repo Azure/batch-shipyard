@@ -3,12 +3,14 @@
         "resource_group": "",
         "location": "",
         "managed_disks": {
+            "resource_group": "",
             "premium": false,
             "disk_size_gb": 20,
             "disk_ids": ["disk0", "disk1"]
         },
         "storage_cluster": {
             "id": "",
+            "resource_group": "",
             "hostname_prefix": "shipyard-nfs",
             "ssh": {
                 "username": "shipyard",
@@ -39,7 +41,15 @@
             },
             "file_server": {
                 "type": "nfs",
-                "mountpoint": "/data"
+                "mountpoint": "/data",
+                "server_options": {
+                    "glusterfs": {
+                        "volume_type": "replica",
+                        "transport": "tcp",
+                        "option1key": "option1value",
+                        "option2key": "option2value"
+                    }
+                }
             },
             "vm_count": 1,
             "vm_size": "STANDARD_F4",

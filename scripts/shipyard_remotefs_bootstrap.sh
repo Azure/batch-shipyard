@@ -5,18 +5,213 @@ set -o pipefail
 
 DEBIAN_FRONTEND=noninteractive
 
+# constants
+gluster_brick_mountpath=/gluster/brick
+gluster_brick_location=$gluster_brick_mountpath/brick0
+gluster_volname=gv0
+ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
+
 # vars
 attach_disks=0
 rebalance=0
 filesystem=
+peer_ips=
 server_type=
 mountpath=
 optimize_tcp=0
+server_options=
 premium_storage=0
 raid_level=-1
+offset=
+
+# functions
+setup_nfs() {
+    # amend /etc/exports if needed
+    add_exports=0
+    set +e
+    grep "^${mountpath}" /etc/exports
+    if [ $? -ne 0 ]; then
+        add_exports=1
+    fi
+    if [ $add_exports -eq 1 ]; then
+        # note that the * address/hostname allow is ok since we block nfs
+        # inbound traffic at the network security group except for allowed
+        # ip addresses as specified in the fs.json file
+        echo "${mountpath} *(rw,sync,root_squash,no_subtree_check,mountpoint=${mountpath})" >> /etc/exports
+        systemctl reload nfs-kernel-server.service
+        exportfs -v
+    fi
+    systemctl status nfs-kernel-server.service
+    if [ $? -ne 0 ]; then
+        set -e
+        # attempt to start
+        systemctl start nfs-kernel-server.service
+    fi
+    set -e
+}
+
+gluster_peer_probe() {
+    echo "Attempting to peer with $1"
+    peered=0
+    local START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        # attempt to ping before peering
+        ping -c 2 $1 > /dev/null
+        if [ $? -eq 0 ]; then
+            gp_info=`gluster peer probe $1`
+            if [ $? -eq 0 ]; then
+                echo $gp_info
+                peered=1
+            fi
+        fi
+        if [ $peered -eq 1 ]; then
+            break
+        else
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
+            # fail after 15 minutes of attempts
+            if [ $DIFF -ge 15 ]; then
+                echo "Could not probe peer $1"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
+    echo "Peering successful with $1"
+}
+
+gluster_poll_for_connections() {
+    local numnodes=$1
+    local numpeers=$(($numnodes - 1))
+    echo "Waiting for $numpeers peers to reach connected state..."
+    # get peer info
+    set +e
+    while :
+    do
+        local numready=$(gluster peer status | grep -e '^State: Peer in Cluster' | wc -l)
+        if [ $numready == $numpeers ]; then
+            break
+        fi
+        sleep 1
+    done
+    set -e
+    echo "$numpeers joined peering"
+    # delay to wait for after peer connections
+    sleep 5
+}
+
+gluster_poll_for_volume() {
+    echo "Waiting for gluster volume $1"
+    local START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        gluster volume info $1
+        if [ $? -eq 0 ]; then
+            echo $gv_info
+            # delay to wait for subvolumes
+            sleep 5
+            break
+        else
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
+            # fail after 15 minutes of attempts
+            if [ $DIFF -ge 15 ]; then
+                echo "Could not connect to gluster volume $1"
+                exit 1
+            fi
+            sleep 2
+        fi
+    done
+    set -e
+
+}
+
+setup_glusterfs() {
+    IFS=',' read -ra hosts <<< "$peer_ips"
+    # master (first host) performs peering
+    if [ ${hosts[0]} == $ipaddress ]; then
+        # construct brick locations
+        IFS=',' read -ra hosts <<< "$peer_ips"
+        bricks=
+        for host in "${hosts[@]}"
+        do
+            bricks+=" $host:$gluster_brick_location"
+            # probe peer
+            if [ $host != $ipaddress ]; then
+                gluster_peer_probe $host
+            fi
+        done
+        # wait for connections
+        local numnodes=${#hosts[@]}
+        gluster_poll_for_connections $numnodes
+        # parse server options in the format voltype,transport,key:value,...
+        IFS=',' read -ra so <<< "$server_options"
+        local voltype=${so[0],,}
+        local volarg=
+        if [ $voltype == "replica" ] || [ $voltype == "stripe" ]; then
+            volarg="$voltype $numnodes"
+        elif [ $voltype != "distributed" ]; then
+            # allow custom replica and/or stripe counts
+            volarg=$voltype
+        fi
+        local transport=${so[1],,}
+        if [ -z $transport ]; then
+            transport="tcp"
+        fi
+        # create volume
+        echo "Creating $voltype gluster volume $gluster_volname ($bricks)"
+        gluster volume create $gluster_volname $volarg transport $transport$bricks
+        # modify volume properties as per input
+        for e in ${so[@]:2}; do
+            IFS=':' read -ra kv <<< "$e"
+            echo "Setting volume option ${kv[@]}"
+            gluster volume set $gluster_volname ${kv[0]} ${kv[1]}
+        done
+        # start volume
+        echo "Starting gluster volume $gluster_volname"
+        gluster volume start $gluster_volname
+    fi
+
+    # poll for volume created
+    gluster_poll_for_volume $gluster_volname
+
+    # add gluster volume to /etc/fstab
+    mkdir -p $mountpath
+    echo "Adding $mountpath to fstab"
+    echo "$ipaddress:$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
+
+    # mount it
+    echo "Mounting gluster volume $gluster_volname locally to $mountpath"
+    local START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        mount $mountpath
+        if [ $? -eq 0 ]; then
+            break
+        else
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
+            # fail after 5 minutes of attempts
+            if [ $DIFF -ge 5 ]; then
+                echo "Could not mount gluster volume $gluster_volume to $mountpath"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
+
+    # ensure proper permissions on mounted directory
+    chmod 1777 $mountpath
+}
 
 # begin processing
-while getopts "h?abf:m:npr:s:" opt; do
+while getopts "h?abf:i:m:no:pr:s:v:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
@@ -24,11 +219,14 @@ while getopts "h?abf:m:npr:s:" opt; do
             echo "-a attach mode"
             echo "-b rebalance filesystem on resize"
             echo "-f [filesystem] filesystem"
+            echo "-i [peer IPs] peer IPs"
             echo "-m [mountpoint] mountpoint"
             echo "-n Tune TCP parameters"
+            echo "-o [server options] server options"
             echo "-p premium storage disks"
             echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
+            echo "-v [offset] VM offset"
             echo ""
             exit 1
             ;;
@@ -41,11 +239,17 @@ while getopts "h?abf:m:npr:s:" opt; do
         f)
             filesystem=${OPTARG,,}
             ;;
+        i)
+            peer_ips=${OPTARG,,}
+            ;;
         m)
             mountpath=$OPTARG
             ;;
         n)
             optimize_tcp=1
+            ;;
+        o)
+            server_options=$OPTARG
             ;;
         p)
             premium_storage=1
@@ -56,10 +260,15 @@ while getopts "h?abf:m:npr:s:" opt; do
         s)
             server_type=${OPTARG,,}
             ;;
+        v)
+            offset=1
+            ;;
     esac
 done
 shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
+
+# TODO required parameter checks
 
 echo "Parameters:"
 echo "  Attach mode: $attach_disks"
@@ -70,6 +279,9 @@ echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
 echo "  RAID level: $raid_level"
 echo "  Server type: $server_type"
+echo "  VM offset: $offset"
+echo "  Peer IPs: $peer_ips"
+echo "  IP address of VM: $ipaddress"
 
 # first start prep
 if [ $attach_disks -eq 0 ]; then
@@ -114,9 +326,30 @@ EOF
         set -e
         # reload unit files
         systemctl daemon-reload
-        # enable and restart nfs server
+        # enable and start nfs server
         systemctl enable nfs-kernel-server.service
-        systemctl restart nfs-kernel-server.service
+        # start service if not started
+        set +e
+        systemctl status nfs-kernel-server.service
+        if [ $? -ne 0 ]; then
+            set -e
+            systemctl start nfs-kernel-server.service
+        fi
+        set -e
+    elif [ $server_type == "glusterfs" ]; then
+        apt-get install -y -q --no-install-recommends glusterfs-server
+        # reload unit files
+        systemctl daemon-reload
+        # enable and start nfs server
+        systemctl enable glusterfs-server
+        # start service if not started
+        set +e
+        systemctl status glusterfs-server
+        if [ $? -ne 0 ]; then
+            set -e
+            systemctl start glusterfs-server
+        fi
+        set -e
     else
         echo "server_type $server_type not supported."
         exit 1
@@ -302,6 +535,11 @@ fi
 
 # mount filesystem
 if [ $attach_disks -eq 0 ]; then
+    # redirect mountpath if gluster for bricks
+    saved_mp=$mountpath
+    if [ $server_type == "glusterfs" ]; then
+        mountpath=$gluster_brick_mountpath
+    fi
     # check if filesystem is mounted (active array)
     mounted=0
     set +e
@@ -344,11 +582,19 @@ if [ $attach_disks -eq 0 ]; then
         mkdir -p $mountpath
         # mount
         mount $mountpath
-        # ensure proper permissions
-        chmod 1777 $mountpath
+        if [ $server_type == "nfs" ]; then
+            # ensure proper permissions
+            chmod 1777 $mountpath
+        elif [ $server_type == "glusterfs" ]; then
+            # create the brick location
+            mkdir -p $gluster_brick_location
+        fi
     fi
     # log mount
     mount | grep $mountpath
+    # restore mountpath
+    mountpath=$saved_mp
+    unset saved_mp
 fi
 
 
@@ -368,28 +614,9 @@ fi
 # set up server_type software
 if [ $attach_disks -eq 0 ]; then
     if [ $server_type == "nfs" ]; then
-        # edit /etc/exports
-        add_exports=0
-        set +e
-        grep "^${mountpath}" /etc/exports
-        if [ $? -ne 0 ]; then
-            add_exports=1
-        fi
-        if [ $add_exports -eq 1 ]; then
-            # note that the * address/hostname allow is ok since we block nfs
-            # inbound traffic at the network security group except for allowed
-            # ip addresses as specified in the remotefs.json file
-            echo "${mountpath} *(rw,sync,root_squash,no_subtree_check,mountpoint=${mountpath})" >> /etc/exports
-            systemctl reload nfs-kernel-server.service
-            exportfs -v
-        fi
-        systemctl status nfs-kernel-server.service
-        if [ $? -ne 0 ]; then
-            set -e
-            # attempt to start
-            systemctl restart nfs-kernel-server.service
-        fi
-        set -e
+        setup_nfs
+    elif [ $server_type == "glusterfs" ]; then
+        setup_glusterfs
     else
         echo "server_type $server_type not supported."
         exit 1

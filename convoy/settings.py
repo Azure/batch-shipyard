@@ -171,7 +171,7 @@ ResourceFileSettings = collections.namedtuple(
 )
 ManagedDisksSettings = collections.namedtuple(
     'ManagedDisksSettings', [
-        'premium', 'disk_size_gb', 'disk_ids',
+        'resource_group', 'premium', 'disk_size_gb', 'disk_ids',
     ]
 )
 VirtualNetworkSettings = collections.namedtuple(
@@ -182,7 +182,7 @@ VirtualNetworkSettings = collections.namedtuple(
 )
 FileServerSettings = collections.namedtuple(
     'FileServerSettings', [
-        'type', 'mountpoint',
+        'type', 'mountpoint', 'server_options',
     ]
 )
 InboundNetworkSecurityRule = collections.namedtuple(
@@ -197,19 +197,19 @@ NetworkSecuritySettings = collections.namedtuple(
 )
 MappedVmDiskSettings = collections.namedtuple(
     'MappedVmDiskSettings', [
-        'disk_array', 'filesystem', 'raid_level'
+        'disk_array', 'filesystem', 'raid_level',
     ]
 )
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
-        'id', 'virtual_network', 'network_security', 'file_server',
-        'vm_count', 'vm_size', 'static_public_ip', 'hostname_prefix', 'ssh',
-        'vm_disk_map'
+        'id', 'resource_group', 'virtual_network', 'network_security',
+        'file_server', 'vm_count', 'vm_size', 'static_public_ip',
+        'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
 RemoteFsSettings = collections.namedtuple(
     'RemoteFsSettings', [
-        'resource_group', 'location', 'managed_disks', 'storage_cluster',
+        'location', 'managed_disks', 'storage_cluster',
     ]
 )
 
@@ -2316,27 +2316,28 @@ def task_settings(cloud_pool, config, poolconf, conf, missing_images):
 
 # REMOTEFS SETTINGS
 def virtual_network_settings(
-        config, default_existing_ok=False, default_create_nonexistant=True):
+        config, default_resource_group=None, default_existing_ok=False,
+        default_create_nonexistant=True):
     # type: (dict) -> VirtualNetworkSettings
     """Get virtual network settings
     :param dict config: configuration dict
+    :param str default_resource_group: default resource group
     :param bool default_existing_ok: default existing ok
     :param bool default_create_nonexistant: default create nonexistant
     :rtype: VirtualNetworkSettings
     :return: virtual network settings
     """
-    try:
-        conf = config['virtual_network']
-    except KeyError:
-        conf = {}
+    conf = _kv_read_checked(config, 'virtual_network', {})
     name = _kv_read_checked(conf, 'name')
-    resource_group = _kv_read_checked(conf, 'resource_group')
+    resource_group = _kv_read_checked(
+        conf, 'resource_group', default_resource_group)
     address_space = _kv_read_checked(conf, 'address_space')
     existing_ok = _kv_read(conf, 'existing_ok', default_existing_ok)
-    subnet_name = _kv_read_checked(conf['subnet'], 'name')
-    subnet_address_prefix = _kv_read_checked(conf['subnet'], 'address_prefix')
     create_nonexistant = _kv_read(
         conf, 'create_nonexistant', default_create_nonexistant)
+    sub_conf = _kv_read_checked(conf, 'subnet', {})
+    subnet_name = _kv_read_checked(sub_conf, 'name')
+    subnet_address_prefix = _kv_read_checked(sub_conf, 'address_prefix')
     return VirtualNetworkSettings(
         name=name,
         resource_group=resource_group,
@@ -2345,6 +2346,31 @@ def virtual_network_settings(
         subnet_address_prefix=subnet_address_prefix,
         existing_ok=existing_ok,
         create_nonexistant=create_nonexistant,
+    )
+
+
+def fileserver_settings(config, vm_count):
+    conf = _kv_read_checked(config, 'file_server', {})
+    sc_fs_type = _kv_read_checked(conf, 'type')
+    if util.is_none_or_empty(sc_fs_type):
+        raise ValueError(
+            'remote_fs:storage_cluster:file_server:type must be specified')
+    # cross check against number of vms
+    if ((sc_fs_type == 'nfs' and vm_count != 1) or
+            (sc_fs_type == 'glusterfs' and vm_count <= 1)):
+        raise ValueError(
+            ('invalid combination of file_server:type {} and '
+             'vm_count {}').format(sc_fs_type, vm_count))
+    sc_fs_mountpoint = _kv_read_checked(conf, 'mountpoint')
+    if util.is_none_or_empty(sc_fs_mountpoint):
+        raise ValueError(
+            'remote_fs:storage_cluster:file_server must be specified')
+    # get server options
+    so_conf = _kv_read_checked(conf, 'server_options', {})
+    return FileServerSettings(
+        type=sc_fs_type,
+        mountpoint=sc_fs_mountpoint,
+        server_options=so_conf,
     )
 
 
@@ -2357,14 +2383,15 @@ def remotefs_settings(config):
     """
     # general settings
     conf = config['remote_fs']
-    resource_group = conf['resource_group']
-    if util.is_none_or_empty(resource_group):
-        raise ValueError('invalid resource_group in remote_fs')
+    resource_group = _kv_read_checked(conf, 'resource_group')
     location = conf['location']
     if util.is_none_or_empty(location):
         raise ValueError('invalid location in remote_fs')
     # managed disk settings
     md_conf = conf['managed_disks']
+    md_rg = _kv_read_checked(md_conf, 'resource_group', resource_group)
+    if util.is_none_or_empty(md_rg):
+        raise ValueError('invalid managed_disks:resource_group in remote_fs')
     md_premium = _kv_read(md_conf, 'premium', False)
     md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
     md_disk_ids = _kv_read_checked(md_conf, 'disk_ids')
@@ -2373,6 +2400,9 @@ def remotefs_settings(config):
     sc_id = sc_conf['id']
     if util.is_none_or_empty(sc_id):
         raise ValueError('invalid id in remote_fs:storage_cluster')
+    sc_rg = _kv_read_checked(sc_conf, 'resource_group', resource_group)
+    if util.is_none_or_empty(md_rg):
+        raise ValueError('invalid storage_cluster:resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
     sc_static_public_ip = _kv_read(sc_conf, 'static_public_ip', False)
@@ -2396,6 +2426,9 @@ def remotefs_settings(config):
         )
         if not isinstance(sc_ns_inbound['nfs'].source_address_prefix, list):
             raise ValueError('expected list for nfs network security rule')
+
+    # TODO gluster port mapping on nsg
+
     if 'custom_inbound_rules' in ns_conf:
         _reserved = frozenset(['ssh', 'nfs', 'glusterfs'])
         for key in ns_conf['custom_inbound_rules']:
@@ -2419,20 +2452,7 @@ def remotefs_settings(config):
                     'expected list for network security rule {} '
                     'source_address_prefix'.format(key))
     # sc file server settings
-    fs_conf = sc_conf['file_server']
-    sc_fs_type = _kv_read_checked(fs_conf, 'type')
-    if util.is_none_or_empty(sc_fs_type):
-        raise ValueError(
-            'remote_fs:storage_cluster:file_server:type must be specified')
-    # cross check against number of vms
-    if sc_fs_type == 'nfs' and sc_vm_count != 1:
-        raise ValueError(
-            ('invalid combination of file_server:type {} and '
-             'vm_count {}').format(sc_fs_type, sc_vm_count))
-    sc_fs_mountpoint = _kv_read_checked(fs_conf, 'mountpoint')
-    if util.is_none_or_empty(sc_fs_mountpoint):
-        raise ValueError(
-            'remote_fs:storage_cluster:file_server must be specified')
+    file_server = fileserver_settings(sc_conf, sc_vm_count)
     # sc ssh settings
     ssh_conf = sc_conf['ssh']
     sc_ssh_username = _kv_read_checked(ssh_conf, 'username')
@@ -2477,15 +2497,16 @@ def remotefs_settings(config):
              'inconsistent with storage_cluster:vm_count {}').format(
                  len(disk_map), sc_vm_count))
     return RemoteFsSettings(
-        resource_group=resource_group,
         location=location,
         managed_disks=ManagedDisksSettings(
+            resource_group=md_rg,
             premium=md_premium,
             disk_size_gb=md_disk_size_gb,
             disk_ids=md_disk_ids,
         ),
         storage_cluster=StorageClusterSettings(
             id=sc_id,
+            resource_group=sc_rg,
             virtual_network=virtual_network_settings(
                 sc_conf,
                 default_existing_ok=False,
@@ -2494,10 +2515,7 @@ def remotefs_settings(config):
             network_security=NetworkSecuritySettings(
                 inbound=sc_ns_inbound,
             ),
-            file_server=FileServerSettings(
-                type=sc_fs_type,
-                mountpoint=sc_fs_mountpoint,
-            ),
+            file_server=file_server,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
             static_public_ip=sc_static_public_ip,

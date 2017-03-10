@@ -33,6 +33,7 @@ from builtins import (  # noqa
 import logging
 # non-stdlib imports
 import azure.mgmt.network.models as networkmodels
+import azure.mgmt.resource.resources.models as rgmodels
 import msrestazure.azure_exceptions
 # local imports
 from . import util
@@ -42,12 +43,40 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
+def create_resource_group(resource_client, resource_group, location):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        str, str) -> None
+    """Create a resource group if it doesn't exist
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param str resource_group: resource group name
+    :param str location: location
+    """
+    # check if resource group exists
+    exists = resource_client.resource_groups.check_existence(resource_group)
+    # create resource group if it doesn't exist
+    if not exists:
+        logger.info('creating resource group: {}'.format(resource_group))
+        resource_client.resource_groups.create_or_update(
+            resource_group_name=resource_group,
+            parameters=rgmodels.ResourceGroup(
+                location=location,
+            )
+        )
+    else:
+        logger.debug('resource group {} exists'.format(resource_group))
+
+
 def create_virtual_network_and_subnet(
-        network_client, resource_group, location, vnet_settings):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str,
+        resource_client, network_client, resource_group, location,
+        vnet_settings):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, str, str,
     #        settings.VirtualNetworkSettings) ->
     #        Tuple[networkmodels.VirtualNetwork, networkmodels.Subnet]
     """Create a Virtual network and subnet
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param str resource_group: resouce group name
@@ -81,6 +110,8 @@ def create_virtual_network_and_subnet(
                 ('create_nonexistant setting is {} for virtual '
                  'network {}').format(
                      vnet_settings.create_nonexistant, vnet_settings.name))
+        # create resource group if needed
+        create_resource_group(resource_client, resource_group, location)
         logger.info('creating virtual network: {}'.format(vnet_settings.name))
         async_create = network_client.virtual_networks.create_or_update(
             resource_group_name=resource_group,

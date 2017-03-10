@@ -111,11 +111,10 @@ class CliContext(object):
         self._cleanup_after_initialize(
             skip_global_config=True, skip_pool_config=True)
 
-    def initialize_for_batch(self, init_clients_for_vnet=False):
-        # type: (CliContext, bool) -> None
+    def initialize_for_batch(self):
+        # type: (CliContext) -> None
         """Initialize context for batch commands
         :param CliContext self: this
-        :param bool init_clients_for_vnet: intialize clients for vnet
         """
         self._read_credentials_config()
         self._set_global_cli_options()
@@ -666,7 +665,7 @@ def cluster(ctx):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_add(ctx):
+def fs_cluster_add(ctx):
     """Create a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_add(
@@ -676,8 +675,8 @@ def fs_add(ctx):
 
 @cluster.command('del')
 @click.option(
-    '--delete-all-resources', is_flag=True,
-    help='Delete all resources used by storage cluster via resource group')
+    '--delete-resource-group', is_flag=True,
+    help='Delete all resources in the storage cluster resource group')
 @click.option(
     '--delete-data-disks', is_flag=True,
     help='Delete all attached managed data disks')
@@ -689,14 +688,14 @@ def fs_add(ctx):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_del(
-        ctx, delete_all_resources, delete_data_disks, delete_virtual_network,
+def fs_cluster_del(
+        ctx, delete_resource_group, delete_data_disks, delete_virtual_network,
         wait):
     """Delete a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
-        ctx.blob_client, ctx.config, delete_all_resources, delete_data_disks,
+        ctx.blob_client, ctx.config, delete_resource_group, delete_data_disks,
         delete_virtual_network, wait)
 
 
@@ -707,7 +706,7 @@ def fs_del(
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_expand(ctx, rebalance):
+def fs_cluster_expand(ctx, rebalance):
     """Expand a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_expand(
@@ -721,7 +720,7 @@ def fs_expand(ctx, rebalance):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_suspend(ctx, wait):
+def fs_cluster_suspend(ctx, wait):
     """Suspend a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_suspend(
@@ -735,7 +734,7 @@ def fs_suspend(ctx, wait):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_start(ctx, wait):
+def fs_cluster_start(ctx, wait):
     """Starts a previously suspended filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_start(
@@ -747,7 +746,7 @@ def fs_start(ctx, wait):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_status(ctx):
+def fs_cluster_status(ctx):
     """Query status of a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_status(
@@ -765,7 +764,7 @@ def fs_status(ctx):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_ssh(ctx, cardinal, hostname):
+def fs_cluster_ssh(ctx, cardinal, hostname):
     """Interactively login via SSH to a filesystem storage cluster virtual
     machine in Azure"""
     ctx.initialize_for_fs()
@@ -796,16 +795,19 @@ def fs_disks_add(ctx):
 @click.option(
     '--name', help='Delete disk with specified name only')
 @click.option(
+    '--resource-group',
+    help='Delete disks matching specified resource group only')
+@click.option(
     '--wait', is_flag=True, help='Wait for disk deletion to complete')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_disks_del(ctx, name, wait):
+def fs_disks_del(ctx, name, resource_group, wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_del(
-        ctx.compute_client, ctx.config, name, wait)
+        ctx.compute_client, ctx.config, name, resource_group, wait)
 
 
 @disks.command('list')
@@ -980,7 +982,7 @@ def pool_listskus(ctx):
 @pass_cli_context
 def pool_add(ctx):
     """Add a pool to the Batch account"""
-    ctx.initialize_for_batch(init_clients_for_vnet=True)
+    ctx.initialize_for_batch()
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,

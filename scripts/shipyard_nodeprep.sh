@@ -44,7 +44,7 @@ p2penabled=0
 prefix=
 privatereg=
 sku=
-sc_arg=0
+sc_arg=
 version=
 
 while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
@@ -408,10 +408,13 @@ EOF
         mkdir -p /mnt/gluster
     fi
     # install dependencies for storage cluster mount
-    if [ ! -z ${sc_arg+x} ]; then
+    if [ ! -z $sc_arg ]; then
         IFS=':' read -ra sc <<< "$sc_arg"
-        if [ ${sc[0]} == "nfs" ]; then
+        server_type=${sc[0]}
+        if [ $server_type == "nfs" ]; then
             apt-get install -y -q --no-install-recommends nfs-common
+        elif [ $server_type == "glusterfs" ]; then
+            apt-get install -y -q --no-install-recommends glusterfs-client
         else
             echo "Unknown file server type: $sc_arg"
             exit 1
@@ -505,13 +508,18 @@ EOF
             mkdir -p /mnt/resource/gluster
         fi
         # install dependencies for storage cluster mount
-        if [ ! -z ${sc_arg+x} ]; then
+        if [ ! -z $sc_arg ]; then
             IFS=':' read -ra sc <<< "$sc_arg"
-            if [ ${sc[0]} == "nfs" ]; then
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ]; then
                 yum install -y nfs-utils
                 systemctl daemon-reload
                 $rpcbindenable
                 systemctl start rpcbind
+            elif [ $server_type == "glusterfs" ]; then
+                yum install -y epel-release centos-release-gluster38
+                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client
             else
                 echo "Unknown file server type: $sc_arg"
                 exit 1
@@ -589,13 +597,18 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             mkdir -p /mnt/resource/gluster
         fi
         # install dependencies for storage cluster mount
-        if [ ! -z ${sc_arg+x} ]; then
+        if [ ! -z $sc_arg ]; then
             IFS=':' read -ra sc <<< "$sc_arg"
-            if [ ${sc[0]} == "nfs" ]; then
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ]; then
                 zypper -n in nfs-client
                 systemctl daemon-reload
                 systemctl enable rpcbind
                 systemctl start rpcbind
+            elif [ $server_type == "glusterfs" ]; then
+                zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
+                zypper -n --gpg-auto-import-keys ref
+                zypper -n in glusterfs
             else
                 echo "Unknown file server type: $sc_arg"
                 exit 1
@@ -628,7 +641,7 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
 fi
 
 # mount any storage clusters
-if [ ! -z ${sc_arg+x} ]; then
+if [ ! -z $sc_arg ]; then
     IFS=':' read -ra sc <<< "$sc_arg"
     mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
     echo "Creating host directory for storage cluster $sc_arg at $mountpoint"

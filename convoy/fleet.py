@@ -458,7 +458,7 @@ def _add_pool(
             _vnet_rg = bc.resource_group
         # create virtual network and subnet if specified
         vnet, subnet = resource.create_virtual_network_and_subnet(
-            network_client, _vnet_rg, bc.location,
+            resource_client, network_client, _vnet_rg, bc.location,
             pool_settings.virtual_network)
         del _vnet_rg
         # ensure address prefix for subnet is valid
@@ -1235,17 +1235,19 @@ def action_fs_disks_add(resource_client, compute_client, config):
     remotefs.create_managed_disks(resource_client, compute_client, config)
 
 
-def action_fs_disks_del(compute_client, config, name, wait):
+def action_fs_disks_del(compute_client, config, name, resource_group, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
-    #        bool) -> None
+    #        str, bool) -> None
     """Action: Fs Disks Del
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param str name: disk name
+    :param str resource_group: resource group
     :param bool wait: wait for operation to complete
     """
-    remotefs.delete_managed_disks(compute_client, config, name, wait)
+    remotefs.delete_managed_disks(
+        compute_client, config, name, resource_group, wait)
 
 
 def action_fs_disks_list(compute_client, config, restrict_scope):

@@ -161,28 +161,36 @@ def create_arm_clients(ctx, batch_clients=False):
         azure.mgmt.batch.BatchManagementClient,
         azure.batch.batch_service_client.BatchServiceClient)
     """
-    mgmt_aad = settings.credentials_management(ctx.config).aad
-    subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    mgmt = settings.credentials_management(ctx.config)
+    subscription_id = ctx.subscription_id or mgmt.subscription_id
     if util.is_none_or_empty(subscription_id):
-        return (None, None, None, None, None)
-    credentials = aad.create_aad_credentials(ctx, mgmt_aad)
-    resource_client = create_resource_client(
-        ctx, credentials=credentials, subscription_id=subscription_id)
-    compute_client = create_compute_client(
-        ctx, credentials=credentials, subscription_id=subscription_id)
-    network_client = create_network_client(
-        ctx, credentials=credentials, subscription_id=subscription_id)
+        credentials = None
+        resource_client = None
+        compute_client = None
+        network_client = None
+    else:
+        credentials = aad.create_aad_credentials(ctx, mgmt.aad)
+        resource_client = create_resource_client(
+            ctx, credentials=credentials, subscription_id=subscription_id)
+        compute_client = create_compute_client(
+            ctx, credentials=credentials, subscription_id=subscription_id)
+        network_client = create_network_client(
+            ctx, credentials=credentials, subscription_id=subscription_id)
     if batch_clients:
-        batch_client = create_batch_service_client(ctx)
         try:
+            if credentials is None:
+                credentials = aad.create_aad_credentials(ctx, mgmt.add)
             batch_mgmt_client = create_batch_mgmt_client(
                 ctx, credentials=credentials, subscription_id=subscription_id)
         except Exception:
-            logger.warning('could not create batch management client')
+            if settings.verbose(ctx.config):
+                logger.warning('could not create batch management client')
             batch_mgmt_client = None
+        # create batch service client
+        batch_client = create_batch_service_client(ctx)
     else:
-        batch_client = None
         batch_mgmt_client = None
+        batch_client = None
     return (
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client
@@ -196,9 +204,11 @@ def create_keyvault_client(ctx):
     :rtype: azure.keyvault.KeyVaultClient
     :return: keyvault client
     """
-    kv_aad = settings.credentials_keyvault(ctx.config).aad
+    kv = settings.credentials_keyvault(ctx.config)
+    if util.is_none_or_empty(kv.keyvault_uri):
+        return None
     return azure.keyvault.KeyVaultClient(
-        aad.create_aad_credentials(ctx, kv_aad)
+        aad.create_aad_credentials(ctx, kv.aad)
     )
 
 
