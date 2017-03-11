@@ -115,9 +115,15 @@
                     "volume_options": [
                     ]
                 },
-                "mystoragecluster": {
+                "my_nfs_cluster": {
                     "volume_driver": "storage_cluster",
-                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/mystoragecluster",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/my_nfs_cluster",
+                    "mount_options": [
+                    ]
+                },
+                "my_glusterfs_cluster": {
+                    "volume_driver": "storage_cluster",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/my_glusterfs_cluster",
                     "mount_options": [
                     ]
                 }

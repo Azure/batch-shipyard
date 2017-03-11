@@ -42,8 +42,13 @@
             "file_server": {
                 "type": "nfs",
                 "mountpoint": "/data",
+                "mount_options": [
+                    "noatime",
+                    "nodiratime"
+                ],
                 "server_options": {
                     "glusterfs": {
+                        "volume_name": "gv0",
                         "volume_type": "replica",
                         "transport": "tcp",
                         "performance.cache-size": "1 GB"

@@ -75,7 +75,6 @@ elif [ $server_type == "glusterfs" ]; then
     echo "glusterfs service status:"
     systemctl status glusterfs-server
     echo ""
-    echo "volume info:"
     gluster volume info all
     echo ""
     gluster volume status all detail

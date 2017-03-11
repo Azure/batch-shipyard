@@ -182,7 +182,7 @@ VirtualNetworkSettings = collections.namedtuple(
 )
 FileServerSettings = collections.namedtuple(
     'FileServerSettings', [
-        'type', 'mountpoint', 'server_options',
+        'type', 'mountpoint', 'mount_options', 'server_options',
     ]
 )
 InboundNetworkSecurityRule = collections.namedtuple(
@@ -2365,11 +2365,13 @@ def fileserver_settings(config, vm_count):
     if util.is_none_or_empty(sc_fs_mountpoint):
         raise ValueError(
             'remote_fs:storage_cluster:file_server must be specified')
+    sc_mo = _kv_read_checked(conf, 'mount_options')
     # get server options
     so_conf = _kv_read_checked(conf, 'server_options', {})
     return FileServerSettings(
         type=sc_fs_type,
         mountpoint=sc_fs_mountpoint,
+        mount_options=sc_mo,
         server_options=so_conf,
     )
 

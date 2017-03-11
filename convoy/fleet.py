@@ -45,6 +45,7 @@ import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
 import azure.mgmt.batch.models as batchmgmtmodels
+import azure.mgmt.compute.models as computemodels
 # local imports
 from . import batch
 from . import crypto
@@ -439,12 +440,29 @@ def _create_storage_cluster_mount_args(
                 sdv, sc.id)):
         raise RuntimeError(
             'No storage cluster {} found in configuration'.format(sc.id))
-    # check for same vnet
-    if vnet.name != sc.virtual_network.name:
+    # check for same vnet name
+    if vnet.name.lower() != sc.virtual_network.name.lower():
         raise RuntimeError(
             'cannot link storage cluster {} on virtual '
             'network {} with pool virtual network {}'.format(
                 sc.id, sc.virtual_network.name, vnet.name))
+    # cross check vnet resource group
+    _vnet_tmp = vnet.id.lower().split('/')
+    if _vnet_tmp[4] != sc.virtual_network.resource_group.lower():
+        raise RuntimeError(
+            'cannot link storage cluster {} virtual network in resource group '
+            '{} with pool virtual network in resource group {}'.format(
+                sc.id, sc.virtual_network.resource_group,
+                _vnet_tmp[4]))
+    # cross check vnet subscription id
+    _ba_tmp = ba.id.lower().split('/')
+    if _vnet_tmp[2] != _ba_tmp[2]:
+        raise RuntimeError(
+            'cannot link storage cluster {} virtual network in subscription '
+            '{} with pool virtual network in subscription {}'.format(
+                sc.id, _vnet_tmp[2], _ba_tmp[2]))
+    del _vnet_tmp
+    del _ba_tmp
     # get vm count
     if sc.vm_count < 1:
         raise RuntimeError(
@@ -455,11 +473,11 @@ def _create_storage_cluster_mount_args(
         # query first vm for info
         vm_name = '{}-vm{}'.format(sc.hostname_prefix, 0)
         vm = compute_client.virtual_machines.get(
-            resource_group_name=rfs.resource_group,
+            resource_group_name=sc.resource_group,
             vm_name=vm_name,
         )
         nic = resource.get_nic_from_virtual_machine(
-            network_client, rfs.resource_group, vm)
+            network_client, sc.resource_group, vm)
         # get private ip of vm
         remote_ip = nic.ip_configurations[0].private_ip_address
         # construct mount options
@@ -490,10 +508,88 @@ def _create_storage_cluster_mount_args(
                 mo=mo,
             )
     elif sc.file_server.type == 'glusterfs':
-        # TODO
-        # walk all vms and find non-overlapping ud/fds
-        # use non-overlapping backupvolfile-server in mount option
-        raise NotImplementedError()
+        # walk vms and find non-overlapping ud/fds
+        primary_ip = None
+        primary_ud = None
+        primary_fd = None
+        backup_ip = None
+        backup_ud = None
+        backup_fd = None
+        vms = {}
+        # first pass, attempt to populate all ip, ud/fd
+        for i in range(sc.vm_count):
+            vm_name = '{}-vm{}'.format(sc.hostname_prefix, i)
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=sc.resource_group,
+                vm_name=vm_name,
+                expand=computemodels.InstanceViewTypes.instance_view,
+            )
+            nic = resource.get_nic_from_virtual_machine(
+                network_client, sc.resource_group, vm)
+            vms[i] = (vm, nic)
+            # get private ip and ud/fd of vm
+            remote_ip = nic.ip_configurations[0].private_ip_address
+            ud = vm.instance_view.platform_update_domain
+            fd = vm.instance_view.platform_fault_domain
+            if primary_ip is None:
+                primary_ip = remote_ip
+                primary_ud = ud
+                primary_fd = fd
+            if backup_ip is None:
+                if (primary_ip == backup_ip or primary_ud == ud
+                        or primary_fd == fd):
+                    continue
+                backup_ip = remote_ip
+                backup_ud = ud
+                backup_fd = fd
+        # second pass, fill in with at least non-overlapping update domains
+        if backup_ip is None:
+            for i in range(sc.vm_count):
+                vm, nic = vms[i]
+                remote_ip = nic.ip_configurations[0].private_ip_address
+                ud = vm.instance_view.platform_update_domain
+                fd = vm.instance_view.platform_fault_domain
+                if primary_ud != ud:
+                    backup_ip = remote_ip
+                    backup_ud = ud
+                    backup_fd = fd
+                    break
+        if primary_ip is None or backup_ip is None:
+            raise RuntimeError(
+                'Could not find either a primary ip {} or backup ip {} for '
+                'glusterfs client mount'.format(primary_ip, backup_ip))
+        logger.debug('primary ip/ud/fd={} backup ip/ud/fd={}'.format(
+            (primary_ip, primary_ud, primary_fd),
+            (backup_ip, backup_ud, backup_fd)))
+        # construct mount options
+        mo = '_netdev,auto,transport=tcp,backupvolfile-server={}'.format(
+            backup_ip)
+        amo = settings.shared_data_volume_mount_options(sdv, sc.id)
+        if util.is_not_empty(amo):
+            if any([x.startswith('backupvolfile-server=') for x in amo]):
+                raise RuntimeError(
+                    ('backupvolfile-server cannot be specified as a mount '
+                     'option for storage cluster {}').format(sc.id))
+            if any([x.startswith('transport=') for x in amo]):
+                raise RuntimeError(
+                    ('transport cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc.id))
+            mo = ','.join((mo, ','.join(amo)))
+        # get gluster volume name
+        try:
+            volname = sc.file_server.server_options['glusterfs']['volume_name']
+        except KeyError:
+            volname = remotefs._GLUSTER_DEFAULT_VOLNAME
+        # construct mount string for fstab, srcpath is the gluster volume
+        fstab_mount = (
+            '{remoteip}:/{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
+            '{fstype} {mo} 0 2').format(
+                remoteip=primary_ip,
+                srcpath=volname,
+                scid=sc.id,
+                fstype=sc.file_server.type,
+                mo=mo,
+            )
     else:
         raise NotImplementedError(
             ('cannot handle file_server type {} for storage '

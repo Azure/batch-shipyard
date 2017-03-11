@@ -39,6 +39,16 @@ The pool schema is as follows:
                 }
             ]
         },
+        "virtual_network": {
+            "name": "myvnet",
+            "resource_group": "vnet-in-another-rg",
+            "create_nonexistant": false,
+            "address_space": "10.0.0.0/16",
+            "subnet": {
+                "name": "subnet-for-batch-vms",
+                "address_prefix": "10.0.0.0/20"
+            }
+        },
         "ssh": {
             "username": "docker",
             "expiry_days": 7,
@@ -129,6 +139,24 @@ data defined in `files` prior to pool creation and disable the option above
       `data ingress` command.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
+* (optional) `virtual_network` is the property for specifying an ARM-based
+virtual network resource for the pool. This is only available for
+UserSubscription Batch accounts.
+  * (required) `name` is the name of the virtual network
+  * (optional) `resource_group` containing the virtual network. If
+    the resource group name is not specified here, the `resource_group`
+    specified in the `batch` credentials will be used instead.
+  * (optional) `create_nonexistant` specifies if the virtual network and
+    subnet should be created if not found. If not specified, this defaults
+    to `false`.
+  * (required if creating, optional otherwise) `address_space` is the
+    allowed address space for the virtual network.
+  * (required) `subnet` specifies the subnet properties.
+    * (required) `name` is the subnet name.
+    * (required) `address_prefix` is the subnet address prefix to use for
+      allocation Batch compute nodes to. The maximum number of compute nodes
+      a subnet can support is 4096 which maps roughly to a CIDR mask of
+      20-bits.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation.

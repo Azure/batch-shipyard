@@ -412,9 +412,9 @@ EOF
         IFS=':' read -ra sc <<< "$sc_arg"
         server_type=${sc[0]}
         if [ $server_type == "nfs" ]; then
-            apt-get install -y -q --no-install-recommends nfs-common
+            apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
         elif [ $server_type == "glusterfs" ]; then
-            apt-get install -y -q --no-install-recommends glusterfs-client
+            apt-get install -y -q --no-install-recommends glusterfs-client acl
         else
             echo "Unknown file server type: $sc_arg"
             exit 1
@@ -425,10 +425,11 @@ EOF
         # install azure storage python dependency
         apt-get install -y -q --no-install-recommends \
             build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-        pip3 install --no-cache-dir azure-storage==0.33.0
+        pip3 install --no-cache-dir azure-storage==0.34.0
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
-            apt-get install -y -q --no-install-recommends python3-libtorrent pigz
+            apt-get install -y -q --no-install-recommends \
+                python3-libtorrent pigz
         fi
     fi
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
@@ -512,14 +513,14 @@ EOF
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
             if [ $server_type == "nfs" ]; then
-                yum install -y nfs-utils
+                yum install -y nfs-utils nfs4-acl-tools
                 systemctl daemon-reload
                 $rpcbindenable
                 systemctl start rpcbind
             elif [ $server_type == "glusterfs" ]; then
                 yum install -y epel-release centos-release-gluster38
                 sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client
+                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
             else
                 echo "Unknown file server type: $sc_arg"
                 exit 1
@@ -601,14 +602,14 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
             if [ $server_type == "nfs" ]; then
-                zypper -n in nfs-client
+                zypper -n in nfs-client nfs4-acl-tools
                 systemctl daemon-reload
                 systemctl enable rpcbind
                 systemctl start rpcbind
             elif [ $server_type == "glusterfs" ]; then
                 zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
                 zypper -n --gpg-auto-import-keys ref
-                zypper -n in glusterfs
+                zypper -n in glusterfs acl
             else
                 echo "Unknown file server type: $sc_arg"
                 exit 1

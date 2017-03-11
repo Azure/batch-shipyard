@@ -8,7 +8,6 @@ DEBIAN_FRONTEND=noninteractive
 # constants
 gluster_brick_mountpath=/gluster/brick
 gluster_brick_location=$gluster_brick_mountpath/brick0
-gluster_volname=gv0
 ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 
 # vars
@@ -22,6 +21,7 @@ optimize_tcp=0
 server_options=
 premium_storage=0
 raid_level=-1
+mount_options=
 
 # functions
 setup_nfs() {
@@ -130,6 +130,10 @@ gluster_poll_for_volume() {
 }
 
 setup_glusterfs() {
+    # parse server options in the format: volname,voltype,transport,key:value,...
+    IFS=',' read -ra so <<< "$server_options"
+    local gluster_volname=${so[0]}
+    # create hosts array
     IFS=',' read -ra hosts <<< "$peer_ips"
     # master (first host) performs peering
     if [ ${hosts[0]} == $ipaddress ]; then
@@ -147,9 +151,7 @@ setup_glusterfs() {
         # wait for connections
         local numnodes=${#hosts[@]}
         gluster_poll_for_connections $numnodes
-        # parse server options in the format: voltype,transport,key:value,...
-        IFS=',' read -ra so <<< "$server_options"
-        local voltype=${so[0],,}
+        local voltype=${so[1],,}
         local volarg=
         if [ $voltype == "replica" ] || [ $voltype == "stripe" ]; then
             volarg="$voltype $numnodes"
@@ -157,7 +159,7 @@ setup_glusterfs() {
             # allow custom replica and/or stripe counts
             volarg=$voltype
         fi
-        local transport=${so[1],,}
+        local transport=${so[2],,}
         if [ -z $transport ]; then
             transport="tcp"
         fi
@@ -173,7 +175,7 @@ setup_glusterfs() {
         echo "Creating $voltype gluster volume $gluster_volname ($force$bricks)"
         gluster volume create $gluster_volname $volarg transport $transport$bricks $force
         # modify volume properties as per input
-        for e in ${so[@]:2}; do
+        for e in ${so[@]:3}; do
             IFS=':' read -ra kv <<< "$e"
             echo "Setting volume option ${kv[@]}"
             gluster volume set $gluster_volname ${kv[0]} ${kv[1]}
@@ -181,6 +183,23 @@ setup_glusterfs() {
         # start volume
         echo "Starting gluster volume $gluster_volname"
         gluster volume start $gluster_volname
+        # heal volume if force created with certain volume types
+        if [ ! -z $force ]; then
+            if [[ $voltype == replica* ]] || [[ $voltype == disperse* ]]; then
+                echo "Checking if gluster volume $gluster_volname needs healing"
+                set +e
+                gluster volume heal $gluster_volname info
+                if [ $? -eq 0 ]; then
+                    set -e
+                    gluster volume heal $gluster_volname
+                    # print status after heal
+                    gluster volume heal $gluster_volname info healed
+                    gluster volume heal $gluster_volname info heal-failed
+                    gluster volume heal $gluster_volname info split-brain
+                fi
+                set -e
+            fi
+        fi
     fi
 
     # poll for volume created
@@ -238,7 +257,7 @@ setup_glusterfs() {
 }
 
 # begin processing
-while getopts "h?abf:i:m:no:pr:s:" opt; do
+while getopts "h?abf:i:m:no:pr:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
@@ -253,6 +272,7 @@ while getopts "h?abf:i:m:no:pr:s:" opt; do
             echo "-p premium storage disks"
             echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
+            echo "-t [mount options] mount options"
             echo ""
             exit 1
             ;;
@@ -285,6 +305,9 @@ while getopts "h?abf:i:m:no:pr:s:" opt; do
             ;;
         s)
             server_type=${OPTARG,,}
+            ;;
+        t)
+            mount_options=$OPTARG
             ;;
     esac
 done
@@ -336,7 +359,7 @@ EOF
     # install required server_type software
     apt-get update
     if [ $server_type == "nfs" ]; then
-        apt-get install -y --no-install-recommends nfs-kernel-server
+        apt-get install -y --no-install-recommends nfs-kernel-server nfs4-acl-tools
         # patch buggy nfs-mountd.service unit file
         # https://bugs.launchpad.net/ubuntu/+source/nfs-utils/+bug/1590799
         set +e
@@ -420,6 +443,11 @@ fi
 # check if disks are already in raid set
 raid_resized=0
 if [ $raid_level -ge 0 ]; then
+    # redirect mountpath if gluster for bricks
+    saved_mp=$mountpath
+    if [ $server_type == "glusterfs" ]; then
+        mountpath=$gluster_brick_mountpath
+    fi
     format_target=0
     md_preexist=0
     if [ $filesystem == "btrfs" ]; then
@@ -534,6 +562,9 @@ if [ $raid_level -ge 0 ]; then
     if [ -z $target_uuid ]; then
         read target_uuid < <(blkid ${all_raid_disks[0]} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
     fi
+    # restore mountpath
+    mountpath=$saved_mp
+    unset saved_mp
 fi
 
 # create filesystem on target device
@@ -587,18 +618,24 @@ if [ $attach_disks -eq 0 ]; then
         # add fstab entry
         if [ $add_fstab -eq 1 ]; then
             echo "Adding $target_uuid to mountpoint $mountpath to /etc/fstab"
+            # construct mount options
+            if [ -z $mount_options ]; then
+                mount_options="defaults"
+            else
+                mount_options="defaults,$mount_options"
+            fi
             if [ $premium_storage -eq 1 ]; then
                 # disable barriers due to RO cache
                 if [ $filesystem == "btrfs" ]; then
-                    mo=",nobarrier"
+                    mount_options+=",nobarrier"
                 else
-                    mo=",barrier=0"
+                    mount_options+=",barrier=0"
                 fi
             else
                 # enable discard to save cost on standard storage
-                mo=",discard"
+                mount_options+=",discard"
             fi
-            echo "UUID=$target_uuid $mountpath $filesystem defaults,noatime,nodiratime${mo} 0 2" >> /etc/fstab
+            echo "UUID=$target_uuid $mountpath $filesystem ${mount_options} 0 2" >> /etc/fstab
         fi
         # create mountpath
         mkdir -p $mountpath

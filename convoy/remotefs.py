@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _SSH_KEY_PREFIX = 'id_rsa_shipyard_remotefs'
+_GLUSTER_DEFAULT_VOLNAME = 'gv0'
 
 
 def _create_managed_disk(compute_client, rfs, disk_name):
@@ -523,6 +524,10 @@ def _create_virtual_machine_extension(
     # if they don't exist)
     if st == 'glusterfs':
         try:
+            server_options.append(so[st]['volume_name'])
+        except KeyError:
+            server_options.append(_GLUSTER_DEFAULT_VOLNAME)
+        try:
             server_options.append(so[st]['volume_type'])
         except KeyError:
             server_options.append('distributed')
@@ -537,7 +542,8 @@ def _create_virtual_machine_extension(
     if st in so:
         for key in so[st]:
             if (st == 'glusterfs' and
-                    (key == 'volume_type' or key == 'transport')):
+                    (key == 'volume_name' or key == 'volume_type' or
+                     key == 'transport')):
                 continue
             server_options.append('{}:{}'.format(key, so[st][key]))
     logger.debug('server options: {}'.format(server_options))
@@ -557,7 +563,7 @@ def _create_virtual_machine_extension(
             },
             protected_settings={
                 'commandToExecute':
-                './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}'.format(
+                './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
                     bsf=bootstrap_file,
                     f=' -f {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].filesystem),
@@ -575,6 +581,11 @@ def _create_virtual_machine_extension(
                     r=' -r {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].raid_level),
                     s=' -s {}'.format(rfs.storage_cluster.file_server.type),
+                    t=' -t {}'.format(
+                        ','.join(rfs.storage_cluster.file_server.mount_options)
+                        if util.is_not_empty(
+                                rfs.storage_cluster.file_server.mount_options)
+                        else ''),
                 ),
                 'storageAccountName': storage.get_storageaccount(),
                 'storageAccountKey': storage.get_storageaccount_key(),
@@ -602,10 +613,11 @@ def _create_availability_set(compute_client, rfs):
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         name=as_name,
+        # user maximums for ud/fd
         parameters=computemodels.AvailabilitySet(
             location=rfs.location,
-            platform_update_domain_count=5,
-            platform_fault_domain_count=2,
+            platform_update_domain_count=20,
+            platform_fault_domain_count=3,
             managed=True,
         )
     )
@@ -1109,7 +1121,7 @@ def delete_storage_cluster(
         if len(data_disks) > 0:
             data_disk_ops.extend(delete_managed_disks(
                 compute_client, config, data_disks,
-                resource_group=rfs.storage_cluster.resource_group, wait=False))
+                resource_group=rfs.managed_disks.resource_group, wait=False))
     # wait for nics to delete
     logger.debug('waiting for network interfaces to delete')
     for op in nic_ops:
@@ -1328,8 +1340,9 @@ def expand_storage_cluster(
             )
             lun += 1
         logger.info(
-            'attaching {} additional data disks to virtual machine {}'.format(
-                len(entry['new_disks']), vm.id))
+            ('attaching {} additional data disks {} to virtual '
+             'machine {}').format(
+                len(entry['new_disks']), entry['new_disks'], vm.name))
         # update vm
         async_ops.append(
             (key, premium, compute_client.virtual_machines.create_or_update(
@@ -1368,7 +1381,7 @@ def expand_storage_cluster(
         cmd.extend(script_cmd.split())
         proc = util.subprocess_nowait_pipe_stdout(cmd)
         stdout = proc.communicate()[0]
-        if stdout is not None:
+        if util.is_not_empty(stdout):
             stdout = stdout.decode('utf8')
             if util.on_windows():
                 stdout = stdout.replace('\n', os.linesep)
@@ -1383,6 +1396,7 @@ def expand_storage_cluster(
             vm.name, entry['status'])
         if entry['status'] == 0:
             logger.info(log)
+            logger.debug(entry['stdout'])
         else:
             logger.error(log)
             logger.error(entry['stdout'])
