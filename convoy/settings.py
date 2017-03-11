@@ -2509,6 +2509,7 @@ def remotefs_settings(config):
             resource_group=sc_rg,
             virtual_network=virtual_network_settings(
                 sc_conf,
+                default_resource_group=sc_rg,
                 default_existing_ok=False,
                 default_create_nonexistant=True,
             ),

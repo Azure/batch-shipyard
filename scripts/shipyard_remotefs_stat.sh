@@ -4,22 +4,30 @@ set -o pipefail
 
 DEBIAN_FRONTEND=noninteractive
 
+# constants
+gluster_brick_mountpath=/gluster/brick
+
 # vars
+filesystem=
 mountpath=
 raid_level=-1
 server_type=
 
 # begin processing
-while getopts "h?m:r:s:" opt; do
+while getopts "h?f:m:r:s:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_stat.sh parameters"
             echo ""
+            echo "-f [filesystem] filesystem"
             echo "-m [mountpoint] mountpoint"
             echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
             echo ""
             exit 1
+            ;;
+        f)
+            filesystem=${OPTARG,,}
             ;;
         m)
             mountpath=$OPTARG
@@ -63,6 +71,21 @@ if [ $server_type == "nfs" ]; then
     echo ""
     echo "connected clients:"
     netstat -tn | grep :2049
+elif [ $server_type == "glusterfs" ]; then
+    echo "glusterfs service status:"
+    systemctl status glusterfs-server
+    echo ""
+    echo "volume info:"
+    gluster volume info all
+    echo ""
+    gluster volume status all detail
+    echo ""
+    gluster volume status all mem
+    echo ""
+    gluster volume status all fd
+    echo ""
+    gluster volume status all clients
+    echo ""
 else
     echo "$server_type not supported."
     exit 1
@@ -80,12 +103,9 @@ else
 fi
 echo ""
 
-# get filesystem type from mount
-formatted_as=$(echo $mount | cut -d" " -f5)
-
 # get raid status
 if [ $raid_level -ge 0 ]; then
-    if [ $formatted_as == "btrfs" ]; then
+    if [ $filesystem == "btrfs" ]; then
         echo "btrfs device status:"
         for disk in "${data_disks[@]}"; do
             btrfs device stats ${disk}1
@@ -93,7 +113,11 @@ if [ $raid_level -ge 0 ]; then
         echo ""
         echo "btrfs filesystem:"
         btrfs filesystem show
-        btrfs filesystem usage -h $mountpath
+        if [ $server_type == "glusterfs" ]; then
+            btrfs filesystem usage -h $gluster_brick_mountpath
+        else
+            btrfs filesystem usage -h $mountpath
+        fi
     else
         echo "/proc/mdstat:"
         cat /proc/mdstat

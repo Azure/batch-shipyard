@@ -154,6 +154,9 @@ class CliContext(object):
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
+        # increase detail in logger formatters
+        if self.verbose:
+            convoy.util.set_verbose_logger_handlers()
 
     def _cleanup_after_initialize(
             self, skip_global_config, skip_pool_config):

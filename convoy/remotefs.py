@@ -557,7 +557,7 @@ def _create_virtual_machine_extension(
             },
             protected_settings={
                 'commandToExecute':
-                './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}{v}'.format(
+                './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}'.format(
                     bsf=bootstrap_file,
                     f=' -f {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].filesystem),
@@ -575,7 +575,6 @@ def _create_virtual_machine_extension(
                     r=' -r {}'.format(
                         rfs.storage_cluster.vm_disk_map[offset].raid_level),
                     s=' -s {}'.format(rfs.storage_cluster.file_server.type),
-                    v=' -v {}'.format(offset),
                 ),
                 'storageAccountName': storage.get_storageaccount(),
                 'storageAccountKey': storage.get_storageaccount_key(),
@@ -692,18 +691,11 @@ def create_storage_cluster(
         ]
         logger.debug('static private ip addresses to assign: {}'.format(
             private_ips))
-
-        # TODO remove all SLB refs, not needed - use backupvolfile-sever
-
     # create virtual network and subnet if specified
-    if util.is_not_empty(rfs.storage_cluster.virtual_network.resource_group):
-        _vnet_rg = rfs.storage_cluster.virtual_network.resource_group
-    else:
-        _vnet_rg = rfs.storage_cluster.resource_group
     vnet, subnet = resource.create_virtual_network_and_subnet(
-        resource_client, network_client, _vnet_rg, rfs.location,
+        resource_client, network_client,
+        rfs.storage_cluster.virtual_network.resource_group, rfs.location,
         rfs.storage_cluster.virtual_network)
-    del _vnet_rg
     # create public ips
     async_ops = []
     for i in range(rfs.storage_cluster.vm_count):
@@ -770,21 +762,23 @@ def create_storage_cluster(
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # wait for vms to be created
-    logger.debug('waiting for virtual machines to be created')
+    logger.info(
+        'waiting for {} virtual machines to be created'.format(
+            len(vms_async_ops)))
     vms = {}
-    vm_ext_ops = {}
     for offset in vms_async_ops:
         # cache vm
         vms[offset] = vms_async_ops[offset].result()
     del vms_async_ops
     logger.debug('{} virtual machines created'.format(len(vms)))
     # wait for all vms to be created before installing extensions to prevent
-    # uneven wait times and timeouts
+    # variability in wait times and timeouts during customscript
+    vm_ext_ops = {}
     for i in range(rfs.storage_cluster.vm_count):
         # install vm extension
         vm_ext_ops[i] = _create_virtual_machine_extension(
             compute_client, rfs, bootstrap_file, blob_urls,
-            vm.name, disk_map, private_ips, i)
+            vms[i].name, disk_map, private_ips, i)
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in vm_ext_ops:
         # refresh public ip for vm
@@ -809,7 +803,7 @@ def _get_resource_names_from_virtual_machine(
     #        azure.mgmt.network.NetworkManagementClient,
     #        settings.RemoteFsSettings, computemodels.VirtualMachine,
     #        networkmodels.NetworkInterface, networkmodels.PublicIPAddress) ->
-    #        Tuple[str, str, str, str, str, str]
+    #        Tuple[str, str, str, str, str]
     """Get resource names from a virtual machine
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -820,7 +814,7 @@ def _get_resource_names_from_virtual_machine(
     :param networkmodels.NetworkInterface nic: network interface
     :param networkmodels.PublicIPAddress pip: public ip
     :rtype: tuple
-    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name, slb_name)
+    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name)
     """
     # get nic
     if nic is None:
@@ -860,12 +854,7 @@ def _get_resource_names_from_virtual_machine(
         nsg_name = tmp[-1]
     else:
         nsg_name = None
-
-    # TODO get slb
-
-    return (
-        nic_name, pip_name, subnet_name, vnet_name, nsg_name, None,
-    )
+    return (nic_name, pip_name, subnet_name, vnet_name, nsg_name)
 
 
 def _delete_virtual_machine(compute_client, rg_name, vm_name):
@@ -1057,7 +1046,7 @@ def delete_storage_cluster(
                 raise
         else:
             # get resources connected to vm
-            nic, pip, subnet, vnet, nsg, slb = \
+            nic, pip, subnet, vnet, nsg = \
                 _get_resource_names_from_virtual_machine(
                     compute_client, network_client, rfs, vm)
             resources[i] = {
@@ -1068,7 +1057,6 @@ def delete_storage_cluster(
                 'subnet': subnet,
                 'nsg': nsg,
                 'vnet': vnet,
-                'slb': slb,
                 'os_disk': vm.storage_profile.os_disk.name,
                 'data_disks': [],
             }
@@ -1086,7 +1074,7 @@ def delete_storage_cluster(
     if len(resources) == 0:
         logger.warning('no resources deleted')
         return
-    if settings.verbose:
+    if settings.verbose(config):
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
     # delete vms
@@ -1095,7 +1083,8 @@ def delete_storage_cluster(
         vm_name = resources[key]['vm']
         vm_ops.append(_delete_virtual_machine(
             compute_client, rfs.storage_cluster.resource_group, vm_name))
-    logger.debug('waiting for virtual machines to delete')
+    logger.info(
+        'waiting for {} virtual machines to delete'.format(len(vm_ops)))
     for op in vm_ops:
         op.result()
     logger.info('{} virtual machines deleted'.format(len(vm_ops)))
@@ -1184,9 +1173,6 @@ def delete_storage_cluster(
         _delete_availability_set(
             compute_client, rfs.storage_cluster.resource_group, as_name)
     deleted.clear()
-
-    # TODO delete slb
-
     # wait for nsgs and os disks to delete
     if wait:
         logger.debug('waiting for network security groups to delete')
@@ -1472,17 +1458,29 @@ def suspend_storage_cluster(compute_client, config, wait=False):
     if len(vms) == 0:
         logger.warning('no virtual machines to suspend')
         return
+    # check if glusterfs and warn
+    if rfs.storage_cluster.file_server.type == 'glusterfs':
+        logger.warning(
+            'Suspending a glusterfs cluster is risky. Depending upon the '
+            'volume type and state of the bricks at the time of suspension, '
+            'a variety of issues can occur such as: unsuccessful restart of '
+            'the cluster, split brain, or even data loss.')
+        if not util.confirm_action(
+                config, 'suspend glusterfs storage cluster {}'.format(
+                    rfs.storage_cluster.id)):
+            return
     # deallocate each vm
     async_ops = []
     for vm in vms:
         async_ops.append(_deallocate_virtual_machine(
             compute_client, rfs.storage_cluster.resource_group, vm.name))
     if wait:
-        logger.debug('waiting for virtual machines to deallocate')
+        logger.info(
+            'waiting for {} virtual machines to deallocate'.format(
+                len(async_ops)))
         for op in async_ops:
             op.result()
         logger.info('{} virtual machines deallocated'.format(len(async_ops)))
-        async_ops.clear()
 
 
 def start_storage_cluster(compute_client, config, wait=False):
@@ -1524,11 +1522,11 @@ def start_storage_cluster(compute_client, config, wait=False):
         async_ops.append(_start_virtual_machine(
             compute_client, rfs.storage_cluster.resource_group, vm.name))
     if wait:
-        logger.debug('waiting for virtual machines to start')
+        logger.info(
+            'waiting for {} virtual machines to start'.format(len(async_ops)))
         for op in async_ops:
             op.result()
         logger.info('{} virtual machines started'.format(len(async_ops)))
-        async_ops.clear()
 
 
 def stat_storage_cluster(
@@ -1561,7 +1559,7 @@ def stat_storage_cluster(
             else:
                 raise
         else:
-            vms.append(vm)
+            vms.append((vm, i))
     if len(vms) == 0:
         logger.error(
             'no virtual machines to query for storage cluster {}'.format(
@@ -1570,7 +1568,7 @@ def stat_storage_cluster(
     # fetch vm status
     fsstatus = []
     vmstatus = {}
-    for vm in vms:
+    for vm, offset in vms:
         powerstate = None
         for status in vm.instance_view.statuses:
             if status.code.startswith('PowerState'):
@@ -1584,9 +1582,8 @@ def stat_storage_cluster(
         nic, pip = resource.get_nic_and_pip_from_virtual_machine(
             network_client, rfs.storage_cluster.resource_group, vm)
         # get resource names (pass cached data to prevent another lookup)
-        _, _, subnet, vnet, nsg, slb = \
-            _get_resource_names_from_virtual_machine(
-                compute_client, network_client, rfs, vm, nic=nic, pip=pip)
+        _, _, subnet, vnet, nsg = _get_resource_names_from_virtual_machine(
+            compute_client, network_client, rfs, vm, nic=nic, pip=pip)
         # stat data disks
         disks = {}
         total_size_gb = 0
@@ -1604,8 +1601,10 @@ def stat_storage_cluster(
             ssh_priv_key, port, username, ip = _get_ssh_info(
                 compute_client, network_client, config, None, vm.name, pip=pip)
             offset = int(vm.name.split('-vm')[-1])
-            script_cmd = '/opt/batch-shipyard/{sf} {m}{r}{s}'.format(
+            script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{r}{s}'.format(
                 sf=status_script,
+                f=' -f {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].filesystem),
                 m=' -m {}'.format(
                     rfs.storage_cluster.file_server.mountpoint),
                 r=' -r {}'.format(
@@ -1619,31 +1618,29 @@ def stat_storage_cluster(
             cmd.extend(script_cmd.split())
             proc = util.subprocess_nowait_pipe_stdout(cmd)
             stdout = proc.communicate()[0]
-            if proc.returncode == 0:
-                if stdout is not None:
-                    stdout = stdout.decode('utf8')
-                    if util.on_windows():
-                        stdout = stdout.replace('\n', os.linesep)
-                fsstatus.append('>> File Server Status for {}:{}{}'.format(
-                    vm.name, os.linesep, stdout))
-            else:
-                fsstatus.append('>> File Server Status for {} FAILED'.format(
-                    vm.name))
+            if util.is_not_empty(stdout):
+                stdout = stdout.decode('utf8')
+                if util.on_windows():
+                    stdout = stdout.replace('\n', os.linesep)
+            fsstatus.append(
+                '>> File Server Status for {} ec={}:{}{}'.format(
+                    vm.name, proc.returncode, os.linesep, stdout))
         vmstatus[vm.name] = {
             'vm_size': vm.hardware_profile.vm_size,
             'powerstate': powerstate,
             'provisioning_state': vm.provisioning_state,
             'availability_set':
-            vm.availability_set.name if vm.availability_set is not None
-            else None,
+            vm.availability_set.id.split('/')[-1]
+            if vm.availability_set is not None else None,
             'update_domain/fault_domain': '{}/{}'.format(
                 vm.instance_view.platform_update_domain,
                 vm.instance_view.platform_fault_domain),
             'fqdn': pip.dns_settings.fqdn,
-            'static_ip': pip.public_ip_allocation_method ==
-            networkmodels.IPAllocationMethod.static,
             'public_ip_address': pip.ip_address,
+            'public_ip_allocation': pip.public_ip_allocation_method,
             'private_ip_address': nic.ip_configurations[0].private_ip_address,
+            'private_ip_allocation':
+            nic.ip_configurations[0].private_ip_allocation_method,
             'admin_username': vm.os_profile.admin_username,
             'accelerated_networking': nic.enable_accelerated_networking,
             'virtual_network': vnet,

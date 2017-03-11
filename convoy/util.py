@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 # global defines
 _PY2 = sys.version_info.major == 2
 _ON_WINDOWS = platform.system() == 'Windows'
+_REGISTERED_LOGGER_HANDLERS = []
 
 
 def on_python2():
@@ -80,13 +81,26 @@ def on_windows():
 def setup_logger(logger):
     # type: (logger) -> None
     """Set up logger"""
+    global _REGISTERED_LOGGER_HANDLERS
     logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        '%(asctime)sZ %(levelname)s %(name)s:%(funcName)s:%(lineno)d '
-        '%(message)s')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s - %(message)s')
+    formatter.default_msec_format = '%s.%03d'
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    _REGISTERED_LOGGER_HANDLERS.append(handler)
+
+
+def set_verbose_logger_handlers():
+    # type: (None) -> None
+    """Set logger handler formatters to more detail"""
+    global _REGISTERED_LOGGER_HANDLERS
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s %(name)s:%(funcName)s:%(lineno)d '
+        '%(message)s')
+    formatter.default_msec_format = '%s.%03d'
+    for handler in _REGISTERED_LOGGER_HANDLERS:
+        handler.setFormatter(formatter)
 
 
 # set up util logger

@@ -46,8 +46,7 @@
                     "glusterfs": {
                         "volume_type": "replica",
                         "transport": "tcp",
-                        "option1key": "option1value",
-                        "option2key": "option2value"
+                        "performance.cache-size": "1 GB"
                     }
                 }
             },

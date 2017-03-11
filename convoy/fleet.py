@@ -392,6 +392,123 @@ def _setup_azurefile_volume_driver(blob_client, config):
     return bin, srv, srvenv, volcreate
 
 
+def _create_storage_cluster_mount_args(
+        compute_client, network_client, batch_mgmt_client, config, bc, vnet,
+        subnet):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient, dict,
+    #        settings.BatchCredentials, networkmodels.VirtualNetwork,
+    #        networkmodels.Subnet) -> Tuple[str, str]
+    """Create storage cluster mount arguments
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param dict config: configuration dict
+    :param settings.BatchCredentials: batch creds
+    :param networkmodels.VirtualNetwork: vnet
+    :param networkmodels.Subnet: subnet
+    :rtype: tuple
+    :return: (fstab mount, storage cluster arg)
+    """
+    fstab_mount = None
+    sc_arg = None
+    # ensure usersubscription account
+    ba = batch.get_batch_account(batch_mgmt_client, config)
+    if (not ba.pool_allocation_mode ==
+            batchmgmtmodels.PoolAllocationMode.user_subscription):
+        raise RuntimeError(
+            '{} account is not a UserSubscription account'.format(
+                bc.account))
+    # check for vnet/subnet presence
+    if vnet is None or subnet is None:
+        raise RuntimeError(
+            'cannot mount a storage cluster without a valid virtual '
+            'network or subnet')
+    # get remotefs settings
+    rfs = settings.remotefs_settings(config)
+    sc = rfs.storage_cluster
+    # iterate through shared data volumes and fine storage clusters
+    sdv = settings.global_resources_shared_data_volumes(config)
+    if (sc.id not in sdv or
+            not settings.is_shared_data_volume_storage_cluster(
+                sdv, sc.id)):
+        raise RuntimeError(
+            'No storage cluster {} found in configuration'.format(sc.id))
+    # check for same vnet
+    if vnet.name != sc.virtual_network.name:
+        raise RuntimeError(
+            'cannot link storage cluster {} on virtual '
+            'network {} with pool virtual network {}'.format(
+                sc.id, sc.virtual_network.name, vnet.name))
+    # get vm count
+    if sc.vm_count < 1:
+        raise RuntimeError(
+            'storage cluster {} vm_count {} is invalid'.format(
+                sc.id, sc.vm_count))
+    # get fileserver type
+    if sc.file_server.type == 'nfs':
+        # query first vm for info
+        vm_name = '{}-vm{}'.format(sc.hostname_prefix, 0)
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=rfs.resource_group,
+            vm_name=vm_name,
+        )
+        nic = resource.get_nic_from_virtual_machine(
+            network_client, rfs.resource_group, vm)
+        # get private ip of vm
+        remote_ip = nic.ip_configurations[0].private_ip_address
+        # construct mount options
+        mo = '_netdev,auto,nfsvers=4,intr'
+        amo = settings.shared_data_volume_mount_options(sdv, sc.id)
+        if util.is_not_empty(amo):
+            if 'udp' in mo:
+                raise RuntimeError(
+                    ('udp cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc.id))
+            if any([x.startswith('nfsvers=') for x in amo]):
+                raise RuntimeError(
+                    ('nfsvers cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc.id))
+            if any([x.startswith('port=') for x in amo]):
+                raise RuntimeError(
+                    ('port cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc.id))
+            mo = ','.join((mo, ','.join(amo)))
+        # construct mount string for fstab
+        fstab_mount = (
+            '{remoteip}:{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
+            '{fstype} {mo} 0 2').format(
+                remoteip=remote_ip,
+                srcpath=sc.file_server.mountpoint,
+                scid=sc.id,
+                fstype=sc.file_server.type,
+                mo=mo,
+            )
+    elif sc.file_server.type == 'glusterfs':
+        # TODO
+        # walk all vms and find non-overlapping ud/fds
+        # use non-overlapping backupvolfile-server in mount option
+        raise NotImplementedError()
+    else:
+        raise NotImplementedError(
+            ('cannot handle file_server type {} for storage '
+             'cluster {}').format(sc.file_server.type, sc.id))
+    if util.is_none_or_empty(fstab_mount):
+        raise RuntimeError(
+            ('Could not construct an fstab mount entry for storage '
+             'cluster {}').format(sc.id))
+    # construct sc_arg
+    sc_arg = '{}:{}'.format(sc.file_server.type, sc.id)
+    # log config
+    if settings.verbose(config):
+        logger.debug('storage cluster {} fstab mount: {}'.format(
+            sc.id, fstab_mount))
+    return (fstab_mount, sc_arg)
+
+
 def _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config):
@@ -495,92 +612,9 @@ def _add_pool(
     fstab_mount = None
     sc_arg = None
     if storage_cluster_mount:
-        # ensure usersubscription account
-        ba = batch.get_batch_account(batch_mgmt_client, config)
-        if (not ba.pool_allocation_mode ==
-                batchmgmtmodels.PoolAllocationMode.user_subscription):
-            raise RuntimeError(
-                '{} account is not a UserSubscription account'.format(
-                    bc.account))
-        # check for vnet/subnet presence
-        if vnet is None or subnet is None:
-            raise RuntimeError(
-                'cannot mount a storage cluster without a valid virtual '
-                'network or subnet')
-        # get remotefs settings
-        rfs = settings.remotefs_settings(config)
-        sc = rfs.storage_cluster
-        # iterate through shared data volumes and fine storage clusters
-        sdv = settings.global_resources_shared_data_volumes(config)
-        if (sc.id not in sdv or
-                not settings.is_shared_data_volume_storage_cluster(
-                    sdv, sc.id)):
-            raise RuntimeError(
-                'No storage cluster {} found in configuration'.format(sc.id))
-        # check for same vnet
-        if vnet.name != sc.virtual_network.name:
-            raise RuntimeError(
-                'cannot link storage cluster {} on virtual '
-                'network {} with pool virtual network {}'.format(
-                    sc.id, sc.virtual_network.name, vnet.name))
-        # get vm count
-        if sc.vm_count < 1:
-            raise RuntimeError(
-                'storage cluster {} vm_count {} is invalid'.format(
-                    sc.id, sc.vm_count))
-        # get fileserver type
-        if sc.file_server.type == 'nfs':
-            # query first vm for info
-            vm_name = '{}-vm{}'.format(sc.hostname_prefix, 0)
-            vm = compute_client.virtual_machines.get(
-                resource_group_name=rfs.resource_group,
-                vm_name=vm_name,
-            )
-            nic = resource.get_nic_from_virtual_machine(
-                network_client, rfs.resource_group, vm)
-            # get private ip of vm
-            remote_ip = nic.ip_configurations[0].private_ip_address
-            # construct mount options
-            mo = '_netdev,auto,nfsvers=4,intr'
-            amo = settings.shared_data_volume_mount_options(sdv, sc.id)
-            if util.is_not_empty(amo):
-                if 'udp' in mo:
-                    raise RuntimeError(
-                        ('udp cannot be specified as a mount option for '
-                         'storage cluster {}').format(sc.id))
-                if any([x.startswith('nfsvers=') for x in amo]):
-                    raise RuntimeError(
-                        ('nfsvers cannot be specified as a mount option for '
-                         'storage cluster {}').format(sc.id))
-                if any([x.startswith('port=') for x in amo]):
-                    raise RuntimeError(
-                        ('port cannot be specified as a mount option for '
-                         'storage cluster {}').format(sc.id))
-                mo = ','.join((mo, ','.join(amo)))
-            # construct mount string for fstab
-            fstab_mount = (
-                '{remoteip}:{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
-                '{fstype} {mo} 0 2').format(
-                    remoteip=remote_ip,
-                    srcpath=sc.file_server.mountpoint,
-                    scid=sc.id,
-                    fstype=sc.file_server.type,
-                    mo=mo,
-                )
-        else:
-            raise NotImplementedError(
-                ('cannot handle file_server type {} for storage '
-                 'cluster {}').format(sc.file_server.type, sc.id))
-        if util.is_none_or_empty(fstab_mount):
-            raise RuntimeError(
-                ('Could not construct an fstab mount entry for storage '
-                 'cluster {}').format(sc.id))
-        # construct sc_arg
-        sc_arg = '{}:{}'.format(sc.file_server.type, sc.id)
-        # log config
-        if settings.verbose(config):
-            logger.debug('storage cluster {} fstab mount: {}'.format(
-                sc.id, fstab_mount))
+        fstab_mount, sc_arg = _create_storage_cluster_mount_args(
+            compute_client, network_client, batch_mgmt_client, config,
+            bc, vnet, subnet)
     del storage_cluster_mount
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)

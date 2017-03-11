@@ -22,7 +22,6 @@ optimize_tcp=0
 server_options=
 premium_storage=0
 raid_level=-1
-offset=
 
 # functions
 setup_nfs() {
@@ -98,7 +97,7 @@ gluster_poll_for_connections() {
         sleep 1
     done
     set -e
-    echo "$numpeers joined peering"
+    echo "$numpeers host(s) joined peering"
     # delay to wait for after peer connections
     sleep 5
 }
@@ -148,7 +147,7 @@ setup_glusterfs() {
         # wait for connections
         local numnodes=${#hosts[@]}
         gluster_poll_for_connections $numnodes
-        # parse server options in the format voltype,transport,key:value,...
+        # parse server options in the format: voltype,transport,key:value,...
         IFS=',' read -ra so <<< "$server_options"
         local voltype=${so[0],,}
         local volarg=
@@ -162,9 +161,17 @@ setup_glusterfs() {
         if [ -z $transport ]; then
             transport="tcp"
         fi
+        # check if volume exists
+        local force=
+        set +e
+        gluster volume info $gluster_volname
+        if [ $? -ne 0 ]; then
+            force="force"
+        fi
+        set -e
         # create volume
-        echo "Creating $voltype gluster volume $gluster_volname ($bricks)"
-        gluster volume create $gluster_volname $volarg transport $transport$bricks
+        echo "Creating $voltype gluster volume $gluster_volname ($force$bricks)"
+        gluster volume create $gluster_volname $volarg transport $transport$bricks $force
         # modify volume properties as per input
         for e in ${so[@]:2}; do
             IFS=':' read -ra kv <<< "$e"
@@ -179,39 +186,59 @@ setup_glusterfs() {
     # poll for volume created
     gluster_poll_for_volume $gluster_volname
 
-    # add gluster volume to /etc/fstab
-    mkdir -p $mountpath
-    echo "Adding $mountpath to fstab"
-    echo "$ipaddress:$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
-
-    # mount it
-    echo "Mounting gluster volume $gluster_volname locally to $mountpath"
-    local START=$(date -u +"%s")
+    # check if volume is mounted
+    local mounted=0
     set +e
-    while :
-    do
-        mount $mountpath
-        if [ $? -eq 0 ]; then
-            break
-        else
-            local NOW=$(date -u +"%s")
-            local DIFF=$((($NOW-$START)/60))
-            # fail after 5 minutes of attempts
-            if [ $DIFF -ge 5 ]; then
-                echo "Could not mount gluster volume $gluster_volume to $mountpath"
-                exit 1
-            fi
-            sleep 1
-        fi
-    done
+    mountpoint -q $mountpath
+    if [ $? -eq 0 ]; then
+        mounted=1
+    fi
     set -e
-
-    # ensure proper permissions on mounted directory
-    chmod 1777 $mountpath
+    # add fstab entry and mount
+    if [ $mounted -eq 0 ]; then
+        # check if fstab entry exists
+        add_fstab=0
+        set +e
+        grep "$mountpath glusterfs" /etc/fstab
+        if [ $? -ne 0 ]; then
+            add_fstab=1
+        fi
+        set -e
+        # add fstab entry
+        if [ $add_fstab -eq 1 ]; then
+            echo "Adding $gluster_volname to mountpoint $mountpath to /etc/fstab"
+            echo "$ipaddress:/$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
+        fi
+        # create mountpath
+        mkdir -p $mountpath
+        # mount it
+        echo "Mounting gluster volume $gluster_volname locally to $mountpath"
+        local START=$(date -u +"%s")
+        set +e
+        while :
+        do
+            mount $mountpath
+            if [ $? -eq 0 ]; then
+                break
+            else
+                local NOW=$(date -u +"%s")
+                local DIFF=$((($NOW-$START)/60))
+                # fail after 5 minutes of attempts
+                if [ $DIFF -ge 5 ]; then
+                    echo "Could not mount gluster volume $gluster_volume to $mountpath"
+                    exit 1
+                fi
+                sleep 1
+            fi
+        done
+        set -e
+        # ensure proper permissions on mounted directory
+        chmod 1777 $mountpath
+    fi
 }
 
 # begin processing
-while getopts "h?abf:i:m:no:pr:s:v:" opt; do
+while getopts "h?abf:i:m:no:pr:s:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
@@ -226,7 +253,6 @@ while getopts "h?abf:i:m:no:pr:s:v:" opt; do
             echo "-p premium storage disks"
             echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
-            echo "-v [offset] VM offset"
             echo ""
             exit 1
             ;;
@@ -260,9 +286,6 @@ while getopts "h?abf:i:m:no:pr:s:v:" opt; do
         s)
             server_type=${OPTARG,,}
             ;;
-        v)
-            offset=1
-            ;;
     esac
 done
 shift $((OPTIND-1))
@@ -279,7 +302,6 @@ echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
 echo "  RAID level: $raid_level"
 echo "  Server type: $server_type"
-echo "  VM offset: $offset"
 echo "  Peer IPs: $peer_ips"
 echo "  IP address of VM: $ipaddress"
 
@@ -576,7 +598,7 @@ if [ $attach_disks -eq 0 ]; then
                 # enable discard to save cost on standard storage
                 mo=",discard"
             fi
-            echo "UUID=$target_uuid $mountpath $filesystem defaults,noatime${mo} 0 2" >> /etc/fstab
+            echo "UUID=$target_uuid $mountpath $filesystem defaults,noatime,nodiratime${mo} 0 2" >> /etc/fstab
         fi
         # create mountpath
         mkdir -p $mountpath
