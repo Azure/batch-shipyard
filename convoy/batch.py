@@ -488,7 +488,7 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
                 pool.ssh.generated_file_export_path, crypto._SSH_KEY_PREFIX)
         ssh_args = [
             'ssh', '-o', 'StrictHostKeyChecking=no',
-            '-o', 'UserKnownHostsFile=/dev/null',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
             '-i', str(ssh_priv_key), '-p', '$port', '-N',
             '-L', '2375:localhost:2375', '-L', '3476:localhost:3476',
             '{}@$ip'.format(pool.ssh.username)
@@ -520,7 +520,7 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
                 'echo tunneling to docker daemon on $node at '
                 '$ip:$port\n')
             fd.write(' '.join(ssh_args))
-            fd.write(' >/dev/null 2>&1 &\n')
+            fd.write(' >{} 2>&1 &\n'.format(os.devnull))
             fd.write('pid=$!\n')
             fd.write('echo ssh tunnel pid is $pid\n')
             fd.write(
@@ -1029,10 +1029,10 @@ def _send_docker_kill_signal(
         rls = batch_client.compute_node.get_remote_login_settings(
             target[0], target[1])
         ssh_args = [
-            'ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-            'UserKnownHostsFile=/dev/null', '-i', str(ssh_private_key),
-            '-p', str(rls.remote_login_port), '-t',
-            '{}@{}'.format(username, rls.remote_login_ip_address),
+            'ssh', '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
+            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
             ('sudo /bin/bash -c "docker kill {tn}; '
              'docker ps -qa -f name={tn} | '
              'xargs --no-run-if-empty docker rm -v"').format(tn=task_name)

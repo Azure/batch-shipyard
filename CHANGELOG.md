@@ -38,6 +38,11 @@ Canonical/UbuntuServer/16.04-LTS instead
 
 ### Fixed
 - Logging time format and incorrect Zulu time designation.
+- `scp` and `multinode_scp` data movement capability is now supported in
+Windows given `ssh.exe` and `scp.exe` can be found in `%PATH%` or the current
+working directory. `rsync` methods are not supported on Windows.
+- Credential encryption is now supported in Windows given `openssl.exe` can
+be found in `%PATH%` or the current working directory.
 
 ## [2.5.4] - 2017-03-08
 ### Changed

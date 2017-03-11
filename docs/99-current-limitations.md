@@ -14,6 +14,14 @@ Shipyard needs to take special actions or ensure the intended outcome:
   `--termtasks` option with `jobs del`
 
 The following are general limitations or restrictions:
+* SSH tunnel script generation is only compatible with non-Windows machines.
+* Data movement support on Windows is restricted to scp. Both `ssh.exe` and
+`scp.exe` must be found through `%PATH%` or in the current working directory.
+Rsync is not supported in Windows.
+* `pool ssh` support in Windows is only available if `ssh.exe` is found
+through `%PATH%` or is in the current working directory.
+* Credential encryption support in Windows is available only if `openssl.exe`
+is found through `%PATH%` or is in the current working directory.
 * Compute pool resize down (i.e., removing nodes from a pool) is not supported
 when peer-to-peer transfer is enabled.
 * The maximum number of compute nodes with peer-to-peer enabled is currently

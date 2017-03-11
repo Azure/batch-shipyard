@@ -141,7 +141,8 @@ created with pool creation.
     the SSH user is not created.
   * (optional) `generate_docker_tunnel_script` property directs script to
     generate an SSH tunnel script that can be used to connect to the remote
-    Docker engine running on a compute node.
+    Docker engine running on a compute node. This script can only be used on
+    non-Windows systems.
   * (optional) `generated_file_export_path` is the path to export the
     generated RSA keypair and docker tunnel script to. If omitted, the
     current directory is used.

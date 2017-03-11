@@ -325,9 +325,8 @@ def _singlenode_transfer(dest, src, dst, username, ssh_private_key, rls):
         logger.debug('creating remote directory: {}'.format(dst))
         dirs = ['mkdir -p {}'.format(dst)]
         mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
-                    '-o UserKnownHostsFile=/dev/null '
-                    '-i {} -p {} {}@{} {}'.format(
-                        ssh_private_key, port, username, ip,
+                    '-o UserKnownHostsFile={} -i {} -p {} {}@{} {}'.format(
+                        os.devnull, ssh_private_key, port, username, ip,
                         util.wrap_commands_in_shell(dirs)))
         rc = util.subprocess_with_output(
             mkdircmd, shell=True, suppress_output=True)
@@ -348,17 +347,16 @@ def _singlenode_transfer(dest, src, dst, username, ssh_private_key, rls):
     # transfer data
     if dest.data_transfer.method == 'scp':
         cmd = ('scp -o StrictHostKeyChecking=no '
-               '-o UserKnownHostsFile=/dev/null -p '
-               '{} {} -i {} -P {} {} {}@{}:"{}"'.format(
-                   dest.data_transfer.scp_ssh_extra_options, recursive,
-                   ssh_private_key.resolve(), port, cmdsrc,
+               '-o UserKnownHostsFile={} -p {} {} -i {} '
+               '-P {} {} {}@{}:"{}"'.format(
+                   os.devnull, dest.data_transfer.scp_ssh_extra_options,
+                   recursive, ssh_private_key.resolve(), port, cmdsrc,
                    username, ip, shellquote(dst)))
     elif dest.data_transfer.method == 'rsync+ssh':
         cmd = ('rsync {} {} -e "ssh -T -x -o StrictHostKeyChecking=no '
-               '-o UserKnownHostsFile=/dev/null '
-               '{} -i {} -p {}" {} {}@{}:"{}"'.format(
+               '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
                    dest.data_transfer.rsync_extra_options, recursive,
-                   dest.data_transfer.scp_ssh_extra_options,
+                   os.devnull, dest.data_transfer.scp_ssh_extra_options,
                    ssh_private_key.resolve(), port,
                    cmdsrc, username, ip, shellquote(dst)))
     else:
@@ -502,9 +500,8 @@ def _multinode_transfer(
         port = _rls.remote_login_port
         del _rls
         mkdircmd = ('ssh -T -x -o StrictHostKeyChecking=no '
-                    '-o UserKnownHostsFile=/dev/null '
-                    '-i {} -p {} {}@{} {}'.format(
-                        ssh_private_key, port, username, ip,
+                    '-o UserKnownHostsFile={} -i {} -p {} {}@{} {}'.format(
+                        os.devnull, ssh_private_key, port, username, ip,
                         util.wrap_commands_in_shell(dirs)))
         rc = util.subprocess_with_output(
             mkdircmd, shell=True, suppress_output=True)
@@ -579,23 +576,22 @@ def _spawn_next_transfer(
     if method == 'multinode_scp':
         if begin is None and end is None:
             cmd = ('scp -o StrictHostKeyChecking=no '
-                   '-o UserKnownHostsFile=/dev/null -p '
-                   '{} -i {} -P {} {} {}@{}:"{}"'.format(
-                       eo, ssh_private_key, port, shellquote(src),
+                   '-o UserKnownHostsFile={} -p {} -i {} '
+                   '-P {} {} {}@{}:"{}"'.format(
+                       os.devnull, eo, ssh_private_key, port, shellquote(src),
                        username, ip, shellquote(dst)))
         else:
             cmd = ('ssh -T -x -o StrictHostKeyChecking=no '
-                   '-o UserKnownHostsFile=/dev/null '
-                   '{} -i {} -p {} {}@{} \'cat > "{}"\''.format(
-                       eo, ssh_private_key, port,
+                   '-o UserKnownHostsFile={} {} -i {} '
+                   '-p {} {}@{} \'cat > "{}"\''.format(
+                       os.devnull, eo, ssh_private_key, port,
                        username, ip, shellquote(dst)))
     elif method == 'multinode_rsync+ssh':
         if begin is not None or end is not None:
             raise RuntimeError('cannot rsync with file offsets')
         cmd = ('rsync {} -e "ssh -T -x -o StrictHostKeyChecking=no '
-               '-o UserKnownHostsFile=/dev/null '
-               '{} -i {} -p {}" {} {}@{}:"{}"'.format(
-                   reo, eo, ssh_private_key, port, shellquote(src),
+               '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
+                   reo, os.devnull, eo, ssh_private_key, port, shellquote(src),
                    username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
@@ -680,10 +676,10 @@ def _multinode_thread_worker(
                     'rm -f {}.*'.format(dstpath)
                 ]
                 joincmd = ('ssh -T -x -o StrictHostKeyChecking=no '
-                           '-o UserKnownHostsFile=/dev/null '
-                           '-i {} -p {} {}@{} {}'.format(
-                               ssh_private_key, port, username, ip,
-                               util.wrap_commands_in_shell(cmds)))
+                           '-o UserKnownHostsFile={} -i {} '
+                           '-p {} {}@{} {}'.format(
+                               os.devnull, ssh_private_key, port, username,
+                               ip, util.wrap_commands_in_shell(cmds)))
                 procs.append(
                     util.subprocess_nowait(joincmd, shell=True))
             else:

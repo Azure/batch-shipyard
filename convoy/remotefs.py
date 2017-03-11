@@ -1361,10 +1361,10 @@ def expand_storage_cluster(
             )
         ssh_priv_key, port, username, ip = _get_ssh_info(
             compute_client, network_client, config, None, vm.name)
-        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-               'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key),
-               '-p', str(port), '{}@{}'.format(username, ip),
-               'sudo']
+        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_priv_key), '-p', str(port),
+               '{}@{}'.format(username, ip), 'sudo']
         cmd.extend(script_cmd.split())
         proc = util.subprocess_nowait_pipe_stdout(cmd)
         stdout = proc.communicate()[0]
@@ -1611,10 +1611,10 @@ def stat_storage_cluster(
                     rfs.storage_cluster.vm_disk_map[offset].raid_level),
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
             )
-            cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-                   'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key),
-                   '-p', str(port), '{}@{}'.format(username, ip),
-                   'sudo']
+            cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+                   '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+                   '-i', str(ssh_priv_key), '-p', str(port),
+                   '{}@{}'.format(username, ip), 'sudo']
             cmd.extend(script_cmd.split())
             proc = util.subprocess_nowait_pipe_stdout(cmd)
             stdout = proc.communicate()[0]
@@ -1729,6 +1729,7 @@ def ssh_storage_cluster(
     logger.info('connecting to virtual machine {}:{} with key {}'.format(
         ip, port, ssh_priv_key))
     util.subprocess_with_output(
-        ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-         'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key), '-p',
-         str(port), '{}@{}'.format(username, ip)])
+        ['ssh', '-o', 'StrictHostKeyChecking=no',
+         '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+         '-i', str(ssh_priv_key), '-p', str(port),
+         '{}@{}'.format(username, ip)])

@@ -237,28 +237,25 @@ necessary software as well. With a manual installation, the following
 programs must be installed to take advantage of data movement features of
 Batch Shipyard:
 
-1. An SSH client that provides `scp`. OpenSSH with
+1. An SSH client that provides `ssh` and `scp` (or `ssh.exe` and `scp.exe`
+on Windows). OpenSSH with
 [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
 can be used on the client side to further accelerate `scp` to Azure Batch
 compute nodes where `hpn_server_swap` has been set to `true` in the
 `pool_specification`.
-2. `rsync` if `rsync` functionality is needed.
+2. `rsync` if `rsync` functionality is needed. This is not supported on
+Windows.
 3. [blobxfer](https://github.com/Azure/blobxfer) if transfering to Azure
 storage. This is automatically installed if `pip install` is used with
 `requirements.txt` as per above. If installed with `--user` flag, this is
 typically placed in `~/.local/bin`. This path will need to be added to your
 `PATH` environment variable.
 
-Note that data movement which involves programs required in from 1 or 2 above
-are not supported if invoked from Windows.
-
 ###Encryption Support
 Batch Shipyard supports encrypting credentials that are used by backend
 components within your pool deployment. In order to utilize this feature,
 you must have `openssl` installed. The `install.sh` script ensures that
-OpenSSL is installed. The Docker CLI image also contains OpenSSL. Encryption
-support is disabled on Windows; if you need this feature, please use
-Linux or Mac.
+OpenSSL is installed. The Docker CLI image also contains OpenSSL.
 
 Note that all commandlines, environment variables and resource file URLs
 which are stored by the Azure Batch Service are encrypted by the service.

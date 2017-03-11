@@ -31,6 +31,7 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
+import os
 try:
     import pathlib2 as pathlib
 except ImportError:
@@ -103,12 +104,13 @@ _NODEPREP_FILE = (
     str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh'))
 )
 _GLUSTERPREP_FILE = (
-    'shipyard_glusterfs.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs.sh'))
+    'shipyard_glusterfs_on_compute.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh'))
 )
 _GLUSTERRESIZE_FILE = (
-    'shipyard_glusterfs_resize.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_resize.sh'))
+    'shipyard_glusterfs_on_compute_resize.sh',
+    str(pathlib.Path(
+        _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh'))
 )
 _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
@@ -1770,8 +1772,9 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
         ip, port, ssh_priv_key))
     util.subprocess_with_output(
         ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-         'UserKnownHostsFile=/dev/null', '-i', str(ssh_priv_key), '-p',
-         str(port), '{}@{}'.format(pool.ssh.username, ip)])
+         'UserKnownHostsFile={}'.format(os.devnull),
+         '-i', str(ssh_priv_key), '-p', str(port),
+         '{}@{}'.format(pool.ssh.username, ip)])
 
 
 def action_pool_delnode(batch_client, config, nodeid):
