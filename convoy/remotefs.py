@@ -105,7 +105,7 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
     # iterate disks and create disks if they don't exist
     existing_disk_sizes = set()
     async_ops = []
-    for disk_name in rfs.managed_disks.disk_ids:
+    for disk_name in rfs.managed_disks.disk_names:
         try:
             disk = compute_client.disks.get(
                 resource_group_name=rfs.managed_disks.resource_group,
@@ -169,7 +169,7 @@ def delete_managed_disks(
         ]
     else:
         if util.is_none_or_empty(name):
-            disks = rfs.managed_disks.disk_ids
+            disks = rfs.managed_disks.disk_names
         else:
             if isinstance(name, list):
                 disks = name
@@ -217,7 +217,7 @@ def list_disks(
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
-    confdisks = frozenset(rfs.managed_disks.disk_ids)
+    confdisks = frozenset(rfs.managed_disks.disk_names)
     resource_group = resource_group or rfs.managed_disks.resource_group
     # list disks in resource group
     logger.debug(
@@ -648,10 +648,10 @@ def create_storage_cluster(
         rfs.storage_cluster.id))
     # construct disk map
     disk_map = {}
-    disk_ids = list_disks(compute_client, config, restrict_scope=True)
-    for disk_id, sat in disk_ids:
+    disk_names = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_names:
         disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    del disk_ids
+    del disk_names
     # check vms
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
@@ -835,10 +835,10 @@ def resize_storage_cluster(
         raise RuntimeError('Cannot resize glusterfs striped volumes')
     # construct disk map
     disk_map = {}
-    disk_ids = list_disks(compute_client, config, restrict_scope=True)
-    for disk_id, sat in disk_ids:
+    disk_names = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_names:
         disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    del disk_ids
+    del disk_names
     # get existing vms
     new_vms = []
     pe_vms = {}
@@ -1101,10 +1101,10 @@ def expand_storage_cluster(
         rfs.storage_cluster.id))
     # construct disk map
     disk_map = {}
-    disk_ids = list_disks(compute_client, config, restrict_scope=True)
-    for disk_id, sat in disk_ids:
+    disk_names = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_names:
         disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    del disk_ids
+    del disk_names
     # check vms
     vms = {}
     new_disk_count = 0

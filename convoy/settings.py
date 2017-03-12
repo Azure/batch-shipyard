@@ -172,7 +172,7 @@ ResourceFileSettings = collections.namedtuple(
 )
 ManagedDisksSettings = collections.namedtuple(
     'ManagedDisksSettings', [
-        'resource_group', 'premium', 'disk_size_gb', 'disk_ids',
+        'resource_group', 'premium', 'disk_size_gb', 'disk_names',
     ]
 )
 VirtualNetworkSettings = collections.namedtuple(
@@ -2365,6 +2365,7 @@ def fileserver_settings(config, vm_count):
     if util.is_none_or_empty(sc_fs_type):
         raise ValueError(
             'remote_fs:storage_cluster:file_server:type must be specified')
+    sc_fs_type = sc_fs_type.lower()
     # cross check against number of vms
     if ((sc_fs_type == 'nfs' and vm_count != 1) or
             (sc_fs_type == 'glusterfs' and vm_count <= 1)):
@@ -2406,7 +2407,7 @@ def remotefs_settings(config):
         raise ValueError('invalid managed_disks:resource_group in remote_fs')
     md_premium = _kv_read(md_conf, 'premium', False)
     md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
-    md_disk_ids = _kv_read_checked(md_conf, 'disk_ids')
+    md_disk_names = _kv_read_checked(md_conf, 'disk_names')
     # storage cluster settings
     sc_conf = conf['storage_cluster']
     sc_id = sc_conf['id']
@@ -2473,7 +2474,7 @@ def remotefs_settings(config):
         ssh_conf, 'generated_file_export_path', '.')
     # sc vm disk map settings
     vmd_conf = sc_conf['vm_disk_map']
-    _disk_set = frozenset(md_disk_ids)
+    _disk_set = frozenset(md_disk_names)
     disk_map = {}
     for vmkey in vmd_conf:
         # ensure all disks in disk array are specified in managed disks
@@ -2481,7 +2482,7 @@ def remotefs_settings(config):
         if not _disk_set.issuperset(set(disk_array)):
             raise ValueError(
                 ('All disks {} for vm {} are not specified in '
-                 'managed_disks:disk_ids ({})').format(
+                 'managed_disks:disk_names ({})').format(
                      disk_array, vmkey, _disk_set))
         raid_level = _kv_read(vmd_conf[vmkey], 'raid_level', -1)
         if len(disk_array) == 1 and raid_level != -1:
@@ -2514,7 +2515,7 @@ def remotefs_settings(config):
             resource_group=md_rg,
             premium=md_premium,
             disk_size_gb=md_disk_size_gb,
-            disk_ids=md_disk_ids,
+            disk_names=md_disk_names,
         ),
         storage_cluster=StorageClusterSettings(
             id=sc_id,

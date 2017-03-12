@@ -8,11 +8,248 @@ The remote filesystem schema is as follows:
 ```json
 {
     "remote_fs": {
+        "resource_group": "my-resource-group",
+        "location": "<Azure region, e.g., eastus>",
+        "managed_disks": {
+            "resource_group": "my-disk-resource-group",
+            "premium": true,
+            "disk_size_gb": 128,
+            "disk_names": [
+                "p10-disk0a", "p10-disk1a",
+                "p10-disk0b", "p10-disk1b"
+            ]
+        },
+        "storage_cluster": {
+            "id": "mystoragecluster",
+            "resource_group": "my-server-resource-group",
+            "hostname_prefix": "mystoragecluster",
+            "ssh": {
+                "username": "shipyard",
+                "ssh_public_key": null,
+                "generated_file_export_path": null
+            },
+            "static_public_ip": false,
+            "virtual_network": {
+                "name": "myvnet",
+                "resource_group": "my-vnet-resource-group",
+                "existing_ok": false,
+                "address_space": "10.0.0.0/16",
+                "subnet": {
+                    "name": "my-server-subnet",
+                    "address_prefix": "10.0.0.0/24"
+                }
+            },
+            "network_security": {
+                "ssh": ["*"],
+                "nfs": ["1.2.3.0/24", "2.3.4.5"],
+                "custom_inbound_rules": {
+                    "myrule": {
+                        "destination_port_range": "5000-5001",
+                        "source_address_prefix": ["1.2.3.4", "5.6.7.0/24"],
+                        "protocol": "*"
+                    }
+                }
+            },
+            "file_server": {
+                "type": "glusterfs",
+                "mountpoint": "/data",
+                "mount_options": [
+                    "noatime",
+                    "nodiratime"
+                ],
+                "server_options": {
+                    "glusterfs": {
+                        "volume_name": "gv0",
+                        "volume_type": "distributed",
+                        "transport": "tcp",
+                        "performance.cache-size": "1 GB"
+                    }
+                }
+            },
+            "vm_count": 2,
+            "vm_size": "STANDARD_F8S",
+            "vm_disk_map": {
+                "0": {
+                    "disk_array": ["p10-disk0a", "p10-disk1a"],
+                    "filesystem": "btrfs",
+                    "raid_level": 0
+                },
+                "1": {
+                    "disk_array": ["p10-disk0b", "p10-disk1b"],
+                    "filesystem": "btrfs",
+                    "raid_level": 0
+                }
+            }
+        }
     }
 }
 ```
 
 ## Details
+The remote fs schema is constructed from two portions. The first section
+specifies
+[Azure Managed Disks](https://docs.microsoft.com/en-us/azure/storage/storage-managed-disks-overview)
+to use in the storage cluster. The second section defines the storage cluster
+itself, including networking and virtual machine to disk mapping.
+
+There are two properties which reside outside of these sections:
+* (optional) `resource_group` this is the default resource group to use
+for both the `managed_disks` and `storage_cluster` sections. This setting
+is only used if `resource_group` is not explicitly set in their respective
+configuration blocks.
+* (required) `location` is the Azure region name for the resources, e.g.,
+`eastus` or `northeurope`. The `location` specified must match the same
+region as your Azure Batch account if linking a compute pool with a storage
+cluster.
+
+### Managed Disks: `managed_disks`
+This section defines the disks used by the file server as specified in the
+`storage_cluster` section. Not all disks specified here need to be used by
+the storage cluster, but every disk in the storage cluster should be
+defined in this section.
+* (optional) `resource_group` this is the resource group to use for the
+disks. If this is not specified, then the `resource_group` specified in
+the parent is used. At least one `resource_group` must be defined.
+* (optional) `premium` defines if
+[premium managed disks](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage)
+should be created. Premium storage provisions a
+[guaranteed level of IOPS and bandwidth](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage#premium-storage-scalability-and-performance-targets)
+that scales with disk size. The default is `false` which creates
+standard managed disks. Regardless of the type of storage used to back
+managed disks, all data written is durable and persistent backed to Azure
+Storage.
+* (required) `disk_size_gb` is an integral value defining the size of the
+data disks to create. The maximum size is 1023 GB. If you are unfamiliar with
+how Azure prices managed disks with regard to the size of disk chosen,
+please refer to
+[this link](https://docs.microsoft.com/en-us/azure/storage/storage-managed-disks-overview#pricing-and-billing).
+* (required) `disk_names` is an array of disk names to create. All disks
+will be created identically with the properties defined in the `managed_disks`
+section.
+
+### Storage Cluster: `storage_cluster`
+This section defines the storage cluster containing the file server
+specification and disk mapping. This section cross-references the
+`managed_disks` section so both sections must be populated when performing
+`fs cluster` actions.
+* (required) `id` is the storage cluster id. This id is referenced in other
+actions such as `data ingress` and `pool add` actions.
+* (optional) `resource_group` this is the resource group to use for the
+storage cluster. If this is not specified, then the `resource_group`
+specified in the parent is used. At least one `resource_group` must be
+defined.
+* (required) `hostname_prefix` is the DNS label prefix to apply to each
+virtual machine and resource allocated for the storage cluster. It should
+be unique.
+* (required) `ssh` is the SSH admin user to create on the machine. This is not
+optional as it is in the pool specification.
+  * (required) `username` is the username to associate
+  * (optional) `ssh_public_key` is the path to a pre-existing ssh public
+    key to use. If this is not specified an RSA public/private key pair will
+    be generated for use in your current working directory (with a
+    non-colliding name for auto-generated SSH keys for compute pools).
+  * (optional) `generated_file_export_path` is an optional path to specify
+    for where to create the RSA public/private key pair.
+* (optional) `static_public_ip` is to specify if static public IPs should
+be assigned to each virtual machine allocated. The default is `false` which
+results in dynamic public IP addresses. A "static" FQDN will be provided
+regardless of this setting.
+* (required) `virtual_network` is the virtual network to use for the
+storage cluster.
+  * (required) `name` is the virtual network name
+  * (optional) `resource_group` is the resource group for the virtual network.
+    If this is not specified, the resource group name falls back to the
+    resource group specified in `storage_cluster` or its parent.
+  * (optional) `existing_ok` allows use of a pre-existing virtual network.
+    The default is `false`.
+  * (required if creating, optional otherwise) `address_space` is the
+    allowed address space for the virtual network.
+  * (required) `subnet` specifies the subnet properties. This subnet must
+    be exclusive to the storage cluster and cannot be shared with other
+    resources, including compute nodes. Compute nodes and storage clusters
+    can co-exist on the same virtual network, but should be in separate
+    subnets.
+    * (required) `name` is the subnet name.
+    * (required) `address_prefix` is the subnet address prefix to use for
+      allocation of the storage cluster file server virtual machines to.
+* (required) `network_security` defines the network security rules to apply
+to each virtual machine in the storage cluster.
+  * (required) `ssh` is the rule for which address prefixes to allow for
+    connecting to sshd port 22 on the virtual machine. In the example, `"*"`
+    allows any IP address to connect. This is an array property which allows
+    multiple address prefixes to be specified.
+  * (optional) `nfs` rule allows the NFSv4 server port to be exposed to the
+    specified address prefix. Multiple address prefixes can be specified. This
+    property is ignored for glusterfs clusters.
+  * (optional) `custom_inbound_rules` are custom inbound rules for other
+    services that you need to expose.
+    * (required) `<rule name>` is the name of the rule; the example uses
+      `myrule`. Each rule name should be unique.
+      * (required) `destination_port_range` is the ports on each virtual
+        machine that will be exposed. This can be a single port and should
+        be a string.
+      * (required) `source_address_prefix` is an array of address prefixes
+        to allow.
+      * (required) `protocol` is the protocol to allow. Valid values are
+        `tcp`, `udp` and `*` (which means any protocol).
+* (required) `file_server` is the file server specification.
+  * (required) `type` is the type of file server to provision. Valid values
+    are `nfs` and `glusterfs`. `nfs` will provision an
+    [NFSv4 server](https://en.wikipedia.org/wiki/Network_File_System).
+    `glusterfs` will provision a [GlusterFS server](https://www.gluster.org/).
+  * (required) `mountpoint` is the path to mount the filesystem. This will
+    also be the export path from the server.
+  * (optional) `mount_options` are mount options as an array to specify when
+    mounting the filesystem. The examples here `noatime` and `nodiratime`
+    reduce file metadata updates for access times on files and directories.
+  * (optional) `server_options` is a key-value array of server options with
+    the key of the filesystem `type`. In this example, we are explicitly
+    definining options for `glusterfs`. `volume_name`, `volume_type` and
+    `transport` are all special keywords.
+    * (optional) `volume_name` is the name of the gluster volume. The default
+      is `gv0`.
+    * (optional) `volume_type` is the type of volume to create. If not
+      specified, the default is the gluster default of a distributed volume.
+      Please note that the `volume_type` specified here will have significant
+      impact on performance and data availability delivered by GlusterFS for
+      your workload. Although written data is durable due to managed disks,
+      VM availability can cause reliability issues if a virtual machine fails
+      or becomes unavailable. You can view all of the available GlusterFS
+      volume types
+      [here](https://gluster.readthedocs.io/en/latest/Quick-Start-Guide/Architecture/#types-of-volumes).
+    * (optional) `transport` is the transport type to use. The default and
+      only valid value is `tcp`.
+    * (optional) Other GlusterFS tuning options can be further specified here
+      as key-value pairs. You can find all of the tuning options
+      [here](https://gluster.readthedocs.io/en/latest/Administrator%20Guide/Managing%20Volumes/#tuning-volume-options).
+      Please note that nfs-related options, although they can be enabled,
+      are not inherently supported by Batch Shipyard. Batch Shipyard
+      automatically provisions the proper GlusterFS FUSE client on compute
+      nodes that require access to GlusterFS-based storage clusters.
+* (required) `vm_count` is the number of virtual machines to allocate for
+the storage cluster. For `nfs` file servers, the only valid value is 1.
+pNFS is not supported at this time. For `glusterfs` storage clusters, this
+value must be at least 2.
+* (required) `vm_size` is the virtual machine instance size to use. To attach
+premium managed disks, you must use a
+[premium storage compatible virtual machine size](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage#premium-storage-supported-vms).
+* (required) `vm_disk_map` is the virtual machine to managed disk mapping.
+The number of entries in this map must match the `vm_count`.
+  * (required) `<instance number>` is the virtual machine instance number.
+    This value must be a string (although it is integral in nature).
+    * (required) `disk_array` is the listing of managed disk names to attach
+      to this instance. This disks must be provisioned before creating the
+      storage cluster.
+    * (required) `filesystem` is the filesystem to use. Valid values are
+      `btrfs`, `ext4`, `ext3` and `ext2`. `btrfs` is generally stable for
+      RAID-0, with better features and data integrity protection. `btrfs`
+      also allows for RAID-0 expansion and is the only filesystem compatible
+      with the `fs cluster expand` command.
+    * (required) `raid_level` is the RAID level to apply to the disks in the
+      `disk_array`. The only valid value for multiple disks is `0`. Note that
+      if you wish to expand the number of disks in the array in the future,
+      you must use `btrfs` as the filesystem. At least two disks are required
+      for RAID-0.
 
 ## Full template
 An full template of a credentials file can be found

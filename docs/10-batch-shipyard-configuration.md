@@ -24,7 +24,10 @@ may be mutually exclusive. Please read the following document carefully when
 crafting your configuration files.
 
 Each property is marked with required or optional. Properties marked with
-experimental should be considered as features for testing only.
+experimental should be considered as features for testing only. Properties
+are hierarchical in nature. If the parent is an optional property but a child
+is marked required, then the child property need only be specified if the
+parent is specified.
 
 Example config templates can be found in [this directory](../config\_templates)
 of the repository. Note that templates contain every possible property and

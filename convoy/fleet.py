@@ -582,17 +582,12 @@ def _create_storage_cluster_mount_args(
                     ('transport cannot be specified as a mount option for '
                      'storage cluster {}').format(sc.id))
             mo = ','.join((mo, ','.join(amo)))
-        # get gluster volume name
-        try:
-            volname = sc.file_server.server_options['glusterfs']['volume_name']
-        except KeyError:
-            volname = settings.get_gluster_default_volume_name()
         # construct mount string for fstab, srcpath is the gluster volume
         fstab_mount = (
             '{remoteip}:/{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
             '{fstype} {mo} 0 2').format(
                 remoteip=primary_ip,
-                srcpath=volname,
+                srcpath=settings.get_file_server_glusterfs_volume_name(sc),
                 scid=sc.id,
                 fstype=sc.file_server.type,
                 mo=mo,
@@ -1038,7 +1033,8 @@ def _setup_glusterfs(
     ]
     if volopts is not None:
         for vo in volopts:
-            appcmd.append('gluster volume set gv0 {}'.format(vo))
+            appcmd.append('gluster volume set {} {}'.format(
+                settings.get_gluster_default_volume_name(), vo))
     # upload script
     sas_urls = storage.upload_resource_files(
         blob_client, config, [shell_script])
