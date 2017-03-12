@@ -676,6 +676,19 @@ def fs_cluster_add(ctx):
         ctx.blob_client, ctx.config)
 
 
+@cluster.command('resize')
+@common_options
+@fs_options
+@aad_options
+@pass_cli_context
+def fs_cluster_resize(ctx):
+    """Resize a filesystem storage cluster in Azure. Only increasing the
+    storage cluster size is supported."""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_resize(
+        ctx.compute_client, ctx.network_client, ctx.blob_client, ctx.config)
+
+
 @cluster.command('del')
 @click.option(
     '--delete-resource-group', is_flag=True,
@@ -745,15 +758,17 @@ def fs_cluster_start(ctx, wait):
 
 
 @cluster.command('status')
+@click.option(
+    '--detail', is_flag=True, help='Detailed storage cluster status')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_cluster_status(ctx):
+def fs_cluster_status(ctx, detail):
     """Query status of a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_status(
-        ctx.compute_client, ctx.network_client, ctx.config)
+        ctx.compute_client, ctx.network_client, ctx.config, detail)
 
 
 @cluster.command('ssh')
@@ -796,6 +811,8 @@ def fs_disks_add(ctx):
 
 @disks.command('del')
 @click.option(
+    '--all', is_flag=True, help='Delete all disks in resource group')
+@click.option(
     '--name', help='Delete disk with specified name only')
 @click.option(
     '--resource-group',
@@ -806,14 +823,17 @@ def fs_disks_add(ctx):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_disks_del(ctx, name, resource_group, wait):
+def fs_disks_del(ctx, all, name, resource_group, wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_del(
-        ctx.compute_client, ctx.config, name, resource_group, wait)
+        ctx.compute_client, ctx.config, name, resource_group, all, wait)
 
 
 @disks.command('list')
+@click.option(
+    '--resource-group',
+    help='List disks matching specified resource group only')
 @click.option(
     '--restrict-scope', is_flag=True,
     help='List disks present only in configuration if they exist')
@@ -821,11 +841,11 @@ def fs_disks_del(ctx, name, resource_group, wait):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_disks_list(ctx, restrict_scope):
+def fs_disks_list(ctx, resource_group, restrict_scope):
     """List managed disks in resource group"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_list(
-        ctx.compute_client, ctx.config, restrict_scope)
+        ctx.compute_client, ctx.config, resource_group, restrict_scope)
 
 
 @cli.group()

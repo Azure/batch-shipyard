@@ -100,11 +100,10 @@ each credential section.
 * (optional) `aad` property contains members for Azure Active Directory
 credentials. Note that some options are mutually exclusive of each other
 depending upon authentication type: `auth_key`, `rsa_private_key_pem` and
-`password` cannot be defined at the same time. Please see the
-[Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
-for more information. Note that any of the following can be specified as
-a CLI option or environment variable instead. For example, if you do not
-want to store the `auth_key` in the file, it can be specified at runtime.
+`password` cannot be defined at the same time. Note that most of the
+following properties can be specified as a CLI option or environment
+variable instead. For example, if you do not want to store the `auth_key`
+in the file, it can be specified at runtime.
 * (optional) `directory_id` AAD directory (tenant) id
 * (optional) `application_id` AAD application (client) id
 * (optional) `auth_key` Service Principal authentication key
@@ -120,6 +119,9 @@ want to store the `auth_key` in the file, it can be specified at runtime.
   * (optional) `filename` specifies the file path to cache the signed token
 
 ### KeyVault: `keyvault`
+Please see the
+[Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
+for more information.
 * (optional) The `keyvault` property defines the required members for
 accessing Azure KeyVault with Azure Active Directory credentials. Note that
 this property is *mutually exclusive* of all other properties in this file.

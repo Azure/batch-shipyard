@@ -2483,11 +2483,11 @@ def remotefs_settings(config):
                 ('All disks {} for vm {} are not specified in '
                  'managed_disks:disk_ids ({})').format(
                      disk_array, vmkey, _disk_set))
-        if len(disk_array) == 1:
-            # disable raid
-            raid_level = -1
+        raid_level = _kv_read(vmd_conf[vmkey], 'raid_level', -1)
+        if len(disk_array) == 1 and raid_level != -1:
+            raise ValueError(
+                'Cannot specify a RAID-level with 1 disk in array')
         else:
-            raid_level = vmd_conf[vmkey]['raid_level']
             if raid_level == 0 and len(disk_array) < 2:
                 raise ValueError('RAID-0 arrays require at least two disks')
             if raid_level != 0:
@@ -2544,3 +2544,49 @@ def remotefs_settings(config):
             vm_disk_map=disk_map,
         ),
     )
+
+
+def get_file_server_glusterfs_volume_name(sc):
+    # type: (StorageClusterSettings) -> str
+    """Get the glusterfs volume name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: glusterfs volume name
+    """
+    try:
+        volname = sc.file_server.server_options['glusterfs']['volume_name']
+    except KeyError:
+        volname = get_gluster_default_volume_name()
+    return volname
+
+
+def get_file_server_glusterfs_volume_type(sc):
+    # type: (StorageClusterSettings) -> str
+    """Get the glusterfs volume type
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: glusterfs volume type
+    """
+    try:
+        voltype = sc.file_server.server_options[
+            'glusterfs']['volume_type'].lower()
+    except KeyError:
+        voltype = 'distributed'
+    return voltype
+
+
+def get_file_server_glusterfs_transport(sc):
+    # type: (StorageClusterSettings) -> str
+    """Get the glusterfs transport
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: glusterfs transport
+    """
+    try:
+        transport = sc.file_server.server_options[
+            'glusterfs']['transport'].lower()
+        if transport != 'tcp':
+            raise ValueError('Only tcp is supported as transport')
+    except KeyError:
+        transport = 'tcp'
+    return transport

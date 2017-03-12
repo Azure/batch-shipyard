@@ -59,9 +59,8 @@ gluster_peer_probe() {
         # attempt to ping before peering
         ping -c 2 $1 > /dev/null
         if [ $? -eq 0 ]; then
-            gp_info=`gluster peer probe $1`
+            gluster peer probe $1
             if [ $? -eq 0 ]; then
-                echo $gp_info
                 peered=1
             fi
         fi
@@ -138,8 +137,7 @@ setup_glusterfs() {
     # master (first host) performs peering
     if [ ${hosts[0]} == $ipaddress ]; then
         # construct brick locations
-        IFS=',' read -ra hosts <<< "$peer_ips"
-        bricks=
+        local bricks=
         for host in "${hosts[@]}"
         do
             bricks+=" $host:$gluster_brick_location"
@@ -153,9 +151,9 @@ setup_glusterfs() {
         gluster_poll_for_connections $numnodes
         local voltype=${so[1],,}
         local volarg=
-        if [ $voltype == "replica" ] || [ $voltype == "stripe" ]; then
+        if [ "$voltype" == "replica" ] || [ "$voltype" == "stripe" ]; then
             volarg="$voltype $numnodes"
-        elif [ $voltype != "distributed" ]; then
+        elif [ "$voltype" != "distributed" ]; then
             # allow custom replica and/or stripe counts
             volarg=$voltype
         fi
@@ -164,33 +162,40 @@ setup_glusterfs() {
             transport="tcp"
         fi
         # check if volume exists
+        local start_only=0
         local force=
         set +e
-        gluster volume info $gluster_volname
+        gluster volume info $gluster_volname 2>&1 | grep "does not exist"
         if [ $? -ne 0 ]; then
-            force="force"
+            gluster volume info $gluster_volname 2>&1 | grep "Volume Name: $gluster_volname"
+            if [ $? -eq 0 ]; then
+                start_only=1
+            else
+                force="force"
+            fi
         fi
         set -e
         # create volume
-        echo "Creating $voltype gluster volume $gluster_volname ($force$bricks)"
-        gluster volume create $gluster_volname $volarg transport $transport$bricks $force
-        # modify volume properties as per input
-        for e in ${so[@]:3}; do
-            IFS=':' read -ra kv <<< "$e"
-            echo "Setting volume option ${kv[@]}"
-            gluster volume set $gluster_volname ${kv[0]} ${kv[1]}
-        done
+        if [ $start_only -eq 0 ]; then
+            echo "Creating gluster volume $gluster_volname $volarg ($force$bricks)"
+            gluster volume create $gluster_volname $volarg transport $transport$bricks $force
+            # modify volume properties as per input
+            for e in ${so[@]:3}; do
+                IFS=':' read -ra kv <<< "$e"
+                echo "Setting volume option ${kv[@]}"
+                gluster volume set $gluster_volname ${kv[0]} ${kv[1]}
+            done
+        fi
         # start volume
         echo "Starting gluster volume $gluster_volname"
         gluster volume start $gluster_volname
         # heal volume if force created with certain volume types
         if [ ! -z $force ]; then
-            if [[ $voltype == replica* ]] || [[ $voltype == disperse* ]]; then
+            if [[ "$voltype" == replica* ]] || [[ "$voltype" == disperse* ]]; then
                 echo "Checking if gluster volume $gluster_volname needs healing"
                 set +e
                 gluster volume heal $gluster_volname info
                 if [ $? -eq 0 ]; then
-                    set -e
                     gluster volume heal $gluster_volname
                     # print status after heal
                     gluster volume heal $gluster_volname info healed
@@ -531,16 +536,7 @@ if [ $raid_level -ge 0 ]; then
             # add new block devices first
             echo "Adding devices ${raid_array[@]} to $mountpath"
             btrfs device add ${raid_array[@]} $mountpath
-            # resize btrfs volume
-            echo "Resizing filesystem at $mountpath."
-            btrfs filesystem resize max $mountpath
-            # rebalance data and metadata across all devices
-            if [ $rebalance -eq 1 ]; then
-                echo "Rebalancing btrfs on $mountpath."
-                btrfs filesystem balance $mountpath
-                echo "Rebalance of btrfs on $mountpath complete."
-            fi
-            raid_resized=0
+            raid_resized=1
         else
             # add new block device first
             echo "Adding devices ${raid_array[@]} to $target"
@@ -659,15 +655,29 @@ fi
 
 # grow underlying filesystem if required
 if [ $raid_resized -eq 1 ]; then
+    # redirect mountpath if gluster for bricks
+    saved_mp=$mountpath
+    if [ $server_type == "glusterfs" ]; then
+        mountpath=$gluster_brick_mountpath
+    fi
     echo "Resizing filesystem at $mountpath."
     if [ $filesystem == "btrfs" ]; then
         btrfs filesystem resize max $mountpath
+        # rebalance data and metadata across all devices
+        if [ $rebalance -eq 1 ]; then
+            echo "Rebalancing btrfs on $mountpath."
+            btrfs filesystem balance $mountpath
+            echo "Rebalance of btrfs on $mountpath complete."
+        fi
     elif [[ $filesystem == ext* ]]; then
         resize2fs $mountpath
     else
         echo "Unknown filesystem: $filesystem"
         exit 1
     fi
+    # restore mountpath
+    mountpath=$saved_mp
+    unset saved_mp
 fi
 
 # set up server_type software

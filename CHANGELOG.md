@@ -6,8 +6,10 @@
   - Support for NFS (single VM, scale up)
   - Support for glusterfs (multi VM, scale up and out)
 - Support for provisioning managed disks via the `fs disks` command
+- Support for data ingress to provisioned storage clusters
 - Support for UserSubscription Batch accounts
 - Azure Active Directory authentication support for Batch accounts
+- Support for specifying a virtual network to use with a compute pool
 - `allow_run_on_missing` option to jobs that allows tasks to execute under
 jobs with Docker images that have not been pre-loaded via the
 `global_resources`:`docker_images` setting in config.json. Note that, if

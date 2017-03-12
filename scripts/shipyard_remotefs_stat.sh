@@ -10,17 +10,19 @@ gluster_brick_mountpath=/gluster/brick
 # vars
 filesystem=
 mountpath=
+gluster_volname=
 raid_level=-1
 server_type=
 
 # begin processing
-while getopts "h?f:m:r:s:" opt; do
+while getopts "h?f:m:n:r:s:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_stat.sh parameters"
             echo ""
             echo "-f [filesystem] filesystem"
             echo "-m [mountpoint] mountpoint"
+            echo "-n [volume name] volume name"
             echo "-r [RAID level] RAID level"
             echo "-s [server type] server type"
             echo ""
@@ -31,6 +33,9 @@ while getopts "h?f:m:r:s:" opt; do
             ;;
         m)
             mountpath=$OPTARG
+            ;;
+        n)
+            gluster_volname=$OPTARG
             ;;
         r)
             raid_level=$OPTARG
@@ -79,12 +84,20 @@ elif [ $server_type == "glusterfs" ]; then
     echo ""
     gluster volume status all detail
     echo ""
-    gluster volume status all mem
-    echo ""
-    gluster volume status all fd
-    echo ""
     gluster volume status all clients
     echo ""
+    set +e
+    gluster volume rebalance $gluster_volname status 2>&1
+    gluster volume heal $gluster_volname info 2>&1
+    if [ $? -eq 0 ]; then
+        gluster volume heal $gluster_volname info healed 2>&1
+        gluster volume heal $gluster_volname info heal-failed 2>&1
+        gluster volume heal $gluster_volname info split-brain 2>&1
+    fi
+    set -e
+    echo ""
+    # set mountpath to brick
+    mountpath=$gluster_brick_mountpath
 else
     echo "$server_type not supported."
     exit 1
@@ -112,11 +125,7 @@ if [ $raid_level -ge 0 ]; then
         echo ""
         echo "btrfs filesystem:"
         btrfs filesystem show
-        if [ $server_type == "glusterfs" ]; then
-            btrfs filesystem usage -h $gluster_brick_mountpath
-        else
-            btrfs filesystem usage -h $mountpath
-        fi
+        btrfs filesystem usage -h $mountpath
     else
         echo "/proc/mdstat:"
         cat /proc/mdstat

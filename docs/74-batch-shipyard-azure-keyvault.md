@@ -477,7 +477,6 @@ them within your `credentials.json` file. For example:
 
 ```json
         "batch": {
-            "account": "myaccount",
             "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey",
             "account_service_url": "myserviceurl"
         },

@@ -125,14 +125,6 @@ _BLOBXFER_FILE = (
     'shipyard_blobxfer.sh',
     str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh'))
 )
-_REMOTEFSPREP_FILE = (
-    'shipyard_remotefs_bootstrap.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh'))
-)
-_REMOTEFSSTAT_FILE = (
-    'shipyard_remotefs_stat.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh'))
-)
 _CASCADE_FILE = (
     'cascade.py',
     str(pathlib.Path(_ROOT_PATH, 'cascade/cascade.py'))
@@ -145,6 +137,21 @@ _PERF_FILE = (
     'perf.py',
     str(pathlib.Path(_ROOT_PATH, 'cascade/perf.py'))
 )
+_REMOTEFSPREP_FILE = (
+    'shipyard_remotefs_bootstrap.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh'))
+)
+_REMOTEFSADDBRICK_FILE = (
+    'shipyard_remotefs_addbrick.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_addbrick.sh'))
+)
+_REMOTEFSSTAT_FILE = (
+    'shipyard_remotefs_stat.sh',
+    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh'))
+)
+_ALL_REMOTEFS_FILES = [
+    _REMOTEFSPREP_FILE, _REMOTEFSADDBRICK_FILE, _REMOTEFSSTAT_FILE,
+]
 
 
 def adjust_general_settings(config):
@@ -1367,30 +1374,36 @@ def action_fs_disks_add(resource_client, compute_client, config):
     remotefs.create_managed_disks(resource_client, compute_client, config)
 
 
-def action_fs_disks_del(compute_client, config, name, resource_group, wait):
+def action_fs_disks_del(
+        compute_client, config, name, resource_group, all, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
-    #        str, bool) -> None
+    #        str, bool, bool) -> None
     """Action: Fs Disks Del
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param str name: disk name
     :param str resource_group: resource group
+    :param bool all: delete all in resource group
     :param bool wait: wait for operation to complete
     """
     remotefs.delete_managed_disks(
-        compute_client, config, name, resource_group, wait)
+        compute_client, config, name, resource_group, all, wait,
+        confirm_override=False)
 
 
-def action_fs_disks_list(compute_client, config, restrict_scope):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def action_fs_disks_list(
+        compute_client, config, resource_group, restrict_scope):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        bool) -> None
     """Action: Fs Disks List
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str resource_group: resource group
     :param bool restrict_scope: restrict scope to config
     """
-    remotefs.list_disks(compute_client, config, restrict_scope)
+    remotefs.list_disks(compute_client, config, resource_group, restrict_scope)
 
 
 def action_fs_cluster_add(
@@ -1412,7 +1425,25 @@ def action_fs_cluster_add(
     storage.create_storage_containers_remotefs(blob_client, config)
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
-        _REMOTEFSPREP_FILE[0], [_REMOTEFSPREP_FILE, _REMOTEFSSTAT_FILE])
+        _REMOTEFSPREP_FILE[0], _ALL_REMOTEFS_FILES)
+
+
+def action_fs_cluster_resize(
+        compute_client, network_client, blob_client, config):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService, dict) -> None
+    """Action: Fs Cluster Resize
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    remotefs.resize_storage_cluster(
+        compute_client, network_client, blob_client, config,
+        _REMOTEFSPREP_FILE[0], _REMOTEFSADDBRICK_FILE[0], _ALL_REMOTEFS_FILES)
 
 
 def action_fs_cluster_del(
@@ -1460,7 +1491,8 @@ def action_fs_cluster_expand(
     if remotefs.expand_storage_cluster(
             compute_client, network_client, config, _REMOTEFSPREP_FILE[0],
             rebalance):
-        action_fs_cluster_status(compute_client, network_client, config)
+        action_fs_cluster_status(
+            compute_client, network_client, config, detail=True)
 
 
 def action_fs_cluster_suspend(compute_client, config, wait):
@@ -1488,21 +1520,23 @@ def action_fs_cluster_start(
     """
     remotefs.start_storage_cluster(compute_client, config, wait)
     if wait:
-        action_fs_cluster_status(compute_client, network_client, config)
+        action_fs_cluster_status(
+            compute_client, network_client, config, detail=True)
 
 
-def action_fs_cluster_status(compute_client, network_client, config):
+def action_fs_cluster_status(compute_client, network_client, config, detail):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
     """Action: Fs Cluster Status
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param bool detail: detailed status
     """
     remotefs.stat_storage_cluster(
-        compute_client, network_client, config, _REMOTEFSSTAT_FILE[0])
+        compute_client, network_client, config, _REMOTEFSSTAT_FILE[0], detail)
 
 
 def action_fs_cluster_ssh(

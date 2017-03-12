@@ -143,31 +143,40 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
 
 
 def delete_managed_disks(
-        compute_client, config, name, resource_group=None, wait=False,
-        confirm_override=False):
+        compute_client, config, name, resource_group=None, all=False,
+        wait=False, confirm_override=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str or list,
-    #        bool, bool) -> None
+    #        bool, bool, bool) -> None
     """Delete managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param str or list name: specific disk name or list of names
     :param str resource_group: resource group of the disks
+    :param bool all: delete all disks in resource group
     :param bool wait: wait for operation to complete
     :param bool confirm_override: override confirmation of delete
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
     resource_group = resource_group or rfs.managed_disks.resource_group
+    # set disks to delete
+    if all:
+        disks = [
+            x[0].split('/')[-1] for x in list_disks(
+                compute_client, config, resource_group=resource_group,
+                restrict_scope=False)
+        ]
+    else:
+        if util.is_none_or_empty(name):
+            disks = rfs.managed_disks.disk_ids
+        else:
+            if isinstance(name, list):
+                disks = name
+            else:
+                disks = [name]
     # iterate disks and delete them
     async_ops = []
-    if util.is_none_or_empty(name):
-        disks = rfs.managed_disks.disk_ids
-    else:
-        if isinstance(name, list):
-            disks = name
-        else:
-            disks = [name]
     for disk_name in disks:
         if (not confirm_override and not util.confirm_action(
                 config,
@@ -193,13 +202,15 @@ def delete_managed_disks(
         return async_ops
 
 
-def list_disks(compute_client, config, restrict_scope=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) ->
+def list_disks(
+        compute_client, config, resource_group=None, restrict_scope=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str, bool) ->
     #        List[str, computemodels.StorageAccountTypes]
     """List managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str resource_group: resource group to list from
     :param bool restrict_scope: restrict scope to config
     :rtype: list
     :return list of (disk ids, disk account type)
@@ -207,13 +218,13 @@ def list_disks(compute_client, config, restrict_scope=False):
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
     confdisks = frozenset(rfs.managed_disks.disk_ids)
+    resource_group = resource_group or rfs.managed_disks.resource_group
     # list disks in resource group
     logger.debug(
         ('listing all managed disks in resource group {} '
-         '[restrict_scope={}]').format(
-             rfs.managed_disks.resource_group, restrict_scope))
+         '[restrict_scope={}]').format(resource_group, restrict_scope))
     disks = compute_client.disks.list_by_resource_group(
-        resource_group_name=rfs.managed_disks.resource_group)
+        resource_group_name=resource_group)
     ret = []
     i = 0
     for disk in disks:
@@ -228,8 +239,7 @@ def list_disks(compute_client, config, restrict_scope=False):
     if i == 0:
         logger.error(
             ('no managed disks found in resource group {} '
-             '[restrict_scope={}]').format(
-                 rfs.managed_disks.resource_group, restrict_scope))
+             '[restrict_scope={}]').format(resource_group, restrict_scope))
     return ret
 
 
@@ -520,21 +530,15 @@ def _create_virtual_machine_extension(
     # special processing for gluster (always create these options
     # if they don't exist)
     if st == 'glusterfs':
-        try:
-            server_options.append(so[st]['volume_name'])
-        except KeyError:
-            server_options.append(settings.get_gluster_default_volume_name())
-        try:
-            server_options.append(so[st]['volume_type'])
-        except KeyError:
-            server_options.append('distributed')
-        try:
-            transport = so[st]['transport']
-            if transport != 'tcp':
-                raise ValueError('Only tcp is supported as transport')
-        except KeyError:
-            transport = 'tcp'
-        server_options.append(transport)
+        server_options.append(
+            settings.get_file_server_glusterfs_volume_name(
+                rfs.storage_cluster))
+        server_options.append(
+            settings.get_file_server_glusterfs_volume_type(
+                rfs.storage_cluster))
+        server_options.append(
+            settings.get_file_server_glusterfs_transport(
+                rfs.storage_cluster))
     # process key pairs
     if st in so:
         for key in so[st]:
@@ -544,6 +548,24 @@ def _create_virtual_machine_extension(
                 continue
             server_options.append('{}:{}'.format(key, so[st][key]))
     logger.debug('server options: {}'.format(server_options))
+    # construct bootstrap command
+    cmd = './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
+        bsf=bootstrap_file,
+        f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
+        i=' -i {}'.format(
+            ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
+        m=' -m {}'.format(rfs.storage_cluster.file_server.mountpoint),
+        n=' -n' if settings.can_tune_tcp(rfs.storage_cluster.vm_size) else '',
+        o=' -o "{}"'.format(','.join(server_options)) if util.is_not_empty(
+            server_options) else '',
+        p=' -p' if premium else '',
+        r=' -r {}'.format(rfs.storage_cluster.vm_disk_map[offset].raid_level),
+        s=' -s {}'.format(rfs.storage_cluster.file_server.type),
+        t=' -t {}'.format(
+            ','.join(rfs.storage_cluster.file_server.mount_options)
+            if util.is_not_empty(rfs.storage_cluster.file_server.mount_options)
+            else ''))
+    # logger.debug('bootstrap command: {}'.format(cmd))
     logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
     return compute_client.virtual_machine_extensions.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -559,31 +581,7 @@ def _create_virtual_machine_extension(
                 'fileUris': blob_urls,
             },
             protected_settings={
-                'commandToExecute':
-                './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
-                    bsf=bootstrap_file,
-                    f=' -f {}'.format(
-                        rfs.storage_cluster.vm_disk_map[offset].filesystem),
-                    i=' -i {}'.format(
-                        ','.join(private_ips)) if util.is_not_empty(
-                            private_ips) else '',
-                    m=' -m {}'.format(
-                        rfs.storage_cluster.file_server.mountpoint),
-                    n=' -n' if settings.can_tune_tcp(
-                        rfs.storage_cluster.vm_size) else '',
-                    o=' -o {}'.format(
-                        ','.join(server_options)) if util.is_not_empty(
-                            server_options) else '',
-                    p=' -p' if premium else '',
-                    r=' -r {}'.format(
-                        rfs.storage_cluster.vm_disk_map[offset].raid_level),
-                    s=' -s {}'.format(rfs.storage_cluster.file_server.type),
-                    t=' -t {}'.format(
-                        ','.join(rfs.storage_cluster.file_server.mount_options)
-                        if util.is_not_empty(
-                                rfs.storage_cluster.file_server.mount_options)
-                        else ''),
-                ),
+                'commandToExecute': cmd,
                 'storageAccountName': storage.get_storageaccount(),
                 'storageAccountKey': storage.get_storageaccount_key(),
             },
@@ -804,6 +802,472 @@ def create_storage_cluster(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 pip.dns_settings.fqdn, pip.ip_address,
                 vm.hardware_profile.vm_size))
+
+
+def resize_storage_cluster(
+        compute_client, network_client, blob_client, config, bootstrap_file,
+        addbrick_file, remotefs_files):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, str,
+    #        list) -> bool
+    """Resize a storage cluster (increase size only for now)
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param str bootstrap_file: bootstrap file
+    :param str addbrick_file: glusterfs addbrick file
+    :param list remotefs_files: remotefs files to upload
+    :rtype: bool
+    :return: if cluster was resized
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # if storage cluster is not glusterfs, exit
+    if rfs.storage_cluster.file_server.type != 'glusterfs':
+        raise ValueError(
+            'Resize is only supported on glusterfs storage clusters')
+    # only allow certain types of resizes to proceed
+    voltype = settings.get_file_server_glusterfs_volume_type(
+        rfs.storage_cluster).lower()
+    if 'stripe' in voltype:
+        raise RuntimeError('Cannot resize glusterfs striped volumes')
+    # construct disk map
+    disk_map = {}
+    disk_ids = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_ids:
+        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
+    del disk_ids
+    # get existing vms
+    new_vms = []
+    pe_vms = {}
+    all_pe_disks = set()
+    vnet_name = None
+    subnet_name = None
+    nsg_name = None
+    for i in range(rfs.storage_cluster.vm_count):
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.storage_cluster.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                new_vms.append(i)
+                continue
+            else:
+                raise
+        entry = {
+            'vm': vm,
+            'disks': set(),
+        }
+        for dd in vm.storage_profile.data_disks:
+            entry['disks'].add(dd.name)
+            all_pe_disks.add(dd.name.lower())
+        # get vnet, subnet, nsg names
+        if vnet_name is None or subnet_name is None or nsg_name is None:
+            _, _, subnet_name, vnet_name, nsg_name = \
+                _get_resource_names_from_virtual_machine(
+                    compute_client, network_client, rfs, vm)
+        # add vm to map
+        pe_vms[i] = entry
+    # check early return conditions
+    if len(new_vms) == 0:
+        logger.warning(
+            'no new virtual machines to add in storage cluster {}'.format(
+                rfs.storage_cluster.id))
+        return False
+    # ensure that new disks to add are not already attached and
+    # are provisioned
+    for i in new_vms:
+        for disk in rfs.storage_cluster.vm_disk_map[i].disk_array:
+            if disk.lower() in all_pe_disks:
+                raise RuntimeError(
+                    'Disk {} for new VM {} is already attached'.format(
+                        disk, i))
+            # check disks for new vms are provisioned
+            if disk not in disk_map:
+                raise RuntimeError(
+                    ('Disk {} for new VM {} is not provisioned in '
+                     'resource group {}').format(
+                         disk, i, rfs.storage_cluster.resource_group))
+    logger.warning(
+        ('**WARNING** cluster resize is an experimental feature and may lead '
+         'to data loss, unavailability or an unrecoverable state for '
+         'the storage cluster {}.'.format(rfs.storage_cluster.id)))
+    # confirm before proceeding
+    if not util.confirm_action(
+            config, 'resize storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return False
+    # create static private ip block, start offset at 4
+    private_ips = [
+        x for x in ip_from_address_prefix(
+            rfs.storage_cluster.virtual_network.subnet_address_prefix,
+            start_offset=4,
+            max=rfs.storage_cluster.vm_count)
+    ]
+    logger.debug('static private ip block: {}'.format(private_ips))
+    # create public ips
+    async_ops = []
+    for i in new_vms:
+        async_ops.append(_create_public_ip(network_client, rfs, i))
+    # get subnet and nsg objects
+    subnet = network_client.subnets.get(
+        resource_group_name=rfs.storage_cluster.resource_group,
+        virtual_network_name=vnet_name,
+        subnet_name=subnet_name,
+    )
+    nsg = network_client.network_security_groups.get(
+        resource_group_name=rfs.storage_cluster.resource_group,
+        network_security_group_name=nsg_name,
+    )
+    # get ssh login info of prober vm
+    ssh_info = None
+    for i in pe_vms:
+        vm = pe_vms[i]['vm']
+        ssh_info = _get_ssh_info(
+            compute_client, network_client, config, None, vm.name)
+        break
+    if settings.verbose(config):
+        logger.debug('prober vm: {}'.format(ssh_info))
+    # wait for pips
+    logger.debug('waiting for public ips to be created')
+    pips = {}
+    for offset, op in async_ops:
+        pip = op.result()
+        logger.info(
+            ('public ip: {} [provisioning_state={} ip_address={} '
+             'public_ip_allocation={}]').format(
+                 pip.id, pip.provisioning_state,
+                 pip.ip_address, pip.public_ip_allocation_method))
+        pips[offset] = pip
+    async_ops.clear()
+    # create nics
+    nics = {}
+    for i in new_vms:
+        async_ops.append(_create_network_interface(
+            network_client, rfs, subnet, nsg, private_ips, pips, i))
+    # get availability set
+    availset = compute_client.availability_sets.get(
+        resource_group_name=rfs.storage_cluster.resource_group,
+        availability_set_name='{}-as'.format(
+            rfs.storage_cluster.hostname_prefix),
+    )
+    # wait for nics to be created
+    logger.debug('waiting for network interfaces to be created')
+    for offset, op in async_ops:
+        nic = op.result()
+        logger.info(
+            ('network interface: {} [provisioning_state={} private_ip={} '
+             'private_ip_allocation_method={} network_security_group={} '
+             'accelerated={}]').format(
+                 nic.id, nic.provisioning_state,
+                 nic.ip_configurations[0].private_ip_address,
+                 nic.ip_configurations[0].private_ip_allocation_method,
+                 nsg.name if nsg is not None else None,
+                 nic.enable_accelerated_networking))
+        nics[offset] = nic
+    async_ops.clear()
+    # create universal ssh key for all vms if not specified
+    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+        # check if ssh key exists first in default location
+        ssh_pub_key = pathlib.Path(
+            rfs.storage_cluster.ssh.generated_file_export_path,
+            crypto.get_remotefs_ssh_key_prefix() + '.pub')
+        if not ssh_pub_key.exists():
+            _, ssh_pub_key = crypto.generate_ssh_keypair(
+                rfs.storage_cluster.ssh.generated_file_export_path,
+                crypto.get_remotefs_ssh_key_prefix())
+        else:
+            ssh_pub_key = str(ssh_pub_key)
+    else:
+        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+    with open(ssh_pub_key, 'rb') as fd:
+        key_data = fd.read().decode('utf8')
+    ssh_pub_key = computemodels.SshPublicKey(
+        path='/home/{}/.ssh/authorized_keys'.format(
+            rfs.storage_cluster.ssh.username),
+        key_data=key_data,
+    )
+    del key_data
+    # create vms
+    vms_async_ops = {}
+    for i in new_vms:
+        vms_async_ops[i] = _create_virtual_machine(
+            compute_client, rfs, availset, nics, disk_map, ssh_pub_key, i)
+    # upload scripts to blob storage for customscript vm extension
+    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
+    # gather all new private ips
+    new_private_ips = {}
+    for offset in nics:
+        new_private_ips[offset] = nics[
+            offset].ip_configurations[0].private_ip_address
+    if settings.verbose(config):
+        logger.debug('new private ips: {}'.format(new_private_ips))
+    # wait for vms to be created
+    logger.info(
+        'waiting for {} virtual machines to be created'.format(
+            len(vms_async_ops)))
+    vms = {}
+    for offset in vms_async_ops:
+        # cache vm
+        vms[offset] = vms_async_ops[offset].result()
+    del vms_async_ops
+    logger.debug('{} virtual machines created'.format(len(vms)))
+    # wait for all vms to be created before installing extensions to prevent
+    # variability in wait times and timeouts during customscript
+    vm_ext_ops = {}
+    for i in new_vms:
+        # install vm extension
+        vm_ext_ops[i] = _create_virtual_machine_extension(
+            compute_client, rfs, bootstrap_file, blob_urls,
+            vms[i].name, disk_map, private_ips, i)
+    # execute special add brick script
+    script_cmd = \
+        '/opt/batch-shipyard/{asf} {c}{i}{n}{v}'.format(
+            asf=addbrick_file,
+            c=' -c {}'.format(rfs.storage_cluster.vm_count),
+            i=' -i {}'.format(','.join(list(new_private_ips.values()))),
+            n=' -n {}'.format(
+                settings.get_file_server_glusterfs_volume_name(
+                    rfs.storage_cluster)),
+            v=' -v "{}"'.format(voltype),
+        )
+    ssh_priv_key, port, username, ip = ssh_info
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+           '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+           '-i', str(ssh_priv_key), '-p', str(port),
+           '{}@{}'.format(username, ip), 'sudo']
+    cmd.extend(script_cmd.split())
+    if settings.verbose(config):
+        logger.debug('add brick command: {}'.format(cmd))
+    proc = util.subprocess_nowait_pipe_stdout(cmd)
+    stdout = proc.communicate()[0]
+    logline = 'add brick script completed with ec={}'.format(proc.returncode)
+    if proc.returncode != 0:
+        logger.error(logline)
+    else:
+        logger.info(logline)
+    del logline
+    if util.is_not_empty(stdout):
+        stdout = stdout.decode('utf8')
+        if util.on_windows():
+            stdout = stdout.replace('\n', os.linesep)
+        logger.debug('add brick output:{}{}'.format(os.linesep, stdout))
+    del stdout
+    # wait for new vms to finish custom script extension processing
+    logger.debug('waiting for virtual machine extensions to be created')
+    for offset in vm_ext_ops:
+        # refresh public ip for vm
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=rfs.storage_cluster.resource_group,
+            public_ip_address_name=pips[offset].name,
+        )
+        # get vm extension result
+        vm_ext = vm_ext_ops[offset].result()
+        vm = vms[offset]
+        logger.info(
+            'virtual machine: {} [provisioning_state={}/{} fqdn={} '
+            'public_ip_address={} vm_size={}]'.format(
+                vm.id, vm.provisioning_state, vm_ext.provisioning_state,
+                pip.dns_settings.fqdn, pip.ip_address,
+                vm.hardware_profile.vm_size))
+
+
+def expand_storage_cluster(
+        compute_client, network_client, config, bootstrap_file,
+        rebalance=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        bool) -> bool
+    """Expand a storage cluster
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param str bootstrap_file: bootstrap file
+    :param bool rebalance: rebalance filesystem
+    :rtype: bool
+    :return: if cluster was expanded
+    """
+    # retrieve remotefs settings
+    rfs = settings.remotefs_settings(config)
+    # check if cluster exists
+    logger.debug('checking if storage cluster {} exists'.format(
+        rfs.storage_cluster.id))
+    # construct disk map
+    disk_map = {}
+    disk_ids = list_disks(compute_client, config, restrict_scope=True)
+    for disk_id, sat in disk_ids:
+        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
+    del disk_ids
+    # check vms
+    vms = {}
+    new_disk_count = 0
+    for i in range(rfs.storage_cluster.vm_count):
+        # check if this vm filesystem supports expanding
+        if (rfs.storage_cluster.vm_disk_map[i].filesystem != 'btrfs' and
+                rfs.storage_cluster.vm_disk_map[i].raid_level == 0):
+            raise RuntimeError(
+                'Cannot expand mdadm-based RAID-0 volumes. Please re-create '
+                'your storage cluster with btrfs using new disks.')
+        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        try:
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=rfs.storage_cluster.resource_group,
+                vm_name=vm_name,
+            )
+        except msrestazure.azure_exceptions.CloudError as e:
+            if e.status_code == 404:
+                raise RuntimeError(
+                    'Virtual machine {} not found, cannot expand this '
+                    'storage cluster'.format(vm_name))
+            else:
+                raise
+        # create entry
+        entry = {
+            'vm': vm,
+            'pe_disks': {
+                'names': set(),
+                'luns': [],
+            },
+            'new_disks': [],
+        }
+        # get attached disks
+        for dd in vm.storage_profile.data_disks:
+            entry['pe_disks']['names'].add(dd.name)
+            entry['pe_disks']['luns'].append(dd.lun)
+        # check if all referenced managed disks exist
+        for disk in rfs.storage_cluster.vm_disk_map[i].disk_array:
+            if disk not in disk_map:
+                raise RuntimeError(
+                    ('Referenced managed disk {} unavailable in set {} for '
+                     'vm offset {}. Ensure that this disk has been '
+                     'provisioned first.').format(disk, disk_map, i))
+            if disk not in entry['pe_disks']['names']:
+                entry['new_disks'].append(disk)
+                new_disk_count += 1
+        # check for proper raid setting and number of disks
+        pe_len = len(entry['pe_disks']['names'])
+        if pe_len <= 1 or rfs.storage_cluster.vm_disk_map[i].raid_level != 0:
+            raise RuntimeError(
+                'Cannot expand array from {} disk(s) or RAID level {}'.format(
+                    pe_len, rfs.storage_cluster.vm_disk_map[i].raid_level))
+        # add vm to map
+        vms[i] = entry
+    # check early return conditions
+    if len(vms) == 0:
+        logger.warning(
+            'no virtual machines to expand in storage cluster {}'.format(
+                rfs.storage_cluster.id))
+        return False
+    if settings.verbose(config):
+        logger.debug('expand settings:{}{}'.format(os.linesep, vms))
+    if new_disk_count == 0:
+        logger.error(
+            'no new disks detected for storage cluster {}'.format(
+                rfs.storage_cluster.id))
+        return False
+    # confirm before proceeding
+    if not util.confirm_action(
+            config, 'expand storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return False
+    # attach new data disks to each vm
+    async_ops = []
+    for key in vms:
+        entry = vms[key]
+        if len(entry['new_disks']) == 0:
+            logger.debug('no new disks to attach to virtual machine {}'.format(
+                vm.id))
+            continue
+        vm = entry['vm']
+        premium = False
+        # sort lun array and get last element
+        lun = sorted(entry['pe_disks']['luns'])[-1] + 1
+        for diskname in entry['new_disks']:
+            if (disk_map[diskname][1] ==
+                    computemodels.StorageAccountTypes.premium_lrs):
+                premium = True
+            vm.storage_profile.data_disks.append(
+                computemodels.DataDisk(
+                    lun=lun,
+                    name=diskname,
+                    create_option=computemodels.DiskCreateOption.attach,
+                    managed_disk=computemodels.ManagedDiskParameters(
+                        id=disk_map[diskname][0],
+                    ),
+                )
+            )
+            lun += 1
+        logger.info(
+            ('attaching {} additional data disks {} to virtual '
+             'machine {}').format(
+                len(entry['new_disks']), entry['new_disks'], vm.name))
+        # update vm
+        async_ops.append(
+            (key, premium, compute_client.virtual_machines.create_or_update(
+                resource_group_name=rfs.storage_cluster.resource_group,
+                vm_name=vm.name,
+                parameters=vm)))
+    # wait for async ops to complete
+    if len(async_ops) == 0:
+        logger.error('no operations started for expansion')
+        return False
+    logger.debug('waiting for disks to attach to virtual machines')
+    for offset, premium, op in async_ops:
+        vm = op.result()
+        vms[offset]['vm'] = vm
+        # execute bootstrap script via ssh
+        script_cmd = \
+            '/opt/batch-shipyard/{bsf} {a}{b}{f}{m}{p}{r}{s}'.format(
+                bsf=bootstrap_file,
+                a=' -a',
+                b=' -b' if rebalance else '',
+                f=' -f {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].filesystem),
+                m=' -m {}'.format(
+                    rfs.storage_cluster.file_server.mountpoint),
+                p=' -p' if premium else '',
+                r=' -r {}'.format(
+                    rfs.storage_cluster.vm_disk_map[offset].raid_level),
+                s=' -s {}'.format(rfs.storage_cluster.file_server.type),
+            )
+        ssh_priv_key, port, username, ip = _get_ssh_info(
+            compute_client, network_client, config, None, vm.name)
+        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_priv_key), '-p', str(port),
+               '{}@{}'.format(username, ip), 'sudo']
+        cmd.extend(script_cmd.split())
+        if settings.verbose(config):
+            logger.debug('bootstrap command: {}'.format(cmd))
+        proc = util.subprocess_nowait_pipe_stdout(cmd)
+        stdout = proc.communicate()[0]
+        if util.is_not_empty(stdout):
+            stdout = stdout.decode('utf8')
+            if util.on_windows():
+                stdout = stdout.replace('\n', os.linesep)
+        vms[offset]['status'] = proc.returncode
+        vms[offset]['stdout'] = '>>stdout>> {}:{}{}'.format(
+            vm.name, os.linesep, stdout)
+    logger.info('disk attach operations completed')
+    for key in vms:
+        entry = vms[key]
+        vm = entry['vm']
+        log = 'bootstrap exit code for virtual machine {}: {}'.format(
+            vm.name, entry['status'])
+        if entry['status'] == 0:
+            logger.info(log)
+            logger.debug(entry['stdout'])
+        else:
+            logger.error(log)
+            logger.error(entry['stdout'])
+    return True
 
 
 def _get_resource_names_from_virtual_machine(
@@ -1103,22 +1567,6 @@ def delete_storage_cluster(
         nic = resources[key]['nic']
         nic_ops.append(_delete_network_interface(
             network_client, rfs.storage_cluster.resource_group, nic))
-    # delete os disks (delay from vm due to potential in use errors)
-    os_disk_ops = []
-    for key in resources:
-        os_disk = resources[key]['os_disk']
-        os_disk_ops.extend(delete_managed_disks(
-            compute_client, config, os_disk,
-            resource_group=rfs.storage_cluster.resource_group, wait=False,
-            confirm_override=True))
-    # delete data disks (delay from vm due to potential in use errors)
-    data_disk_ops = []
-    for key in resources:
-        data_disks = resources[key]['data_disks']
-        if len(data_disks) > 0:
-            data_disk_ops.extend(delete_managed_disks(
-                compute_client, config, data_disks,
-                resource_group=rfs.managed_disks.resource_group, wait=False))
     # wait for nics to delete
     logger.debug('waiting for network interfaces to delete')
     for op in nic_ops:
@@ -1178,10 +1626,27 @@ def delete_storage_cluster(
         if util.is_none_or_empty(as_name) or as_name in deleted:
             continue
         deleted.add(as_name)
-        logger.info('deleting availability set {}'.format(as_name))
         _delete_availability_set(
             compute_client, rfs.storage_cluster.resource_group, as_name)
+        logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
+    # delete data disks (delay from vm due to potential in use errors)
+    data_disk_ops = []
+    for key in resources:
+        data_disks = resources[key]['data_disks']
+        if len(data_disks) > 0:
+            data_disk_ops.extend(delete_managed_disks(
+                compute_client, config, data_disks,
+                resource_group=rfs.managed_disks.resource_group, wait=False))
+    # delete os disks (delay from vm due to potential in use errors)
+    os_disk_ops = []
+    for key in resources:
+        os_disk = resources[key]['os_disk']
+        os_disk_ops.extend(delete_managed_disks(
+            compute_client, config, os_disk,
+            resource_group=rfs.storage_cluster.resource_group, wait=False,
+            confirm_override=True))
+    # TODO check for 409s and retry
     # wait for nsgs and os disks to delete
     if wait:
         logger.debug('waiting for network security groups to delete')
@@ -1208,196 +1673,6 @@ def delete_storage_cluster(
             logger.info('{} managed data disks deleted'.format(
                 len(data_disk_ops)))
             data_disk_ops.clear()
-
-
-def expand_storage_cluster(
-        compute_client, network_client, config, bootstrap_file,
-        rebalance=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str,
-    #        bool) -> bool
-    """Expand a storage cluster
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param dict config: configuration dict
-    :param str bootstrap_file: bootstrap file
-    :param bool rebalance: rebalance filesystem
-    :rtype: bool
-    :return: if cluster was expanded
-    """
-    # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
-    if not util.confirm_action(
-            config, 'expand storage cluster {}'.format(
-                rfs.storage_cluster.id)):
-        return False
-    # check if cluster exists
-    logger.debug('checking if storage cluster {} exists'.format(
-        rfs.storage_cluster.id))
-    # construct disk map
-    disk_map = {}
-    disk_ids = list_disks(compute_client, config, restrict_scope=True)
-    for disk_id, sat in disk_ids:
-        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    del disk_ids
-    # check vms
-    vms = {}
-    new_disk_count = 0
-    for i in range(rfs.storage_cluster.vm_count):
-        # check if this vm filesystem supports expanding
-        if (rfs.storage_cluster.vm_disk_map[i].filesystem != 'btrfs' and
-                rfs.storage_cluster.vm_disk_map[i].raid_level == 0):
-            raise RuntimeError(
-                'Cannot expand mdadm-based RAID-0 volumes. Please re-create '
-                'your storage cluster with btrfs using new disks.')
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
-        try:
-            vm = compute_client.virtual_machines.get(
-                resource_group_name=rfs.storage_cluster.resource_group,
-                vm_name=vm_name,
-            )
-        except msrestazure.azure_exceptions.CloudError as e:
-            if e.status_code == 404:
-                raise RuntimeError(
-                    'Virtual machine {} not found, cannot expand this '
-                    'storage cluster'.format(vm_name))
-            else:
-                raise
-        # create entry
-        entry = {
-            'vm': vm,
-            'pe_disks': {
-                'names': set(),
-                'luns': [],
-            },
-            'new_disks': [],
-        }
-        # get attached disks
-        for dd in vm.storage_profile.data_disks:
-            entry['pe_disks']['names'].add(dd.name)
-            entry['pe_disks']['luns'].append(dd.lun)
-        # check if all referenced managed disks exist
-        for disk in rfs.storage_cluster.vm_disk_map[i].disk_array:
-            if disk not in disk_map:
-                raise RuntimeError(
-                    ('Referenced managed disk {} unavailable in set {} for '
-                     'vm offset {}. Ensure that this disk has been '
-                     'provisioned first.').format(disk, disk_map, i))
-            if disk not in entry['pe_disks']['names']:
-                entry['new_disks'].append(disk)
-                new_disk_count += 1
-        # check for proper raid setting and number of disks
-        pe_len = len(entry['pe_disks']['names'])
-        if pe_len <= 1 or rfs.storage_cluster.vm_disk_map[i].raid_level != 0:
-            raise RuntimeError(
-                'Cannot expand array from {} disk(s) or RAID level {}'.format(
-                    pe_len, rfs.storage_cluster.vm_disk_map[i].raid_level))
-        # add vm to map
-        vms[i] = entry
-    # check early return conditions
-    if len(vms) == 0:
-        logger.warning(
-            'no virtual machines to expand in storage cluster {}'.format(
-                rfs.storage_cluster.id))
-        return False
-    if settings.verbose(config):
-        logger.debug('expand settings:{}{}'.format(os.linesep, vms))
-    if new_disk_count == 0:
-        logger.error(
-            'no new disks detected for storage cluster {}'.format(
-                rfs.storage_cluster.id))
-        return False
-    # attach new data disks to each vm
-    async_ops = []
-    for key in vms:
-        entry = vms[key]
-        if len(entry['new_disks']) == 0:
-            logger.debug('no new disks to attach to virtual machine {}'.format(
-                vm.id))
-            continue
-        vm = entry['vm']
-        premium = False
-        # sort lun array and get last element
-        lun = sorted(entry['pe_disks']['luns'])[-1] + 1
-        for diskname in entry['new_disks']:
-            if (disk_map[diskname][1] ==
-                    computemodels.StorageAccountTypes.premium_lrs):
-                premium = True
-            vm.storage_profile.data_disks.append(
-                computemodels.DataDisk(
-                    lun=lun,
-                    name=diskname,
-                    create_option=computemodels.DiskCreateOption.attach,
-                    managed_disk=computemodels.ManagedDiskParameters(
-                        id=disk_map[diskname][0],
-                    ),
-                )
-            )
-            lun += 1
-        logger.info(
-            ('attaching {} additional data disks {} to virtual '
-             'machine {}').format(
-                len(entry['new_disks']), entry['new_disks'], vm.name))
-        # update vm
-        async_ops.append(
-            (key, premium, compute_client.virtual_machines.create_or_update(
-                resource_group_name=rfs.storage_cluster.resource_group,
-                vm_name=vm.name,
-                parameters=vm)))
-    # wait for async ops to complete
-    if len(async_ops) == 0:
-        logger.error('no operations started for expansion')
-        return False
-    logger.debug('waiting for disks to attach to virtual machines')
-    for offset, premium, op in async_ops:
-        vm = op.result()
-        vms[offset]['vm'] = vm
-        # execute bootstrap script via ssh
-        script_cmd = \
-            '/opt/batch-shipyard/{bsf} {a}{b}{f}{m}{p}{r}{s}'.format(
-                bsf=bootstrap_file,
-                a=' -a',
-                b=' -b' if rebalance else '',
-                f=' -f {}'.format(
-                    rfs.storage_cluster.vm_disk_map[offset].filesystem),
-                m=' -m {}'.format(
-                    rfs.storage_cluster.file_server.mountpoint),
-                p=' -p' if premium else '',
-                r=' -r {}'.format(
-                    rfs.storage_cluster.vm_disk_map[offset].raid_level),
-                s=' -s {}'.format(rfs.storage_cluster.file_server.type),
-            )
-        ssh_priv_key, port, username, ip = _get_ssh_info(
-            compute_client, network_client, config, None, vm.name)
-        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
-               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_priv_key), '-p', str(port),
-               '{}@{}'.format(username, ip), 'sudo']
-        cmd.extend(script_cmd.split())
-        proc = util.subprocess_nowait_pipe_stdout(cmd)
-        stdout = proc.communicate()[0]
-        if util.is_not_empty(stdout):
-            stdout = stdout.decode('utf8')
-            if util.on_windows():
-                stdout = stdout.replace('\n', os.linesep)
-        vms[offset]['status'] = proc.returncode
-        vms[offset]['stdout'] = '>>stdout>> {}:{}{}'.format(
-            vm.name, os.linesep, stdout)
-    logger.info('disk attach operations completed')
-    for key in vms:
-        entry = vms[key]
-        vm = entry['vm']
-        log = 'bootstrap exit code for virtual machine {}: {}'.format(
-            vm.name, entry['status'])
-        if entry['status'] == 0:
-            logger.info(log)
-            logger.debug(entry['stdout'])
-        else:
-            logger.error(log)
-            logger.error(entry['stdout'])
-    return True
 
 
 def _deallocate_virtual_machine(compute_client, rg_name, vm_name):
@@ -1446,10 +1721,6 @@ def suspend_storage_cluster(compute_client, config, wait=False):
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
-    if not util.confirm_action(
-            config, 'suspend storage cluster {}'.format(
-                rfs.storage_cluster.id)):
-        return
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
@@ -1472,14 +1743,14 @@ def suspend_storage_cluster(compute_client, config, wait=False):
     # check if glusterfs and warn
     if rfs.storage_cluster.file_server.type == 'glusterfs':
         logger.warning(
-            'Suspending a glusterfs cluster is risky. Depending upon the '
-            'volume type and state of the bricks at the time of suspension, '
-            'a variety of issues can occur such as: unsuccessful restart of '
-            'the cluster, split brain, or even data loss.')
-        if not util.confirm_action(
-                config, 'suspend glusterfs storage cluster {}'.format(
-                    rfs.storage_cluster.id)):
-            return
+            '**WARNING** Suspending a glusterfs cluster is risky. Depending '
+            'upon the volume type and state of the bricks at the time of '
+            'suspension, a variety of issues can occur such as: unsuccessful '
+            'restart of the cluster, split-brain states, or even data loss.')
+    if not util.confirm_action(
+            config, 'suspend storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
     # deallocate each vm
     async_ops = []
     for vm in vms:
@@ -1504,10 +1775,6 @@ def start_storage_cluster(compute_client, config, wait=False):
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
-    if not util.confirm_action(
-            config, 'start suspended storage cluster {}'.format(
-                rfs.storage_cluster.id)):
-        return
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
@@ -1527,6 +1794,10 @@ def start_storage_cluster(compute_client, config, wait=False):
     if len(vms) == 0:
         logger.error('no virtual machines to restart')
         return
+    if not util.confirm_action(
+            config, 'start suspended storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
     # start each vm
     async_ops = []
     for vm in vms:
@@ -1541,9 +1812,10 @@ def start_storage_cluster(compute_client, config, wait=False):
 
 
 def stat_storage_cluster(
-        compute_client, network_client, config, status_script):
+        compute_client, network_client, config, status_script, detail=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        bool) -> None
     """Retrieve status of a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1551,6 +1823,7 @@ def stat_storage_cluster(
         network client
     :param dict config: configuration dict
     :param str status_script: status script
+    :param bool detail: detailed status
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -1607,17 +1880,20 @@ def stat_storage_cluster(
                 'type': str(dd.managed_disk.storage_account_type),
             }
         disks['disk_array_size_gb'] = total_size_gb
-        # verbose settings: run stat script via ssh
-        if settings.verbose(config):
+        # detailed settings: run stat script via ssh
+        if detail:
             ssh_priv_key, port, username, ip = _get_ssh_info(
                 compute_client, network_client, config, None, vm.name, pip=pip)
             offset = int(vm.name.split('-vm')[-1])
-            script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{r}{s}'.format(
+            script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{n}{r}{s}'.format(
                 sf=status_script,
                 f=' -f {}'.format(
                     rfs.storage_cluster.vm_disk_map[offset].filesystem),
                 m=' -m {}'.format(
                     rfs.storage_cluster.file_server.mountpoint),
+                n=' -n {}'.format(
+                    settings.get_file_server_glusterfs_volume_name(
+                        rfs.storage_cluster)),
                 r=' -r {}'.format(
                     rfs.storage_cluster.vm_disk_map[offset].raid_level),
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
@@ -1659,12 +1935,12 @@ def stat_storage_cluster(
             'network_security_group': nsg,
             'data_disks': disks,
         }
-    if settings.verbose(config):
+    if detail:
         log = '{}{}{}{}'.format(
             json.dumps(vmstatus, sort_keys=True, indent=4),
             os.linesep, os.linesep,
             '{}{}'.format(os.linesep, os.linesep).join(
-                fsstatus) if settings.verbose(config) else '')
+                fsstatus) if detail else '')
     else:
         log = '{}'.format(json.dumps(vmstatus, sort_keys=True, indent=4))
     logger.info('storage cluster {} virtual machine status:{}{}'.format(
@@ -1700,7 +1976,6 @@ def _get_ssh_info(
         vm = compute_client.virtual_machines.get(
             resource_group_name=rfs.storage_cluster.resource_group,
             vm_name=vm_name,
-            expand=computemodels.InstanceViewTypes.instance_view,
         )
     except msrestazure.azure_exceptions.CloudError as e:
         if e.status_code == 404:
