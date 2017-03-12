@@ -587,7 +587,7 @@ def _jobs_option(f):
         callback=callback)(f)
 
 
-def _fs_option(f):
+def fs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
         clictx.json_fs = value
@@ -637,7 +637,7 @@ def keyvault_options(f):
 
 def fs_options(f):
     f = _azure_subscription_id_option(f)
-    f = _fs_option(f)
+    f = fs_option(f)
     return f
 
 
@@ -699,62 +699,63 @@ def fs_cluster_resize(ctx):
 @click.option(
     '--delete-virtual-network', is_flag=True, help='Delete virtual network')
 @click.option(
-    '--wait', is_flag=True, help='Wait for deletion to complete')
+    '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
 def fs_cluster_del(
         ctx, delete_resource_group, delete_data_disks, delete_virtual_network,
-        wait):
+        no_wait):
     """Delete a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config, delete_resource_group, delete_data_disks,
-        delete_virtual_network, wait)
+        delete_virtual_network, not no_wait)
 
 
 @cluster.command('expand')
 @click.option(
-    '--rebalance', is_flag=True, help='Rebalance filesystem, if applicable')
+    '--no-rebalance', is_flag=True,
+    help='Do not rebalance filesystem, if applicable')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_cluster_expand(ctx, rebalance):
+def fs_cluster_expand(ctx, no_rebalance):
     """Expand a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_expand(
-        ctx.compute_client, ctx.network_client, ctx.config, rebalance)
+        ctx.compute_client, ctx.network_client, ctx.config, not no_rebalance)
 
 
 @cluster.command('suspend')
 @click.option(
-    '--wait', is_flag=True, help='Wait for suspension to complete')
+    '--no-wait', is_flag=True, help='Do not wait for suspension to complete')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_cluster_suspend(ctx, wait):
+def fs_cluster_suspend(ctx, no_wait):
     """Suspend a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_suspend(
-        ctx.compute_client, ctx.config, wait)
+        ctx.compute_client, ctx.config, not no_wait)
 
 
 @cluster.command('start')
 @click.option(
-    '--wait', is_flag=True, help='Wait for restart to complete')
+    '--no-wait', is_flag=True, help='Do not wait for restart to complete')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_cluster_start(ctx, wait):
+def fs_cluster_start(ctx, no_wait):
     """Starts a previously suspended filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_start(
-        ctx.compute_client, ctx.network_client, ctx.config, wait)
+        ctx.compute_client, ctx.network_client, ctx.config, not no_wait)
 
 
 @cluster.command('status')
@@ -818,16 +819,17 @@ def fs_disks_add(ctx):
     '--resource-group',
     help='Delete disks matching specified resource group only')
 @click.option(
-    '--wait', is_flag=True, help='Wait for disk deletion to complete')
+    '--no-wait', is_flag=True,
+    help='Do not wait for disk deletion to complete')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_disks_del(ctx, all, name, resource_group, wait):
+def fs_disks_del(ctx, all, name, resource_group, no_wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_del(
-        ctx.compute_client, ctx.config, name, resource_group, all, wait)
+        ctx.compute_client, ctx.config, name, resource_group, all, not no_wait)
 
 
 @disks.command('list')
@@ -999,6 +1001,7 @@ def pool_listskus(ctx):
 
 @pool.command('add')
 @common_options
+@fs_option
 @batch_options
 @keyvault_options
 @aad_options

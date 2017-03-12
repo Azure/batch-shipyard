@@ -17,7 +17,7 @@ to the script.
 If on Windows or Mac, you will need to invoke the Python interpreter and pass
 the script as an argument. For example:
 ```
-C:\Python35\python.exe shipyard.py
+C:\Python36\python.exe shipyard.py
 ```
 The `-h` or `--help` option will list the available options, which are
 explained below.
@@ -61,10 +61,11 @@ shipyard pool add -h
 ```
 
 ## Shared Options
-There are a set of shared options which are used for every sub-command.
+There are a set of shared options which are used between most sub-commands.
 These options must be specified after the command and sub-command. These are:
 ```
   -y, --yes                       Assume yes for all confirmation prompts
+  --show-config                   Show configuration
   -v, --verbose                   Verbose output
   --configdir TEXT                Configuration directory where all
                                   configuration files can be found. Each json
@@ -75,11 +76,14 @@ These options must be specified after the command and sub-command. These are:
                                   option.
   --credentials TEXT              Credentials json config file
   --config TEXT                   Global json config file
+  --fs TEXT                       Filesystem json config file
   --pool TEXT                     Pool json config file
   --jobs TEXT                     Jobs json config file
+  --subscription-id TEXT          Azure Subscription ID
   --keyvault-uri TEXT             Azure KeyVault URI
   --keyvault-credentials-secret-id TEXT
                                   Azure KeyVault credentials secret id
+  --aad-endpoint TEXT             Azure Active Directory endpoint
   --aad-directory-id TEXT         Azure Active Directory directory (tenant) id
   --aad-application-id TEXT       Azure Active Directory application (client)
                                   id
@@ -92,6 +96,7 @@ These options must be specified after the command and sub-command. These are:
                                   thumbprint
 ```
 * `-y` or `--yes` is to assume yes for all confirmation prompts
+* `--show-config` will output the merged configuration prior to execution
 * `-v` or `--verbose` is for verbose output
 * `--configdir path` can be used instead of the individual config switches
 below if all configuration json files are in one directory and named after
@@ -104,9 +109,18 @@ following:
   * `--config path/to/config.json` is required for all actions.
   * `--pool path/to/pool.json` is required for most actions.
   * `--jobs path/to/jobs.json` is required for job-related actions.
+  * `--fs path/to/fs.json` is required for fs-related actions and some pool
+    actions.
+* `--subscription-id` is the Azure Subscription Id associated with the
+Batch account or Remote file system resources. This is only required for
+creating pools with a virtual network specification or with `fs` commands.
 * `--keyvault-uri` is required for all `keyvault` commands.
 * `--keyvault-credentials-secret-id` is required if utilizing a credentials
 json stored in Azure KeyVault
+* `--aad-endpoint` is the Active Directory endpoint for the resource. Note
+that this can cause conflicts for actions that require multiple endpoints
+for different resources. It is better to specify endpoints explicitly in
+the credential file.
 * `--aad-directory-id` is the Active Directory Directory Id (or Tenant Id)
 * `--aad-application-id` is the Active Directory Application Id (or Client Id)
 * `--aad-auth-key` is the authentication key for the application (or client)
@@ -129,9 +143,12 @@ instead:
 * `SHIPYARD_CONFIG_JSON` in lieu of `--config`
 * `SHIPYARD_POOL_JSON` in lieu of `--pool`
 * `SHIPYARD_JOBS_JSON` in lieu of `--jobs`
+* `SHIPYARD_FS_JSON` in lieu of `--fs`
+* `SHIPYARD_SUBSCRIPTION_ID` in lieu of `--subscription-id`
 * `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
 * `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
 `--keyvault-credentials-secret-id`
+* `SHIPYARD_AAD_ENDPOINT` in lieu of `--aad-endpoint`
 * `SHIPYARD_AAD_DIRECTORY_ID` in lieu of `--aad-directory-id`
 * `SHIPYARD_AAD_APPLICATION_ID` in lieu of `--aad-application-id`
 * `SHIPYARD_AAD_AUTH_KEY` in lieu of `--aad-auth-key`
@@ -146,6 +163,7 @@ commands:
 ```
   cert      Certificate actions
   data      Data actions
+  fs        Filesystem in Azure actions
   jobs      Jobs actions
   keyvault  KeyVault actions
   pool      Pool actions
@@ -153,13 +171,15 @@ commands:
 ```
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
+* `fs` commands deal with Batch Shipyard provisioned remote filesystems in
+Azure
 * `jobs` commands deal with Azure Batch jobs and tasks
 * `keyvault` commands deal with Azure KeyVault secrets for use with Batch
 Shipyard
 * `pool` commands deal with Azure Batch pools
 * `storage` commands deal with Batch Shipyard metadata on Azure Storage
 
-## Certificate Command
+## `cert` Command
 The `cert` command has the following sub-commands:
 ```
   add     Add a certificate to a Batch account
@@ -175,7 +195,7 @@ then invoked the `cert add` command. Please see the
 * `del` will delete a certificate from the Batch account
 * `list` will list certificates in the Batch account
 
-## Data Command
+## `data` Command
 The `data` command has the following sub-commands:
 ```
   getfile      Retrieve file(s) from a job/task
@@ -211,7 +231,77 @@ or binary if streamed to disk
     running task within the job of `<jobid>` will be used to locate the
     `<filename>`.
 
-## Jobs Command
+## `fs` Command
+The `fs` command has the following sub-commands which work on two different
+parts of a remote filesystem:
+```
+  cluster  Filesystem storage cluster in Azure actions
+  disks    Managed disk actions
+```
+
+### `fs cluster` Command
+`fs cluster` command has the following sub-commands:
+```
+  add      Create a filesystem storage cluster in Azure
+  del      Delete a filesystem storage cluster in Azure
+  expand   Expand a filesystem storage cluster in Azure
+  resize   Resize a filesystem storage cluster in Azure.
+  ssh      Interactively login via SSH to a filesystem...
+  start    Starts a previously suspended filesystem...
+  status   Query status of a filesystem storage cluster...
+  suspend  Suspend a filesystem storage cluster in Azure
+```
+* `add` will create a remote fs cluster as defined in the fs config file
+* `del` will delete a remote fs cluster as defined in the fs config file
+  * `--delete-resource-group` will delete the entire resource group that
+    contains the server. Please take care when using this option as any
+    resource in the resoure group is deleted which may be other resources
+    that are not Batch Shipyard related.
+  * `--delete-data-disks` will delete attached data disks
+  * `--delete-virtual-network` will delete the virtual network and all of
+    its subnets
+  * `--no-wait` does not wait for deletion completion. It is not recommended
+    to use this parameter.
+* `expand` expands the number of disks used by the underlying filesystems on
+the file server.
+  * `--no-rebalance` rebalances the data and metadata among the disks for
+    better data spread and performance after the disk is added to the array.
+* `resize` resizes the storage cluster with additional virtual machines as
+specified in the configuration. This is an experimental feature.
+* `ssh` will interactively log into a virtual machine in the storage cluster
+  * `--cardinal` is the zero-based cardinal number of the virtual machine in
+    the storage cluster to connect to
+  * `--hostname` is the hostname of the virtual machine in the storage cluster
+    to connect to
+* `start` will start a previously suspended storage cluster
+  * `--no-wait` does not wait for the restart to complete. It is not
+    recommended to use this parameter.
+* `status` displays the status of the storage cluster
+  * `--detail` reports in-depth details about each virtual machine in the
+    storage cluster
+* `suspend` suspends a storage cluster
+  * `--no-wait` does not wait for the suspension to complete. It is not
+    recommended to use this parameter.
+
+### `fs disks` Command
+`fs disks` command has the following sub-commands:
+```
+  add   Create managed disks in Azure
+  del   Delete managed disks in Azure
+  list  List managed disks in resource group
+```
+* `add` creates managed disks as specified in the fs config file
+* `del` deletes managed disks as specified in the fs config file
+  * `--all` deletes all managed disks found in a specified resource group
+  * `--name` deletes a specific named disk in a resource group
+  * `--no-wait` does not wait for disk deletion to complete. It is not
+    recommended to use this parameter.
+  * `--resource-group` deletes one or more managed disks in this resource group
+* `list` lists managed disks found in a resource group
+  * `--resource-group` lists disks in this resource group only
+  * `--restrict-scope` lists disks only if found in the fs config file
+
+## `jobs` Command
 The `jobs` command has the following sub-commands:
 ```
   add        Add jobs
@@ -261,7 +351,7 @@ user.
   * `--taskid` force termination scope to just this task id
   * `--wait` will wait for termination to complete
 
-## KeyVault Command
+## `keyvault` Command
 The `keyvault` command has the following sub-commands:
 ```
   add   Add a credentials json as a secret to Azure...
@@ -283,7 +373,7 @@ KeyVault. A valid credentials json must be specified as an option.
     from the KeyVault
 * `list` will list all secret ids and metadata in an Azure KeyVault
 
-## Pool Command
+## `pool` Command
 The `pool` command has the following sub-commands:
 ```
   add         Add a pool to the Batch account
@@ -335,7 +425,7 @@ command requires a valid SSH user.
   * `--digest` will restrict the update to just the image or image:tag and
     a specific digest
 
-## Storage Command
+## `storage` Command
 The `storage` command has the following sub-commands:
 ```
   clear  Clear Azure Storage containers used by Batch...
@@ -422,6 +512,10 @@ written to the host and persisted after the docker container exits. Otherwise,
 the generated files will only reside within the docker container and
 will not be available for use on the host (e.g., SSH into compute node with
 generated RSA private key or use the generated SSH docker tunnel script).
+
+## Remote Filesystem Support
+For more information regarding remote filesystems and Batch Shipyard,
+please see [this page](65-batch-shipyard-remote-fs.md).
 
 ## Data Movement
 For more information regarding data movement with respect to Batch Shipyard,

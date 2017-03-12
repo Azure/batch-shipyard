@@ -4,7 +4,7 @@
 
 # Batch Shipyard
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute batch-processing Docker workloads on
+provision and execute batch processing and HPC Docker workloads on
 [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) compute
 pools. No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
