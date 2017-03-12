@@ -13,6 +13,10 @@ Batch Shipyard and Docker-specific configuration settings
 Batch Shipyard pool configuration
 4. [Jobs](14-batch-shipyard-configuration-jobs.md) -
 Batch Shipyard jobs and tasks configuration
+5. [FS](15-batch-shipyard-configuration-fs.md) -
+Batch Shipyard remote filesystem configuration. This configuration is
+entirely optional unless using the remote filesystem capabilities of
+Batch Shipyard.
 
 Note that all potential properties are described here and that specifying
 all such properties may result in invalid configuration as some properties

@@ -10,6 +10,7 @@ and effectively running your batch-style Docker workloads on Azure Batch.
   2. [Global Configuration](12-batch-shipyard-configuration-global.md)
   3. [Pool Configuration](13-batch-shipyard-configuration-pool.md)
   4. [Jobs Configuration](14-batch-shipyard-configuration-jobs.md)
+  5. [FS Configuration](15-batch-shipyard-configuration-fs.md)
 5. [Usage](20-batch-shipyard-usage.md)
 6. [Data Movement](70-batch-shipyard-data-movement.md)
 7. [Azure KeyVault for Credential Management](74-batch-shipyard-azure-keyvault.md)

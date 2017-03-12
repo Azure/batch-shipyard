@@ -127,6 +127,18 @@ The global config schema is as follows:
                         "performance.cache-max-file-size 10 MB",
                         "performance.cache-refresh-timeout 61",
                     ]
+                },
+                "nfs_server": {
+                    "volume_driver": "storage_cluster",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/nfs_server",
+                    "mount_options": [
+                    ]
+                },
+                "glusterfs_cluster": {
+                    "volume_driver": "storage_cluster",
+                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/glusterfs_cluster",
+                    "mount_options": [
+                    ]
                 }
             }
         }
@@ -407,6 +419,26 @@ ingress/egress with their host path equivalents.
 Note that when resizing a pool with a `glusterfs_on_compute` shared file
 systems that you must resize with the `pool resize` command in `shipyard.py`
 and not with Azure Portal, Batch Explorer or any other tool.
+
+The third shared volume, `nfs_server` is an NFS server that is to be
+mounted on to compute node hosts. The name `nfs_server` should match the
+`remote_fs`:`storage_cluster`:`id` specified as your NFS server. These NFS
+servers can be configured using the `fs` command in Batch Shipyard. These
+volumes have the following properties:
+* (required) `volume_driver` property should be set as `storage_cluster`.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `mount_options` property defines additional mount options
+to pass when mounting this file system to the compute node.
+
+The fourth shared volume, `glusterfs_cluster` is a GlusterFS cluster that is
+mounted on to compute node hosts. The name `glusterfs_cluster` should match
+the `remote_fs`:`storage_cluster`:`id` specified as your GlusterFS cluster.
+These GlusterFS clusters can be configured using the `fs` command in Batch
+Shipyard. These volumes have the following properties:
+* (required) `volume_driver` property should be set as `storage_cluster`.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `mount_options` property defines additional mount options
+to pass when mounting this file system to the compute node.
 
 Finally, note that all `docker_volumes` can be omitted completely along with
 one or all of `data_volumes` and `shared_data_volumes` if you do not require
