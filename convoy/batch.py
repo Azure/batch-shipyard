@@ -485,7 +485,8 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             nodes = batch_client.compute_node.list(pool.id)
         if ssh_priv_key is None:
             ssh_priv_key = pathlib.Path(
-                pool.ssh.generated_file_export_path, crypto._SSH_KEY_PREFIX)
+                pool.ssh.generated_file_export_path,
+                crypto.get_ssh_key_prefix())
         ssh_args = [
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile={}'.format(os.devnull),

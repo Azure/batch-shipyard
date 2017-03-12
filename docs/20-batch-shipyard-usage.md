@@ -197,6 +197,8 @@ The `data` command has the following sub-commands:
   * `--filespec <nodeid>,<filename>` can be given to download one
     specific file from compute node
 * `ingress` will ingress data as specified in configuration files
+  * `--to-fs` transfers data as specified in configuration files to
+    a remote file system instead of Azure Storage
 * `listfiles` will list files for all tasks in jobs
   * `--jobid` force scope to just this job id
   * `--taskid` force scope to just this task id

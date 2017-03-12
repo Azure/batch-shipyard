@@ -1382,15 +1382,19 @@ def data_getfilenode(ctx, all, filespec):
 
 
 @data.command('ingress')
+@click.option(
+    '--to-fs', is_flag=True, help='Ingress data to a remote filesystem')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def data_ingress(ctx):
+def data_ingress(ctx, to_fs):
     """Ingress data into Azure"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_data_ingress(ctx.batch_client, ctx.config)
+    convoy.fleet.action_data_ingress(
+        ctx.batch_client, ctx.compute_client, ctx.network_client, ctx.config,
+        to_fs)
 
 
 if __name__ == '__main__':

@@ -40,7 +40,8 @@ except ImportError:
 from . import util
 
 # global defines
-_GLUSTER_VOLUME = '.gluster/gv0'
+_GLUSTER_DEFAULT_VOLNAME = 'gv0'
+_GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
 _GPU_COMPUTE_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
 ))
@@ -248,13 +249,22 @@ def _kv_read(conf, key, default=None):
     return ret
 
 
-def get_gluster_volume():
+def get_gluster_default_volume_name():
     # type: (None) -> str
-    """Get gluster volume mount suffix
+    """Get gluster default volume name
     :rtype: str
-    :return: gluster volume mount
+    :return: gluster default volume name
     """
-    return _GLUSTER_VOLUME
+    return _GLUSTER_DEFAULT_VOLNAME
+
+
+def get_gluster_on_compute_volume():
+    # type: (None) -> str
+    """Get gluster on compute volume mount suffix
+    :rtype: str
+    :return: gluster on compute volume mount
+    """
+    return _GLUSTER_ON_COMPUTE_VOLUME
 
 
 def can_tune_tcp(vm_size):
@@ -1306,7 +1316,7 @@ def files_destination_settings(fdict):
     try:
         ssh_private_key = pathlib.Path(
             conf['data_transfer']['ssh_private_key'])
-    except KeyError:
+    except (KeyError, TypeError):
         ssh_private_key = None
     try:
         container = conf['data_transfer']['container']
@@ -2101,7 +2111,7 @@ def task_settings(cloud_pool, config, poolconf, conf, missing_images):
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 run_opts.append('-v {}/{}:{}'.format(
                     '$AZ_BATCH_NODE_SHARED_DIR',
-                    get_gluster_volume(),
+                    get_gluster_on_compute_volume(),
                     shared_data_volume_container_path(sdv, sdvkey)))
             else:
                 run_opts.append('-v {}:{}'.format(

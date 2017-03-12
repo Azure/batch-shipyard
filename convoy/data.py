@@ -45,8 +45,11 @@ except ImportError:
     from pipes import quote as shellquote
 import threading
 import time
+# non-stdlib imports
+import azure.batch.models as batchmodels
 # local imports
 from . import crypto
+from . import resource
 from . import settings
 from . import storage
 from . import util
@@ -75,7 +78,7 @@ def _get_gluster_paths(config):
     for sdvkey in sdv:
         if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
             gluster_host = '$AZ_BATCH_NODE_SHARED_DIR/{}'.format(
-                settings.get_gluster_volume())
+                settings.get_gluster_on_compute_volume())
             gluster_container = settings.shared_data_volume_container_path(
                 sdv, sdvkey).rstrip('/')
             break
@@ -775,14 +778,21 @@ def wait_for_storage_threads(storage_threads):
 
 
 def ingress_data(
-        batch_client, config, rls=None, kind=None, current_dedicated=None):
-    # type: (batch.BatchServiceClient, dict, dict, str, int) -> list
-    """Ingresses data into Azure Batch
+        batch_client, compute_client, network_client, config, rls=None,
+        kind=None, current_dedicated=None):
+    # type: (batch.BatchServiceClient,
+    #        azure.mgmt.compute.ComputeManagementClient, dict, dict, str,
+    #        int) -> list
+    """Ingresses data into Azure
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
     :param dict config: configuration dict
     :param dict rls: remote login settings
-    :param str kind: 'all', 'shared', or 'storage'
+    :param str kind: 'all', 'shared', 'storage', or 'remotefs'
     :param int current_dedicated: current dedicated
     :rtype: list
     :return: list of storage threads
@@ -821,33 +831,15 @@ def ingress_data(
                         'a shared data volume as the ingress destination '
                         'instead.')
         if dest.shared_data_volume is not None or direct_single_node:
-            if rls is None:
-                logger.warning(
-                    'skipping data ingress from {} to {} for pool with no '
-                    'remote login settings or non-existent pool'.format(
-                        source.path, dest.shared_data_volume))
-                continue
             if kind == 'storage':
                 logger.warning(
                     'skipping data ingress from {} to {} for pool as ingress '
                     'to shared file system not specified'.format(
                         source.path, dest.shared_data_volume))
                 continue
-            if pool.ssh.username is None:
-                raise RuntimeError(
-                    'cannot ingress data to shared data volume without a '
-                    'valid SSH user')
-            if dest.data_transfer.ssh_private_key is None:
-                # use default name for private key
-                ssh_private_key = pathlib.Path(crypto.get_ssh_key_prefix())
-            else:
-                ssh_private_key = dest.data_transfer.ssh_private_key
-            if not ssh_private_key.exists():
-                raise RuntimeError(
-                    'ssh private key does not exist at: {}'.format(
-                        ssh_private_key))
-            logger.debug('using ssh_private_key from: {}'.format(
-                ssh_private_key))
+            # get rfs settings
+            rfs = settings.remotefs_settings(config)
+            dst_rfs = False
             # set base dst path
             dst = '{}/batch/tasks/'.format(
                 settings.temp_disk_mountpoint(config))
@@ -858,13 +850,80 @@ def ingress_data(
                     if sdvkey == dest.shared_data_volume:
                         if settings.is_shared_data_volume_gluster_on_compute(
                                 sdv, sdvkey):
+                            if kind == 'remotefs':
+                                continue
                             dst = '{}shared/{}/'.format(
-                                dst, settings.get_gluster_volume())
+                                dst, settings.get_gluster_on_compute_volume())
+                        elif settings.is_shared_data_volume_storage_cluster(
+                                sdv, sdvkey):
+                            if kind != 'remotefs':
+                                continue
+                            dst = rfs.storage_cluster.file_server.mountpoint
+                            # add trailing directory separator if needed
+                            if dst[-1] != '/':
+                                dst = dst + '/'
+                            dst_rfs = True
                         else:
                             raise RuntimeError(
                                 'data ingress to {} not supported'.format(
                                     sdvkey))
                         break
+            # skip entries that are a mismatch if remotefs transfer
+            # is selected
+            if kind == 'remotefs':
+                if not dst_rfs:
+                    continue
+            else:
+                if dst_rfs:
+                    continue
+            # set ssh info
+            ssh_private_key = None
+            # use default name for private key if not specified
+            if dst_rfs:
+                username = rfs.storage_cluster.ssh.username
+                if dest.data_transfer.ssh_private_key is None:
+                    ssh_private_key = pathlib.Path(
+                        crypto.get_remotefs_ssh_key_prefix())
+                #  retrieve public ips from all vms in named storage cluster
+                rls = {}
+                for i in range(rfs.storage_cluster.vm_count):
+                    vm_name = '{}-vm{}'.format(
+                        rfs.storage_cluster.hostname_prefix, i)
+                    vm = compute_client.virtual_machines.get(
+                        resource_group_name=rfs.storage_cluster.resource_group,
+                        vm_name=vm_name,
+                    )
+                    _, pip = resource.get_nic_and_pip_from_virtual_machine(
+                        network_client, rfs.storage_cluster.resource_group, vm)
+                    # create compute node rls settings with sc vm ip/port
+                    rls[vm_name] = \
+                        batchmodels.ComputeNodeGetRemoteLoginSettingsResult(
+                            remote_login_ip_address=pip.ip_address,
+                            remote_login_port=22,
+                        )
+            else:
+                username = pool.ssh.username
+                if dest.data_transfer.ssh_private_key is None:
+                    ssh_private_key = pathlib.Path(
+                        crypto.get_ssh_key_prefix())
+            if rls is None:
+                logger.warning(
+                    'skipping data ingress from {} to {} for pool with no '
+                    'remote login settings or non-existent pool'.format(
+                        source.path, dest.shared_data_volume))
+                continue
+            if username is None:
+                raise RuntimeError(
+                    'cannot ingress data to shared data volume without a '
+                    'valid SSH user')
+            if ssh_private_key is None:
+                ssh_private_key = dest.data_transfer.ssh_private_key
+            if ssh_private_key is None or not ssh_private_key.exists():
+                raise RuntimeError(
+                    'ssh private key is invalid or does not exist: {}'.format(
+                        ssh_private_key))
+            logger.debug('using ssh_private_key from: {}'.format(
+                ssh_private_key))
             if (dest.data_transfer.method == 'scp' or
                     dest.data_transfer.method == 'rsync+ssh'):
                 # split/source include/exclude will force multinode
@@ -873,17 +932,17 @@ def ingress_data(
                         source.include is not None or
                         source.exclude is not None):
                     _multinode_transfer(
-                        'multinode_' + dest.data_transfer.method, dest, source,
-                        dst, pool.ssh.username, ssh_private_key, rls, 1)
+                        'multinode_' + dest.data_transfer.method, dest,
+                        source, dst, username, ssh_private_key, rls, 1)
                 else:
                     _singlenode_transfer(
-                        dest, source.path, dst, pool.ssh.username,
-                        ssh_private_key, rls)
+                        dest, source.path, dst, username, ssh_private_key,
+                        rls)
             elif (dest.data_transfer.method == 'multinode_scp' or
                   dest.data_transfer.method == 'multinode_rsync+ssh'):
                 _multinode_transfer(
                     dest.data_transfer.method, dest, source, dst,
-                    pool.ssh.username, ssh_private_key, rls,
+                    username, ssh_private_key, rls,
                     dest.data_transfer.max_parallel_transfers_per_node)
             else:
                 raise RuntimeError(

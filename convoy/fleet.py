@@ -579,7 +579,7 @@ def _create_storage_cluster_mount_args(
         try:
             volname = sc.file_server.server_options['glusterfs']['volume_name']
         except KeyError:
-            volname = remotefs._GLUSTER_DEFAULT_VOLNAME
+            volname = settings.get_gluster_default_volume_name()
         # construct mount string for fstab, srcpath is the gluster volume
         fstab_mount = (
             '{remoteip}:/{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
@@ -1858,7 +1858,7 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
     ssh_priv_key = pathlib.Path(
-        pool.ssh.generated_file_export_path, crypto._SSH_KEY_PREFIX)
+        pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
@@ -2135,33 +2135,50 @@ def action_data_getfilenode(batch_client, config, all, nodeid):
         batch.get_file_via_node(batch_client, config, nodeid)
 
 
-def action_data_ingress(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_data_ingress(
+        batch_client, compute_client, network_client, config, to_fs):
+    # type: (batchsc.BatchServiceClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
     """Action: Data Ingress
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
     :param dict config: configuration dict
+    :param bool to_fs: ingress to remote filesystem
     """
     pool_cd = None
-    try:
-        # get pool current dedicated
-        pool = batch_client.pool.get(settings.pool_id(config))
-        pool_cd = pool.current_dedicated
-        del pool
-        # ensure there are remote login settings
-        rls = batch.get_remote_login_settings(
-            batch_client, config, nodes=None)
-        # ensure nodes are at least idle/running for shared ingress
-        kind = 'all'
-        if not batch.check_pool_nodes_runnable(
-                batch_client, config):
-            kind = 'storage'
-    except batchmodels.BatchErrorException as ex:
-        if 'The specified pool does not exist' in ex.message.value:
-            rls = None
-            kind = 'storage'
-        else:
-            raise
+    if not to_fs:
+        try:
+            # get pool current dedicated
+            pool = batch_client.pool.get(settings.pool_id(config))
+            pool_cd = pool.current_dedicated
+            del pool
+            # ensure there are remote login settings
+            rls = batch.get_remote_login_settings(
+                batch_client, config, nodes=None)
+            # ensure nodes are at least idle/running for shared ingress
+            kind = 'all'
+            if not batch.check_pool_nodes_runnable(
+                    batch_client, config):
+                kind = 'storage'
+        except batchmodels.BatchErrorException as ex:
+            if 'The specified pool does not exist' in ex.message.value:
+                rls = None
+                kind = 'storage'
+            else:
+                raise
+    else:
+        rls = None
+        kind = 'remotefs'
+        if compute_client is None or network_client is None:
+            raise RuntimeError(
+                'required ARM clients are invalid, please provide management '
+                'AAD credentials')
     storage_threads = data.ingress_data(
-        batch_client, config, rls=rls, kind=kind, current_dedicated=pool_cd)
+        batch_client, compute_client, network_client, config, rls=rls,
+        kind=kind, current_dedicated=pool_cd)
     data.wait_for_storage_threads(storage_threads)

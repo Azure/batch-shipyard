@@ -53,9 +53,6 @@ from . import util
 # create logger
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
-# global defines
-_SSH_KEY_PREFIX = 'id_rsa_shipyard_remotefs'
-_GLUSTER_DEFAULT_VOLNAME = 'gv0'
 
 
 def _create_managed_disk(compute_client, rfs, disk_name):
@@ -526,7 +523,7 @@ def _create_virtual_machine_extension(
         try:
             server_options.append(so[st]['volume_name'])
         except KeyError:
-            server_options.append(_GLUSTER_DEFAULT_VOLNAME)
+            server_options.append(settings.get_gluster_default_volume_name())
         try:
             server_options.append(so[st]['volume_type'])
         except KeyError:
@@ -755,7 +752,7 @@ def create_storage_cluster(
     if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
         _, ssh_pub_key = crypto.generate_ssh_keypair(
             rfs.storage_cluster.ssh.generated_file_export_path,
-            _SSH_KEY_PREFIX)
+            crypto.get_remotefs_ssh_key_prefix())
     else:
         ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
     with open(ssh_pub_key, 'rb') as fd:
@@ -1716,7 +1713,8 @@ def _get_ssh_info(
             network_client, rfs.storage_cluster.resource_group, vm)
     # connect to vm
     ssh_priv_key = pathlib.Path(
-        rfs.storage_cluster.ssh.generated_file_export_path, _SSH_KEY_PREFIX)
+        rfs.storage_cluster.ssh.generated_file_export_path,
+        crypto.get_remotefs_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
