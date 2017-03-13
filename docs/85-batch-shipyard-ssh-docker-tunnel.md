@@ -100,6 +100,7 @@ is unset. For example:
 ```shell
 export DOCKER_HOST=:
 docker run --rm -it busybox
+# other docker commands after this will automatically run on the compute node
 ```
 
 would create a busybox container on the remote compute node similar to
@@ -107,7 +108,7 @@ the prior command.
 
 To run a CUDA/GPU enabled docker image remotely with nvidia-docker, first you
 must install
-[nvidia-docker locally](https://github.com/NVIDIA/nvidia-docker/wiki/Installation)
+[nvidia-docker locally](https://github.com/NVIDIA/nvidia-docker#quick-start)
 in addition to docker as per the initial requirement. You can install
 nvidia-docker locally even without an Nvidia GPU or CUDA installed. It is
 simply required for the local command execution. If you do not have an Nvidia
@@ -119,6 +120,13 @@ with the `nvidia-docker` command instead:
 
 ```shell
 DOCKER_HOST=: nvidia-docker run --rm -it nvidia/cuda nvidia-smi
+
+# or, export the DOCKER_HOST env var first
+
+export DOCKER_HOST=:
+nvidia-docker run --rm -it nvidia/cuda nvidia-smi
+# other docker or nvidia-docker commands after this will automatically
+# run on the compute node
 ```
 
 Once you are finished with running your `docker` and/or `nvidia-docker`
@@ -128,7 +136,7 @@ the script, thus we would terminate the SSH tunnel with the following:
 
 ```shell
 kill 22204
-# unset DOCKER_HOST if exported
+# unset DOCKER_HOST if exported so docker commands are routed back to localhost
 unset DOCKER_HOST
 ```
 

@@ -677,11 +677,17 @@ def create_storage_cluster(
                      'vm offset {}').format(disk, disk_map, i))
             if (disk_map[disk][1] ==
                     computemodels.StorageAccountTypes.premium_lrs and
-                    not rfs.storage_cluster.vm_size.lower().endswith('s')):
+                    not settings.is_premium_storage_vm_size(
+                        rfs.storage_cluster.vm_size)):
                 raise RuntimeError(
                     ('Premium storage requires a DS, DS_V2, FS, GS or LS '
                      'series vm_size instead of {}'.format(
                          rfs.storage_cluster.vm_size)))
+    # confirm before proceeding
+    if not util.confirm_action(
+            config, 'create storage cluster {}'.format(
+                rfs.storage_cluster.id)):
+        return
     # create nsg
     nsg_op = _create_network_security_group(network_client, rfs)
     # create static private ip block

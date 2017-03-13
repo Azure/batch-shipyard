@@ -51,7 +51,13 @@ _GPU_VISUALIZATION_INSTANCES = frozenset((
 _GPU_INSTANCES = _GPU_COMPUTE_INSTANCES.union(_GPU_VISUALIZATION_INSTANCES)
 _RDMA_INSTANCES = frozenset((
     'standard_a8', 'standard_a9', 'standard_h16r', 'standard_h16mr',
-    'standard_nc24r'
+    'standard_nc24r',
+))
+_PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
+    'standard_ds', 'standard_gs',
+))
+_PREMIUM_STORAGE_INSTANCE_SUFFIXES = frozenset((
+    's',
 ))
 _VM_TCP_NO_TUNE = (
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
@@ -323,6 +329,22 @@ def is_rdma_pool(vm_size):
     :return: if rdma is present
     """
     if vm_size.lower() in _RDMA_INSTANCES:
+        return True
+    return False
+
+
+def is_premium_storage_vm_size(vm_size):
+    # type: (str) -> bool
+    """Check if vm size is premium storage compatible
+    :pararm str vm_size: vm size
+    :rtype: bool
+    :return: if vm size is premium storage compatible
+    """
+    if any([vm_size.lower().endswith(x)
+            for x in _PREMIUM_STORAGE_INSTANCE_SUFFIXES]):
+        return True
+    elif any([vm_size.lower().startswith(x)
+              for x in _PREMIUM_STORAGE_INSTANCE_PREFIXES]):
         return True
     return False
 
@@ -2112,6 +2134,11 @@ def task_settings(cloud_pool, config, poolconf, conf, missing_images):
                 run_opts.append('-v {}/{}:{}'.format(
                     '$AZ_BATCH_NODE_SHARED_DIR',
                     get_gluster_on_compute_volume(),
+                    shared_data_volume_container_path(sdv, sdvkey)))
+            elif is_shared_data_volume_storage_cluster(sdv, sdvkey):
+                run_opts.append('-v {}/{}:{}'.format(
+                    '$AZ_BATCH_NODE_SHARED_DIR',
+                    sdvkey,
                     shared_data_volume_container_path(sdv, sdvkey)))
             else:
                 run_opts.append('-v {}:{}'.format(
