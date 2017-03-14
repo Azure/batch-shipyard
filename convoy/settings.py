@@ -157,6 +157,11 @@ DataTransferSettings = collections.namedtuple(
         'container', 'file_share', 'blobxfer_extra_options',
     ]
 )
+UserIdentitySettings = collections.namedtuple(
+    'UserIdentitySettings', [
+        'default_pool_admin', 'specific_user_uid', 'specific_user_gid',
+    ]
+)
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
@@ -1944,13 +1949,14 @@ def set_task_id(conf, id):
     conf['id'] = id
 
 
-def task_settings(cloud_pool, config, poolconf, conf, missing_images):
-    # type: (azure.batch.models.CloudPool, dict, PoolSettings,
+def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
+    # type: (azure.batch.models.CloudPool, dict, PoolSettings, dict,
     #        dict, list) -> TaskSettings
     """Get task settings
     :param azure.batch.models.CloudPool cloud_pool: cloud pool object
     :param dict config: configuration dict
     :param PoolSettings poolconf: pool settings
+    :param dict jobspec: job specification
     :param dict conf: task configuration object
     :param list missing_images: list of missing docker images on pool
     :rtype: TaskSettings
@@ -1993,6 +1999,23 @@ def task_settings(cloud_pool, config, poolconf, conf, missing_images):
             lower()
         vm_size = cloud_pool.vm_size.lower()
         inter_node_comm = cloud_pool.enable_inter_node_communication
+    # get user identity settings
+    ui = _kv_read_checked(jobspec, 'user_identity', {})
+    ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
+    ui_specific = _kv_read(ui, 'specific_user', {})
+    ui_specific_uid = _kv_read(ui_specific, 'uid')
+    ui_specific_gid = _kv_read(ui_specific, 'gid')
+    del ui
+    del ui_specific
+    if ui_default_pool_admin and ui_specific_uid is not None:
+        raise ValueError(
+            'cannot specify both default_pool_admin and '
+            'specific_user:uid/gid at the same time')
+    ui = UserIdentitySettings(
+        default_pool_admin=ui_default_pool_admin,
+        specific_user_uid=ui_specific_uid,
+        specific_user_gid=ui_specific_gid,
+    )
     # get depends on
     try:
         depends_on = conf['depends_on']
@@ -2143,6 +2166,26 @@ def task_settings(cloud_pool, config, poolconf, conf, missing_images):
             else:
                 run_opts.append('-v {}:{}'.format(
                     sdvkey, shared_data_volume_container_path(sdv, sdvkey)))
+    # append user identity options
+    attach_ui = False
+    if ui.default_pool_admin:
+        # run as the default pool admin user. note that this is *undocumented*
+        # behavior and may break at anytime
+        run_opts.append('-u `id -u _azbatch`:`id -g _azbatch`')
+        attach_ui = True
+    elif ui.specific_user_uid is not None:
+        if ui.specific_user_gid is None:
+            raise ValueError(
+                'cannot specify a user identity uid without a gid')
+        run_opts.append(
+            '-u {}:{}'.format(ui.specific_user_uid, ui.specific_user_gid))
+        attach_ui = True
+    if attach_ui:
+        run_opts.append('-v /etc/passwd:/etc/passwd:ro')
+        run_opts.append('-v /etc/group:/etc/group:ro')
+        run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
+    del attach_ui
+    del ui
     # env vars
     try:
         env_vars = conf['environment_variables']

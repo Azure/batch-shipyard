@@ -43,7 +43,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     # create volume
     echo "creating gv0 ($bricks)"
     gluster volume create gv0 $voltype $numnodes transport tcp$bricks
-    # modify volume properties
+    # modify volume properties: the uid/gid mapping is UNDOCUMENTED behavior
     gluster volume set gv0 storage.owner-uid `id -u _azbatch`
     gluster volume set gv0 storage.owner-gid `id -g _azbatch`
     # start volume

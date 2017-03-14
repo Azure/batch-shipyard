@@ -1891,7 +1891,7 @@ def add_jobs(
                 settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
             del _task_id
             task = settings.task_settings(
-                cloud_pool, config, pool, _task, missing_images)
+                cloud_pool, config, pool, jobspec, _task, missing_images)
             # retrieve keyvault task env vars
             if util.is_not_empty(
                     task.environment_variables_keyvault_secret_id):

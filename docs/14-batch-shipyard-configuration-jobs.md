@@ -17,6 +17,13 @@ The jobs schema is as follows:
             "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 3,
             "allow_run_on_missing_image": false,
+            "user_identity": {
+                "default_pool_admin": true,
+                "specific_user": {
+                    "uid": 1001,
+                    "gid": 1001
+                }
+            },
             "input_data": {
                 "azure_batch": [
                     {
@@ -153,6 +160,20 @@ that was not pre-loaded on to the compute node via
 run. Note that you should attempt to specify all Docker images that you intend
 to run in the `global_resources`:`docker_images` property in the global
 configuration to minimize scheduling to task execution latency.
+* (optional) `user_identity` property is to define which user to run the
+container as. By default, if this property is not defined, the container will
+be run as the root user. However, it may be required to run the container
+with a different user, especially if integrating with storage cluster and
+shared file systems. All first-level properties within `user_identity` are
+mutually exclusive of one another.
+  * (optional) `default_pool_admin` specifies if the container should be
+    run with the default pool (compute node) administrator user that Azure
+    Batch automatically configures upon compute node start. This user will
+    have passwordless sudo access.
+  * (optional) `specific_user` specifies to run the container as a specific
+    user.
+    * (required) `uid` is the user id of the user
+    * (required) `gid` is the group id of the user
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
