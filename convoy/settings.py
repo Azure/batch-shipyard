@@ -2637,6 +2637,106 @@ def remotefs_settings(config):
     )
 
 
+def generate_availability_set_name(sc):
+    # type: (StorageClusterSettings) -> str
+    """Generate an availabilty set name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: availability set name
+    """
+    return '{}-as'.format(sc.hostname_prefix)
+
+
+def generate_virtual_machine_name(sc, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a virtual machine name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: vm name
+    """
+    return '{}-vm{}'.format(sc.hostname_prefix, i)
+
+
+def get_offset_from_virtual_machine_name(vm_name):
+    # type: (StorageClusterSettings) -> int
+    """Gets the virtual machine offset given a vm name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: int
+    :return: vm offset
+    """
+    return int(vm_name.split('-vm')[-1])
+
+
+def generate_virtual_machine_extension_name(sc, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a virtual machine extension name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: vm extension name
+    """
+    return '{}-vmext{}'.format(sc.hostname_prefix, i)
+
+
+def generate_network_security_group_name(sc):
+    # type: (StorageClusterSettings) -> str
+    """Generate a network security group name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: nsg name
+    """
+    return '{}-nsg'.format(sc.hostname_prefix)
+
+
+def generate_network_security_inbound_rule_name(rule_name, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a network security inbound rule name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: inbound rule name
+    """
+    return '{}_in-{}'.format(rule_name, i)
+
+
+def generate_network_security_inbound_rule_description(rule_name, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a network security inbound rule description
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: inbound description
+    """
+    return '{} inbound ({})'.format(rule_name, i)
+
+
+def generate_public_ip_name(sc, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a public ip name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: public ip name
+    """
+    return '{}-pip{}'.format(sc.hostname_prefix, i)
+
+
+def generate_hostname(sc, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a hostname (dns label prefix)
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: hostname
+    """
+    return '{}{}'.format(sc.hostname_prefix, i)
+
+
+def generate_network_interface_name(sc, i):
+    # type: (StorageClusterSettings) -> str
+    """Generate a network inetrface name
+    :param StorageClusterSettings sc: storage cluster settings
+    :rtype: str
+    :return: network interface name
+    """
+    return '{}-ni{}'.format(sc.hostname_prefix, i)
+
+
 def get_file_server_glusterfs_volume_name(sc):
     # type: (StorageClusterSettings) -> str
     """Get the glusterfs volume name

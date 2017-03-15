@@ -478,7 +478,7 @@ def _create_storage_cluster_mount_args(
     # get fileserver type
     if sc.file_server.type == 'nfs':
         # query first vm for info
-        vm_name = '{}-vm{}'.format(sc.hostname_prefix, 0)
+        vm_name = settings.generate_virtual_machine_name(sc, 0)
         vm = compute_client.virtual_machines.get(
             resource_group_name=sc.resource_group,
             vm_name=vm_name,
@@ -525,7 +525,7 @@ def _create_storage_cluster_mount_args(
         vms = {}
         # first pass, attempt to populate all ip, ud/fd
         for i in range(sc.vm_count):
-            vm_name = '{}-vm{}'.format(sc.hostname_prefix, i)
+            vm_name = settings.generate_virtual_machine_name(sc, i)
             vm = compute_client.virtual_machines.get(
                 resource_group_name=sc.resource_group,
                 vm_name=vm_name,
@@ -1444,12 +1444,13 @@ def action_fs_cluster_resize(
 
 def action_fs_cluster_del(
         resource_client, compute_client, network_client, blob_client, config,
-        delete_all_resources, delete_data_disks, delete_virtual_network, wait):
+        delete_all_resources, delete_data_disks, delete_virtual_network,
+        generate_from_prefix, wait):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService, dict, bool, bool,
-    #        bool, bool) -> None
+    #        bool, bool, bool) -> None
     """Action: Fs Cluster Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1462,13 +1463,20 @@ def action_fs_cluster_del(
     :param bool delete_all_resources: delete all resources
     :param bool delete_data_disks: delete data disks
     :param bool delete_virtual_network: delete virtual network
+    :param bool generate_from_prefix: generate resources from hostname prefix
     :param bool wait: wait for deletion to complete
     """
+    if (generate_from_prefix and
+            (delete_all_resources or delete_data_disks or
+             delete_virtual_network)):
+        raise ValueError(
+            'Cannot specify generate_from_prefix and a delete_* option')
     remotefs.delete_storage_cluster(
         resource_client, compute_client, network_client, config,
         delete_data_disks=delete_data_disks,
         delete_virtual_network=delete_virtual_network,
-        delete_resource_group=delete_all_resources, wait=wait)
+        delete_resource_group=delete_all_resources,
+        generate_from_prefix=generate_from_prefix, wait=wait)
     storage.delete_storage_containers_remotefs(blob_client, config)
 
 

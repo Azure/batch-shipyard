@@ -30,10 +30,12 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import functools
 import logging
 # non-stdlib imports
 import azure.mgmt.network.models as networkmodels
 import azure.mgmt.resource.resources.models as rgmodels
+import msrest.exceptions
 import msrestazure.azure_exceptions
 # local imports
 from . import util
@@ -41,6 +43,69 @@ from . import util
 # create logger
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
+
+
+class AsyncOperation(object):
+    """Async Operation handler with automatic retry"""
+    def __init__(
+            self, partial, max_retries=-1, auto_invoke=True,
+            retry_notfound=False):
+        """Ctor for AsyncOperation
+        :param AsyncOperation self: this
+        :param functools.partial partial: partial object
+        :param int max_retries: maximum number of retries before giving up
+        :param bool auto_invoke: automatically invoke the async operation
+        :param bool retry_notfound: retry on not found (404) errors
+        """
+        self._partial = partial
+        self._retry_count = 0
+        self._max_retries = max_retries
+        self._retry_notfound = retry_notfound
+        self._op = None
+        self._noop = False
+        if auto_invoke:
+            self._invoke()
+
+    def _invoke(self):
+        """Invoke helper
+        :param AsyncOperation self: this
+        """
+        if self._op is None:
+            self._op = self._partial()
+            if self._op is None:
+                self._noop = True
+
+    def result(self):
+        """Wait on async operation result
+        :param AsyncOperation self: this
+        :rtype: object
+        :return: result of async wait
+        """
+        while True:
+            if self._noop:
+                return self._op  # will return None
+            if (self._max_retries >= 0 and
+                    self._retry_count > self._max_retries):
+                raise RuntimeError(
+                    ('Ran out of retry attempts invoking {}(args={} '
+                     'kwargs={})').format(
+                         self._partial.func.__name__, self._partial.args,
+                         self._partial.keywords))
+            self._invoke()
+            try:
+                return self._op.result()
+            except (msrest.exceptions.ClientException,
+                    msrestazure.azure_exceptions.CloudError) as e:
+                if e.status_code == 404 and not self._retry_notfound:
+                    raise
+                logger.error('Async operation failed: {}'.format(e))
+            self._op = None
+            self._retry_count += 1
+            logger.debug(
+                ('Attempting retry of operation: {}, retry_count={} '
+                 'max_retries={}').format(
+                     self._partial.func.__name__, self._retry_count,
+                     self._max_retries if self._max_retries >= 0 else 'inf'))
 
 
 def create_resource_group(resource_client, resource_group, location):
@@ -74,7 +139,7 @@ def create_virtual_network_and_subnet(
     #        azure.mgmt.network.NetworkManagementClient, str, str,
     #        settings.VirtualNetworkSettings) ->
     #        Tuple[networkmodels.VirtualNetwork, networkmodels.Subnet]
-    """Create a Virtual network and subnet
+    """Create a Virtual network and subnet. This is a blocking function.
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.network.NetworkManagementClient network_client:
@@ -113,7 +178,8 @@ def create_virtual_network_and_subnet(
         # create resource group if needed
         create_resource_group(resource_client, resource_group, location)
         logger.info('creating virtual network: {}'.format(vnet_settings.name))
-        async_create = network_client.virtual_networks.create_or_update(
+        async_create = AsyncOperation(functools.partial(
+            network_client.virtual_networks.create_or_update,
             resource_group_name=resource_group,
             virtual_network_name=vnet_settings.name,
             parameters=networkmodels.VirtualNetwork(
@@ -124,7 +190,7 @@ def create_virtual_network_and_subnet(
                     ],
                 ),
             ),
-        )
+        ))
         virtual_network = async_create.result()
     # attach subnet
     exists = False
@@ -154,14 +220,15 @@ def create_virtual_network_and_subnet(
                      vnet_settings.subnet_name))
         logger.info('attaching subnet {} to virtual network {}'.format(
             vnet_settings.subnet_name, vnet_settings.name))
-        async_create = network_client.subnets.create_or_update(
+        async_create = AsyncOperation(functools.partial(
+            network_client.subnets.create_or_update,
             resource_group_name=resource_group,
             virtual_network_name=vnet_settings.name,
             subnet_name=vnet_settings.subnet_name,
             subnet_parameters=networkmodels.Subnet(
                 address_prefix=vnet_settings.subnet_address_prefix
             )
-        )
+        ))
         subnet = async_create.result()
     logger.info(
         ('virtual network: {} [provisioning_state={} address_space={} '

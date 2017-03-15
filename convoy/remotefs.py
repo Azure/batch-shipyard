@@ -30,6 +30,7 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import functools
 import json
 import logging
 import os
@@ -104,7 +105,7 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
         resource_client, rfs.managed_disks.resource_group, rfs.location)
     # iterate disks and create disks if they don't exist
     existing_disk_sizes = set()
-    async_ops = []
+    async_ops = {}
     for disk_name in rfs.managed_disks.disk_names:
         try:
             disk = compute_client.disks.get(
@@ -124,9 +125,9 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
                              rfs.managed_disks.disk_size_gb,
                              existing_disk_sizes)
                     )
-                async_ops.append(
-                    _create_managed_disk(compute_client, rfs, disk_name)
-                )
+                async_ops[disk_name] = resource.AsyncOperation(
+                    functools.partial(
+                        _create_managed_disk, compute_client, rfs, disk_name))
             else:
                 raise
     # block for all ops to complete if specified
@@ -136,8 +137,8 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
         if len(async_ops) > 0:
             logger.debug('waiting for all {} disks to be created'.format(
                 len(async_ops)))
-        for op in async_ops:
-            disk = op.result()
+        for disk_name in async_ops:
+            disk = async_ops[disk_name].result()
             logger.info('{} created with size of {} GB'.format(
                 disk.id, disk.disk_size_gb))
 
@@ -146,7 +147,7 @@ def delete_managed_disks(
         compute_client, config, name, resource_group=None, all=False,
         wait=False, confirm_override=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str or list,
-    #        bool, bool, bool) -> None
+    #        bool, bool, bool) -> dict
     """Delete managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -156,6 +157,9 @@ def delete_managed_disks(
     :param bool all: delete all disks in resource group
     :param bool wait: wait for operation to complete
     :param bool confirm_override: override confirmation of delete
+    :rtype: dict or None
+    :return: dictionary of disk names -> async ops if wait is False,
+        otherwise None
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -176,7 +180,7 @@ def delete_managed_disks(
             else:
                 disks = [name]
     # iterate disks and delete them
-    async_ops = []
+    async_ops = {}
     for disk_name in disks:
         if (not confirm_override and not util.confirm_action(
                 config,
@@ -185,17 +189,16 @@ def delete_managed_disks(
             continue
         logger.info('deleting managed disk {} in resource group {}'.format(
             disk_name, resource_group))
-        async_ops.append(
-            compute_client.disks.delete(
-                resource_group_name=resource_group, disk_name=disk_name)
-        )
+        async_ops[disk_name] = resource.AsyncOperation(functools.partial(
+            compute_client.disks.delete, resource_group_name=resource_group,
+            disk_name=disk_name))
     # block for all ops to complete if specified
     if wait:
         if len(async_ops) > 0:
             logger.debug('waiting for all {} disks to be deleted'.format(
                 len(async_ops)))
-        for op in async_ops:
-            op.result()
+        for disk_name in async_ops:
+            async_ops[disk_name].result()
         logger.info('{} managed disks deleted in resource group {}'.format(
             len(async_ops), resource_group))
     else:
@@ -280,7 +283,8 @@ def _create_network_security_group(network_client, rfs):
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: async op poller
     """
-    nsg_name = '{}-nsg'.format(rfs.storage_cluster.hostname_prefix)
+    nsg_name = settings.generate_network_security_group_name(
+        rfs.storage_cluster)
     # TODO check and fail if nsg exists
     # create security rules as found in settings
     priority = 100
@@ -300,8 +304,10 @@ def _create_network_security_group(network_client, rfs):
                 raise ValueError('Unknown protocol {} for rule {}'.format(
                     proto, nsi))
             security_rules.append(networkmodels.SecurityRule(
-                name='{}_in-{}'.format(nsi, i),
-                description='{} inbound ({})'.format(nsi, i),
+                name=settings.generate_network_security_inbound_rule_name(
+                    nsi, i),
+                description=settings.
+                generate_network_security_inbound_rule_description(nsi, i),
                 protocol=proto,
                 source_port_range='*',
                 destination_port_range=str(ir.destination_port_range),
@@ -332,20 +338,21 @@ def _create_network_security_group(network_client, rfs):
 def _create_public_ip(network_client, rfs, offset):
     # type: (azure.mgmt.network.NetworkManagementClient,
     #        settings.RemoteFsSettings, networkmodels.Subnet, int) ->
-    #        Tuple[int, msrestazure.azure_operation.AzureOperationPoller]
+    #        msrestazure.azure_operation.AzureOperationPoller
     """Create a network interface
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param settings.RemoteFsSettings rfs: remote filesystem settings
     :param int offset: public ip number
-    :rtype: tuple
-    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: msrestazure.azure_operation.AzureOperationPoller
     """
-    pip_name = '{}-pip{}'.format(rfs.storage_cluster.hostname_prefix, offset)
-    hostname = '{}{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    pip_name = settings.generate_public_ip_name(rfs.storage_cluster, offset)
+    hostname = settings.generate_hostname(rfs.storage_cluster, offset)
     # TODO check and fail if pip exists
-    logger.debug('creating public ip: {}'.format(pip_name))
-    return offset, network_client.public_ip_addresses.create_or_update(
+    logger.debug('creating public ip: {} with label: {}'.format(
+        pip_name, hostname))
+    return network_client.public_ip_addresses.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         public_ip_address_name=pip_name,
         parameters=networkmodels.PublicIPAddress(
@@ -369,8 +376,7 @@ def _create_network_interface(
     # type: (azure.mgmt.network.NetworkManagementClient,
     #        settings.RemoteFsSettings, networkmodels.Subnet,
     #        networkmodels.NetworkSecurityGroup, List[str], dict, int) ->
-    #        Tuple[int, networkmodels.PublicIPAddress,
-    #              msrestazure.azure_operation.AzureOperationPoller]
+    #        msrestazure.azure_operation.AzureOperationPoller
     """Create a network interface
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
@@ -380,10 +386,11 @@ def _create_network_interface(
     :param list private_ips: list of static private ips
     :param dict pips: public ip map
     :param int offset: network interface number
-    :rtype: tuple
-    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: msrestazure.azure_operation.AzureOperationPoller
     """
-    nic_name = '{}-ni{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    nic_name = settings.generate_network_interface_name(
+        rfs.storage_cluster, offset)
     # TODO check and fail if nic exists
     # create network ip config
     if private_ips is None:
@@ -404,7 +411,7 @@ def _create_network_interface(
 
         )
     logger.debug('creating network interface: {}'.format(nic_name))
-    return offset, network_client.network_interfaces.create_or_update(
+    return network_client.network_interfaces.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         network_interface_name=nic_name,
         parameters=networkmodels.NetworkInterface(
@@ -433,7 +440,8 @@ def _create_virtual_machine(
     :rtype: tuple
     :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
     """
-    vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, offset)
+    vm_name = settings.generate_virtual_machine_name(
+        rfs.storage_cluster, offset)
     # construct data disks array
     lun = 3
     data_disks = []
@@ -515,8 +523,8 @@ def _create_virtual_machine_extension(
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
     # construct vm extensions
-    vm_ext_name = '{}-vmext{}'.format(
-        rfs.storage_cluster.hostname_prefix, offset)
+    vm_ext_name = settings.generate_virtual_machine_extension_name(
+        rfs.storage_cluster, offset)
     # get premium storage settings
     premium = False
     for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
@@ -604,7 +612,7 @@ def _create_availability_set(compute_client, rfs):
     if rfs.storage_cluster.vm_count <= 1:
         logger.warning('insufficient vm_count for availability set')
         return None
-    as_name = '{}-as'.format(rfs.storage_cluster.hostname_prefix)
+    as_name = settings.generate_availability_set_name(rfs.storage_cluster)
     logger.debug('creating availability set: {}'.format(as_name))
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -655,7 +663,8 @@ def create_storage_cluster(
     del disk_names
     # check vms
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -689,14 +698,17 @@ def create_storage_cluster(
             config, 'create storage cluster {}'.format(
                 rfs.storage_cluster.id)):
         return
+    # async operation dictionary
+    async_ops = {}
     # create nsg
-    nsg_op = _create_network_security_group(network_client, rfs)
+    async_ops['nsg'] = resource.AsyncOperation(functools.partial(
+        _create_network_security_group, network_client, rfs))
     # create static private ip block
     if rfs.storage_cluster.file_server.type == 'nfs':
         private_ips = None
         logger.debug('using dynamic private ip address allocation')
     else:
-        # start offset at 4
+        # follow Azure numbering scheme: start offset at 4
         private_ips = [
             x for x in ip_from_address_prefix(
                 rfs.storage_cluster.virtual_network.subnet_address_prefix,
@@ -711,37 +723,36 @@ def create_storage_cluster(
         rfs.storage_cluster.virtual_network.resource_group, rfs.location,
         rfs.storage_cluster.virtual_network)
     # create public ips
-    async_ops = []
+    async_ops['pips'] = {}
     for i in range(rfs.storage_cluster.vm_count):
-        async_ops.append(_create_public_ip(network_client, rfs, i))
+        async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
+            _create_public_ip, network_client, rfs, i))
     logger.debug('waiting for public ips to be created')
     pips = {}
-    for offset, op in async_ops:
-        pip = op.result()
+    for offset in async_ops['pips']:
+        pip = async_ops['pips'][offset].result()
         logger.info(
             ('public ip: {} [provisioning_state={} ip_address={} '
              'public_ip_allocation={}]').format(
                  pip.id, pip.provisioning_state,
                  pip.ip_address, pip.public_ip_allocation_method))
         pips[offset] = pip
-    async_ops.clear()
     # get nsg
-    if nsg_op is None:
-        nsg = None
-    else:
-        logger.debug('waiting for network security group to be created')
-        nsg = nsg_op.result()
+    logger.debug('waiting for network security group to be created')
+    nsg = async_ops['nsg'].result()
     # create nics
-    nics = {}
+    async_ops['nics'] = {}
     for i in range(rfs.storage_cluster.vm_count):
-        async_ops.append(_create_network_interface(
-            network_client, rfs, subnet, nsg, private_ips, pips, i))
-    # create availability set if vm_count > 1
+        async_ops['nics'][i] = resource.AsyncOperation(functools.partial(
+            _create_network_interface, network_client, rfs, subnet, nsg,
+            private_ips, pips, i))
+    # create availability set if vm_count > 1, this call is not async
     availset = _create_availability_set(compute_client, rfs)
     # wait for nics to be created
     logger.debug('waiting for network interfaces to be created')
-    for offset, op in async_ops:
-        nic = op.result()
+    nics = {}
+    for offset in async_ops['nics']:
+        nic = async_ops['nics'][offset].result()
         logger.info(
             ('network interface: {} [provisioning_state={} private_ip={} '
              'private_ip_allocation_method={} network_security_group={} '
@@ -752,7 +763,6 @@ def create_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    async_ops.clear()
     # create universal ssh key for all vms if not specified
     if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
         _, ssh_pub_key = crypto.generate_ssh_keypair(
@@ -769,39 +779,38 @@ def create_storage_cluster(
     )
     del key_data
     # create vms
-    vms_async_ops = {}
+    async_ops['vms'] = {}
     for i in range(rfs.storage_cluster.vm_count):
-        vms_async_ops[i] = _create_virtual_machine(
-            compute_client, rfs, availset, nics, disk_map, ssh_pub_key, i)
+        async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
+            _create_virtual_machine, compute_client, rfs, availset, nics,
+            disk_map, ssh_pub_key, i))
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # wait for vms to be created
     logger.info(
         'waiting for {} virtual machines to be created'.format(
-            len(vms_async_ops)))
+            len(async_ops['vms'])))
     vms = {}
-    for offset in vms_async_ops:
-        # cache vm
-        vms[offset] = vms_async_ops[offset].result()
-    del vms_async_ops
+    for offset in async_ops['vms']:
+        vms[offset] = async_ops['vms'][offset].result()
     logger.debug('{} virtual machines created'.format(len(vms)))
     # wait for all vms to be created before installing extensions to prevent
     # variability in wait times and timeouts during customscript
-    vm_ext_ops = {}
+    async_ops['vmext'] = {}
     for i in range(rfs.storage_cluster.vm_count):
         # install vm extension
-        vm_ext_ops[i] = _create_virtual_machine_extension(
-            compute_client, rfs, bootstrap_file, blob_urls,
-            vms[i].name, disk_map, private_ips, i)
+        async_ops['vmext'][i] = resource.AsyncOperation(functools.partial(
+            _create_virtual_machine_extension, compute_client, rfs,
+            bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips, i))
     logger.debug('waiting for virtual machine extensions to be created')
-    for offset in vm_ext_ops:
+    for offset in async_ops['vmext']:
         # refresh public ip for vm
         pip = network_client.public_ip_addresses.get(
             resource_group_name=rfs.storage_cluster.resource_group,
             public_ip_address_name=pips[offset].name,
         )
         # get vm extension result
-        vm_ext = vm_ext_ops[offset].result()
+        vm_ext = async_ops['vmext'][offset].result()
         vm = vms[offset]
         logger.info(
             'virtual machine: {} [provisioning_state={}/{} fqdn={} '
@@ -836,6 +845,8 @@ def resize_storage_cluster(
         raise ValueError(
             'Resize is only supported on glusterfs storage clusters')
     # only allow certain types of resizes to proceed
+    # for now disallow resize on all stripe volumes, can be relaxed in
+    # the future
     voltype = settings.get_file_server_glusterfs_volume_type(
         rfs.storage_cluster).lower()
     if 'stripe' in voltype:
@@ -854,7 +865,8 @@ def resize_storage_cluster(
     subnet_name = None
     nsg_name = None
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -918,9 +930,11 @@ def resize_storage_cluster(
     ]
     logger.debug('static private ip block: {}'.format(private_ips))
     # create public ips
-    async_ops = []
+    async_ops = {}
+    async_ops['pips'] = {}
     for i in new_vms:
-        async_ops.append(_create_public_ip(network_client, rfs, i))
+        async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
+            _create_public_ip, network_client, rfs, i))
     # get subnet and nsg objects
     subnet = network_client.subnets.get(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -943,30 +957,31 @@ def resize_storage_cluster(
     # wait for pips
     logger.debug('waiting for public ips to be created')
     pips = {}
-    for offset, op in async_ops:
-        pip = op.result()
+    for offset in async_ops['pips']:
+        pip = async_ops['pips'][offset].result()
         logger.info(
             ('public ip: {} [provisioning_state={} ip_address={} '
              'public_ip_allocation={}]').format(
                  pip.id, pip.provisioning_state,
                  pip.ip_address, pip.public_ip_allocation_method))
         pips[offset] = pip
-    async_ops.clear()
     # create nics
     nics = {}
+    async_ops['nics'] = {}
     for i in new_vms:
-        async_ops.append(_create_network_interface(
-            network_client, rfs, subnet, nsg, private_ips, pips, i))
+        async_ops['nics'][i] = resource.AsyncOperation(functools.partial(
+            _create_network_interface, network_client, rfs, subnet, nsg,
+            private_ips, pips, i))
     # get availability set
     availset = compute_client.availability_sets.get(
         resource_group_name=rfs.storage_cluster.resource_group,
-        availability_set_name='{}-as'.format(
-            rfs.storage_cluster.hostname_prefix),
+        availability_set_name=settings.generate_availability_set_name(
+            rfs.storage_cluster),
     )
     # wait for nics to be created
     logger.debug('waiting for network interfaces to be created')
-    for offset, op in async_ops:
-        nic = op.result()
+    for offset in async_ops['nics']:
+        nic = async_ops['nics'][offset].result()
         logger.info(
             ('network interface: {} [provisioning_state={} private_ip={} '
              'private_ip_allocation_method={} network_security_group={} '
@@ -977,7 +992,6 @@ def resize_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    async_ops.clear()
     # create universal ssh key for all vms if not specified
     if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
         # check if ssh key exists first in default location
@@ -1001,10 +1015,11 @@ def resize_storage_cluster(
     )
     del key_data
     # create vms
-    vms_async_ops = {}
+    async_ops['vms'] = {}
     for i in new_vms:
-        vms_async_ops[i] = _create_virtual_machine(
-            compute_client, rfs, availset, nics, disk_map, ssh_pub_key, i)
+        async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
+            _create_virtual_machine, compute_client, rfs, availset, nics,
+            disk_map, ssh_pub_key, i))
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # gather all new private ips
@@ -1017,21 +1032,21 @@ def resize_storage_cluster(
     # wait for vms to be created
     logger.info(
         'waiting for {} virtual machines to be created'.format(
-            len(vms_async_ops)))
+            len(async_ops['vms'])))
     vms = {}
-    for offset in vms_async_ops:
-        # cache vm
-        vms[offset] = vms_async_ops[offset].result()
-    del vms_async_ops
+    for offset in async_ops['vms']:
+        vms[offset] = async_ops['vms'][offset].result()
     logger.debug('{} virtual machines created'.format(len(vms)))
     # wait for all vms to be created before installing extensions to prevent
     # variability in wait times and timeouts during customscript
-    vm_ext_ops = {}
+    async_ops['vmext'] = {}
     for i in new_vms:
         # install vm extension
-        vm_ext_ops[i] = _create_virtual_machine_extension(
-            compute_client, rfs, bootstrap_file, blob_urls,
-            vms[i].name, disk_map, private_ips, i)
+        async_ops['vmext'][i] = resource.AsyncOperation(functools.partial(
+            _create_virtual_machine_extension, compute_client, rfs,
+            bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips, i))
+    logger.debug('adding {} bricks to gluster volume'.format(
+        len(async_ops['vmext'])))
     # execute special add brick script
     script_cmd = \
         '/opt/batch-shipyard/{asf} {c}{i}{n}{v}'.format(
@@ -1067,14 +1082,14 @@ def resize_storage_cluster(
     del stdout
     # wait for new vms to finish custom script extension processing
     logger.debug('waiting for virtual machine extensions to be created')
-    for offset in vm_ext_ops:
+    for offset in async_ops['vmext']:
         # refresh public ip for vm
         pip = network_client.public_ip_addresses.get(
             resource_group_name=rfs.storage_cluster.resource_group,
             public_ip_address_name=pips[offset].name,
         )
         # get vm extension result
-        vm_ext = vm_ext_ops[offset].result()
+        vm_ext = async_ops['vmext'][offset].result()
         vm = vms[offset]
         logger.info(
             'virtual machine: {} [provisioning_state={}/{} fqdn={} '
@@ -1122,7 +1137,8 @@ def expand_storage_cluster(
             raise RuntimeError(
                 'Cannot expand mdadm-based RAID-0 volumes. Please re-create '
                 'your storage cluster with btrfs using new disks.')
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -1185,7 +1201,7 @@ def expand_storage_cluster(
                 rfs.storage_cluster.id)):
         return False
     # attach new data disks to each vm
-    async_ops = []
+    async_ops = {}
     for key in vms:
         entry = vms[key]
         if len(entry['new_disks']) == 0:
@@ -1216,17 +1232,20 @@ def expand_storage_cluster(
              'machine {}').format(
                 len(entry['new_disks']), entry['new_disks'], vm.name))
         # update vm
-        async_ops.append(
-            (key, premium, compute_client.virtual_machines.create_or_update(
+        async_ops[key] = (
+            premium,
+            resource.AsyncOperation(functools.partial(
+                compute_client.virtual_machines.create_or_update,
                 resource_group_name=rfs.storage_cluster.resource_group,
-                vm_name=vm.name,
-                parameters=vm)))
+                vm_name=vm.name, parameters=vm))
+        )
     # wait for async ops to complete
     if len(async_ops) == 0:
         logger.error('no operations started for expansion')
         return False
     logger.debug('waiting for disks to attach to virtual machines')
-    for offset, premium, op in async_ops:
+    for offset in async_ops:
+        premium, op = async_ops[offset]
         vm = op.result()
         vms[offset]['vm'] = vm
         # execute bootstrap script via ssh
@@ -1470,11 +1489,11 @@ def _delete_virtual_network(network_client, rg_name, vnet_name):
 def delete_storage_cluster(
         resource_client, compute_client, network_client, config,
         delete_data_disks=False, delete_virtual_network=False,
-        delete_resource_group=False, wait=False):
+        delete_resource_group=False, generate_from_prefix=False, wait=False):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, bool, bool,
-    #        bool, bool) -> None
+    #        bool, bool, bool) -> None
     """Delete a storage cluster
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1486,6 +1505,7 @@ def delete_storage_cluster(
     :param bool delete_data_disks: delete managed data disks
     :param bool delete_virtual_network: delete vnet
     :param bool delete_resource_group: delete resource group
+    :param bool generate_from_prefix: generate resources from hostname prefix
     :param bool wait: wait for completion
     """
     # retrieve remotefs settings
@@ -1513,7 +1533,8 @@ def delete_storage_cluster(
     # get vms and cache for concurent async ops
     resources = {}
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -1522,6 +1543,30 @@ def delete_storage_cluster(
         except msrestazure.azure_exceptions.CloudError as e:
             if e.status_code == 404:
                 logger.warning('virtual machine {} not found'.format(vm_name))
+                if generate_from_prefix:
+                    logger.warning(
+                        'OS and data disks for this virtual machine will not '
+                        'be deleted, please use "fs disks del" to delete '
+                        'those resources if desired')
+                    resources[i] = {
+                        'vm': settings.generate_virtual_machine_name(
+                            rfs.storage_cluster, i),
+                        'as': None,
+                        'nic': settings.generate_network_interface_name(
+                            rfs.storage_cluster, i),
+                        'pip': settings.generate_public_ip_name(
+                            rfs.storage_cluster, i),
+                        'subnet': None,
+                        'nsg': settings.generate_network_security_group_name(
+                            rfs.storage_cluster),
+                        'vnet': None,
+                        'os_disk': None,
+                        'data_disks': [],
+                    }
+                    if rfs.storage_cluster.vm_count > 1:
+                        resources[i]['as'] = \
+                            settings.generate_availability_set_name(
+                                rfs.storage_cluster)
                 continue
             else:
                 raise
@@ -1558,77 +1603,115 @@ def delete_storage_cluster(
     if settings.verbose(config):
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
+    # create async op holder
+    async_ops = {}
     # delete vms
-    vm_ops = []
+    async_ops['vms'] = {}
     for key in resources:
         vm_name = resources[key]['vm']
-        vm_ops.append(_delete_virtual_machine(
-            compute_client, rfs.storage_cluster.resource_group, vm_name))
+        async_ops['vms'][vm_name] = resource.AsyncOperation(functools.partial(
+            _delete_virtual_machine, compute_client,
+            rfs.storage_cluster.resource_group, vm_name))
     logger.info(
-        'waiting for {} virtual machines to delete'.format(len(vm_ops)))
-    for op in vm_ops:
-        op.result()
-    logger.info('{} virtual machines deleted'.format(len(vm_ops)))
+        'waiting for {} virtual machines to delete'.format(
+            len(async_ops['vms'])))
+    for vm_name in async_ops['vms']:
+        async_ops['vms'][vm_name].result()
+    logger.info('{} virtual machines deleted'.format(len(async_ops['vms'])))
     # delete nics
-    nic_ops = []
+    async_ops['nics'] = {}
     for key in resources:
-        nic = resources[key]['nic']
-        nic_ops.append(_delete_network_interface(
-            network_client, rfs.storage_cluster.resource_group, nic))
+        nic_name = resources[key]['nic']
+        async_ops['nics'][nic_name] = resource.AsyncOperation(
+            functools.partial(
+                _delete_network_interface, network_client,
+                rfs.storage_cluster.resource_group, nic_name)
+        )
     # wait for nics to delete
-    logger.debug('waiting for network interfaces to delete')
-    for op in nic_ops:
-        op.result()
-    logger.info('{} network interfaces deleted'.format(len(nic_ops)))
+    logger.debug('waiting for {} network interfaces to delete'.format(
+        len(async_ops['nics'])))
+    for nic_name in async_ops['nics']:
+        async_ops['nics'][nic_name].result()
+    logger.info('{} network interfaces deleted'.format(len(async_ops['nics'])))
+    # delete data disks if specified
+    async_ops['data_disks'] = []
+    for key in resources:
+        data_disks = resources[key]['data_disks']
+        if util.is_none_or_empty(data_disks):
+            continue
+        if len(data_disks) > 0:
+            async_ops['data_disks'].append(delete_managed_disks(
+                compute_client, config, data_disks,
+                resource_group=rfs.managed_disks.resource_group, wait=False))
+    # delete os disks
+    async_ops['os_disk'] = []
+    for key in resources:
+        os_disk = resources[key]['os_disk']
+        if util.is_none_or_empty(os_disk):
+            continue
+        async_ops['os_disk'].append(delete_managed_disks(
+            compute_client, config, os_disk,
+            resource_group=rfs.storage_cluster.resource_group, wait=False,
+            confirm_override=True))
     # delete nsg
     deleted = set()
-    nsg_ops = []
+    async_ops['nsg'] = {}
     for key in resources:
         nsg_name = resources[key]['nsg']
         if nsg_name in deleted:
             continue
         deleted.add(nsg_name)
-        nsg_ops.append(_delete_network_security_group(
-            network_client, rfs.storage_cluster.resource_group, nsg_name))
+        async_ops['nsg'][nsg_name] = resource.AsyncOperation(functools.partial(
+            _delete_network_security_group, network_client,
+            rfs.storage_cluster.resource_group, nsg_name))
     deleted.clear()
     # delete public ips
-    pip_ops = []
+    async_ops['pips'] = {}
     for key in resources:
-        pip = resources[key]['pip']
-        pip_ops.append(_delete_public_ip(
-            network_client, rfs.storage_cluster.resource_group, pip))
-    logger.debug('waiting for public ips to delete')
-    for op in pip_ops:
-        op.result()
-    logger.info('{} public ips deleted'.format(len(pip_ops)))
+        pip_name = resources[key]['pip']
+        async_ops['pips'][pip_name] = resource.AsyncOperation(
+            functools.partial(
+                _delete_public_ip, network_client,
+                rfs.storage_cluster.resource_group, pip_name)
+        )
+    logger.debug('waiting for {} public ips to delete'.format(
+        len(async_ops['pips'])))
+    for pip_name in async_ops['pips']:
+        async_ops['pips'][pip_name].result()
+    logger.info('{} public ips deleted'.format(len(async_ops['pips'])))
     # delete subnets
+    async_ops['subnets'] = {}
     for key in resources:
-        subnet_ops = []
         subnet_name = resources[key]['subnet']
         vnet_name = resources[key]['vnet']
         if util.is_none_or_empty(subnet_name) or subnet_name in deleted:
             continue
         deleted.add(subnet_name)
-        subnet_ops.append(_delete_subnet(
-            network_client, rfs.storage_cluster.resource_group, vnet_name,
-            subnet_name))
-        logger.debug('waiting for subnets to delete')
-        for op in subnet_ops:
-            op.result()
-        logger.info('{} subnets deleted'.format(len(subnet_ops)))
-        subnet_ops.clear()
+        async_ops['subnets'][subnet_name] = resource.AsyncOperation(
+            functools.partial(
+                _delete_subnet, network_client,
+                rfs.storage_cluster.resource_group, vnet_name, subnet_name)
+        )
+    logger.debug('waiting for {} subnets to delete'.format(
+        len(async_ops['subnets'])))
+    for subnet_name in async_ops['subnets']:
+        async_ops['subnets'][subnet_name].result()
+    logger.info('{} subnets deleted'.format(len(async_ops['subnets'])))
     deleted.clear()
     # delete vnet
-    vnet_ops = []
+    async_ops['vnets'] = {}
     for key in resources:
         vnet_name = resources[key]['vnet']
         if util.is_none_or_empty(vnet_name) or vnet_name in deleted:
             continue
         deleted.add(vnet_name)
-        vnet_ops.append(_delete_virtual_network(
-            network_client, rfs.storage_cluster.resource_group, vnet_name))
+        async_ops['vnets'][vnet_name] = resource.AsyncOperation(
+            functools.partial(
+                _delete_virtual_network, network_client,
+                rfs.storage_cluster.resource_group, vnet_name)
+        )
     deleted.clear()
-    # delete availability set
+    # delete availability set, this is synchronous
     for key in resources:
         as_name = resources[key]['as']
         if util.is_none_or_empty(as_name) or as_name in deleted:
@@ -1638,49 +1721,33 @@ def delete_storage_cluster(
             compute_client, rfs.storage_cluster.resource_group, as_name)
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
-    # delete data disks (delay from vm due to potential in use errors)
-    data_disk_ops = []
-    for key in resources:
-        data_disks = resources[key]['data_disks']
-        if len(data_disks) > 0:
-            data_disk_ops.extend(delete_managed_disks(
-                compute_client, config, data_disks,
-                resource_group=rfs.managed_disks.resource_group, wait=False))
-    # delete os disks (delay from vm due to potential in use errors)
-    os_disk_ops = []
-    for key in resources:
-        os_disk = resources[key]['os_disk']
-        os_disk_ops.extend(delete_managed_disks(
-            compute_client, config, os_disk,
-            resource_group=rfs.storage_cluster.resource_group, wait=False,
-            confirm_override=True))
-    # TODO check for 409s and retry
-    # wait for nsgs and os disks to delete
+    # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')
-        for op in nsg_ops:
-            op.result()
+        for nsg_name in async_ops['nsg']:
+            async_ops['nsg'][nsg_name].result()
         logger.info('{} network security groups deleted'.format(
-            len(nsg_ops)))
-        nsg_ops.clear()
+            len(async_ops['nsg'])))
         logger.debug('waiting for virtual networks to delete')
-        for op in vnet_ops:
-            op.result()
-        logger.info('{} virtual networks deleted'.format(len(vnet_ops)))
-        vnet_ops.clear()
+        for vnet_name in async_ops['vnets']:
+            async_ops['vnets'][vnet_name].result()
+        logger.info('{} virtual networks deleted'.format(
+            len(async_ops['vnets'])))
         logger.debug('waiting for managed os disks to delete')
-        for op in os_disk_ops:
-            op.result()
-        logger.info('{} managed os disks deleted'.format(
-            len(os_disk_ops)))
-        os_disk_ops.clear()
-        if len(data_disk_ops) > 0:
+        count = 0
+        for os_disk_set in async_ops['os_disk']:
+            for os_disk in os_disk_set:
+                os_disk_set[os_disk].result()
+                count += 1
+        logger.info('{} managed os disks deleted'.format(count))
+        if len(async_ops['data_disks']) > 0:
             logger.debug('waiting for managed data disks to delete')
-            for op in data_disk_ops:
-                op.result()
-            logger.info('{} managed data disks deleted'.format(
-                len(data_disk_ops)))
-            data_disk_ops.clear()
+            count = 0
+            for data_disk_set in async_ops['data_disks']:
+                for data_disk in data_disk_set:
+                    data_disk_set[data_disk].result()
+                    count += 1
+            logger.info('{} managed data disks deleted'.format(count))
 
 
 def _deallocate_virtual_machine(compute_client, rg_name, vm_name):
@@ -1731,7 +1798,8 @@ def suspend_storage_cluster(compute_client, config, wait=False):
     rfs = settings.remotefs_settings(config)
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -1760,16 +1828,17 @@ def suspend_storage_cluster(compute_client, config, wait=False):
                 rfs.storage_cluster.id)):
         return
     # deallocate each vm
-    async_ops = []
+    async_ops = {}
     for vm in vms:
-        async_ops.append(_deallocate_virtual_machine(
-            compute_client, rfs.storage_cluster.resource_group, vm.name))
+        async_ops[vm.name] = resource.AsyncOperation(functools.partial(
+            _deallocate_virtual_machine, compute_client,
+            rfs.storage_cluster.resource_group, vm.name))
     if wait:
         logger.info(
             'waiting for {} virtual machines to deallocate'.format(
                 len(async_ops)))
-        for op in async_ops:
-            op.result()
+        for vm_name in async_ops:
+            async_ops[vm_name].result()
         logger.info('{} virtual machines deallocated'.format(len(async_ops)))
 
 
@@ -1785,7 +1854,8 @@ def start_storage_cluster(compute_client, config, wait=False):
     rfs = settings.remotefs_settings(config)
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -1807,15 +1877,16 @@ def start_storage_cluster(compute_client, config, wait=False):
                 rfs.storage_cluster.id)):
         return
     # start each vm
-    async_ops = []
+    async_ops = {}
     for vm in vms:
-        async_ops.append(_start_virtual_machine(
-            compute_client, rfs.storage_cluster.resource_group, vm.name))
+        async_ops[vm.name] = resource.AsyncOperation(functools.partial(
+            _start_virtual_machine, compute_client,
+            rfs.storage_cluster.resource_group, vm.name))
     if wait:
         logger.info(
             'waiting for {} virtual machines to start'.format(len(async_ops)))
-        for op in async_ops:
-            op.result()
+        for vm_name in async_ops:
+            async_ops[vm_name].result()
         logger.info('{} virtual machines started'.format(len(async_ops)))
 
 
@@ -1840,7 +1911,8 @@ def stat_storage_cluster(
     # retrieve all vms
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
-        vm_name = '{}-vm{}'.format(rfs.storage_cluster.hostname_prefix, i)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, i)
         try:
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
@@ -1894,7 +1966,7 @@ def stat_storage_cluster(
         if detail:
             ssh_priv_key, port, username, ip = _get_ssh_info(
                 compute_client, network_client, config, None, vm.name, pip=pip)
-            offset = int(vm.name.split('-vm')[-1])
+            offset = settings.get_offset_from_virtual_machine_name(vm.name)
             script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{n}{r}{s}'.format(
                 sf=status_script,
                 f=' -f {}'.format(
@@ -1991,8 +2063,8 @@ def _get_ssh_info(
     rfs = settings.remotefs_settings(config)
     # retrieve specific vm
     if cardinal is not None:
-        vm_name = '{}-vm{}'.format(
-            rfs.storage_cluster.hostname_prefix, cardinal)
+        vm_name = settings.generate_virtual_machine_name(
+            rfs.storage_cluster, cardinal)
     else:
         vm_name = hostname
     try:

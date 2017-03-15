@@ -260,6 +260,12 @@ parts of a remote filesystem:
   * `--delete-data-disks` will delete attached data disks
   * `--delete-virtual-network` will delete the virtual network and all of
     its subnets
+  * `--generate-from-prefix` will attempt to generate all resource names
+    using conventions used. This is helpful when there was an issue with
+    cluster deletion and the original virtual machine(s) resources can no
+    longer by enumerated. Note that OS disks and data disks cannot be
+    deleted with this option. Please use `fs disks del` to delete disks
+    that may have been used in the storage cluster.
   * `--no-wait` does not wait for deletion completion. It is not recommended
     to use this parameter.
 * `expand` expands the number of disks used by the underlying filesystems on

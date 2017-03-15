@@ -699,6 +699,9 @@ def fs_cluster_resize(ctx):
 @click.option(
     '--delete-virtual-network', is_flag=True, help='Delete virtual network')
 @click.option(
+    '--generate-from-prefix', is_flag=True,
+    help='Generate resources to delete from storage cluster hostname prefix')
+@click.option(
     '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
 @common_options
 @fs_options
@@ -706,13 +709,13 @@ def fs_cluster_resize(ctx):
 @pass_cli_context
 def fs_cluster_del(
         ctx, delete_resource_group, delete_data_disks, delete_virtual_network,
-        no_wait):
+        generate_from_prefix, no_wait):
     """Delete a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config, delete_resource_group, delete_data_disks,
-        delete_virtual_network, not no_wait)
+        delete_virtual_network, generate_from_prefix, not no_wait)
 
 
 @cluster.command('expand')
