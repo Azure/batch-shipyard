@@ -2504,16 +2504,36 @@ def remotefs_settings(config):
     if 'nfs' in ns_conf:
         sc_ns_inbound['nfs'] = InboundNetworkSecurityRule(
             destination_port_range='2049',
-            source_address_prefix=_kv_read_checked(ns_conf, 'nfs', ['*']),
+            source_address_prefix=_kv_read_checked(ns_conf, 'nfs'),
             protocol='tcp',
         )
         if not isinstance(sc_ns_inbound['nfs'].source_address_prefix, list):
             raise ValueError('expected list for nfs network security rule')
-
-    # TODO gluster port mapping on nsg
-
+    if 'glusterfs' in ns_conf:
+        # glusterd and management ports
+        sc_ns_inbound['glusterfs-management'] = InboundNetworkSecurityRule(
+            destination_port_range='24007-24008',
+            source_address_prefix=_kv_read_checked(ns_conf, 'glusterfs'),
+            protocol='tcp',
+        )
+        # gluster brick ports: only 1 port per vm is needed as there will
+        # only be 1 brick per vm (brick is spread across RAID)
+        sc_ns_inbound['glusterfs-bricks'] = InboundNetworkSecurityRule(
+            destination_port_range='49152',
+            source_address_prefix=_kv_read_checked(ns_conf, 'glusterfs'),
+            protocol='tcp',
+        )
+        # only need to check one for glusterfs
+        if not isinstance(
+                sc_ns_inbound['glusterfs-management'].source_address_prefix,
+                list):
+            raise ValueError(
+                'expected list for glusterfs network security rule')
     if 'custom_inbound_rules' in ns_conf:
-        _reserved = frozenset(['ssh', 'nfs', 'glusterfs'])
+        # reserve keywords (current and expected possible future support)
+        _reserved = frozenset(
+            ['ssh', 'nfs', 'glusterfs', 'beegfs', 'samba', 'cifs']
+        )
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
             if key.lower() in _reserved:

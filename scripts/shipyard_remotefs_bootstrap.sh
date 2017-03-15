@@ -13,6 +13,7 @@ ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 # vars
 attach_disks=0
 rebalance=0
+hostname_prefix=0
 filesystem=
 peer_ips=
 server_type=
@@ -132,22 +133,38 @@ setup_glusterfs() {
     # parse server options in the format: volname,voltype,transport,key:value,...
     IFS=',' read -ra so <<< "$server_options"
     local gluster_volname=${so[0]}
-    # create hosts array
-    IFS=',' read -ra hosts <<< "$peer_ips"
+    # create peer ip array
+    IFS=',' read -ra peers <<< "$peer_ips"
+    # create vm hostnames array
+    # we don't need to add these to /etc/hosts because the local DNS
+    # resolver will resolve them to the proper private ip addresses
+    local myhostname=
+    local i=0
+    declare -a hosts
+    set +e
+    for ip in "${peers[@]}"; do
+        local host=${hostname_prefix}-vm$i
+        hosts=("${hosts[@]}" "$host")
+        if [ ${peers[$i]} == $ipaddress ]; then
+            myhostname=$host
+        fi
+        i=$(($i + 1))
+    done
+    set -e
     # master (first host) performs peering
-    if [ ${hosts[0]} == $ipaddress ]; then
+    if [ ${peers[0]} == $ipaddress ]; then
         # construct brick locations
         local bricks=
         for host in "${hosts[@]}"
         do
             bricks+=" $host:$gluster_brick_location"
             # probe peer
-            if [ $host != $ipaddress ]; then
+            if [ $host != $myhostname ]; then
                 gluster_peer_probe $host
             fi
         done
         # wait for connections
-        local numnodes=${#hosts[@]}
+        local numnodes=${#peers[@]}
         gluster_poll_for_connections $numnodes
         local voltype=${so[1],,}
         local volarg=
@@ -231,7 +248,7 @@ setup_glusterfs() {
         # add fstab entry
         if [ $add_fstab -eq 1 ]; then
             echo "Adding $gluster_volname to mountpoint $mountpath to /etc/fstab"
-            echo "$ipaddress:/$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
+            echo "$myhostname:/$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
         fi
         # create mountpath
         mkdir -p $mountpath
@@ -262,13 +279,14 @@ setup_glusterfs() {
 }
 
 # begin processing
-while getopts "h?abf:i:m:no:pr:s:t:" opt; do
+while getopts "h?abd:f:i:m:no:pr:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
             echo ""
             echo "-a attach mode"
             echo "-b rebalance filesystem on resize"
+            echo "-d [hostname/dns label prefix] hostname prefix"
             echo "-f [filesystem] filesystem"
             echo "-i [peer IPs] peer IPs"
             echo "-m [mountpoint] mountpoint"
@@ -286,6 +304,9 @@ while getopts "h?abf:i:m:no:pr:s:t:" opt; do
             ;;
         b)
             rebalance=1
+            ;;
+        d)
+            hostname_prefix=${OPTARG,,}
             ;;
         f)
             filesystem=${OPTARG,,}
@@ -330,6 +351,7 @@ echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
 echo "  RAID level: $raid_level"
 echo "  Server type: $server_type"
+echo "  Hostname prefix: $hostname_prefix"
 echo "  Peer IPs: $peer_ips"
 echo "  IP address of VM: $ipaddress"
 

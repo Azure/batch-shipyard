@@ -279,6 +279,9 @@ specified in the configuration. This is an experimental feature.
 * `status` displays the status of the storage cluster
   * `--detail` reports in-depth details about each virtual machine in the
     storage cluster
+  * `--hosts` will output the public IP to hosts mapping for mounting a
+    `glusterfs` based remote filesystem locally. `glusterfs` must be
+    allowed in the network security rules for this to work properly.
 * `suspend` suspends a storage cluster
   * `--no-wait` does not wait for the suspension to complete. It is not
     recommended to use this parameter.

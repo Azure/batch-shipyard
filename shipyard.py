@@ -761,15 +761,18 @@ def fs_cluster_start(ctx, no_wait):
 @cluster.command('status')
 @click.option(
     '--detail', is_flag=True, help='Detailed storage cluster status')
+@click.option(
+    '--hosts', is_flag=True,
+    help='Output /etc/hosts compatible name resolution for GlusterFS clusters')
 @common_options
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_cluster_status(ctx, detail):
+def fs_cluster_status(ctx, detail, hosts):
     """Query status of a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_status(
-        ctx.compute_client, ctx.network_client, ctx.config, detail)
+        ctx.compute_client, ctx.network_client, ctx.config, detail, hosts)
 
 
 @cluster.command('ssh')

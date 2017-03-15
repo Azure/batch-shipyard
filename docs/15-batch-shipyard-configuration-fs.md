@@ -42,6 +42,7 @@ The remote filesystem schema is as follows:
             "network_security": {
                 "ssh": ["*"],
                 "nfs": ["1.2.3.0/24", "2.3.4.5"],
+                "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
                 "custom_inbound_rules": {
                     "myrule": {
                         "destination_port_range": "5000-5001",
@@ -142,18 +143,19 @@ defined.
 virtual machine and resource allocated for the storage cluster. It should
 be unique.
 * (required) `ssh` is the SSH admin user to create on the machine. This is not
-optional as it is in the pool specification.
-  * (required) `username` is the username to associate
+optional in this configuration as it is in the pool specification.
+  * (required) `username` is the admin user to create on all virtual machines
   * (optional) `ssh_public_key` is the path to a pre-existing ssh public
-    key to use. If this is not specified an RSA public/private key pair will
+    key to use. If this is not specified, an RSA public/private key pair will
     be generated for use in your current working directory (with a
-    non-colliding name for auto-generated SSH keys for compute pools).
+    non-colliding name for auto-generated SSH keys for compute pools, i.e.,
+    `id_rsa_shipyard_remotefs`).
   * (optional) `generated_file_export_path` is an optional path to specify
     for where to create the RSA public/private key pair.
 * (optional) `static_public_ip` is to specify if static public IPs should
 be assigned to each virtual machine allocated. The default is `false` which
 results in dynamic public IP addresses. A "static" FQDN will be provided
-regardless of this setting.
+per virtual machine, regardless of this setting.
 * (required) `virtual_network` is the virtual network to use for the
 storage cluster.
   * (required) `name` is the virtual network name
@@ -181,6 +183,10 @@ to each virtual machine in the storage cluster.
   * (optional) `nfs` rule allows the NFSv4 server port to be exposed to the
     specified address prefix. Multiple address prefixes can be specified. This
     property is ignored for glusterfs clusters.
+  * (optional) `glusterfs` rule allows the various GlusterFS management and
+    brick ports to be exposed to the specified address prefix. Multiple
+    address prefixes can be specified. This property is ignored for nfs
+    clusters.
   * (optional) `custom_inbound_rules` are custom inbound rules for other
     services that you need to expose.
     * (required) `<rule name>` is the name of the rule; the example uses
@@ -212,9 +218,12 @@ to each virtual machine in the storage cluster.
       specified, the default is the gluster default of a distributed volume.
       Please note that the `volume_type` specified here will have significant
       impact on performance and data availability delivered by GlusterFS for
-      your workload. Although written data is durable due to managed disks,
-      VM availability can cause reliability issues if a virtual machine fails
-      or becomes unavailable. You can view all of the available GlusterFS
+      your workload. It is imperative to understand your data I/O and access
+      patterns and selecting the proper volume type to maximize performance
+      and/or availability. Although written data is durable due to managed
+      disks, VM availability can cause reliability issues if a virtual machine
+      fails or becomes unavailable thus resulting in unavailability of the
+      brick hosting the data. You can view all of the available GlusterFS
       volume types
       [here](https://gluster.readthedocs.io/en/latest/Quick-Start-Guide/Architecture/#types-of-volumes).
     * (optional) `transport` is the transport type to use. The default and
@@ -238,17 +247,18 @@ The number of entries in this map must match the `vm_count`.
   * (required) `<instance number>` is the virtual machine instance number.
     This value must be a string (although it is integral in nature).
     * (required) `disk_array` is the listing of managed disk names to attach
-      to this instance. This disks must be provisioned before creating the
+      to this instance. These disks must be provisioned before creating the
       storage cluster.
     * (required) `filesystem` is the filesystem to use. Valid values are
       `btrfs`, `ext4`, `ext3` and `ext2`. `btrfs` is generally stable for
       RAID-0, with better features and data integrity protection. `btrfs`
       also allows for RAID-0 expansion and is the only filesystem compatible
       with the `fs cluster expand` command.
-    * (required) `raid_level` is the RAID level to apply to the disks in the
-      `disk_array`. The only valid value for multiple disks is `0`. Note that
-      if you wish to expand the number of disks in the array in the future,
-      you must use `btrfs` as the filesystem. At least two disks are required
+    * (optional for single disk, required for multiple disks) `raid_level`
+      is the RAID level to apply to the disks in the `disk_array`. The only
+      valid value for multiple disks is `0`. Note that if you wish to expand
+      the number of disks in the array in the future, you must use `btrfs`
+      as the filesystem. At least two disks per virtual machine are required
       for RAID-0.
 
 ## Full template

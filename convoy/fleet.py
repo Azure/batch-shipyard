@@ -1488,7 +1488,7 @@ def action_fs_cluster_expand(
             compute_client, network_client, config, _REMOTEFSPREP_FILE[0],
             rebalance):
         action_fs_cluster_status(
-            compute_client, network_client, config, detail=True)
+            compute_client, network_client, config, detail=True, hosts=False)
 
 
 def action_fs_cluster_suspend(compute_client, config, wait):
@@ -1517,12 +1517,14 @@ def action_fs_cluster_start(
     remotefs.start_storage_cluster(compute_client, config, wait)
     if wait:
         action_fs_cluster_status(
-            compute_client, network_client, config, detail=True)
+            compute_client, network_client, config, detail=True, hosts=False)
 
 
-def action_fs_cluster_status(compute_client, network_client, config, detail):
+def action_fs_cluster_status(
+        compute_client, network_client, config, detail, hosts):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, bool,
+    #        bool) -> None
     """Action: Fs Cluster Status
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1530,9 +1532,11 @@ def action_fs_cluster_status(compute_client, network_client, config, detail):
         network client
     :param dict config: configuration dict
     :param bool detail: detailed status
+    :param bool hosts: dump info for /etc/hosts
     """
     remotefs.stat_storage_cluster(
-        compute_client, network_client, config, _REMOTEFSSTAT_FILE[0], detail)
+        compute_client, network_client, config, _REMOTEFSSTAT_FILE[0], detail,
+        hosts)
 
 
 def action_fs_cluster_ssh(

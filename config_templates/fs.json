@@ -34,6 +34,7 @@
             "network_security": {
                 "ssh": ["*"],
                 "nfs": ["1.2.3.0/24", "2.3.4.5"],
+                "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
                 "custom_inbound_rules": {
                     "myrule": {
                         "destination_port_range": "5000-5001",

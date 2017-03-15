@@ -549,8 +549,9 @@ def _create_virtual_machine_extension(
             server_options.append('{}:{}'.format(key, so[st][key]))
     logger.debug('server options: {}'.format(server_options))
     # construct bootstrap command
-    cmd = './{bsf} {f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
+    cmd = './{bsf} {d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
         bsf=bootstrap_file,
+        d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
         f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
         i=' -i {}'.format(
             ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
@@ -1230,10 +1231,11 @@ def expand_storage_cluster(
         vms[offset]['vm'] = vm
         # execute bootstrap script via ssh
         script_cmd = \
-            '/opt/batch-shipyard/{bsf} {a}{b}{f}{m}{p}{r}{s}'.format(
+            '/opt/batch-shipyard/{bsf} {a}{b}{d}{f}{m}{p}{r}{s}'.format(
                 bsf=bootstrap_file,
                 a=' -a',
                 b=' -b' if rebalance else '',
+                d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
                 f=' -f {}'.format(
                     rfs.storage_cluster.vm_disk_map[offset].filesystem),
                 m=' -m {}'.format(
@@ -1818,10 +1820,11 @@ def start_storage_cluster(compute_client, config, wait=False):
 
 
 def stat_storage_cluster(
-        compute_client, network_client, config, status_script, detail=False):
+        compute_client, network_client, config, status_script, detail=False,
+        hosts=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str,
-    #        bool) -> None
+    #        bool, bool) -> None
     """Retrieve status of a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1830,6 +1833,7 @@ def stat_storage_cluster(
     :param dict config: configuration dict
     :param str status_script: status script
     :param bool detail: detailed status
+    :param bool hosts: dump info for /etc/hosts
     """
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
@@ -1951,6 +1955,19 @@ def stat_storage_cluster(
         log = '{}'.format(json.dumps(vmstatus, sort_keys=True, indent=4))
     logger.info('storage cluster {} virtual machine status:{}{}'.format(
         rfs.storage_cluster.id, os.linesep, log))
+    if hosts:
+        if rfs.storage_cluster.file_server.type != 'glusterfs':
+            raise ValueError('hosts option not compatible with glusterfs')
+        print(('{}>> Ensure that you have enabled the "glusterfs" network '
+               'security rule.{}>> Add the following entries to your '
+               '/etc/hosts to mount the gluster volume.{}>> Mount the '
+               'source as -t glusterfs from {}:/{}{}'.format(
+                   os.linesep, os.linesep, os.linesep, next(iter(vmstatus)),
+                   settings.get_file_server_glusterfs_volume_name(
+                       rfs.storage_cluster), os.linesep)))
+        for vmname in vmstatus:
+            print('{} {}'.format(
+                vmstatus[vmname]['public_ip_address'], vmname))
 
 
 def _get_ssh_info(
