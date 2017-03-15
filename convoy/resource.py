@@ -84,13 +84,6 @@ class AsyncOperation(object):
         while True:
             if self._noop:
                 return self._op  # will return None
-            if (self._max_retries >= 0 and
-                    self._retry_count > self._max_retries):
-                raise RuntimeError(
-                    ('Ran out of retry attempts invoking {}(args={} '
-                     'kwargs={})').format(
-                         self._partial.func.__name__, self._partial.args,
-                         self._partial.keywords))
             self._invoke()
             try:
                 return self._op.result()
@@ -98,9 +91,16 @@ class AsyncOperation(object):
                     msrestazure.azure_exceptions.CloudError) as e:
                 if e.status_code == 404 and not self._retry_notfound:
                     raise
-                logger.error('Async operation failed: {}'.format(e))
+                self._retry_count += 1
+                if (self._max_retries >= 0 and
+                        self._retry_count > self._max_retries):
+                    logger.error(
+                        ('Ran out of retry attempts invoking {}(args={} '
+                         'kwargs={})').format(
+                             self._partial.func.__name__, self._partial.args,
+                             self._partial.keywords))
+                    raise
             self._op = None
-            self._retry_count += 1
             logger.debug(
                 ('Attempting retry of operation: {}, retry_count={} '
                  'max_retries={}').format(

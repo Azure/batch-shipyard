@@ -799,9 +799,13 @@ def create_storage_cluster(
     async_ops['vmext'] = {}
     for i in range(rfs.storage_cluster.vm_count):
         # install vm extension
-        async_ops['vmext'][i] = resource.AsyncOperation(functools.partial(
-            _create_virtual_machine_extension, compute_client, rfs,
-            bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips, i))
+        async_ops['vmext'][i] = resource.AsyncOperation(
+            functools.partial(
+                _create_virtual_machine_extension, compute_client, rfs,
+                bootstrap_file, blob_urls, vms[i].name, disk_map,
+                private_ips, i),
+            max_retries=0,
+        )
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in async_ops['vmext']:
         # refresh public ip for vm
@@ -1042,9 +1046,13 @@ def resize_storage_cluster(
     async_ops['vmext'] = {}
     for i in new_vms:
         # install vm extension
-        async_ops['vmext'][i] = resource.AsyncOperation(functools.partial(
-            _create_virtual_machine_extension, compute_client, rfs,
-            bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips, i))
+        async_ops['vmext'][i] = resource.AsyncOperation(
+            functools.partial(
+                _create_virtual_machine_extension, compute_client, rfs,
+                bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips,
+                i),
+            max_retries=0,
+        )
     logger.debug('adding {} bricks to gluster volume'.format(
         len(async_ops['vmext'])))
     # execute special add brick script
