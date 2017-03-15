@@ -204,7 +204,11 @@ to each virtual machine in the storage cluster.
     [NFSv4 server](https://en.wikipedia.org/wiki/Network_File_System).
     `glusterfs` will provision a [GlusterFS server](https://www.gluster.org/).
   * (required) `mountpoint` is the path to mount the filesystem. This will
-    also be the export path from the server.
+    also be the export path from the server for NFS. Note that with GlusterFS,
+    if the cluster is suspended then restarted or machines are rebooted, the
+    local gluster volume mount will not automatically mount upon boot, but
+    will mount upon first use. This only applies to local access to the
+    gluster volume mountpath directly on the virtual machine itself.
   * (optional) `mount_options` are mount options as an array to specify when
     mounting the filesystem. The examples here `noatime` and `nodiratime`
     reduce file metadata updates for access times on files and directories.

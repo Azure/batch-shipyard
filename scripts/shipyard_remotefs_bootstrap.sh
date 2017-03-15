@@ -248,7 +248,9 @@ setup_glusterfs() {
         # add fstab entry
         if [ $add_fstab -eq 1 ]; then
             echo "Adding $gluster_volname to mountpoint $mountpath to /etc/fstab"
-            echo "$myhostname:/$gluster_volname $mountpath glusterfs _netdev,auto 0 2" >> /etc/fstab
+            # user systemd automount, boot time mount has a race between
+            # mounting and the glusterfs-server being ready
+            echo "$myhostname:/$gluster_volname $mountpath glusterfs defaults,_netdev,noauto,x-systemd.automount,fetch-attempts=10 0 2" >> /etc/fstab
         fi
         # create mountpath
         mkdir -p $mountpath
