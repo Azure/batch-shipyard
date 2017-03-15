@@ -20,8 +20,8 @@ The jobs schema is as follows:
             "user_identity": {
                 "default_pool_admin": true,
                 "specific_user": {
-                    "uid": 1001,
-                    "gid": 1001
+                    "uid": 1000,
+                    "gid": 1000
                 }
             },
             "input_data": {

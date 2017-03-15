@@ -143,6 +143,7 @@ they are used for credential management with Azure KeyVault.
 accessing Azure Resources (ARM) with Azure Active Directory credentials. This
 is required with Filesystem actions and pools created with a virtual network
 specification.
+  * (required) `subscription_id` is the subscription id to interact with.
   * (required) `aad` AAD authentication parameters for ARM.
 
 ### Batch: `batch`

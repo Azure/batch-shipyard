@@ -114,8 +114,7 @@ The global config schema is as follows:
                     "container_path": "$AZ_BATCH_NODE_SHARED_DIR/azfile",
                     "mount_options": [
                         "filemode=0777",
-                        "dirmode=0777",
-                        "nolock=true"
+                        "dirmode=0777"
                     ]
                 },
                 "glustervol": {
