@@ -12,6 +12,7 @@ ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 
 # vars
 vm_count=
+hostnames=
 peer_ips=
 gluster_volname=
 volume_type=
@@ -72,17 +73,22 @@ gluster_poll_for_connections() {
 }
 
 gluster_add_bricks() {
-    # create hosts array
-    IFS=',' read -ra hosts <<< "$peer_ips"
+    # create peers array
+    IFS=',' read -ra peers <<< "$peer_ips"
+    # create vm hostnames array
+    IFS=',' read -ra hosts <<< "$hostnames"
+    # cross-validate length
+    if [ ${#peers[@]} -ne ${#hosts[@]} ]; then
+        echo "${peers[@]} length does not match ${hosts[@]} length"
+        exit 1
+    fi
     # construct brick locations
-    bricks=
+    local bricks=
     for host in "${hosts[@]}"
     do
         bricks+=" $host:$gluster_brick_location"
         # probe peer
-        if [ $host != $ipaddress ]; then
-            gluster_peer_probe $host
-        fi
+        gluster_peer_probe $host
     done
     # wait for connections
     gluster_poll_for_connections
@@ -120,12 +126,13 @@ gluster_add_bricks() {
 }
 
 # begin processing
-while getopts "h?c:i:n:v:" opt; do
+while getopts "h?c:d:i:n:v:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_addbrick.sh parameters"
             echo ""
             echo "-c [total VM count] total number of VMs"
+            echo "-d [hostname/dns label prefix] hostnames"
             echo "-i [peer IPs] peer IPs"
             echo "-n [volume name] volume name"
             echo "-v [volume type] volume type"
@@ -134,6 +141,9 @@ while getopts "h?c:i:n:v:" opt; do
             ;;
         c)
             vm_count=$OPTARG
+            ;;
+        d)
+            hostnames=${OPTARG,,}
             ;;
         i)
             peer_ips=${OPTARG,,}
@@ -155,6 +165,7 @@ echo "Parameters:"
 echo "  VM Count: $vm_count"
 echo "  Gluster Volume Name: $gluster_volname"
 echo "  Gluster Volume Type: $volume_type"
+echo "  Peer Hostnames: $hostnames"
 echo "  Peer IPs: $peer_ips"
 echo "  IP address of VM: $ipaddress"
 

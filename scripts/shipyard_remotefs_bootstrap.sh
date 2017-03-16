@@ -13,7 +13,7 @@ ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 # vars
 attach_disks=0
 rebalance=0
-hostname_prefix=0
+hostname_prefix=
 filesystem=
 peer_ips=
 server_type=
@@ -151,6 +151,10 @@ setup_glusterfs() {
         i=$(($i + 1))
     done
     set -e
+    if [ -z $myhostname ]; then
+        echo "Could not determine own hostname from prefix"
+        exit 1
+    fi
     # master (first host) performs peering
     if [ ${peers[0]} == $ipaddress ]; then
         # construct brick locations

@@ -285,7 +285,18 @@ def _create_network_security_group(network_client, rfs):
     """
     nsg_name = settings.generate_network_security_group_name(
         rfs.storage_cluster)
-    # TODO check and fail if nsg exists
+    # check and fail if nsg exists
+    try:
+        network_client.network_security_groups.get(
+            resource_group_name=rfs.storage_cluster.resource_group,
+            network_security_group_name=nsg_name,
+        )
+        raise RuntimeError('network security group {} exists'.format(nsg_name))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
     # create security rules as found in settings
     priority = 100
     security_rules = []
@@ -348,8 +359,19 @@ def _create_public_ip(network_client, rfs, offset):
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
     pip_name = settings.generate_public_ip_name(rfs.storage_cluster, offset)
+    # check and fail if pip exists
+    try:
+        network_client.public_ip_addresses.get(
+            resource_group_name=rfs.storage_cluster.resource_group,
+            public_ip_address_name=pip_name,
+        )
+        raise RuntimeError('public ip {} exists'.format(pip_name))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
     hostname = settings.generate_hostname(rfs.storage_cluster, offset)
-    # TODO check and fail if pip exists
     logger.debug('creating public ip: {} with label: {}'.format(
         pip_name, hostname))
     return network_client.public_ip_addresses.create_or_update(
@@ -391,7 +413,18 @@ def _create_network_interface(
     """
     nic_name = settings.generate_network_interface_name(
         rfs.storage_cluster, offset)
-    # TODO check and fail if nic exists
+    # check and fail if nic exists
+    try:
+        network_client.network_interfaces.get(
+            resource_group_name=rfs.storage_cluster.resource_group,
+            network_interface_name=nic_name,
+        )
+        raise RuntimeError('network interface {} exists'.format(nic_name))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
     # create network ip config
     if private_ips is None:
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
@@ -613,6 +646,18 @@ def _create_availability_set(compute_client, rfs):
         logger.warning('insufficient vm_count for availability set')
         return None
     as_name = settings.generate_availability_set_name(rfs.storage_cluster)
+    # check and fail if as exists
+    try:
+        compute_client.availability_sets.get(
+            resource_group_name=rfs.storage_cluster.resource_group,
+            availability_set_name=as_name,
+        )
+        raise RuntimeError('availability set {} exists'.format(as_name))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
     logger.debug('creating availability set: {}'.format(as_name))
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -1037,10 +1082,15 @@ def resize_storage_cluster(
     logger.info(
         'waiting for {} virtual machines to be created'.format(
             len(async_ops['vms'])))
+    vm_hostnames = []
     vms = {}
     for offset in async_ops['vms']:
         vms[offset] = async_ops['vms'][offset].result()
-    logger.debug('{} virtual machines created'.format(len(vms)))
+        # generate vm names in list
+        vm_hostnames.append(settings.generate_virtual_machine_name(
+            rfs.storage_cluster, offset))
+    logger.debug('{} virtual machines created: {}'.format(
+        len(vms), vm_hostnames))
     # wait for all vms to be created before installing extensions to prevent
     # variability in wait times and timeouts during customscript
     async_ops['vmext'] = {}
@@ -1057,9 +1107,10 @@ def resize_storage_cluster(
         len(async_ops['vmext'])))
     # execute special add brick script
     script_cmd = \
-        '/opt/batch-shipyard/{asf} {c}{i}{n}{v}'.format(
+        '/opt/batch-shipyard/{asf} {c}{d}{i}{n}{v}'.format(
             asf=addbrick_file,
             c=' -c {}'.format(rfs.storage_cluster.vm_count),
+            d=' -d {}'.format(','.join(vm_hostnames)),
             i=' -i {}'.format(','.join(list(new_private_ips.values()))),
             n=' -n {}'.format(
                 settings.get_file_server_glusterfs_volume_name(

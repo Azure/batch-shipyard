@@ -76,7 +76,10 @@ Please note that not all regions have every VM size available.
 * (required) `vm_count` is the number of compute nodes to allocate.
 * (optional) `max_tasks_per_node` is the maximum number of concurrent tasks
 that can be running at any one time on a compute node. This defaults to a
-value of 1 if not specified.
+value of 1 if not specified. The maximum value for the property that Azure
+Batch will accept is `4 x <# cores per compute node>`. For instance, for a
+`STANDARD_F2` instance, because the virtual machine has 2 cores, the maximum
+allowable value for this property would be `8`.
 * (optional) `inter_node_communication_enabled` designates if this pool is set
 up for inter-node communication. This must be set to `true` for any containers
 that must communicate with each other such as MPI applications. This property

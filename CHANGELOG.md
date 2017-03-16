@@ -4,7 +4,7 @@
 ### Added
 - Support for provisioning storage clusters via the `fs cluster` command
   - Support for NFS (single VM, scale up)
-  - Support for glusterfs (multi VM, scale up and out)
+  - Support for GlusterFS (multi VM, scale up and out)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
 - Support for UserSubscription Batch accounts
@@ -24,7 +24,7 @@ longer receiving updates.
 ### Changed
 - **Breaking Change:** `glusterfs` `volume_driver` for `shared_data_volumes`
 should now be named as `glusterfs_on_compute`. This is to distinguish between
-co-located glusterfs on compute nodes with standalong glusterfs
+co-located GlusterFS on compute nodes with standalone GlusterFS
 `storage_cluster` remote mounted distributed file system.
 - Logging now has less verbose details (call origin) by default. Prior
 behavior can be restored with the `-v` option.
