@@ -86,8 +86,7 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'rf', postfix))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', postfix))
-    _STORAGE_CONTAINERS['blob_remotefs'] = '-'.join(
-        (sep + 'remotefs', postfix))
+    _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
@@ -111,6 +110,18 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGEACCOUNTEP = saep
     if sasexpiry is not None:
         _DEFAULT_SAS_EXPIRY_DAYS = sasexpiry
+
+
+def set_storage_remotefs_container(storage_cluster_id):
+    # type: (str) -> None
+    """Set storage properties for a remotefs storage cluster
+    :param str storage_cluster_id: storage cluster id
+    """
+    if util.is_none_or_empty(storage_cluster_id):
+        raise ValueError('storage_cluster_id is invalid')
+    _STORAGE_CONTAINERS['blob_remotefs'] = '{}-{}'.format(
+        _STORAGE_CONTAINERS['blob_remotefs'],
+        storage_cluster_id)
 
 
 def get_storageaccount():
@@ -380,9 +391,10 @@ def delete_storage_containers(
     """
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
-            logger.debug('deleting container: {}'.format(
-                _STORAGE_CONTAINERS[key]))
-            blob_client.delete_container(_STORAGE_CONTAINERS[key])
+            if key != 'blob_remotefs':
+                logger.debug('deleting container: {}'.format(
+                    _STORAGE_CONTAINERS[key]))
+                blob_client.delete_container(_STORAGE_CONTAINERS[key])
         elif not skip_tables and key.startswith('table_'):
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
@@ -457,7 +469,8 @@ def clear_storage_containers(
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if not tables_only and key.startswith('blob_'):
-            _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
+            if key != 'blob_remotefs':
+                _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             try:
                 _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
@@ -500,9 +513,9 @@ def create_storage_containers_remotefs(blob_client, config):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
-    logger.info('creating container: {}'.format(
-        _STORAGE_CONTAINERS['blob_remotefs']))
-    blob_client.create_container(_STORAGE_CONTAINERS['blob_remotefs'])
+    contname = _STORAGE_CONTAINERS['blob_remotefs']
+    logger.info('creating container: {}'.format(contname))
+    blob_client.create_container(contname)
 
 
 def delete_storage_containers_remotefs(blob_client, config):
@@ -511,9 +524,9 @@ def delete_storage_containers_remotefs(blob_client, config):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     """
-    logger.info('deleting container: {}'.format(
-        _STORAGE_CONTAINERS['blob_remotefs']))
-    blob_client.delete_container(_STORAGE_CONTAINERS['blob_remotefs'])
+    contname = _STORAGE_CONTAINERS['blob_remotefs']
+    logger.info('deleting container: {}'.format(contname))
+    blob_client.delete_container(contname)
 
 
 def cleanup_with_del_pool(blob_client, queue_client, table_client, config):

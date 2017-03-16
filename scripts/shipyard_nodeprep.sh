@@ -44,16 +44,16 @@ p2penabled=0
 prefix=
 privatereg=
 sku=
-sc_arg=
+sc_args=
 version=
 
-while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
+while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
-            echo "-b [resources] block until resources loaded"
+            echo "-b block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs cluster"
@@ -75,7 +75,7 @@ while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
             azurefile=1
             ;;
         b)
-            block=$OPTARG
+            block=$SHIPYARD_DOCKER_IMAGES_PRELOAD
             ;;
         d)
             cascadecontainer=1
@@ -90,7 +90,7 @@ while getopts "h?ab:de:fg:nm:o:p:r:s:t:v:wx:" opt; do
             gpu=$OPTARG
             ;;
         m)
-            sc_arg=$OPTARG
+            IFS=',' read -ra sc_args <<< "${OPTARG,,}"
             ;;
         n)
             networkopt=1
@@ -408,17 +408,23 @@ EOF
         mkdir -p /mnt/gluster
     fi
     # install dependencies for storage cluster mount
-    if [ ! -z $sc_arg ]; then
-        IFS=':' read -ra sc <<< "$sc_arg"
-        server_type=${sc[0]}
-        if [ $server_type == "nfs" ]; then
-            apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
-        elif [ $server_type == "glusterfs" ]; then
-            apt-get install -y -q --no-install-recommends glusterfs-client acl
-        else
-            echo "Unknown file server type: $sc_arg"
-            exit 1
-        fi
+    if [ ! -z $sc_args ]; then
+        nfs_installed=0
+        glusterfs_installed=0
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+                apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
+                nfs_installed=1
+            elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                apt-get install -y -q --no-install-recommends glusterfs-client acl
+                glusterfs_installed=1
+            else
+                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                exit 1
+            fi
+        done
     fi
     # install dependencies if not using cascade container
     if [ $cascadecontainer -eq 0 ]; then
@@ -509,22 +515,28 @@ EOF
             mkdir -p /mnt/resource/gluster
         fi
         # install dependencies for storage cluster mount
-        if [ ! -z $sc_arg ]; then
-            IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
-                yum install -y nfs-utils nfs4-acl-tools
-                systemctl daemon-reload
-                $rpcbindenable
-                systemctl start rpcbind
-            elif [ $server_type == "glusterfs" ]; then
-                yum install -y epel-release centos-release-gluster38
-                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
-            else
-                echo "Unknown file server type: $sc_arg"
-                exit 1
-            fi
+        if [ ! -z $sc_args ]; then
+            nfs_installed=0
+            glusterfs_installed=0
+            for sc_arg in ${sc_args[@]}; do
+                IFS=':' read -ra sc <<< "$sc_arg"
+                server_type=${sc[0]}
+                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+                    yum install -y nfs-utils nfs4-acl-tools
+                    systemctl daemon-reload
+                    $rpcbindenable
+                    systemctl start rpcbind
+                    nfs_installed=1
+                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                    yum install -y epel-release centos-release-gluster38
+                    sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                    yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
+                    glusterfs_installed=1
+                else
+                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                    exit 1
+                fi
+            done
         fi
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
@@ -598,22 +610,28 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             mkdir -p /mnt/resource/gluster
         fi
         # install dependencies for storage cluster mount
-        if [ ! -z $sc_arg ]; then
-            IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
-                zypper -n in nfs-client nfs4-acl-tools
-                systemctl daemon-reload
-                systemctl enable rpcbind
-                systemctl start rpcbind
-            elif [ $server_type == "glusterfs" ]; then
-                zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
-                zypper -n --gpg-auto-import-keys ref
-                zypper -n in glusterfs acl
-            else
-                echo "Unknown file server type: $sc_arg"
-                exit 1
-            fi
+        if [ ! -z $sc_args ]; then
+            nfs_installed=0
+            glusterfs_installed=0
+            for sc_arg in ${sc_args[@]}; do
+                IFS=':' read -ra sc <<< "$sc_arg"
+                server_type=${sc[0]}
+                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+                    zypper -n in nfs-client nfs4-acl-tools
+                    systemctl daemon-reload
+                    systemctl enable rpcbind
+                    systemctl start rpcbind
+                    nfs_installed=1
+                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                    zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
+                    zypper -n --gpg-auto-import-keys ref
+                    zypper -n in glusterfs acl
+                    glusterfs_installed=1
+                else
+                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                    exit 1
+                fi
+            done
         fi
         # if hpc sku, set up intel mpi
         if [[ $offer == sles-hpc* ]]; then
@@ -642,38 +660,45 @@ if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
 fi
 
 # mount any storage clusters
-if [ ! -z $sc_arg ]; then
-    IFS=':' read -ra sc <<< "$sc_arg"
-    mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
-    echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
-    mkdir -p $mountpoint
-    chmod 777 $mountpoint
-    echo "Adding $mountpoint to fstab"
-    # eval fstab var to expand vars (this is ok since it is set by shipyard)
-    fstab_entry=$(eval echo $SHIPYARD_STORAGE_CLUSTER_FSTAB)
-    echo $fstab_entry >> /etc/fstab
-    tail -n1 /etc/fstab
-    echo "Mounting $mountpoint"
-    START=$(date -u +"%s")
-    set +e
-    while :
-    do
-        mount $mountpoint
-        if [ $? -eq 0 ]; then
-            break
-        else
-            NOW=$(date -u +"%s")
-            DIFF=$((($NOW-$START)/60))
-            # fail after 5 minutes of attempts
-            if [ $DIFF -ge 5 ]; then
-                echo "Could not mount storage cluster $sc_arg on: $mountpoint"
-                exit 1
+if [ ! -z $sc_args ]; then
+    # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
+    fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
+    IFS='#' read -ra fstabs <<< "$fstab_mounts"
+    i=0
+    for sc_arg in ${sc_args[@]}; do
+        IFS=':' read -ra sc <<< "$sc_arg"
+        mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
+        echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
+        mkdir -p $mountpoint
+        chmod 777 $mountpoint
+        echo "Adding $mountpoint to fstab"
+        # eval fstab var to expand vars (this is ok since it is set by shipyard)
+        fstab_entry="${fstabs[$i]}"
+        echo $fstab_entry >> /etc/fstab
+        tail -n1 /etc/fstab
+        echo "Mounting $mountpoint"
+        START=$(date -u +"%s")
+        set +e
+        while :
+        do
+            mount $mountpoint
+            if [ $? -eq 0 ]; then
+                break
+            else
+                NOW=$(date -u +"%s")
+                DIFF=$((($NOW-$START)/60))
+                # fail after 5 minutes of attempts
+                if [ $DIFF -ge 5 ]; then
+                    echo "Could not mount storage cluster $sc_arg on: $mountpoint"
+                    exit 1
+                fi
+                sleep 1
             fi
-            sleep 1
-        fi
+        done
+        set -e
+        echo "$mountpoint mounted."
+        i=$(($i + 1))
     done
-    set -e
-    echo "$mountpoint mounted."
 fi
 
 # touch node prep finished file to preserve idempotency

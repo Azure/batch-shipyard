@@ -779,10 +779,10 @@ def wait_for_storage_threads(storage_threads):
 
 def ingress_data(
         batch_client, compute_client, network_client, config, rls=None,
-        kind=None, current_dedicated=None):
+        kind=None, current_dedicated=None, to_fs=None):
     # type: (batch.BatchServiceClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict, dict, str,
-    #        int) -> list
+    #        int, str) -> list
     """Ingresses data into Azure
     :param batch_client: The batch client to use.
     :type batch_client: `batchserviceclient.BatchServiceClient`
@@ -794,6 +794,7 @@ def ingress_data(
     :param dict rls: remote login settings
     :param str kind: 'all', 'shared', 'storage', or 'remotefs'
     :param int current_dedicated: current dedicated
+    :param str to_fs: to remote filesystem
     :rtype: list
     :return: list of storage threads
     """
@@ -838,7 +839,7 @@ def ingress_data(
                         source.path, dest.shared_data_volume))
                 continue
             # get rfs settings
-            rfs = settings.remotefs_settings(config)
+            rfs = settings.remotefs_settings(config, to_fs)
             dst_rfs = False
             # set base dst path
             dst = '{}/batch/tasks/'.format(
@@ -856,7 +857,7 @@ def ingress_data(
                                 dst, settings.get_gluster_on_compute_volume())
                         elif settings.is_shared_data_volume_storage_cluster(
                                 sdv, sdvkey):
-                            if kind != 'remotefs':
+                            if kind != 'remotefs' or sdvkey != to_fs:
                                 continue
                             dst = rfs.storage_cluster.file_server.mountpoint
                             # add trailing directory separator if needed

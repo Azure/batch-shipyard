@@ -2433,8 +2433,7 @@ def fileserver_settings(config, vm_count):
     conf = _kv_read_checked(config, 'file_server', {})
     sc_fs_type = _kv_read_checked(conf, 'type')
     if util.is_none_or_empty(sc_fs_type):
-        raise ValueError(
-            'remote_fs:storage_cluster:file_server:type must be specified')
+        raise ValueError('file_server:type must be specified')
     sc_fs_type = sc_fs_type.lower()
     # cross check against number of vms
     if ((sc_fs_type == 'nfs' and vm_count != 1) or
@@ -2444,8 +2443,7 @@ def fileserver_settings(config, vm_count):
              'vm_count {}').format(sc_fs_type, vm_count))
     sc_fs_mountpoint = _kv_read_checked(conf, 'mountpoint')
     if util.is_none_or_empty(sc_fs_mountpoint):
-        raise ValueError(
-            'remote_fs:storage_cluster:file_server must be specified')
+        raise ValueError('file_server must be specified')
     sc_mo = _kv_read_checked(conf, 'mount_options')
     # get server options
     so_conf = _kv_read_checked(conf, 'server_options', {})
@@ -2457,10 +2455,11 @@ def fileserver_settings(config, vm_count):
     )
 
 
-def remotefs_settings(config):
-    # type: (dict) -> RemoteFsSettings
+def remotefs_settings(config, sc_id=None):
+    # type: (dict, str) -> RemoteFsSettings
     """Get remote fs settings
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :rtype: RemoteFsSettings
     :return: remote fs settings
     """
@@ -2478,14 +2477,23 @@ def remotefs_settings(config):
     md_premium = _kv_read(md_conf, 'premium', False)
     md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
     md_disk_names = _kv_read_checked(md_conf, 'disk_names')
-    # storage cluster settings
-    sc_conf = conf['storage_cluster']
-    sc_id = sc_conf['id']
+    md = ManagedDisksSettings(
+        resource_group=md_rg,
+        premium=md_premium,
+        disk_size_gb=md_disk_size_gb,
+        disk_names=md_disk_names,
+    )
     if util.is_none_or_empty(sc_id):
-        raise ValueError('invalid id in remote_fs:storage_cluster')
+        return RemoteFsSettings(
+            location=location,
+            managed_disks=md,
+            storage_cluster=None,
+        )
+    # storage cluster settings
+    sc_conf = conf['storage_clusters'][sc_id]
     sc_rg = _kv_read_checked(sc_conf, 'resource_group', resource_group)
     if util.is_none_or_empty(md_rg):
-        raise ValueError('invalid storage_cluster:resource_group in remote_fs')
+        raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
     sc_static_public_ip = _kv_read(sc_conf, 'static_public_ip', False)
@@ -2596,9 +2604,8 @@ def remotefs_settings(config):
     # check disk map against vm_count
     if len(disk_map) != sc_vm_count:
         raise ValueError(
-            ('Number of entries in storage_cluster:vm_disk_map {} '
-             'inconsistent with storage_cluster:vm_count {}').format(
-                 len(disk_map), sc_vm_count))
+            ('Number of entries in vm_disk_map {} inconsistent with '
+             'vm_count {}').format(len(disk_map), sc_vm_count))
     return RemoteFsSettings(
         location=location,
         managed_disks=ManagedDisksSettings(

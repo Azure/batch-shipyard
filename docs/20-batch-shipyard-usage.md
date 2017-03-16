@@ -217,8 +217,9 @@ The `data` command has the following sub-commands:
   * `--filespec <nodeid>,<filename>` can be given to download one
     specific file from compute node
 * `ingress` will ingress data as specified in configuration files
-  * `--to-fs` transfers data as specified in configuration files to
-    a remote file system instead of Azure Storage
+  * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
+    configuration files to the specified remote file system storage cluster
+    instead of Azure Storage
 * `listfiles` will list files for all tasks in jobs
   * `--jobid` force scope to just this job id
   * `--taskid` force scope to just this task id
@@ -251,6 +252,11 @@ parts of a remote filesystem:
   status   Query status of a filesystem storage cluster...
   suspend  Suspend a filesystem storage cluster in Azure
 ```
+As the `fs.json` configuration file can contain multiple storage cluster
+definitions, all `fs cluster` commands require the argument
+`STORAGE_CLUSTER_ID` after any option below is specified targeting the
+storage cluster to perform actions against.
+
 * `add` will create a remote fs cluster as defined in the fs config file
 * `del` will delete a remote fs cluster as defined in the fs config file
   * `--delete-resource-group` will delete the entire resource group that

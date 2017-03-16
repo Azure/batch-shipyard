@@ -209,8 +209,9 @@ def populate_global_settings(config, fs_storage):
     sc = settings.credentials_storage(config, bs.storage_account_settings)
     bc = settings.credentials_batch(config)
     if fs_storage:
-        rfs = settings.remotefs_settings(config)
-        postfix = rfs.storage_cluster.id
+        # set postfix to empty for now, it will be populated with the
+        # storage cluster during the actual calls
+        postfix = ''
     else:
         postfix = '-'.join(
             (bc.account.lower(), settings.pool_id(config, lower=True)))
@@ -403,11 +404,11 @@ def _setup_azurefile_volume_driver(blob_client, config):
 
 
 def _create_storage_cluster_mount_args(
-        compute_client, network_client, batch_mgmt_client, config, bc, vnet,
-        subnet):
+        compute_client, network_client, batch_mgmt_client, config, sc_id,
+        bc, vnet, subnet):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        azure.mgmt.batch.BatchManagementClient, dict,
+    #        azure.mgmt.batch.BatchManagementClient, dict, str,
     #        settings.BatchCredentials, networkmodels.VirtualNetwork,
     #        networkmodels.Subnet) -> Tuple[str, str]
     """Create storage cluster mount arguments
@@ -417,6 +418,7 @@ def _create_storage_cluster_mount_args(
         network client
     :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param settings.BatchCredentials: batch creds
     :param networkmodels.VirtualNetwork: vnet
     :param networkmodels.Subnet: subnet
@@ -438,28 +440,28 @@ def _create_storage_cluster_mount_args(
             'cannot mount a storage cluster without a valid virtual '
             'network or subnet')
     # get remotefs settings
-    rfs = settings.remotefs_settings(config)
+    rfs = settings.remotefs_settings(config, sc_id)
     sc = rfs.storage_cluster
     # iterate through shared data volumes and fine storage clusters
     sdv = settings.global_resources_shared_data_volumes(config)
-    if (sc.id not in sdv or
+    if (sc_id not in sdv or
             not settings.is_shared_data_volume_storage_cluster(
-                sdv, sc.id)):
+                sdv, sc_id)):
         raise RuntimeError(
-            'No storage cluster {} found in configuration'.format(sc.id))
+            'No storage cluster {} found in configuration'.format(sc_id))
     # check for same vnet name
     if vnet.name.lower() != sc.virtual_network.name.lower():
         raise RuntimeError(
             'cannot link storage cluster {} on virtual '
             'network {} with pool virtual network {}'.format(
-                sc.id, sc.virtual_network.name, vnet.name))
+                sc_id, sc.virtual_network.name, vnet.name))
     # cross check vnet resource group
     _vnet_tmp = vnet.id.lower().split('/')
     if _vnet_tmp[4] != sc.virtual_network.resource_group.lower():
         raise RuntimeError(
             'cannot link storage cluster {} virtual network in resource group '
             '{} with pool virtual network in resource group {}'.format(
-                sc.id, sc.virtual_network.resource_group,
+                sc_id, sc.virtual_network.resource_group,
                 _vnet_tmp[4]))
     # cross check vnet subscription id
     _ba_tmp = ba.id.lower().split('/')
@@ -467,14 +469,14 @@ def _create_storage_cluster_mount_args(
         raise RuntimeError(
             'cannot link storage cluster {} virtual network in subscription '
             '{} with pool virtual network in subscription {}'.format(
-                sc.id, _vnet_tmp[2], _ba_tmp[2]))
+                sc_id, _vnet_tmp[2], _ba_tmp[2]))
     del _vnet_tmp
     del _ba_tmp
     # get vm count
     if sc.vm_count < 1:
         raise RuntimeError(
             'storage cluster {} vm_count {} is invalid'.format(
-                sc.id, sc.vm_count))
+                sc_id, sc.vm_count))
     # get fileserver type
     if sc.file_server.type == 'nfs':
         # query first vm for info
@@ -489,20 +491,20 @@ def _create_storage_cluster_mount_args(
         remote_ip = nic.ip_configurations[0].private_ip_address
         # construct mount options
         mo = '_netdev,auto,nfsvers=4,intr'
-        amo = settings.shared_data_volume_mount_options(sdv, sc.id)
+        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
         if util.is_not_empty(amo):
             if 'udp' in mo:
                 raise RuntimeError(
                     ('udp cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc.id))
+                     'storage cluster {}').format(sc_id))
             if any([x.startswith('nfsvers=') for x in amo]):
                 raise RuntimeError(
                     ('nfsvers cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc.id))
+                     'storage cluster {}').format(sc_id))
             if any([x.startswith('port=') for x in amo]):
                 raise RuntimeError(
                     ('port cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc.id))
+                     'storage cluster {}').format(sc_id))
             mo = ','.join((mo, ','.join(amo)))
         # construct mount string for fstab
         fstab_mount = (
@@ -510,7 +512,7 @@ def _create_storage_cluster_mount_args(
             '{fstype} {mo} 0 2').format(
                 remoteip=remote_ip,
                 srcpath=sc.file_server.mountpoint,
-                scid=sc.id,
+                scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo,
             )
@@ -571,16 +573,16 @@ def _create_storage_cluster_mount_args(
         # construct mount options
         mo = '_netdev,auto,transport=tcp,backupvolfile-server={}'.format(
             backup_ip)
-        amo = settings.shared_data_volume_mount_options(sdv, sc.id)
+        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
         if util.is_not_empty(amo):
             if any([x.startswith('backupvolfile-server=') for x in amo]):
                 raise RuntimeError(
                     ('backupvolfile-server cannot be specified as a mount '
-                     'option for storage cluster {}').format(sc.id))
+                     'option for storage cluster {}').format(sc_id))
             if any([x.startswith('transport=') for x in amo]):
                 raise RuntimeError(
                     ('transport cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc.id))
+                     'storage cluster {}').format(sc_id))
             mo = ','.join((mo, ','.join(amo)))
         # construct mount string for fstab, srcpath is the gluster volume
         fstab_mount = (
@@ -588,24 +590,24 @@ def _create_storage_cluster_mount_args(
             '{fstype} {mo} 0 2').format(
                 remoteip=primary_ip,
                 srcpath=settings.get_file_server_glusterfs_volume_name(sc),
-                scid=sc.id,
+                scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo,
             )
     else:
         raise NotImplementedError(
             ('cannot handle file_server type {} for storage '
-             'cluster {}').format(sc.file_server.type, sc.id))
+             'cluster {}').format(sc.file_server.type, sc_id))
     if util.is_none_or_empty(fstab_mount):
         raise RuntimeError(
             ('Could not construct an fstab mount entry for storage '
-             'cluster {}').format(sc.id))
+             'cluster {}').format(sc_id))
     # construct sc_arg
-    sc_arg = '{}:{}'.format(sc.file_server.type, sc.id)
+    sc_arg = '{}:{}'.format(sc.file_server.type, sc_id)
     # log config
     if settings.verbose(config):
         logger.debug('storage cluster {} fstab mount: {}'.format(
-            sc.id, fstab_mount))
+            sc_id, fstab_mount))
     return (fstab_mount, sc_arg)
 
 
@@ -634,7 +636,7 @@ def _add_pool(
     # check shared data volume mounts before proceeding to allocate
     azurefile_vd = False
     gluster_on_compute = False
-    storage_cluster_mount = False
+    storage_cluster_mounts = []
     try:
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
@@ -651,7 +653,7 @@ def _add_pool(
                 gluster_on_compute = True
             elif settings.is_shared_data_volume_storage_cluster(
                     sdv, sdvkey):
-                storage_cluster_mount = True
+                storage_cluster_mounts.append(sdvkey)
             else:
                 raise ValueError('Unknown shared data volume: {}'.format(
                     settings.shared_data_volume_driver(sdv, sdvkey)))
@@ -708,14 +710,19 @@ def _add_pool(
         logger.info('using virtual network subnet id: {}'.format(subnet.id))
     else:
         logger.debug('no virtual network settings specified')
-    # construct fstab mount for storage_cluster_mount
-    fstab_mount = None
-    sc_arg = None
-    if storage_cluster_mount:
-        fstab_mount, sc_arg = _create_storage_cluster_mount_args(
-            compute_client, network_client, batch_mgmt_client, config,
-            bc, vnet, subnet)
-    del storage_cluster_mount
+    # construct fstab mounts for storage clusters
+    fstab_mounts = []
+    sc_args = []
+    if util.is_not_empty(storage_cluster_mounts):
+        for sc_id in storage_cluster_mounts:
+            fm, sca = _create_storage_cluster_mount_args(
+                compute_client, network_client, batch_mgmt_client, config,
+                sc_id, bc, vnet, subnet)
+            fstab_mounts.append(fm)
+            sc_args.append(sca)
+        if settings.verbose(config):
+            logger.debug('storage cluster args: {}'.format(sc_args))
+    del storage_cluster_mounts
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
@@ -796,12 +803,13 @@ def _add_pool(
         '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
             npf=_NODEPREP_FILE[0],
             a=' -a' if azurefile_vd else '',
-            b=' -b {}'.format(block_for_gr) if block_for_gr else '',
+            b=' -b' if util.is_not_empty(block_for_gr) else '',
             d=' -d' if bs.use_shipyard_docker_image else '',
             e=' -e {}'.format(pfx.sha1) if encrypt else '',
             f=' -f' if gluster_on_compute else '',
             g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            m=' -m {}'.format(sc_arg) if util.is_not_empty(sc_arg) else '',
+            m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                sc_args) else '',
             n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
             o=' -o {}'.format(pool_settings.offer),
             p=' -p {}'.format(
@@ -848,11 +856,18 @@ def _add_pool(
                             storage.get_storageaccount_endpoint(),
                             storage.get_storageaccount_key()),
                         config)
-                )
+                ),
             ],
             resource_files=[],
         ),
     )
+    if util.is_not_empty(block_for_gr):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SHIPYARD_DOCKER_IMAGES_PRELOAD',
+                block_for_gr,
+            )
+        )
     if encrypt:
         pool.certificate_references = [
             batchmodels.CertificateReference(
@@ -890,13 +905,15 @@ def _add_pool(
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet.id,
         )
-    if util.is_not_empty(sc_arg):
+    if util.is_not_empty(fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_STORAGE_CLUSTER_FSTAB',
-                fstab_mount
+                '#'.join(fstab_mounts)
             )
         )
+        del sc_args
+        del fstab_mounts
     # add optional environment variables
     if bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
@@ -1403,11 +1420,12 @@ def action_fs_disks_list(
 
 
 def action_fs_cluster_add(
-        resource_client, compute_client, network_client, blob_client, config):
+        resource_client, compute_client, network_client, blob_client,
+        config, storage_cluster_id):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        azure.storage.blob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService, dict, str) -> None
     """Action: Fs Cluster Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1417,18 +1435,21 @@ def action_fs_cluster_add(
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     """
+    storage.set_storage_remotefs_container(storage_cluster_id)
     storage.create_storage_containers_remotefs(blob_client, config)
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
-        _REMOTEFSPREP_FILE[0], _ALL_REMOTEFS_FILES)
+        storage_cluster_id, _REMOTEFSPREP_FILE[0], _ALL_REMOTEFS_FILES)
 
 
 def action_fs_cluster_resize(
-        compute_client, network_client, blob_client, config):
+        compute_client, network_client, blob_client, config,
+        storage_cluster_id):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        azure.storage.blob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService, dict, str) -> None
     """Action: Fs Cluster Resize
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1436,20 +1457,22 @@ def action_fs_cluster_resize(
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     """
     remotefs.resize_storage_cluster(
         compute_client, network_client, blob_client, config,
-        _REMOTEFSPREP_FILE[0], _REMOTEFSADDBRICK_FILE[0], _ALL_REMOTEFS_FILES)
+        storage_cluster_id, _REMOTEFSPREP_FILE[0], _REMOTEFSADDBRICK_FILE[0],
+        _ALL_REMOTEFS_FILES)
 
 
 def action_fs_cluster_del(
         resource_client, compute_client, network_client, blob_client, config,
-        delete_all_resources, delete_data_disks, delete_virtual_network,
-        generate_from_prefix, wait):
+        storage_cluster_id, delete_all_resources, delete_data_disks,
+        delete_virtual_network, generate_from_prefix, wait):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        azure.storage.blob.BlockBlobService, dict, bool, bool,
+    #        azure.storage.blob.BlockBlobService, dict, str, bool, bool,
     #        bool, bool, bool) -> None
     """Action: Fs Cluster Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -1460,6 +1483,7 @@ def action_fs_cluster_del(
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param bool delete_all_resources: delete all resources
     :param bool delete_data_disks: delete data disks
     :param bool delete_virtual_network: delete virtual network
@@ -1471,9 +1495,10 @@ def action_fs_cluster_del(
              delete_virtual_network)):
         raise ValueError(
             'Cannot specify generate_from_prefix and a delete_* option')
+    storage.set_storage_remotefs_container(storage_cluster_id)
     remotefs.delete_storage_cluster(
         resource_client, compute_client, network_client, config,
-        delete_data_disks=delete_data_disks,
+        storage_cluster_id, delete_data_disks=delete_data_disks,
         delete_virtual_network=delete_virtual_network,
         delete_resource_group=delete_all_resources,
         generate_from_prefix=generate_from_prefix, wait=wait)
@@ -1481,57 +1506,69 @@ def action_fs_cluster_del(
 
 
 def action_fs_cluster_expand(
-        compute_client, network_client, config, rebalance):
+        compute_client, network_client, config, storage_cluster_id, rebalance):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        bool) -> None
     """Action: Fs Cluster Expand
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param bool rebalance: rebalance filesystem
     """
     if remotefs.expand_storage_cluster(
-            compute_client, network_client, config, _REMOTEFSPREP_FILE[0],
-            rebalance):
+            compute_client, network_client, config, storage_cluster_id,
+            _REMOTEFSPREP_FILE[0], rebalance):
         action_fs_cluster_status(
-            compute_client, network_client, config, detail=True, hosts=False)
+            compute_client, network_client, config, storage_cluster_id,
+            detail=True, hosts=False)
 
 
-def action_fs_cluster_suspend(compute_client, config, wait):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def action_fs_cluster_suspend(
+        compute_client, config, storage_cluster_id, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        bool) -> None
     """Action: Fs Cluster Suspend
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param bool wait: wait for suspension to complete
     """
-    remotefs.suspend_storage_cluster(compute_client, config, wait)
+    remotefs.suspend_storage_cluster(
+        compute_client, config, storage_cluster_id, wait)
 
 
 def action_fs_cluster_start(
-        compute_client, network_client, config, wait):
+        compute_client, network_client, config, storage_cluster_id, wait):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        bool) -> None
     """Action: Fs Cluster Start
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param bool wait: wait for restart to complete
     """
-    remotefs.start_storage_cluster(compute_client, config, wait)
+    remotefs.start_storage_cluster(
+        compute_client, config, storage_cluster_id, wait)
     if wait:
         action_fs_cluster_status(
-            compute_client, network_client, config, detail=True, hosts=False)
+            compute_client, network_client, config, storage_cluster_id,
+            detail=True, hosts=False)
 
 
 def action_fs_cluster_status(
-        compute_client, network_client, config, detail, hosts):
+        compute_client, network_client, config, storage_cluster_id,
+        detail, hosts):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, bool,
     #        bool) -> None
     """Action: Fs Cluster Status
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1539,18 +1576,20 @@ def action_fs_cluster_status(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param bool detail: detailed status
     :param bool hosts: dump info for /etc/hosts
     """
     remotefs.stat_storage_cluster(
-        compute_client, network_client, config, _REMOTEFSSTAT_FILE[0], detail,
-        hosts)
+        compute_client, network_client, config, storage_cluster_id,
+        _REMOTEFSSTAT_FILE[0], detail, hosts)
 
 
 def action_fs_cluster_ssh(
-        compute_client, network_client, config, cardinal, hostname):
+        compute_client, network_client, config, storage_cluster_id,
+        cardinal, hostname):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, int,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
     #        str) -> None
     """Action: Fs Cluster Ssh
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1558,6 +1597,7 @@ def action_fs_cluster_ssh(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str storage_cluster_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
     """
@@ -1568,7 +1608,8 @@ def action_fs_cluster_ssh(
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
-        compute_client, network_client, config, cardinal, hostname)
+        compute_client, network_client, config, storage_cluster_id,
+        cardinal, hostname)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
@@ -2181,7 +2222,7 @@ def action_data_ingress(
         batch_client, compute_client, network_client, config, to_fs):
     # type: (batchsc.BatchServiceClient,
     #        azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str) -> None
     """Action: Data Ingress
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -2190,10 +2231,10 @@ def action_data_ingress(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
-    :param bool to_fs: ingress to remote filesystem
+    :param str to_fs: ingress to remote filesystem
     """
     pool_cd = None
-    if not to_fs:
+    if util.is_none_or_empty(to_fs):
         try:
             # get pool current dedicated
             pool = batch_client.pool.get(settings.pool_id(config))
@@ -2222,5 +2263,5 @@ def action_data_ingress(
                 'AAD credentials')
     storage_threads = data.ingress_data(
         batch_client, compute_client, network_client, config, rls=rls,
-        kind=kind, current_dedicated=pool_cd)
+        kind=kind, current_dedicated=pool_cd, to_fs=to_fs)
     data.wait_for_storage_threads(storage_threads)

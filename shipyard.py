@@ -600,6 +600,14 @@ def fs_option(f):
         callback=callback)(f)
 
 
+def _storage_cluster_id_argument(f):
+    def callback(ctx, param, value):
+        return value
+    return click.argument(
+        'storage-cluster-id',
+        callback=callback)(f)
+
+
 def common_options(f):
     f = _config_option(f)
     f = _credentials_option(f)
@@ -641,6 +649,12 @@ def fs_options(f):
     return f
 
 
+def fs_cluster_options(f):
+    f = fs_options(f)
+    f = _storage_cluster_id_argument(f)
+    return f
+
+
 @click.group(context_settings=_CONTEXT_SETTINGS)
 @click.version_option(version=convoy.__version__)
 @click.pass_context
@@ -665,28 +679,45 @@ def cluster(ctx):
 
 @cluster.command('add')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_add(ctx):
+def fs_cluster_add(ctx, storage_cluster_id):
     """Create a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
-        ctx.blob_client, ctx.config)
+        ctx.blob_client, ctx.config, storage_cluster_id)
 
 
 @cluster.command('resize')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_resize(ctx):
+def fs_cluster_resize(ctx, storage_cluster_id):
     """Resize a filesystem storage cluster in Azure. Only increasing the
     storage cluster size is supported."""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_resize(
-        ctx.compute_client, ctx.network_client, ctx.blob_client, ctx.config)
+        ctx.compute_client, ctx.network_client, ctx.blob_client, ctx.config,
+        storage_cluster_id)
+
+
+@cluster.command('expand')
+@click.option(
+    '--no-rebalance', is_flag=True,
+    help='Do not rebalance filesystem, if applicable')
+@common_options
+@fs_cluster_options
+@aad_options
+@pass_cli_context
+def fs_cluster_expand(ctx, storage_cluster_id, no_rebalance):
+    """Expand a filesystem storage cluster in Azure"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_expand(
+        ctx.compute_client, ctx.network_client, ctx.config,
+        storage_cluster_id, not no_rebalance)
 
 
 @cluster.command('del')
@@ -704,61 +735,48 @@ def fs_cluster_resize(ctx):
 @click.option(
     '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
 def fs_cluster_del(
-        ctx, delete_resource_group, delete_data_disks, delete_virtual_network,
-        generate_from_prefix, no_wait):
+        ctx, storage_cluster_id, delete_resource_group, delete_data_disks,
+        delete_virtual_network, generate_from_prefix, no_wait):
     """Delete a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_del(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
-        ctx.blob_client, ctx.config, delete_resource_group, delete_data_disks,
-        delete_virtual_network, generate_from_prefix, not no_wait)
-
-
-@cluster.command('expand')
-@click.option(
-    '--no-rebalance', is_flag=True,
-    help='Do not rebalance filesystem, if applicable')
-@common_options
-@fs_options
-@aad_options
-@pass_cli_context
-def fs_cluster_expand(ctx, no_rebalance):
-    """Expand a filesystem storage cluster in Azure"""
-    ctx.initialize_for_fs()
-    convoy.fleet.action_fs_cluster_expand(
-        ctx.compute_client, ctx.network_client, ctx.config, not no_rebalance)
+        ctx.blob_client, ctx.config, storage_cluster_id,
+        delete_resource_group, delete_data_disks, delete_virtual_network,
+        generate_from_prefix, not no_wait)
 
 
 @cluster.command('suspend')
 @click.option(
     '--no-wait', is_flag=True, help='Do not wait for suspension to complete')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_suspend(ctx, no_wait):
+def fs_cluster_suspend(ctx, storage_cluster_id, no_wait):
     """Suspend a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_suspend(
-        ctx.compute_client, ctx.config, not no_wait)
+        ctx.compute_client, ctx.config, storage_cluster_id, not no_wait)
 
 
 @cluster.command('start')
 @click.option(
     '--no-wait', is_flag=True, help='Do not wait for restart to complete')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_start(ctx, no_wait):
+def fs_cluster_start(ctx, storage_cluster_id, no_wait):
     """Starts a previously suspended filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_start(
-        ctx.compute_client, ctx.network_client, ctx.config, not no_wait)
+        ctx.compute_client, ctx.network_client, ctx.config,
+        storage_cluster_id, not no_wait)
 
 
 @cluster.command('status')
@@ -768,14 +786,15 @@ def fs_cluster_start(ctx, no_wait):
     '--hosts', is_flag=True,
     help='Output /etc/hosts compatible name resolution for GlusterFS clusters')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_status(ctx, detail, hosts):
+def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
     """Query status of a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_status(
-        ctx.compute_client, ctx.network_client, ctx.config, detail, hosts)
+        ctx.compute_client, ctx.network_client, ctx.config,
+        storage_cluster_id, detail, hosts)
 
 
 @cluster.command('ssh')
@@ -786,15 +805,16 @@ def fs_cluster_status(ctx, detail, hosts):
 @click.option(
     '--hostname', help='Hostname of remote fs vm to connect to')
 @common_options
-@fs_options
+@fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_ssh(ctx, cardinal, hostname):
+def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname):
     """Interactively login via SSH to a filesystem storage cluster virtual
     machine in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_ssh(
-        ctx.compute_client, ctx.network_client, ctx.config, cardinal, hostname)
+        ctx.compute_client, ctx.network_client, ctx.config,
+        storage_cluster_id, cardinal, hostname)
 
 
 @fs.group()
@@ -1412,7 +1432,7 @@ def data_getfilenode(ctx, all, filespec):
 
 @data.command('ingress')
 @click.option(
-    '--to-fs', is_flag=True, help='Ingress data to a remote filesystem')
+    '--to-fs', help='Ingress data to specified remote filesystem')
 @common_options
 @batch_options
 @keyvault_options

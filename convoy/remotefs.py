@@ -674,11 +674,11 @@ def _create_availability_set(compute_client, rfs):
 
 def create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
-        bootstrap_file, remotefs_files):
+        sc_id, bootstrap_file, remotefs_files):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        azure.storage.blob.BlockBlobService, dict, str,
+    #        azure.storage.blob.BlockBlobService, dict, str, str,
     #        List[tuple]) -> None
     """Create a storage cluster
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -688,18 +688,20 @@ def create_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str sc_id: storage cluster id
     :param str bootstrap_file: customscript bootstrap file
     :param list remotefs_files: remotefs shell scripts
     :param dict config: configuration dict
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # create resource group if it doesn't exist
     resource.create_resource_group(
         resource_client, rfs.storage_cluster.resource_group, rfs.location)
     # check if cluster already exists
-    logger.debug('checking if storage cluster {} exists'.format(
-        rfs.storage_cluster.id))
+    logger.debug('checking if storage cluster {} exists'.format(sc_id))
     # construct disk map
     disk_map = {}
     disk_names = list_disks(compute_client, config, restrict_scope=True)
@@ -740,8 +742,7 @@ def create_storage_cluster(
                          rfs.storage_cluster.vm_size)))
     # confirm before proceeding
     if not util.confirm_action(
-            config, 'create storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'create storage cluster {}'.format(sc_id)):
         return
     # async operation dictionary
     async_ops = {}
@@ -870,10 +871,10 @@ def create_storage_cluster(
 
 
 def resize_storage_cluster(
-        compute_client, network_client, blob_client, config, bootstrap_file,
-        addbrick_file, remotefs_files):
+        compute_client, network_client, blob_client, config, sc_id,
+        bootstrap_file, addbrick_file, remotefs_files):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str, str,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, str, str,
     #        list) -> bool
     """Resize a storage cluster (increase size only for now)
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -881,6 +882,7 @@ def resize_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param str bootstrap_file: bootstrap file
     :param str addbrick_file: glusterfs addbrick file
     :param list remotefs_files: remotefs files to upload
@@ -888,7 +890,9 @@ def resize_storage_cluster(
     :return: if cluster was resized
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # if storage cluster is not glusterfs, exit
     if rfs.storage_cluster.file_server.type != 'glusterfs':
         raise ValueError(
@@ -945,7 +949,7 @@ def resize_storage_cluster(
     if len(new_vms) == 0:
         logger.warning(
             'no new virtual machines to add in storage cluster {}'.format(
-                rfs.storage_cluster.id))
+                sc_id))
         return False
     # ensure that new disks to add are not already attached and
     # are provisioned
@@ -964,11 +968,10 @@ def resize_storage_cluster(
     logger.warning(
         ('**WARNING** cluster resize is an experimental feature and may lead '
          'to data loss, unavailability or an unrecoverable state for '
-         'the storage cluster {}.'.format(rfs.storage_cluster.id)))
+         'the storage cluster {}.'.format(sc_id)))
     # confirm before proceeding
     if not util.confirm_action(
-            config, 'resize storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'resize storage cluster {}'.format(sc_id)):
         return False
     # create static private ip block, start offset at 4
     private_ips = [
@@ -1159,10 +1162,10 @@ def resize_storage_cluster(
 
 
 def expand_storage_cluster(
-        compute_client, network_client, config, bootstrap_file,
+        compute_client, network_client, config, sc_id, bootstrap_file,
         rebalance=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, str,
     #        bool) -> bool
     """Expand a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1170,16 +1173,18 @@ def expand_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param str bootstrap_file: bootstrap file
     :param bool rebalance: rebalance filesystem
     :rtype: bool
     :return: if cluster was expanded
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # check if cluster exists
-    logger.debug('checking if storage cluster {} exists'.format(
-        rfs.storage_cluster.id))
+    logger.debug('checking if storage cluster {} exists'.format(sc_id))
     # construct disk map
     disk_map = {}
     disk_names = list_disks(compute_client, config, restrict_scope=True)
@@ -1245,19 +1250,17 @@ def expand_storage_cluster(
     if len(vms) == 0:
         logger.warning(
             'no virtual machines to expand in storage cluster {}'.format(
-                rfs.storage_cluster.id))
+                sc_id))
         return False
     if settings.verbose(config):
         logger.debug('expand settings:{}{}'.format(os.linesep, vms))
     if new_disk_count == 0:
         logger.error(
-            'no new disks detected for storage cluster {}'.format(
-                rfs.storage_cluster.id))
+            'no new disks detected for storage cluster {}'.format(sc_id))
         return False
     # confirm before proceeding
     if not util.confirm_action(
-            config, 'expand storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'expand storage cluster {}'.format(sc_id)):
         return False
     # attach new data disks to each vm
     async_ops = {}
@@ -1547,12 +1550,12 @@ def _delete_virtual_network(network_client, rg_name, vnet_name):
 
 def delete_storage_cluster(
         resource_client, compute_client, network_client, config,
-        delete_data_disks=False, delete_virtual_network=False,
+        sc_id, delete_data_disks=False, delete_virtual_network=False,
         delete_resource_group=False, generate_from_prefix=False, wait=False):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, bool, bool,
-    #        bool, bool, bool) -> None
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, bool,
+    #        bool, bool, bool, bool) -> None
     """Delete a storage cluster
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1561,6 +1564,7 @@ def delete_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param bool delete_data_disks: delete managed data disks
     :param bool delete_virtual_network: delete vnet
     :param bool delete_resource_group: delete resource group
@@ -1568,7 +1572,9 @@ def delete_storage_cluster(
     :param bool wait: wait for completion
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # delete rg if specified
     if delete_resource_group:
         if util.confirm_action(
@@ -1586,8 +1592,7 @@ def delete_storage_cluster(
                     rfs.storage_cluster.resource_group))
         return
     if not util.confirm_action(
-            config, 'delete storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'delete storage cluster {}'.format(sc_id)):
         return
     # get vms and cache for concurent async ops
     resources = {}
@@ -1845,16 +1850,20 @@ def _start_virtual_machine(compute_client, rg_name, vm_name):
     )
 
 
-def suspend_storage_cluster(compute_client, config, wait=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def suspend_storage_cluster(compute_client, config, sc_id, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        bool) -> None
     """Suspend a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param bool wait: wait for suspension to complete
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = settings.generate_virtual_machine_name(
@@ -1883,8 +1892,7 @@ def suspend_storage_cluster(compute_client, config, wait=False):
             'suspension, a variety of issues can occur such as: unsuccessful '
             'restart of the cluster, split-brain states, or even data loss.')
     if not util.confirm_action(
-            config, 'suspend storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'suspend storage cluster {}'.format(sc_id)):
         return
     # deallocate each vm
     async_ops = {}
@@ -1901,16 +1909,20 @@ def suspend_storage_cluster(compute_client, config, wait=False):
         logger.info('{} virtual machines deallocated'.format(len(async_ops)))
 
 
-def start_storage_cluster(compute_client, config, wait=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+def start_storage_cluster(compute_client, config, sc_id, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        bool) -> None
     """Starts a suspended storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param bool wait: wait for restart to complete
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = settings.generate_virtual_machine_name(
@@ -1932,8 +1944,7 @@ def start_storage_cluster(compute_client, config, wait=False):
         logger.error('no virtual machines to restart')
         return
     if not util.confirm_action(
-            config, 'start suspended storage cluster {}'.format(
-                rfs.storage_cluster.id)):
+            config, 'start suspended storage cluster {}'.format(sc_id)):
         return
     # start each vm
     async_ops = {}
@@ -1950,10 +1961,10 @@ def start_storage_cluster(compute_client, config, wait=False):
 
 
 def stat_storage_cluster(
-        compute_client, network_client, config, status_script, detail=False,
-        hosts=False):
+        compute_client, network_client, config, sc_id, status_script,
+        detail=False, hosts=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, str,
     #        bool, bool) -> None
     """Retrieve status of a storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -1961,12 +1972,15 @@ def stat_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param str status_script: status script
     :param bool detail: detailed status
     :param bool hosts: dump info for /etc/hosts
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # retrieve all vms
     vms = []
     for i in range(rfs.storage_cluster.vm_count):
@@ -1988,7 +2002,7 @@ def stat_storage_cluster(
     if len(vms) == 0:
         logger.error(
             'no virtual machines to query for storage cluster {}'.format(
-                rfs.storage_cluster.id))
+                sc_id))
         return
     # fetch vm status
     fsstatus = []
@@ -2085,7 +2099,7 @@ def stat_storage_cluster(
     else:
         log = '{}'.format(json.dumps(vmstatus, sort_keys=True, indent=4))
     logger.info('storage cluster {} virtual machine status:{}{}'.format(
-        rfs.storage_cluster.id, os.linesep, log))
+        sc_id, os.linesep, log))
     if hosts:
         if rfs.storage_cluster.file_server.type != 'glusterfs':
             raise ValueError('hosts option not compatible with glusterfs')
@@ -2102,9 +2116,10 @@ def stat_storage_cluster(
 
 
 def _get_ssh_info(
-        compute_client, network_client, config, cardinal, hostname, pip=None):
+        compute_client, network_client, config, sc_id, cardinal, hostname,
+        pip=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, int,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
     #        str, networkmodels.PublicIPAddress) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -2112,6 +2127,7 @@ def _get_ssh_info(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
     :param networkmodels.PublicIPAddress pip: public ip
@@ -2119,7 +2135,9 @@ def _get_ssh_info(
     :return (ssh private key, port, username, ip)
     """
     # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
+    if util.is_none_or_empty(sc_id):
+        raise ValueError('storage cluster id not specified')
+    rfs = settings.remotefs_settings(config, sc_id)
     # retrieve specific vm
     if cardinal is not None:
         vm_name = settings.generate_virtual_machine_name(
@@ -2151,9 +2169,9 @@ def _get_ssh_info(
 
 
 def ssh_storage_cluster(
-        compute_client, network_client, config, cardinal, hostname):
+        compute_client, network_client, config, sc_id, cardinal, hostname):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, int,
+    #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
     #        str) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -2161,14 +2179,16 @@ def ssh_storage_cluster(
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param dict config: configuration dict
+    :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
-        compute_client, network_client, config, cardinal, hostname)
+        compute_client, network_client, config, sc_id, cardinal, hostname)
     # connect to vm
-    logger.info('connecting to virtual machine {}:{} with key {}'.format(
-        ip, port, ssh_priv_key))
+    logger.info(
+        ('connecting to storage cluster {} virtual machine {}:{} with '
+         'key {}').format(sc_id, ip, port, ssh_priv_key))
     util.subprocess_with_output(
         ['ssh', '-o', 'StrictHostKeyChecking=no',
          '-o', 'UserKnownHostsFile={}'.format(os.devnull),

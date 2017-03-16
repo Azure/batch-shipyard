@@ -20,65 +20,66 @@ The remote filesystem schema is as follows:
             ]
         },
         "storage_cluster": {
-            "id": "mystoragecluster",
-            "resource_group": "my-server-resource-group",
-            "hostname_prefix": "mystoragecluster",
-            "ssh": {
-                "username": "shipyard",
-                "ssh_public_key": null,
-                "generated_file_export_path": null
-            },
-            "static_public_ip": false,
-            "virtual_network": {
-                "name": "myvnet",
-                "resource_group": "my-vnet-resource-group",
-                "existing_ok": false,
-                "address_space": "10.0.0.0/16",
-                "subnet": {
-                    "name": "my-server-subnet",
-                    "address_prefix": "10.0.0.0/24"
-                }
-            },
-            "network_security": {
-                "ssh": ["*"],
-                "nfs": ["1.2.3.0/24", "2.3.4.5"],
-                "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
-                "custom_inbound_rules": {
-                    "myrule": {
-                        "destination_port_range": "5000-5001",
-                        "source_address_prefix": ["1.2.3.4", "5.6.7.0/24"],
-                        "protocol": "*"
-                    }
-                }
-            },
-            "file_server": {
-                "type": "glusterfs",
-                "mountpoint": "/data",
-                "mount_options": [
-                    "noatime",
-                    "nodiratime"
-                ],
-                "server_options": {
-                    "glusterfs": {
-                        "volume_name": "gv0",
-                        "volume_type": "distributed",
-                        "transport": "tcp",
-                        "performance.cache-size": "1 GB"
-                    }
-                }
-            },
-            "vm_count": 2,
-            "vm_size": "STANDARD_F8S",
-            "vm_disk_map": {
-                "0": {
-                    "disk_array": ["p10-disk0a", "p10-disk1a"],
-                    "filesystem": "btrfs",
-                    "raid_level": 0
+            "mystoragecluster": {
+                "resource_group": "my-server-resource-group",
+                "hostname_prefix": "mystoragecluster",
+                "ssh": {
+                    "username": "shipyard",
+                    "ssh_public_key": null,
+                    "generated_file_export_path": null
                 },
-                "1": {
-                    "disk_array": ["p10-disk0b", "p10-disk1b"],
-                    "filesystem": "btrfs",
-                    "raid_level": 0
+                "static_public_ip": false,
+                "virtual_network": {
+                    "name": "myvnet",
+                    "resource_group": "my-vnet-resource-group",
+                    "existing_ok": false,
+                    "address_space": "10.0.0.0/16",
+                    "subnet": {
+                        "name": "my-server-subnet",
+                        "address_prefix": "10.0.0.0/24"
+                    }
+                },
+                "network_security": {
+                    "ssh": ["*"],
+                    "nfs": ["1.2.3.0/24", "2.3.4.5"],
+                    "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
+                    "custom_inbound_rules": {
+                        "myrule": {
+                            "destination_port_range": "5000-5001",
+                            "source_address_prefix": ["1.2.3.4", "5.6.7.0/24"],
+                            "protocol": "*"
+                        }
+                    }
+                },
+                "file_server": {
+                    "type": "glusterfs",
+                    "mountpoint": "/data",
+                    "mount_options": [
+                        "noatime",
+                        "nodiratime"
+                    ],
+                    "server_options": {
+                        "glusterfs": {
+                            "volume_name": "gv0",
+                            "volume_type": "distributed",
+                            "transport": "tcp",
+                            "performance.cache-size": "1 GB"
+                        }
+                    }
+                },
+                "vm_count": 2,
+                "vm_size": "STANDARD_F8S",
+                "vm_disk_map": {
+                    "0": {
+                        "disk_array": ["p10-disk0a", "p10-disk1a"],
+                        "filesystem": "btrfs",
+                        "raid_level": 0
+                    },
+                    "1": {
+                        "disk_array": ["p10-disk0b", "p10-disk1b"],
+                        "filesystem": "btrfs",
+                        "raid_level": 0
+                    }
                 }
             }
         }
@@ -95,7 +96,7 @@ itself, including networking and virtual machine to disk mapping.
 
 There are two properties which reside outside of these sections:
 * (optional) `resource_group` this is the default resource group to use
-for both the `managed_disks` and `storage_cluster` sections. This setting
+for both the `managed_disks` and `storage_clusters` sections. This setting
 is only used if `resource_group` is not explicitly set in their respective
 configuration blocks.
 * (required) `location` is the Azure region name for the resources, e.g.,
@@ -105,7 +106,7 @@ cluster.
 
 ### Managed Disks: `managed_disks`
 This section defines the disks used by the file server as specified in the
-`storage_cluster` section. Not all disks specified here need to be used by
+`storage_clusters` section. Not all disks specified here need to be used by
 the storage cluster, but every disk in the storage cluster should be
 defined in this section.
 * (optional) `resource_group` this is the resource group to use for the
@@ -128,13 +129,21 @@ please refer to
 will be created identically with the properties defined in the `managed_disks`
 section.
 
-### Storage Cluster: `storage_cluster`
-This section defines the storage cluster containing the file server
+### Storage Clusters: `storage_clusters`
+This section defines the storage clusters containing the file server
 specification and disk mapping. This section cross-references the
 `managed_disks` section so both sections must be populated when performing
 `fs cluster` actions.
-* (required) `id` is the storage cluster id. This id is referenced in other
-actions such as `data ingress` and `pool add` actions.
+
+You can specify multiple storage clusters in the `storage_clusters` section.
+Each key in the `storage_clusters` dictionary is a unique id for the
+storage cluster that you intend to create. This storage cluster id is
+used as the argument `STORAGE_CLUSTER_ID` argument for all `fs cluster`
+actions in the CLI along with any configuration specified for linking against
+Azure Batch pools, if specified, for `pool add`. `data ingress` will also
+take this storage cluster id as a parameter if transfering to the file
+system. Each storage cluster id (key) is paired with a json property
+specifying the following properties:
 * (optional) `resource_group` this is the resource group to use for the
 storage cluster. If this is not specified, then the `resource_group`
 specified in the parent is used. At least one `resource_group` must be
@@ -161,7 +170,7 @@ storage cluster.
   * (required) `name` is the virtual network name
   * (optional) `resource_group` is the resource group for the virtual network.
     If this is not specified, the resource group name falls back to the
-    resource group specified in `storage_cluster` or its parent.
+    resource group specified in the storage cluster or its parent.
   * (optional) `existing_ok` allows use of a pre-existing virtual network.
     The default is `false`.
   * (required if creating, optional otherwise) `address_space` is the
