@@ -649,9 +649,10 @@ if [ $attach_disks -eq 0 ]; then
                 mount_options="defaults,$mount_options"
             fi
             if [ $premium_storage -eq 1 ]; then
-                # disable barriers due to RO cache
+                # disable barriers due to cache
                 if [ $filesystem == "btrfs" ]; then
-                    mount_options+=",nobarrier"
+                    # also enable ssd optimizations on btrfs
+                    mount_options+=",nobarrier,ssd"
                 else
                     mount_options+=",barrier=0"
                 fi
