@@ -744,6 +744,8 @@ def create_storage_cluster(
     if not util.confirm_action(
             config, 'create storage cluster {}'.format(sc_id)):
         return
+    # create storage container
+    storage.create_storage_containers_remotefs(blob_client, config)
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -1549,12 +1551,13 @@ def _delete_virtual_network(network_client, rg_name, vnet_name):
 
 
 def delete_storage_cluster(
-        resource_client, compute_client, network_client, config,
+        resource_client, compute_client, network_client, blob_client, config,
         sc_id, delete_data_disks=False, delete_virtual_network=False,
         delete_resource_group=False, generate_from_prefix=False, wait=False):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient, dict, str, bool,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService, dict, str, bool,
     #        bool, bool, bool, bool) -> None
     """Delete a storage cluster
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -1563,6 +1566,7 @@ def delete_storage_cluster(
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param str sc_id: storage cluster id
     :param bool delete_data_disks: delete managed data disks
@@ -1785,6 +1789,8 @@ def delete_storage_cluster(
             compute_client, rfs.storage_cluster.resource_group, as_name)
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
+    # delete storage container
+    storage.delete_storage_containers_remotefs(blob_client, config)
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')

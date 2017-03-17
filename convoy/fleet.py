@@ -1455,7 +1455,6 @@ def action_fs_cluster_add(
     :param str storage_cluster_id: storage cluster id
     """
     storage.set_storage_remotefs_container(storage_cluster_id)
-    storage.create_storage_containers_remotefs(blob_client, config)
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
         storage_cluster_id, _REMOTEFSPREP_FILE[0], _ALL_REMOTEFS_FILES)
@@ -1514,12 +1513,11 @@ def action_fs_cluster_del(
             'Cannot specify generate_from_prefix and a delete_* option')
     storage.set_storage_remotefs_container(storage_cluster_id)
     remotefs.delete_storage_cluster(
-        resource_client, compute_client, network_client, config,
+        resource_client, compute_client, network_client, blob_client, config,
         storage_cluster_id, delete_data_disks=delete_data_disks,
         delete_virtual_network=delete_virtual_network,
         delete_resource_group=delete_all_resources,
         generate_from_prefix=generate_from_prefix, wait=wait)
-    storage.delete_storage_containers_remotefs(blob_client, config)
 
 
 def action_fs_cluster_expand(

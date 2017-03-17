@@ -1,6 +1,14 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Added virtual environment install option for `install.sh` which is now
+the recommended way to install Batch Shipyard. Please see the install
+guide for more information. (#55)
+
+### Fixed
+- KeyVault client not initialized in `fs` contexts (#57)
+- Check pool current node count prior to executing `udi` task (#58)
 
 ## [2.6.0b1] - 2017-03-16
 ### Added

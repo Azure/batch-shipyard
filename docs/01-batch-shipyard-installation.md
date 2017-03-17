@@ -65,7 +65,7 @@ export PATH=$PATH:$HOME/.local/bin
 Please ensure that you are not invoking the install script as root. `sudo`
 will be invoked wherever root access is required for installing system-wide
 packages in the `install.sh` script. Python packages required by Batch
-Shipyard will be installed either in the virtual environemnt or user context.
+Shipyard will be installed either in the virtual environment or user context.
 
 A helper script named `shipyard` will be generated with a successful
 installation. This helper script can be invoked in lieu of `shipyard.py`

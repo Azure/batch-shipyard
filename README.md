@@ -25,8 +25,8 @@ and compute nodes
   * Any internet accessible Docker container registry
   * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
     instance creation on compute nodes
-* [Integrated Remote Filesystem Provisioning](docs/65-batch-shipyard-remote-fs.md)
-and auto-linking of these filesystems to compute nodes with support for
+* [Standalone Remote Filesystem Provisioning](docs/65-batch-shipyard-remote-fs.md)
+with integration to auto-link these filesystems to compute nodes with support for
   * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
   * [GlusterFS](https://www.gluster.org/) distributed network file system
 * Automatic shared data volume support
