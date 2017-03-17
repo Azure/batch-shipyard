@@ -23,7 +23,29 @@ recommended to install Batch Shipyard on Python 3.5 or later. Although Python
 your system but Python 2.7 is available, then please use that version of
 Python to avoid installation hassles with a Python interpreter.
 
-Install required software as follows:
+The `install.sh` script supports isolated installation through a virtual
+environment so that other system-wide or user python dependencies are left
+unmodified. To perform this style of installation, which is recommended,
+specify the virtual environment to create with the `-e` parameter. This option
+also does not require modifying your shell rc file for advanced data movement
+capability provided by Batch Shipyard.
+
+The recommended installation method with a virtual environment:
+```shell
+# Ensure you are not root
+# Obtain Batch Shipyard through git clone or downloading the archive and unpacking
+# Change directory to where Batch Shipyard was cloned or unpacked to
+cd batch-shipyard
+# Install for Python 2.7 in the virtual environment "shipyard"
+./install.sh -e shipyard
+# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
+./install.sh -3 -e shipyard
+```
+Do not delete the virtual environment directory (in the above example, a
+directory named `shipyard` would be created), as this contains the virtual
+environment required for execution.
+
+Alternatively, install directly into your "user" environment:
 ```shell
 # Ensure you are not root
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
@@ -31,7 +53,7 @@ Install required software as follows:
 cd batch-shipyard
 # Install for Python 2.7
 ./install.sh
-# Or to install for Python 3.5+ (recommended)
+# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
 ./install.sh -3
 # Add $HOME/.local/bin to your PATH in your shell rc file
 # For example, the following line can be added to ~/.bashrc for bash shells:
@@ -39,15 +61,16 @@ export PATH=$PATH:$HOME/.local/bin
 # Reload .bashrc for bash shells
 . ~/.bashrc
 ```
+
 Please ensure that you are not invoking the install script as root. `sudo`
 will be invoked wherever root access is required for installing system-wide
 packages in the `install.sh` script. Python packages required by Batch
-Shipyard will be installed in the user context.
+Shipyard will be installed either in the virtual environemnt or user context.
 
 A helper script named `shipyard` will be generated with a successful
 installation. This helper script can be invoked in lieu of `shipyard.py`
-which will invoke the python script with the appropriate version of
-the interpreter.
+which will invoke shipyard with the appropriate interpreter and virtual
+environment, if created during installation.
 
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
@@ -151,7 +174,9 @@ release archive and unpack. Next, upgrade the dependencies for your
 respective platform below.
 
 #### Linux
-Rerun the `install.sh` script for all upgrades.
+Rerun the `install.sh` script with the appropriate parameters for all
+upgrades. If you specified the `-3` and/or `-e <env name>` parameter, then
+these parameters must be used again for upgrades.
 
 #### Windows
 Reissue the `pip.exe install --upgrade -r requirements.txt` command.

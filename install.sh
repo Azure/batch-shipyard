@@ -3,6 +3,34 @@
 set -e
 set -o pipefail
 
+# vars
+PYTHON=python
+PIP=pip
+VENV_NAME=
+
+# process options
+while getopts "h?3e:" opt; do
+    case "$opt" in
+        h|\?)
+            echo "install.sh parameters"
+            echo ""
+            echo "-3 install for Python 3.3+"
+            echo "-e [environment name] install to a virtual environment"
+            echo ""
+            exit 1
+            ;;
+        3)
+            PYTHON=python3
+            PIP=pip3
+            ;;
+        e)
+            VENV_NAME=$OPTARG
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+[ "$1" = "--" ] && shift
+
 # check to ensure this is not being run directly as root
 if [ $(id -u) -eq 0 ]; then
     echo "Installation cannot be performed as root or via sudo."
@@ -25,14 +53,7 @@ if [ ! -f $PWD/shipyard.py ]; then
     exit 1
 fi
 
-# check for python version
-if [ "$1" == "-3" ]; then
-    PYTHON=python3
-    PIP=pip3
-else
-    PYTHON=python
-    PIP=pip
-fi
+# check for python
 if hash $PYTHON 2> /dev/null; then
     echo "Installing for $PYTHON."
 else
@@ -88,9 +109,9 @@ elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
         fi
         PYTHON_PKGS="python34-devel"
     fi
-    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
     sudo yum install -y gcc openssl-devel libffi-devel openssl \
         openssh-clients rsync $PYTHON_PKGS
+    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
 elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
     sudo zypper ref
     if [ $PYTHON == "python" ]; then
@@ -98,13 +119,27 @@ elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
     else
         PYTHON_PKGS="python3-devel"
     fi
-    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
     sudo zypper -n in gcc libopenssl-devel libffi48-devel openssl \
         openssh rsync $PYTHON_PKGS
+    curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
 else
     echo "Unsupported distribution."
     echo "Please refer to the Installation documentation for manual installation steps."
     exit 1
+fi
+
+# create virtual env if required and install required python packages
+if [ ! -z $VENV_NAME ]; then
+    # create venv
+    mkdir -p $VENV_NAME
+    virtualenv -p $PYTHON $VENV_NAME
+    source $VENV_NAME/bin/activate
+    $PIP install --upgrade pip setuptools
+    $PIP install --upgrade -r requirements.txt
+    deactivate
+else
+    sudo $PIP install --upgrade pip setuptools
+    $PIP install --upgrade --user -r requirements.txt
 fi
 
 # create shipyard script
@@ -115,6 +150,7 @@ set -e
 set -f
 
 BATCH_SHIPYARD_ROOT_DIR=$PWD
+VENV_NAME=$VENV_NAME
 
 EOF
 cat >> shipyard << 'EOF'
@@ -126,6 +162,12 @@ fi
 
 EOF
 
+if [ ! -z $VENV_NAME ]; then
+cat >> shipyard << 'EOF'
+source $BATCH_SHIPYARD_ROOT_DIR/$VENV_NAME/bin/activate
+EOF
+fi
+
 if [ $PYTHON == "python" ]; then
 cat >> shipyard << 'EOF'
 python $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
@@ -136,10 +178,18 @@ python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
 fi
 
+if [ ! -z $VENV_NAME ]; then
+cat >> shipyard << 'EOF'
+deactivate
+EOF
+fi
+
 chmod 755 shipyard
 
-# install required python packages
-sudo $PIP install --upgrade pip setuptools
-$PIP install --upgrade --user -r requirements.txt
 echo ""
+if [ -z $VENV_NAME ]; then
+    echo '>> Please add $HOME/.local/bin to your $PATH. You can do this '
+    echo '>> permanently in your shell rc script, e.g., .bashrc for bash shells.'
+    echo ""
+fi
 echo ">> Install completed for $PYTHON. Please run Batch Shipyard as: $PWD/shipyard"
