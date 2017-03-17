@@ -1156,6 +1156,16 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
                 images = ['{}@{}'.format(image, digest)]
     else:
         images = settings.global_resources_docker_images(config)
+    # get pool current dedicated
+    pool = batch_client.pool.get(pool_id)
+    # check pool current dedicated is > 0. There is no reason to run udi
+    # if pool has no nodes in it. When the pool is resized up, the nodes
+    # will always fetch either :latest if untagged or the latest :tag if
+    # updated in the upstream registry
+    if pool.current_dedicated == 0:
+        raise RuntimeError(
+            ('not executing udi command as the current number of compute '
+             'nodes is zero for pool {}').format(pool_id))
     # create job for update
     job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
@@ -1186,8 +1196,6 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         environment_settings=taskenv,
         user_identity=batch._RUN_ELEVATED,
     )
-    # get pool current dedicated
-    pool = batch_client.pool.get(pool_id)
     # create multi-instance task for pools with more than 1 node
     if pool.current_dedicated > 1:
         batchtask.multi_instance_settings = batchmodels.MultiInstanceSettings(
