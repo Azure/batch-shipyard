@@ -98,15 +98,22 @@ UserSubscription Batch accounts.
 The following is a description of `aad` properties that can be used within
 each credential section. The `aad` property contains members for Azure Active
 Directory credentials. Note that some options are mutually exclusive of each
-other depending upon authentication type: `auth_key`, `rsa_private_key_pem` +
-`x509_cert_sha1_thumbprint` and `username` or `username` + `password` cannot
-be defined at the same time. In a nutshell, you are only required the
-authentication parameters necessary to authenticate your service principal
-or AAD user account. You cannot specify them all at once. Note that most of
-the following properties can be specified as a CLI option or environment
-variable instead. For example, if you do not want to store the `auth_key`
-in the file, it can be specified at runtime.
-* (optional) `directory_id` AAD directory (tenant) id
+other depending upon authentication type. The available authentication types
+for Batch Shipyard with the required parameters for each are:
+* Service principal authentication key: `application_id` and `auth_key`
+* Certificate-based asymmetric key auth: `application_id`,
+`rsa_private_key_pem` and `x509_cert_sha1_thumbprint`
+* Username directory authentication: `username` and `password` if multi-factor
+authentication is not required, or just `username` if multi-factor
+authentication is required.
+
+In a nutshell, you are only required the authentication parameters necessary
+to authenticate your service principal or AAD user account. This will not
+require all of the following properties to be specified. Note that most of
+the following properties can be specified as a CLI option or as an
+environment variable instead. For example, if you do not want to store the
+`auth_key` in the file, it can be specified at runtime.
+* (required) `directory_id` AAD directory (tenant) id
 * (optional) `application_id` AAD application (client) id
 * (optional) `auth_key` Service Principal authentication key
 * (optional) `rsa_private_key_pem` path to RSA private key PEM file if using
@@ -118,8 +125,8 @@ certificate for use with Certificate-based authentication
 username and password authentication. You can omit this property if you
 want to resort to interactive multi-factor authentication.
 * (optional) `endpoint` is the AAD endpoint for the associated resource
-* (optional) `token_cache` defines token cache properties for device code
-  auth only. Tokens are not cached for other auth mechanisms.
+* (optional) `token_cache` defines token cache properties for multi-factor
+  device code auth only. Tokens are not cached for other auth mechanisms.
   * (optional) `enabled` enables the token cache for device code auth
   * (optional) `filename` specifies the file path to cache the signed token
 
