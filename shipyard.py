@@ -90,6 +90,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
