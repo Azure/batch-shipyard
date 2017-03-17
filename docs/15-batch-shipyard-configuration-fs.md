@@ -137,8 +137,8 @@ specification and disk mapping. This section cross-references the
 
 You can specify multiple storage clusters in the `storage_clusters` section.
 Each key in the `storage_clusters` dictionary is a unique id for the
-storage cluster that you intend to create. This storage cluster id is
-used as the argument `STORAGE_CLUSTER_ID` argument for all `fs cluster`
+storage cluster that you intend to create. This storage cluster id should be
+used as the `STORAGE_CLUSTER_ID` argument for all `fs cluster`
 actions in the CLI along with any configuration specified for linking against
 Azure Batch pools, if specified, for `pool add`. `data ingress` will also
 take this storage cluster id as a parameter if transfering to the file

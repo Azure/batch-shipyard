@@ -96,22 +96,27 @@ UserSubscription Batch accounts.
 
 ### Azure Active Directory: `aad`
 The following is a description of `aad` properties that can be used within
-each credential section.
-* (optional) `aad` property contains members for Azure Active Directory
-credentials. Note that some options are mutually exclusive of each other
-depending upon authentication type: `auth_key`, `rsa_private_key_pem` and
-`password` cannot be defined at the same time. Note that most of the
-following properties can be specified as a CLI option or environment
+each credential section. The `aad` property contains members for Azure Active
+Directory credentials. Note that some options are mutually exclusive of each
+other depending upon authentication type: `auth_key`, `rsa_private_key_pem` +
+`x509_cert_sha1_thumbprint` and `username` or `username` + `password` cannot
+be defined at the same time. In a nutshell, you are only required the
+authentication parameters necessary to authenticate your service principal
+or AAD user account. You cannot specify them all at once. Note that most of
+the following properties can be specified as a CLI option or environment
 variable instead. For example, if you do not want to store the `auth_key`
 in the file, it can be specified at runtime.
 * (optional) `directory_id` AAD directory (tenant) id
 * (optional) `application_id` AAD application (client) id
 * (optional) `auth_key` Service Principal authentication key
-* (optional) `rsa_private_key_pem` path to RSA private key PEM file
+* (optional) `rsa_private_key_pem` path to RSA private key PEM file if using
+Certificate-based authentication
 * (optional) `x509_cert_sha1_thumbprint` thumbprint of the X.509
-  certificate for use with Certificate-based authentication
+certificate for use with Certificate-based authentication
 * (optional) `user` AAD username
-* (optional) `password` AAD password associated with the user
+* (optional) `password` AAD password associated with the user if using
+username and password authentication. You can omit this property if you
+want to resort to interactive multi-factor authentication.
 * (optional) `endpoint` is the AAD endpoint for the associated resource
 * (optional) `token_cache` defines token cache properties for device code
   auth only. Tokens are not cached for other auth mechanisms.
@@ -131,7 +136,7 @@ instead for AAD and KeyVault credentials.
   * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
   * (optional) `credentials_secret_id` property defines the KeyVault secret
     id containing an entire credentials.json file.
-  * (required) `aad` AAD authentication parameters.
+  * (required) `aad` AAD authentication parameters for KeyVault.
 
 Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
@@ -141,8 +146,8 @@ they are used for credential management with Azure KeyVault.
 ### Management: `management`
 * (optional) The `management` property defines the required members for
 accessing Azure Resources (ARM) with Azure Active Directory credentials. This
-is required with Filesystem actions and pools created with a virtual network
-specification.
+is required with `fs` filesystem actions and pools that need to be created
+with a virtual network specification (thus UserSubscription Batch accounts).
   * (required) `subscription_id` is the subscription id to interact with.
   * (required) `aad` AAD authentication parameters for ARM.
 
@@ -151,18 +156,17 @@ specification.
 under the `batch` property can be found in the
 [Azure Portal](https://portal.azure.com) under your Batch account.
   * (required) `account_service_url` is the Batch account service URL.
-  * (required for UserSubscription accounts, optional otherwise) `aad` AAD
-    authentication parameters for Azure Batch.
-  * (optional) `resource_group` is the resource group containing the Batch
-    account. This is only required if using a UserSubscription Batch account
-    with `aad` authentication.
+  * (required for UserSubscription Batch accounts, optional otherwise) `aad`
+    defines the AAD authentication parameters for Azure Batch.
+  * (required for UserSubscription Batch accounts, optional otherwise)
+    `resource_group` is the resource group containing the Batch account.
   * (required unless `aad` is specified) `account_key` is the shared
     key. This is required for non-AAD logins. This option takes precendence
     over the `aad` property if specified.
   * (optional) `account_key_keyvault_secret_id` property can be used to
     reference an Azure KeyVault secret id. Batch Shipyard will contact the
     specified KeyVault and replace the `account_key` value as returned by
-    Azure KeyVault.
+    Azure KeyVault. This cannot be used with UserSubscription Batch accounts.
 
 ### Storage: `storage`
 * (required) Multiple storage properties can be defined which references
@@ -175,12 +179,15 @@ name) can be the same as the storage account name itself.
     reference an Azure KeyVault secret id. Batch Shipyard will contact the
     specified KeyVault and replace the `account_key` value as returned by
     Azure KeyVault.
+
+### Docker Registries: `docker_registry`
 * (optional) `docker_registry` property defines logins for Docker registry
 servers. This property does not need to be defined if you are using only
 public repositories on Docker Hub. However, this is required if pulling from
 authenticated private registries such as a secured Azure Container Registry
 or private repositories on Docker Hub.
-  * (optional) `hub` defines the login property to Docker Hub:
+  * (optional) `hub` defines the login property to Docker Hub. This is only
+    required for private repos on Docker Hub.
     * (optional) `username` username to log in to Docker Hub
     * (optional) `password` password associated with the username
     * (optional) `password_keyvault_secret_id` property can be used to

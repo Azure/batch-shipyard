@@ -18,6 +18,7 @@ jobs with Docker images that have not been pre-loaded via the
 possible, you should attempt to specify all Docker images that you intend
 to run in the `global_resources`:`docker_images` property in the global
 configuration to minimize scheduling to task execution latency.
+- Support for running containers as a different user identity (uid/gid)
 - Support for Canonical/UbuntuServer/16.04-LTS. 16.04-LTS should be used over
 the old 16.04.0-LTS sku due to
 [issue #31](https://github.com/Azure/batch-shipyard/issues/31) and is no
