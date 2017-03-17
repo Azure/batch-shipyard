@@ -2540,7 +2540,7 @@ def remotefs_settings(config, sc_id=None):
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
         _reserved = frozenset(
-            ['ssh', 'nfs', 'glusterfs', 'beegfs', 'samba', 'cifs']
+            ['ssh', 'nfs', 'glusterfs', 'zfs', 'beegfs', 'samba', 'cifs']
         )
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved

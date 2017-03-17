@@ -39,6 +39,7 @@ zero-downtime disk array expansion and storage cluster resize (scale out),
 status queries tailored to file server types and hassle-free SSH for
 administration
 * Support for cluster suspension (deallocation) and restart
+* Support for definining and managing multiple clusters simultaneously
 * Support for [btrfs](https://en.wikipedia.org/wiki/Btrfs) along with
 ext4, ext3 and ext2 filesystems
 * Automatic disk array construction via RAID-0 through btrfs or Linux
@@ -56,6 +57,8 @@ concurrent multi-node parallel transfers with GlusterFS storage clusters
 ## Azure Batch Integration Features
 * Automatic linking between Azure Batch pools (compute nodes) and Batch
 Shipyard provisioned remote filesystems
+* Support for mounting multiple disparate Batch Shipyard provisioned remote
+filesystem concurrently to the same pool and compute ndoes
 * Automatic failover for HA GlusterFS volume file lookups (compute node client
 mount) through remote filesystem deployment walk to find disparate upgrade and
 fault domains of the GlusterFS servers

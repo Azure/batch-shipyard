@@ -793,7 +793,16 @@ def _add_pool(
         image_ref.offer.lower() == pool_settings.offer.lower() and
         image_ref.sku.lower() == pool_settings.sku.lower()
     ]
-    sku_to_use, image_ref_to_use = skus_to_use[-1]
+    try:
+        sku_to_use, image_ref_to_use = skus_to_use[-1]
+    except IndexError:
+        raise RuntimeError(
+            ('Could not find an Azure Batch Node Agent Sku for this '
+             'offer={} publisher={} sku={}. You can list the valid and '
+             'available Marketplace images with the command: pool '
+             'listskus').format(
+                 pool_settings.offer, pool_settings.publisher,
+                 pool_settings.sku))
     # upload resource files
     sas_urls = storage.upload_resource_files(
         blob_client, config, _rflist)

@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.6.0b1] - 2017-03-16
 ### Added
 - Support for provisioning storage clusters via the `fs cluster` command
   - Support for NFS (single VM, scale up)
@@ -34,6 +36,8 @@ to add without an active pool.
 - Configuration doc broken up into multiple pages
 - Update all recipes using Canonical/UbuntuServer/16.04.0-LTS to use
 Canonical/UbuntuServer/16.04-LTS instead
+- Configuration is no longer shown with `-v`. Use `--show-config` to dump
+the complete configuration being used for the command.
 - Precompile Python files during build for Docker images
 - All dependencies updated to latest versions
 - Update Batch API call compatibility for `azure-batch 2.0.0`
@@ -437,7 +441,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.5.4...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...HEAD
+[2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1
 [2.5.4]: https://github.com/Azure/batch-shipyard/compare/2.5.3...2.5.4
 [2.5.3]: https://github.com/Azure/batch-shipyard/compare/2.5.2...2.5.3
 [2.5.2]: https://github.com/Azure/batch-shipyard/compare/2.5.1...2.5.2
