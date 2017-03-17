@@ -2490,7 +2490,12 @@ def remotefs_settings(config, sc_id=None):
             storage_cluster=None,
         )
     # storage cluster settings
-    sc_conf = conf['storage_clusters'][sc_id]
+    try:
+        sc_conf = conf['storage_clusters'][sc_id]
+    except KeyError:
+        raise ValueError(
+            ('Storage cluster {} is not defined in the given fs '
+             'configuration file').format(sc_id))
     sc_rg = _kv_read_checked(sc_conf, 'resource_group', resource_group)
     if util.is_none_or_empty(md_rg):
         raise ValueError('invalid resource_group in remote_fs')
