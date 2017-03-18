@@ -201,10 +201,10 @@ setup_glusterfs() {
             echo "Creating gluster volume $gluster_volname $volarg ($force$bricks)"
             gluster volume create $gluster_volname $volarg transport $transport$bricks $force
             # modify volume properties as per input
-            for e in ${so[@]:3}; do
+            for e in "${so[@]:3}"; do
                 IFS=':' read -ra kv <<< "$e"
                 echo "Setting volume option ${kv[@]}"
-                gluster volume set $gluster_volname ${kv[0]} ${kv[1]}
+                gluster volume set $gluster_volname "${kv[0]}" "${kv[1]}"
             done
         fi
         # start volume
@@ -357,6 +357,7 @@ echo "  Tune TCP parameters: $optimize_tcp"
 echo "  Premium storage: $premium_storage"
 echo "  RAID level: $raid_level"
 echo "  Server type: $server_type"
+echo "  Server options: $server_options"
 echo "  Hostname prefix: $hostname_prefix"
 echo "  Peer IPs: $peer_ips"
 echo "  IP address of VM: $ipaddress"

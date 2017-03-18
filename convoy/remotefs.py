@@ -538,7 +538,7 @@ def _create_virtual_machine(
 
 def _create_virtual_machine_extension(
         compute_client, rfs, bootstrap_file, blob_urls, vm_name, disks,
-        private_ips, offset):
+        private_ips, offset, verbose=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        settings.RemoteFsSettings, str, List[str], str, dict, List[str],
     #        int) -> msrestazure.azure_operation.AzureOperationPoller
@@ -552,6 +552,7 @@ def _create_virtual_machine_extension(
     :param dict disks: data disk map
     :param list private_ips: list of static private ips
     :param int offset: vm number
+    :param bool verbose: verbose logging
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
@@ -607,7 +608,8 @@ def _create_virtual_machine_extension(
             ','.join(rfs.storage_cluster.file_server.mount_options)
             if util.is_not_empty(rfs.storage_cluster.file_server.mount_options)
             else ''))
-    # logger.debug('bootstrap command: {}'.format(cmd))
+    if verbose:
+        logger.debug('bootstrap command: {}'.format(cmd))
     logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
     return compute_client.virtual_machine_extensions.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -851,7 +853,7 @@ def create_storage_cluster(
             functools.partial(
                 _create_virtual_machine_extension, compute_client, rfs,
                 bootstrap_file, blob_urls, vms[i].name, disk_map,
-                private_ips, i),
+                private_ips, i, settings.verbose(config)),
             max_retries=0,
         )
     logger.debug('waiting for virtual machine extensions to be created')
@@ -1105,7 +1107,7 @@ def resize_storage_cluster(
             functools.partial(
                 _create_virtual_machine_extension, compute_client, rfs,
                 bootstrap_file, blob_urls, vms[i].name, disk_map, private_ips,
-                i),
+                i, settings.verbose(config)),
             max_retries=0,
         )
     logger.debug('adding {} bricks to gluster volume'.format(
