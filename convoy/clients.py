@@ -179,7 +179,7 @@ def create_arm_clients(ctx, batch_clients=False):
     if batch_clients:
         try:
             if credentials is None:
-                credentials = aad.create_aad_credentials(ctx, mgmt.add)
+                credentials = aad.create_aad_credentials(ctx, mgmt.aad)
             batch_mgmt_client = create_batch_mgmt_client(
                 ctx, credentials=credentials, subscription_id=subscription_id)
         except Exception:
@@ -205,7 +205,7 @@ def create_keyvault_client(ctx):
     :return: keyvault client
     """
     kv = settings.credentials_keyvault(ctx.config)
-    if util.is_none_or_empty(kv.keyvault_uri):
+    if util.is_none_or_empty(ctx.keyvault_uri or kv.keyvault_uri):
         return None
     return azure.keyvault.KeyVaultClient(
         aad.create_aad_credentials(ctx, kv.aad)

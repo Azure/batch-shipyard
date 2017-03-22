@@ -10,6 +10,10 @@ pools. No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your Dockerized tasks with easy-to-understand configuration files!
 
+Additionally, Batch Shipyard provides the ability to provision and manage
+entire [standalone remote file systems (storage clusters)](docs/65-batch-shipyard-remote-fs.md)
+in Azure, independent of any integrated Azure Batch functionality.
+
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) installation tuned
 for Azure Batch compute nodes

@@ -1,14 +1,21 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.6.0b2] - 2017-03-22
 ### Added
 - Added virtual environment install option for `install.sh` which is now
 the recommended way to install Batch Shipyard. Please see the install
 guide for more information. (#55)
 
+### Changed
+- Force SSD optimizations for btrfs with premium storage
+
 ### Fixed
+- Incorrect FS server options parsing at script time
 - KeyVault client not initialized in `fs` contexts (#57)
-- Check pool current node count prior to executing `udi` task (#58)
+- Check pool current node count prior to executing `pool udi` task (#58)
+- Initialization with KeyVault uri on commandline (#59)
 
 ## [2.6.0b1] - 2017-03-16
 ### Added
@@ -17,7 +24,8 @@ guide for more information. (#55)
   - Support for GlusterFS (multi VM, scale up and out)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
-- Support for UserSubscription Batch accounts
+- Support for
+[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
 - `allow_run_on_missing` option to jobs that allows tasks to execute under
@@ -450,7 +458,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...HEAD
+[2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1
 [2.5.4]: https://github.com/Azure/batch-shipyard/compare/2.5.3...2.5.4
 [2.5.3]: https://github.com/Azure/batch-shipyard/compare/2.5.2...2.5.3

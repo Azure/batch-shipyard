@@ -177,9 +177,9 @@ storage cluster.
     allowed address space for the virtual network.
   * (required) `subnet` specifies the subnet properties. This subnet must
     be exclusive to the storage cluster and cannot be shared with other
-    resources, including compute nodes. Compute nodes and storage clusters
-    can co-exist on the same virtual network, but should be in separate
-    subnets.
+    resources, including Batch compute nodes. Batch compute nodes and storage
+    clusters can co-exist on the same virtual network, but should be in
+    separate subnets.
     * (required) `name` is the subnet name.
     * (required) `address_prefix` is the subnet address prefix to use for
       allocation of the storage cluster file server virtual machines to.
