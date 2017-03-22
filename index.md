@@ -4,11 +4,15 @@
 
 # Batch Shipyard
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute batch-style Docker workloads on
+provision and execute batch processing and HPC Docker workloads on
 [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) compute
 pools. No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your Dockerized tasks with easy-to-understand configuration files!
+
+Additionally, Batch Shipyard provides the ability to provision and manage
+entire [standalone remote file systems (storage clusters)](docs/65-batch-shipyard-remote-fs.md)
+in Azure, independent of any integrated Azure Batch functionality.
 
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) installation tuned
@@ -18,17 +22,22 @@ for Azure Batch compute nodes
 a large number of VMs via private peer-to-peer distribution of Docker images
 among the compute nodes
 * Comprehensive data movement support: move data easily between locally
-accessible storage systems, Azure Blob or File Storage, and compute nodes
+accessible storage systems, remote filesystems, Azure Blob or File Storage,
+and compute nodes
 * Docker Private Registry support
   * [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
   * Any internet accessible Docker container registry
   * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
     instance creation on compute nodes
+* [Standalone Remote Filesystem Provisioning](docs/65-batch-shipyard-remote-fs.md)
+with integration to auto-link these filesystems to compute nodes with support for
+  * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
+  * [GlusterFS](https://www.gluster.org/) distributed network file system
 * Automatic shared data volume support
+  * Remote Filesystems as provisioned by Batch Shipyard
   * [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
     installation and share setup for SMB/CIFS backed to Azure Storage
-  * [GlusterFS](https://www.gluster.org/) distributed network file system
-    installation and setup
+  * [GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
