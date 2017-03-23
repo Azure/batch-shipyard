@@ -20,7 +20,8 @@ Use the following links to quickly navigate to recipe collections:
 2. [Computational Fluid Dynamics (CFD)](#cfd)
 3. [Deep Learning](#deeplearning)
 4. [Molecular Dynamics (MD)](#md)
-5. [Video Processing](#video)
+5. [RemoteFS](#remotefs)
+6. [Video Processing](#video)
 
 ## <a name="benchmarks"></a>Benchmarks
 #### [HPCG-Infiniband-IntelMPI](./HPCG-Infiniband-IntelMPI)
@@ -138,6 +139,15 @@ Infiniband/RDMA Azure VMs with Intel MPI.
 This NAMD-TCP recipe contains information on how to Dockerize distributed
 [NAMD](http://www.ks.uiuc.edu/Research/namd/) across multiple Azure Batch
 compute nodes using TCP.
+
+## <a name="remotefs"></a>RemoteFS Samples
+#### [RemoteFS-NFS](./RemoteFS-NFS)
+This RemoteFS-NFS recipe contains information on how to provision a sample
+single VM NFS server.
+
+#### [RemoteFS-GlusterFS](./RemoteFS-GlusterFS)
+This RemoteFS-GlusterFS recipe contains information on how to provision a
+sample multi-VM GlusterFS storage cluster.
 
 ## <a name="video"></a>Video Processing
 #### [FFmpeg-GPU](./FFmpeg-GPU)

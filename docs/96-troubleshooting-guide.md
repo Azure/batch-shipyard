@@ -34,7 +34,7 @@ Remember that when you issue `pool add`, a pool starts with zero compute nodes
 and then grows to the target number of nodes specified. You can query the
 pools in your account with the `pool list` command and any resize errors
 will be displayed. You can also query this information using Azure Portal
-or Azure Batch Explorer. If it appears that the resize error was transient,
+or Batch Labs. If it appears that the resize error was transient,
 you can try to issue `pool resize` to begin the pool grow or shrink process
 again, or alternatively you can opt to recreate the pool.
 

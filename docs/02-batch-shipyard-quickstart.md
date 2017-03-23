@@ -90,7 +90,7 @@ config files.
 
 ## Graphical Interfaces
 You can also use the [Azure Portal](https://portal.azure.com) or
-[Batch Explorer](https://github.com/Azure/azure-batch-samples) for Windows to
+[Batch Labs](https://github.com/Azure/BatchLabs) to
 view more properties of your Azure Batch accounts, pools, nodes, jobs and
 tasks. You can view your Azure Storage accounts on Azure Portal or with
 [Microsoft Azure Storage Explorer](http://storageexplorer.com/).

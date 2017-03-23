@@ -207,12 +207,12 @@ def populate_global_settings(config, fs_storage):
     """
     bs = settings.batch_shipyard_settings(config)
     sc = settings.credentials_storage(config, bs.storage_account_settings)
-    bc = settings.credentials_batch(config)
     if fs_storage:
         # set postfix to empty for now, it will be populated with the
         # storage cluster during the actual calls
         postfix = ''
     else:
+        bc = settings.credentials_batch(config)
         postfix = '-'.join(
             (bc.account.lower(), settings.pool_id(config, lower=True)))
     storage.set_storage_configuration(

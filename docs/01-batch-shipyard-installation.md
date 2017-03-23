@@ -285,7 +285,7 @@ OpenSSL is installed. The Docker CLI image also contains OpenSSL.
 Note that all commandlines, environment variables and resource file URLs
 which are stored by the Azure Batch Service are encrypted by the service.
 This feature is to prevent credentials from being displayed in the clear when
-using the Azure Portal, Batch Explorer, or other tools to inspect the status
+using the Azure Portal, Batch Labs, or other tools to inspect the status
 of pools, jobs and tasks. If this is not an issue for your scenario, then
 encrypting credentials is unnecessary. Please review the
 [credential encryption guide](75-batch-shipyard-credential-encryption.md)

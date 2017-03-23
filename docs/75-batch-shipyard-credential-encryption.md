@@ -25,14 +25,14 @@ these credentials must be exposed to the compute node through environment
 variables or command line arguments. As explained above, due to the strict
 encryption policies enforced by the Azure Batch service, these credentials
 would never pose a risk to be exposed on their own, however, tools such
-as the Azure Portal, Azure Batch Explorer, Azure CLI or Azure PowerShell
+as the Azure Portal, Batch Labs, Azure CLI or Azure PowerShell
 cmdlets can expose these credentials because command lines and environment
 variables are decrypted by the Azure Batch service and sent over HTTPS
 back to the user so that they may be viewable for status monitoring and
 diagnosis. Again, there is no risk for exposure to other parties while
 in-transit, however, they can be viewed once the data reaches the point of
-display - be it the web browser displaying the Azure Portal or the Azure
-Batch Explorer UI for example.
+display - be it the web browser displaying the Azure Portal or the Batch
+Labs UI for example.
 
 The question for you is, does this matter or not? Is there a risk of
 credential leakage by means of these UI or command line display mechanisms?

@@ -417,7 +417,7 @@ ingress/egress with their host path equivalents.
 
 Note that when resizing a pool with a `glusterfs_on_compute` shared file
 systems that you must resize with the `pool resize` command in `shipyard.py`
-and not with Azure Portal, Batch Explorer or any other tool.
+and not with Azure Portal, Batch Labs or any other tool.
 
 The third shared volume, `nfs_server` is an NFS server that is to be
 mounted on to compute node hosts. The name `nfs_server` should match the

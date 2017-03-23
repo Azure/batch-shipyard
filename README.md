@@ -11,7 +11,7 @@ pools. No experience with the
 your Dockerized tasks with easy-to-understand configuration files!
 
 Additionally, Batch Shipyard provides the ability to provision and manage
-entire [standalone remote file systems (storage clusters)](docs/65-batch-shipyard-remote-fs.md)
+entire [standalone remote file systems (storage clusters)](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
 in Azure, independent of any integrated Azure Batch functionality.
 
 ## Major Features
@@ -29,7 +29,7 @@ and compute nodes
   * Any internet accessible Docker container registry
   * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
     instance creation on compute nodes
-* [Standalone Remote Filesystem Provisioning](docs/65-batch-shipyard-remote-fs.md)
+* [Standalone Remote Filesystem Provisioning](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
 with integration to auto-link these filesystems to compute nodes with support for
   * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
   * [GlusterFS](https://www.gluster.org/) distributed network file system

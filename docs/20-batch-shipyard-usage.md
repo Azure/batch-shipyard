@@ -412,7 +412,7 @@ all nodes in the specified pool
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard. It is recommended to use this command instead of deleting
-a pool directly from the Azure Portal, Batch Explorer, or other tools as
+a pool directly from the Azure Portal, Batch Labs, or other tools as
 this action can conveniently remove all associated Batch Shipyard metadata on
 Azure Storage.
   * `--wait` will wait for deletion to complete
