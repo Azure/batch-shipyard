@@ -1754,7 +1754,7 @@ def add_jobs(
         # 1. check docker images in task against pre-loaded on pool
         # 2. if tasks have dependencies, set it if so
         # 3. if there are multi-instance tasks
-        mi_ac = settings.job_multi_instance_auto_complete(config)
+        mi_ac = settings.job_multi_instance_auto_complete(jobspec)
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None

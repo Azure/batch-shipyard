@@ -218,11 +218,11 @@ class CliContext(object):
         if self.configdir is not None and self.json_credentials is None:
             self.json_credentials = pathlib.Path(
                 self.configdir, 'credentials.json')
-        if (self.json_credentials is not None and
-                not isinstance(self.json_credentials, pathlib.Path)):
-            self.json_credentials = pathlib.Path(self.json_credentials)
-        if self.json_credentials.exists():
-            self._read_json_file(self.json_credentials)
+        if self.json_credentials is not None:
+            if not isinstance(self.json_credentials, pathlib.Path):
+                self.json_credentials = pathlib.Path(self.json_credentials)
+            if self.json_credentials.exists():
+                self._read_json_file(self.json_credentials)
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
