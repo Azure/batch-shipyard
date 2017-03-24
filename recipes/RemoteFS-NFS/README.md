@@ -42,7 +42,8 @@ is only a single VM, thus all disks should be mapped in the `"0"` entry.
 ### Commands to create the NFS file server
 After modifying the configuration files as required, then you must create
 the managed disks as the first step. The following assumes the configuration
-files are in the current working directory. This can be done with:
+files are in the current working directory. First all of the managed disks
+used by the file server must be provisioned:
 
 ```shell
 SHIPYARD_CONFIGDIR=. ./shipyard fs disks add

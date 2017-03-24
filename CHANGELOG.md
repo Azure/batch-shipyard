@@ -5,7 +5,7 @@
 - Add sample RemoteFS recipes for NFS and GlusterFS
 
 ### Fixed
-- Requirement of a `batch` credential section for pure `fs` operations
+- Removed requirement of a `batch` credential section for pure `fs` operations
 
 ## [2.6.0b2] - 2017-03-22
 ### Added

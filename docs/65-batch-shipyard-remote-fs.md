@@ -173,3 +173,7 @@ on `fs` command usage.
 You can find information regarding User Subscription Batch accounts and how
 to create them at this
 [blog post](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/).
+
+## Sample Recipes
+Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can
+be found in the [recipes](../recipes) area.

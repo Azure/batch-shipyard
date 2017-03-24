@@ -274,11 +274,15 @@ The number of entries in this map must match the `vm_count`.
       as the filesystem. At least two disks per virtual machine are required
       for RAID-0.
 
+## Remote Filesystems with Batch Shipyard Guide
+Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
+on how this feature works in Batch Shipyard.
+
 ## Full template
 An full template of a credentials file can be found
 [here](../config\_templates/fs.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.
 
-## Remote Filesystems with Batch Shipyard Guide
-Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
-on how this feature works in Batch Shipyard.
+## Sample Recipes
+Sample recipes for both NFS and GlusterFS can be found in the
+[recipes](../recipes) area.

@@ -44,10 +44,11 @@ here.
 there are at least 2 VMs, thus disks should be mapped in their respective
 cardinal entry.
 
-### Commands to create the GlusterFS file server
+### Commands to create the GlusterFS storage cluster
 After modifying the configuration files as required, then you must create
 the managed disks as the first step. The following assumes the configuration
-files are in the current working directory. This can be done with:
+files are in the current working directory. First all of the managed disks
+used by the storage cluster must be provisioned:
 
 ```shell
 SHIPYARD_CONFIGDIR=. ./shipyard fs disks add

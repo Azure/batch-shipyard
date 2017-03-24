@@ -140,7 +140,7 @@ This NAMD-TCP recipe contains information on how to Dockerize distributed
 [NAMD](http://www.ks.uiuc.edu/Research/namd/) across multiple Azure Batch
 compute nodes using TCP.
 
-## <a name="remotefs"></a>RemoteFS Samples
+## <a name="remotefs"></a>RemoteFS Provisioning
 #### [RemoteFS-NFS](./RemoteFS-NFS)
 This RemoteFS-NFS recipe contains information on how to provision a sample
 single VM NFS server.
