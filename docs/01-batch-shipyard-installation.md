@@ -2,6 +2,10 @@
 Installation is an easy two-step process: fetch the code and run the
 install script to download and setup dependencies.
 
+If you wish to install Batch Shipyard into your Azure App Service (e.g.,
+Azure Function App) environment, please see
+[this guide](60-batch-shipyard-site-extension.md).
+
 ## Installation
 ### Step 1: Acquire Batch Shipyard
 Clone the repository:
@@ -36,14 +40,23 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 2.7 in the virtual environment "shipyard"
-./install.sh -e shipyard
-# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
-./install.sh -3 -e shipyard
+# Install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -e shipyard.venv
+# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
+./install.sh -3 -e shipyard.venv
+# Or to install for Anaconda Python3 in the environment "shipyard.venv". Note
+# that for Anaconda installations, the -e parameter is required
+./install.sh -3 -e shipyard.venv
 ```
 Do not delete the virtual environment directory (in the above example, a
-directory named `shipyard` would be created), as this contains the virtual
-environment required for execution.
+directory named `shipyard.venv` would be created), as this contains the
+virtual environment required for execution.
+
+Please note that although Anaconda environment installations are supported,
+there is a larger startup delay for invoking `shipyard` with Anaconda
+environments due to the delay in activating a conda environment.
+Python from [python.org](https://www.python.org) (CPython) is recommended as
+the execution environment.
 
 Alternatively, install directly into your "user" environment:
 ```shell
@@ -55,7 +68,7 @@ cd batch-shipyard
 ./install.sh
 # Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
 ./install.sh -3
-# Add $HOME/.local/bin to your PATH in your shell rc file
+# Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
 # Reload .bashrc for bash shells

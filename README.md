@@ -60,6 +60,8 @@ for MPI on HPC low-latency Azure VM instances:
 tunneling to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
+* Support for execution on an
+[Azure Function App environment](https://github.com/Azure/batch-shipyard/blob/master/docs/60-batch-shipyard-site-extension.md)
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available
