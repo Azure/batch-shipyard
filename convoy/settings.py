@@ -212,10 +212,15 @@ MappedVmDiskSettings = collections.namedtuple(
         'disk_array', 'filesystem', 'raid_level',
     ]
 )
+PublicIpSettings = collections.namedtuple(
+    'PublicIpSettings', [
+        'enabled', 'static',
+    ]
+)
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'resource_group', 'virtual_network', 'network_security',
-        'file_server', 'vm_count', 'vm_size', 'static_public_ip',
+        'file_server', 'vm_count', 'vm_size', 'public_ip',
         'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
@@ -2501,8 +2506,11 @@ def remotefs_settings(config, sc_id=None):
         raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
-    sc_static_public_ip = _kv_read(sc_conf, 'static_public_ip', False)
     sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
+    # public ip settings
+    pip_conf = _kv_read_checked(sc_conf, 'public_ip', {})
+    sc_pip_enabled = _kv_read(pip_conf, 'enabled', True)
+    sc_pip_static = _kv_read(pip_conf, 'static', False)
     # sc network security settings
     ns_conf = sc_conf['network_security']
     sc_ns_inbound = {
@@ -2634,7 +2642,10 @@ def remotefs_settings(config, sc_id=None):
             file_server=file_server,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
-            static_public_ip=sc_static_public_ip,
+            public_ip=PublicIpSettings(
+                enabled=sc_pip_enabled,
+                static=sc_pip_static,
+            ),
             hostname_prefix=sc_hostname_prefix,
             ssh=SSHSettings(
                 username=sc_ssh_username,

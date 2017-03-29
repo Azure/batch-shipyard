@@ -20,7 +20,10 @@
                     "ssh_public_key": null,
                     "generated_file_export_path": null
                 },
-                "static_public_ip": false,
+                "public_ip": {
+                    "enabled": true,
+                    "static": false
+                },
                 "virtual_network": {
                     "name": "myvnet",
                     "resource_group": "my-vnet-resource-group",

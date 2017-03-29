@@ -7,6 +7,12 @@ You can now one-click install Batch Shipyard as a site extension (after you
 have Python installed) and use Batch Shipyard from an Azure Functions trigger.
 - Add sample RemoteFS recipes for NFS and GlusterFS
 
+### Changed
+- **Breaking Change:** `static_public_ip` has been replaced with a `public_ip`
+complex property. This is to accomodate for situations where public IP for
+RemoteFS is disabled. Please see the Remote FS configuration doc for more
+info.
+
 ### Fixed
 - Removed requirement of a `batch` credential section for pure `fs` operations
 - Multi-instance auto complete setting not being properly read

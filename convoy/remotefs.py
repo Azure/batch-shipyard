@@ -350,7 +350,7 @@ def _create_public_ip(network_client, rfs, offset):
     # type: (azure.mgmt.network.NetworkManagementClient,
     #        settings.RemoteFsSettings, networkmodels.Subnet, int) ->
     #        msrestazure.azure_operation.AzureOperationPoller
-    """Create a network interface
+    """Create a public IP
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param settings.RemoteFsSettings rfs: remote filesystem settings
@@ -385,7 +385,7 @@ def _create_public_ip(network_client, rfs, offset):
             ),
             public_ip_allocation_method=(
                 networkmodels.IPAllocationMethod.static if
-                rfs.storage_cluster.static_public_ip else
+                rfs.storage_cluster.public_ip.static else
                 networkmodels.IPAllocationMethod.dynamic
             ),
             public_ip_address_version=networkmodels.IPVersion.ipv4,
@@ -425,18 +425,22 @@ def _create_network_interface(
             pass
         else:
             raise
+    if util.is_none_or_empty(pips):
+        pip = None
+    else:
+        pip = pips[offset]
     # create network ip config
     if private_ips is None:
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
             name=rfs.storage_cluster.hostname_prefix,
             subnet=subnet,
-            public_ip_address=pips[offset],
+            public_ip_address=pip,
         )
     else:
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
             name=rfs.storage_cluster.hostname_prefix,
             subnet=subnet,
-            public_ip_address=pips[offset],
+            public_ip_address=pip,
             private_ip_address=private_ips[offset],
             private_ip_allocation_method=networkmodels.
             IPAllocationMethod.static,
@@ -773,20 +777,25 @@ def create_storage_cluster(
         rfs.storage_cluster.virtual_network.resource_group, rfs.location,
         rfs.storage_cluster.virtual_network)
     # create public ips
-    async_ops['pips'] = {}
-    for i in range(rfs.storage_cluster.vm_count):
-        async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
-            _create_public_ip, network_client, rfs, i))
-    logger.debug('waiting for public ips to be created')
-    pips = {}
-    for offset in async_ops['pips']:
-        pip = async_ops['pips'][offset].result()
-        logger.info(
-            ('public ip: {} [provisioning_state={} ip_address={} '
-             'public_ip_allocation={}]').format(
-                 pip.id, pip.provisioning_state,
-                 pip.ip_address, pip.public_ip_allocation_method))
-        pips[offset] = pip
+    pips = None
+    if rfs.storage_cluster.public_ip.enabled:
+        async_ops['pips'] = {}
+        for i in range(rfs.storage_cluster.vm_count):
+            async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
+                _create_public_ip, network_client, rfs, i))
+        logger.debug('waiting for public ips to be created')
+        pips = {}
+        for offset in async_ops['pips']:
+            pip = async_ops['pips'][offset].result()
+            logger.info(
+                ('public ip: {} [provisioning_state={} ip_address={} '
+                 'public_ip_allocation={}]').format(
+                     pip.id, pip.provisioning_state,
+                     pip.ip_address, pip.public_ip_allocation_method))
+            pips[offset] = pip
+    else:
+        logger.info('public ip is disabled for storage cluster: {}'.format(
+            sc_id))
     # get nsg
     logger.debug('waiting for network security group to be created')
     nsg = async_ops['nsg'].result()
@@ -858,20 +867,26 @@ def create_storage_cluster(
         )
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in async_ops['vmext']:
-        # refresh public ip for vm
-        pip = network_client.public_ip_addresses.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            public_ip_address_name=pips[offset].name,
-        )
+        # get ip info for vm
+        if util.is_none_or_empty(pips):
+            ipinfo = 'private_ip_address={}'.format(
+                nics[offset].ip_configurations[0].private_ip_address)
+        else:
+            # refresh public ip for vm
+            pip = network_client.public_ip_addresses.get(
+                resource_group_name=rfs.storage_cluster.resource_group,
+                public_ip_address_name=pips[offset].name,
+            )
+            ipinfo = 'fqdn={} public_ip_address={}'.format(
+                pip.dns_settings.fqdn, pip.ip_address)
         # get vm extension result
         vm_ext = async_ops['vmext'][offset].result()
         vm = vms[offset]
         logger.info(
-            'virtual machine: {} [provisioning_state={}/{} fqdn={} '
-            'public_ip_address={} vm_size={}]'.format(
+            ('virtual machine: {} [provisioning_state={}/{} '
+             'vm_size={} {}]').format(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
-                pip.dns_settings.fqdn, pip.ip_address,
-                vm.hardware_profile.vm_size))
+                vm.hardware_profile.vm_size, ipinfo))
 
 
 def resize_storage_cluster(
@@ -985,12 +1000,16 @@ def resize_storage_cluster(
             max=rfs.storage_cluster.vm_count)
     ]
     logger.debug('static private ip block: {}'.format(private_ips))
-    # create public ips
     async_ops = {}
-    async_ops['pips'] = {}
-    for i in new_vms:
-        async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
-            _create_public_ip, network_client, rfs, i))
+    # create public ips
+    if rfs.storage_cluster.public_ip.enabled:
+        async_ops['pips'] = {}
+        for i in new_vms:
+            async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
+                _create_public_ip, network_client, rfs, i))
+    else:
+        logger.info('public ip is disabled for storage cluster: {}'.format(
+            sc_id))
     # get subnet and nsg objects
     subnet = network_client.subnets.get(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -1011,16 +1030,18 @@ def resize_storage_cluster(
     if settings.verbose(config):
         logger.debug('prober vm: {}'.format(ssh_info))
     # wait for pips
-    logger.debug('waiting for public ips to be created')
-    pips = {}
-    for offset in async_ops['pips']:
-        pip = async_ops['pips'][offset].result()
-        logger.info(
-            ('public ip: {} [provisioning_state={} ip_address={} '
-             'public_ip_allocation={}]').format(
-                 pip.id, pip.provisioning_state,
-                 pip.ip_address, pip.public_ip_allocation_method))
-        pips[offset] = pip
+    pips = None
+    if util.is_not_empty(pips):
+        logger.debug('waiting for public ips to be created')
+        pips = {}
+        for offset in async_ops['pips']:
+            pip = async_ops['pips'][offset].result()
+            logger.info(
+                ('public ip: {} [provisioning_state={} ip_address={} '
+                 'public_ip_allocation={}]').format(
+                     pip.id, pip.provisioning_state,
+                     pip.ip_address, pip.public_ip_allocation_method))
+            pips[offset] = pip
     # create nics
     nics = {}
     async_ops['nics'] = {}
@@ -1149,20 +1170,26 @@ def resize_storage_cluster(
     # wait for new vms to finish custom script extension processing
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in async_ops['vmext']:
-        # refresh public ip for vm
-        pip = network_client.public_ip_addresses.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            public_ip_address_name=pips[offset].name,
-        )
+        # get ip info for vm
+        if util.is_none_or_empty(pips):
+            ipinfo = 'private_ip_address={}'.format(
+                nics[offset].ip_configurations[0].private_ip_address)
+        else:
+            # refresh public ip for vm
+            pip = network_client.public_ip_addresses.get(
+                resource_group_name=rfs.storage_cluster.resource_group,
+                public_ip_address_name=pips[offset].name,
+            )
+            ipinfo = 'fqdn={} public_ip_address={}'.format(
+                pip.dns_settings.fqdn, pip.ip_address)
         # get vm extension result
         vm_ext = async_ops['vmext'][offset].result()
         vm = vms[offset]
         logger.info(
-            'virtual machine: {} [provisioning_state={}/{} fqdn={} '
-            'public_ip_address={} vm_size={}]'.format(
+            ('virtual machine: {} [provisioning_state={}/{} '
+             'vm_size={} {}]').format(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
-                pip.dns_settings.fqdn, pip.ip_address,
-                vm.hardware_profile.vm_size))
+                vm.hardware_profile.vm_size, ipinfo))
 
 
 def expand_storage_cluster(
@@ -1397,11 +1424,14 @@ def _get_resource_names_from_virtual_machine(
         nic_name = nic.name
     # get public ip
     if pip is None:
-        pip_id = nic.ip_configurations[0].public_ip_address.id
-        tmp = pip_id.split('/')
-        if tmp[-2] != 'publicIPAddresses':
-            raise RuntimeError('could not parse public ip address id')
-        pip_name = tmp[-1]
+        if nic.ip_configurations[0].public_ip_address is not None:
+            pip_id = nic.ip_configurations[0].public_ip_address.id
+            tmp = pip_id.split('/')
+            if tmp[-2] != 'publicIPAddresses':
+                raise RuntimeError('could not parse public ip address id')
+            pip_name = tmp[-1]
+        else:
+            pip_name = None
     else:
         pip_name = pip.name
     # get subnet and vnet
@@ -1739,6 +1769,8 @@ def delete_storage_cluster(
     async_ops['pips'] = {}
     for key in resources:
         pip_name = resources[key]['pip']
+        if util.is_none_or_empty(pip_name):
+            continue
         async_ops['pips'][pip_name] = resource.AsyncOperation(
             functools.partial(
                 _delete_public_ip, network_client,
@@ -2046,7 +2078,8 @@ def stat_storage_cluster(
         # detailed settings: run stat script via ssh
         if detail:
             ssh_priv_key, port, username, ip = _get_ssh_info(
-                compute_client, network_client, config, None, vm.name, pip=pip)
+                compute_client, network_client, config, sc_id, None, vm.name,
+                nic=nic, pip=pip)
             offset = settings.get_offset_from_virtual_machine_name(vm.name)
             script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{n}{r}{s}'.format(
                 sf=status_script,
@@ -2085,9 +2118,10 @@ def stat_storage_cluster(
             'update_domain/fault_domain': '{}/{}'.format(
                 vm.instance_view.platform_update_domain,
                 vm.instance_view.platform_fault_domain),
-            'fqdn': pip.dns_settings.fqdn,
-            'public_ip_address': pip.ip_address,
-            'public_ip_allocation': pip.public_ip_allocation_method,
+            'fqdn': pip.dns_settings.fqdn if pip is not None else None,
+            'public_ip_address': pip.ip_address if pip is not None else None,
+            'public_ip_allocation':
+            pip.public_ip_allocation_method if pip is not None else None,
             'private_ip_address': nic.ip_configurations[0].private_ip_address,
             'private_ip_allocation':
             nic.ip_configurations[0].private_ip_allocation_method,
@@ -2125,10 +2159,12 @@ def stat_storage_cluster(
 
 def _get_ssh_info(
         compute_client, network_client, config, sc_id, cardinal, hostname,
-        pip=None):
+        nic=None, pip=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str, networkmodels.PublicIPAddress) -> None
+    #        str, networkmodes.NetworkInterface,
+    #        networkmodels.PublicIPAddress) ->
+    #        Tuple[pathlib.Path, int, str, str]
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -2138,6 +2174,7 @@ def _get_ssh_info(
     :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param networkmodels.NetworkInterface nic: network interface
     :param networkmodels.PublicIPAddress pip: public ip
     :rtype: tuple
     :return (ssh private key, port, username, ip)
@@ -2162,18 +2199,26 @@ def _get_ssh_info(
             raise RuntimeError('virtual machine {} not found'.format(vm_name))
         else:
             raise
-    # get pip connected to vm
-    if pip is None:
-        _, pip = resource.get_nic_and_pip_from_virtual_machine(
-            network_client, rfs.storage_cluster.resource_group, vm)
-    # connect to vm
+    # get connection ip
+    if rfs.storage_cluster.public_ip.enabled:
+        # get pip connected to vm
+        if pip is None:
+            _, pip = resource.get_nic_and_pip_from_virtual_machine(
+                network_client, rfs.storage_cluster.resource_group, vm)
+        ip_address = pip.ip_address
+    else:
+        if nic is None:
+            nic, _ = resource.get_nic_and_pip_from_virtual_machine(
+                network_client, rfs.storage_cluster.resource_group, vm)
+        ip_address = nic.ip_configurations[0].private_ip_address
+    # return connection info for vm
     ssh_priv_key = pathlib.Path(
         rfs.storage_cluster.ssh.generated_file_export_path,
         crypto.get_remotefs_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
-    return ssh_priv_key, 22, vm.os_profile.admin_username, pip.ip_address
+    return ssh_priv_key, 22, vm.os_profile.admin_username, ip_address
 
 
 def ssh_storage_cluster(

@@ -32,6 +32,8 @@ from builtins import (  # noqa
 # stdlib imports
 import functools
 import logging
+import random
+import time
 # non-stdlib imports
 import azure.mgmt.network.models as networkmodels
 import azure.mgmt.resource.resources.models as rgmodels
@@ -49,18 +51,18 @@ class AsyncOperation(object):
     """Async Operation handler with automatic retry"""
     def __init__(
             self, partial, max_retries=-1, auto_invoke=True,
-            retry_notfound=False):
+            retry_nonretryable=False):
         """Ctor for AsyncOperation
         :param AsyncOperation self: this
         :param functools.partial partial: partial object
         :param int max_retries: maximum number of retries before giving up
         :param bool auto_invoke: automatically invoke the async operation
-        :param bool retry_notfound: retry on not found (404) errors
+        :param bool retry_nonretryable: retry on 400-level errors
         """
         self._partial = partial
         self._retry_count = 0
         self._max_retries = max_retries
-        self._retry_notfound = retry_notfound
+        self._retry_nonretryable = retry_nonretryable
         self._op = None
         self._noop = False
         if auto_invoke:
@@ -89,18 +91,21 @@ class AsyncOperation(object):
                 return self._op.result()
             except (msrest.exceptions.ClientException,
                     msrestazure.azure_exceptions.CloudError) as e:
-                if e.status_code == 404 and not self._retry_notfound:
+                if (e.status_code >= 400 and e.status_code < 500 and
+                        not self._retry_nonretryable):
                     raise
                 self._retry_count += 1
                 if (self._max_retries >= 0 and
                         self._retry_count > self._max_retries):
                     logger.error(
                         ('Ran out of retry attempts invoking {}(args={} '
-                         'kwargs={})').format(
+                         'kwargs={}) status_code={}').format(
                              self._partial.func.__name__, self._partial.args,
-                             self._partial.keywords))
+                             self._partial.keywords, e.status_code))
                     raise
             self._op = None
+            # randomly backoff
+            time.sleep(random.randint(1, 3))
             logger.debug(
                 ('Attempting retry of operation: {}, retry_count={} '
                  'max_retries={}').format(
@@ -281,13 +286,16 @@ def get_nic_and_pip_from_virtual_machine(
     if nic is None:
         nic = get_nic_from_virtual_machine(network_client, resource_group, vm)
     # get public ip
-    pip_id = nic.ip_configurations[0].public_ip_address.id
-    tmp = pip_id.split('/')
-    if tmp[-2] != 'publicIPAddresses':
-        raise RuntimeError('could not parse public ip address id')
-    pip_name = tmp[-1]
-    pip = network_client.public_ip_addresses.get(
-        resource_group_name=resource_group,
-        public_ip_address_name=pip_name,
-    )
+    if nic.ip_configurations[0].public_ip_address is not None:
+        pip_id = nic.ip_configurations[0].public_ip_address.id
+        tmp = pip_id.split('/')
+        if tmp[-2] != 'publicIPAddresses':
+            raise RuntimeError('could not parse public ip address id')
+        pip_name = tmp[-1]
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=resource_group,
+            public_ip_address_name=pip_name,
+        )
+    else:
+        pip = None
     return (nic, pip)

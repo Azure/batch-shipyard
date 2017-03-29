@@ -28,7 +28,10 @@ The remote filesystem schema is as follows:
                     "ssh_public_key": null,
                     "generated_file_export_path": null
                 },
-                "static_public_ip": false,
+                "public_ip": {
+                    "enabled": true,
+                    "static": false
+                },
                 "virtual_network": {
                     "name": "myvnet",
                     "resource_group": "my-vnet-resource-group",
@@ -161,10 +164,18 @@ optional in this configuration as it is in the pool specification.
     `id_rsa_shipyard_remotefs`).
   * (optional) `generated_file_export_path` is an optional path to specify
     for where to create the RSA public/private key pair.
-* (optional) `static_public_ip` is to specify if static public IPs should
-be assigned to each virtual machine allocated. The default is `false` which
-results in dynamic public IP addresses. A "static" FQDN will be provided
-per virtual machine, regardless of this setting.
+* (optional) `public_ip` are public IP properties for each virtual machine.
+  * (optional) `enabled` designates if public IPs should be assigned. The
+    default is `true`. Note that if public IP is disabled, then you must
+    create an alternate means for accessing the storage cluster virtual
+    machines through a "jumpbox" on the virtual network. If this property
+    is set to `false` (disabled), then any action requiring SSH, or the
+    SSH command itself, will occur against the private IP address of the
+    virtual machine.
+  * (optional) `static` is to specify if static public IPs should be assigned
+    to each virtual machine allocated. The default is `false` which
+    results in dynamic public IP addresses. A "static" FQDN will be provided
+    per virtual machine, regardless of this setting if public IPs are enabled.
 * (required) `virtual_network` is the virtual network to use for the
 storage cluster.
   * (required) `name` is the virtual network name
