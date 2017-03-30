@@ -832,14 +832,15 @@ def _add_pool(
             x=' -x {}'.format(data._BLOBXFER_VERSION),
         ),
     ]
-    # add additional start task commands
-    start_task.extend(pool_settings.additional_node_prep_commands)
     # digest any input data
     addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, settings.pool_specification(config))
     if addlcmds is not None:
         start_task.append(addlcmds)
     del addlcmds
+    # add additional start task commands, these should always be the last
+    # start task commands
+    start_task.extend(pool_settings.additional_node_prep_commands)
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
