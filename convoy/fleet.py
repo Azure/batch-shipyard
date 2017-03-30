@@ -738,7 +738,8 @@ def _add_pool(
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
         storage_threads = data.ingress_data(
-            batch_client, config, rls=None, kind='storage')
+            batch_client, compute_client, network_client, config, rls=None,
+            kind='storage')
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
@@ -945,8 +946,8 @@ def _add_pool(
     if pool_settings.transfer_files_on_pool_creation:
         _pool = batch_client.pool.get(pool.id)
         data.ingress_data(
-            batch_client, config, rls=rls, kind='shared',
-            current_dedicated=_pool.current_dedicated)
+            batch_client, compute_client, network_client, config, rls=rls,
+            kind='shared', current_dedicated=_pool.current_dedicated)
         del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
