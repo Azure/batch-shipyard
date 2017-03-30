@@ -60,6 +60,18 @@
                             "transport": "tcp",
                             "performance.cache-size": "1 GB"
                         }
+                    },
+                    "samba": {
+                        "share_name": "data",
+                        "account":  {
+                            "username": "myuser",
+                            "password": "",
+                            "uid": 1002,
+                            "gid": 1002
+                        },
+                        "read_only": false,
+                        "create_mask": "0700",
+                        "directory_mask": "0700"
                     }
                 },
                 "vm_count": 2,

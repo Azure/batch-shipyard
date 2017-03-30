@@ -594,9 +594,25 @@ def _create_virtual_machine_extension(
                 continue
             server_options.append('{}:{}'.format(key, so[st][key]))
     logger.debug('server options: {}'.format(server_options))
+    # create samba option
+    if util.is_not_empty(rfs.storage_cluster.file_server.samba.share_name):
+        samba = rfs.storage_cluster.file_server.samba
+        smb = '{share}:{user}:{pw}:{uid}:{gid}:{ro}:{cm}:{dm}'.format(
+            share=samba.share_name,
+            user=samba.account.username,
+            pw=samba.account.password,
+            uid=samba.account.uid,
+            gid=samba.account.gid,
+            ro=samba.read_only,
+            cm=samba.create_mask,
+            dm=samba.directory_mask,
+        )
+    else:
+        smb = None
     # construct bootstrap command
-    cmd = './{bsf} {d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
+    cmd = './{bsf} {c}{d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
         bsf=bootstrap_file,
+        c=' -c "{}"'.format(smb) if util.is_not_empty(smb) else '',
         d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
         f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
         i=' -i {}'.format(
@@ -1711,7 +1727,7 @@ def delete_storage_cluster(
         vm_name = resources[key]['vm']
         async_ops['vms'][vm_name] = resource.AsyncOperation(functools.partial(
             _delete_virtual_machine, compute_client,
-            rfs.storage_cluster.resource_group, vm_name))
+            rfs.storage_cluster.resource_group, vm_name), retry_conflict=True)
     logger.info(
         'waiting for {} virtual machines to delete'.format(
             len(async_ops['vms'])))
@@ -1725,7 +1741,8 @@ def delete_storage_cluster(
         async_ops['nics'][nic_name] = resource.AsyncOperation(
             functools.partial(
                 _delete_network_interface, network_client,
-                rfs.storage_cluster.resource_group, nic_name)
+                rfs.storage_cluster.resource_group, nic_name),
+            retry_conflict=True
         )
     # wait for nics to delete
     logger.debug('waiting for {} network interfaces to delete'.format(
@@ -1763,7 +1780,7 @@ def delete_storage_cluster(
         deleted.add(nsg_name)
         async_ops['nsg'][nsg_name] = resource.AsyncOperation(functools.partial(
             _delete_network_security_group, network_client,
-            rfs.storage_cluster.resource_group, nsg_name))
+            rfs.storage_cluster.resource_group, nsg_name), retry_conflict=True)
     deleted.clear()
     # delete public ips
     async_ops['pips'] = {}
@@ -1774,7 +1791,8 @@ def delete_storage_cluster(
         async_ops['pips'][pip_name] = resource.AsyncOperation(
             functools.partial(
                 _delete_public_ip, network_client,
-                rfs.storage_cluster.resource_group, pip_name)
+                rfs.storage_cluster.resource_group, pip_name),
+            retry_conflict=True
         )
     logger.debug('waiting for {} public ips to delete'.format(
         len(async_ops['pips'])))
@@ -1792,7 +1810,8 @@ def delete_storage_cluster(
         async_ops['subnets'][subnet_name] = resource.AsyncOperation(
             functools.partial(
                 _delete_subnet, network_client,
-                rfs.storage_cluster.resource_group, vnet_name, subnet_name)
+                rfs.storage_cluster.resource_group, vnet_name, subnet_name),
+            retry_conflict=True
         )
     logger.debug('waiting for {} subnets to delete'.format(
         len(async_ops['subnets'])))
@@ -1810,7 +1829,8 @@ def delete_storage_cluster(
         async_ops['vnets'][vnet_name] = resource.AsyncOperation(
             functools.partial(
                 _delete_virtual_network, network_client,
-                rfs.storage_cluster.resource_group, vnet_name)
+                rfs.storage_cluster.resource_group, vnet_name),
+            retry_conflict=True
         )
     deleted.clear()
     # delete availability set, this is synchronous
@@ -1939,7 +1959,7 @@ def suspend_storage_cluster(compute_client, config, sc_id, wait=False):
     for vm in vms:
         async_ops[vm.name] = resource.AsyncOperation(functools.partial(
             _deallocate_virtual_machine, compute_client,
-            rfs.storage_cluster.resource_group, vm.name))
+            rfs.storage_cluster.resource_group, vm.name), retry_conflict=True)
     if wait:
         logger.info(
             'waiting for {} virtual machines to deallocate'.format(

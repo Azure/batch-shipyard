@@ -5,6 +5,7 @@
 - Created [Azure App Service Site Extension](https://www.siteextensions.net/packages/batch-shipyard).
 You can now one-click install Batch Shipyard as a site extension (after you
 have Python installed) and use Batch Shipyard from an Azure Functions trigger.
+- Samba support on storage cluster servers
 - Add sample RemoteFS recipes for NFS and GlusterFS
 - `install.sh` now handles Anaconda Python environments
 
@@ -18,6 +19,7 @@ info.
 - Removed requirement of a `batch` credential section for pure `fs` operations
 - Multi-instance auto complete setting not being properly read
 - `install.sh` virtual environment issues
+- Fix pool ingress data calls with remotefs (#62)
 
 ## [2.6.0b2] - 2017-03-22
 ### Added

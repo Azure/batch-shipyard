@@ -68,6 +68,18 @@ The remote filesystem schema is as follows:
                             "transport": "tcp",
                             "performance.cache-size": "1 GB"
                         }
+                    },
+                    "samba": {
+                        "share_name": "data",
+                        "account":  {
+                            "username": "myuser",
+                            "password": "",
+                            "uid": 1002,
+                            "gid": 1002
+                        },
+                        "read_only": false,
+                        "create_mask": "0700",
+                        "directory_mask": "0700"
                     }
                 },
                 "vm_count": 2,
@@ -259,6 +271,28 @@ to each virtual machine in the storage cluster.
       are not inherently supported by Batch Shipyard. Batch Shipyard
       automatically provisions the proper GlusterFS FUSE client on compute
       nodes that require access to GlusterFS-based storage clusters.
+  * (optional) `samba` defines properties required for enabling
+    [SMB/CIFS](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365233(v=vs.85).aspx)
+    support on storage cluster nodes. This support is accomplished by
+    running [Samba](https://www.samba.org/) alongside the NFS or GlusterFS
+    server software. If this section is omitted, SMB/CIFS will be disabled.
+    * (required) `share_name` name of the share. The path of this share is
+      automatically mapped.
+    * (optional) `account` is a user identity to mount the file share as.
+      If this is not specified, the share will be created with guest access
+      allowed. Files and directories will be created and modified by the
+      `nobody` account on the server.
+      * (required) `username` is the username
+      * (required) `password` is the password for the user. This cannot be
+        null or empty.
+      * (required) `uid` is the desired uid for the username
+      * (required) `gid` is the desired gid for the group
+    * (optional) `read_only` designates that the share is read only if this
+      property is set to `true`. The default is `false`.
+    * (optional) `create_mask` is the file creation mask as an octal string.
+      The default is `"0700"`.
+    * (optional) `directory_mask` is the directory creation mask as an octal
+      string. The default is `"0700"`.
 * (required) `vm_count` is the number of virtual machines to allocate for
 the storage cluster. For `nfs` file servers, the only valid value is 1.
 pNFS is not supported at this time. For `glusterfs` storage clusters, this

@@ -192,9 +192,20 @@ VirtualNetworkSettings = collections.namedtuple(
         'subnet_address_prefix', 'existing_ok', 'create_nonexistant',
     ]
 )
+SambaAccountSettings = collections.namedtuple(
+    'SambaAccountSettings', [
+        'username', 'password', 'uid', 'gid',
+    ]
+)
+SambaSettings = collections.namedtuple(
+    'SambaSettings', [
+        'share_name', 'account', 'read_only', 'create_mask',
+        'directory_mask',
+    ]
+)
 FileServerSettings = collections.namedtuple(
     'FileServerSettings', [
-        'type', 'mountpoint', 'mount_options', 'server_options',
+        'type', 'mountpoint', 'mount_options', 'server_options', 'samba',
     ]
 )
 InboundNetworkSecurityRule = collections.namedtuple(
@@ -2452,11 +2463,44 @@ def fileserver_settings(config, vm_count):
     sc_mo = _kv_read_checked(conf, 'mount_options')
     # get server options
     so_conf = _kv_read_checked(conf, 'server_options', {})
+    # get samba options
+    sc_samba = _kv_read_checked(conf, 'samba', {})
+    smb_share_name = _kv_read_checked(sc_samba, 'share_name')
+    sc_samba_account = _kv_read_checked(sc_samba, 'account', {})
+    smb_account = SambaAccountSettings(
+        username=_kv_read_checked(sc_samba_account, 'username', 'nobody'),
+        password=_kv_read_checked(sc_samba_account, 'password'),
+        uid=_kv_read(sc_samba_account, 'uid'),
+        gid=_kv_read(sc_samba_account, 'gid'),
+    )
+    if smb_account.username != 'nobody':
+        if util.is_none_or_empty(smb_account.password):
+            raise ValueError(
+                'samba account password is invalid for username {}'.format(
+                    smb_account.username))
+        if smb_account.uid is None or smb_account.gid is None:
+            raise ValueError(
+                ('samba account uid and/or gid is invalid for '
+                 'username {}').format(smb_account.username))
+    smb_ro = _kv_read(sc_samba, 'read_only', False)
+    if smb_ro:
+        smb_ro = 'yes'
+    else:
+        smb_ro = 'no'
+    smb_cm = _kv_read_checked(sc_samba, 'create_mask', '0700')
+    smb_dm = _kv_read_checked(sc_samba, 'directory_mask', '0700')
     return FileServerSettings(
         type=sc_fs_type,
         mountpoint=sc_fs_mountpoint,
         mount_options=sc_mo,
         server_options=so_conf,
+        samba=SambaSettings(
+            share_name=smb_share_name,
+            account=smb_account,
+            read_only=smb_ro,
+            create_mask=smb_cm,
+            directory_mask=smb_dm,
+        ),
     )
 
 

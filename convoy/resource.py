@@ -51,18 +51,18 @@ class AsyncOperation(object):
     """Async Operation handler with automatic retry"""
     def __init__(
             self, partial, max_retries=-1, auto_invoke=True,
-            retry_nonretryable=False):
+            retry_conflict=False):
         """Ctor for AsyncOperation
         :param AsyncOperation self: this
         :param functools.partial partial: partial object
         :param int max_retries: maximum number of retries before giving up
         :param bool auto_invoke: automatically invoke the async operation
-        :param bool retry_nonretryable: retry on 400-level errors
+        :param bool retry_conflict: retry 409 conflict errors
         """
         self._partial = partial
         self._retry_count = 0
         self._max_retries = max_retries
-        self._retry_nonretryable = retry_nonretryable
+        self._retry_conflict = retry_conflict
         self._op = None
         self._noop = False
         if auto_invoke:
@@ -91,9 +91,11 @@ class AsyncOperation(object):
                 return self._op.result()
             except (msrest.exceptions.ClientException,
                     msrestazure.azure_exceptions.CloudError) as e:
-                if (e.status_code >= 400 and e.status_code < 500 and
-                        not self._retry_nonretryable):
-                    raise
+                if e.status_code >= 400 and e.status_code < 500:
+                    if not (e.status_code == 409 and self._retry_conflict):
+                        logger.error('not retrying status_code={}'.format(
+                            e.status_code))
+                        raise
                 self._retry_count += 1
                 if (self._max_retries >= 0 and
                         self._retry_count > self._max_retries):
