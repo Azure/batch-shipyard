@@ -37,6 +37,10 @@ import hashlib
 import logging
 import logging.handlers
 import os
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 import subprocess
 try:
     from os import scandir as scandir
@@ -339,7 +343,9 @@ def compute_sha256_for_file(file, as_base64, blocksize=65536):
     :return: SHA256 for file
     """
     hasher = hashlib.sha256()
-    with file.open('rb') as filedesc:
+    if isinstance(file, pathlib.Path):
+        file = str(file)
+    with open(file, 'rb') as filedesc:
         while True:
             buf = filedesc.read(blocksize)
             if not buf:
@@ -361,7 +367,9 @@ def compute_md5_for_file(file, as_base64, blocksize=65536):
     :return: md5 for file
     """
     hasher = hashlib.md5()
-    with file.open('rb') as filedesc:
+    if isinstance(file, pathlib.Path):
+        file = str(file)
+    with open(file, 'rb') as filedesc:
         while True:
             buf = filedesc.read(blocksize)
             if not buf:

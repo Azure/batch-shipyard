@@ -23,6 +23,7 @@ info.
 - Move additional node prep commands to last set of commands to execute in
 start task (#63)
 - `glusterfs_on_compute` shared data volume issues
+- future and pathlib compat issues
 
 ## [2.6.0b2] - 2017-03-22
 ### Added

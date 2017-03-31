@@ -102,52 +102,52 @@ _NVIDIA_DRIVER = {
 }
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
 )
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
 )
 _GLUSTERRESIZE_FILE = (
     'shipyard_glusterfs_on_compute_resize.sh',
-    str(pathlib.Path(
-        _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh'))
+    pathlib.Path(
+        _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh')
 )
 _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh')
 )
 _JOBPREP_FILE = (
     'docker_jp_block.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh')
 )
 _BLOBXFER_FILE = (
     'shipyard_blobxfer.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh')
 )
 _CASCADE_FILE = (
     'cascade.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/cascade.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/cascade.py')
 )
 _SETUP_PR_FILE = (
     'setup_private_registry.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py')
 )
 _PERF_FILE = (
     'perf.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/perf.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
 )
 _REMOTEFSPREP_FILE = (
     'shipyard_remotefs_bootstrap.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh')
 )
 _REMOTEFSADDBRICK_FILE = (
     'shipyard_remotefs_addbrick.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_addbrick.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_addbrick.sh')
 )
 _REMOTEFSSTAT_FILE = (
     'shipyard_remotefs_stat.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh')
 )
 _ALL_REMOTEFS_FILES = [
     _REMOTEFSPREP_FILE, _REMOTEFSADDBRICK_FILE, _REMOTEFSSTAT_FILE,
@@ -765,20 +765,20 @@ def _add_pool(
     if azurefile_vd:
         afbin, afsrv, afenv, afvc = _setup_azurefile_volume_driver(
             blob_client, config)
-        _rflist.append((afbin.name, str(afbin)))
-        _rflist.append((afsrv.name, str(afsrv)))
-        _rflist.append((afenv.name, str(afenv)))
-        _rflist.append((afvc.name, str(afvc)))
+        _rflist.append((afbin.name, afbin))
+        _rflist.append((afsrv.name, afsrv))
+        _rflist.append((afenv.name, afenv))
+        _rflist.append((afvc.name, afvc))
     # gpu settings
     if settings.is_gpu_pool(pool_settings.vm_size):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
                 blob_client, config, pool_settings.vm_size)
-            _rflist.append((gpu_driver.name, str(gpu_driver)))
+            _rflist.append((gpu_driver.name, gpu_driver))
         else:
             gpu_driver = pathlib.Path(_NVIDIA_DRIVER['target'])
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
-        _rflist.append((gpupkg.name, str(gpupkg)))
+        _rflist.append((gpupkg.name, gpupkg))
         gpu_env = '{}:{}:{}'.format(
             settings.is_gpu_visualization_pool(pool_settings.vm_size),
             gpu_driver.name,
