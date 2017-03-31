@@ -1101,7 +1101,7 @@ def _setup_glusterfs(
     success = True
     for node in nodes:
         try:
-            batch_client.file.get_node_file_properties_from_compute_node(
+            batch_client.file.get_properties_from_compute_node(
                 pool_id, node.id,
                 ('workitems/{}/job-1/gluster-setup/wd/'
                  '.glusterfs_success').format(job_id))

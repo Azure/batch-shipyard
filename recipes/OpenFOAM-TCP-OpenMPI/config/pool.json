@@ -6,7 +6,7 @@
         "inter_node_communication_enabled": true,
         "publisher": "OpenLogic",
         "offer": "CentOS",
-        "sku": "7.2",
+        "sku": "7.3",
         "ssh": {
             "username": "docker"
         },
