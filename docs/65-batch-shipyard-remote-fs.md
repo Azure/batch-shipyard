@@ -30,6 +30,8 @@ scale up and scale out scenarios.
 
 ## Major Features
 * Support for multiple file server types: NFS or GlusterFS
+* Support for SMB/CIFS on top of NFS or GlusterFS mountpoints to enable
+file sharing to Windows clients
 * Automatic provisioning of all required resources for the storage cluster
 including managed disks, virtual networks, subnets, network interfaces, IP
 addresses and DNS labels, network security groups, availability sets, virtual

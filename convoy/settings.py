@@ -2594,11 +2594,19 @@ def remotefs_settings(config, sc_id=None):
                 list):
             raise ValueError(
                 'expected list for glusterfs network security rule')
+    if 'smb' in ns_conf:
+        sc_ns_inbound['smb'] = InboundNetworkSecurityRule(
+            destination_port_range='445',
+            source_address_prefix=_kv_read_checked(ns_conf, 'smb'),
+            protocol='tcp',
+        )
+        if not isinstance(sc_ns_inbound['smb'].source_address_prefix, list):
+            raise ValueError('expected list for smb network security rule')
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
-        _reserved = frozenset(
-            ['ssh', 'nfs', 'glusterfs', 'zfs', 'beegfs', 'samba', 'cifs']
-        )
+        _reserved = frozenset([
+            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs', 'beegfs'
+        ])
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
             if key.lower() in _reserved:

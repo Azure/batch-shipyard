@@ -46,6 +46,7 @@ The remote filesystem schema is as follows:
                     "ssh": ["*"],
                     "nfs": ["1.2.3.0/24", "2.3.4.5"],
                     "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
+                    "smb": ["6.7.8.9"],
                     "custom_inbound_rules": {
                         "myrule": {
                             "destination_port_range": "5000-5001",
@@ -219,6 +220,11 @@ to each virtual machine in the storage cluster.
     brick ports to be exposed to the specified address prefix. Multiple
     address prefixes can be specified. This property is ignored for nfs
     clusters.
+  * (optional) `smb` rule allows the the direct host SMB port to be exposed if
+    a `samba` configuration is specified under `file_server`. This requires
+    Windows 2000 or later. Please note the name of this rule is `smb` which
+    refers to the protocol rather than the `samba` implementation for
+    providing this service on a non-Windows host.
   * (optional) `custom_inbound_rules` are custom inbound rules for other
     services that you need to expose.
     * (required) `<rule name>` is the name of the rule; the example uses
@@ -272,10 +278,10 @@ to each virtual machine in the storage cluster.
       automatically provisions the proper GlusterFS FUSE client on compute
       nodes that require access to GlusterFS-based storage clusters.
   * (optional) `samba` defines properties required for enabling
-    [SMB/CIFS](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365233(v=vs.85).aspx)
+    [SMB](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365233(v=vs.85).aspx)
     support on storage cluster nodes. This support is accomplished by
     running [Samba](https://www.samba.org/) alongside the NFS or GlusterFS
-    server software. If this section is omitted, SMB/CIFS will be disabled.
+    server software. If this section is omitted, SMB access will be disabled.
     * (required) `share_name` name of the share. The path of this share is
       automatically mapped.
     * (optional) `account` is a user identity to mount the file share as.

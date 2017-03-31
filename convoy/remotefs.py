@@ -2101,8 +2101,10 @@ def stat_storage_cluster(
                 compute_client, network_client, config, sc_id, None, vm.name,
                 nic=nic, pip=pip)
             offset = settings.get_offset_from_virtual_machine_name(vm.name)
-            script_cmd = '/opt/batch-shipyard/{sf} {f}{m}{n}{r}{s}'.format(
+            script_cmd = '/opt/batch-shipyard/{sf} {c}{f}{m}{n}{r}{s}'.format(
                 sf=status_script,
+                c=' -c' if util.is_not_empty(
+                    rfs.storage_cluster.file_server.samba.share_name) else '',
                 f=' -f {}'.format(
                     rfs.storage_cluster.vm_disk_map[offset].filesystem),
                 m=' -m {}'.format(
