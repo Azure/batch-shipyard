@@ -1621,7 +1621,10 @@ def action_fs_cluster_ssh(
     if cardinal is not None and hostname is not None:
         raise ValueError('cannot specify both cardinal and hostname options')
     if cardinal is None and hostname is None:
-        raise ValueError('must specify one of cardinal or hostname option')
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or hostname option '
+            'was specified')
+        cardinal = 0
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
@@ -1953,7 +1956,10 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
     if cardinal is not None and nodeid is not None:
         raise ValueError('cannot specify both cardinal and nodeid options')
     if cardinal is None and nodeid is None:
-        raise ValueError('must specify one of cardinal or nodeid option')
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or nodeid option '
+            'was specified')
+        cardinal = 0
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)

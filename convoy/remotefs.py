@@ -191,7 +191,7 @@ def delete_managed_disks(
             disk_name, resource_group))
         async_ops[disk_name] = resource.AsyncOperation(functools.partial(
             compute_client.disks.delete, resource_group_name=resource_group,
-            disk_name=disk_name))
+            disk_name=disk_name), retry_conflict=True)
     # block for all ops to complete if specified
     if wait:
         if len(async_ops) > 0:
@@ -2127,9 +2127,11 @@ def stat_storage_cluster(
                 stdout = stdout.decode('utf8')
                 if util.on_windows():
                     stdout = stdout.replace('\n', os.linesep)
+            fsstatfmt = '>> File Server Status for {} ec={}:{}{}'
+            if util.on_python2():
+                fsstatfmt = unicode(fsstatfmt)  # noqa
             fsstatus.append(
-                '>> File Server Status for {} ec={}:{}{}'.format(
-                    vm.name, proc.returncode, os.linesep, stdout))
+                fsstatfmt.format(vm.name, proc.returncode, os.linesep, stdout))
         vmstatus[vm.name] = {
             'vm_size': vm.hardware_profile.vm_size,
             'powerstate': powerstate,

@@ -728,10 +728,6 @@ if [ $attach_disks -eq 0 ]; then
     fi
     # setup samba server if specified
     if [ ! -z $samba_options ]; then
-        saved_mp=$mountpath
-        if [ $server_type == "glusterfs" ]; then
-            mountpath=$gluster_brick_mountpath
-        fi
         # install samba
         apt-get install -y -q --no-install-recommends samba
         # parse options
@@ -780,8 +776,5 @@ EOF
         fi
         # restart samba service
         systemctl restart smbd.service
-        # restore mountpath
-        mountpath=$saved_mp
-        unset saved_mp
     fi
 fi

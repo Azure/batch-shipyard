@@ -14,6 +14,8 @@ have Python installed) and use Batch Shipyard from an Azure Functions trigger.
 complex property. This is to accomodate for situations where public IP for
 RemoteFS is disabled. Please see the Remote FS configuration doc for more
 info.
+- `--cardinal 0` is now implicit if no `--hostname` or `--nodeid` is specified
+for `fs cluster ssh` or `pool ssh` commands, respectively
 
 ### Fixed
 - Removed requirement of a `batch` credential section for pure `fs` operations
@@ -24,6 +26,7 @@ info.
 start task (#63)
 - `glusterfs_on_compute` shared data volume issues
 - future and pathlib compat issues
+- Python2 unicode/str issues with management libraries
 
 ## [2.6.0b2] - 2017-03-22
 ### Added
