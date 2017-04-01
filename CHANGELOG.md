@@ -7,13 +7,15 @@ You can now one-click install Batch Shipyard as a site extension (after you
 have Python installed) and use Batch Shipyard from an Azure Functions trigger.
 - Samba support on storage cluster servers
 - Add sample RemoteFS recipes for NFS and GlusterFS
-- `install.sh` now handles Anaconda Python environments
+- `install.cmd` installer for Windows. `install_conda_windows.cmd` has been
+replaced by `install.cmd`, please see the install doc for more information.
 
 ### Changed
 - **Breaking Change:** `static_public_ip` has been replaced with a `public_ip`
 complex property. This is to accomodate for situations where public IP for
 RemoteFS is disabled. Please see the Remote FS configuration doc for more
 info.
+- `install.sh` now handles Anaconda Python environments
 - `--cardinal 0` is now implicit if no `--hostname` or `--nodeid` is specified
 for `fs cluster ssh` or `pool ssh` commands, respectively
 

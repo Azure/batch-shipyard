@@ -90,11 +90,6 @@ if [ ! -z $VENV_NAME ]; then
         echo "Virtual environment name cannot be shipyard. Please use a different virtual environment name."
         exit 1
     fi
-    # check if dir already exists
-    if [ -d "$VENV_NAME" ]; then
-        echo "Directory $VENV_NAME already exists. Please use a different virtual environment name."
-        exit 1
-    fi
     # check for virtualenv executable
     if [ $ANACONDA -eq 0 ]; then
         if hash virtualenv 2> /dev/null; then
@@ -190,8 +185,7 @@ if [ ! -z $VENV_NAME ]; then
         sudo $PIP install virtualenv
     fi
     if [ $ANACONDA -eq 0 ]; then
-        # create venv
-        mkdir -p $VENV_NAME
+        # create venv if it doesn't exist
         virtualenv -p $PYTHON $VENV_NAME
         source $VENV_NAME/bin/activate
         $PIP install --upgrade pip setuptools
@@ -199,7 +193,9 @@ if [ ! -z $VENV_NAME ]; then
         deactivate
     else
         # create conda env
+        set +e
         conda create --yes --name $VENV_NAME
+        set -e
         source activate $VENV_NAME
         conda install --yes pip
         # temporary workaround with pip requirements upgrading setuptools and
@@ -277,4 +273,4 @@ if [ -z $VENV_NAME ]; then
     echo '>> permanently in your shell rc script, e.g., .bashrc for bash shells.'
     echo ""
 fi
-echo ">> Install completed for $PYTHON. Please run Batch Shipyard as: $PWD/shipyard"
+echo ">> Install complete for $PYTHON. Please run Batch Shipyard as: $PWD/shipyard"

@@ -18,9 +18,12 @@ Anaconda has isolated environments which are conceptually equivalent to
 [Virtual Environments](https://pypi.python.org/pypi/virtualenv) and also
 have separate packaging mechanisms than packages traditionally found on
 PyPI. As such, special attention should be given when installing Batch
-Shipyard into an Anaconda environment. On Windows, you can use the provided
-`install_conda_windows.cmd` script to aid in installation to Anaconda
-environments on Windows.
+Shipyard into an Anaconda environment. It is highly recommended to use
+an Anaconda environment that provides Python 3.5 or higher.
+
+It is recommended to use the `install.sh` script to install on an Anaconda
+environment on Linux and the `install.cmd` command file to install on an
+Anaconda environment on Windows.
 
 ## <a name="batchservice"></a>Azure Batch Service Issues
 #### Check Azure Batch Service Status
