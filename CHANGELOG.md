@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.6.0b3] - 2017-04-03
 ### Added
 - Created [Azure App Service Site Extension](https://www.siteextensions.net/packages/batch-shipyard).
 You can now one-click install Batch Shipyard as a site extension (after you
@@ -493,7 +495,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...HEAD
+[2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
 [2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1
 [2.5.4]: https://github.com/Azure/batch-shipyard/compare/2.5.3...2.5.4
