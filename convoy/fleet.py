@@ -734,6 +734,8 @@ def _add_pool(
         images = settings.global_resources_docker_images(config)
         if len(images) > 0:
             block_for_gr = ','.join([x for x in images])
+        else:
+            logger.warning('no docker images specified in global resources')
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
@@ -1145,19 +1147,19 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         registry = '{}/'.format(preg.server)
     else:
         registry = ''
-    # if image is specified, check that it exists for this pool
-    if image is not None:
-        if image not in settings.global_resources_docker_images(config):
-            raise RuntimeError(
-                ('cannot update docker image {} not specified as a global '
-                 'resource for pool').format(image))
-        else:
-            if digest is None:
-                images = [image]
-            else:
-                images = ['{}@{}'.format(image, digest)]
-    else:
+    # if image is not specified use images from global config
+    if util.is_none_or_empty(image):
         images = settings.global_resources_docker_images(config)
+    else:
+        # log warning if it doesn't exist in global resources
+        if image not in settings.global_resources_docker_images(config):
+            logger.warning(
+                ('docker image {} is not specified as a global resource '
+                 'for pool {}').format(image, pool_id))
+        if digest is None:
+            images = [image]
+        else:
+            images = ['{}@{}'.format(image, digest)]
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
     # check pool current dedicated is > 0. There is no reason to run udi

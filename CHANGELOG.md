@@ -22,6 +22,9 @@ info.
 - `install.sh` now handles Anaconda Python environments
 - `--cardinal 0` is now implicit if no `--hostname` or `--nodeid` is specified
 for `fs cluster ssh` or `pool ssh` commands, respectively
+- Allow `docker_images` in `global_resources` to be empty. Note that it is
+always recommended to pre-load images on to pools for consistent scheduling
+latencies from pool idle.
 
 ### Fixed
 - Removed requirement of a `batch` credential section for pure `fs` operations

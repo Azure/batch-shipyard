@@ -243,7 +243,12 @@ private registry server names, as these will be automatically prepended. For
 instance, if you have an image `abc/mytag` on your private registry
 `myregistry-myorg.azurecr.io`, your image should be named in the
 `docker_images` array as `abc/mytag` and not
-`myregistry-myorg.azurecr.io/abc/mytag`.
+`myregistry-myorg.azurecr.io/abc/mytag`. If this property is empty or
+is not specified, no Docker images are pre-loaded on to compute nodes which
+may increase scheduling latency. It is highly recommended not to leave this
+property empty if possible. Note that if you do not specify Docker
+images to preload, you must specify `allow_run_on_missing_image` as `true`
+in your job specification.
 
 `files` is an optional property that specifies data that should be ingressed
 from a location accessible by the local machine (i.e., machine invoking
