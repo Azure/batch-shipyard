@@ -10,7 +10,7 @@ The jobs schema is as follows:
     "job_specifications": [
         {
             "id": "dockerjob",
-            "multi_instance_auto_complete": true,
+            "auto_complete": false,
             "environment_variables": {
                 "abc": "xyz"
             },
@@ -137,10 +137,10 @@ The jobs schema is as follows:
 `job_specifications` array consists of jobs to create.
 * (required) `id` is the job id to create. If the job already exists, the
 specified `tasks` under the job will be added to the existing job.
-* (optional) `multi_instance_auto_complete` enables auto-completion of the job
-for which a multi-task instance is run. This allows automatic cleanup of the
-Docker container in multi-instance tasks. This is defaulted to `true` when
-multi-instance tasks are specified.
+* (optional) `auto_complete` enables auto-completion of the job for which
+the specified tasks are run under. When run with multi-instance tasks, this
+performs automatic cleanup of the Docker container which is run in detached
+mode. The default is `false`.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job. Note that
 environment variables are not expanded and are passed as-is. You will need

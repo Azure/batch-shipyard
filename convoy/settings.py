@@ -1793,18 +1793,18 @@ def job_id(conf):
     return conf['id']
 
 
-def job_multi_instance_auto_complete(conf):
+def job_auto_complete(conf):
     # type: (dict) -> bool
-    """Get multi-instance job autocompelte setting
+    """Get job (and multi-instance) autocomplete setting
     :param dict conf: job configuration object
     :rtype: bool
-    :return: multi instance job autocomplete
+    :return: job autocomplete
     """
     try:
-        mi_ac = conf['multi_instance_auto_complete']
+        ac = conf['auto_complete']
     except KeyError:
-        mi_ac = True
-    return mi_ac
+        ac = False
+    return ac
 
 
 def job_environment_variables(conf):

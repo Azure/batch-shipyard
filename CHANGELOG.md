@@ -11,6 +11,10 @@ have Python installed) and use Batch Shipyard from an Azure Functions trigger.
 replaced by `install.cmd`, please see the install doc for more information.
 
 ### Changed
+- **Breaking Change:** `multi_instance_auto_complete` under
+`job_specifications` is now named `auto_complete`. This property will apply
+to all types of jobs and not just multi-instance tasks. The default is now
+`false` (instead of `true` for the old `multi_instance_auto_complete`).
 - **Breaking Change:** `static_public_ip` has been replaced with a `public_ip`
 complex property. This is to accomodate for situations where public IP for
 RemoteFS is disabled. Please see the Remote FS configuration doc for more

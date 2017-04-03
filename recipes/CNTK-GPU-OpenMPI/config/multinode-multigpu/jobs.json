@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "cntkjob",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "tasks": [
                 {
                     "image": "alfpark/cntk:2.0beta4-gpu-openmpi-refdata",

@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "hpcg",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "tasks": [
                 {
                     "image": "alfpark/linpack:cpu-intel-mkl",

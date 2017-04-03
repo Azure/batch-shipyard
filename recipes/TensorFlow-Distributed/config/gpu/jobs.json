@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "tensorflow",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "tasks": [
                 {
                     "image": "alfpark/tensorflow:0.11.0-gpu",

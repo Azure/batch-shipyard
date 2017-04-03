@@ -1754,7 +1754,7 @@ def add_jobs(
         # 1. check docker images in task against pre-loaded on pool
         # 2. if tasks have dependencies, set it if so
         # 3. if there are multi-instance tasks
-        mi_ac = settings.job_multi_instance_auto_complete(jobspec)
+        auto_complete = settings.job_auto_complete(jobspec)
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
@@ -1779,7 +1779,7 @@ def add_jobs(
             if settings.has_depends_on_task(task):
                 uses_task_dependencies = True
             if settings.is_multi_instance_task(task):
-                if multi_instance and mi_ac:
+                if multi_instance and auto_complete:
                     raise ValueError(
                         'cannot specify more than one multi-instance task '
                         'per job with auto completion enabled')
@@ -1833,10 +1833,13 @@ def add_jobs(
             constraints=job_constraints,
         )
         lastjob = job.id
-        # add multi-instance settings
-        set_terminate_on_all_tasks_complete = False
-        if multi_instance and mi_ac:
+        job_updated_for_auto_terminate = False
+        if auto_complete:
             set_terminate_on_all_tasks_complete = True
+        else:
+            set_terminate_on_all_tasks_complete = False
+        # add multi-instance settings
+        if multi_instance and auto_complete:
             job.job_release_task = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
@@ -1862,11 +1865,11 @@ def add_jobs(
             elif 'The specified job already exists' in ex.message.value:
                 # cannot re-use an existing job if multi-instance due to
                 # job release requirement
-                if multi_instance and mi_ac:
+                if multi_instance and auto_complete:
                     raise
             else:
                 raise
-        del mi_ac
+        del auto_complete
         del multi_instance
         del mi_docker_container_name
         del uses_task_dependencies
@@ -2047,13 +2050,15 @@ def add_jobs(
                 logger.info('Adding task: {}'.format(task.id))
             batch_client.task.add(job_id=job.id, task=batchtask)
             # update job if job autocompletion is needed
-            if set_terminate_on_all_tasks_complete:
+            if (set_terminate_on_all_tasks_complete and
+                    not job_updated_for_auto_terminate):
                 batch_client.job.update(
                     job_id=job.id,
                     job_update_parameter=batchmodels.JobUpdateParameter(
                         pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                         on_all_tasks_complete=batchmodels.
                         OnAllTasksComplete.terminate_job))
+                job_updated_for_auto_terminate = True
             lasttask = task.id
     # tail file if specified
     if tail:
