@@ -1165,9 +1165,10 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     # will always fetch either :latest if untagged or the latest :tag if
     # updated in the upstream registry
     if pool.current_dedicated == 0:
-        raise RuntimeError(
+        logger.warning(
             ('not executing udi command as the current number of compute '
              'nodes is zero for pool {}').format(pool_id))
+        return
     # create job for update
     job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
