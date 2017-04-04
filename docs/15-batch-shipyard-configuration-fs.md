@@ -286,13 +286,13 @@ to each virtual machine in the storage cluster.
       automatically mapped.
     * (optional) `account` is a user identity to mount the file share as.
       If this is not specified, the share will be created with guest access
-      allowed. Files and directories will be created and modified by the
+      allowed and files and directories will be created and modified by the
       `nobody` account on the server.
       * (required) `username` is the username
       * (required) `password` is the password for the user. This cannot be
         null or empty.
       * (required) `uid` is the desired uid for the username
-      * (required) `gid` is the desired gid for the group
+      * (required) `gid` is the desired gid for the username's group
     * (optional) `read_only` designates that the share is read only if this
       property is set to `true`. The default is `false`.
     * (optional) `create_mask` is the file creation mask as an octal string.

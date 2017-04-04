@@ -6,7 +6,7 @@
 ### Added
 - Created [Azure App Service Site Extension](https://www.siteextensions.net/packages/batch-shipyard).
 You can now one-click install Batch Shipyard as a site extension (after you
-have Python installed) and use Batch Shipyard from an Azure Functions trigger.
+have Python installed) and use Batch Shipyard from an Azure Function trigger.
 - Samba support on storage cluster servers
 - Add sample RemoteFS recipes for NFS and GlusterFS
 - `install.cmd` installer for Windows. `install_conda_windows.cmd` has been
@@ -18,7 +18,7 @@ replaced by `install.cmd`, please see the install doc for more information.
 to all types of jobs and not just multi-instance tasks. The default is now
 `false` (instead of `true` for the old `multi_instance_auto_complete`).
 - **Breaking Change:** `static_public_ip` has been replaced with a `public_ip`
-complex property. This is to accomodate for situations where public IP for
+complex property. This is to accommodate for situations where public IP for
 RemoteFS is disabled. Please see the Remote FS configuration doc for more
 info.
 - `install.sh` now handles Anaconda Python environments
@@ -65,8 +65,8 @@ guide for more information. (#55)
 [UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
-- `allow_run_on_missing` option to jobs that allows tasks to execute under
-jobs with Docker images that have not been pre-loaded via the
+- `allow_run_on_missing_image` option to jobs that allows tasks to execute
+under jobs with Docker images that have not been pre-loaded via the
 `global_resources`:`docker_images` setting in config.json. Note that, if
 possible, you should attempt to specify all Docker images that you intend
 to run in the `global_resources`:`docker_images` property in the global
