@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+### Fixed
+- Possible race condition between disk setup and glusterfs volume create
 
 ## [2.6.0b3] - 2017-04-03
 ### Added

@@ -130,6 +130,18 @@ gluster_poll_for_volume() {
 
 }
 
+enable_and_start_glusterfs() {
+    systemctl enable glusterfs-server
+    # start service if not started
+    set +e
+    systemctl status glusterfs-server
+    if [ $? -ne 0 ]; then
+        set -e
+        systemctl start glusterfs-server
+    fi
+    set -e
+}
+
 setup_glusterfs() {
     # parse server options in the format: volname,voltype,transport,key:value,...
     IFS=',' read -ra so <<< "$server_options"
@@ -425,16 +437,9 @@ EOF
         apt-get install -y -q --no-install-recommends glusterfs-server
         # reload unit files
         systemctl daemon-reload
-        # enable and start nfs server
-        systemctl enable glusterfs-server
-        # start service if not started
-        set +e
-        systemctl status glusterfs-server
-        if [ $? -ne 0 ]; then
-            set -e
-            systemctl start glusterfs-server
-        fi
-        set -e
+        # ensure glusterfs server is stopped. we should not start it yet
+        # until all local disk setup has been completed.
+        systemctl stop glusterfs-server
     else
         echo "server_type $server_type not supported."
         exit 1
@@ -721,6 +726,7 @@ if [ $attach_disks -eq 0 ]; then
     if [ $server_type == "nfs" ]; then
         setup_nfs
     elif [ $server_type == "glusterfs" ]; then
+        enable_and_start_glusterfs
         setup_glusterfs
     else
         echo "server_type $server_type not supported."

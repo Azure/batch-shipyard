@@ -61,7 +61,7 @@ concurrent multi-node parallel transfers with GlusterFS storage clusters
 [UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
 and Batch Shipyard provisioned remote filesystems
 * Support for mounting multiple disparate Batch Shipyard provisioned remote
-filesystem concurrently to the same pool and compute ndoes
+filesystem concurrently to the same pool and compute nodes
 * Automatic failover for HA GlusterFS volume file lookups (compute node client
 mount) through remote filesystem deployment walk to find disparate upgrade and
 fault domains of the GlusterFS servers
