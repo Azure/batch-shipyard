@@ -2,6 +2,10 @@
 Installation is an easy two-step process: fetch the code and run the
 install script to download and setup dependencies.
 
+If you wish to install Batch Shipyard into your Azure App Service (e.g.,
+Azure Function App) environment, please see
+[this guide](60-batch-shipyard-site-extension.md).
+
 ## Installation
 ### Step 1: Acquire Batch Shipyard
 Clone the repository:
@@ -11,7 +15,7 @@ git clone https://github.com/Azure/batch-shipyard.git
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases)
 and unpack the archive.
 
-### Step 2a: [Linux] Run the install.sh Script
+### Step 2a: [Linux] Run the `install.sh` Script
 Batch Shipyard includes an installation script to simplify installation on
 a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
@@ -36,14 +40,29 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 2.7 in the virtual environment "shipyard"
-./install.sh -e shipyard
-# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
-./install.sh -3 -e shipyard
+# Install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -e shipyard.venv
+# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
+./install.sh -3 -e shipyard.venv
+# Or to install for Anaconda Python3 in the environment "shipyard.venv". Note
+# that for Anaconda installations, the -e parameter is required
+./install.sh -3 -e shipyard.venv
 ```
+
+A helper script named `shipyard` will be generated with a successful
+installation. This helper script can be invoked in lieu of `shipyard.py`
+which will invoke shipyard with the appropriate interpreter and virtual
+environment, if created during installation.
+
 Do not delete the virtual environment directory (in the above example, a
-directory named `shipyard` would be created), as this contains the virtual
-environment required for execution.
+directory named `shipyard.venv` would be created), as this contains the
+virtual environment required for execution.
+
+Please note that although Anaconda environment installations are supported,
+there is a larger startup delay for invoking `shipyard` with Anaconda
+environments due to the delay in activating a conda environment.
+Python from [python.org](https://www.python.org) (CPython) is recommended as
+the execution environment.
 
 Alternatively, install directly into your "user" environment:
 ```shell
@@ -55,7 +74,7 @@ cd batch-shipyard
 ./install.sh
 # Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
 ./install.sh -3
-# Add $HOME/.local/bin to your PATH in your shell rc file
+# Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
 # Reload .bashrc for bash shells
@@ -66,11 +85,6 @@ Please ensure that you are not invoking the install script as root. `sudo`
 will be invoked wherever root access is required for installing system-wide
 packages in the `install.sh` script. Python packages required by Batch
 Shipyard will be installed either in the virtual environment or user context.
-
-A helper script named `shipyard` will be generated with a successful
-installation. This helper script can be invoked in lieu of `shipyard.py`
-which will invoke shipyard with the appropriate interpreter and virtual
-environment, if created during installation.
 
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
@@ -99,17 +113,34 @@ The following distributions will not work with the `install.sh` script:
 Please follow the manual installation instructions found later in this
 document for these distributions.
 
-### Step 2b: [Windows] Pip Install Dependencies
-Invoke `pip.exe` (or `pip3.exe`) and install using the `requirements.txt`
-file. For example:
+### Step 2b: [Windows] Run the `install.cmd` Script
+Batch Shipyard includes a installation command file that simplifies
+installing Batch Shipyard on [python.org (CPython)](https://www.python.org)
+and Anaconda. It is highly recommended to use Python 3.5 or higher (or an
+Anaconda equivalent). The use of the `install.cmd` script installs Batch
+Shipyard into a virtual environment. For example:
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Windows on Python 3.5+
-pip3.exe install --upgrade -r requirements.txt
-# Or invoke directly from the installation directory
-C:\Python36\Scripts\pip3.exe install --upgrade -r requirements.txt
+# Install Batch Shipyard into the virtual environment named shipyard.venv
+install.cmd shipyard.venv
 ```
+
+A helper command file named `shipyard.cmd` will be generated with a successful
+installation. This helper script can be invoked in lieu of `shipyard.py`
+which will invoke shipyard with the appropriate interpreter and virtual
+environment, if created during installation.
+
+Do not delete the virtual environment directory (in the above example, a
+directory named `shipyard.venv` would be created), as this contains the
+virtual environment required for execution.
+
+Please note that although Anaconda environment installations are supported,
+there is a larger startup delay for invoking `shipyard.cmd` with Anaconda
+environments due to the delay in activating a conda environment.
+Python from [python.org](https://www.python.org) (CPython) is recommended as
+the execution environment.
+
 If you are installing on Python < 3.5 on Windows, you will need a compiler
 that matches the CRT of the CPython version you are using. For Python 2.7,
 you can download the necessary development headers and compiler
@@ -117,21 +148,18 @@ you can download the necessary development headers and compiler
 on Windows, it is recommended to upgrade to Python 3.5 or later so that you
 do not need a compiler to install the dependencies.
 
-Although it is recommended to use the Python distribution from
-[python.org](https://www.python.org) for use with Batch Shipyard, if you are
-using the Anaconda distribution, you can use the `install_conda_windows.cmd`
-file to aid in installing dependencies to your conda environment:
+Alternatively you can install Batch Shipyard using the `requirements.txt`
+file:
 ```shell
-# Create environment if you haven't done so yet such that you don't install
-# to the root environment, unless you really want to
-conda create --name batchshipyard
-# Activate the environment
-activate batchshipyard
-# Change directory to where Batch Shipyard was cloned or unpacked to
-cd batch-shipyard
-# Run installer script
-install_conda_windows.cmd
+# Install for Windows on Python 3.5+
+pip3.exe install --upgrade -r requirements.txt
+# Or invoke directly from wherever you installed python
+C:\Python36\Scripts\pip3.exe install --upgrade -r requirements.txt
 ```
+
+Note that installing directly using the `requirements.txt` file does not
+create a `shipyard.cmd` file that wraps `shipyard.py` and points it to the
+proper interpreter.
 
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
@@ -179,10 +207,7 @@ upgrades. If you specified the `-3` and/or `-e <env name>` parameter, then
 these parameters must be used again for upgrades.
 
 #### Windows
-Reissue the `pip.exe install --upgrade -r requirements.txt` command.
-
-If using Anaconda, you can rerun the `install_conda_windows.cmd` script
-within the environment that hosts Batch Shipyard.
+Rerun the `install.cmd` script with the same virtual environment parameter.
 
 #### Mac
 Reissue the `pip install --upgrade --user -r requirements.txt` command.
@@ -224,27 +249,27 @@ installing on Python 3.5 or later for Windows, no development environment
 is needed. The following are example commands to execute (as root or with
 `sudo`) to install the required dependencies on Linux:
 
-####Ubuntu/Debian
+#### Ubuntu/Debian
 ```
 apt-get update
 apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev python-pip
 pip install --upgrade pip
 ```
 
-####CentOS/RHEL/Fedora
+#### CentOS/RHEL/Fedora
 ```
 yum install -y gcc openssl-dev libffi-devel python-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
-####SLES/OpenSUSE
+#### SLES/OpenSUSE
 ```
 zypper ref
 zypper -n in gcc libopenssl-devel libffi48-devel python-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
-####Note about Python 3.3+
+#### Note about Python 3.3+
 If installing for Python 3.3+, then simply use the Python3 equivalents for
 the python dependencies. For example, on Ubuntu/Debian:
 ```
@@ -254,7 +279,7 @@ pip3 install --upgrade pip
 ```
 would install the proper dependencies for Python3.
 
-###Data Movement Support
+### Data Movement Support
 Batch Shipyard contains native support for moving files locally accessible
 at the point of script execution. The `install.sh` script ensures that the
 following programs are installed. The Docker CLI image contains all of the
@@ -276,7 +301,7 @@ storage. This is automatically installed if `pip install` is used with
 typically placed in `~/.local/bin`. This path will need to be added to your
 `PATH` environment variable.
 
-###Encryption Support
+### Encryption Support
 Batch Shipyard supports encrypting credentials that are used by backend
 components within your pool deployment. In order to utilize this feature,
 you must have `openssl` installed. The `install.sh` script ensures that
@@ -285,7 +310,7 @@ OpenSSL is installed. The Docker CLI image also contains OpenSSL.
 Note that all commandlines, environment variables and resource file URLs
 which are stored by the Azure Batch Service are encrypted by the service.
 This feature is to prevent credentials from being displayed in the clear when
-using the Azure Portal, Batch Explorer, or other tools to inspect the status
+using the Azure Portal, Batch Labs, or other tools to inspect the status
 of pools, jobs and tasks. If this is not an issue for your scenario, then
 encrypting credentials is unnecessary. Please review the
 [credential encryption guide](75-batch-shipyard-credential-encryption.md)

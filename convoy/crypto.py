@@ -84,18 +84,18 @@ def generate_ssh_keypair(export_path, prefix=None):
         prefix = _SSH_KEY_PREFIX
     privkey = pathlib.Path(export_path, prefix)
     pubkey = pathlib.Path(export_path, prefix + '.pub')
-    sprivkey = str(privkey)
     if privkey.exists():
-        old = pathlib.Path(sprivkey + '.old')
+        old = pathlib.Path(export_path, prefix + '.old')
         if old.exists():
             old.unlink()
         privkey.rename(old)
     if pubkey.exists():
-        old = pathlib.Path(str(pubkey) + '.old')
+        old = pathlib.Path(export_path, prefix + '.pub.old')
         if old.exists():
             old.unlink()
         pubkey.rename(old)
     logger.info('generating ssh key pair to path: {}'.format(export_path))
+    sprivkey = str(privkey)
     subprocess.check_call(
         ['ssh-keygen', '-f', sprivkey, '-t', 'rsa', '-N', ''''''])
     return (sprivkey, str(pubkey))

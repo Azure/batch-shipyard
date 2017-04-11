@@ -33,10 +33,6 @@ from builtins import (  # noqa
 import datetime
 import hashlib
 import logging
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
 # non-stdlib imports
 import azure.common
 import azure.storage.blob as azureblob
@@ -297,9 +293,36 @@ def populate_queues(queue_client, table_client, config):
         dr.peer_to_peer.concurrent_source_downloads, 'docker_images')
 
 
+def _check_file_and_upload(blob_client, file, container):
+    # type: (azure.storage.blob.BlockBlobService, tuple, str) -> None
+    """Upload file to blob storage if necessary
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param tuple file: file to upload
+    :param str container: blob container ref
+    """
+    if file[0] is None:
+        return
+    upload = True
+    # check if blob exists
+    try:
+        prop = blob_client.get_blob_properties(
+            _STORAGE_CONTAINERS[container], file[0])
+        if (prop.properties.content_settings.content_md5 ==
+                util.compute_md5_for_file(file[1], True)):
+            logger.debug(
+                'remote file is the same for {}, skipping'.format(
+                    file[0]))
+            upload = False
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    if upload:
+        logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
+        blob_client.create_blob_from_path(
+            _STORAGE_CONTAINERS[container], file[0], str(file[1]))
+
+
 def upload_resource_files(blob_client, config, files):
-    # type: (azure.storage.blob.BlockBlobService, dict, List[tuple], tuple,
-    #        str, str) -> dict
+    # type: (azure.storage.blob.BlockBlobService, dict, List[tuple]) -> dict
     """Upload resource files to blob storage
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
@@ -309,27 +332,7 @@ def upload_resource_files(blob_client, config, files):
     """
     sas_urls = {}
     for file in files:
-        # skip if no file is specified
-        if file[0] is None:
-            continue
-        upload = True
-        fp = pathlib.Path(file[1])
-        # check if blob exists
-        try:
-            prop = blob_client.get_blob_properties(
-                _STORAGE_CONTAINERS['blob_resourcefiles'], file[0])
-            if (prop.properties.content_settings.content_md5 ==
-                    util.compute_md5_for_file(fp, True)):
-                logger.debug(
-                    'remote file is the same for {}, skipping'.format(
-                        file[0]))
-                upload = False
-        except azure.common.AzureMissingResourceHttpError:
-            pass
-        if upload:
-            logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
-            blob_client.create_blob_from_path(
-                _STORAGE_CONTAINERS['blob_resourcefiles'], file[0], file[1])
+        _check_file_and_upload(blob_client, file, 'blob_resourcefiles')
         sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(
             _STORAGEACCOUNT, _STORAGEACCOUNTEP,
             _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
@@ -354,24 +357,7 @@ def upload_for_remotefs(blob_client, files):
     """
     ret = []
     for file in files:
-        upload = True
-        fp = pathlib.Path(file[1])
-        # check if blob exists
-        try:
-            prop = blob_client.get_blob_properties(
-                _STORAGE_CONTAINERS['blob_remotefs'], file[0])
-            if (prop.properties.content_settings.content_md5 ==
-                    util.compute_md5_for_file(fp, True)):
-                logger.debug(
-                    'remote file is the same for {}, skipping'.format(
-                        file[0]))
-                upload = False
-        except azure.common.AzureMissingResourceHttpError:
-            pass
-        if upload:
-            logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
-            blob_client.create_blob_from_path(
-                _STORAGE_CONTAINERS['blob_remotefs'], file[0], file[1])
+        _check_file_and_upload(blob_client, file, 'blob_remotefs')
         ret.append('https://{}.blob.{}/{}/{}'.format(
             _STORAGEACCOUNT, _STORAGEACCOUNTEP,
             _STORAGE_CONTAINERS['blob_remotefs'], file[0]))

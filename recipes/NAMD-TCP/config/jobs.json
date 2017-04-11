@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "namdjob",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "tasks": [
                 {
                     "image": "alfpark/namd:2.11-tcp",

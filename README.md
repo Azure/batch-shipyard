@@ -10,6 +10,10 @@ pools. No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your Dockerized tasks with easy-to-understand configuration files!
 
+Additionally, Batch Shipyard provides the ability to provision and manage
+entire [standalone remote file systems (storage clusters)](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
+in Azure, independent of any integrated Azure Batch functionality.
+
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) installation tuned
 for Azure Batch compute nodes
@@ -25,7 +29,7 @@ and compute nodes
   * Any internet accessible Docker container registry
   * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
     instance creation on compute nodes
-* [Standalone Remote Filesystem Provisioning](docs/65-batch-shipyard-remote-fs.md)
+* [Standalone Remote Filesystem Provisioning](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
 with integration to auto-link these filesystems to compute nodes with support for
   * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
   * [GlusterFS](https://www.gluster.org/) distributed network file system
@@ -56,6 +60,8 @@ for MPI on HPC low-latency Azure VM instances:
 tunneling to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
+* Support for execution on an
+[Azure Function App environment](https://github.com/Azure/batch-shipyard/blob/master/docs/60-batch-shipyard-site-extension.md)
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available

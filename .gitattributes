@@ -5,3 +5,5 @@
 *.cmd text eol=crlf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+*.xdt text eol=crlf
+*.nuspec text eol=crlf

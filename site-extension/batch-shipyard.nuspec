@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>batch-shipyard</id>
+    <version>0.0.1.8</version>
+    <title>Batch Shipyard</title>
+    <authors>Fred Park</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>Execute jobs on Azure Batch via Batch Shipyard. Requires Python.</description>
+    <iconUrl>https://azurecomcdn.azureedge.net/cvt-351112a289cff390998cc55a66a04f540f6cecfdeffbeac6a482ab886a841f7c/images/page/services/batch/100x-scale.png</iconUrl>
+    <projectUrl>https://github.com/Azure/batch-shipyard</projectUrl>
+    <licenseUrl>https://github.com/Azure/batch-shipyard/blob/master/LICENSE</licenseUrl>
+	<copyright>Microsoft</copyright>
+	<releaseNotes>https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md</releaseNotes>
+    <tags>azure batch shipyard docker containers python</tags>
+  </metadata>
+  <files>
+    <file src="*.cmd" target="content" />
+    <file src="applicationHost.xdt" target="content" />
+  </files>
+</package>

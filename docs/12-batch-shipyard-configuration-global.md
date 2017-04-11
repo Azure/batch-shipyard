@@ -243,7 +243,12 @@ private registry server names, as these will be automatically prepended. For
 instance, if you have an image `abc/mytag` on your private registry
 `myregistry-myorg.azurecr.io`, your image should be named in the
 `docker_images` array as `abc/mytag` and not
-`myregistry-myorg.azurecr.io/abc/mytag`.
+`myregistry-myorg.azurecr.io/abc/mytag`. If this property is empty or
+is not specified, no Docker images are pre-loaded on to compute nodes which
+may increase scheduling latency. It is highly recommended not to leave this
+property empty if possible. Note that if you do not specify Docker
+images to preload, you must specify `allow_run_on_missing_image` as `true`
+in your job specification.
 
 `files` is an optional property that specifies data that should be ingressed
 from a location accessible by the local machine (i.e., machine invoking
@@ -417,7 +422,7 @@ ingress/egress with their host path equivalents.
 
 Note that when resizing a pool with a `glusterfs_on_compute` shared file
 systems that you must resize with the `pool resize` command in `shipyard.py`
-and not with Azure Portal, Batch Explorer or any other tool.
+and not with Azure Portal, Batch Labs or any other tool.
 
 The third shared volume, `nfs_server` is an NFS server that is to be
 mounted on to compute node hosts. The name `nfs_server` should match the

@@ -27,7 +27,7 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals
 )
 from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
+    bytes, dict, int, list, object, range, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
-def create_resource_client(ctx, credentials=None, subscription_id=None):
+def _create_resource_client(ctx, credentials=None, subscription_id=None):
     # type: (CliContext, object, str) ->
     #        azure.mgmt.resource.resources.ResourceManagementClient
     """Create resource management client
@@ -76,7 +76,7 @@ def create_resource_client(ctx, credentials=None, subscription_id=None):
         credentials, subscription_id)
 
 
-def create_compute_client(ctx, credentials=None, subscription_id=None):
+def _create_compute_client(ctx, credentials=None, subscription_id=None):
     # type: (CliContext, object, str) ->
     #        azure.mgmt.compute.ComputeManagementClient
     """Create compute management client
@@ -98,7 +98,7 @@ def create_compute_client(ctx, credentials=None, subscription_id=None):
         credentials, subscription_id)
 
 
-def create_network_client(ctx, credentials=None, subscription_id=None):
+def _create_network_client(ctx, credentials=None, subscription_id=None):
     # type: (CliContext, object, str) ->
     #        azure.mgmt.network.NetworkManagementClient
     """Create network management client
@@ -118,7 +118,7 @@ def create_network_client(ctx, credentials=None, subscription_id=None):
         credentials, subscription_id)
 
 
-def create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
+def _create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
     # type: (CliContext, object, str) ->
     #        azure.mgmt.batch.BatchManagementClient
     """Create batch management client
@@ -169,25 +169,30 @@ def create_arm_clients(ctx, batch_clients=False):
         compute_client = None
         network_client = None
     else:
+        # subscription_id must be of type 'str' due to python management
+        # library type checking, but can be read as 'unicode' from json
+        subscription_id = str(subscription_id)
+        # create add credential object
         credentials = aad.create_aad_credentials(ctx, mgmt.aad)
-        resource_client = create_resource_client(
+        # create clients
+        resource_client = _create_resource_client(
             ctx, credentials=credentials, subscription_id=subscription_id)
-        compute_client = create_compute_client(
+        compute_client = _create_compute_client(
             ctx, credentials=credentials, subscription_id=subscription_id)
-        network_client = create_network_client(
+        network_client = _create_network_client(
             ctx, credentials=credentials, subscription_id=subscription_id)
     if batch_clients:
         try:
             if credentials is None:
-                credentials = aad.create_aad_credentials(ctx, mgmt.add)
-            batch_mgmt_client = create_batch_mgmt_client(
+                credentials = aad.create_aad_credentials(ctx, mgmt.aad)
+            batch_mgmt_client = _create_batch_mgmt_client(
                 ctx, credentials=credentials, subscription_id=subscription_id)
         except Exception:
             if settings.verbose(ctx.config):
                 logger.warning('could not create batch management client')
             batch_mgmt_client = None
         # create batch service client
-        batch_client = create_batch_service_client(ctx)
+        batch_client = _create_batch_service_client(ctx)
     else:
         batch_mgmt_client = None
         batch_client = None
@@ -205,14 +210,14 @@ def create_keyvault_client(ctx):
     :return: keyvault client
     """
     kv = settings.credentials_keyvault(ctx.config)
-    if util.is_none_or_empty(kv.keyvault_uri):
+    if util.is_none_or_empty(ctx.keyvault_uri or kv.keyvault_uri):
         return None
     return azure.keyvault.KeyVaultClient(
         aad.create_aad_credentials(ctx, kv.aad)
     )
 
 
-def create_batch_service_client(ctx):
+def _create_batch_service_client(ctx):
     # type: (CliContext) -> azure.batch.batch_service_client.BatchServiceClient
     """Create batch service client
     :param CliContext ctx: Cli Context

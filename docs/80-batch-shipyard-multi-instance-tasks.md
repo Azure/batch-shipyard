@@ -142,13 +142,14 @@ will still be running after the application command completes. Currently,
 there is no "clean" way to perform cleanup from the Azure Batch API.
 However, by using the job auto-complete and job release facilities provided
 by Azure Batch, Batch Shipyard can automatically stop and remove the Docker
-container. By default, multi-instance tasks are now cleaned up using this
-method, but limits the number of multi-instance tasks per job to 1.
+container. By default, this behavior is not enabled automatically, however,
+by specifying the `auto_complete` property for your job to `true`, your
+multi-instance task will automatically be cleaned up for you, but limits
+the number of multi-instance tasks per job to 1.
 
-If you require or prefer more than 1 multi-instance task per job, you can
-override the default cleanup behavior by specifying
-`multi_instance_auto_complete` to `false` in the
-[job specification](10-batch-shipyard-configuration.md) of each job.
+If you require or prefer more than one multi-instance task per job, you can
+keep the `auto_complete` setting to `false`
+[job specification](14-batch-shipyard-configuration-jobs.md) of each job.
 To manually cleanup after multi-instance tasks, there are helper methods in
 the Batch Shipyard toolkit. These methods will aid in cleaning up compute nodes
 involved in multi-instance tasks if they are needed to be reused for

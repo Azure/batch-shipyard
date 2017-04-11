@@ -192,9 +192,20 @@ VirtualNetworkSettings = collections.namedtuple(
         'subnet_address_prefix', 'existing_ok', 'create_nonexistant',
     ]
 )
+SambaAccountSettings = collections.namedtuple(
+    'SambaAccountSettings', [
+        'username', 'password', 'uid', 'gid',
+    ]
+)
+SambaSettings = collections.namedtuple(
+    'SambaSettings', [
+        'share_name', 'account', 'read_only', 'create_mask',
+        'directory_mask',
+    ]
+)
 FileServerSettings = collections.namedtuple(
     'FileServerSettings', [
-        'type', 'mountpoint', 'mount_options', 'server_options',
+        'type', 'mountpoint', 'mount_options', 'server_options', 'samba',
     ]
 )
 InboundNetworkSecurityRule = collections.namedtuple(
@@ -212,10 +223,15 @@ MappedVmDiskSettings = collections.namedtuple(
         'disk_array', 'filesystem', 'raid_level',
     ]
 )
+PublicIpSettings = collections.namedtuple(
+    'PublicIpSettings', [
+        'enabled', 'static',
+    ]
+)
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'resource_group', 'virtual_network', 'network_security',
-        'file_server', 'vm_count', 'vm_size', 'static_public_ip',
+        'file_server', 'vm_count', 'vm_size', 'public_ip',
         'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
@@ -1777,18 +1793,18 @@ def job_id(conf):
     return conf['id']
 
 
-def job_multi_instance_auto_complete(conf):
+def job_auto_complete(conf):
     # type: (dict) -> bool
-    """Get multi-instance job autocompelte setting
+    """Get job (and multi-instance) autocomplete setting
     :param dict conf: job configuration object
     :rtype: bool
-    :return: multi instance job autocomplete
+    :return: job autocomplete
     """
     try:
-        mi_ac = conf['multi_instance_auto_complete']
+        ac = conf['auto_complete']
     except KeyError:
-        mi_ac = True
-    return mi_ac
+        ac = False
+    return ac
 
 
 def job_environment_variables(conf):
@@ -2447,11 +2463,44 @@ def fileserver_settings(config, vm_count):
     sc_mo = _kv_read_checked(conf, 'mount_options')
     # get server options
     so_conf = _kv_read_checked(conf, 'server_options', {})
+    # get samba options
+    sc_samba = _kv_read_checked(conf, 'samba', {})
+    smb_share_name = _kv_read_checked(sc_samba, 'share_name')
+    sc_samba_account = _kv_read_checked(sc_samba, 'account', {})
+    smb_account = SambaAccountSettings(
+        username=_kv_read_checked(sc_samba_account, 'username', 'nobody'),
+        password=_kv_read_checked(sc_samba_account, 'password'),
+        uid=_kv_read(sc_samba_account, 'uid'),
+        gid=_kv_read(sc_samba_account, 'gid'),
+    )
+    if smb_account.username != 'nobody':
+        if util.is_none_or_empty(smb_account.password):
+            raise ValueError(
+                'samba account password is invalid for username {}'.format(
+                    smb_account.username))
+        if smb_account.uid is None or smb_account.gid is None:
+            raise ValueError(
+                ('samba account uid and/or gid is invalid for '
+                 'username {}').format(smb_account.username))
+    smb_ro = _kv_read(sc_samba, 'read_only', False)
+    if smb_ro:
+        smb_ro = 'yes'
+    else:
+        smb_ro = 'no'
+    smb_cm = _kv_read_checked(sc_samba, 'create_mask', '0700')
+    smb_dm = _kv_read_checked(sc_samba, 'directory_mask', '0700')
     return FileServerSettings(
         type=sc_fs_type,
         mountpoint=sc_fs_mountpoint,
         mount_options=sc_mo,
         server_options=so_conf,
+        samba=SambaSettings(
+            share_name=smb_share_name,
+            account=smb_account,
+            read_only=smb_ro,
+            create_mask=smb_cm,
+            directory_mask=smb_dm,
+        ),
     )
 
 
@@ -2501,8 +2550,11 @@ def remotefs_settings(config, sc_id=None):
         raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
-    sc_static_public_ip = _kv_read(sc_conf, 'static_public_ip', False)
     sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
+    # public ip settings
+    pip_conf = _kv_read_checked(sc_conf, 'public_ip', {})
+    sc_pip_enabled = _kv_read(pip_conf, 'enabled', True)
+    sc_pip_static = _kv_read(pip_conf, 'static', False)
     # sc network security settings
     ns_conf = sc_conf['network_security']
     sc_ns_inbound = {
@@ -2542,11 +2594,19 @@ def remotefs_settings(config, sc_id=None):
                 list):
             raise ValueError(
                 'expected list for glusterfs network security rule')
+    if 'smb' in ns_conf:
+        sc_ns_inbound['smb'] = InboundNetworkSecurityRule(
+            destination_port_range='445',
+            source_address_prefix=_kv_read_checked(ns_conf, 'smb'),
+            protocol='tcp',
+        )
+        if not isinstance(sc_ns_inbound['smb'].source_address_prefix, list):
+            raise ValueError('expected list for smb network security rule')
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
-        _reserved = frozenset(
-            ['ssh', 'nfs', 'glusterfs', 'zfs', 'beegfs', 'samba', 'cifs']
-        )
+        _reserved = frozenset([
+            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs', 'beegfs'
+        ])
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
             if key.lower() in _reserved:
@@ -2634,7 +2694,10 @@ def remotefs_settings(config, sc_id=None):
             file_server=file_server,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
-            static_public_ip=sc_static_public_ip,
+            public_ip=PublicIpSettings(
+                enabled=sc_pip_enabled,
+                static=sc_pip_static,
+            ),
             hostname_prefix=sc_hostname_prefix,
             ssh=SSHSettings(
                 username=sc_ssh_username,

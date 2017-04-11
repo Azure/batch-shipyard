@@ -28,7 +28,10 @@ The remote filesystem schema is as follows:
                     "ssh_public_key": null,
                     "generated_file_export_path": null
                 },
-                "static_public_ip": false,
+                "public_ip": {
+                    "enabled": true,
+                    "static": false
+                },
                 "virtual_network": {
                     "name": "myvnet",
                     "resource_group": "my-vnet-resource-group",
@@ -43,6 +46,7 @@ The remote filesystem schema is as follows:
                     "ssh": ["*"],
                     "nfs": ["1.2.3.0/24", "2.3.4.5"],
                     "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
+                    "smb": ["6.7.8.9"],
                     "custom_inbound_rules": {
                         "myrule": {
                             "destination_port_range": "5000-5001",
@@ -65,6 +69,18 @@ The remote filesystem schema is as follows:
                             "transport": "tcp",
                             "performance.cache-size": "1 GB"
                         }
+                    },
+                    "samba": {
+                        "share_name": "data",
+                        "account":  {
+                            "username": "myuser",
+                            "password": "",
+                            "uid": 1002,
+                            "gid": 1002
+                        },
+                        "read_only": false,
+                        "create_mask": "0700",
+                        "directory_mask": "0700"
                     }
                 },
                 "vm_count": 2,
@@ -161,10 +177,18 @@ optional in this configuration as it is in the pool specification.
     `id_rsa_shipyard_remotefs`).
   * (optional) `generated_file_export_path` is an optional path to specify
     for where to create the RSA public/private key pair.
-* (optional) `static_public_ip` is to specify if static public IPs should
-be assigned to each virtual machine allocated. The default is `false` which
-results in dynamic public IP addresses. A "static" FQDN will be provided
-per virtual machine, regardless of this setting.
+* (optional) `public_ip` are public IP properties for each virtual machine.
+  * (optional) `enabled` designates if public IPs should be assigned. The
+    default is `true`. Note that if public IP is disabled, then you must
+    create an alternate means for accessing the storage cluster virtual
+    machines through a "jumpbox" on the virtual network. If this property
+    is set to `false` (disabled), then any action requiring SSH, or the
+    SSH command itself, will occur against the private IP address of the
+    virtual machine.
+  * (optional) `static` is to specify if static public IPs should be assigned
+    to each virtual machine allocated. The default is `false` which
+    results in dynamic public IP addresses. A "static" FQDN will be provided
+    per virtual machine, regardless of this setting if public IPs are enabled.
 * (required) `virtual_network` is the virtual network to use for the
 storage cluster.
   * (required) `name` is the virtual network name
@@ -177,9 +201,9 @@ storage cluster.
     allowed address space for the virtual network.
   * (required) `subnet` specifies the subnet properties. This subnet must
     be exclusive to the storage cluster and cannot be shared with other
-    resources, including compute nodes. Compute nodes and storage clusters
-    can co-exist on the same virtual network, but should be in separate
-    subnets.
+    resources, including Batch compute nodes. Batch compute nodes and storage
+    clusters can co-exist on the same virtual network, but should be in
+    separate subnets.
     * (required) `name` is the subnet name.
     * (required) `address_prefix` is the subnet address prefix to use for
       allocation of the storage cluster file server virtual machines to.
@@ -196,6 +220,11 @@ to each virtual machine in the storage cluster.
     brick ports to be exposed to the specified address prefix. Multiple
     address prefixes can be specified. This property is ignored for nfs
     clusters.
+  * (optional) `smb` rule allows the the direct host SMB port to be exposed if
+    a `samba` configuration is specified under `file_server`. This requires
+    Windows 2000 or later. Please note the name of this rule is `smb` which
+    refers to the protocol rather than the `samba` implementation for
+    providing this service on a non-Windows host.
   * (optional) `custom_inbound_rules` are custom inbound rules for other
     services that you need to expose.
     * (required) `<rule name>` is the name of the rule; the example uses
@@ -248,6 +277,28 @@ to each virtual machine in the storage cluster.
       are not inherently supported by Batch Shipyard. Batch Shipyard
       automatically provisions the proper GlusterFS FUSE client on compute
       nodes that require access to GlusterFS-based storage clusters.
+  * (optional) `samba` defines properties required for enabling
+    [SMB](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365233(v=vs.85).aspx)
+    support on storage cluster nodes. This support is accomplished by
+    running [Samba](https://www.samba.org/) alongside the NFS or GlusterFS
+    server software. If this section is omitted, SMB access will be disabled.
+    * (required) `share_name` name of the share. The path of this share is
+      automatically mapped.
+    * (optional) `account` is a user identity to mount the file share as.
+      If this is not specified, the share will be created with guest access
+      allowed and files and directories will be created and modified by the
+      `nobody` account on the server.
+      * (required) `username` is the username
+      * (required) `password` is the password for the user. This cannot be
+        null or empty.
+      * (required) `uid` is the desired uid for the username
+      * (required) `gid` is the desired gid for the username's group
+    * (optional) `read_only` designates that the share is read only if this
+      property is set to `true`. The default is `false`.
+    * (optional) `create_mask` is the file creation mask as an octal string.
+      The default is `"0700"`.
+    * (optional) `directory_mask` is the directory creation mask as an octal
+      string. The default is `"0700"`.
 * (required) `vm_count` is the number of virtual machines to allocate for
 the storage cluster. For `nfs` file servers, the only valid value is 1.
 pNFS is not supported at this time. For `glusterfs` storage clusters, this
@@ -274,11 +325,15 @@ The number of entries in this map must match the `vm_count`.
       as the filesystem. At least two disks per virtual machine are required
       for RAID-0.
 
+## Remote Filesystems with Batch Shipyard Guide
+Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
+on how this feature works in Batch Shipyard.
+
 ## Full template
 An full template of a credentials file can be found
 [here](../config\_templates/fs.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.
 
-## Remote Filesystems with Batch Shipyard Guide
-Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
-on how this feature works in Batch Shipyard.
+## Sample Recipes
+Sample recipes for both NFS and GlusterFS can be found in the
+[recipes](../recipes) area.

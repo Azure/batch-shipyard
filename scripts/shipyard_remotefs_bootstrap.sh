@@ -13,6 +13,7 @@ ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 # vars
 attach_disks=0
 rebalance=0
+samba_options=
 hostname_prefix=
 filesystem=
 peer_ips=
@@ -127,6 +128,18 @@ gluster_poll_for_volume() {
     done
     set -e
 
+}
+
+enable_and_start_glusterfs() {
+    systemctl enable glusterfs-server
+    # start service if not started
+    set +e
+    systemctl status glusterfs-server
+    if [ $? -ne 0 ]; then
+        set -e
+        systemctl start glusterfs-server
+    fi
+    set -e
 }
 
 setup_glusterfs() {
@@ -285,13 +298,14 @@ setup_glusterfs() {
 }
 
 # begin processing
-while getopts "h?abd:f:i:m:no:pr:s:t:" opt; do
+while getopts "h?abc:d:f:i:m:no:pr:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
             echo ""
             echo "-a attach mode"
             echo "-b rebalance filesystem on resize"
+            echo "-c [share_name:username:password:uid:gid:ro:create_mask:directory_mask] samba options"
             echo "-d [hostname/dns label prefix] hostname prefix"
             echo "-f [filesystem] filesystem"
             echo "-i [peer IPs] peer IPs"
@@ -310,6 +324,9 @@ while getopts "h?abd:f:i:m:no:pr:s:t:" opt; do
             ;;
         b)
             rebalance=1
+            ;;
+        c)
+            IFS=':' read -ra samba_options <<< "$OPTARG"
             ;;
         d)
             hostname_prefix=${OPTARG,,}
@@ -350,6 +367,7 @@ shift $((OPTIND-1))
 
 echo "Parameters:"
 echo "  Attach mode: $attach_disks"
+echo "  Samba options: ${samba_options[@]}"
 echo "  Rebalance filesystem: $rebalance"
 echo "  Filesystem: $filesystem"
 echo "  Mountpath: $mountpath"
@@ -419,16 +437,9 @@ EOF
         apt-get install -y -q --no-install-recommends glusterfs-server
         # reload unit files
         systemctl daemon-reload
-        # enable and start nfs server
-        systemctl enable glusterfs-server
-        # start service if not started
-        set +e
-        systemctl status glusterfs-server
-        if [ $? -ne 0 ]; then
-            set -e
-            systemctl start glusterfs-server
-        fi
-        set -e
+        # ensure glusterfs server is stopped. we should not start it yet
+        # until all local disk setup has been completed.
+        systemctl stop glusterfs-server
     else
         echo "server_type $server_type not supported."
         exit 1
@@ -715,9 +726,61 @@ if [ $attach_disks -eq 0 ]; then
     if [ $server_type == "nfs" ]; then
         setup_nfs
     elif [ $server_type == "glusterfs" ]; then
+        enable_and_start_glusterfs
         setup_glusterfs
     else
         echo "server_type $server_type not supported."
         exit 1
+    fi
+    # setup samba server if specified
+    if [ ! -z $samba_options ]; then
+        # install samba
+        apt-get install -y -q --no-install-recommends samba
+        # parse options
+        # [share_name:username:password:uid:gid:ro:create_mask:directory_mask]
+        smb_share=${samba_options[0]}
+        smb_username=${samba_options[1]}
+        smb_password=${samba_options[2]}
+        smb_uid=${samba_options[3]}
+        smb_gid=${samba_options[4]}
+        smb_ro=${samba_options[5]}
+        smb_create_mask=${samba_options[6]}
+        smb_directory_mask=${samba_options[7]}
+        # add some common bits to share def
+cat >> /etc/samba/smb.conf << EOF
+
+[$smb_share]
+  path = $mountpath
+  read only = $smb_ro
+  create mask = $smb_create_mask
+  directory mask = $smb_directory_mask
+EOF
+        if [ $smb_username != "nobody" ]; then
+            # create group
+            groupadd -o -g $smb_gid $smb_username
+            # create user (disable login)
+            useradd -N -g $smb_gid -p '!' -o -u $smb_uid -s /bin/bash -m -d /home/$smb_username $smb_username
+            # add user to smb tdbsam
+            echo -ne "$smb_password\n$smb_password\n" | smbpasswd -a -s $smb_username
+            smbpasswd -e $smb_username
+            # modify smb.conf global
+            sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto" /etc/samba/smb.conf
+            # modify smb.conf share
+cat >> /etc/samba/smb.conf << EOF
+  guest ok = no
+  browseable = no
+  valid users = $smb_username
+EOF
+        else
+            # modify smb.conf global
+            sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto\nguest account = $smb_username" /etc/samba/smb.conf
+            # modify smb.conf share
+cat >> /etc/samba/smb.conf << EOF
+  guest ok = yes
+  browseable = yes
+EOF
+        fi
+        # restart samba service
+        systemctl restart smbd.service
     fi
 fi

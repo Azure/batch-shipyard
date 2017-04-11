@@ -1104,6 +1104,9 @@ def distribute_global_resources(
             else:
                 with _DIRECTDL_LOCK:
                     _DIRECTDL.append(ent['Resource'])
+    if nentities == 0:
+        logger.info('no global resources specified')
+        return
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
         loop, blob_client, queue_client, table_client, ipaddress, nentities))

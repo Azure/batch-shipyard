@@ -20,7 +20,10 @@
                     "ssh_public_key": null,
                     "generated_file_export_path": null
                 },
-                "static_public_ip": false,
+                "public_ip": {
+                    "enabled": true,
+                    "static": false
+                },
                 "virtual_network": {
                     "name": "myvnet",
                     "resource_group": "my-vnet-resource-group",
@@ -35,6 +38,7 @@
                     "ssh": ["*"],
                     "nfs": ["1.2.3.0/24", "2.3.4.5"],
                     "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
+                    "smb": ["6.7.8.9"],
                     "custom_inbound_rules": {
                         "myrule": {
                             "destination_port_range": "5000-5001",
@@ -57,6 +61,18 @@
                             "transport": "tcp",
                             "performance.cache-size": "1 GB"
                         }
+                    },
+                    "samba": {
+                        "share_name": "data",
+                        "account":  {
+                            "username": "myuser",
+                            "password": "",
+                            "uid": 1002,
+                            "gid": 1002
+                        },
+                        "read_only": false,
+                        "create_mask": "0700",
+                        "directory_mask": "0700"
                     }
                 },
                 "vm_count": 2,

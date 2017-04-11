@@ -8,6 +8,7 @@ DEBIAN_FRONTEND=noninteractive
 gluster_brick_mountpath=/gluster/brick
 
 # vars
+samba=0
 filesystem=
 mountpath=
 gluster_volname=
@@ -15,11 +16,12 @@ raid_level=-1
 server_type=
 
 # begin processing
-while getopts "h?f:m:n:r:s:" opt; do
+while getopts "h?cf:m:n:r:s:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_stat.sh parameters"
             echo ""
+            echo "-c samba enabled"
             echo "-f [filesystem] filesystem"
             echo "-m [mountpoint] mountpoint"
             echo "-n [volume name] volume name"
@@ -27,6 +29,9 @@ while getopts "h?f:m:n:r:s:" opt; do
             echo "-s [server type] server type"
             echo ""
             exit 1
+            ;;
+        c)
+            samba=1
             ;;
         f)
             filesystem=${OPTARG,,}
@@ -113,10 +118,10 @@ else
     echo "$mountpath not mounted"
     exit 1
 fi
-echo ""
 
 # get raid status
 if [ $raid_level -ge 0 ]; then
+    echo ""
     if [ $filesystem == "btrfs" ]; then
         echo "btrfs device status:"
         for disk in "${data_disks[@]}"; do
@@ -140,4 +145,14 @@ if [ $raid_level -ge 0 ]; then
         echo "mdadm detail:"
         mdadm --detail $target
     fi
+fi
+
+# get samba status
+if [ $samba -eq 1 ]; then
+    echo ""
+    echo "smbd service status:"
+    systemctl status smbd.service
+    echo ""
+    echo "smbstatus:"
+    smbstatus
 fi

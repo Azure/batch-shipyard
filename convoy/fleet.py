@@ -102,52 +102,52 @@ _NVIDIA_DRIVER = {
 }
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
 )
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
 )
 _GLUSTERRESIZE_FILE = (
     'shipyard_glusterfs_on_compute_resize.sh',
-    str(pathlib.Path(
-        _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh'))
+    pathlib.Path(
+        _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh')
 )
 _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh')
 )
 _JOBPREP_FILE = (
     'docker_jp_block.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh')
 )
 _BLOBXFER_FILE = (
     'shipyard_blobxfer.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh')
 )
 _CASCADE_FILE = (
     'cascade.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/cascade.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/cascade.py')
 )
 _SETUP_PR_FILE = (
     'setup_private_registry.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py')
 )
 _PERF_FILE = (
     'perf.py',
-    str(pathlib.Path(_ROOT_PATH, 'cascade/perf.py'))
+    pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
 )
 _REMOTEFSPREP_FILE = (
     'shipyard_remotefs_bootstrap.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_bootstrap.sh')
 )
 _REMOTEFSADDBRICK_FILE = (
     'shipyard_remotefs_addbrick.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_addbrick.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_addbrick.sh')
 )
 _REMOTEFSSTAT_FILE = (
     'shipyard_remotefs_stat.sh',
-    str(pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh'))
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_remotefs_stat.sh')
 )
 _ALL_REMOTEFS_FILES = [
     _REMOTEFSPREP_FILE, _REMOTEFSADDBRICK_FILE, _REMOTEFSSTAT_FILE,
@@ -207,12 +207,12 @@ def populate_global_settings(config, fs_storage):
     """
     bs = settings.batch_shipyard_settings(config)
     sc = settings.credentials_storage(config, bs.storage_account_settings)
-    bc = settings.credentials_batch(config)
     if fs_storage:
         # set postfix to empty for now, it will be populated with the
         # storage cluster during the actual calls
         postfix = ''
     else:
+        bc = settings.credentials_batch(config)
         postfix = '-'.join(
             (bc.account.lower(), settings.pool_id(config, lower=True)))
     storage.set_storage_configuration(
@@ -734,11 +734,14 @@ def _add_pool(
         images = settings.global_resources_docker_images(config)
         if len(images) > 0:
             block_for_gr = ','.join([x for x in images])
+        else:
+            logger.warning('no docker images specified in global resources')
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
         storage_threads = data.ingress_data(
-            batch_client, config, rls=None, kind='storage')
+            batch_client, compute_client, network_client, config, rls=None,
+            kind='storage')
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
@@ -764,20 +767,20 @@ def _add_pool(
     if azurefile_vd:
         afbin, afsrv, afenv, afvc = _setup_azurefile_volume_driver(
             blob_client, config)
-        _rflist.append((afbin.name, str(afbin)))
-        _rflist.append((afsrv.name, str(afsrv)))
-        _rflist.append((afenv.name, str(afenv)))
-        _rflist.append((afvc.name, str(afvc)))
+        _rflist.append((afbin.name, afbin))
+        _rflist.append((afsrv.name, afsrv))
+        _rflist.append((afenv.name, afenv))
+        _rflist.append((afvc.name, afvc))
     # gpu settings
     if settings.is_gpu_pool(pool_settings.vm_size):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
                 blob_client, config, pool_settings.vm_size)
-            _rflist.append((gpu_driver.name, str(gpu_driver)))
+            _rflist.append((gpu_driver.name, gpu_driver))
         else:
             gpu_driver = pathlib.Path(_NVIDIA_DRIVER['target'])
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
-        _rflist.append((gpupkg.name, str(gpupkg)))
+        _rflist.append((gpupkg.name, gpupkg))
         gpu_env = '{}:{}:{}'.format(
             settings.is_gpu_visualization_pool(pool_settings.vm_size),
             gpu_driver.name,
@@ -831,14 +834,15 @@ def _add_pool(
             x=' -x {}'.format(data._BLOBXFER_VERSION),
         ),
     ]
-    # add additional start task commands
-    start_task.extend(pool_settings.additional_node_prep_commands)
     # digest any input data
     addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, settings.pool_specification(config))
     if addlcmds is not None:
         start_task.append(addlcmds)
     del addlcmds
+    # add additional start task commands, these should always be the last
+    # start task commands
+    start_task.extend(pool_settings.additional_node_prep_commands)
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
@@ -945,8 +949,8 @@ def _add_pool(
     if pool_settings.transfer_files_on_pool_creation:
         _pool = batch_client.pool.get(pool.id)
         data.ingress_data(
-            batch_client, config, rls=rls, kind='shared',
-            current_dedicated=_pool.current_dedicated)
+            batch_client, compute_client, network_client, config, rls=rls,
+            kind='shared', current_dedicated=_pool.current_dedicated)
         del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
@@ -1099,7 +1103,7 @@ def _setup_glusterfs(
     success = True
     for node in nodes:
         try:
-            batch_client.file.get_node_file_properties_from_compute_node(
+            batch_client.file.get_properties_from_compute_node(
                 pool_id, node.id,
                 ('workitems/{}/job-1/gluster-setup/wd/'
                  '.glusterfs_success').format(job_id))
@@ -1143,19 +1147,19 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         registry = '{}/'.format(preg.server)
     else:
         registry = ''
-    # if image is specified, check that it exists for this pool
-    if image is not None:
-        if image not in settings.global_resources_docker_images(config):
-            raise RuntimeError(
-                ('cannot update docker image {} not specified as a global '
-                 'resource for pool').format(image))
-        else:
-            if digest is None:
-                images = [image]
-            else:
-                images = ['{}@{}'.format(image, digest)]
-    else:
+    # if image is not specified use images from global config
+    if util.is_none_or_empty(image):
         images = settings.global_resources_docker_images(config)
+    else:
+        # log warning if it doesn't exist in global resources
+        if image not in settings.global_resources_docker_images(config):
+            logger.warning(
+                ('docker image {} is not specified as a global resource '
+                 'for pool {}').format(image, pool_id))
+        if digest is None:
+            images = [image]
+        else:
+            images = ['{}@{}'.format(image, digest)]
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
     # check pool current dedicated is > 0. There is no reason to run udi
@@ -1163,9 +1167,10 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     # will always fetch either :latest if untagged or the latest :tag if
     # updated in the upstream registry
     if pool.current_dedicated == 0:
-        raise RuntimeError(
+        logger.warning(
             ('not executing udi command as the current number of compute '
              'nodes is zero for pool {}').format(pool_id))
+        return
     # create job for update
     job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
@@ -1619,7 +1624,10 @@ def action_fs_cluster_ssh(
     if cardinal is not None and hostname is not None:
         raise ValueError('cannot specify both cardinal and hostname options')
     if cardinal is None and hostname is None:
-        raise ValueError('must specify one of cardinal or hostname option')
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or hostname option '
+            'was specified')
+        cardinal = 0
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
@@ -1951,7 +1959,10 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
     if cardinal is not None and nodeid is not None:
         raise ValueError('cannot specify both cardinal and nodeid options')
     if cardinal is None and nodeid is None:
-        raise ValueError('must specify one of cardinal or nodeid option')
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or nodeid option '
+            'was specified')
+        cardinal = 0
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)

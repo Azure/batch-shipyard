@@ -5,7 +5,7 @@ MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set environment variables
 # currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
-ENV libtorrent_version=1.0.10 \
+ENV libtorrent_version=1.0.11 \
     CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.5
 
 # add base packages, python dependencies, create script directory,

@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "openfoamjob",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "tasks": [
                 {
                     "image": "alfpark/openfoam:4.0-gcc-openmpi",

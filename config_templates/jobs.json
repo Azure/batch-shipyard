@@ -2,7 +2,7 @@
     "job_specifications": [
         {
             "id": "dockerjob",
-            "multi_instance_auto_complete": true,
+            "auto_complete": true,
             "environment_variables": {
                 "abc": "xyz"
             },

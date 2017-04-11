@@ -1,14 +1,60 @@
 # Change Log
 
 ## [Unreleased]
+### Fixed
+- Possible race condition between disk setup and glusterfs volume create
+
+## [2.6.0b3] - 2017-04-03
+### Added
+- Created [Azure App Service Site Extension](https://www.siteextensions.net/packages/batch-shipyard).
+You can now one-click install Batch Shipyard as a site extension (after you
+have Python installed) and use Batch Shipyard from an Azure Function trigger.
+- Samba support on storage cluster servers
+- Add sample RemoteFS recipes for NFS and GlusterFS
+- `install.cmd` installer for Windows. `install_conda_windows.cmd` has been
+replaced by `install.cmd`, please see the install doc for more information.
+
+### Changed
+- **Breaking Change:** `multi_instance_auto_complete` under
+`job_specifications` is now named `auto_complete`. This property will apply
+to all types of jobs and not just multi-instance tasks. The default is now
+`false` (instead of `true` for the old `multi_instance_auto_complete`).
+- **Breaking Change:** `static_public_ip` has been replaced with a `public_ip`
+complex property. This is to accommodate for situations where public IP for
+RemoteFS is disabled. Please see the Remote FS configuration doc for more
+info.
+- `install.sh` now handles Anaconda Python environments
+- `--cardinal 0` is now implicit if no `--hostname` or `--nodeid` is specified
+for `fs cluster ssh` or `pool ssh` commands, respectively
+- Allow `docker_images` in `global_resources` to be empty. Note that it is
+always recommended to pre-load images on to pools for consistent scheduling
+latencies from pool idle.
+
+### Fixed
+- Removed requirement of a `batch` credential section for pure `fs` operations
+- Multi-instance auto complete setting not being properly read
+- `install.sh` virtual environment issues
+- Fix pool ingress data calls with remotefs (#62)
+- Move additional node prep commands to last set of commands to execute in
+start task (#63)
+- `glusterfs_on_compute` shared data volume issues
+- future and pathlib compat issues
+- Python2 unicode/str issues with management libraries
+
+## [2.6.0b2] - 2017-03-22
 ### Added
 - Added virtual environment install option for `install.sh` which is now
 the recommended way to install Batch Shipyard. Please see the install
 guide for more information. (#55)
 
+### Changed
+- Force SSD optimizations for btrfs with premium storage
+
 ### Fixed
+- Incorrect FS server options parsing at script time
 - KeyVault client not initialized in `fs` contexts (#57)
-- Check pool current node count prior to executing `udi` task (#58)
+- Check pool current node count prior to executing `pool udi` task (#58)
+- Initialization with KeyVault uri on commandline (#59)
 
 ## [2.6.0b1] - 2017-03-16
 ### Added
@@ -17,11 +63,12 @@ guide for more information. (#55)
   - Support for GlusterFS (multi VM, scale up and out)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
-- Support for UserSubscription Batch accounts
+- Support for
+[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
-- `allow_run_on_missing` option to jobs that allows tasks to execute under
-jobs with Docker images that have not been pre-loaded via the
+- `allow_run_on_missing_image` option to jobs that allows tasks to execute
+under jobs with Docker images that have not been pre-loaded via the
 `global_resources`:`docker_images` setting in config.json. Note that, if
 possible, you should attempt to specify all Docker images that you intend
 to run in the `global_resources`:`docker_images` property in the global
@@ -450,7 +497,9 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...HEAD
+[2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
+[2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1
 [2.5.4]: https://github.com/Azure/batch-shipyard/compare/2.5.3...2.5.4
 [2.5.3]: https://github.com/Azure/batch-shipyard/compare/2.5.2...2.5.3

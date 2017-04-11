@@ -30,6 +30,8 @@ scale up and scale out scenarios.
 
 ## Major Features
 * Support for multiple file server types: NFS or GlusterFS
+* Support for SMB/CIFS on top of NFS or GlusterFS mountpoints to enable
+file sharing to Windows clients
 * Automatic provisioning of all required resources for the storage cluster
 including managed disks, virtual networks, subnets, network interfaces, IP
 addresses and DNS labels, network security groups, availability sets, virtual
@@ -55,10 +57,11 @@ storage cluster
 concurrent multi-node parallel transfers with GlusterFS storage clusters
 
 ## Azure Batch Integration Features
-* Automatic linking between Azure Batch pools (compute nodes) and Batch
-Shipyard provisioned remote filesystems
+* Automatic linking between Azure Batch pools (compute nodes) created with
+[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
+and Batch Shipyard provisioned remote filesystems
 * Support for mounting multiple disparate Batch Shipyard provisioned remote
-filesystem concurrently to the same pool and compute ndoes
+filesystem concurrently to the same pool and compute nodes
 * Automatic failover for HA GlusterFS volume file lookups (compute node client
 mount) through remote filesystem deployment walk to find disparate upgrade and
 fault domains of the GlusterFS servers
@@ -168,3 +171,11 @@ Please see [this page](15-batch-shipyard-configuration-fs.md) for a full
 explanation of each remote filesystem and storage cluster configuration
 option. Please see [this page](20-batch-shipyard-usage.md) for documentation
 on `fs` command usage.
+
+You can find information regarding User Subscription Batch accounts and how
+to create them at this
+[blog post](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/).
+
+## Sample Recipes
+Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can
+be found in the [recipes](../recipes) area.

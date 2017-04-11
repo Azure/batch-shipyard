@@ -218,11 +218,11 @@ class CliContext(object):
         if self.configdir is not None and self.json_credentials is None:
             self.json_credentials = pathlib.Path(
                 self.configdir, 'credentials.json')
-        if (self.json_credentials is not None and
-                not isinstance(self.json_credentials, pathlib.Path)):
-            self.json_credentials = pathlib.Path(self.json_credentials)
-        if self.json_credentials.exists():
-            self._read_json_file(self.json_credentials)
+        if self.json_credentials is not None:
+            if not isinstance(self.json_credentials, pathlib.Path):
+                self.json_credentials = pathlib.Path(self.json_credentials)
+            if self.json_credentials.exists():
+                self._read_json_file(self.json_credentials)
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
@@ -300,6 +300,8 @@ class CliContext(object):
         else:
             self.config = kvcreds
         del kvcreds
+        # re-populate global cli options again
+        self._set_global_cli_options()
         # parse any keyvault secret ids from credentials
         convoy.fleet.fetch_secrets_from_keyvault(
             self.keyvault_client, self.config)
@@ -317,8 +319,9 @@ class CliContext(object):
                 if self.json_jobs.exists():
                     self._read_json_file(self.json_jobs)
         # adjust settings
-        convoy.fleet.adjust_general_settings(self.config)
-        convoy.fleet.populate_global_settings(self.config, fs_storage)
+        if not skip_global_config:
+            convoy.fleet.adjust_general_settings(self.config)
+            convoy.fleet.populate_global_settings(self.config, fs_storage)
         # show config if specified
         if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))

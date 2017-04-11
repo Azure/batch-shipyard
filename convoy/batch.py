@@ -1754,7 +1754,7 @@ def add_jobs(
         # 1. check docker images in task against pre-loaded on pool
         # 2. if tasks have dependencies, set it if so
         # 3. if there are multi-instance tasks
-        mi_ac = settings.job_multi_instance_auto_complete(config)
+        auto_complete = settings.job_auto_complete(jobspec)
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
@@ -1779,7 +1779,7 @@ def add_jobs(
             if settings.has_depends_on_task(task):
                 uses_task_dependencies = True
             if settings.is_multi_instance_task(task):
-                if multi_instance and mi_ac:
+                if multi_instance and auto_complete:
                     raise ValueError(
                         'cannot specify more than one multi-instance task '
                         'per job with auto completion enabled')
@@ -1795,23 +1795,12 @@ def add_jobs(
                     settings.set_task_name(task, _id)
                     mi_docker_container_name = settings.task_name(task)
                     del _id
-        # construct job prep
-        if util.is_not_empty(global_resources):
-            if len(missing_images) > 0 and allow_run_on_missing:
-                gr = list(set(global_resources) - set(missing_images))
-            else:
-                gr = global_resources
-            jpcmd = ['$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
-                jpfile[0], ' '.join(gr))]
+        # set autocomplete settings
+        job_updated_for_auto_terminate = False
+        if auto_complete:
+            set_terminate_on_all_tasks_complete = True
         else:
-            jpcmd = []
-        # digest any input_data
-        addlcmds = data.process_input_data(config, bxfile, jobspec)
-        if addlcmds is not None:
-            jpcmd.append(addlcmds)
-        del addlcmds
-        jpcmdline = util.wrap_commands_in_shell(jpcmd)
-        del jpcmd
+            set_terminate_on_all_tasks_complete = False
         # define max task retry count constraint for this task if set
         job_constraints = None
         max_task_retries = settings.job_max_task_retries(jobspec)
@@ -1819,30 +1808,57 @@ def add_jobs(
             job_constraints = batchmodels.JobConstraints(
                 max_task_retry_count=max_task_retries
             )
-        # create job
-        job = batchmodels.JobAddParameter(
-            id=settings.job_id(jobspec),
-            pool_info=batchmodels.PoolInformation(pool_id=pool.id),
-            job_preparation_task=batchmodels.JobPreparationTask(
-                command_line=jpcmdline,
+        # construct job prep
+        jpcmd = []
+        if util.is_not_empty(global_resources):
+            if len(missing_images) > 0 and allow_run_on_missing:
+                gr = list(set(global_resources) - set(missing_images))
+            else:
+                gr = global_resources
+            if len(gr) > 0:
+                jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
+                    jpfile[0], ' '.join(gr)))
+        # job prep: digest any input_data
+        addlcmds = data.process_input_data(config, bxfile, jobspec)
+        if addlcmds is not None:
+            jpcmd.append(addlcmds)
+        del addlcmds
+        jptask = None
+        if len(jpcmd) > 0:
+            jptask = batchmodels.JobPreparationTask(
+                command_line=util.wrap_commands_in_shell(jpcmd),
                 wait_for_success=True,
                 user_identity=_RUN_ELEVATED,
                 rerun_on_node_reboot_after_success=False,
-            ),
-            uses_task_dependencies=uses_task_dependencies,
-            constraints=job_constraints,
-        )
-        lastjob = job.id
-        # add multi-instance settings
-        set_terminate_on_all_tasks_complete = False
-        if multi_instance and mi_ac:
-            set_terminate_on_all_tasks_complete = True
-            job.job_release_task = batchmodels.JobReleaseTask(
+            )
+        del jpcmd
+        # construct job release for multi-instance auto-complete
+        jrtask = None
+        if multi_instance and auto_complete:
+            jrtask = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
                      'docker rm -v {}'.format(mi_docker_container_name)]),
                 user_identity=_RUN_ELEVATED,
             )
+            # job prep task must exist
+            if jptask is None:
+                jptask = batchmodels.JobPreparationTask(
+                    command_line='echo',
+                    wait_for_success=False,
+                    user_identity=_RUN_ELEVATED,
+                    rerun_on_node_reboot_after_success=False,
+                )
+        # create job
+        job = batchmodels.JobAddParameter(
+            id=settings.job_id(jobspec),
+            pool_info=batchmodels.PoolInformation(pool_id=pool.id),
+            constraints=job_constraints,
+            uses_task_dependencies=uses_task_dependencies,
+            job_preparation_task=jptask,
+            job_release_task=jrtask,
+        )
+        lastjob = job.id
         logger.info('Adding job {} to pool {}'.format(job.id, pool.id))
         try:
             batch_client.job.add(job)
@@ -1862,11 +1878,11 @@ def add_jobs(
             elif 'The specified job already exists' in ex.message.value:
                 # cannot re-use an existing job if multi-instance due to
                 # job release requirement
-                if multi_instance and mi_ac:
+                if multi_instance and auto_complete:
                     raise
             else:
                 raise
-        del mi_ac
+        del auto_complete
         del multi_instance
         del mi_docker_container_name
         del uses_task_dependencies
@@ -2047,13 +2063,15 @@ def add_jobs(
                 logger.info('Adding task: {}'.format(task.id))
             batch_client.task.add(job_id=job.id, task=batchtask)
             # update job if job autocompletion is needed
-            if set_terminate_on_all_tasks_complete:
+            if (set_terminate_on_all_tasks_complete and
+                    not job_updated_for_auto_terminate):
                 batch_client.job.update(
                     job_id=job.id,
                     job_update_parameter=batchmodels.JobUpdateParameter(
                         pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                         on_all_tasks_complete=batchmodels.
                         OnAllTasksComplete.terminate_job))
+                job_updated_for_auto_terminate = True
             lasttask = task.id
     # tail file if specified
     if tail:
