@@ -87,6 +87,7 @@ The remote filesystem schema is as follows:
                 },
                 "vm_count": 2,
                 "vm_size": "STANDARD_F8S",
+                "fault_domains": 2,
                 "vm_disk_map": {
                     "0": {
                         "disk_array": ["p10-disk0a", "p10-disk1a"],
@@ -176,15 +177,19 @@ optional in this configuration as it is in the pool specification.
     key to use. If this is not specified, an RSA public/private key pair will
     be generated for use in your current working directory (with a
     non-colliding name for auto-generated SSH keys for compute pools, i.e.,
-    `id_rsa_shipyard_remotefs`). This option cannot be specified with
-    `ssh_public_key_data`.
+    `id_rsa_shipyard_remotefs`). On Windows only, if this is option is not
+    specified, the SSH keys are not auto-generated (unless `ssh-keygen.exe`
+    can be invoked in the current working directory or is in `%PATH%`).
+    This option cannot be specified with `ssh_public_key_data`.
   * (optional) `ssh_public_key_data` is the raw RSA public key data in OpenSSH
     format, e.g., a string starting with `ssh-rsa ...`. Only one key may be
     specified. This option cannot be specified with `ssh_public_key`.
   * (optional) `ssh_private_key` is the path to an existing SSH private key
     to use against either `ssh_public_key` or `ssh_public_key_data` for
-    connecting to storage nodes. This option is only valid if neither
-    `ssh_public_key` or `ssh_public_key_data` are specified.
+    connecting to storage nodes and performing operations that require SSH
+    such as cluster resize and detail status. This option should only be
+    specified if either `ssh_public_key` or `ssh_public_key_data` are
+    specified.
   * (optional) `generated_file_export_path` is an optional path to specify
     for where to create the RSA public/private key pair.
 * (optional) `public_ip` are public IP properties for each virtual machine.
@@ -316,6 +321,10 @@ value must be at least 2.
 * (required) `vm_size` is the virtual machine instance size to use. To attach
 premium managed disks, you must use a
 [premium storage compatible virtual machine size](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage#premium-storage-supported-vms).
+* (optional) `fault_domains` is the number of fault domains to configure for
+the availability set. This only applies to `vm_count` > `1` and must be
+in the range [2, 3]. The default is `2` if not specified. Note that some
+regions do not support 3 fault domains.
 * (required) `vm_disk_map` is the virtual machine to managed disk mapping.
 The number of entries in this map must match the `vm_count`.
   * (required) `<instance number>` is the virtual machine instance number.

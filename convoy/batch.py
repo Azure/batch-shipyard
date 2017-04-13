@@ -456,7 +456,7 @@ def add_ssh_user(batch_client, config, nodes=None):
     # read public key data from settings if available
     if util.is_not_empty(pool.ssh.ssh_public_key_data):
         ssh_pub_key_data = pool.ssh.ssh_public_key_data
-        ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
+        ssh_priv_key = pool.ssh.ssh_private_key
     else:
         # generate ssh key pair if not specified
         if util.is_none_or_empty(pool.ssh.ssh_public_key):
@@ -464,9 +464,9 @@ def add_ssh_user(batch_client, config, nodes=None):
                 pool.ssh.generated_file_export_path)
         else:
             ssh_pub_key = pool.ssh.ssh_public_key
-            ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
+            ssh_priv_key = pool.ssh.ssh_private_key
         # read public key data
-        with open(ssh_pub_key, 'rb') as fd:
+        with ssh_pub_key.open('rb') as fd:
             ssh_pub_key_data = fd.read().decode('utf8')
     # get node list if not provided
     if nodes is None:
@@ -1075,10 +1075,12 @@ def terminate_tasks(
     if util.is_none_or_empty(pool.ssh.username):
         raise ValueError(
             'cannot terminate docker container without an SSH username')
-    ssh_private_key = pathlib.Path(
-        pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    ssh_private_key = pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
     if not ssh_private_key.exists():
-        raise RuntimeError('ssh private key at {} not found'.format(
+        raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_private_key))
     if jobid is None:
         jobs = settings.job_specifications(config)

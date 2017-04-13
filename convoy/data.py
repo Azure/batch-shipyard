@@ -353,14 +353,14 @@ def _singlenode_transfer(dest, src, dst, username, ssh_private_key, rls):
                '-o UserKnownHostsFile={} -p {} {} -i {} '
                '-P {} {} {}@{}:"{}"'.format(
                    os.devnull, dest.data_transfer.scp_ssh_extra_options,
-                   recursive, ssh_private_key.resolve(), port, cmdsrc,
+                   recursive, ssh_private_key, port, cmdsrc,
                    username, ip, shellquote(dst)))
     elif dest.data_transfer.method == 'rsync+ssh':
         cmd = ('rsync {} {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
                    dest.data_transfer.rsync_extra_options, recursive,
                    os.devnull, dest.data_transfer.scp_ssh_extra_options,
-                   ssh_private_key.resolve(), port,
+                   ssh_private_key, port,
                    cmdsrc, username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(
@@ -839,7 +839,7 @@ def ingress_data(
                         source.path, dest.shared_data_volume))
                 continue
             # get rfs settings
-            rfs = settings.remotefs_settings(config, to_fs)
+            rfs = None
             dst_rfs = False
             # set base dst path
             dst = '{}/batch/tasks/'.format(
@@ -859,6 +859,8 @@ def ingress_data(
                                 sdv, sdvkey):
                             if kind != 'remotefs' or sdvkey != to_fs:
                                 continue
+                            if rfs is None:
+                                rfs = settings.remotefs_settings(config, to_fs)
                             dst = rfs.storage_cluster.file_server.mountpoint
                             # add trailing directory separator if needed
                             if dst[-1] != '/':
@@ -878,13 +880,8 @@ def ingress_data(
                 if dst_rfs:
                     continue
             # set ssh info
-            ssh_private_key = None
-            # use default name for private key if not specified
             if dst_rfs:
                 username = rfs.storage_cluster.ssh.username
-                if dest.data_transfer.ssh_private_key is None:
-                    ssh_private_key = pathlib.Path(
-                        crypto.get_remotefs_ssh_key_prefix())
                 #  retrieve public ips from all vms in named storage cluster
                 rls = {}
                 for i in range(rfs.storage_cluster.vm_count):
@@ -904,9 +901,6 @@ def ingress_data(
                         )
             else:
                 username = pool.ssh.username
-                if dest.data_transfer.ssh_private_key is None:
-                    ssh_private_key = pathlib.Path(
-                        crypto.get_ssh_key_prefix())
             if rls is None:
                 logger.warning(
                     'skipping data ingress from {} to {} for pool with no '
@@ -917,8 +911,12 @@ def ingress_data(
                 raise RuntimeError(
                     'cannot ingress data to shared data volume without a '
                     'valid SSH user')
-            if ssh_private_key is None:
-                ssh_private_key = dest.data_transfer.ssh_private_key
+            # try to get valid ssh private key (from various config blocks)
+            ssh_private_key = dest.data_transfer.ssh_private_key
+            if ssh_private_key is None or not ssh_private_key.exists():
+                ssh_private_key = pool.ssh.ssh_private_key
+            if ssh_private_key is None or not ssh_private_key.exists():
+                ssh_private_key = pathlib.Path(crypto.get_ssh_key_prefix())
             if ssh_private_key is None or not ssh_private_key.exists():
                 raise RuntimeError(
                     'ssh private key is invalid or does not exist: {}'.format(

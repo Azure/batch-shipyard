@@ -58,7 +58,7 @@ concurrent multi-node parallel transfers with GlusterFS storage clusters
 
 ## Azure Batch Integration Features
 * Automatic linking between Azure Batch pools (compute nodes) created with
-[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
+[UserSubscription Batch accounts](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
 and Batch Shipyard provisioned remote filesystems
 * Support for mounting multiple disparate Batch Shipyard provisioned remote
 filesystem concurrently to the same pool and compute nodes
@@ -174,7 +174,7 @@ on `fs` command usage.
 
 You can find information regarding User Subscription Batch accounts and how
 to create them at this
-[blog post](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/).
+[blog post](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode).
 
 ## Sample Recipes
 Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can

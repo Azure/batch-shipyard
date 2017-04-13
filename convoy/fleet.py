@@ -1966,22 +1966,21 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
-    if util.is_not_empty(pool.ssh.ssh_private_key):
-        ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
-    else:
-        ssh_priv_key = pathlib.Path(
+    ssh_private_key = pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
             pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
-    if not ssh_priv_key.exists():
+    if not ssh_private_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
-            ssh_priv_key))
+            ssh_private_key))
     ip, port = batch.get_remote_login_setting_for_node(
         batch_client, config, cardinal, nodeid)
     logger.info('connecting to node {}:{} with key {}'.format(
-        ip, port, ssh_priv_key))
+        ip, port, ssh_private_key))
     util.subprocess_with_output(
         ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
          'UserKnownHostsFile={}'.format(os.devnull),
-         '-i', str(ssh_priv_key), '-p', str(port),
+         '-i', str(ssh_private_key), '-p', str(port),
          '{}@{}'.format(pool.ssh.username, ip)])
 
 

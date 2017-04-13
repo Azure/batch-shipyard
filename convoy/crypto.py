@@ -95,10 +95,9 @@ def generate_ssh_keypair(export_path, prefix=None):
             old.unlink()
         pubkey.rename(old)
     logger.info('generating ssh key pair to path: {}'.format(export_path))
-    sprivkey = str(privkey)
     subprocess.check_call(
-        ['ssh-keygen', '-f', sprivkey, '-t', 'rsa', '-N', ''''''])
-    return (sprivkey, str(pubkey))
+        ['ssh-keygen', '-f', str(privkey), '-t', 'rsa', '-N', ''''''])
+    return (privkey, pubkey)
 
 
 def derive_private_key_pem_from_pfx(pfxfile, passphrase=None, pemfile=None):

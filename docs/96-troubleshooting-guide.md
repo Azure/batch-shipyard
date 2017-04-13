@@ -19,11 +19,15 @@ Anaconda has isolated environments which are conceptually equivalent to
 have separate packaging mechanisms than packages traditionally found on
 PyPI. As such, special attention should be given when installing Batch
 Shipyard into an Anaconda environment. It is highly recommended to use
-an Anaconda environment that provides Python 3.5 or higher.
+an Anaconda environment that provides Python 3.5 or higher if using Anaconda.
+In general, it is recommended to use [CPython](https://python.org) especially
+when installing into virtual environments (the recommended installation
+method) as the command lag can be much shorter.
 
-It is recommended to use the `install.sh` script to install on an Anaconda
-environment on Linux and the `install.cmd` command file to install on an
-Anaconda environment on Windows.
+However, if you do plan to use Anaconda, then it is recommended to use the
+`install.sh` script to install on an Anaconda environment on Linux and
+the `install.cmd` command file to install on an Anaconda environment on
+Windows.
 
 ## <a name="batchservice"></a>Azure Batch Service Issues
 #### Check Azure Batch Service Status

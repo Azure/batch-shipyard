@@ -684,11 +684,11 @@ def _create_availability_set(compute_client, rfs):
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         name=as_name,
-        # user maximums for ud/fd
+        # user maximums ud, fd from settings due to region variability
         parameters=computemodels.AvailabilitySet(
             location=rfs.location,
             platform_update_domain_count=20,
-            platform_fault_domain_count=3,
+            platform_fault_domain_count=rfs.storage_cluster.fault_domains,
             managed=True,
         )
     )
@@ -850,7 +850,7 @@ def create_storage_cluster(
         else:
             ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
         # read public key data
-        with open(ssh_pub_key, 'rb') as fd:
+        with ssh_pub_key.open('rb') as fd:
             key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
@@ -1103,11 +1103,9 @@ def resize_storage_cluster(
                 _, ssh_pub_key = crypto.generate_ssh_keypair(
                     rfs.storage_cluster.ssh.generated_file_export_path,
                     crypto.get_remotefs_ssh_key_prefix())
-            else:
-                ssh_pub_key = str(ssh_pub_key)
         else:
             ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
-    with open(ssh_pub_key, 'rb') as fd:
+    with ssh_pub_key.open('rb') as fd:
         key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(

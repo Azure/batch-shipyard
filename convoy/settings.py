@@ -231,7 +231,7 @@ PublicIpSettings = collections.namedtuple(
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'resource_group', 'virtual_network', 'network_security',
-        'file_server', 'vm_count', 'vm_size', 'public_ip',
+        'file_server', 'vm_count', 'vm_size', 'fault_domains', 'public_ip',
         'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
@@ -466,20 +466,18 @@ def pool_settings(config):
             raise KeyError()
     except KeyError:
         ssh_expiry_days = 30
-    try:
-        ssh_public_key = conf['ssh']['ssh_public_key']
-        if util.is_none_or_empty(ssh_public_key):
-            raise KeyError()
-    except KeyError:
-        ssh_public_key = None
+    ssh_public_key = _kv_read_checked(conf['ssh'], 'ssh_public_key')
+    if util.is_not_empty(ssh_public_key):
+        ssh_public_key = pathlib.Path(ssh_public_key)
     ssh_public_key_data = _kv_read_checked(conf['ssh'], 'ssh_public_key_data')
     ssh_private_key = _kv_read_checked(conf['ssh'], 'ssh_private_key')
-    if (util.is_not_empty(ssh_public_key) and
-            util.is_not_empty(ssh_public_key_data)):
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
+    if ssh_public_key is not None and util.is_not_empty(ssh_public_key_data):
         raise ValueError('cannot specify both an SSH public key file and data')
-    if (util.is_none_or_empty(ssh_public_key) and
+    if (ssh_public_key is None and
             util.is_none_or_empty(ssh_public_key_data) and
-            util.is_not_empty(ssh_private_key)):
+            ssh_private_key is not None):
         raise ValueError(
             'cannot specify an SSH private key with no public key specified')
     try:
@@ -1368,11 +1366,10 @@ def files_destination_settings(fdict):
             split <<= 20
     except KeyError:
         split = None
-    try:
-        ssh_private_key = pathlib.Path(
-            conf['data_transfer']['ssh_private_key'])
-    except (KeyError, TypeError):
-        ssh_private_key = None
+    ssh_private_key = _kv_read_checked(
+        conf['data_transfer'], 'ssh_private_key')
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
     try:
         container = conf['data_transfer']['container']
         if util.is_none_or_empty(container):
@@ -2562,6 +2559,10 @@ def remotefs_settings(config, sc_id=None):
         raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
+    sc_fault_domains = _kv_read(sc_conf, 'fault_domains', 2)
+    if sc_fault_domains < 2 or sc_fault_domains > 3:
+        raise ValueError('fault_domains must be in range [2, 3]: {}'.format(
+            sc_fault_domains))
     sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
     # public ip settings
     pip_conf = _kv_read_checked(sc_conf, 'public_ip', {})
@@ -2646,14 +2647,18 @@ def remotefs_settings(config, sc_id=None):
     ssh_conf = sc_conf['ssh']
     sc_ssh_username = _kv_read_checked(ssh_conf, 'username')
     sc_ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    if util.is_not_empty(sc_ssh_public_key):
+        sc_ssh_public_key = pathlib.Path(sc_ssh_public_key)
     sc_ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
     sc_ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
-    if (util.is_not_empty(sc_ssh_public_key) and
+    if util.is_not_empty(sc_ssh_private_key):
+        sc_ssh_private_key = pathlib.Path(sc_ssh_private_key)
+    if (sc_ssh_public_key is not None and
             util.is_not_empty(sc_ssh_public_key_data)):
         raise ValueError('cannot specify both an SSH public key file and data')
-    if (util.is_none_or_empty(sc_ssh_public_key) and
+    if (sc_ssh_public_key is None and
             util.is_none_or_empty(sc_ssh_public_key_data) and
-            util.is_not_empty(sc_ssh_private_key)):
+            sc_ssh_private_key is not None):
         raise ValueError(
             'cannot specify an SSH private key with no public key specified')
     sc_ssh_gen_file_path = _kv_read_checked(
@@ -2721,6 +2726,7 @@ def remotefs_settings(config, sc_id=None):
             file_server=file_server,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
+            fault_domains=sc_fault_domains,
             public_ip=PublicIpSettings(
                 enabled=sc_pip_enabled,
                 static=sc_pip_static,

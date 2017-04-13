@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.6.0] - 2017-04-14
 ### Added
 - Richer SSH options with new `ssh_public_key_data` and `ssh_private_key`
 properties in `ssh` configuration blocks (for both `pool.json` and
@@ -11,11 +13,19 @@ properties in `ssh` configuration blocks (for both `pool.json` and
     respect to pre-created public keys (either `ssh_public_key` or
     `ssh_public_key_data`). This allows transparent `pool ssh` or
     `fs cluster ssh` commands with pre-created keys.
+- RemoteFS-GlusterFS+BatchPool recipe
+
+### Changed
+- Fault domains for multi-vm storage clusters are now set to 2 by default but
+can be configured using the `fault_domains` property. This was lowered from
+the prior default of 3 due to managed disks and availability set restrictions
+as some regions do not support 3 fault domains with this combination.
 
 ### Fixed
 - Possible race condition between disk setup and glusterfs volume create
 - Forbid SSH username to be the same as the samba username
 - Allow smbd.service to auto-restart with delay
+- Data ingress to glusterfs on compute with no remotefs settings
 
 ## [2.6.0b3] - 2017-04-03
 ### Added
@@ -77,7 +87,7 @@ guide for more information. (#55)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
 - Support for
-[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
+[UserSubscription Batch accounts](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
 - `allow_run_on_missing_image` option to jobs that allows tasks to execute
@@ -510,7 +520,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0...HEAD
+[2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0
 [2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
 [2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1
