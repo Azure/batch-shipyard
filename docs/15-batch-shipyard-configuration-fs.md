@@ -25,7 +25,9 @@ The remote filesystem schema is as follows:
                 "hostname_prefix": "mystoragecluster",
                 "ssh": {
                     "username": "shipyard",
-                    "ssh_public_key": null,
+                    "ssh_public_key": "/path/to/rsa/publickey.pub",
+                    "ssh_public_key_data": "ssh-rsa ...",
+                    "ssh_private_key": "/path/to/rsa/privatekey",
                     "generated_file_export_path": null
                 },
                 "public_ip": {
@@ -174,7 +176,15 @@ optional in this configuration as it is in the pool specification.
     key to use. If this is not specified, an RSA public/private key pair will
     be generated for use in your current working directory (with a
     non-colliding name for auto-generated SSH keys for compute pools, i.e.,
-    `id_rsa_shipyard_remotefs`).
+    `id_rsa_shipyard_remotefs`). This option cannot be specified with
+    `ssh_public_key_data`.
+  * (optional) `ssh_public_key_data` is the raw RSA public key data in OpenSSH
+    format, e.g., a string starting with `ssh-rsa ...`. Only one key may be
+    specified. This option cannot be specified with `ssh_public_key`.
+  * (optional) `ssh_private_key` is the path to an existing SSH private key
+    to use against either `ssh_public_key` or `ssh_public_key_data` for
+    connecting to storage nodes. This option is only valid if neither
+    `ssh_public_key` or `ssh_public_key_data` are specified.
   * (optional) `generated_file_export_path` is an optional path to specify
     for where to create the RSA public/private key pair.
 * (optional) `public_ip` are public IP properties for each virtual machine.

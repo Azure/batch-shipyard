@@ -838,21 +838,25 @@ def create_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    # create universal ssh key for all vms if not specified
-    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
-        _, ssh_pub_key = crypto.generate_ssh_keypair(
-            rfs.storage_cluster.ssh.generated_file_export_path,
-            crypto.get_remotefs_ssh_key_prefix())
+    # read or generate ssh keys
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_public_key_data):
+        key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
-        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
-    with open(ssh_pub_key, 'rb') as fd:
-        key_data = fd.read().decode('utf8')
+        # create universal ssh key for all vms if not specified
+        if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+            _, ssh_pub_key = crypto.generate_ssh_keypair(
+                rfs.storage_cluster.ssh.generated_file_export_path,
+                crypto.get_remotefs_ssh_key_prefix())
+        else:
+            ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+        # read public key data
+        with open(ssh_pub_key, 'rb') as fd:
+            key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
     )
-    del key_data
     # create vms
     async_ops['vms'] = {}
     for i in range(rfs.storage_cluster.vm_count):
@@ -1085,20 +1089,24 @@ def resize_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    # create universal ssh key for all vms if not specified
-    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
-        # check if ssh key exists first in default location
-        ssh_pub_key = pathlib.Path(
-            rfs.storage_cluster.ssh.generated_file_export_path,
-            crypto.get_remotefs_ssh_key_prefix() + '.pub')
-        if not ssh_pub_key.exists():
-            _, ssh_pub_key = crypto.generate_ssh_keypair(
-                rfs.storage_cluster.ssh.generated_file_export_path,
-                crypto.get_remotefs_ssh_key_prefix())
-        else:
-            ssh_pub_key = str(ssh_pub_key)
+    # read or generate ssh keys
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_public_key_data):
+        key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
-        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+        # create universal ssh key for all vms if not specified
+        if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+            # check if ssh key exists first in default location
+            ssh_pub_key = pathlib.Path(
+                rfs.storage_cluster.ssh.generated_file_export_path,
+                crypto.get_remotefs_ssh_key_prefix() + '.pub')
+            if not ssh_pub_key.exists():
+                _, ssh_pub_key = crypto.generate_ssh_keypair(
+                    rfs.storage_cluster.ssh.generated_file_export_path,
+                    crypto.get_remotefs_ssh_key_prefix())
+            else:
+                ssh_pub_key = str(ssh_pub_key)
+        else:
+            ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
     with open(ssh_pub_key, 'rb') as fd:
         key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
@@ -1106,7 +1114,6 @@ def resize_storage_cluster(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
     )
-    del key_data
     # create vms
     async_ops['vms'] = {}
     for i in new_vms:
@@ -2236,9 +2243,12 @@ def _get_ssh_info(
                 network_client, rfs.storage_cluster.resource_group, vm)
         ip_address = nic.ip_configurations[0].private_ip_address
     # return connection info for vm
-    ssh_priv_key = pathlib.Path(
-        rfs.storage_cluster.ssh.generated_file_export_path,
-        crypto.get_remotefs_ssh_key_prefix())
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_private_key):
+        ssh_priv_key = pathlib.Path(rfs.storage_cluster.ssh.ssh_private_key)
+    else:
+        ssh_priv_key = pathlib.Path(
+            rfs.storage_cluster.ssh.generated_file_export_path,
+            crypto.get_remotefs_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
@@ -2262,6 +2272,11 @@ def ssh_storage_cluster(
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
         compute_client, network_client, config, sc_id, cardinal, hostname)
+    if not ssh_priv_key.exists():
+        logger.error(
+            ('cannot SSH into remotefs cluster node with non-existant RSA '
+             'private key: {}').format(ssh_priv_key))
+        return
     # connect to vm
     logger.info(
         ('connecting to storage cluster {} virtual machine {}:{} with '

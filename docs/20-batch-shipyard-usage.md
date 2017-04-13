@@ -280,9 +280,11 @@ the file server.
     better data spread and performance after the disk is added to the array.
 * `resize` resizes the storage cluster with additional virtual machines as
 specified in the configuration. This is an experimental feature.
-* `ssh` will interactively log into a virtual machine in the storage cluster
+* `ssh` will interactively log into a virtual machine in the storage cluster.
+If neither `--cardinal` or `--hostname` are specified, `--cardinal 0` is
+assumed.
   * `--cardinal` is the zero-based cardinal number of the virtual machine in
-    the storage cluster to connect to
+    the storage cluster to connect to.
   * `--hostname` is the hostname of the virtual machine in the storage cluster
     to connect to
 * `start` will start a previously suspended storage cluster
@@ -430,7 +432,8 @@ in the specified pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
   * `--wait` will wait for resize to complete
-* `ssh` will interactively log into a compute node via SSH
+* `ssh` will interactively log into a compute node via SSH. If neither
+`--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed.
   * `--cardinal` is the zero-based cardinal number of the compute node in
     the pool to connect to as listed by `grls`
   * `--nodeid` is the node id to connect to in the pool

@@ -154,9 +154,7 @@ def is_none_or_empty(obj):
     :rtype: bool
     :return: if object is None or empty
     """
-    if obj is None or len(obj) == 0:
-        return True
-    return False
+    return obj is None or len(obj) == 0
 
 
 def is_not_empty(obj):
@@ -166,9 +164,7 @@ def is_not_empty(obj):
     :rtype: bool
     :return: if object is not None and length is > 0
     """
-    if obj is not None and len(obj) > 0:
-        return True
-    return False
+    return obj is not None and len(obj) > 0
 
 
 def get_input(prompt):

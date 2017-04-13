@@ -43,8 +43,10 @@
         },
         "ssh": {
             "username": "docker",
-            "expiry_days": 7,
-            "ssh_public_key": null,
+            "expiry_days": 30,
+            "ssh_public_key": "/path/to/rsa/publickey.pub",
+            "ssh_public_key_data": "ssh-rsa ...",
+            "ssh_private_key": "/path/to/rsa/privatekey",
             "generate_docker_tunnel_script": true,
             "generated_file_export_path": null,
             "hpn_server_swap": false

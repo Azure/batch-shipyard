@@ -80,9 +80,9 @@ PoolSettings = collections.namedtuple(
 )
 SSHSettings = collections.namedtuple(
     'SSHSettings', [
-        'username', 'expiry_days', 'ssh_public_key',
-        'generate_docker_tunnel_script', 'generated_file_export_path',
-        'hpn_server_swap',
+        'username', 'expiry_days', 'ssh_public_key', 'ssh_public_key_data',
+        'ssh_private_key', 'generate_docker_tunnel_script',
+        'generated_file_export_path', 'hpn_server_swap',
     ]
 )
 AADSettings = collections.namedtuple(
@@ -472,6 +472,16 @@ def pool_settings(config):
             raise KeyError()
     except KeyError:
         ssh_public_key = None
+    ssh_public_key_data = _kv_read_checked(conf['ssh'], 'ssh_public_key_data')
+    ssh_private_key = _kv_read_checked(conf['ssh'], 'ssh_private_key')
+    if (util.is_not_empty(ssh_public_key) and
+            util.is_not_empty(ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (util.is_none_or_empty(ssh_public_key) and
+            util.is_none_or_empty(ssh_public_key_data) and
+            util.is_not_empty(ssh_private_key)):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
     try:
         ssh_gen_docker_tunnel = conf['ssh']['generate_docker_tunnel_script']
     except KeyError:
@@ -515,6 +525,8 @@ def pool_settings(config):
             username=ssh_username,
             expiry_days=ssh_expiry_days,
             ssh_public_key=ssh_public_key,
+            ssh_public_key_data=ssh_public_key_data,
+            ssh_private_key=ssh_private_key,
             generate_docker_tunnel_script=ssh_gen_docker_tunnel,
             generated_file_export_path=ssh_gen_file_path,
             hpn_server_swap=ssh_hpn,
@@ -2605,7 +2617,8 @@ def remotefs_settings(config, sc_id=None):
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
         _reserved = frozenset([
-            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs', 'beegfs'
+            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs',
+            'beegfs', 'cephfs',
         ])
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
@@ -2633,8 +2646,22 @@ def remotefs_settings(config, sc_id=None):
     ssh_conf = sc_conf['ssh']
     sc_ssh_username = _kv_read_checked(ssh_conf, 'username')
     sc_ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    sc_ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
+    sc_ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
+    if (util.is_not_empty(sc_ssh_public_key) and
+            util.is_not_empty(sc_ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (util.is_none_or_empty(sc_ssh_public_key) and
+            util.is_none_or_empty(sc_ssh_public_key_data) and
+            util.is_not_empty(sc_ssh_private_key)):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
     sc_ssh_gen_file_path = _kv_read_checked(
         ssh_conf, 'generated_file_export_path', '.')
+    # ensure ssh username and samba username are not the same
+    if file_server.samba.account.username == sc_ssh_username:
+        raise ValueError(
+            'SSH username and samba account username cannot be the same')
     # sc vm disk map settings
     vmd_conf = sc_conf['vm_disk_map']
     _disk_set = frozenset(md_disk_names)
@@ -2703,6 +2730,8 @@ def remotefs_settings(config, sc_id=None):
                 username=sc_ssh_username,
                 expiry_days=9999,
                 ssh_public_key=sc_ssh_public_key,
+                ssh_public_key_data=sc_ssh_public_key_data,
+                ssh_private_key=sc_ssh_private_key,
                 generate_docker_tunnel_script=False,
                 generated_file_export_path=sc_ssh_gen_file_path,
                 hpn_server_swap=False,

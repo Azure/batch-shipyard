@@ -401,7 +401,7 @@ def create_pool(batch_client, config, pool):
 
 
 def _add_admin_user_to_compute_node(
-        batch_client, config, node, username, ssh_public_key):
+        batch_client, config, node, username, ssh_public_key_data):
     # type: (batch.BatchServiceClient, dict, str, batchmodels.ComputeNode,
     #        str) -> None
     """Adds an administrative user to the Batch Compute Node with a default
@@ -412,7 +412,7 @@ def _add_admin_user_to_compute_node(
     :param node: The compute node.
     :type node: `azure.batch.batch_service_client.models.ComputeNode`
     :param str username: user name
-    :param str ssh_public_key: ssh rsa public key
+    :param str ssh_public_key_data: ssh rsa public key data
     """
     pool = settings.pool_settings(config)
     expiry = datetime.datetime.utcnow() + datetime.timedelta(
@@ -428,7 +428,7 @@ def _add_admin_user_to_compute_node(
                 is_admin=True,
                 expiry_time=expiry,
                 password=None,
-                ssh_public_key=open(ssh_public_key, 'rb').read().decode('utf8')
+                ssh_public_key=ssh_public_key_data,
             )
         )
     except batchmodels.batch_error.BatchErrorException as ex:
@@ -453,19 +453,27 @@ def add_ssh_user(batch_client, config, nodes=None):
     if util.is_none_or_empty(pool.ssh.username):
         logger.info('not creating ssh user on pool {}'.format(pool.id))
         return
-    # generate ssh key pair if not specified
-    if pool.ssh.ssh_public_key is None:
-        ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
-            pool.ssh.generated_file_export_path)
+    # read public key data from settings if available
+    if util.is_not_empty(pool.ssh.ssh_public_key_data):
+        ssh_pub_key_data = pool.ssh.ssh_public_key_data
+        ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
     else:
-        ssh_priv_key = None
-        ssh_pub_key = pool.ssh.ssh_public_key
+        # generate ssh key pair if not specified
+        if util.is_none_or_empty(pool.ssh.ssh_public_key):
+            ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
+                pool.ssh.generated_file_export_path)
+        else:
+            ssh_pub_key = pool.ssh.ssh_public_key
+            ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
+        # read public key data
+        with open(ssh_pub_key, 'rb') as fd:
+            ssh_pub_key_data = fd.read().decode('utf8')
     # get node list if not provided
     if nodes is None:
         nodes = batch_client.compute_node.list(pool.id)
     for node in nodes:
         _add_admin_user_to_compute_node(
-            batch_client, config, node, pool.ssh.username, ssh_pub_key)
+            batch_client, config, node, pool.ssh.username, ssh_pub_key_data)
     # generate tunnel script if requested
     generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes)
 
@@ -487,6 +495,11 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             ssh_priv_key = pathlib.Path(
                 pool.ssh.generated_file_export_path,
                 crypto.get_ssh_key_prefix())
+        if not ssh_priv_key.exists():
+            logger.warning(
+                ('cannot generate tunnel script with non-existant RSA '
+                 'private key: {}').format(ssh_priv_key))
+            return
         ssh_args = [
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile={}'.format(os.devnull),

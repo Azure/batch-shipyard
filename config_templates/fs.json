@@ -17,7 +17,9 @@
                 "hostname_prefix": "mystoragecluster",
                 "ssh": {
                     "username": "shipyard",
-                    "ssh_public_key": null,
+                    "ssh_public_key": "/path/to/rsa/publickey.pub",
+                    "ssh_public_key_data": "ssh-rsa ...",
+                    "ssh_private_key": "/path/to/rsa/privatekey",
                     "generated_file_export_path": null
                 },
                 "public_ip": {

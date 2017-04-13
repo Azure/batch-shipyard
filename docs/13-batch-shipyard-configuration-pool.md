@@ -51,8 +51,10 @@ The pool schema is as follows:
         },
         "ssh": {
             "username": "docker",
-            "expiry_days": 7,
-            "ssh_public_key": null,
+            "expiry_days": 30,
+            "ssh_public_key": "/path/to/rsa/publickey.pub",
+            "ssh_public_key_data": "ssh-rsa ...",
+            "ssh_private_key": "/path/to/rsa/privatekey",
             "generate_docker_tunnel_script": true,
             "generated_file_export_path": null,
             "hpn_server_swap": false
@@ -169,7 +171,15 @@ created with pool creation.
   * (optional) `ssh_public_key` is the path to an existing SSH public key to
     use. If not specified, an RSA public/private keypair will be automatically
     generated only on Linux. If this is `null` or not specified on Windows,
-    the SSH user is not created.
+    the SSH user is not created. This option cannot be specified with
+    `ssh_public_key_data`.
+  * (optional) `ssh_public_key_data` is the raw RSA public key data in OpenSSH
+    format, e.g., a string starting with `ssh-rsa ...`. Only one key may be
+    specified. This option cannot be specified with `ssh_public_key`.
+  * (optional) `ssh_private_key` is the path to an existing SSH private key
+    to use against either `ssh_public_key` or `ssh_public_key_data` for
+    connecting to compute nodes. This option is only valid if neither
+    `ssh_public_key` or `ssh_public_key_data` are specified.
   * (optional) `generate_docker_tunnel_script` property directs script to
     generate an SSH tunnel script that can be used to connect to the remote
     Docker engine running on a compute node. This script can only be used on

@@ -780,6 +780,13 @@ cat >> /etc/samba/smb.conf << EOF
   browseable = yes
 EOF
         fi
+        # reload unit files
+        systemctl daemon-reload
+        # add fix to attempt samba service restarts in case of failures.
+        # note that this will get overwritten if the systemd-sysv-generator
+        # is re-run (e.g., systemctl daemon-reload).
+        sed -i -e "s/^Restart=no/Restart=yes/g" /run/systemd/generator.late/smbd.service
+        sed -i "/^Restart=yes/a RestartSec=2" /run/systemd/generator.late/smbd.service
         # restart samba service
         systemctl restart smbd.service
     fi

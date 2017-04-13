@@ -1966,8 +1966,11 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
-    ssh_priv_key = pathlib.Path(
-        pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if util.is_not_empty(pool.ssh.ssh_private_key):
+        ssh_priv_key = pathlib.Path(pool.ssh.ssh_private_key)
+    else:
+        ssh_priv_key = pathlib.Path(
+            pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))

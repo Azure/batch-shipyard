@@ -1,8 +1,21 @@
 # Change Log
 
 ## [Unreleased]
+### Added
+- Richer SSH options with new `ssh_public_key_data` and `ssh_private_key`
+properties in `ssh` configuration blocks (for both `pool.json` and
+`fs.json`).
+  - `ssh_public_key_data` allows direct embedding of SSH public keys in
+    OpenSSH format into the config files.
+  - `ssh_private_key` specifies where the private key is located with
+    respect to pre-created public keys (either `ssh_public_key` or
+    `ssh_public_key_data`). This allows transparent `pool ssh` or
+    `fs cluster ssh` commands with pre-created keys.
+
 ### Fixed
 - Possible race condition between disk setup and glusterfs volume create
+- Forbid SSH username to be the same as the samba username
+- Allow smbd.service to auto-restart with delay
 
 ## [2.6.0b3] - 2017-04-03
 ### Added
