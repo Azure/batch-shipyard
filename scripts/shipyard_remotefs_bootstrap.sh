@@ -99,7 +99,7 @@ gluster_poll_for_connections() {
     done
     set -e
     echo "$numpeers host(s) joined peering"
-    # delay to wait for after peer connections
+    # delay wait after peer connections
     sleep 5
 }
 
@@ -130,16 +130,9 @@ gluster_poll_for_volume() {
 
 }
 
-enable_and_start_glusterfs() {
-    systemctl enable glusterfs-server
-    # start service if not started
-    set +e
-    systemctl status glusterfs-server
-    if [ $? -ne 0 ]; then
-        set -e
-        systemctl start glusterfs-server
-    fi
-    set -e
+flush_glusterfs_firewall_rules() {
+    iptables -F INPUT
+    iptables -L INPUT
 }
 
 setup_glusterfs() {
@@ -431,15 +424,30 @@ EOF
         if [ $? -ne 0 ]; then
             set -e
             systemctl start nfs-kernel-server.service
+            systemctl status nfs-kernel-server.service
         fi
         set -e
     elif [ $server_type == "glusterfs" ]; then
-        apt-get install -y -q --no-install-recommends glusterfs-server
-        # reload unit files
-        systemctl daemon-reload
-        # ensure glusterfs server is stopped. we should not start it yet
+        # to prevent a race where the master (aka prober) script execution
+        # runs well before the child, we should block all gluster connection
+        # requests with iptables. we should not remove the filter rules
         # until all local disk setup has been completed.
-        systemctl stop glusterfs-server
+        iptables -A INPUT -p tcp --destination-port 24007:24008 -j REJECT
+        iptables -A INPUT -p tcp --destination-port 49152:49215 -j REJECT
+        # install glusterfs server
+        apt-get install -y -q --no-install-recommends glusterfs-server
+        # enable gluster service
+        systemctl enable glusterfs-server
+        # start service if not started
+        set +e
+        systemctl status glusterfs-server
+        if [ $? -ne 0 ]; then
+            set -e
+            systemctl start glusterfs-server
+            systemctl status glusterfs-server
+        fi
+        set -e
+        iptables -L INPUT
     else
         echo "server_type $server_type not supported."
         exit 1
@@ -726,7 +734,7 @@ if [ $attach_disks -eq 0 ]; then
     if [ $server_type == "nfs" ]; then
         setup_nfs
     elif [ $server_type == "glusterfs" ]; then
-        enable_and_start_glusterfs
+        flush_glusterfs_firewall_rules
         setup_glusterfs
     else
         echo "server_type $server_type not supported."

@@ -913,14 +913,14 @@ def ingress_data(
                     'valid SSH user')
             # try to get valid ssh private key (from various config blocks)
             ssh_private_key = dest.data_transfer.ssh_private_key
-            if ssh_private_key is None or not ssh_private_key.exists():
+            if ssh_private_key is None:
                 ssh_private_key = pool.ssh.ssh_private_key
-            if ssh_private_key is None or not ssh_private_key.exists():
+            if ssh_private_key is None:
                 ssh_private_key = pathlib.Path(crypto.get_ssh_key_prefix())
-            if ssh_private_key is None or not ssh_private_key.exists():
-                raise RuntimeError(
-                    'ssh private key is invalid or does not exist: {}'.format(
-                        ssh_private_key))
+                if not ssh_private_key.exists():
+                    raise RuntimeError(
+                        'specified SSH private key is invalid or does not '
+                        'exist')
             logger.debug('using ssh_private_key from: {}'.format(
                 ssh_private_key))
             if (dest.data_transfer.method == 'scp' or

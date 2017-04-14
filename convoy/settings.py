@@ -2487,6 +2487,10 @@ def fileserver_settings(config, vm_count):
             raise ValueError(
                 'samba account password is invalid for username {}'.format(
                     smb_account.username))
+        if ('$' in smb_account.password or '!' in smb_account.password or
+                '\n' in smb_account.password):
+            raise ValueError(
+                'samba account password cannot contain $, ! or \\n characters')
         if smb_account.uid is None or smb_account.gid is None:
             raise ValueError(
                 ('samba account uid and/or gid is invalid for '

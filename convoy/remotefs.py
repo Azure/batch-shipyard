@@ -843,12 +843,11 @@ def create_storage_cluster(
         key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
         # create universal ssh key for all vms if not specified
-        if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+        if ssh_pub_key is None:
             _, ssh_pub_key = crypto.generate_ssh_keypair(
                 rfs.storage_cluster.ssh.generated_file_export_path,
                 crypto.get_remotefs_ssh_key_prefix())
-        else:
-            ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
         # read public key data
         with ssh_pub_key.open('rb') as fd:
             key_data = fd.read().decode('utf8')
@@ -1094,7 +1093,8 @@ def resize_storage_cluster(
         key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
         # create universal ssh key for all vms if not specified
-        if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
+        ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
+        if ssh_pub_key is None:
             # check if ssh key exists first in default location
             ssh_pub_key = pathlib.Path(
                 rfs.storage_cluster.ssh.generated_file_export_path,
@@ -1103,10 +1103,9 @@ def resize_storage_cluster(
                 _, ssh_pub_key = crypto.generate_ssh_keypair(
                     rfs.storage_cluster.ssh.generated_file_export_path,
                     crypto.get_remotefs_ssh_key_prefix())
-        else:
-            ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
-    with ssh_pub_key.open('rb') as fd:
-        key_data = fd.read().decode('utf8')
+        # read public key data
+        with ssh_pub_key.open('rb') as fd:
+            key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
