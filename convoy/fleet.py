@@ -88,10 +88,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '375.39/NVIDIA-Linux-x86_64-375.39.run'
+            '375.51/NVIDIA-Linux-x86_64-375.51.run'
         ),
         'sha256': (
-            '91be5a20841678d671f32074e2901791fe12c00ce1f3b6b3c4199ce302da85a7'
+            '211aa1f44603c6f54f473b6daca0a83431b5bafd63ae3ad40f2e4bfa7cb857a4'
         ),
     },
     'license': (
@@ -1293,9 +1293,6 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
         elif offer == 'opensuse-leap':
             if sku >= '42':
-                allowed = True
-        elif offer == 'opensuse':
-            if sku == '13.2':
                 allowed = True
     # check for valid image if gpu, currently only ubuntu 16.04 is supported
     if (settings.is_gpu_pool(pool.vm_size) and

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [2.6.0] - 2017-04-14
+## [2.6.0rc1] - 2017-04-14
 ### Added
 - Richer SSH options with new `ssh_public_key_data` and `ssh_private_key`
 properties in `ssh` configuration blocks (for both `pool.json` and
@@ -16,12 +16,18 @@ properties in `ssh` configuration blocks (for both `pool.json` and
 - RemoteFS-GlusterFS+BatchPool recipe
 
 ### Changed
+- Docker installations are now pinned to a specific Docker version which
+should reduce sudden breaking changes introduced upstream by Docker and/or
+the distribution
 - Fault domains for multi-vm storage clusters are now set to 2 by default but
 can be configured using the `fault_domains` property. This was lowered from
 the prior default of 3 due to managed disks and availability set restrictions
 as some regions do not support 3 fault domains with this combination.
+- Updated NC-series Tesla driver to 375.51
+- Removed support for OpenSUSE 13.2 and SLES 12
 
 ### Fixed
+- Broken Docker installations due to gpgkey changes
 - Possible race condition between disk setup and glusterfs volume create
 - Forbid SSH username to be the same as the samba username
 - Allow smbd.service to auto-restart with delay
@@ -520,8 +526,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0...HEAD
-[2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...HEAD
+[2.6.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0rc1
 [2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
 [2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1

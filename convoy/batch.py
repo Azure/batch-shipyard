@@ -459,7 +459,7 @@ def add_ssh_user(batch_client, config, nodes=None):
         ssh_priv_key = pool.ssh.ssh_private_key
     else:
         # generate ssh key pair if not specified
-        if util.is_none_or_empty(pool.ssh.ssh_public_key):
+        if pool.ssh.ssh_public_key is None:
             ssh_priv_key, ssh_pub_key = crypto.generate_ssh_keypair(
                 pool.ssh.generated_file_export_path)
         else:

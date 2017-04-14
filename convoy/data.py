@@ -950,9 +950,9 @@ def ingress_data(
         elif dest.storage_account_settings is not None:
             if kind == 'shared':
                 logger.warning(
-                    'skipping data ingress from {} to {} for pool as ingress '
+                    'skipping data ingress from {} for pool as ingress '
                     'to Azure Blob/File Storage not specified'.format(
-                        source.path, storage))
+                        source.path))
                 continue
             if (dest.data_transfer.container is None and
                     dest.data_transfer.file_share is None):

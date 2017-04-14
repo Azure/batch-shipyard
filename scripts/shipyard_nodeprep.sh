@@ -236,12 +236,16 @@ fi
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
+    # name will be appended to dockerversion
+    dockerversion=17.03.1~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
         gfsstart="initctl start glusterfs-server"
+        gpgkey=https://download.docker.com/linux/ubuntu/gpg
+        repo=https://download.docker.com/linux/ubuntu
     elif [[ $sku == 16.04* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
@@ -249,6 +253,8 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         srvenable="systemctl enable docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
+        gpgkey=https://download.docker.com/linux/ubuntu/gpg
+        repo=https://download.docker.com/linux/ubuntu
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
@@ -256,6 +262,8 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         srvenable="systemctl enable docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
+        gpgkey=https://download.docker.com/linux/debian/gpg
+        repo=https://download.docker.com/linux/debian
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
@@ -266,48 +274,48 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     fi
     # reload network settings
     if [ $networkopt -eq 1 ]; then
-        service procps reload
-    fi
-    # check if docker apt source list file exists
-    aptsrc=/etc/apt/sources.list.d/docker.list
-    if [ ! -e $aptsrc ] || [ ! -s $aptsrc ]; then
-        # refresh package index
-        apt-get update
-        # install required software first
-        if [ $offer == "debian" ]; then
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-                apt-transport-https ca-certificates
+        if [ $name == "ubuntu-trusty" ]; then
+            service procps start
         else
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-                linux-image-extra-$(uname -r) linux-image-extra-virtual
+            service procps reload
         fi
-        set +e
-        retries=100
-        while [ $retries -gt 0 ]; do
-            apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-            if [ $? -eq 0 ]; then
-                break
-            fi
-            let retries=retries-1
-            if [ $retries -eq 0 ]; then
-                echo "Could not add key for docker repo"
-                exit 1
-            fi
-            sleep 1
-        done
-        set -e
-        echo deb https://apt.dockerproject.org/repo $name main > /etc/apt/sources.list.d/docker.list
     fi
-    # update package index with docker repo and purge old docker if it exists
+    # refresh package index
     apt-get update
-    apt-get purge -y -q lxc-docker
+    # install required software first
+    apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+        apt-transport-https ca-certificates curl software-properties-common
+    if [ $name == "ubuntu-trusty" ]; then
+        apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+            linux-image-extra-$(uname -r) linux-image-extra-virtual
+    fi
+    # add gpgkey for repo
+    set +e
+    retries=100
+    while [ $retries -gt 0 ]; do
+        curl -fsSL $gpgkey | apt-key add -
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "Could not add key for docker repo"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+    # add repo
+    add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
+    # refresh index
+    apt-get update
     # ensure docker opts service modifications are idempotent
     set +e
     grep '^DOCKER_OPTS=' /etc/default/docker
     if [ $? -ne 0 ]; then
         # install docker engine
         apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-            docker-engine
+            docker-ce=$dockerversion$name
         set -e
         $srvstop
         set +e
@@ -322,7 +330,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         fi
 
-        if [[ $sku == 16.04* ]] || [[ $name == "debian-jessie" ]]; then
+        if [[ $name == "ubuntu-xenial" ]] || [[ $name == "debian-jessie" ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
             set -e
@@ -450,10 +458,14 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
+        dockerversion=17.03.1.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
+            # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
+            echo "oracle linux is not supported at this time"
+            exit 1
         else
             srvenable="chkconfig docker on"
             gfsenable="chkconfig glusterd on"
@@ -468,76 +480,58 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         sysctl -p
     fi
     # add docker repo to yum
-    yumrepo=/etc/yum.repos.d/docker.repo
-    if [ ! -e $yumrepo ] || [ ! -s $yumrepo ]; then
-        baseurl=
-        if [[ $offer == "oracle-linux" ]]; then
-            baseurl=https://yum.dockerproject.org/repo/main/oraclelinux/7
-            # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
-            echo "oracle linux is not supported at this time"
-            exit 1
-        else
-            baseurl=https://yum.dockerproject.org/repo/main/centos/7/
-        fi
-cat > $yumrepo << EOF
-[dockerrepo]
-name=Docker Repository
-baseurl=$baseurl
-enabled=1
-gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg
-EOF
-        # update yum repo and install docker engine
-        yum install -y docker-engine
-        # modify docker opts
-        mkdir -p /mnt/resource/docker-tmp
-        sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
-        sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
-        sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
+    yum install -y yum-utils
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    yum makecache -y fast
+    yum install -y docker-ce-$dockerversion
+    # modify docker opts
+    mkdir -p /mnt/resource/docker-tmp
+    sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
+    sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
+    sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
+    sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
+    systemctl daemon-reload
+    # start docker service and enable docker daemon on boot
+    $srvenable
+    systemctl start docker.service
+    # setup and start azure file docker volume driver
+    if [ $azurefile -eq 1 ]; then
+        install_azurefile_docker_volume_driver $offer $sku
+    fi
+    # set up glusterfs
+    if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+        yum install -y epel-release centos-release-gluster38
+        sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+        yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
         systemctl daemon-reload
-        # start docker service and enable docker daemon on boot
-        $srvenable
-        systemctl start docker.service
-        # setup and start azure file docker volume driver
-        if [ $azurefile -eq 1 ]; then
-            install_azurefile_docker_volume_driver $offer $sku
-        fi
-        # set up glusterfs
-        if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
-            yum install -y epel-release centos-release-gluster38
-            sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-            yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
-            systemctl daemon-reload
-            $gfsenable
-            systemctl start glusterd
-            # create brick directory
-            mkdir -p /mnt/resource/gluster
-        fi
-        # install dependencies for storage cluster mount
-        if [ ! -z $sc_args ]; then
-            nfs_installed=0
-            glusterfs_installed=0
-            for sc_arg in ${sc_args[@]}; do
-                IFS=':' read -ra sc <<< "$sc_arg"
-                server_type=${sc[0]}
-                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
-                    yum install -y nfs-utils nfs4-acl-tools
-                    systemctl daemon-reload
-                    $rpcbindenable
-                    systemctl start rpcbind
-                    nfs_installed=1
-                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
-                    yum install -y epel-release centos-release-gluster38
-                    sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                    yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
-                    glusterfs_installed=1
-                else
-                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
-                    exit 1
-                fi
-            done
-        fi
+        $gfsenable
+        systemctl start glusterd
+        # create brick directory
+        mkdir -p /mnt/resource/gluster
+    fi
+    # install dependencies for storage cluster mount
+    if [ ! -z $sc_args ]; then
+        nfs_installed=0
+        glusterfs_installed=0
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+                yum install -y nfs-utils nfs4-acl-tools
+                systemctl daemon-reload
+                $rpcbindenable
+                systemctl start rpcbind
+                nfs_installed=1
+            elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                yum install -y epel-release centos-release-gluster38
+                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
+                glusterfs_installed=1
+            else
+                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                exit 1
+            fi
+        done
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     # ensure container only support
@@ -558,23 +552,21 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # add Virtualization:containers repo for recent docker builds
         repodir=
         if [[ $offer == opensuse* ]]; then
-            if [[ $sku == "13.2" ]]; then
-                repodir=openSUSE_13.2
-            elif [[ $sku == "42.1" ]]; then
+            dockerversion=1.12.6-30.2
+            if [[ $sku == "42.1" ]]; then
                 repodir=openSUSE_Leap_42.1
+            elif [[ $sku == "42.2" ]]; then
+                repodir=openSUSE_Leap_42.2
             fi
             # add container repo for zypper
             zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
             zypper -n --gpg-auto-import-keys ref
-            # uninstall existing docker
-            set +e
-            zypper -n rm docker
-            set -e
         elif [[ $offer == sles* ]]; then
-            if [[ $sku == "12" ]]; then
-                repodir=SLE_12
-            elif [[ $sku == "12-sp1" ]]; then
+            dockerversion=1.12.6-90.1
+            if [[ $sku == "12-sp1" ]]; then
                 repodir=SLE_12_SP1
+            elif [[ $sku == "12-sp2" ]]; then
+                repodir=SLE_12_SP2
             fi
             # enable container module
             SUSEConnect -p sle-module-containers/12/x86_64 -r ''
@@ -585,7 +577,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             exit 1
         fi
         # install docker engine
-        zypper -n in docker
+        zypper -n in docker-$dockerversion
         # modify docker opts, docker opts in /etc/sysconfig/docker
         mkdir -p /mnt/resource/docker-tmp
         sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
