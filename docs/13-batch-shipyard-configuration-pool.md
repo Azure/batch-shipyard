@@ -164,7 +164,9 @@ UserSubscription Batch accounts.
       20-bits.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
-created with pool creation.
+created with pool creation. If you are running Batch Shipyard on Windows,
+please refer to [these instructions](85-batch-shipyard-ssh-docker-tunnel.md#ssh-keygen)
+on how to generate an SSH keypair for use with Batch Shipyard.
   * (required) `username` is the user to create on the compute nodes.
   * (optional) `expiry_days` is the number of days from now for the account on
     the compute nodes to expire. The default is 30 days from invocation time.

@@ -171,7 +171,11 @@ defined.
 virtual machine and resource allocated for the storage cluster. It should
 be unique.
 * (required) `ssh` is the SSH admin user to create on the machine. This is not
-optional in this configuration as it is in the pool specification.
+optional in this configuration as it is in the pool specification. If you are
+running Batch Shipyard on Windows, please refer to
+[these instructions](85-batch-shipyard-ssh-docker-tunnel.md#ssh-keygen)
+on how to generate an SSH keypair for use with Batch Shipyard.
+
   * (required) `username` is the admin user to create on all virtual machines
   * (optional) `ssh_public_key` is the path to a pre-existing ssh public
     key to use. If this is not specified, an RSA public/private key pair will

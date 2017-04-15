@@ -14,6 +14,39 @@ node in the pool may have port 22 mapped to port 12346 on the load balancer.
 
 This allows many compute nodes to sit behind one public IP address.
 
+## <a name="ssh-keygen"></a>SSH Keypair Generation
+In order to use SSH, you will need to generate a public/private RSA keypair
+that SSH requires for asymmetric key authentication. If you are running
+Batch Shipyard on Linux or Mac, you can opt to leave `ssh_public_key`
+and `ssh_private_key` unspecified or empty in `ssh` configuration blocks and
+Batch Shipyard will automatically generate the keypair for you. Alternatively,
+you can specify the location of pre-generated keypairs that you may have on
+your system.
+
+On Windows, you can use [PuTTYgen](http://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html)
+to pre-generate public/private keys and then specify the file path in
+`ssh_public_key` and `ssh_private_key` in `ssh` configuration blocks. To
+create compatible keys for use with Batch Shipyard, perform the following
+actions:
+
+1. Launch PuTTYgen
+2. Click on the `Generate` button on the bottom right
+3. Move the mouse around as directed to generate randomness for the keys
+4. Save the RSA private key portion as a file
+   * Click on `Conversions` file menu at the top
+   * Click `Export OpenSSH key`
+   * A prompt will ask if it is ok to save the key without a passphrase. Click
+     `Yes`.
+   * Save the file to a path accessible by Batch Shipyard
+5. Save the RSA public key portion either as text data or as a file. This is
+done by selecting all of the text under the box labeled
+`Public key for pasting into OpenSSH authorized_keys file:` and pressing
+CTRL+C or right-click and Copy.
+   * If using the raw data, populate your `ssh` config property named
+     `ssh_public_key_data` with the key data from the box
+   * If you are saving the key data to a file, then populate your `ssh` config
+     property named `ssh_public_key` and point it to the file
+
 ## Interactive SSH
 By adding an SSH user to the pool (which can be automatically done for you
 via the `ssh` block in the pool config upon pool creation or through the
