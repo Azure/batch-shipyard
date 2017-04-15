@@ -769,7 +769,7 @@ EOF
             # create user (disable login)
             useradd -N -g $smb_gid -p '!' -o -u $smb_uid -s /bin/bash -m -d /home/$smb_username $smb_username
             # add user to smb tdbsam
-            echo -ne "$smb_password\n$smb_password\n" | smbpasswd -a -s $smb_username
+            echo -ne "${smb_password}\n${smb_password}\n" | smbpasswd -a -s $smb_username
             smbpasswd -e $smb_username
             # modify smb.conf global
             sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto" /etc/samba/smb.conf

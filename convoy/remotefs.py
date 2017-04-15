@@ -612,14 +612,14 @@ def _create_virtual_machine_extension(
     # construct bootstrap command
     cmd = './{bsf} {c}{d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
         bsf=bootstrap_file,
-        c=' -c "{}"'.format(smb) if util.is_not_empty(smb) else '',
+        c=' -c \'{}\''.format(smb) if util.is_not_empty(smb) else '',
         d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
         f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
         i=' -i {}'.format(
             ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
         m=' -m {}'.format(rfs.storage_cluster.file_server.mountpoint),
         n=' -n' if settings.can_tune_tcp(rfs.storage_cluster.vm_size) else '',
-        o=' -o "{}"'.format(','.join(server_options)) if util.is_not_empty(
+        o=' -o \'{}\''.format(','.join(server_options)) if util.is_not_empty(
             server_options) else '',
         p=' -p' if premium else '',
         r=' -r {}'.format(rfs.storage_cluster.vm_disk_map[offset].raid_level),
@@ -1163,7 +1163,7 @@ def resize_storage_cluster(
             n=' -n {}'.format(
                 settings.get_file_server_glusterfs_volume_name(
                     rfs.storage_cluster)),
-            v=' -v "{}"'.format(voltype),
+            v=' -v \'{}\''.format(voltype),
         )
     ssh_priv_key, port, username, ip = ssh_info
     cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
