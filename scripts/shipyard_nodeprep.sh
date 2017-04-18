@@ -417,17 +417,13 @@ EOF
     fi
     # install dependencies for storage cluster mount
     if [ ! -z $sc_args ]; then
-        nfs_installed=0
-        glusterfs_installed=0
         for sc_arg in ${sc_args[@]}; do
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
-            if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+            if [ $server_type == "nfs" ]; then
                 apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
-                nfs_installed=1
-            elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+            elif [ $server_type == "glusterfs" ]; then
                 apt-get install -y -q --no-install-recommends glusterfs-client acl
-                glusterfs_installed=1
             else
                 echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
@@ -511,22 +507,18 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     fi
     # install dependencies for storage cluster mount
     if [ ! -z $sc_args ]; then
-        nfs_installed=0
-        glusterfs_installed=0
         for sc_arg in ${sc_args[@]}; do
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
-            if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+            if [ $server_type == "nfs" ]; then
                 yum install -y nfs-utils nfs4-acl-tools
                 systemctl daemon-reload
                 $rpcbindenable
                 systemctl start rpcbind
-                nfs_installed=1
-            elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+            elif [ $server_type == "glusterfs" ]; then
                 yum install -y epel-release centos-release-gluster38
                 sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
                 yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
-                glusterfs_installed=1
             else
                 echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
@@ -603,22 +595,18 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         fi
         # install dependencies for storage cluster mount
         if [ ! -z $sc_args ]; then
-            nfs_installed=0
-            glusterfs_installed=0
             for sc_arg in ${sc_args[@]}; do
                 IFS=':' read -ra sc <<< "$sc_arg"
                 server_type=${sc[0]}
-                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
+                if [ $server_type == "nfs" ]; then
                     zypper -n in nfs-client nfs4-acl-tools
                     systemctl daemon-reload
                     systemctl enable rpcbind
                     systemctl start rpcbind
-                    nfs_installed=1
-                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                elif [ $server_type == "glusterfs" ]; then
                     zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
                     zypper -n --gpg-auto-import-keys ref
                     zypper -n in glusterfs acl
-                    glusterfs_installed=1
                 else
                     echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1

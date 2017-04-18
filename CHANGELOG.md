@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+### Fixed
+- Checks that prevented ssh/scp/openssl interaction on Windows
 
 ## [2.6.0rc1] - 2017-04-14
 ### Added
@@ -24,7 +26,6 @@ can be configured using the `fault_domains` property. This was lowered from
 the prior default of 3 due to managed disks and availability set restrictions
 as some regions do not support 3 fault domains with this combination.
 - Updated NC-series Tesla driver to 375.51
-- Removed support for OpenSUSE 13.2 and SLES 12
 
 ### Fixed
 - Broken Docker installations due to gpgkey changes
@@ -32,6 +33,9 @@ as some regions do not support 3 fault domains with this combination.
 - Forbid SSH username to be the same as the samba username
 - Allow smbd.service to auto-restart with delay
 - Data ingress to glusterfs on compute with no remotefs settings
+
+### Removed
+- Host support for OpenSUSE 13.2 and SLES 12
 
 ## [2.6.0b3] - 2017-04-03
 ### Added

@@ -172,9 +172,8 @@ on how to generate an SSH keypair for use with Batch Shipyard.
     the compute nodes to expire. The default is 30 days from invocation time.
   * (optional) `ssh_public_key` is the path to an existing SSH public key to
     use. If not specified, an RSA public/private keypair will be automatically
-    generated only on Linux. On Windows only, if this is option is not
-    specified, the SSH keys are not auto-generated and the user is not
-    created. This option cannot be specified with `ssh_public_key_data`.
+    generated if `ssh-keygen` or `ssh-keygen.exe` can be found on the `PATH`.
+    This option cannot be specified with `ssh_public_key_data`.
   * (optional) `ssh_public_key_data` is the raw RSA public key data in OpenSSH
     format, e.g., a string starting with `ssh-rsa ...`. Only one key may be
     specified. This option cannot be specified with `ssh_public_key`.

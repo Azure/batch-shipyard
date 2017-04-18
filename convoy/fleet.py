@@ -189,14 +189,6 @@ def adjust_general_settings(config):
             'found in global configuration. Please update your global '
             'configuration file. See the configuration doc for more '
             'information.')
-    # adjust encryption settings on windows
-    if util.on_windows():
-        enc = settings.batch_shipyard_encryption_enabled(config)
-        if enc:
-            logger.warning(
-                'disabling credential encryption due to script being run '
-                'from Windows')
-            settings.set_batch_shipyard_encryption_enabled(config, False)
 
 
 def populate_global_settings(config, fs_storage):
@@ -1369,28 +1361,6 @@ def _adjust_settings_for_pool_creation(config):
                 'cannot create more than one GlusterFS volume per pool')
     except KeyError:
         pass
-    # adjust settings on windows
-    if util.on_windows():
-        if pool.ssh.ssh_public_key is None:
-            logger.warning(
-                'disabling ssh user creation due to script being run '
-                'from Windows and no public key is specified')
-            settings.remove_ssh_settings(config)
-        # ensure file transfer settings
-        if pool.transfer_files_on_pool_creation:
-            try:
-                direct = False
-                files = settings.global_resources_files(config)
-                for fdict in files:
-                    if settings.is_direct_transfer(fdict):
-                        direct = True
-                        break
-                if direct:
-                    raise RuntimeError(
-                        'cannot transfer files directly to compute nodes '
-                        'on Windows')
-            except KeyError:
-                pass
 
 
 def action_fs_disks_add(resource_client, compute_client, config):

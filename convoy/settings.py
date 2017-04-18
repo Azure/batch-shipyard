@@ -539,14 +539,6 @@ def pool_settings(config):
     )
 
 
-def remove_ssh_settings(config):
-    # type: (dict) -> None
-    """Remove ssh settings from pool specification
-    :param dict config: configuration object
-    """
-    config['pool_specification'].pop('ssh', None)
-
-
 def set_block_until_all_global_resources_loaded(config, flag):
     # type: (dict, bool) -> None
     """Set block until all global resources setting

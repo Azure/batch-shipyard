@@ -288,7 +288,9 @@ programs must be installed to take advantage of data movement features of
 Batch Shipyard:
 
 1. An SSH client that provides `ssh` and `scp` (or `ssh.exe` and `scp.exe`
-on Windows). OpenSSH with
+on Windows). You can find
+[OpenSSH binaries for Windows](https://github.com/PowerShell/Win32-OpenSSH/releases)
+released by the PowerShell team. OpenSSH with
 [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
 can be used on the client side to further accelerate `scp` to Azure Batch
 compute nodes where `hpn_server_swap` has been set to `true` in the
@@ -304,8 +306,11 @@ typically placed in `~/.local/bin`. This path will need to be added to your
 ### Encryption Support
 Batch Shipyard supports encrypting credentials that are used by backend
 components within your pool deployment. In order to utilize this feature,
-you must have `openssl` installed. The `install.sh` script ensures that
-OpenSSL is installed. The Docker CLI image also contains OpenSSL.
+you must have `openssl` (or `openssl.exe` on Windows) installed. The
+`install.sh` script ensures that OpenSSL is installed on Linux. The Docker
+CLI image also contains OpenSSL. You might be able to find
+[OpenSSL binaries for Windows](https://wiki.openssl.org/index.php/Binaries)
+on the OpenSSL wiki.
 
 Note that all commandlines, environment variables and resource file URLs
 which are stored by the Azure Batch Service are encrypted by the service.
