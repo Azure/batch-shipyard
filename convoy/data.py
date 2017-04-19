@@ -353,15 +353,15 @@ def _singlenode_transfer(dest, src, dst, username, ssh_private_key, rls):
                '-o UserKnownHostsFile={} -p {} {} -i {} '
                '-P {} {} {}@{}:"{}"'.format(
                    os.devnull, dest.data_transfer.scp_ssh_extra_options,
-                   recursive, ssh_private_key, port, cmdsrc,
+                   recursive, ssh_private_key.resolve(), port, cmdsrc,
                    username, ip, shellquote(dst)))
     elif dest.data_transfer.method == 'rsync+ssh':
         cmd = ('rsync {} {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
                    dest.data_transfer.rsync_extra_options, recursive,
                    os.devnull, dest.data_transfer.scp_ssh_extra_options,
-                   ssh_private_key, port,
-                   cmdsrc, username, ip, shellquote(dst)))
+                   ssh_private_key.resolve(), port, cmdsrc, username, ip,
+                   shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(
             dest.data_transfer.method))
@@ -581,21 +581,21 @@ def _spawn_next_transfer(
             cmd = ('scp -o StrictHostKeyChecking=no '
                    '-o UserKnownHostsFile={} -p {} -i {} '
                    '-P {} {} {}@{}:"{}"'.format(
-                       os.devnull, eo, ssh_private_key, port, shellquote(src),
-                       username, ip, shellquote(dst)))
+                       os.devnull, eo, ssh_private_key.resolve(), port,
+                       shellquote(src), username, ip, shellquote(dst)))
         else:
             cmd = ('ssh -T -x -o StrictHostKeyChecking=no '
                    '-o UserKnownHostsFile={} {} -i {} '
                    '-p {} {}@{} \'cat > "{}"\''.format(
-                       os.devnull, eo, ssh_private_key, port,
+                       os.devnull, eo, ssh_private_key.resolve(), port,
                        username, ip, shellquote(dst)))
     elif method == 'multinode_rsync+ssh':
         if begin is not None or end is not None:
             raise RuntimeError('cannot rsync with file offsets')
         cmd = ('rsync {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
-                   reo, os.devnull, eo, ssh_private_key, port, shellquote(src),
-                   username, ip, shellquote(dst)))
+                   reo, os.devnull, eo, ssh_private_key.resolve(), port,
+                   shellquote(src), username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
     if begin is None and end is None:
