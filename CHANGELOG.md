@@ -1,8 +1,14 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.6.0] - 2017-04-20
+### Changed
+- Update to latest dependencies
+
 ### Fixed
 - Checks that prevented ssh/scp/openssl interaction on Windows
+- SSH private key regression in data ingress direct to compute node
 
 ## [2.6.0rc1] - 2017-04-14
 ### Added
@@ -530,7 +536,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0...HEAD
+[2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...2.6.0
 [2.6.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0rc1
 [2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
 [2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2

@@ -45,6 +45,24 @@ or Batch Labs. If it appears that the resize error was transient,
 you can try to issue `pool resize` to begin the pool grow or shrink process
 again, or alternatively you can opt to recreate the pool.
 
+There are typically three common reasons for Resize Errors:
+1. Insufficient core quota: Non-UserSubscription Batch accounts by default
+have 20 cores associated with them. These core quota are managed independently
+of any core quota on the associated subscription. UserSubscription Batch
+Accounts have core quota that is associated with the subscription. Please
+follow [this guide](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
+for submitting a support request to increase your core quota.
+2. Operation(s) took longer than expected: Resizing the pool to a different
+target VM count may take longer than the specified timeout. In these cases,
+re-issue the resize command.
+3. Not enough IPs in the virtual network subnet: When creating a pool with
+a UserSubscription Batch account with a virtual network, you must ensure
+that there are sufficient number of VMs in your subnet. Batch Shipyard will
+attempt to validate this on your behalf if you specify the subnet's address
+range in the configuration. You can attempt to change the address range
+of the subnet indpendently (if pre-created) and issue the resize command
+again if you encounter this issue.
+
 #### Compute Node start task failure
 Batch Shipyard installs the Docker Host Engine and other requisite software
 when the compute node starts. There is a possibility for the start task to

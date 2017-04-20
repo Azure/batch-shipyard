@@ -17,11 +17,8 @@ frameworks to quickly get started:
 The example MNIST training sample will be used on one Azure Batch compute node
 regardless of which Deep Learning framework you prefer for the following.
 
-1. All
-[pre-requisites and installation of Batch Shipyard](01-batch-shipyard-installation.md)
-to your local machine has been completed. Please note that while Batch
-Shipyard works on Windows, some functionality may be disabled. It is
-recommended for the best experience to run Batch Shipyard on Linux.
+1. [Installation of Batch Shipyard](01-batch-shipyard-installation.md)
+to your local machine has been completed.
 2. Create a directory to hold your configuration files. For this quickstart
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe
@@ -46,17 +43,15 @@ account.
 5. Edit the `config/config.json` file and edit the following settings:
   * `storage_account_settings` to link to the storage account named in step 4.
 6. In the main `batch-shipyard` directory (which should contain the
-`shipyard` helper script if on Linux), run the following commands:
+`shipyard` or `shipyard.cmd` helper scripts if on Linux or Windows,
+respectively), run the following commands:
 ```shell
-# The following assumes installation on Linux via the install.sh script. If
-# on a different operating system, you can invoke by passing the script to
-# the Python interpreter, e.g., python shipyard.py <command> <subcommand> ...
-# Or if on Windows, e.g., C:\Python35\python.exe shipyard.py <command> <subcommand> ...
+# NOTE: if you are on Windows, use shipyard.cmd instead of ./shipyard
 
 # create the compute pool
 ./shipyard pool add --configdir config
-# alternatively, you can specify the configdir parameter as an environment
-# variable which some may find as more convenient
+# alternatively (if not on Windows), you can specify the configdir parameter
+# as an environment variable which some may find as more convenient
 SHIPYARD_CONFIGDIR=config ./shipyard pool add
 
 # ... wait for pool to allocate ...
