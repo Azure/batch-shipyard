@@ -354,6 +354,19 @@ def _confirm_option(f):
         callback=callback)(f)
 
 
+def _log_file_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.logfile = value
+        return value
+    return click.option(
+        '--log-file',
+        expose_value=False,
+        envvar='SHIPYARD_LOG_FILE',
+        help='Log to file',
+        callback=callback)(f)
+
+
 def _show_config_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -618,6 +631,7 @@ def common_options(f):
     f = _configdir_option(f)
     f = _verbose_option(f)
     f = _show_config_option(f)
+    # f = _log_file_option(f)
     f = _confirm_option(f)
     return f
 

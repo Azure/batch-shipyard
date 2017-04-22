@@ -23,13 +23,13 @@ to your local machine has been completed.
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe
 of your choice to the `config` directory:
-  * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
-  * [Caffe-CPU](../recipes/Caffe-CPU/config/)
-  * [Chainer-CPU](../recipes/Chainer-CPU/config/)
-  * [Keras+Theano-CPU](../recipes/Keras+Theano-CPU/config/)
-  * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
-  * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
-  * [Torch-CPU](../recipes/Torch-CPU/config/)
+   * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
+   * [Caffe-CPU](../recipes/Caffe-CPU/config/)
+   * [Chainer-CPU](../recipes/Chainer-CPU/config/)
+   * [Keras+Theano-CPU](../recipes/Keras+Theano-CPU/config/)
+   * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
+   * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
+   * [Torch-CPU](../recipes/Torch-CPU/config/)
 4. Edit the `config/credentials.json` file and populate it with your Azure
 Batch and Azure Storage credentials. If you do not have an Azure Batch account,
 you can create one via the
@@ -41,7 +41,7 @@ You can create a standard general purpose
 using any of the aforementioned methods similar to creating an Azure Batch
 account.
 5. Edit the `config/config.json` file and edit the following settings:
-  * `storage_account_settings` to link to the storage account named in step 4.
+   * `storage_account_settings` to link to the storage account named in step 4.
 6. In the main `batch-shipyard` directory (which should contain the
 `shipyard` or `shipyard.cmd` helper scripts if on Linux or Windows,
 respectively), run the following commands:
