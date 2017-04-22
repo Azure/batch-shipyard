@@ -1,6 +1,8 @@
 # Change Log
 
 ## [Unreleased]
+### Fixed
+- Site extension issues
 
 ## [2.6.0] - 2017-04-20
 ### Changed
