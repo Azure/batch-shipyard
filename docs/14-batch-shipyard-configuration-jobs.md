@@ -154,7 +154,7 @@ string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
 does not retry tasks that fail (i.e. `max_task_retries` is 0).
-* (optional) `allow_run_on_missing` allows tasks with a Docker image reference
+* (optional) `allow_run_on_missing_image` allows tasks with a Docker image reference
 that was not pre-loaded on to the compute node via
 `global_resources`:`docker_images` in the global configuration to be able to
 run. Note that you should attempt to specify all Docker images that you intend
