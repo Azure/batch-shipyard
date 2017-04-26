@@ -66,7 +66,7 @@ file server is provisioned, you can login to perform administrative tasks
 through SSH with:
 
 ```shell
-SHIPYARD_CONFIGDIR=. ./shipyard fs cluster ssh mystoragecluster --cardinal 0
+SHIPYARD_CONFIGDIR=. ./shipyard fs cluster ssh mystoragecluster
 ```
 
 This will SSH into the first VM in the storage cluster.

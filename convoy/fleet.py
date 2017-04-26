@@ -934,16 +934,24 @@ def _add_pool(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
     # create admin user on each node if requested
-    batch.add_ssh_user(batch_client, config, nodes)
-    # log remote login settings
-    rls = batch.get_remote_login_settings(batch_client, config, nodes)
-    # ingress data to shared fs if specified
-    if pool_settings.transfer_files_on_pool_creation:
-        _pool = batch_client.pool.get(pool.id)
-        data.ingress_data(
-            batch_client, compute_client, network_client, config, rls=rls,
-            kind='shared', current_dedicated=_pool.current_dedicated)
-        del _pool
+    try:
+        batch.add_ssh_user(batch_client, config, nodes)
+    except Exception as e:
+        logger.exception(e)
+        logger.error(
+            'Could not add SSH users to nodes. Please ensure ssh-keygen is '
+            'available in your PATH or cwd. Skipping data ingress if '
+            'specified.')
+    else:
+        # log remote login settings
+        rls = batch.get_remote_login_settings(batch_client, config, nodes)
+        # ingress data to shared fs if specified
+        if pool_settings.transfer_files_on_pool_creation:
+            _pool = batch_client.pool.get(pool.id)
+            data.ingress_data(
+                batch_client, compute_client, network_client, config, rls=rls,
+                kind='shared', current_dedicated=_pool.current_dedicated)
+            del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 

@@ -17,13 +17,16 @@ This allows many compute nodes to sit behind one public IP address.
 ## <a name="ssh-keygen"></a>SSH Keypair Generation
 In order to use SSH, you will need to generate a public/private RSA keypair
 that SSH requires for asymmetric key authentication. If you are running
-Batch Shipyard on Linux or Mac, you can opt to leave `ssh_public_key`
-and `ssh_private_key` unspecified or empty in `ssh` configuration blocks and
-Batch Shipyard will automatically generate the keypair for you. Alternatively,
-you can specify the location of pre-generated keypairs that you may have on
-your system.
+Batch Shipyard on Linux/Mac (or
+[Windows](https://github.com/PowerShell/Win32-OpenSSH/releases) with
+`ssh-keygen` accessible in your `%PATH%` or current working directory), you
+can opt to leave `ssh_public_key` and `ssh_private_key` unspecified or empty
+in `ssh` configuration blocks and Batch Shipyard will automatically generate
+the keypair for you. Alternatively, you can specify the location of
+pre-generated keypairs that you may have on your system.
 
-On Windows, you can use [PuTTYgen](http://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html)
+On Windows, if you don't have `ssh-keygen` available as per above, you can
+use [PuTTYgen](http://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html)
 to pre-generate public/private keys and then specify the file path in
 `ssh_public_key` and `ssh_private_key` in `ssh` configuration blocks. To
 create compatible keys for use with Batch Shipyard, perform the following
@@ -61,14 +64,15 @@ the SSH private key in the default location or as specified in the
 `generated_file_export_path`, then an interactive SSH session will be
 created to the compute node specified.
 
-`pool ssh` requires either the option `--cardinal` or the option `--nodeid`.
+`pool ssh` can accept either option `--cardinal` or the option `--nodeid`.
 If using `--cardinal` it requires the natural counting number from zero
 associated with the list of nodes as enumerated by `pool grls`. If using
 `--nodeid`, then the exact compute node id within the pool specified in
-the pool config must be used. For example:
+the pool config must be used. If neither option is specified, the default
+is `--cardinal 0`. For example:
 
 ```shell
-SHIPYARD_CONFIGDIR=. shipyard pool ssh --cardinal 0
+SHIPYARD_CONFIGDIR=. shipyard pool ssh
 ```
 
 would create an interactive SSH session with the first compute node in the
