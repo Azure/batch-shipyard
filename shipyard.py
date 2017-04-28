@@ -1464,6 +1464,36 @@ def data_ingress(ctx, to_fs):
         to_fs)
 
 
+@cli.group()
+@pass_cli_context
+def misc(ctx):
+    """Miscellaneous actions"""
+    pass
+
+
+@misc.command('tensorboard')
+@click.option(
+    '--jobid', help='Tensorboard to the specified job id')
+@click.option(
+    '--taskid', help='Tensorboard to the specified task id')
+@click.option(
+    '--logdir', help='logdir for Tensorboard')
+@click.option(
+    '--image',
+    help='Use specified TensorFlow Docker image instead. tensorboard.py '
+    'must be in the expected location in the Docker image.')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def misc_tensorboard(ctx, jobid, taskid, logdir, image):
+    """Create a tunnel to a Tensorboard instance for a specific task"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_misc_tensorboard(
+        ctx.batch_client, ctx.config, jobid, taskid, logdir, image)
+
+
 if __name__ == '__main__':
     convoy.util.setup_logger(logger)
     cli()

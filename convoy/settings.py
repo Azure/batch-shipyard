@@ -42,6 +42,11 @@ from . import util
 # global defines
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
+_TENSORBOARD_DOCKER_IMAGE = (
+    'gcr.io/tensorflow/tensorflow:1.1.0',
+    '/usr/local/lib/python2.7/dist-packages/tensorflow'
+    '/tensorboard/tensorboard.py'
+)
 _GPU_COMPUTE_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
 ))
@@ -261,7 +266,7 @@ def _kv_read_checked(conf, key, default=None):
 
 
 def _kv_read(conf, key, default=None):
-    # type: (dict, str, obj) ->w obj
+    # type: (dict, str, obj) -> obj
     """Read a key as some value
     :param dict conf: configuration dict
     :param str key: conf key
@@ -274,6 +279,15 @@ def _kv_read(conf, key, default=None):
     except KeyError:
         ret = default
     return ret
+
+
+def get_tensorboard_docker_image():
+    # type: (None) -> Tuple[str, str]
+    """Get tensorboard docker image
+    :rtype: tuple
+    :return: tensorboard docker image, absolute path to tensorboard.py
+    """
+    return _TENSORBOARD_DOCKER_IMAGE
 
 
 def get_gluster_default_volume_name():

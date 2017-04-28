@@ -51,6 +51,7 @@ from . import batch
 from . import crypto
 from . import data
 from . import keyvault
+from . import misc
 from . import remotefs
 from . import resource
 from . import settings
@@ -2268,3 +2269,38 @@ def action_data_ingress(
         batch_client, compute_client, network_client, config, rls=rls,
         kind=kind, current_dedicated=pool_cd, to_fs=to_fs)
     data.wait_for_storage_threads(storage_threads)
+
+
+def action_misc_tensorboard(
+        batch_client, config, jobid, taskid, logdir, image):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, str) -> None
+    """Action: Misc Tensorboard
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to list
+    :param str taskid: task id to list
+    :param str logdir: log dir
+    :param str image: tensorflow image to use
+    """
+    if util.is_none_or_empty(jobid):
+        # check if there is more than one jobspec
+        jobspecs = settings.job_specifications(config)
+        if len(jobspecs) != 1:
+            raise ValueError(
+                'The number of jobs in the specified jobs config is not '
+                'one. Please specify which job with --jobid.')
+        if util.is_none_or_empty(taskid):
+            # check if there is more than one task for the job
+            if len(settings.job_tasks(jobspecs[0])) != 1:
+                raise ValueError(
+                    'The number of tasks in the specified jobs config is not '
+                    'one. Please specify which task with --taskid.')
+        else:
+            raise ValueError(
+                'cannot specify a task to tunnel Tensorboard to without the '
+                'corresponding job id')
+    else:
+        if util.is_none_or_empty(taskid):
+            raise ValueError('cannot specify a job id without a task id')
+    misc.tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image)
