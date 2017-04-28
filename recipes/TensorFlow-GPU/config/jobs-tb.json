@@ -8,11 +8,11 @@
                     "remove_container_after_exit": true,
                     "resource_files": [
                         {
-                            "file_path": "convolutional.py",
-                            "blob_source": "https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py"
+                            "file_path": "mnist_with_summaries.py",
+                            "blob_source": "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.1/tensorflow/examples/tutorials/mnist/mnist_with_summaries.py"
                         }
                     ],
-                    "command": "python -u convolutional.py",
+                    "command": "python -u mnist_with_summaries.py --log_dir=logs --max_steps=5000",
                     "gpu": true
                 }
             ]

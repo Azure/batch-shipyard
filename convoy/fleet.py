@@ -2284,23 +2284,13 @@ def action_misc_tensorboard(
     :param str image: tensorflow image to use
     """
     if util.is_none_or_empty(jobid):
-        # check if there is more than one jobspec
         jobspecs = settings.job_specifications(config)
         if len(jobspecs) != 1:
             raise ValueError(
                 'The number of jobs in the specified jobs config is not '
                 'one. Please specify which job with --jobid.')
-        if util.is_none_or_empty(taskid):
-            # check if there is more than one task for the job
-            if len(settings.job_tasks(jobspecs[0])) != 1:
-                raise ValueError(
-                    'The number of tasks in the specified jobs config is not '
-                    'one. Please specify which task with --taskid.')
-        else:
+        if util.is_not_empty(taskid):
             raise ValueError(
                 'cannot specify a task to tunnel Tensorboard to without the '
                 'corresponding job id')
-    else:
-        if util.is_none_or_empty(taskid):
-            raise ValueError('cannot specify a job id without a task id')
     misc.tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image)

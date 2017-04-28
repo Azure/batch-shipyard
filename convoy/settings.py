@@ -2061,8 +2061,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise KeyError()
         if len(depends_on_range) != 2:
             raise ValueError('depends_on_range requires 2 elements exactly')
-        if (type(depends_on_range[0]) is not int or
-                type(depends_on_range[1]) is not int):
+        if not (isinstance(depends_on_range[0], int) and
+                isinstance(depends_on_range[1], int)):
             raise ValueError('depends_on_range requires integral members only')
     except KeyError:
         depends_on_range = None

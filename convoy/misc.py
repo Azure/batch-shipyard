@@ -80,7 +80,7 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
     if util.is_none_or_empty(taskid):
         tasks = batch_client.task.list(
             jobid, task_list_options=batchmodels.TaskListOptions(select='id'))
-        taskid = sorted(tasks)[-1].id
+        taskid = sorted([x.id for x in tasks])[-1]
     # wait for task to be running or completed
     logger.debug('waiting for task {} in job {} to reach a valid state'.format(
         taskid, jobid))
@@ -183,6 +183,10 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
             tunnel_ssh_args, shell=False)
         logger.info(
             ('\n\n>> Please connect to Tensorboard at http://localhost:{}/'
+             '\n\n>> Note that Tensorboard may take a while to start if the '
+             'Docker is'
+             '\n>> not present. Please keep retrying the URL every few '
+             'seconds.'
              '\n\n>> Terminate your session with CTRL+C'
              '\n\n>> If you cannot terminate your session cleanly, run:'
              '\n     shipyard pool ssh --nodeid {}'

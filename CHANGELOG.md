@@ -1,8 +1,27 @@
 # Change Log
 
 ## [Unreleased]
+
+### Added
+- `misc tensorboard` command added which automatically instantiates a
+Tensorboard instance on the compute node which is running or has ran a
+task that has generated TensorFlow summary operation compatible logs. A
+SSH tunnel is then created so you can view Tensorboard locally on the
+machine running Batch Shipyard. This requires a valid SSH user has been
+provisioned via Batch Shipyard with private keys available. This will work
+on Windows if `ssh.exe` is available in `%PATH%` or the current working
+directory. Please see the usage guide for more information about this
+command.
+
+### Changed
+- Added some additional sanity checks in the node prep script
+- Updated TensorFlow-CPU and TensorFlow-GPU recipes to 1.1.0. Removed
+specialized Docker build for TensorFlow-GPU. Added `jobs-tb.json` files
+to TensorFlow-CPU and TensorFlow-GPU recipes as Tensorboard samples.
+
 ### Fixed
 - Site extension issues
+- SSH user add exception on Windows
 
 ## [2.6.0] - 2017-04-20
 ### Changed
