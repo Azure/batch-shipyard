@@ -3,32 +3,7 @@
 set -e
 set -o pipefail
 
-install_azurefile_docker_volume_driver() {
-    chown root:root azurefile-dockervolumedriver*
-    chmod 755 azurefile-dockervolumedriver
-    chmod 640 azurefile-dockervolumedriver.env
-    mv azurefile-dockervolumedriver /usr/bin
-    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
-    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
-        mv azurefile-dockervolumedriver.conf /etc/init
-        initctl reload-configuration
-        initctl start azurefile-dockervolumedriver
-    else
-        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
-            systemdloc=/usr/lib/systemd/system
-        else
-            systemdloc=/lib/systemd/system
-        fi
-        mv azurefile-dockervolumedriver.service $systemdloc
-        systemctl daemon-reload
-        systemctl enable azurefile-dockervolumedriver
-        systemctl start azurefile-dockervolumedriver
-    fi
-    # create docker volumes
-    chmod +x azurefile-dockervolume-create.sh
-    ./azurefile-dockervolume-create.sh
-}
-
+# globals
 azurefile=0
 blobxferversion=latest
 block=
@@ -47,6 +22,7 @@ sku=
 sc_args=
 version=
 
+# process command line options
 while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
@@ -131,26 +107,72 @@ shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 # check args
 if [ -z $offer ]; then
-    echo "vm offer not specified"
+    echo "ERROR: vm offer not specified"
     exit 1
 fi
 if [ -z $sku ]; then
-    echo "vm sku not specified"
+    echo "ERROR: vm sku not specified"
     exit 1
 fi
 if [ -z $version ]; then
-    echo "batch-shipyard version not specified"
+    echo "ERROR: batch-shipyard version not specified"
     exit 1
 fi
 
-# TODO temporary check to look for buggy sdb1 mount
-set +e
-mount | grep /dev/sdb1 | grep fuseblk
-if [ $? -eq 0 ]; then
-    echo "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
-    exit 1
-fi
-set -e
+check_for_buggy_ntfs_mount() {
+    # Check to ensure sdb1 mount is not mounted as ntfs
+    set +e
+    mount | grep /dev/sdb1 | grep fuseblk
+    if [ $? -eq 0 ]; then
+        echo "ERROR: /dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+        exit 1
+    fi
+    set -e
+}
+
+check_for_nvidia_card() {
+    set +e
+    lspci
+    lspci | grep -i nvidia > /dev/null
+    if [ $? -ne 0 ]; then
+        echo "ERROR: No Nvidia card(s) detected!"
+        exit 1
+    fi
+    set -e
+}
+
+install_azurefile_docker_volume_driver() {
+    chown root:root azurefile-dockervolumedriver*
+    chmod 755 azurefile-dockervolumedriver
+    chmod 640 azurefile-dockervolumedriver.env
+    mv azurefile-dockervolumedriver /usr/bin
+    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
+    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
+        mv azurefile-dockervolumedriver.conf /etc/init
+        initctl reload-configuration
+        initctl start azurefile-dockervolumedriver
+    else
+        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
+            systemdloc=/usr/lib/systemd/system
+        else
+            systemdloc=/lib/systemd/system
+        fi
+        mv azurefile-dockervolumedriver.service $systemdloc
+        systemctl daemon-reload
+        systemctl enable azurefile-dockervolumedriver
+        systemctl start azurefile-dockervolumedriver
+    fi
+    # create docker volumes
+    chmod +x azurefile-dockervolume-create.sh
+    ./azurefile-dockervolume-create.sh
+}
+
+# check sdb1 mount
+check_for_buggy_ntfs_mount
+
+# set python env vars
+LC_ALL=en_US.UTF-8
+PYTHONASYNCIODEBUG=1
 
 # store node prep start
 if command -v python3 > /dev/null 2>&1; then
@@ -162,10 +184,6 @@ fi
 # set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
-
-# set python env vars
-LC_ALL=en_US.UTF-8
-PYTHONASYNCIODEBUG=1
 
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
@@ -243,6 +261,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=ubuntu-trusty
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
+        srvstatus="initctl status docker"
         gfsstart="initctl start glusterfs-server"
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
         repo=https://download.docker.com/linux/ubuntu
@@ -251,6 +270,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
@@ -260,6 +280,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
         gpgkey=https://download.docker.com/linux/debian/gpg
@@ -347,8 +368,12 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         set +e
     fi
     set -e
+    # ensure docker daemon is running
+    $srvstatus
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
+        # check for nvidia card
+        check_for_nvidia_card
         # split arg into two
         IFS=':' read -ra GPUARGS <<< "$gpu"
         # take special actions if we're on NV-series VMs
@@ -457,6 +482,8 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         dockerversion=17.03.1.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
+            srvstart="systemctl start docker.service"
+            srvstatus="systemctl status docker.service"
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
             # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
@@ -464,6 +491,8 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             exit 1
         else
             srvenable="chkconfig docker on"
+            srvstart="systemctl start docker.service"
+            srvstatus="systemctl status docker.service"
             gfsenable="chkconfig glusterd on"
             rpcbindenable="chkconfig rpcbind on"
         fi
@@ -489,7 +518,8 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     systemctl daemon-reload
     # start docker service and enable docker daemon on boot
     $srvenable
-    systemctl start docker.service
+    $srvstart
+    $srvstatus
     # setup and start azure file docker volume driver
     if [ $azurefile -eq 1 ]; then
         install_azurefile_docker_volume_driver $offer $sku
@@ -578,6 +608,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # start docker service and enable docker daemon on boot
         systemctl enable docker
         systemctl start docker
+        systemctl status docker
         # setup and start azure file docker volume driver
         if [ $azurefile -eq 1 ]; then
             install_azurefile_docker_volume_driver $offer $sku
