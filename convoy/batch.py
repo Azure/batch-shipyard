@@ -1337,7 +1337,7 @@ def stream_file_and_wait_for_task(
                         fd.write(f)
                     else:
                         print(f.decode('utf8'), end='')
-                curr = end
+                curr = end + 1
             elif completed:
                 if not disk:
                     print()
