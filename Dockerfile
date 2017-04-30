@@ -13,7 +13,7 @@ RUN apk update \
     && cd /opt/batch-shipyard \
     && rm -rf .git \
     && rm -f .git* .travis.yml install* \
-    && pip3 install -r requirements.txt \
+    && pip3 install --no-cache-dir -r requirements.txt \
     && python3 -m compileall -f /opt/batch-shipyard \
     && apk del --purge \
         build-base python3-dev openssl-dev libffi-dev git \

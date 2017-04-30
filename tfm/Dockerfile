@@ -9,7 +9,7 @@ RUN apk update \
         musl build-base python3 python3-dev openssl-dev libffi-dev \
         ca-certificates openssl bash \
     && pip3 install --no-cache-dir --upgrade pip \
-    && pip3 install --upgrade azure-batch==1.1.0 \
+    && pip3 install --no-cache-dir --upgrade azure-batch==1.1.0 \
     && apk del --purge \
         build-base python3-dev openssl-dev libffi-dev \
     && rm /var/cache/apk/*
