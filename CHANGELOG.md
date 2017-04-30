@@ -5,13 +5,13 @@
 ### Added
 - `misc tensorboard` command added which automatically instantiates a
 Tensorboard instance on the compute node which is running or has ran a
-task that has generated TensorFlow summary operation compatible logs. A
+task that has generated TensorFlow summary operation compatible logs. An
 SSH tunnel is then created so you can view Tensorboard locally on the
 machine running Batch Shipyard. This requires a valid SSH user has been
-provisioned via Batch Shipyard with private keys available. This will work
-on Windows if `ssh.exe` is available in `%PATH%` or the current working
-directory. Please see the usage guide for more information about this
-command.
+provisioned via Batch Shipyard with private keys available. This command
+will work on Windows if `ssh.exe` is available in `%PATH%` or the current
+working directory. Please see the usage guide for more information about
+this command.
 
 ### Changed
 - Added some additional sanity checks in the node prep script
@@ -22,6 +22,12 @@ to TensorFlow-CPU and TensorFlow-GPU recipes as Tensorboard samples.
 ### Fixed
 - Site extension issues
 - SSH user add exception on Windows
+- `data stream` off-by-one segment issue
+- `jobs del --termtasks` will now disable the job prior to running task
+termination to prevent active tasks in job from running while tasks are
+being terminated
+- `jobs listtasks` and `data listfiles` will now accept a `--jobid` that
+does not have to be in `jobs.json`
 
 ## [2.6.0] - 2017-04-20
 ### Changed

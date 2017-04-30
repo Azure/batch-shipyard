@@ -408,7 +408,9 @@ or has run the specified task
     operations
   * `--image` specifies an alternate TensorFlow image to use for Tensorboard.
     The `tensorboard.py` file must be in the expected location in the Docker
-    image as stock TensorFlow images.
+    image as stock TensorFlow images. If not specified, Batch Shipyard will
+    attempt to find a suitable TensorFlow image from Docker images in the
+    global resource list or will acquire one on demand for this command.
 
 ## `pool` Command
 The `pool` command has the following sub-commands:

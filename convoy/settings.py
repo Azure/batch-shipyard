@@ -45,7 +45,8 @@ _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
 _TENSORBOARD_DOCKER_IMAGE = (
     'gcr.io/tensorflow/tensorflow:1.1.0',
     '/usr/local/lib/python2.7/dist-packages/tensorflow'
-    '/tensorboard/tensorboard.py'
+    '/tensorboard/tensorboard.py',
+    6006
 )
 _GPU_COMPUTE_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
@@ -285,7 +286,8 @@ def get_tensorboard_docker_image():
     # type: (None) -> Tuple[str, str]
     """Get tensorboard docker image
     :rtype: tuple
-    :return: tensorboard docker image, absolute path to tensorboard.py
+    :return: (tensorboard docker image,
+        absolute path to tensorboard.py, container port)
     """
     return _TENSORBOARD_DOCKER_IMAGE
 

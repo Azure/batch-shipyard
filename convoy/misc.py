@@ -147,31 +147,56 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
             ('cannot determine absolute logdir path for task {} in job {}, '
              'please retry with an absolute path for --logdir').format(
                  taskid, jobid))
+    # determine tensorflow image to use
+    tb = settings.get_tensorboard_docker_image()
+    if util.is_none_or_empty(image):
+        di = settings.global_resources_docker_images(config)
+        di = [x for x in di if 'tensorflow' in x]
+        if util.is_not_empty(di):
+            image = di[0]
+            if not util.confirm_action(
+                    config,
+                    'use auto-detected Docker image: {}'.format(image)):
+                image = None
+            else:
+                logger.debug(
+                    'using auto-detected Docker image: {}'.format(image))
+        del di
+    if util.is_none_or_empty(image):
+        logger.warning(
+            'no pre-loaded tensorflow Docker image detected on pool, '
+            'using: {}'.format(tb[0]))
     # get node remote login settings
     rls = batch_client.compute_node.get_remote_login_settings(
         pool.id, task.node_info.node_id)
     # set up tensorboard command
+    if settings.is_gpu_pool(pool.vm_size):
+        exe = 'nvidia-docker'
+    else:
+        exe = 'docker'
     name = str(uuid.uuid4()).split('-')[0]
-    tb = settings.get_tensorboard_docker_image()
-    tb_port = 6006
+    # map both ports (jupyter and tensorboard) to different host ports
+    # to avoid conflicts
+    host_port = 56006
     tb_ssh_args = [
         'ssh', '-o', 'StrictHostKeyChecking=no',
         '-o', 'UserKnownHostsFile={}'.format(os.devnull),
         '-i', str(ssh_priv_key), '-p', str(rls.remote_login_port),
         '-t', '{}@{}'.format(pool.ssh.username, rls.remote_login_ip_address),
-        ('sudo /bin/bash -c "docker run --rm --name={name} -p {port}:{port} '
-         '-v {logdir}:/{jobid}.{taskid} {image} python {tbpy} --port={port} '
-         '--logdir=/{jobid}.{taskid}"').format(
-             name=name, port=tb_port,
-             image=image if util.is_not_empty(image) else tb[0], tbpy=tb[1],
-             logdir=str(logpath), jobid=jobid, taskid=taskid)
+        ('sudo /bin/bash -c "{exe} run --rm --name={name} -p 58888:8888 '
+         '-p {hostport}:{contport} -v {logdir}:/{jobid}.{taskid} {image} '
+         'python {tbpy} --port={contport} --logdir=/{jobid}.{taskid}"').format(
+             exe=exe, name=name, hostport=host_port, contport=tb[2],
+             image=image, tbpy=tb[1], logdir=str(logpath), jobid=jobid,
+             taskid=taskid)
     ]
     # set up ssh tunnel command
     tunnel_ssh_args = [
         'ssh', '-o', 'StrictHostKeyChecking=no',
         '-o', 'UserKnownHostsFile={}'.format(os.devnull),
         '-i', str(ssh_priv_key), '-p', str(rls.remote_login_port), '-N',
-        '-L', '{port}:localhost:{port}'.format(port=tb_port),
+        '-L', '{port}:localhost:{hostport}'.format(
+            port=tb[2], hostport=host_port),
         '{}@{}'.format(pool.ssh.username, rls.remote_login_ip_address)
     ]
     # execute command and then tunnel
@@ -191,7 +216,7 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
              '\n\n>> If you cannot terminate your session cleanly, run:'
              '\n     shipyard pool ssh --nodeid {}'
              '\n     sudo docker kill {}\n').format(
-                 tb_port, task.node_info.node_id, name))
+                 tb[2], task.node_info.node_id, name))
         tb_proc.wait()
     finally:
         try:

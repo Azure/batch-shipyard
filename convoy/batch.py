@@ -708,8 +708,6 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
     :param bool termtasks: terminate tasks manually prior
     :param bool wait: wait for jobs to delete
     """
-    if termtasks:
-        terminate_tasks(batch_client, config, jobid=jobid, wait=True)
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -722,6 +720,12 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
             nocheck.add(job_id)
             continue
         logger.info('Deleting job: {}'.format(job_id))
+        if termtasks:
+            # disable job first to prevent active tasks from getting processed
+            batch_client.job.disable(
+                job_id, disable_tasks=batchmodels.DisableJobOption.wait)
+            # terminate tasks with forced wait
+            terminate_tasks(batch_client, config, jobid=job_id, wait=True)
         try:
             batch_client.job.delete(job_id)
         except batchmodels.batch_error.BatchErrorException as ex:
@@ -1595,13 +1599,15 @@ def list_tasks(batch_client, config, jobid=None):
     :param dict config: configuration dict
     :param str jobid: job id to list tasks from
     """
-    for job in settings.job_specifications(config):
-        job_id = settings.job_id(job)
-        if jobid is not None and job_id != jobid:
-            continue
+    if util.is_none_or_empty(jobid):
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for job in jobs:
+        jobid = settings.job_id(job)
         i = 0
         try:
-            tasks = batch_client.task.list(job_id)
+            tasks = batch_client.task.list(jobid)
             for task in tasks:
                 if task.execution_info is not None:
                     if task.execution_info.scheduling_error is not None:
@@ -1636,16 +1642,16 @@ def list_tasks(batch_client, config, jobid=None):
                 logger.info(
                     'job_id={} task_id={} [state={} max_retries={} '
                     'retention_time={} pool_id={} node_id={}{}]'.format(
-                        job_id, task.id, task.state,
+                        jobid, task.id, task.state,
                         task.constraints.max_task_retry_count,
                         task.constraints.retention_time, *some_extra_info))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
-                logger.error('{} job does not exist'.format(job_id))
-                continue
+                logger.error('{} job does not exist'.format(jobid))
+            continue
         if i == 0:
-            logger.error('no tasks found for job {}'.format(job_id))
+            logger.error('no tasks found for job {}'.format(jobid))
 
 
 def list_task_files(batch_client, config, jobid=None, taskid=None):
@@ -1658,39 +1664,43 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
     :param str jobid: job id to list
     :param str taskid: task id to list
     """
-    for job in settings.job_specifications(config):
-        job_id = settings.job_id(job)
-        if jobid is not None and job_id != jobid:
-            continue
+    if util.is_none_or_empty(jobid):
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for job in jobs:
+        jobid = settings.job_id(job)
         i = 0
         try:
-            tasks = batch_client.task.list(job_id)
+            tasks = batch_client.task.list(
+                jobid,
+                task_list_options=batchmodels.TaskListOptions(select='id'))
             for task in tasks:
                 if taskid is not None and taskid != task.id:
                     continue
                 j = 0
                 files = batch_client.file.list_from_task(
-                    job_id, task.id, recursive=True)
+                    jobid, taskid, recursive=True)
                 for file in files:
                     if file.is_directory:
                         continue
                     logger.info(
                         'task_id={} file={} [job_id={} lmt={} '
                         'bytes={}]'.format(
-                            task.id, file.name, job_id,
+                            taskid, file.name, jobid,
                             file.properties.last_modified,
                             file.properties.content_length))
                     j += 1
                 if j == 0:
                     logger.error('no files found for task {} job {}'.format(
-                        task.id, job['id']))
+                        taskid, jobid))
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
-                logger.error('{} job does not exist'.format(job_id))
-                continue
+                logger.error('{} job does not exist'.format(jobid))
+            continue
         if i == 0:
-            logger.error('no tasks found for job {}'.format(job_id))
+            logger.error('no tasks found for job {}'.format(jobid))
 
 
 def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
