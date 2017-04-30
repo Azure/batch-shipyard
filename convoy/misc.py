@@ -49,6 +49,12 @@ from . import util
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
+# global defines
+_TENSORBOARD_LOG_ARGS = frozenset((
+    '--tensorboard_logdir', '-tensorboard_logdir', '--logdir', '--log_dir',
+    '--log-dir',
+))
+
 
 def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
     # type: (batchsc.BatchServiceClient, dict, str, str, str, str) -> None
@@ -93,14 +99,14 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
         time.sleep(1)
     # parse "--logdir" from task commandline
     if util.is_none_or_empty(logdir):
-        for arg in ('--logdir', '--log_dir', '--log-dir'):
+        for arg in _TENSORBOARD_LOG_ARGS:
             try:
                 _tmp = task.command_line.index(arg)
             except ValueError:
                 pass
             else:
                 _tmp = task.command_line[_tmp + len(arg) + 1:]
-                logdir = _tmp.split()[0].rstrip(';')
+                logdir = _tmp.split()[0].rstrip(';').rstrip('"').rstrip('\'')
                 if not util.confirm_action(
                         config, 'use auto-detected logdir: {}'.format(logdir)):
                     logdir = None
@@ -219,10 +225,16 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
                  tb[2], task.node_info.node_id, name))
         tb_proc.wait()
     finally:
+        logger.debug(
+            'attempting clean up of Tensorboard instance and SSH tunnel')
         try:
             if tunnel_proc is not None:
-                tunnel_proc.kill()
+                tunnel_proc.poll()
+                if tunnel_proc.returncode is None:
+                    tunnel_proc.kill()
         except Exception as e:
             logger.exception(e)
         if tb_proc is not None:
-            tb_proc.kill()
+            tb_proc.poll()
+            if tb_proc.returncode is None:
+                tb_proc.kill()

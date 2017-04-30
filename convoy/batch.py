@@ -720,19 +720,39 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
             nocheck.add(job_id)
             continue
         logger.info('Deleting job: {}'.format(job_id))
-        if termtasks:
-            # disable job first to prevent active tasks from getting processed
-            batch_client.job.disable(
-                job_id, disable_tasks=batchmodels.DisableJobOption.wait)
-            # terminate tasks with forced wait
-            terminate_tasks(batch_client, config, jobid=job_id, wait=True)
         try:
+            if termtasks:
+                # disable job first to prevent active tasks from
+                # getting processed
+                logger.debug(
+                    'disabling job {} first due to task termination'.format(
+                        job_id))
+                batch_client.job.disable(
+                    job_id, disable_tasks=batchmodels.DisableJobOption.wait)
+                # wait for job to enter non-active/enabling state
+                while True:
+                    _job = batch_client.job.get(
+                        job_id,
+                        job_get_options=batchmodels.JobGetOptions(
+                            select='id,state')
+                    )
+                    if (_job.state == batchmodels.JobState.disabling or
+                            _job.state == batchmodels.JobState.disabled or
+                            _job.state == batchmodels.JobState.completed or
+                            _job.state == batchmodels.JobState.deleting):
+                        break
+                    time.sleep(1)
+                # terminate tasks with forced wait
+                terminate_tasks(batch_client, config, jobid=job_id, wait=True)
+            # delete job
             batch_client.job.delete(job_id)
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(job_id))
                 nocheck.add(job_id)
                 continue
+            else:
+                raise
     if wait:
         for job in jobs:
             job_id = settings.job_id(job)
@@ -741,11 +761,17 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
             try:
                 logger.debug('waiting for job {} to delete'.format(job_id))
                 while True:
-                    batch_client.job.get(job_id)
+                    batch_client.job.get(
+                        job_id,
+                        job_get_options=batchmodels.JobGetOptions(select='id')
+                    )
                     time.sleep(1)
             except batchmodels.batch_error.BatchErrorException as ex:
                 if 'The specified job does not exist' in ex.message.value:
+                    logger.info('job {} does not exist'.format(job_id))
                     continue
+                else:
+                    raise
 
 
 def del_all_jobs(batch_client, config, termtasks=False, wait=False):
@@ -778,8 +804,8 @@ def del_all_jobs(batch_client, config, termtasks=False, wait=False):
                     batch_client.job.get(job_id)
                     time.sleep(1)
             except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' in ex.message.value:
-                    continue
+                if 'The specified job does not exist' not in ex.message.value:
+                    raise
 
 
 def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
@@ -839,7 +865,11 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                         time.sleep(1)
                 except batchmodels.batch_error.BatchErrorException as ex:
                     if 'The specified task does not exist' in ex.message.value:
+                        logger.info('task {} in job {} does not exist'.format(
+                            task, job_id))
                         continue
+                    else:
+                        raise
 
 
 def clean_mi_jobs(batch_client, config):
@@ -964,8 +994,8 @@ def terminate_jobs(
                         break
                     time.sleep(1)
             except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' in ex.message.value:
-                    continue
+                if 'The specified job does not exist' not in ex.message.value:
+                    raise
 
 
 def terminate_all_jobs(batch_client, config, termtasks=False, wait=False):
@@ -1000,8 +1030,8 @@ def terminate_all_jobs(batch_client, config, termtasks=False, wait=False):
                         break
                     time.sleep(1)
             except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' in ex.message.value:
-                    continue
+                if 'The specified job does not exist' not in ex.message.value:
+                    raise
 
 
 def _send_docker_kill_signal(
@@ -1161,8 +1191,9 @@ def terminate_tasks(
                             break
                         time.sleep(1)
                 except batchmodels.batch_error.BatchErrorException as ex:
-                    if 'The specified task does not exist' in ex.message.value:
-                        continue
+                    if ('The specified task does not exist'
+                            not in ex.message.value):
+                        raise
 
 
 def list_nodes(batch_client, config, nodes=None):
@@ -1649,7 +1680,9 @@ def list_tasks(batch_client, config, jobid=None):
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(jobid))
-            continue
+                continue
+            else:
+                raise
         if i == 0:
             logger.error('no tasks found for job {}'.format(jobid))
 
@@ -1698,7 +1731,9 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(jobid))
-            continue
+                continue
+            else:
+                raise
         if i == 0:
             logger.error('no tasks found for job {}'.format(jobid))
 
