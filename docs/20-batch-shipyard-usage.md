@@ -286,6 +286,9 @@ specified in the configuration. This is an experimental feature.
 * `ssh` will interactively log into a virtual machine in the storage cluster.
 If neither `--cardinal` or `--hostname` are specified, `--cardinal 0` is
 assumed.
+  * `COMMAND` is an optional argument to specify the command to run. If your
+    command has switches, preface `COMMAND` with double dash as per POSIX
+    convention, e.g., `fs cluster ssh mycluster -- df -h`.
   * `--cardinal` is the zero-based cardinal number of the virtual machine in
     the storage cluster to connect to.
   * `--hostname` is the hostname of the virtual machine in the storage cluster
@@ -456,6 +459,9 @@ configuration file
   * `--wait` will wait for resize to complete
 * `ssh` will interactively log into a compute node via SSH. If neither
 `--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed.
+  * `COMMAND` is an optional argument to specify the command to run. If your
+    command has switches, preface `COMMAND` with double dash as per POSIX
+    convention, e.g., `pool ssh -- sudo docker ps -a`.
   * `--cardinal` is the zero-based cardinal number of the compute node in
     the pool to connect to as listed by `grls`
   * `--nodeid` is the node id to connect to in the pool

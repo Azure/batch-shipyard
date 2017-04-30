@@ -214,8 +214,8 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
              'seconds.'
              '\n\n>> Terminate your session with CTRL+C'
              '\n\n>> If you cannot terminate your session cleanly, run:'
-             '\n     shipyard pool ssh --nodeid {}'
-             '\n     sudo docker kill {}\n').format(
+             '\n     shipyard pool ssh --nodeid {} '
+             'sudo docker kill {}\n').format(
                  tb[2], task.node_info.node_id, name))
         tb_proc.wait()
     finally:

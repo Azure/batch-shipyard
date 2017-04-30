@@ -2253,10 +2253,11 @@ def _get_ssh_info(
 
 
 def ssh_storage_cluster(
-        compute_client, network_client, config, sc_id, cardinal, hostname):
+        compute_client, network_client, config, sc_id, cardinal, hostname,
+        command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str) -> None
+    #        str, tuple) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -2266,6 +2267,7 @@ def ssh_storage_cluster(
     :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param tuple command: command to execute
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
         compute_client, network_client, config, sc_id, cardinal, hostname)
@@ -2278,8 +2280,10 @@ def ssh_storage_cluster(
     logger.info(
         ('connecting to storage cluster {} virtual machine {}:{} with '
          'key {}').format(sc_id, ip, port, ssh_priv_key))
-    util.subprocess_with_output(
-        ['ssh', '-o', 'StrictHostKeyChecking=no',
-         '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-         '-i', str(ssh_priv_key), '-p', str(port),
-         '{}@{}'.format(username, ip)])
+    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_priv_key), '-p', str(port),
+               '{}@{}'.format(username, ip)]
+    if util.is_not_empty(command):
+        ssh_cmd.extend(command)
+    util.subprocess_with_output(ssh_cmd)

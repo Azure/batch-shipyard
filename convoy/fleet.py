@@ -1583,10 +1583,10 @@ def action_fs_cluster_status(
 
 def action_fs_cluster_ssh(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname):
+        cardinal, hostname, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str) -> None
+    #        str, tuple) -> None
     """Action: Fs Cluster Ssh
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1596,6 +1596,7 @@ def action_fs_cluster_ssh(
     :param str storage_cluster_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param tuple command: command
     """
     if cardinal is not None and hostname is not None:
         raise ValueError('cannot specify both cardinal and hostname options')
@@ -1608,7 +1609,7 @@ def action_fs_cluster_ssh(
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname)
+        cardinal, hostname, command)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
@@ -1923,14 +1924,15 @@ def action_pool_dsu(batch_client, config):
     batch.del_ssh_user(batch_client, config)
 
 
-def action_pool_ssh(batch_client, config, cardinal, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, int, str) -> None
+def action_pool_ssh(batch_client, config, cardinal, nodeid, command):
+    # type: (batchsc.BatchServiceClient, dict, int, str, tuple) -> None
     """Action: Pool Ssh
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
+    :param tuple command: command to execute
     """
     if cardinal is not None and nodeid is not None:
         raise ValueError('cannot specify both cardinal and nodeid options')
@@ -1953,11 +1955,13 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
         batch_client, config, cardinal, nodeid)
     logger.info('connecting to node {}:{} with key {}'.format(
         ip, port, ssh_private_key))
-    util.subprocess_with_output(
-        ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-         'UserKnownHostsFile={}'.format(os.devnull),
-         '-i', str(ssh_private_key), '-p', str(port),
-         '{}@{}'.format(pool.ssh.username, ip)])
+    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+               'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_private_key), '-p', str(port),
+               '{}@{}'.format(pool.ssh.username, ip)]
+    if util.is_not_empty(command):
+        ssh_cmd.extend(command)
+    util.subprocess_with_output(ssh_cmd)
 
 
 def action_pool_delnode(batch_client, config, nodeid):

@@ -59,8 +59,7 @@ Which will output some text similar to the following:
 >> Terminate your session with CTRL+C
 
 >> If you cannot terminate your session cleanly, run:
-     shipyard pool ssh --nodeid tvm-1518333292_4-20170428t151941z
-     sudo docker kill 9e7879b8
+     shipyard pool ssh --nodeid tvm-1518333292_4-20170428t151941z sudo docker kill 9e7879b8
 ```
 
 With a web browser, navigate to http://localhost:6006/ where Tensorboard

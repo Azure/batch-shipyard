@@ -14,6 +14,9 @@ working directory. Please see the usage guide for more information about
 this command.
 
 ### Changed
+- Added optional `COMMAND` argument to `pool ssh` and `fs cluster ssh`
+commands. If `COMMAND` is specified, the command is run non-interactively
+with SSH on the target node.
 - Added some additional sanity checks in the node prep script
 - Updated TensorFlow-CPU and TensorFlow-GPU recipes to 1.1.0. Removed
 specialized Docker build for TensorFlow-GPU. Added `jobs-tb.json` files

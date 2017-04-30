@@ -822,17 +822,18 @@ def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
     type=int)
 @click.option(
     '--hostname', help='Hostname of remote fs vm to connect to')
+@click.argument('command', nargs=-1)
 @common_options
 @fs_cluster_options
 @aad_options
 @pass_cli_context
-def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname):
+def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname, command):
     """Interactively login via SSH to a filesystem storage cluster virtual
     machine in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_ssh(
         ctx.compute_client, ctx.network_client, ctx.config,
-        storage_cluster_id, cardinal, hostname)
+        storage_cluster_id, cardinal, hostname, command)
 
 
 @fs.group()
@@ -1157,16 +1158,17 @@ def pool_dsu(ctx):
     type=int)
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to connect to')
+@click.argument('command', nargs=-1)
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_ssh(ctx, cardinal, nodeid):
+def pool_ssh(ctx, cardinal, nodeid, command):
     """Interactively login via SSH to a node in the pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_ssh(
-        ctx.batch_client, ctx.config, cardinal, nodeid)
+        ctx.batch_client, ctx.config, cardinal, nodeid, command)
 
 
 @pool.command('delnode')
