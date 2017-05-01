@@ -31,6 +31,7 @@ termination to prevent active tasks in job from running while tasks are
 being terminated
 - `jobs listtasks` and `data listfiles` will now accept a `--jobid` that
 does not have to be in `jobs.json`
+- Data ingress on pool create issue with single node
 
 ## [2.6.0] - 2017-04-20
 ### Changed

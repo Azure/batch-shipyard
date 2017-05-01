@@ -823,6 +823,11 @@ def ingress_data(
             if dest.shared_data_volume is None:
                 if current_dedicated == 1:
                     direct_single_node = True
+                elif kind == 'storage':
+                    # this is to prevent current_dedicated check below for
+                    # non shared/all targets and will force continuation
+                    # of the loop below
+                    direct_single_node = True
                 elif current_dedicated is None:
                     raise ValueError('current_dedicated is not set')
                 else:
