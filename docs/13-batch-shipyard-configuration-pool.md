@@ -39,6 +39,13 @@ The pool schema is as follows:
                 }
             ]
         },
+        "resource_files": [
+            {
+                "file_path": "",
+                "blob_source": "",
+                "file_mode": ""
+            }
+        ],
         "virtual_network": {
             "name": "myvnet",
             "resource_group": "vnet-in-another-rg",
@@ -144,6 +151,15 @@ data defined in `files` prior to pool creation and disable the option above
       `data ingress` command.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
+* (optional) `resource_files` is an array of resource files that should be
+downloaded as part of the compute node's preparation. Each array entry
+contains the following information:
+  * `file_path` is the path within the node prep task working directory to
+    place the file on the compute node.
+  * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an Azure
+    Blob Storage URL.
+  * `file_mode` if the file mode to set for the file on the compute node.
+    This is optional.
 * (optional) `virtual_network` is the property for specifying an ARM-based
 virtual network resource for the pool. This is only available for
 UserSubscription Batch accounts.

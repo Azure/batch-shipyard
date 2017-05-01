@@ -894,6 +894,17 @@ def _add_pool(
                 blob_source=pool_settings.gpu_driver,
                 file_mode='0755')
         )
+    # add any additional specified resource files
+    if util.is_not_empty(pool_settings.resource_files):
+        for rf in pool_settings.resource_files:
+            pool.start_task.resource_files.append(
+                batchmodels.ResourceFile(
+                    file_path=rf.file_path,
+                    blob_source=rf.blob_source,
+                    file_mode=rf.file_mode,
+                )
+            )
+    # private registry settings
     if preg.storage_account:
         psa = settings.credentials_storage(config, preg.storage_account)
         pool.start_task.environment_settings.append(
@@ -907,10 +918,12 @@ def _add_pool(
             )
         )
         del psa
+    # virtual network settings
     if subnet is not None:
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet.id,
         )
+    # storage cluster settings
     if util.is_not_empty(fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(

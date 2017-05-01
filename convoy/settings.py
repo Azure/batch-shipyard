@@ -79,8 +79,8 @@ PoolSettings = collections.namedtuple(
         'inter_node_communication_enabled', 'publisher', 'offer', 'sku',
         'reboot_on_start_task_failed',
         'block_until_all_global_resources_loaded',
-        'transfer_files_on_pool_creation',
-        'input_data', 'gpu_driver', 'ssh', 'additional_node_prep_commands',
+        'transfer_files_on_pool_creation', 'input_data', 'resource_files',
+        'gpu_driver', 'ssh', 'additional_node_prep_commands',
         'virtual_network',
     ]
 )
@@ -470,6 +470,28 @@ def pool_settings(config):
             raise KeyError()
     except KeyError:
         input_data = None
+    # get additional resource files
+    try:
+        rfs = conf['resource_files']
+        if util.is_none_or_empty(rfs):
+            raise KeyError()
+        resource_files = []
+        for rf in rfs:
+            try:
+                fm = rf['file_mode']
+                if util.is_none_or_empty(fm):
+                    raise KeyError()
+            except KeyError:
+                fm = None
+            resource_files.append(
+                ResourceFileSettings(
+                    file_path=rf['file_path'],
+                    blob_source=rf['blob_source'],
+                    file_mode=fm,
+                )
+            )
+    except KeyError:
+        resource_files = None
     # ssh settings
     try:
         sshconf = conf['ssh']
@@ -536,6 +558,7 @@ def pool_settings(config):
         block_until_all_global_resources_loaded=block_until_all_gr,
         transfer_files_on_pool_creation=transfer_files_on_pool_creation,
         input_data=input_data,
+        resource_files=resource_files,
         ssh=SSHSettings(
             username=ssh_username,
             expiry_days=ssh_expiry_days,

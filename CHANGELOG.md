@@ -12,6 +12,7 @@ provisioned via Batch Shipyard with private keys available. This command
 will work on Windows if `ssh.exe` is available in `%PATH%` or the current
 working directory. Please see the usage guide for more information about
 this command.
+- Pool-level `resource_files` support
 
 ### Changed
 - Added optional `COMMAND` argument to `pool ssh` and `fs cluster ssh`

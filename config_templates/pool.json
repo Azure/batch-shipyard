@@ -31,6 +31,13 @@
                 }
             ]
         },
+        "resource_files": [
+            {
+                "file_path": "",
+                "blob_source": "",
+                "file_mode": ""
+            }
+        ],
         "virtual_network": {
             "name": "",
             "resource_group": "",
