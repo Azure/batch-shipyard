@@ -841,7 +841,12 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         job_id = settings.job_id(job)
         nocheck[job_id] = set()
         if taskid is None:
-            tasks = [x.id for x in batch_client.task.list(job_id)]
+            tasks = [
+                x.id for x in batch_client.task.list(
+                    job_id,
+                    task_list_options=batchmodels.TaskListOptions(select='id')
+                )
+            ]
         else:
             tasks = [taskid]
         for task in tasks:
@@ -856,7 +861,13 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         for job in jobs:
             job_id = settings.job_id(job)
             if taskid is None:
-                tasks = [x.id for x in batch_client.task.list(job_id)]
+                tasks = [
+                    x.id for x in batch_client.task.list(
+                        job_id,
+                        task_list_options=batchmodels.TaskListOptions(
+                            select='id')
+                    )
+                ]
             else:
                 tasks = [taskid]
             for task in tasks:
@@ -870,7 +881,11 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                         'waiting for task {} in job {} to terminate'.format(
                             task, job_id))
                     while True:
-                        batch_client.task.get(job_id, task)
+                        batch_client.task.get(
+                            job_id, task,
+                            task_get_options=batchmodels.TaskGetOptions(
+                                select='id')
+                        )
                         time.sleep(1)
                 except batchmodels.batch_error.BatchErrorException as ex:
                     if 'The specified task does not exist' in ex.message.value:
@@ -903,7 +918,12 @@ def clean_mi_jobs(batch_client, config):
             if 'The specified job already exists' not in ex.message.value:
                 raise
         # get all cleanup tasks
-        cleanup_tasks = [x.id for x in batch_client.task.list(cleanup_job_id)]
+        cleanup_tasks = [
+            x.id for x in batch_client.task.list(
+                cleanup_job_id,
+                task_list_options=batchmodels.TaskListOptions(select='id')
+            )
+        ]
         # list all tasks in job
         tasks = batch_client.task.list(job_id)
         for task in tasks:
@@ -937,7 +957,10 @@ def clean_mi_jobs(batch_client, config):
                 # wait for cleanup task to complete before adding another
                 while True:
                     batchtask = batch_client.task.get(
-                        cleanup_job_id, batchtask.id)
+                        cleanup_job_id, batchtask.id,
+                        task_get_options=batchmodels.TaskGetOptions(
+                            select='id,state')
+                    )
                     if batchtask.state == batchmodels.TaskState.completed:
                         break
                     time.sleep(1)
@@ -1137,10 +1160,9 @@ def terminate_tasks(
             tasks = [
                 x.id for x in batch_client.task.list(
                     job_id,
-                    task_list_options=batchmodels.TaskListOptions(
-                        select='id'
-                    )
-                )]
+                    task_list_options=batchmodels.TaskListOptions(select='id')
+                )
+            ]
         else:
             tasks = [taskid]
         for task in tasks:
@@ -1181,7 +1203,8 @@ def terminate_tasks(
                         task_list_options=batchmodels.TaskListOptions(
                             select='id'
                         )
-                    )]
+                    )
+                ]
             else:
                 tasks = [taskid]
             for task in tasks:
@@ -1195,7 +1218,11 @@ def terminate_tasks(
                         'waiting for task {} in job {} to terminate'.format(
                             task, job_id))
                     while True:
-                        _task = batch_client.task.get(job_id, task)
+                        _task = batch_client.task.get(
+                            job_id, task,
+                            task_get_options=batchmodels.TaskGetOptions(
+                                select='state')
+                        )
                         if _task.state == batchmodels.TaskState.completed:
                             break
                         time.sleep(1)
@@ -1325,6 +1352,7 @@ def stream_file_and_wait_for_task(
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
                     filter='state eq \'running\'',
+                    select='id,state',
                 ),
             )
             for task in tasks:
@@ -1384,8 +1412,12 @@ def stream_file_and_wait_for_task(
                 if not disk:
                     print()
                 break
-            if not completed:
-                task = batch_client.task.get(job_id, task_id)
+            if not completed and curr == size:
+                task = batch_client.task.get(
+                    job_id, task_id,
+                    task_get_options=batchmodels.TaskGetOptions(
+                        select='state')
+                )
                 if task.state == batchmodels.TaskState.completed:
                     completed = True
             time.sleep(1)
@@ -1426,6 +1458,7 @@ def get_file_via_task(batch_client, config, filespec=None):
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
                     filter='state eq \'running\'',
+                    select='id,state',
                 ),
             )
             for task in tasks:
@@ -1483,6 +1516,7 @@ def get_all_files_via_task(batch_client, config, filespec=None):
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
                     filter='state eq \'running\'',
+                    select='id,state',
                 ),
             )
             for task in tasks:

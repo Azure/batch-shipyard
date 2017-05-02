@@ -2,12 +2,13 @@
 
 ## [Unreleased]
 
+## [2.6.1] - 2017-05-01
 ### Added
 - `misc tensorboard` command added which automatically instantiates a
 Tensorboard instance on the compute node which is running or has ran a
 task that has generated TensorFlow summary operation compatible logs. An
 SSH tunnel is then created so you can view Tensorboard locally on the
-machine running Batch Shipyard. This requires a valid SSH user has been
+machine running Batch Shipyard. This requires a valid SSH user that has been
 provisioned via Batch Shipyard with private keys available. This command
 will work on Windows if `ssh.exe` is available in `%PATH%` or the current
 working directory. Please see the usage guide for more information about
@@ -22,11 +23,11 @@ with SSH on the target node.
 - Updated TensorFlow-CPU and TensorFlow-GPU recipes to 1.1.0. Removed
 specialized Docker build for TensorFlow-GPU. Added `jobs-tb.json` files
 to TensorFlow-CPU and TensorFlow-GPU recipes as Tensorboard samples.
+- Optimize some Batch calls
 
 ### Fixed
 - Site extension issues
 - SSH user add exception on Windows
-- `data stream` off-by-one segment issue
 - `jobs del --termtasks` will now disable the job prior to running task
 termination to prevent active tasks in job from running while tasks are
 being terminated
@@ -568,7 +569,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.1...HEAD
+[2.6.1]: https://github.com/Azure/batch-shipyard/compare/2.6.0...2.6.1
 [2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...2.6.0
 [2.6.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0rc1
 [2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
