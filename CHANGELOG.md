@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- TensorFlow image not being set if no suitable image is found for
+`misc tensorboard` command
+
 ## [2.6.1] - 2017-05-01
 ### Added
 - `misc tensorboard` command added which automatically instantiates a

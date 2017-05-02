@@ -172,6 +172,7 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
         logger.warning(
             'no pre-loaded tensorflow Docker image detected on pool, '
             'using: {}'.format(tb[0]))
+        image = tb[0]
     # get node remote login settings
     rls = batch_client.compute_node.get_remote_login_settings(
         pool.id, task.node_info.node_id)
