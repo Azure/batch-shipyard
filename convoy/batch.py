@@ -727,23 +727,32 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
                 logger.debug(
                     'disabling job {} first due to task termination'.format(
                         job_id))
-                batch_client.job.disable(
-                    job_id, disable_tasks=batchmodels.DisableJobOption.wait)
-                # wait for job to enter non-active/enabling state
-                while True:
-                    _job = batch_client.job.get(
+                try:
+                    batch_client.job.disable(
                         job_id,
-                        job_get_options=batchmodels.JobGetOptions(
-                            select='id,state')
+                        disable_tasks=batchmodels.DisableJobOption.wait
                     )
-                    if (_job.state == batchmodels.JobState.disabling or
-                            _job.state == batchmodels.JobState.disabled or
-                            _job.state == batchmodels.JobState.completed or
-                            _job.state == batchmodels.JobState.deleting):
-                        break
-                    time.sleep(1)
-                # terminate tasks with forced wait
-                terminate_tasks(batch_client, config, jobid=job_id, wait=True)
+                except batchmodels.batch_error.BatchErrorException as ex:
+                    if ('The specified job is already in a completed state' in
+                            ex.message.value):
+                        pass
+                else:
+                    # wait for job to enter non-active/enabling state
+                    while True:
+                        _job = batch_client.job.get(
+                            job_id,
+                            job_get_options=batchmodels.JobGetOptions(
+                                select='id,state')
+                        )
+                        if (_job.state == batchmodels.JobState.disabling or
+                                _job.state == batchmodels.JobState.disabled or
+                                _job.state == batchmodels.JobState.completed or
+                                _job.state == batchmodels.JobState.deleting):
+                            break
+                        time.sleep(1)
+                    # terminate tasks with forced wait
+                    terminate_tasks(
+                        batch_client, config, jobid=job_id, wait=True)
             # delete job
             batch_client.job.delete(job_id)
         except batchmodels.batch_error.BatchErrorException as ex:
@@ -1328,7 +1337,6 @@ def stream_file_and_wait_for_task(
     logger.debug('attempting to stream file {} from job={} task={}'.format(
         file, job_id, task_id))
     curr = 0
-    end = 0
     completed = False
     notfound = 0
     try:
@@ -1360,19 +1368,18 @@ def stream_file_and_wait_for_task(
                 else:
                     raise
             size = int(tfp.response.headers['Content-Length'])
-            if size != end and curr != size:
-                end = size
+            if curr < size:
                 frag = batch_client.file.get_from_task(
                     job_id, task_id, file,
                     batchmodels.FileGetFromTaskOptions(
-                        ocp_range='bytes={}-{}'.format(curr, end))
+                        ocp_range='bytes={}-{}'.format(curr, size))
                 )
                 for f in frag:
                     if fd is not None:
                         fd.write(f)
                     else:
                         print(f.decode('utf8'), end='')
-                curr = end + 1
+                curr = size
             elif completed:
                 if not disk:
                     print()
