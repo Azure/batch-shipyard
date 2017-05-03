@@ -939,7 +939,7 @@ def _add_pool(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
     pool.start_task.environment_settings.extend(
-        _generate_docker_login_environment_variables(config, preg, encrypt)[0])
+        batch.generate_docker_login_settings(config)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
     # set up gluster on compute if specified
@@ -968,65 +968,6 @@ def _add_pool(
             del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
-
-
-def _generate_docker_login_environment_variables(config, preg, encrypt):
-    # type: (dict, DockerRegistrySettings, bool) -> tuple
-    """Generate docker login environment variables and command line
-    for re-login
-    :param dict config: configuration object
-    :param DockerRegistrySettings: docker registry settings
-    :param bool encrypt: encryption flag
-    :rtype: tuple
-    :return: (env vars, login cmds)
-    """
-    cmd = []
-    env = []
-    if preg.server:
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_SERVER', preg.server)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_USERNAME', preg.user)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_PASSWORD',
-                crypto.encrypt_string(encrypt, preg.password, config))
-        )
-        if encrypt:
-            cmd.append(
-                'DOCKER_LOGIN_PASSWORD='
-                '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                'openssl rsautl -decrypt -inkey '
-                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-        cmd.append(
-            'docker login -u $DOCKER_LOGIN_USERNAME '
-            '-p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER')
-    else:
-        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-        if hubuser:
-            env.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_USERNAME', hubuser)
-            )
-            env.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_PASSWORD',
-                    crypto.encrypt_string(encrypt, hubpw, config))
-            )
-            if encrypt:
-                cmd.append(
-                    'DOCKER_LOGIN_PASSWORD='
-                    '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                    'openssl rsautl -decrypt -inkey '
-                    '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-            cmd.append(
-                'docker login -u $DOCKER_LOGIN_USERNAME '
-                '-p $DOCKER_LOGIN_PASSWORD')
-    return env, cmd
 
 
 def _setup_glusterfs(
@@ -1196,9 +1137,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     # 2. pull images with respect to registry
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
-    encrypt = settings.batch_shipyard_encryption_enabled(config)
-    taskenv, coordcmd = _generate_docker_login_environment_variables(
-        config, preg, encrypt)
+    taskenv, coordcmd = batch.generate_docker_login_settings(config)
     coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
     if registry != '':
         coordcmd.extend(

@@ -5,6 +5,8 @@
 ### Fixed
 - TensorFlow image not being set if no suitable image is found for
 `misc tensorboard` command
+- Authentication for running images not present in global config sourced
+from a private registry
 
 ## [2.6.1] - 2017-05-01
 ### Added

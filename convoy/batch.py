@@ -1779,6 +1779,68 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
             logger.error('no tasks found for job {}'.format(jobid))
 
 
+def generate_docker_login_settings(config):
+    # type: (dict) -> tuple
+    """Generate docker login environment variables and command line
+    for login/re-login
+    :param dict config: configuration object
+    :rtype: tuple
+    :return: (env vars, login cmds)
+    """
+    # get private registry settings
+    preg = settings.docker_registry_private_settings(config)
+    # get encryption settings
+    encrypt = settings.batch_shipyard_encryption_enabled(config)
+    # populate command and env vars
+    cmd = []
+    env = []
+    if preg.server:
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_SERVER', preg.server)
+        )
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_USERNAME', preg.user)
+        )
+        env.append(
+            batchmodels.EnvironmentSetting(
+                'DOCKER_LOGIN_PASSWORD',
+                crypto.encrypt_string(encrypt, preg.password, config))
+        )
+        if encrypt:
+            cmd.append(
+                'DOCKER_LOGIN_PASSWORD='
+                '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
+                'openssl rsautl -decrypt -inkey '
+                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
+        cmd.append(
+            'docker login -u $DOCKER_LOGIN_USERNAME '
+            '-p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER')
+    else:
+        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+        if hubuser:
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_USERNAME', hubuser)
+            )
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'DOCKER_LOGIN_PASSWORD',
+                    crypto.encrypt_string(encrypt, hubpw, config))
+            )
+            if encrypt:
+                cmd.append(
+                    'DOCKER_LOGIN_PASSWORD='
+                    '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
+                    'openssl rsautl -decrypt -inkey '
+                    '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
+            cmd.append(
+                'docker login -u $DOCKER_LOGIN_USERNAME '
+                '-p $DOCKER_LOGIN_PASSWORD')
+    return env, cmd
+
+
 def _generate_next_generic_task_id(batch_client, job_id, reserved=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, str,
     #        str) -> str
@@ -1846,6 +1908,7 @@ def add_jobs(
                 return
         else:
             raise
+    preg = settings.docker_registry_private_settings(config)
     global_resources = settings.global_resources_docker_images(config)
     lastjob = None
     lasttask = None
@@ -1862,6 +1925,13 @@ def add_jobs(
         uses_task_dependencies = False
         missing_images = []
         allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
+        # check for public pull on missing setting
+        if (allow_run_on_missing and
+                preg.allow_public_docker_hub_pull_on_missing):
+            logger.warning(
+                'allow run on missing image and allow public docker hub '
+                'pull on missing are both enabled. Note that allow public '
+                'pull on missing will not work in this situation.')
         for task in settings.job_tasks(jobspec):
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
@@ -1911,14 +1981,16 @@ def add_jobs(
             )
         # construct job prep
         jpcmd = []
-        if util.is_not_empty(global_resources):
-            if len(missing_images) > 0 and allow_run_on_missing:
-                gr = list(set(global_resources) - set(missing_images))
-            else:
-                gr = global_resources
-            if len(gr) > 0:
-                jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
-                    jpfile[0], ' '.join(gr)))
+        if len(missing_images) > 0 and allow_run_on_missing:
+            # we don't want symmetric difference as we just want to
+            # block on pre-loaded images only
+            gr = list(set(global_resources) - set(missing_images))
+        else:
+            gr = global_resources
+        if len(gr) > 0:
+            jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
+                jpfile[0], ' '.join(gr)))
+        del gr
         # job prep: digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
@@ -1963,6 +2035,9 @@ def add_jobs(
         logger.info('Adding job {} to pool {}'.format(job.id, pool.id))
         try:
             batch_client.job.add(job)
+            if settings.verbose(config) and jptask is not None:
+                logger.debug('Job prep command: {}'.format(
+                    jptask.command_line))
         except batchmodels.batch_error.BatchErrorException as ex:
             if ('The specified job is already in a completed state.' in
                     ex.message.value):
@@ -2095,6 +2170,13 @@ def add_jobs(
                         '{}'.format(
                             ' ' + task.command) if task.command else '')
                 ]
+            # get docker login if missing images
+            if len(missing_images) > 0 and allow_run_on_missing:
+                taskenv, logincmd = generate_docker_login_settings(config)
+                logincmd.extend(task_commands)
+                task_commands = logincmd
+            else:
+                taskenv = None
             # digest any input_data
             addlcmds = data.process_input_data(
                 config, bxfile, _task, on_task=True)
@@ -2119,6 +2201,7 @@ def add_jobs(
                 resource_files=[],
                 multi_instance_settings=mis,
                 constraints=task_constraints,
+                environment_settings=taskenv,
             )
             # add envfile
             if sas_urls is not None:
