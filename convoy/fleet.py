@@ -271,7 +271,7 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
                 config,
                 msg=('agreement with License for Customer Use of NVIDIA '
                      'Software @ {}').format(_NVIDIA_DRIVER['license']),
-                allow_auto=False):
+                allow_auto=True):
             raise RuntimeError(
                 'Cannot proceed with deployment due to non-agreement with '
                 'license for NVIDIA driver')

@@ -9,7 +9,7 @@ RUN apk update \
         musl build-base python3 python3-dev openssl-dev libffi-dev \
         ca-certificates openssl openssh-client rsync git bash \
     && pip3 install --no-cache-dir --upgrade pip \
-    && git clone -b master --single-branch https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
+    && git clone -b develop --single-branch https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
     && cd /opt/batch-shipyard \
     && rm -rf .git \
     && rm -f .git* .travis.yml install* \
