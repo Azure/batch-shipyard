@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.6.2] - 2017-05-05
+### Added
+- Docker image build for `develop` branch
+
+### Changed
+- Allow NVIDIA license agreement to be auto-confirmed via `-y` option
+- Use requests for file downloading since it is already being installed
+as a dependency
+- Update dependencies to latest versions
+
 ### Fixed
 - TensorFlow image not being set if no suitable image is found for
 `misc tensorboard` command
@@ -575,7 +585,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.2...HEAD
+[2.6.2]: https://github.com/Azure/batch-shipyard/compare/2.6.1...2.6.2
 [2.6.1]: https://github.com/Azure/batch-shipyard/compare/2.6.0...2.6.1
 [2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...2.6.0
 [2.6.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0rc1
