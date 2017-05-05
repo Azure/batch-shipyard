@@ -36,11 +36,8 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
+import requests
 import time
-try:
-    import urllib.request as urllibreq
-except ImportError:
-    import urllib as urllibreq
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
@@ -63,6 +60,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
+_REQUEST_CHUNK_SIZE = 4194304
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _AZUREFILE_DVD_BIN = {
     'url': (
@@ -72,6 +70,7 @@ _AZUREFILE_DVD_BIN = {
     'sha256': (
         '288f809a1290ea8daf89d222507bda9b3709a9665cec8b70354a50252395e127'
     ),
+    'target': 'resources/azurefile-dockervolumedriver'
 }
 _NVIDIA_DOCKER = {
     'ubuntuserver': {
@@ -275,12 +274,18 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
             raise RuntimeError(
                 'Cannot proceed with deployment due to non-agreement with '
                 'license for NVIDIA driver')
+        else:
+            logger.info('NVIDIA Software License accepted')
         # download driver
         logger.debug('downloading NVIDIA driver to {}'.format(
             _NVIDIA_DRIVER['target']))
-        response = urllibreq.urlopen(_NVIDIA_DRIVER[gpu_type]['url'])
+        response = requests.get(_NVIDIA_DRIVER[gpu_type]['url'], stream=True)
         with pkg.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            pkg.stat().st_size, _NVIDIA_DRIVER['target']))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DRIVER[gpu_type]['sha256']):
@@ -308,9 +313,13 @@ def _setup_nvidia_docker_package(blob_client, config):
         # download package
         logger.debug('downloading NVIDIA docker to {}'.format(
             _NVIDIA_DOCKER[offer]['target']))
-        response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
+        response = requests.get(_NVIDIA_DOCKER[offer]['url'], stream=True)
         with pkg.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            pkg.stat().st_size, _NVIDIA_DOCKER[offer]['target']))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DOCKER[offer]['sha256']):
@@ -331,15 +340,19 @@ def _setup_azurefile_volume_driver(blob_client, config):
     offer = settings.pool_offer(config, lower=True)
     sku = settings.pool_sku(config, lower=True)
     # check to see if binary is downloaded
-    bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
+    bin = pathlib.Path(_ROOT_PATH, _AZUREFILE_DVD_BIN['target'])
     if (not bin.exists() or
             util.compute_sha256_for_file(bin, False) !=
             _AZUREFILE_DVD_BIN['sha256']):
         # download package
         logger.debug('downloading Azure File Docker Volume Driver')
-        response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
+        response = requests.get(_AZUREFILE_DVD_BIN['url'], stream=True)
         with bin.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            bin.stat().st_size, _AZUREFILE_DVD_BIN['target']))
         # check sha256
         if (util.compute_sha256_for_file(bin, False) !=
                 _AZUREFILE_DVD_BIN['sha256']):

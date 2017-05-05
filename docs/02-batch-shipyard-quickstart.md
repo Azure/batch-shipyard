@@ -22,7 +22,8 @@ to your local machine has been completed.
 2. Create a directory to hold your configuration files. For this quickstart
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe
-of your choice to the `config` directory:
+of your choice to the `config` directory (please note that some Docker images
+are very large, such as CNTK, which will lead to longer pool allocation time):
    * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
    * [Caffe-CPU](../recipes/Caffe-CPU/config/)
    * [Chainer-CPU](../recipes/Chainer-CPU/config/)

@@ -132,13 +132,15 @@ check_for_buggy_ntfs_mount() {
 
 check_for_nvidia_card() {
     set +e
-    lspci
-    lspci | grep -i nvidia > /dev/null
+    out=$(lspci)
+    echo "$out" | grep -i nvidia > /dev/null
     if [ $? -ne 0 ]; then
+        echo $out
         echo "ERROR: No Nvidia card(s) detected!"
         exit 1
     fi
     set -e
+    echo $out
 }
 
 install_azurefile_docker_volume_driver() {
@@ -376,12 +378,10 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         check_for_nvidia_card
         # split arg into two
         IFS=':' read -ra GPUARGS <<< "$gpu"
-        # take special actions if we're on NV-series VMs
-        if [ ${GPUARGS[0]} == "True" ]; then
-            # remove nouveau
-            apt-get --purge remove xserver-xorg-video-nouveau
-            rmmod nouveau
-            # blacklist nouveau from being loaded if rebooted
+        # remove nouveau
+        apt-get --purge remove xserver-xorg-video-nouveau
+        rmmod nouveau
+        # blacklist nouveau from being loaded if rebooted
 cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
 blacklist nouveau
 blacklist lbm-nouveau
@@ -389,7 +389,6 @@ options nouveau modeset=0
 alias nouveau off
 alias lbm-nouveau off
 EOF
-        fi
         nvdriver=${GPUARGS[1]}
         nvdocker=${GPUARGS[2]}
         # get development essentials for nvidia driver
