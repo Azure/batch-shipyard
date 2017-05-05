@@ -17,7 +17,7 @@ IFS=',' read -ra HOSTS <<< "$AZ_BATCH_HOST_LIST"
 nodes=${#HOSTS[@]}
 
 # special path for non-mpi job with single gpu
-if [ $nodes -eq 0 ] && [ $ngpus -eq 1 ]; then
+if [ $nodes -eq 1 ] && [ $ngpus -eq 1 ]; then
     echo "running cntk in single node + single gpu mode"
     # set cntk file
     cntkfile=/cntk/Examples/Image/Classification/ConvNet/BrainScript/ConvNet_MNIST.cntk
