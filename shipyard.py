@@ -903,15 +903,18 @@ def storage(ctx):
 
 
 @storage.command('del')
+@click.option(
+    '--clear-tables', is_flag=True, help='Clear tables instead of deleting')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_del(ctx):
+def storage_del(ctx, clear_tables):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
-        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config,
+        clear_tables)
 
 
 @storage.command('clear')

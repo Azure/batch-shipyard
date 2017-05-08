@@ -5,13 +5,19 @@ Batch Shipyard and Docker-enabled compute pools.
 The following Azure Batch actions should only be performed through Batch
 Shipyard when deploying your workload through this toolkit as Batch
 Shipyard needs to take special actions or ensure the intended outcome:
-* Pool resize: use `pool resize`
 * Task termination (if task is running): use `jobs termtasks`
 * Task deletion (if task is running): use `jobs deltasks`
 * Job termination (if any tasks are running in the job): use the
   `--termtasks` option with `jobs term`
 * Job deletion (if any tasks are running in the job): use the
   `--termtasks` option with `jobs del`
+* Pool resize: use `pool resize`
+* Pool deletion: use `pool del`
+
+Additionally, you cannot add Batch Shipyard tasks to a non-Batch Shipyard
+allocated pool since all of the preparation for each compute node will not
+be present in those pools. Please use `pool add` with your pool specification
+to create compute resources to execute your Batch Shipyard jobs against.
 
 The following are general limitations or restrictions:
 * SSH tunnel script generation is only compatible with non-Windows machines.

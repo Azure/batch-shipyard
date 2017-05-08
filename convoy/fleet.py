@@ -2107,17 +2107,23 @@ def action_jobs_cmi(batch_client, config, delete):
         batch.del_clean_mi_jobs(batch_client, config)
 
 
-def action_storage_del(blob_client, queue_client, table_client, config):
+def action_storage_del(
+        blob_client, queue_client, table_client, config, clear_tables):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azuretable.TableService, dict, bool) -> None
     """Action: Storage Del
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param bool clear_tables: clear tables instead of deleting
     """
+    if clear_tables:
+        storage.clear_storage_containers(
+            blob_client, queue_client, table_client, config, tables_only=True)
     storage.delete_storage_containers(
-        blob_client, queue_client, table_client, config)
+        blob_client, queue_client, table_client, config,
+        skip_tables=clear_tables)
 
 
 def action_storage_clear(blob_client, queue_client, table_client, config):

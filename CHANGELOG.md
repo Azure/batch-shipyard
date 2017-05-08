@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- `--clear-tables` option to `storage del` command which will delete
+blob containers and queues but clear table entries
+
 ## [2.6.2] - 2017-05-05
 ### Added
 - Docker image build for `develop` branch
