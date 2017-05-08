@@ -6,6 +6,10 @@
 - `--clear-tables` option to `storage del` command which will delete
 blob containers and queues but clear table entries
 
+### Fixed
+- Improve node startup time for GPU NC-series by removing extraneous
+dependencies
+
 ## [2.6.2] - 2017-05-05
 ### Added
 - Docker image build for `develop` branch

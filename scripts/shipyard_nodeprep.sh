@@ -393,7 +393,12 @@ EOF
         nvdocker=${GPUARGS[2]}
         # get development essentials for nvidia driver
         apt-get install -y -q --no-install-recommends \
-            build-essential xserver-xorg-dev nvidia-modprobe
+            build-essential
+        # get additional dependency if NV-series VMs
+        if [ ${GPUARGS[0]} == "True" ]; then
+            apt-get install -y -q --no-install-recommends \
+                xserver-xorg-dev
+        fi
         # install driver
         ./$nvdriver -s
         # install nvidia-docker
@@ -748,6 +753,7 @@ p2p=$p2p
 `env | grep AZ_BATCH_`
 `env | grep DOCKER_LOGIN_`
 EOF
+    chmod 600 $envfile
     # launch container
     docker run $detached --net=host --env-file $envfile \
         -v /var/run/docker.sock:/var/run/docker.sock \
