@@ -822,9 +822,9 @@ def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
     type=int)
 @click.option(
     '--hostname', help='Hostname of remote fs vm to connect to')
-@click.argument('command', nargs=-1)
 @common_options
 @fs_cluster_options
+@click.argument('command', nargs=-1)
 @aad_options
 @pass_cli_context
 def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname, command):

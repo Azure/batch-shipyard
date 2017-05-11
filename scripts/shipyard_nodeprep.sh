@@ -464,7 +464,7 @@ EOF
         # install azure storage python dependency
         apt-get install -y -q --no-install-recommends \
             build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-        pip3 install --no-cache-dir azure-storage==0.34.0
+        pip3 install --no-cache-dir azure-storage==0.34.2
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             apt-get install -y -q --no-install-recommends \

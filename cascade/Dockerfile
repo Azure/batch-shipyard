@@ -16,7 +16,7 @@ RUN apk update \
         ca-certificates boost boost-dev boost-python3 file curl tar pigz \
         docker bash \
     && pip3 install --no-cache-dir --upgrade pip \
-    && pip3 install --no-cache-dir --upgrade azure-storage==0.34.0 \
+    && pip3 install --no-cache-dir --upgrade azure-storage==0.34.2 \
     && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version//./_}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
     && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && cd libtorrent-rasterbar-${libtorrent_version} \

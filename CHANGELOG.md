@@ -6,9 +6,15 @@
 - `--clear-tables` option to `storage del` command which will delete
 blob containers and queues but clear table entries
 
+### Changed
+- Updated all dependencies to latest
+
 ### Fixed
 - Improve node startup time for GPU NC-series by removing extraneous
 dependencies
+- `fs cluster ssh` storage cluster id and command argument ordering was
+inverted. This has been corrected to be as intended where the command
+is the last argument, e.g., `fs cluster ssh mynfs -- df -h`
 
 ## [2.6.2] - 2017-05-05
 ### Added
