@@ -10,7 +10,11 @@ The pool schema is as follows:
     "pool_specification": {
         "id": "dockerpool",
         "vm_size": "STANDARD_A9",
-        "vm_count": 10,
+        "vm_count": {
+            "dedicated": 8,
+            "low_priority": 0
+        },
+        "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
         "inter_node_communication_enabled": true,
         "publisher": "OpenLogic",
@@ -82,7 +86,21 @@ The `pool_specification` property has the following members:
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
-* (required) `vm_count` is the number of compute nodes to allocate.
+* (required) `vm_count` is the number of compute nodes to allocate. You may
+specify a mixed number of compute nodes in the following properties:
+  * (optional) `dedicated` is the number of dedicated compute nodes to
+    allocate. These nodes cannot be pre-empted. The default value is `0`.
+  * (optional) `low_priority` is the number of low-priority compute nodes to
+    allocate. These nodes may be pre-empted at any time. Workloads that
+    are amenable to `low_priority` nodes are those that do not have strict
+    deadlines for pickup and completion. Optimally, these types of jobs would
+    checkpoint their progress and be able to recover when re-scheduled.
+    The default value is `0`.
+* (optional) `resize_timeout` is the amount of time allowed for resize
+operations (note that creating a pool resizes from 0 to the specified number
+of nodes). The format for this property is a timedelta with a string
+representation of "d.HH:mm:ss". "HH:mm:ss" is required, but "d" is optional,
+if specified. If not specified, the default is 15 minutes.
 * (optional) `max_tasks_per_node` is the maximum number of concurrent tasks
 that can be running at any one time on a compute node. This defaults to a
 value of 1 if not specified. The maximum value for the property that Azure
@@ -91,7 +109,9 @@ Batch will accept is `4 x <# cores per compute node>`. For instance, for a
 allowable value for this property would be `8`.
 * (optional) `inter_node_communication_enabled` designates if this pool is set
 up for inter-node communication. This must be set to `true` for any containers
-that must communicate with each other such as MPI applications. This property
+that must communicate with each other such as MPI applications. This
+property cannot be enabled if there are positive values for both
+`dedicated and `low_priority` compute nodes specified above. This property
 will be force enabled if peer-to-peer replication is enabled.
 * (required) `publisher` is the publisher name of the Marketplace VM image.
 * (required) `offer` is the offer name of the Marketplace VM image.

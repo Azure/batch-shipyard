@@ -697,13 +697,17 @@ def _add_pool(
         allowable_addresses = (1 << (32 - mask)) - 4
         logger.debug('subnet {} mask is {} and allows {} addresses'.format(
             subnet.name, mask, allowable_addresses))
-        if allowable_addresses < pool_settings.vm_count:
+        pool_total_vm_count = (
+            pool_settings.vm_count.dedicated +
+            pool_settings.vm_count.low_priority
+        )
+        if allowable_addresses < pool_total_vm_count:
             raise RuntimeError(
                 ('subnet {} mask is {} and allows {} addresses but desired '
                  'pool vm_count is {}').format(
                      subnet.name, mask, allowable_addresses,
-                     pool_settings.vm_count))
-        elif int(allowable_addresses * 0.9) <= pool_settings.vm_count:
+                     pool_total_vm_count))
+        elif int(allowable_addresses * 0.9) <= pool_total_vm_count:
             # if within 90% tolerance, warn user due to potential
             # address shortage if other compute resources are in this subnet
             if not util.confirm_action(
@@ -711,7 +715,7 @@ def _add_pool(
                     msg=('subnet {} mask is {} and allows {} addresses '
                          'but desired pool vm_count is {}, proceed?').format(
                              subnet.name, mask, allowable_addresses,
-                             pool_settings.vm_count)):
+                             pool_total_vm_count)):
                 raise RuntimeError('Pool deployment rejected by user')
         logger.info('using virtual network subnet id: {}'.format(subnet.id))
     else:
@@ -856,7 +860,9 @@ def _add_pool(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id),
         vm_size=pool_settings.vm_size,
-        target_dedicated=pool_settings.vm_count,
+        target_dedicated_nodes=pool_settings.vm_count.dedicated,
+        target_low_priority_nodes=pool_settings.vm_count.low_priority,
+        resize_timeout=pool_settings.resize_timeout,
         max_tasks_per_node=pool_settings.max_tasks_per_node,
         enable_inter_node_communication=pool_settings.
         inter_node_communication_enabled,
@@ -975,9 +981,13 @@ def _add_pool(
         # ingress data to shared fs if specified
         if pool_settings.transfer_files_on_pool_creation:
             _pool = batch_client.pool.get(pool.id)
+            total_vm_count = (
+                _pool.current_dedicated_nodes +
+                _pool.current_low_priority_nodes
+            )
             data.ingress_data(
                 batch_client, compute_client, network_client, config, rls=rls,
-                kind='shared', current_dedicated=_pool.current_dedicated)
+                kind='shared', total_vm_count=total_vm_count)
             del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
@@ -1041,7 +1051,7 @@ def _setup_glusterfs(
     batchtask = batchmodels.TaskAddParameter(
         id='gluster-setup',
         multi_instance_settings=batchmodels.MultiInstanceSettings(
-            number_of_instances=pool.current_dedicated,
+            number_of_instances=pool.current_dedicated_nodes,
             coordination_command_line=cmdline,
             common_resource_files=[
                 batchmodels.ResourceFile(
@@ -1089,14 +1099,78 @@ def _setup_glusterfs(
             batchtask.id, job_id))
 
 
-def _update_docker_images(batch_client, config, image=None, digest=None):
-    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
+    # type: (batchsc.BatchServiceClient, dict, batchmodels.CloudPool,
+    #        list) -> None
+    """Update docker images in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param batchmodels.CloudPool pool: cloud pool
+    :param list cmd: command
+    """
+    _pool = settings.pool_settings(config)
+    # get ssh settings
+    username = _pool.ssh.username
+    if util.is_none_or_empty(username):
+        raise ValueError('cannot update docker images without an SSH username')
+    ssh_private_key = _pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            _pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_private_key))
+    # iterate through all nodes
+    nodes = batch_client.compute_node.list(pool.id)
+    procs = []
+    failures = False
+    for node in nodes:
+        rls = batch_client.compute_node.get_remote_login_settings(
+            pool.id, node.id)
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
+            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
+            'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
+        ]
+        procs.append(util.subprocess_nowait(ssh_args, shell=False))
+        if len(procs) >= 40:
+            logger.debug('waiting for {} update processes to complete'.format(
+                len(procs)))
+            rcs = util.subprocess_wait_all(procs)
+            if any([x != 0 for x in rcs]):
+                failures = True
+            procs.clear()
+            del rcs
+    if len(procs) > 0:
+        logger.debug('waiting for {} update processes to complete'.format(
+            len(procs)))
+        rcs = util.subprocess_wait_all(procs)
+        if any([x != 0 for x in rcs]):
+            failures = True
+        procs.clear()
+        del rcs
+    if failures:
+        raise RuntimeError(
+            'failures detected updating docker image on pool: {}'.format(
+                pool.id))
+    else:
+        logger.info('docker image update completed for pool: {}'.format(
+            pool.id))
+
+
+def _update_docker_images(
+        batch_client, config, image=None, digest=None, force_ssh=False):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Update docker images in pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str image: docker image to update
     :param str digest: digest to update to
+    :param bool force_ssh: force update over SSH
     """
     # first check that peer-to-peer is disabled for pool
     pool_id = settings.pool_id(config)
@@ -1128,29 +1202,30 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
             images = [image]
         else:
             images = ['{}@{}'.format(image, digest)]
+    if util.is_none_or_empty(images):
+        logger.error('no images detected or specified to update')
+        return
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
-    # check pool current dedicated is > 0. There is no reason to run udi
+    # check pool current vms is > 0. There is no reason to run udi
     # if pool has no nodes in it. When the pool is resized up, the nodes
     # will always fetch either :latest if untagged or the latest :tag if
     # updated in the upstream registry
-    if pool.current_dedicated == 0:
+    if (pool.current_dedicated_nodes == 0 and
+            pool.current_low_priority_nodes == 0):
         logger.warning(
             ('not executing udi command as the current number of compute '
              'nodes is zero for pool {}').format(pool_id))
         return
-    # create job for update
-    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
-    job = batchmodels.JobAddParameter(
-        id=job_id,
-        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
-    )
+    if not force_ssh and pool.current_low_priority_nodes > 0:
+        logger.debug('forcing update via SSH due to low priority nodes')
+        force_ssh = True
     # create coordination command line
     # 1. log in again in case of cred expiry
     # 2. pull images with respect to registry
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
-    taskenv, coordcmd = batch.generate_docker_login_settings(config)
+    taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
     coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
     if registry != '':
         coordcmd.extend(
@@ -1158,8 +1233,17 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     coordcmd.append(
         'docker images --filter dangling=true -q --no-trunc | '
         'xargs --no-run-if-empty docker rmi')
+    if force_ssh:
+        _update_docker_images_over_ssh(batch_client, config, pool, coordcmd)
+        return
     coordcmd.append('touch .udi_success')
     coordcmd = util.wrap_commands_in_shell(coordcmd)
+    # create job for update
+    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
+    job = batchmodels.JobAddParameter(
+        id=job_id,
+        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+    )
     # create task
     batchtask = batchmodels.TaskAddParameter(
         id='update-docker-images',
@@ -1168,9 +1252,9 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         user_identity=batch._RUN_ELEVATED,
     )
     # create multi-instance task for pools with more than 1 node
-    if pool.current_dedicated > 1:
+    if pool.current_dedicated_nodes > 1:
         batchtask.multi_instance_settings = batchmodels.MultiInstanceSettings(
-            number_of_instances=pool.current_dedicated,
+            number_of_instances=pool.current_dedicated_nodes,
             coordination_command_line=coordcmd,
         )
         # create application command line
@@ -1191,7 +1275,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         time.sleep(1)
     # ensure all nodes have success file if multi-instance
     success = True
-    if pool.current_dedicated > 1:
+    if pool.current_dedicated_nodes > 1:
         nodes = batch_client.compute_node.list(pool_id)
         for node in nodes:
             try:
@@ -1278,8 +1362,10 @@ def _adjust_settings_for_pool_creation(config):
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
     # adjust inter node comm setting
-    if pool.vm_count < 1:
-        raise ValueError('invalid vm_count: {}'.format(pool.vm_count))
+    pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
+    if pool_total_vm_count < 1:
+        raise ValueError('invalid total vm_count: {}'.format(
+            pool_total_vm_count))
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)
@@ -1307,6 +1393,12 @@ def _adjust_settings_for_pool_creation(config):
         settings.set_block_until_all_global_resources_loaded(config, False)
     # re-read pool settings
     pool = settings.pool_settings(config)
+    # ensure internode is not enabled for mix node pools
+    if (pool.inter_node_communication_enabled and
+            pool.vm_count.dedicated > 0 and pool.vm_count.low_priority > 0):
+        raise ValueError(
+            'inter node communication cannot be enabled with both '
+            'dedicated and low priority nodes')
     # glusterfs requires internode comms and more than 1 node
     try:
         num_gluster = 0
@@ -1319,9 +1411,15 @@ def _adjust_settings_for_pool_creation(config):
                     # user to reconfigure
                     raise ValueError(
                         'inter node communication in pool configuration '
-                        'must be enabled for glusterfs')
-                if pool.vm_count <= 1:
-                    raise ValueError('vm_count should exceed 1 for glusterfs')
+                        'must be enabled for glusterfs on compute')
+                if pool.vm_count.low_priority > 0:
+                    raise ValueError(
+                        'glusterfs on compute cannot be installed on pools '
+                        'with low priority nodes')
+                if pool.vm_count.dedicated <= 1:
+                    raise ValueError(
+                        'vm_count dedicated should exceed 1 for glusterfs '
+                        'on compute')
                 num_gluster += 1
                 try:
                     if settings.gluster_volume_type(sdv, sdvkey) != 'replica':
@@ -1332,7 +1430,8 @@ def _adjust_settings_for_pool_creation(config):
                     pass
         if num_gluster > 1:
             raise ValueError(
-                'cannot create more than one GlusterFS volume per pool')
+                'cannot create more than one GlusterFS on compute volume '
+                'per pool')
     except KeyError:
         pass
 
@@ -1748,18 +1847,24 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     pool = settings.pool_settings(config)
     # check direction of resize
     _pool = batch_client.pool.get(pool.id)
-    if pool.vm_count == _pool.current_dedicated == _pool.target_dedicated:
+    if (pool.vm_count.dedicated == _pool.current_dedicated_nodes ==
+            _pool.target_dedicated_nodes and
+            pool.vm_count.low_priority == _pool.current_low_priority_nodes ==
+            _pool.target_low_priority_nodes):
         logger.error(
             'pool {} is already at {} nodes'.format(pool.id, pool.vm_count))
         return
-    resize_up = True
-    if pool.vm_count < _pool.target_dedicated:
-        resize_up = False
+    resize_up_d = False
+    resize_up_lp = False
+    if pool.vm_count.dedicated > _pool.current_dedicated_nodes:
+        resize_up_d = True
+    if pool.vm_count.low_priority > _pool.current_low_priority_nodes:
+        resize_up_lp = True
     del _pool
     create_ssh_user = False
     # try to get handle on public key, avoid generating another set
     # of keys
-    if resize_up:
+    if resize_up_d or resize_up_lp:
         if pool.ssh.username is None:
             logger.info('not creating ssh user on new nodes of pool {}'.format(
                 pool.id))
@@ -1795,6 +1900,10 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     logger.debug('glusterfs shared volume present: {}'.format(
         gluster_present))
     if gluster_present:
+        if resize_up_lp:
+            raise RuntimeError(
+                'cannot resize up a pool with glusterfs_on_compute and '
+                'low priority nodes')
         logger.debug('forcing wait to True due to glusterfs')
         wait = True
     # cache old nodes
@@ -1805,7 +1914,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     # resize pool
     nodes = batch.resize_pool(batch_client, config, wait)
     # add ssh user to new nodes if present
-    if create_ssh_user and resize_up:
+    if create_ssh_user and (resize_up_d or resize_up_lp):
         if wait:
             # get list of new nodes only
             new_nodes = [node for node in nodes if node.id not in old_nodes]
@@ -1818,15 +1927,15 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         else:
             logger.warning('ssh user was not added as --wait was not given')
     # add brick for new nodes
-    if gluster_present and resize_up:
+    if gluster_present and resize_up_d:
         # get pool current dedicated
         _pool = batch_client.pool.get(pool.id)
         # ensure current dedicated is the target
-        if pool.vm_count != _pool.current_dedicated:
+        if pool.vm_count.dedicated != _pool.current_dedicated_nodes:
             raise RuntimeError(
                 ('cannot perform glusterfs setup on new nodes, unexpected '
                  'current dedicated {} to vm_count {}').format(
-                     _pool.current_dedicated, pool.vm_count))
+                     _pool.current_dedicated_nodes, pool.vm_count.dedicated))
         del _pool
         # get internal ip addresses of new nodes
         new_nodes = [
@@ -1839,7 +1948,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
                 _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk,
-                pool.vm_count, masterip, ' '.join(new_nodes))])
+                pool.vm_count.dedicated, masterip, ' '.join(new_nodes))])
         # setup gluster
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERRESIZE_FILE,
@@ -1957,19 +2066,20 @@ def action_pool_rebootnode(
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 
 
-def action_pool_udi(batch_client, config, image, digest):
-    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+def action_pool_udi(batch_client, config, image, digest, ssh):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Pool Udi
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param str image: image to update
     :param str digest: digest to update to
+    :param bool ssh: use direct SSH update mode
     """
     if digest is not None and image is None:
         raise ValueError(
             'cannot specify a digest to update to without the image')
-    _update_docker_images(batch_client, config, image, digest)
+    _update_docker_images(batch_client, config, image, digest, force_ssh=ssh)
 
 
 def action_jobs_add(
@@ -2212,20 +2322,21 @@ def action_data_ingress(
     :param dict config: configuration dict
     :param str to_fs: ingress to remote filesystem
     """
-    pool_cd = None
+    pool_total_vm_count = None
     if util.is_none_or_empty(to_fs):
         try:
             # get pool current dedicated
             pool = batch_client.pool.get(settings.pool_id(config))
-            pool_cd = pool.current_dedicated
+            pool_total_vm_count = (
+                pool.current_dedicated_nodes + pool.current_low_priority_nodes
+            )
             del pool
             # ensure there are remote login settings
             rls = batch.get_remote_login_settings(
                 batch_client, config, nodes=None)
             # ensure nodes are at least idle/running for shared ingress
             kind = 'all'
-            if not batch.check_pool_nodes_runnable(
-                    batch_client, config):
+            if not batch.check_pool_nodes_runnable(batch_client, config):
                 kind = 'storage'
         except batchmodels.BatchErrorException as ex:
             if 'The specified pool does not exist' in ex.message.value:
@@ -2242,7 +2353,7 @@ def action_data_ingress(
                 'AAD credentials')
     storage_threads = data.ingress_data(
         batch_client, compute_client, network_client, config, rls=rls,
-        kind=kind, current_dedicated=pool_cd, to_fs=to_fs)
+        kind=kind, total_vm_count=pool_total_vm_count, to_fs=to_fs)
     data.wait_for_storage_threads(storage_threads)
 
 

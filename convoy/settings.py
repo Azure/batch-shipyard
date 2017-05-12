@@ -73,9 +73,15 @@ _VM_TCP_NO_TUNE = (
     'standard_d1_v2', 'standard_f1'
 )
 # named tuples
+PoolVmCountSettings = collections.namedtuple(
+    'PoolVmCountSettings', [
+        'dedicated',
+        'low_priority',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
-        'id', 'vm_size', 'vm_count', 'max_tasks_per_node',
+        'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
         'inter_node_communication_enabled', 'publisher', 'offer', 'sku',
         'reboot_on_start_task_failed',
         'block_until_all_global_resources_loaded',
@@ -434,6 +440,20 @@ def pool_specification(config):
     return config['pool_specification']
 
 
+def _pool_vm_count(config):
+    # type: (dict) -> PoolVmCountSettings
+    """Get Pool vm count settings
+    :param dict config: configuration object
+    :rtype: PoolVmCountSettings
+    :return: pool vm count settings
+    """
+    conf = pool_specification(config)['vm_count']
+    return PoolVmCountSettings(
+        dedicated=_kv_read(conf, 'dedicated', 0),
+        low_priority=_kv_read(conf, 'low_priority', 0),
+    )
+
+
 def pool_settings(config):
     # type: (dict) -> PoolSettings
     """Get Pool settings
@@ -446,6 +466,11 @@ def pool_settings(config):
         max_tasks_per_node = conf['max_tasks_per_node']
     except KeyError:
         max_tasks_per_node = 1
+    resize_timeout = _kv_read_checked(conf, 'resize_timeout')
+    if util.is_not_empty(resize_timeout):
+        resize_timeout = util.convert_string_to_timedelta(resize_timeout)
+    else:
+        resize_timeout = None
     try:
         inter_node_communication_enabled = conf[
             'inter_node_communication_enabled']
@@ -548,7 +573,8 @@ def pool_settings(config):
     return PoolSettings(
         id=conf['id'],
         vm_size=conf['vm_size'].lower(),  # normalize
-        vm_count=conf['vm_count'],
+        vm_count=_pool_vm_count(config),
+        resize_timeout=resize_timeout,
         max_tasks_per_node=max_tasks_per_node,
         inter_node_communication_enabled=inter_node_communication_enabled,
         publisher=conf['publisher'],
@@ -630,17 +656,6 @@ def pool_id(config, lower=False):
     """
     id = config['pool_specification']['id']
     return id.lower() if lower else id
-
-
-def pool_vm_count(config):
-    # type: (dict) -> int
-    """Get Pool vm count
-    :param dict config: configuration object
-    :param bool lower: lowercase return
-    :rtype: int
-    :return: pool vm count
-    """
-    return config['pool_specification']['vm_count']
 
 
 def pool_publisher(config, lower=False):
@@ -1224,13 +1239,15 @@ def data_replication_settings(config):
         p2p_compression = conf['compression']
     except KeyError:
         p2p_compression = True
+    pool_vm_count = _pool_vm_count(config)
+    total_vm_count = pool_vm_count.dedicated + pool_vm_count.low_priority
     try:
         p2p_concurrent_source_downloads = conf['concurrent_source_downloads']
         if (p2p_concurrent_source_downloads is None or
                 p2p_concurrent_source_downloads < 1):
             raise KeyError()
     except KeyError:
-        p2p_concurrent_source_downloads = pool_vm_count(config) // 6
+        p2p_concurrent_source_downloads = total_vm_count // 6
         if p2p_concurrent_source_downloads < 1:
             p2p_concurrent_source_downloads = 1
     try:
@@ -1239,7 +1256,7 @@ def data_replication_settings(config):
                 p2p_direct_download_seed_bias < 1):
             raise KeyError()
     except KeyError:
-        p2p_direct_download_seed_bias = pool_vm_count(config) // 10
+        p2p_direct_download_seed_bias = total_vm_count // 10
         if p2p_direct_download_seed_bias < 1:
             p2p_direct_download_seed_bias = 1
     return DataReplicationSettings(
@@ -2386,15 +2403,22 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):
-            if num_instances == 'pool_specification_vm_count':
-                num_instances = pool_vm_count(config)
-            elif num_instances == 'pool_current_dedicated':
+            if num_instances == 'pool_specification_vm_count_dedicated':
+                pool_vm_count = _pool_vm_count(config)
+                num_instances = pool_vm_count.dedicated
+            elif num_instances == 'pool_specification_vm_count_low_priority':
+                pool_vm_count = _pool_vm_count(config)
+                num_instances = pool_vm_count.low_priority
+            elif (num_instances == 'pool_current_dedicated' or
+                  num_instances == 'pool_current_low_priority'):
                 if cloud_pool is None:
                     raise RuntimeError(
                         ('Cannot retrieve current dedicated count for '
                          'pool: {}. Ensure pool exists.)'.format(pool_id)))
-                else:
-                    num_instances = cloud_pool.current_dedicated
+                if num_instances == 'pool_current_dedicated':
+                    num_instances = cloud_pool.current_dedicated_nodes
+                elif num_instances == 'pool_current_low_priority':
+                    num_instances = cloud_pool.current_low_priority_nodes
             else:
                 raise ValueError(
                     ('multi instance num instances setting '

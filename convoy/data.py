@@ -779,7 +779,7 @@ def wait_for_storage_threads(storage_threads):
 
 def ingress_data(
         batch_client, compute_client, network_client, config, rls=None,
-        kind=None, current_dedicated=None, to_fs=None):
+        kind=None, total_vm_count=None, to_fs=None):
     # type: (batch.BatchServiceClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict, dict, str,
     #        int, str) -> list
@@ -793,7 +793,7 @@ def ingress_data(
     :param dict config: configuration dict
     :param dict rls: remote login settings
     :param str kind: 'all', 'shared', 'storage', or 'remotefs'
-    :param int current_dedicated: current dedicated
+    :param int total_vm_count: total current vm count
     :param str to_fs: to remote filesystem
     :rtype: list
     :return: list of storage threads
@@ -821,15 +821,15 @@ def ingress_data(
                     'instead.')
             # check if this is going to a single vm
             if dest.shared_data_volume is None:
-                if current_dedicated == 1:
+                if total_vm_count == 1:
                     direct_single_node = True
                 elif kind == 'storage':
-                    # this is to prevent current_dedicated check below for
+                    # this is to prevent total_vm_count check below for
                     # non shared/all targets and will force continuation
                     # of the loop below
                     direct_single_node = True
-                elif current_dedicated is None:
-                    raise ValueError('current_dedicated is not set')
+                elif total_vm_count is None:
+                    raise ValueError('total_vm_count is not set')
                 else:
                     raise RuntimeError(
                         'Cannot ingress data directly into compute node '

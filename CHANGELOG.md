@@ -2,11 +2,21 @@
 
 ## [Unreleased]
 
+## [2.7.0b1] - 2017-05-12
 ### Added
+- Support for [Low Priority Batch Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+- `resize_timeout` can now be specified on the pool specification
 - `--clear-tables` option to `storage del` command which will delete
 blob containers and queues but clear table entries
+- `--ssh` option to `pool udi` command which will force the update Docker
+images command to update over SSH instead of through a Batch job. This is
+useful if you want to perform an out-of-band update of the Docker image, e.g.,
+your pool is currently busy processing tasks and would not be able to
+accommodate another task.
 
 ### Changed
+- **Breaking Change:** `vm_count` in the pool specification is now a
+complex property consisting of the properties `dedicated` and `low_priority`
 - Updated all dependencies to latest
 
 ### Fixed
@@ -599,7 +609,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...HEAD
+[2.7.0b1]: https://github.com/Azure/batch-shipyard/compare/2.6.2...2.7.0b1
 [2.6.2]: https://github.com/Azure/batch-shipyard/compare/2.6.1...2.6.2
 [2.6.1]: https://github.com/Azure/batch-shipyard/compare/2.6.0...2.6.1
 [2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...2.6.0

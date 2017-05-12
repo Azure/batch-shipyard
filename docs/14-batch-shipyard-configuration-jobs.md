@@ -360,13 +360,21 @@ transferred again. This object currently supports `azure_batch` and
     property for tasks that are not multi-instance. Additional members of this
     property are:
     * `num_instances` is a property setting the number of compute node
-      instances are required for this multi-instance task. This can be any one
-      of the following:
-      1. An integral number
+      instances are required for this multi-instance task. Note that it is
+      generally recommended not to use low priority nodes for multi-instance
+      tasks as compute nodes may be pre-empted at any time. This property
+      can be any one of the following:
+      1. An integral number. Note that if there are insufficient nodes to
+         matching this number, the task will be blocked.
       2. `pool_current_dedicated` which is the instantaneous reading of the
          target pool's current dedicated count during this function invocation.
-      3. `pool_specification_vm_count` which is the `vm_count` specified in the
-         pool configuration.
+      3. `pool_current_low_priority` which is the instantaneous reading of the
+         target pool's current low priority count during this function
+         invocation.
+      4. `pool_specification_vm_count_dedicated` which is the
+         `vm_count`:`dedicated` specified in the pool configuration.
+      5. `pool_specification_vm_count_low_priority` which is the
+         `vm_count`:`low_priority` specified in the pool configuration.
     * `coordination_command` is the coordination command this is run by each
       instance (compute node) of this multi-instance task prior to the
       application command. This command must not block and must exit

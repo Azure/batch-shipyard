@@ -1212,15 +1212,18 @@ def pool_rebootnode(ctx, all_start_task_failed, nodeid):
     '--image', help='Docker image[:tag] to update')
 @click.option(
     '--digest', help='Digest to update image to')
+@click.option(
+    '--ssh', help='Update over SSH instead of using a Batch job')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_udi(ctx, image, digest):
+def pool_udi(ctx, image, digest, ssh):
     """Update Docker images in a pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_udi(ctx.batch_client, ctx.config, image, digest)
+    convoy.fleet.action_pool_udi(
+        ctx.batch_client, ctx.config, image, digest, ssh)
 
 
 @cli.group()

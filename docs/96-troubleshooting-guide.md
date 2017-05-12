@@ -142,3 +142,11 @@ the number of compute nodes reaches the prior number. Additionally, if
 `max_tasks_per_node` is set to 1 or unspecified in `pool.json` and any
 task is running on any node, the update Docker images job will be blocked
 until that task completes.
+
+You can work around this behavior by providing the `--ssh` option to the
+`pool udi` command. This will use an SSH side-channel to upgrade the Docker
+images on the pool. Please note that this requires a provisioned SSH user
+and `ssh` or `ssh.exe` available.
+
+`pool udi` will always use the SSH side-channel method for pools containing
+a positive number of low priority nodes.

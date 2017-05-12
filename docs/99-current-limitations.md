@@ -2,6 +2,7 @@
 Please read the following carefully concerning current limitations with
 Batch Shipyard and Docker-enabled compute pools.
 
+### Azure Batch and Batch Shipyard Command Restrictions
 The following Azure Batch actions should only be performed through Batch
 Shipyard when deploying your workload through this toolkit as Batch
 Shipyard needs to take special actions or ensure the intended outcome:
@@ -19,7 +20,7 @@ allocated pool since all of the preparation for each compute node will not
 be present in those pools. Please use `pool add` with your pool specification
 to create compute resources to execute your Batch Shipyard jobs against.
 
-The following are general limitations or restrictions:
+### General Limitations and Restrictions
 * SSH tunnel script generation is only compatible with non-Windows machines.
 * Data movement support on Windows is restricted to scp. Both `ssh.exe` and
 `scp.exe` must be found through `%PATH%` or in the current working directory.
@@ -45,3 +46,23 @@ Batch Shipyard at this time.
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
 This is a current limitation of the underlying VM and host drivers.
+* GlusterFS on compute can only be used on pure dedicated Batch pools.
+Allocation will fail if such a shared data volume is specified or if a resize
+is attempted.
+
+### Special Considerations for Low-Priority Compute Nodes
+* Pool and compute node allocation may take up to the full resize timeout
+and not reach full allocation with low priority if a low priority node is
+pre-empted and the target number of low priority nodes cannot be reached.
+* Pool allocation is considered successful if the target number of dedicated
+nodes is reached. If the number of low priority nodes cannot be reached,
+a resize error will be logged, but the allocation will continue such as
+continuing with SSH user provisioning and data ingress.
+* Certain commands may timeout and fail with low priority nodes. As nodes
+can be pre-empted at any time, commands that rely on interacting with the
+node such as direct SSH access, task termination, etc. may not complete
+successfully.
+* `pool udi` command will only run a multi-instance update if a compute
+pool is completely comprised of dedicated nodes. For pools with any
+low-priority nodes then images will be updated individually on each node via
+SSH, thus requiring an SSH user to be active and allocated on the nodes.

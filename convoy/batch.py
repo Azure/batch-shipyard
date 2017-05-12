@@ -243,13 +243,24 @@ def _block_for_nodes_ready(
     i = 0
     reboot_map = {}
     while True:
-        # refresh pool to ensure that there is no resize error
+        # refresh pool to ensure that there is no dedicated resize error
         pool = batch_client.pool.get(pool_id)
-        if pool.resize_error is not None:
-            raise RuntimeError(
-                'Resize error encountered for pool {}: code={} msg={}'.format(
-                    pool.id, pool.resize_error.code,
-                    pool.resize_error.message))
+        if util.is_not_empty(pool.resize_errors):
+            dedicated_failure = False
+            errors = []
+            for err in pool.resize_errors:
+                errors.append('code={} msg={}'.format(err.code, err.message))
+                if 'Desired number of dedicated nodes' in err.message:
+                    dedicated_failure = True
+            if dedicated_failure:
+                raise RuntimeError(
+                    'Fatal resize errors encountered for pool {}: {}'.format(
+                        pool.id, os.linesep.join(errors)))
+            else:
+                logger.error(
+                    'Resize errors encountered for pool {}: {}'.format(
+                        pool.id, os.linesep.join(errors)))
+                return list(batch_client.compute_node.list(pool.id))
         nodes = list(batch_client.compute_node.list(pool.id))
         # check if any nodes are in start task failed state
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
@@ -297,7 +308,9 @@ def _block_for_nodes_ready(
                      'directory if available. If this error appears '
                      'non-transient, please submit an issue on '
                      'GitHub.').format(pool.id))
-        if (len(nodes) == pool.target_dedicated and
+        if (len(nodes) ==
+                (pool.target_dedicated_nodes +
+                 pool.target_low_priority_nodes) and
                 all(node.state in stopping_states for node in nodes)):
             if any(node.state not in end_states for node in nodes):
                 # list nodes of pool
@@ -313,8 +326,11 @@ def _block_for_nodes_ready(
         i += 1
         if i % 3 == 0:
             i = 0
-            logger.debug('waiting for {} nodes to reach desired state'.format(
-                pool.target_dedicated))
+            logger.debug(
+                ('waiting for {} dedicated nodes and {} low priority nodes '
+                 'to reach desired state').format(
+                     pool.target_dedicated_nodes,
+                     pool.target_low_priority_nodes))
             for node in nodes:
                 logger.debug('{}: {}'.format(node.id, node.state))
         time.sleep(10)
@@ -366,7 +382,8 @@ def check_pool_nodes_runnable(batch_client, config):
     )
     pool = batch_client.pool.get(pool_id)
     nodes = list(batch_client.compute_node.list(pool_id))
-    if (len(nodes) >= pool.target_dedicated and
+    if (len(nodes) >=
+            (pool.target_dedicated_nodes + pool.target_low_priority_nodes) and
             all(node.state in node_state for node in nodes)):
         return True
     return False
@@ -436,7 +453,9 @@ def _add_admin_user_to_compute_node(
             logger.warning('user {} already exists on node {}'.format(
                 username, node.id))
         else:
-            raise
+            # log as error instead of raising the exception in case
+            # of low-priority removal
+            logger.error(ex.message.value)
 
 
 def add_ssh_user(batch_client, config, nodes=None):
@@ -585,16 +604,22 @@ def list_pools(batch_client):
     i = 0
     pools = batch_client.pool.list()
     for pool in pools:
-        if pool.resize_error is not None:
-            re = ' resize_error=(code={} msg={})'.format(
-                pool.resize_error.code, pool.resize_error.message)
+        if util.is_not_empty(pool.resize_errors):
+            errors = []
+            for err in pool.resize_errors:
+                errors.append('code={} msg={}'.format(err.code, err.message))
+            errors = ' resize_error=({})'.format(' '.join(errors))
         else:
-            re = ''
+            errors = ''
         logger.info(
             ('pool_id={} [state={} allocation_state={}{} vm_size={}, '
-             'vm_count={} target_vm_count={}]'.format(
-                 pool.id, pool.state, pool.allocation_state, re, pool.vm_size,
-                 pool.current_dedicated, pool.target_dedicated)))
+             'vm_dedicated_count={} target_vm_dedicated_count={} '
+             'vm_low_priority_count={} '
+             'target_vm_low_priority_count={}]'.format(
+                 pool.id, pool.state, pool.allocation_state, errors,
+                 pool.vm_size, pool.current_dedicated_nodes,
+                 pool.target_dedicated_nodes, pool.current_low_priority_nodes,
+                 pool.target_low_priority_nodes)))
         i += 1
     if i == 0:
         logger.error('no pools found')
@@ -611,20 +636,20 @@ def resize_pool(batch_client, config, wait=False):
     :rtype: list or None
     :return: list of nodes if wait or None
     """
-    pool_id = settings.pool_id(config)
-    vm_count = settings.pool_vm_count(config)
+    pool = settings.pool_settings(config)
     logger.info('Resizing pool {} to {} compute nodes'.format(
-        pool_id, vm_count))
+        pool.id, pool.vm_count))
     batch_client.pool.resize(
-        pool_id=pool_id,
+        pool_id=pool.id,
         pool_resize_parameter=batchmodels.PoolResizeParameter(
-            target_dedicated=vm_count,
-            resize_timeout=datetime.timedelta(minutes=20),
+            target_dedicated_nodes=pool.vm_count.dedicated,
+            target_low_priority_nodes=pool.vm_count.low_priority,
+            resize_timeout=pool.resize_timeout,
         )
     )
     if wait:
         return wait_for_pool_ready(
-            batch_client, config, pool_id,
+            batch_client, config, pool.id,
             addl_end_states=[batchmodels.ComputeNodeState.running])
 
 
@@ -1251,12 +1276,12 @@ def list_nodes(batch_client, config, nodes=None):
         else:
             info = ''
         if node.start_task_info is not None:
-            if node.start_task_info.scheduling_error is not None:
-                info += (' start_task_scheduling_error=(category={} code={} '
+            if node.start_task_info.failure_info is not None:
+                info += (' start_task_failure_info=(category={} code={} '
                          'message={})').format(
-                             node.start_task_info.scheduling_error.category,
-                             node.start_task_info.scheduling_error.code,
-                             node.start_task_info.scheduling_error.message)
+                             node.start_task_info.failure_info.category,
+                             node.start_task_info.failure_info.code,
+                             node.start_task_info.failure_info.message)
             else:
                 info += ' start_task_exit_code={}'.format(
                     node.start_task_info.exit_code)
@@ -1682,15 +1707,12 @@ def list_tasks(batch_client, config, jobid=None):
             tasks = batch_client.task.list(jobid)
             for task in tasks:
                 if task.execution_info is not None:
-                    if task.execution_info.scheduling_error is not None:
-                        ei = (' scheduling_error=(category={} code={} '
+                    if task.execution_info.failure_info is not None:
+                        ei = (' failure_info=(category={} code={} '
                               'message={})').format(
-                                  task.execution_info.
-                                  scheduling_error.category,
-                                  task.execution_info.
-                                  scheduling_error.code,
-                                  task.execution_info.
-                                  scheduling_error.message)
+                                  task.execution_info.failure_info.category,
+                                  task.execution_info.failure_info.code,
+                                  task.execution_info.failure_info.message)
                     else:
                         if (task.execution_info.end_time is not None and
                                 task.execution_info.start_time is not None):
@@ -1779,11 +1801,12 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
             logger.error('no tasks found for job {}'.format(jobid))
 
 
-def generate_docker_login_settings(config):
-    # type: (dict) -> tuple
+def generate_docker_login_settings(config, for_ssh=False):
+    # type: (dict, bool) -> tuple
     """Generate docker login environment variables and command line
     for login/re-login
     :param dict config: configuration object
+    :param bool for_ssh: for direct SSH use
     :rtype: tuple
     :return: (env vars, login cmds)
     """
@@ -1838,6 +1861,24 @@ def generate_docker_login_settings(config):
             cmd.append(
                 'docker login -u $DOCKER_LOGIN_USERNAME '
                 '-p $DOCKER_LOGIN_PASSWORD')
+    # transform env and cmd into single command for ssh
+    if for_ssh:
+        key = '${}'.format('DOCKER_LOGIN_PASSWORD')
+        pw = cmd[0][22:].replace(key, env[1].value)
+        cmd = cmd[1].replace(key, pw)
+        key = '${}'.format('DOCKER_LOGIN_USERNAME')
+        cmd = cmd.replace(key, env[0].value)
+        key = 'openssl'
+        if key in cmd:
+            cmd = cmd.replace(key, 'sudo {}'.format(key))
+        key = '$AZ_BATCH_NODE_STARTUP_DIR'
+        if key in cmd:
+            start_mnt = '/'.join((
+                settings.temp_disk_mountpoint(config), 'batch', 'tasks',
+                'startup',
+            ))
+            cmd = cmd.replace(key, start_mnt)
+        return None, [cmd]
     return env, cmd
 
 
