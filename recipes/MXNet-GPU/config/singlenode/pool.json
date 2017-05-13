@@ -2,7 +2,9 @@
     "pool_specification": {
         "id": "mxnet-singlenode",
         "vm_size": "STANDARD_NC24",
-        "vm_count": 1,
+        "vm_count": {
+            "dedicated": 1
+        },
         "publisher": "Canonical",
         "offer": "UbuntuServer",
         "sku": "16.04-LTS",
