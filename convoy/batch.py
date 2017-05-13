@@ -1287,11 +1287,12 @@ def list_nodes(batch_client, config, nodes=None):
                     node.start_task_info.exit_code)
         logger.info(
             ('node_id={} [state={}{} scheduling_state={} ip_address={} '
-             'vm_size={} total_tasks_run={} running_tasks_count={} '
-             'total_tasks_succeeded={}]').format(
+             'vm_size={} dedicated={} total_tasks_run={} '
+             'running_tasks_count={} total_tasks_succeeded={}]').format(
                  node.id, node.state, info, node.scheduling_state,
-                 node.ip_address, node.vm_size, node.total_tasks_run,
-                 node.running_tasks_count, node.total_tasks_succeeded))
+                 node.ip_address, node.vm_size, node.is_dedicated,
+                 node.total_tasks_run, node.running_tasks_count,
+                 node.total_tasks_succeeded))
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):

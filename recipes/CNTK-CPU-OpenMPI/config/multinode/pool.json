@@ -2,7 +2,9 @@
     "pool_specification": {
         "id": "cntk-cpu-multinode",
         "vm_size": "STANDARD_D1_V2",
-        "vm_count": 3,
+        "vm_count": {
+            "dedicated": 3
+        },
         "inter_node_communication_enabled": true,
         "publisher": "Canonical",
         "offer": "UbuntuServer",

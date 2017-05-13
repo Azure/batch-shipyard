@@ -46,9 +46,6 @@ Batch Shipyard at this time.
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
 This is a current limitation of the underlying VM and host drivers.
-* GlusterFS on compute can only be used on pure dedicated Batch pools.
-Allocation will fail if such a shared data volume is specified or if a resize
-is attempted.
 
 ### Special Considerations for Low-Priority Compute Nodes
 * Pool and compute node allocation may take up to the full resize timeout
@@ -66,3 +63,7 @@ successfully.
 pool is completely comprised of dedicated nodes. For pools with any
 low-priority nodes then images will be updated individually on each node via
 SSH, thus requiring an SSH user to be active and allocated on the nodes.
+* GlusterFS on compute can only be used on pure dedicated Batch pools.
+Allocation will fail if such a shared data volume is specified on a pool with
+low priority nodes or if a resize to include low priority nodes is attempted
+with a GlusterFS on compute shared data volume.

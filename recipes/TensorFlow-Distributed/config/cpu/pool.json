@@ -2,7 +2,9 @@
     "pool_specification": {
         "id": "tensorflow-distributed",
         "vm_size": "STANDARD_D4_V2",
-        "vm_count": 2,
+        "vm_count": {
+            "dedicated": 2
+        },
         "inter_node_communication_enabled": true,
         "publisher": "Canonical",
         "offer": "UbuntuServer",

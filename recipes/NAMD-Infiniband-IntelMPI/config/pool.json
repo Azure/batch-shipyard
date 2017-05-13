@@ -2,7 +2,9 @@
     "pool_specification": {
         "id": "docker-namd-rdma",
         "vm_size": "STANDARD_A9",
-        "vm_count": 4,
+        "vm_count": {
+            "dedicated": 4
+        },
         "inter_node_communication_enabled": true,
         "publisher": "OpenLogic",
         "offer": "CentOS-HPC",

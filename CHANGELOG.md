@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Log if node is dedicated in `pool listnodes`
+- Updated all recipes with new `vm_count` changes
+
 ## [2.7.0b1] - 2017-05-12
 ### Added
 - Support for [Low Priority Batch Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
@@ -10,7 +14,7 @@
 blob containers and queues but clear table entries
 - `--ssh` option to `pool udi` command which will force the update Docker
 images command to update over SSH instead of through a Batch job. This is
-useful if you want to perform an out-of-band update of the Docker image, e.g.,
+useful if you want to perform an out-of-band update of Docker image(s), e.g.,
 your pool is currently busy processing tasks and would not be able to
 accommodate another task.
 

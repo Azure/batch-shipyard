@@ -2,7 +2,9 @@
     "pool_specification": {
         "id": "tensorflow-gpu",
         "vm_size": "STANDARD_NC6",
-        "vm_count": 1,
+        "vm_count": {
+            "dedicated": 1
+        },
         "publisher": "Canonical",
         "offer": "UbuntuServer",
         "sku": "16.04-LTS",
