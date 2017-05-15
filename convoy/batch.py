@@ -351,9 +351,13 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
     base_stopping_states = [
         batchmodels.ComputeNodeState.start_task_failed,
         batchmodels.ComputeNodeState.unusable,
-        batchmodels.ComputeNodeState.idle
+        batchmodels.ComputeNodeState.preempted,
+        batchmodels.ComputeNodeState.idle,
     ]
-    base_end_states = [batchmodels.ComputeNodeState.idle]
+    base_end_states = [
+        batchmodels.ComputeNodeState.preempted,
+        batchmodels.ComputeNodeState.idle,
+    ]
     if addl_end_states is not None and len(addl_end_states) > 0:
         base_stopping_states.extend(addl_end_states)
         base_end_states.extend(addl_end_states)

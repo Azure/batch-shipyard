@@ -961,6 +961,13 @@ def _add_pool(
         batch.generate_docker_login_settings(config)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
+    if util.is_none_or_empty(nodes):
+        raise RuntimeError(
+            ('No nodes could be allocated for pool: {}. If the pool is '
+             'comprised entirely of low priority nodes, then there may not '
+             'have been enough available capacity in the region to satisfy '
+             'your request. Please inspect the pool for errors and issue '
+             'pool resize to try again.').format(pool.id))
     # set up gluster on compute if specified
     if gluster_on_compute:
         _setup_glusterfs(
