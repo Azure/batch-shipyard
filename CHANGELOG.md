@@ -3,8 +3,13 @@
 ## [Unreleased]
 
 ### Changed
+- Allow the prior `vm_count` behavior, but provide a deprecation warning. The
+old `vm_count` behavior will be removed in a future release. (#84)
 - Log if node is dedicated in `pool listnodes`
 - Updated all recipes with new `vm_count` changes
+
+### Fixed
+- Improve pool resize wait logic for pools with mixed node types
 
 ## [2.7.0b1] - 2017-05-12
 ### Added

@@ -59,10 +59,10 @@ continuing with SSH user provisioning and data ingress.
 can be pre-empted at any time, commands that rely on interacting with the
 node such as direct SSH access, task termination, etc. may not complete
 successfully.
-* `pool udi` command will only run a multi-instance update if a compute
-pool is completely comprised of dedicated nodes. For pools with any
-low-priority nodes then images will be updated individually on each node via
-SSH, thus requiring an SSH user to be active and allocated on the nodes.
+* `pool udi` command will only run as a Batch job if a compute pool is
+completely comprised of dedicated nodes. For pools with any low-priority
+nodes then images will be updated individually on each node via SSH, thus
+requiring an SSH user to be active and allocated on the nodes.
 * GlusterFS on compute can only be used on pure dedicated Batch pools.
 Allocation will fail if such a shared data volume is specified on a pool with
 low priority nodes or if a resize to include low priority nodes is attempted

@@ -641,8 +641,12 @@ def resize_pool(batch_client, config, wait=False):
     :return: list of nodes if wait or None
     """
     pool = settings.pool_settings(config)
-    logger.info('Resizing pool {} to {} compute nodes'.format(
-        pool.id, pool.vm_count))
+    _pool = batch_client.pool.get(pool.id)
+    logger.info(
+        ('Resizing pool {} to {} compute nodes [current_dedicated_nodes={} '
+         'current_low_priority_nodes={}]').format(
+             pool.id, pool.vm_count, _pool.current_dedicated_nodes,
+             _pool.current_low_priority_nodes))
     batch_client.pool.resize(
         pool_id=pool.id,
         pool_resize_parameter=batchmodels.PoolResizeParameter(
@@ -652,6 +656,20 @@ def resize_pool(batch_client, config, wait=False):
         )
     )
     if wait:
+        # wait until at least one node has entered leaving_pool state first
+        total_vm_count = (
+            _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
+        )
+        if total_vm_count > 0:
+            logger.debug(
+                'waiting for resize to start on pool: {}'.format(pool.id))
+            while True:
+                nodes = list(batch_client.compute_node.list(pool.id))
+                if any(node.state == batchmodels.ComputeNodeState.leaving_pool
+                       for node in nodes):
+                    break
+                else:
+                    time.sleep(1)
         return wait_for_pool_ready(
             batch_client, config, pool.id,
             addl_end_states=[batchmodels.ComputeNodeState.running])
