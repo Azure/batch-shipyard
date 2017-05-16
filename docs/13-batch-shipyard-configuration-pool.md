@@ -87,7 +87,9 @@ The `pool_specification` property has the following members:
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
 * (required) `vm_count` is the number of compute nodes to allocate. You may
-specify a mixed number of compute nodes in the following properties:
+specify a number of dedicated compute nodes to allocate if you only desire
+dedicated nodes and no low-priority nodes. Alternatively, you can supply a
+mixed number of compute nodes in the following properties:
   * (optional) `dedicated` is the number of dedicated compute nodes to
     allocate. These nodes cannot be pre-empted. The default value is `0`.
   * (optional) `low_priority` is the number of low-priority compute nodes to
