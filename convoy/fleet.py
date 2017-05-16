@@ -154,12 +154,12 @@ _ALL_REMOTEFS_FILES = [
 ]
 
 
-def adjust_general_settings(config):
+def check_for_invalid_config(config):
     # type: (dict) -> None
-    """Adjust general settings
+    """Check for invalid configuration settings
     :param dict config: configuration dict
     """
-    # check for deprecated properties
+    # check for invalid properties, remove checks on next major release
     try:
         config['pool_specification']['ssh_docker_tunnel']
     except KeyError:
@@ -189,6 +189,26 @@ def adjust_general_settings(config):
             'found in global configuration. Please update your global '
             'configuration file. See the configuration doc for more '
             'information.')
+    # check for deprecated properties
+    try:
+        config['docker_registry']['azure_storage']
+    except KeyError:
+        pass
+    else:
+        logger.warning(
+            'DEPRECATION WARNING: docker_registry:azure_storage is '
+            'specified. Docker private registries backed by Azure Storage '
+            'blobs will not be supported in future releases. Please '
+            'migrate your Docker images to Azure Container Registry, '
+            'Docker Hub (public or private), or any other Internet '
+            'accessible Docker registry solution.')
+    if isinstance(config['pool_specification']['vm_count'], int):
+        logger.warning(
+            'DEPRECATION WARNING: pool_specification:vm_count is directly '
+            'set with an integral value for dedicated nodes. This '
+            'configuration will not be supported in future releases. '
+            'Please update your configuration to include a complex property '
+            'of dedicated and/or low_priority nodes for vm_count.')
 
 
 def populate_global_settings(config, fs_storage):

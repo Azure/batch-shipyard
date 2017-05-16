@@ -448,6 +448,8 @@ def _pool_vm_count(config):
     :return: pool vm count settings
     """
     conf = pool_specification(config)['vm_count']
+    if isinstance(conf, int):
+        conf = {'dedicated': conf}
     return PoolVmCountSettings(
         dedicated=_kv_read(conf, 'dedicated', 0),
         low_priority=_kv_read(conf, 'low_priority', 0),

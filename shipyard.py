@@ -320,7 +320,7 @@ class CliContext(object):
                     self._read_json_file(self.json_jobs)
         # adjust settings
         if not skip_global_config:
-            convoy.fleet.adjust_general_settings(self.config)
+            convoy.fleet.check_for_invalid_config(self.config)
             convoy.fleet.populate_global_settings(self.config, fs_storage)
         # show config if specified
         if self.show_config:
