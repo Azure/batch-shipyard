@@ -1447,6 +1447,10 @@ def _adjust_settings_for_pool_creation(config):
                     raise ValueError(
                         'vm_count dedicated should exceed 1 for glusterfs '
                         'on compute')
+                if pool.max_tasks_per_node > 1:
+                    raise ValueError(
+                        'max_tasks_per_node cannot exceed 1 for glusterfs '
+                        'on compute')
                 num_gluster += 1
                 try:
                     if settings.gluster_volume_type(sdv, sdvkey) != 'replica':
