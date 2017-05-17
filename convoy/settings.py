@@ -2354,8 +2354,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # mount batch root dir
     run_opts.append(
         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
-    # set working directory
-    run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+    # set working directory if not already set
+    if not any((x.startswith('-w ') or x.startswith('--workdir '))
+               for x in run_opts):
+        run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
     # always add option for envfile
     envfile = '.shipyard.envlist'
     run_opts.append('--env-file {}'.format(envfile))
