@@ -2,14 +2,19 @@
 
 ## [Unreleased]
 
+## [2.7.0b2] - 2017-05-18
 ### Changed
 - Allow the prior `vm_count` behavior, but provide a deprecation warning. The
 old `vm_count` behavior will be removed in a future release. (#84)
+- Add tasks via collection (#86)
 - Log if node is dedicated in `pool listnodes`
 - Updated all recipes with new `vm_count` changes
 
 ### Fixed
 - Improve pool resize wait logic for pools with mixed node types
+- Do not override workdir if specified (#87)
+- Prevent container scanning for data ingress from Azure Storage if include
+filter contains no wildcards (#88)
 
 ## [2.7.0b1] - 2017-05-12
 ### Added
@@ -618,7 +623,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...HEAD
+[2.7.0b2]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...2.7.0b2
 [2.7.0b1]: https://github.com/Azure/batch-shipyard/compare/2.6.2...2.7.0b1
 [2.6.2]: https://github.com/Azure/batch-shipyard/compare/2.6.1...2.6.2
 [2.6.1]: https://github.com/Azure/batch-shipyard/compare/2.6.0...2.6.1
