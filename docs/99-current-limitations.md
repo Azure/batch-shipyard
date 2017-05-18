@@ -46,6 +46,9 @@ Batch Shipyard at this time.
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
 This is a current limitation of the underlying VM and host drivers.
+* Adding tasks to the same job across multiple, concurrent Batch Shipyard
+invocations may result in failure if task ids for these jobs are
+auto-generated.
 
 ### Special Considerations for Low-Priority Compute Nodes
 * Pool and compute node allocation may take up to the full resize timeout
