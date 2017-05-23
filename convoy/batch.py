@@ -2132,9 +2132,11 @@ def add_jobs(
         # define max task retry count constraint for this task if set
         job_constraints = None
         max_task_retries = settings.job_max_task_retries(jobspec)
-        if max_task_retries is not None:
+        max_wall_time = settings.job_max_wall_time(jobspec)
+        if max_task_retries is not None or max_wall_time is not None:
             job_constraints = batchmodels.JobConstraints(
-                max_task_retry_count=max_task_retries
+                max_task_retry_count=max_task_retries,
+                max_wall_clock_time=max_wall_time,
             )
         # construct job prep
         jpcmd = []
@@ -2351,7 +2353,10 @@ def add_jobs(
             task_constraints = batchmodels.TaskConstraints(
                 retention_time=task.retention_time,
                 max_task_retry_count=task.max_task_retries,
+                max_wall_clock_time=task.max_wall_time,
             )
+            print(task_constraints.max_wall_clock_time)
+            print(task_constraints.max_task_retry_count)
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,

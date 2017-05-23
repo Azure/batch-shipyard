@@ -179,8 +179,9 @@ TaskSettings = collections.namedtuple(
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'environment_variables_keyvault_secret_id', 'envfile',
         'resource_files', 'command', 'infiniband', 'gpu', 'depends_on',
-        'depends_on_range', 'max_task_retries', 'retention_time',
-        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+        'depends_on_range', 'max_task_retries', 'max_wall_time',
+        'retention_time', 'docker_run_cmd', 'docker_exec_cmd',
+        'multi_instance',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -1915,6 +1916,19 @@ def job_max_task_retries(conf):
     return max_task_retries
 
 
+def job_max_wall_time(conf):
+    # type: (dict) -> int
+    """Get maximum wall time for any task of a job
+    :param dict conf: job configuration object
+    :rtype: datetime.timedelta
+    :return: max wall time
+    """
+    max_wall_time = _kv_read_checked(conf, 'max_wall_time')
+    if util.is_not_empty(max_wall_time):
+        max_wall_time = util.convert_string_to_timedelta(max_wall_time)
+    return max_wall_time
+
+
 def job_allow_run_on_missing(conf):
     # type: (dict) -> int
     """Get allow task run on missing image
@@ -2138,23 +2152,24 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     except KeyError:
         run_opts = []
     # parse remove container option
+    rm_container = False
     try:
         rm_container = conf['remove_container_after_exit']
     except KeyError:
-        pass
-    else:
-        if rm_container and '--rm' not in run_opts:
-            run_opts.append('--rm')
+        rm_container = _kv_read(jobspec, 'remove_container_after_exit', False)
+    if rm_container and '--rm' not in run_opts:
+        run_opts.append('--rm')
+    del rm_container
     # parse /dev/shm option
+    shm_size = None
     try:
         shm_size = conf['shm_size']
-        if util.is_none_or_empty(shm_size):
-            raise KeyError()
     except KeyError:
-        pass
-    else:
-        if not any(x.startswith('--shm-size=') for x in run_opts):
-            run_opts.append('--shm-size={}'.format(shm_size))
+        shm_size = _kv_read_checked(jobspec, 'shm_size')
+    if (util.is_not_empty(shm_size) and
+            not any(x.startswith('--shm-size=') for x in run_opts)):
+        run_opts.append('--shm-size={}'.format(shm_size))
+    del shm_size
     # parse name option, if not specified use task id
     try:
         name = conf['name']
@@ -2198,13 +2213,18 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     except KeyError:
         command = None
     # parse data volumes
+    data_volumes = _kv_read_checked(jobspec, 'data_volumes')
     try:
-        data_volumes = conf['data_volumes']
-        if util.is_none_or_empty(data_volumes):
-            raise KeyError()
+        tdv = conf['data_volumes']
+        if util.is_not_empty(tdv):
+            if util.is_not_empty(data_volumes):
+                data_volumes.extend(tdv)
+            else:
+                data_volumes = tdv
+        del tdv
     except KeyError:
         pass
-    else:
+    if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:
             try:
@@ -2219,14 +2239,20 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             else:
                 run_opts.append('-v {}'.format(
                     dv[dvkey]['container_path']))
+    del data_volumes
     # parse shared data volumes
+    shared_data_volumes = _kv_read_checked(jobspec, 'shared_data_volumes')
     try:
-        shared_data_volumes = conf['shared_data_volumes']
-        if util.is_none_or_empty(shared_data_volumes):
-            raise KeyError()
+        tsdv = conf['shared_data_volumes']
+        if util.is_not_empty(tsdv):
+            if util.is_not_empty(shared_data_volumes):
+                shared_data_volumes.extend(tsdv)
+            else:
+                shared_data_volumes = tsdv
+        del tsdv
     except KeyError:
         pass
-    else:
+    if util.is_not_empty(shared_data_volumes):
         sdv = global_resources_shared_data_volumes(config)
         for sdvkey in shared_data_volumes:
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
@@ -2242,6 +2268,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             else:
                 run_opts.append('-v {}:{}'.format(
                     sdvkey, shared_data_volume_container_path(sdv, sdvkey)))
+    del shared_data_volumes
     # append user identity options
     attach_ui = False
     if ui.default_pool_admin:
@@ -2282,24 +2309,36 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise KeyError()
     except KeyError:
         max_task_retries = None
+    # max wall time
+    try:
+        max_wall_time = conf['max_wall_time']
+        if max_wall_time is None:
+            raise KeyError()
+        else:
+            max_wall_time = util.convert_string_to_timedelta(max_wall_time)
+    except KeyError:
+        max_wall_time = None
     # retention time
     try:
         retention_time = conf['retention_time']
-        if util.is_none_or_empty(retention_time):
-            raise KeyError()
-        retention_time = util.convert_string_to_timedelta(retention_time)
     except KeyError:
+        retention_time = _kv_read_checked(jobspec, 'retention_time')
+    if util.is_not_empty(retention_time):
+        retention_time = util.convert_string_to_timedelta(retention_time)
+    else:
         retention_time = None
     # infiniband
+    infiniband = False
     try:
         infiniband = conf['infiniband']
     except KeyError:
-        infiniband = False
+        infiniband = _kv_read(jobspec, 'infiniband', False)
     # gpu
+    gpu = False
     try:
         gpu = conf['gpu']
     except KeyError:
-        gpu = False
+        gpu = _kv_read(jobspec, 'gpu', False)
     # adjust for gpu settings
     if gpu:
         if not is_gpu_pool(vm_size):
@@ -2465,6 +2504,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         envfile=envfile,
         resource_files=resource_files,
         max_task_retries=max_task_retries,
+        max_wall_time=max_wall_time,
         retention_time=retention_time,
         command=command,
         infiniband=infiniband,

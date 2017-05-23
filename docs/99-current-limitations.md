@@ -21,6 +21,9 @@ be present in those pools. Please use `pool add` with your pool specification
 to create compute resources to execute your Batch Shipyard jobs against.
 
 ### General Limitations and Restrictions
+* Tasks can have a maximum run time of 7 days (including time spent for
+data movement). This is a current fundamental limitation in the Azure Batch
+service.
 * SSH tunnel script generation is only compatible with non-Windows machines.
 * Data movement support on Windows is restricted to scp. Both `ssh.exe` and
 `scp.exe` must be found through `%PATH%` or in the current working directory.

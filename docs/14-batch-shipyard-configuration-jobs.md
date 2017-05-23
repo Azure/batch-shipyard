@@ -16,6 +16,7 @@ The jobs schema is as follows:
             },
             "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 3,
+            "max_wall_time": "02:00:00",
             "allow_run_on_missing_image": false,
             "user_identity": {
                 "default_pool_admin": true,
@@ -24,6 +25,16 @@ The jobs schema is as follows:
                     "gid": 1000
                 }
             },
+            "remove_container_after_exit": true,
+            "shm_size": "256m",
+            "infiniband": false,
+            "gpu": false,
+            "data_volumes": [
+                "joblevelvol"
+            ],
+            "shared_data_volumes": [
+                "joblevelsharedvol"
+            ],
             "input_data": {
                 "azure_batch": [
                     {
@@ -113,6 +124,7 @@ The jobs schema is as follows:
                     "infiniband": false,
                     "gpu": false,
                     "max_task_retries": 3,
+                    "max_wall_time": "03:00:00",
                     "retention_time": "1.12:00:00",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
@@ -154,8 +166,23 @@ string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
 does not retry tasks that fail (i.e. `max_task_retries` is 0).
-* (optional) `allow_run_on_missing_image` allows tasks with a Docker image reference
-that was not pre-loaded on to the compute node via
+* (optional) `max_wall_time` sets the maximum wallclock time that the job
+can stay active for (i.e., time period after it has been created). By
+default, or if not set, the job may stay active for an infinite period. The
+format for this property is a timedelta with a string representation of
+"d.HH:mm:ss". Note that the job will transition to completed state after the
+the maximum wall clock time is reached along with termination of any
+running tasks.
+* (optional) `retention_time` sets the timedelta to retain any tasks
+directories under the job on the compute node where it ran after the task
+completes. The format for this property is a timedelta with a string
+representation of "d.HH:mm:ss". For example, "1.12:00:00" would allow the
+compute node to clean up all of the task directories under this job
+36 hours after the task completed. The default, if unspecified, is
+effectively infinite - i.e., task data is retained forever on the compute
+node that ran the task.
+* (optional) `allow_run_on_missing_image` allows tasks with a Docker image
+reference that was not pre-loaded on to the compute node via
 `global_resources`:`docker_images` in the global configuration to be able to
 run. Note that you should attempt to specify all Docker images that you intend
 to run in the `global_resources`:`docker_images` property in the global
@@ -174,6 +201,30 @@ mutually exclusive of one another.
     user.
     * (required) `uid` is the user id of the user
     * (required) `gid` is the group id of the user
+* (optional) `remove_container_after_exit` property specifies if all
+containers under the job should be automatically removed/cleaned up after
+the task exits. This defaults to `false`.
+* (optional) `shm_size` property specifies the size of `/dev/shm` in all
+containers under the job. The default is `64m`. The postfix unit can be
+designated as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
+(gigabytes). This value may need to be increased from the default of `64m`
+for certain Docker applications, including multi-instance tasks using Intel
+MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
+* (optional) `infiniband` designates if all tasks under the job require
+access to the Infiniband/RDMA devices on the host. Note that this will
+automatically force containers to use the host network stack. If this
+property is set to `true`, ensure that the `pool_specification` property
+`inter_node_communication_enabled` is set to `true`.
+* (optional) `gpu` designates if all containers under the job require access
+to the GPU devices on the host. If this property is set to `true`, Docker
+containers are instantiated via `nvidia-docker`. This requires N-series VM
+instances.
+* (optional) `data_volumes` is an array of `data_volume` aliases as defined
+in the global configuration file. These volumes will be mounted in the
+all containers under the job.
+* (optional) `shared_data_volumes` is an array of `shared_data_volume`
+aliases as defined in the global configuration file. These volumes will be
+mounted in all containers under the job.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -250,10 +301,12 @@ transferred again. This object currently supports `azure_batch` and
     exposed to the host.
   * (optional) `data_volumes` is an array of `data_volume` aliases as defined
     in the global configuration file. These volumes will be mounted in the
-    container.
+    container. Volumes specified here will be merged with any job-level
+    volumes specified.
   * (optional) `shared_data_volumes` is an array of `shared_data_volume`
     aliases as defined in the global configuration file. These volumes will be
-    mounted in the container.
+    mounted in the container. Volumes specified here will be merged with any
+    job-level volumes specified.
   * (optional) `resource_files` is an array of resource files that should be
     downloaded as part of the task. Each array entry contains the following
     information:
@@ -323,13 +376,14 @@ transferred again. This object currently supports `azure_batch` and
         `blobxfer`.
   * (optional) `remove_container_after_exit` property specifies if the
     container should be automatically removed/cleaned up after it exits. This
-    defaults to `false`.
+    defaults to `false`. This overrides the job-level property, if set.
   * (optional) `shm_size` property specifies the size of `/dev/shm` in
     the container. The default is `64m`. The postfix unit can be designated
     as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g` (gigabytes). This
     value may need to be increased from the default of `64m` for certain
     Docker applications, including multi-instance tasks using Intel MPI
-    (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
+    (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)). This
+    overrides the job-level property, if set.
   * (optional) `additional_docker_run_options` is an array of addition Docker
     run options that should be passed to the Docker daemon when starting this
     container.
@@ -337,21 +391,30 @@ transferred again. This object currently supports `azure_batch` and
     Infiniband/RDMA devices on the host. Note that this will automatically
     force the container to use the host network stack. If this property is
     set to `true`, ensure that the `pool_specification` property
-    `inter_node_communication_enabled` is set to `true`.
+    `inter_node_communication_enabled` is set to `true`. This overrides the
+    job-level property, if set.
   * (optional) `gpu` designates if this container requires access to the GPU
     devices on the host. If this property is set to `true`, Docker containers
     are instantiated via `nvidia-docker`. This requires N-series VM instances.
+    This overrides the job-level property, if set.
   * (optional) `max_task_retries` sets the maximum number of times that
     Azure Batch should retry this task for. This overrides the job-level task
     retry count. By default, Azure Batch does not retry tasks that fail
     (i.e. `max_task_retries` is 0).
+    * (optional) `max_wall_time` sets the maximum wallclock time for this task.
+    Please note that if this is greater than the job-level constraint, then
+    the job-level contraint takes precendence. By default, or if not set, this
+    is infinite, however, please note that tasks can only run for a maximum
+    of 7-days due to an Azure Batch limitation. The format for this property
+    is a timedelta with a string representation of "d.HH:mm:ss".
   * (optional) `retention_time` sets the timedelta to retain the task
     directory on the compute node where it ran after the task completes.
     The format for this property is a timedelta with a string representation
     of "d.HH:mm:ss". For example, "1.12:00:00" would allow the compute node
     to clean up this task's directory 36 hours after the task completed. The
     default, if unspecified, is effectively infinite - i.e., task data is
-    retained forever on the compute node that ran the task.
+    retained forever on the compute node that ran the task. This overrides the
+    job-level property.
   * (optional) `multi_instance` is a property indicating that this task is a
     multi-instance task. This is required if the Docker image is an MPI
     program. Additional information about multi-instance tasks and Batch

@@ -3,11 +3,22 @@
 ## [Unreleased]
 
 ### Added
+- `max_wall_time` option for both jobs and tasks. Please consult the
+documentation for the difference when specifying this option at either the
+job or task level.
 - `--poll-until-tasks-complete` option for `jobs listtasks` to block the CLI
 from exiting until all tasks under jobs for which the command is run
 complete
 - `--tty` option for `pool ssh` and `fs cluster ssh` to enable allocation
 of a pseudo-tty for the SSH session
+
+### Changed
+- `remove_container_after_exit`, `retention_time`, `shm_size`, `infiniband`,
+`gpu` can now all be specified at the job-level and overriden at the task-level
+in the jobs configuration
+- `data_volumes` and `shared_data_volumes` can be specified at the job-level
+and any volumes specified at the task level will be *merged* with the
+job-level volumes to be exposed for the container
 
 ### Fixed
 - Add missing deprecation path for `pool_specification_vm_count` for
