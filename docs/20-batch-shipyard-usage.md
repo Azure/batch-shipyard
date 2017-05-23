@@ -293,6 +293,7 @@ assumed.
     the storage cluster to connect to.
   * `--hostname` is the hostname of the virtual machine in the storage cluster
     to connect to
+  * `--tty` allocates a pseudo-terminal
 * `start` will start a previously suspended storage cluster
   * `--no-wait` does not wait for the restart to complete. It is not
     recommended to use this parameter.
@@ -466,6 +467,7 @@ configuration file
   * `--cardinal` is the zero-based cardinal number of the compute node in
     the pool to connect to as listed by `grls`
   * `--nodeid` is the node id to connect to in the pool
+  * `--tty` allocates a pseudo-terminal
 * `udi` will update Docker images on all compute nodes of the pool. This
 command requires a valid SSH user.
   * `--image` will restrict the update to just the image or image:tag

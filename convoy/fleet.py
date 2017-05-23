@@ -1678,10 +1678,10 @@ def action_fs_cluster_status(
 
 def action_fs_cluster_ssh(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname, command):
+        cardinal, hostname, tty, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str, tuple) -> None
+    #        str, bool, tuple) -> None
     """Action: Fs Cluster Ssh
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1691,6 +1691,7 @@ def action_fs_cluster_ssh(
     :param str storage_cluster_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param bool tty: allocate pseudo-tty
     :param tuple command: command
     """
     if cardinal is not None and hostname is not None:
@@ -1704,7 +1705,7 @@ def action_fs_cluster_ssh(
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname, command)
+        cardinal, hostname, tty, command)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
@@ -2029,14 +2030,15 @@ def action_pool_dsu(batch_client, config):
     batch.del_ssh_user(batch_client, config)
 
 
-def action_pool_ssh(batch_client, config, cardinal, nodeid, command):
-    # type: (batchsc.BatchServiceClient, dict, int, str, tuple) -> None
+def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
+    # type: (batchsc.BatchServiceClient, dict, int, str, bool, tuple) -> None
     """Action: Pool Ssh
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
+    :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
     """
     if cardinal is not None and nodeid is not None:
@@ -2062,8 +2064,10 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, command):
         ip, port, ssh_private_key))
     ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
                'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_private_key), '-p', str(port),
-               '{}@{}'.format(pool.ssh.username, ip)]
+               '-i', str(ssh_private_key), '-p', str(port)]
+    if tty:
+        ssh_cmd.append('-t')
+    ssh_cmd.append('{}@{}'.format(pool.ssh.username, ip))
     if util.is_not_empty(command):
         ssh_cmd.extend(command)
     util.subprocess_with_output(ssh_cmd)

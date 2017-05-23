@@ -6,6 +6,8 @@
 - `--poll-until-tasks-complete` option for `jobs listtasks` to block the CLI
 from exiting until all tasks under jobs for which the command is run
 complete
+- `--tty` option for `pool ssh` and `fs cluster ssh` to enable allocation
+of a pseudo-tty for the SSH session
 
 ### Fixed
 - Add missing deprecation path for `pool_specification_vm_count` for

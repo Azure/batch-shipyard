@@ -2254,10 +2254,10 @@ def _get_ssh_info(
 
 def ssh_storage_cluster(
         compute_client, network_client, config, sc_id, cardinal, hostname,
-        command):
+        tty, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str, tuple) -> None
+    #        str, bool, tuple) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -2267,6 +2267,7 @@ def ssh_storage_cluster(
     :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
@@ -2282,8 +2283,10 @@ def ssh_storage_cluster(
          'key {}').format(sc_id, ip, port, ssh_priv_key))
     ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
                '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_priv_key), '-p', str(port),
-               '{}@{}'.format(username, ip)]
+               '-i', str(ssh_priv_key), '-p', str(port)]
+    if tty:
+        ssh_cmd.append('-t')
+    ssh_cmd.append('{}@{}'.format(username, ip))
     if util.is_not_empty(command):
         ssh_cmd.extend(command)
     util.subprocess_with_output(ssh_cmd)
