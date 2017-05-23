@@ -427,6 +427,7 @@ The `pool` command has the following sub-commands:
   dsu         Delete an SSH user from all nodes in pool
   grls        Get remote login settings for all nodes in...
   list        List all pools in the Batch account
+  listimages  List Docker images in the pool
   listnodes   List nodes in pool
   listskus    List available VM configurations available to...
   rebootnode  Reboot a node or nodes in a pool
@@ -451,6 +452,9 @@ from all nodes in the specified pool
 * `grls` will retrieve all of the remote login settings for every node
 in the specified pool
 * `list` will list all pools in the Batch account
+* `listimages` will query the nodes in the pool for Docker images. Common
+and mismatched images will be listed. Requires a provisioned SSH user and
+private key.
 * `listnodes` will list all nodes in the specified pool
 * `rebootnode` will reboot a specified node in the pool
   * `--all-start-task-failed` will reboot all nodes in the start task

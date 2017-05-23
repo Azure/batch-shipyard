@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- `pool listimages` command which will list all common Docker images on
+all nodes and provide warning for mismatched images amongst compute nodes.
+This functionality requires a provisioned SSH user and private key.
 - `max_wall_time` option for both jobs and tasks. Please consult the
 documentation for the difference when specifying this option at either the
 job or task level.
@@ -26,6 +29,7 @@ multi-instance tasks. Please upgrade your jobs configuration to explicitly
 use either `pool_specification_vm_count_dedicated` or
 `pool_specification_vm_count_low_priority`.
 - Speed up task collection additions by caching last task id
+- Issues with pool resize and wait logic with low priority
 
 ## [2.7.0b2] - 2017-05-18
 ### Changed

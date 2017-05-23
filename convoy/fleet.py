@@ -1332,6 +1332,109 @@ def _update_docker_images(
             batchtask.id, job_id))
 
 
+def _list_docker_images(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """List Docker images in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param batchmodels.CloudPool pool: cloud pool
+    """
+    _pool = settings.pool_settings(config)
+    pool = batch_client.pool.get(_pool.id)
+    if (pool.current_dedicated_nodes == 0 and
+            pool.current_low_priority_nodes == 0):
+        logger.warning('pool {} has no compute nodes'.format(pool.id))
+        return
+    # get ssh settings
+    username = _pool.ssh.username
+    if util.is_none_or_empty(username):
+        raise ValueError('cannot list docker images without an SSH username')
+    ssh_private_key = _pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            _pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_private_key))
+    # iterate through all nodes
+    nodes = batch_client.compute_node.list(pool.id)
+    procs = {}
+    stdout = {}
+    failures = False
+    for node in nodes:
+        rls = batch_client.compute_node.get_remote_login_settings(
+            pool.id, node.id)
+        cmd = 'sudo docker images --format "{{.ID}} {{.Repository}}:{{.Tag}}"'
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
+            '{}@{}'.format(username, rls.remote_login_ip_address), cmd,
+        ]
+        procs[node.id] = util.subprocess_nowait_pipe_stdout(
+            ssh_args, shell=False)
+        if len(procs) >= 40:
+            logger.debug('waiting for {} processes to complete'.format(
+                len(procs)))
+            for key in procs:
+                stdout[key] = procs[key].communicate()[0].decode(
+                    'utf8').split('\n')
+            rcs = util.subprocess_wait_all(list(procs.values()))
+            if any([x != 0 for x in rcs]):
+                failures = True
+            procs.clear()
+            del rcs
+    if len(procs) > 0:
+        logger.debug('waiting for {} processes to complete'.format(
+            len(procs)))
+        for key in procs:
+            stdout[key] = procs[key].communicate()[0].decode(
+                'utf8').split('\n')
+        rcs = util.subprocess_wait_all(list(procs.values()))
+        if any([x != 0 for x in rcs]):
+            failures = True
+        procs.clear()
+        del rcs
+    if failures:
+        raise RuntimeError(
+            'failures retrieving docker images on pool: {}'.format(
+                pool.id))
+    # process stdout
+    node_images = {}
+    all_images = {}
+    for key in stdout:
+        node_images[key] = set()
+        for out in stdout[key]:
+            if util.is_not_empty(out):
+                dec = out.split()
+                if (not dec[1].startswith('alfpark/batch-shipyard') and
+                        not dec[1].startswith('alfpark/blobxfer')):
+                    node_images[key].add(dec[0])
+                    if dec[0] not in all_images:
+                        all_images[dec[0]] = dec[1]
+    # find set intersection among all nodes
+    intersecting_images = set.intersection(*list(node_images.values()))
+    logger.info('Common Docker images across all nodes in pool {}:{}{}'.format(
+        pool.id,
+        os.linesep,
+        os.linesep.join(
+            ['{} {}'.format(key, all_images[key])
+             for key in intersecting_images])
+    ))
+    # find mismatched images on nodes
+    for node in node_images:
+        images = set(node_images[node])
+        diff = images.difference(intersecting_images)
+        if len(diff) > 0:
+            logger.warning('Docker images present only on node {}:{}{}'.format(
+                node, os.linesep,
+                os.linesep.join(
+                    ['{} {}'.format(key, all_images[key])
+                     for key in diff])
+            ))
+
+
 def _adjust_settings_for_pool_creation(config):
     # type: (dict) -> None
     """Adjust settings for pool creation
@@ -2115,6 +2218,16 @@ def action_pool_udi(batch_client, config, image, digest, ssh):
         raise ValueError(
             'cannot specify a digest to update to without the image')
     _update_docker_images(batch_client, config, image, digest, force_ssh=ssh)
+
+
+def action_pool_listimages(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Listimages
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    _list_docker_images(batch_client, config)
 
 
 def action_jobs_add(

@@ -1230,6 +1230,18 @@ def pool_udi(ctx, image, digest, ssh):
         ctx.batch_client, ctx.config, image, digest, ssh)
 
 
+@pool.command('listimages')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_listimages(ctx):
+    """List Docker images in the pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
+
+
 @cli.group()
 @pass_cli_context
 def jobs(ctx):

@@ -260,7 +260,6 @@ def _block_for_nodes_ready(
                 logger.error(
                     'Resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
-                return list(batch_client.compute_node.list(pool.id))
         nodes = list(batch_client.compute_node.list(pool.id))
         # check if any nodes are in start task failed state
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
@@ -647,6 +646,9 @@ def resize_pool(batch_client, config, wait=False):
          'current_low_priority_nodes={}]').format(
              pool.id, pool.vm_count, _pool.current_dedicated_nodes,
              _pool.current_low_priority_nodes))
+    total_vm_count = (
+        _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
+    )
     batch_client.pool.resize(
         pool_id=pool.id,
         pool_resize_parameter=batchmodels.PoolResizeParameter(
@@ -657,16 +659,19 @@ def resize_pool(batch_client, config, wait=False):
     )
     if wait:
         # wait until at least one node has entered leaving_pool state first
-        total_vm_count = (
-            _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
+        # if this pool is being resized down
+        diff_vm_count = (
+            pool.vm_count.dedicated + pool.vm_count.low_priority -
+            total_vm_count
         )
-        if total_vm_count > 0:
+        if diff_vm_count < 0:
             logger.debug(
                 'waiting for resize to start on pool: {}'.format(pool.id))
             while True:
                 nodes = list(batch_client.compute_node.list(pool.id))
-                if any(node.state == batchmodels.ComputeNodeState.leaving_pool
-                       for node in nodes):
+                if (len(nodes) != total_vm_count or any(
+                        node.state == batchmodels.ComputeNodeState.leaving_pool
+                        for node in nodes)):
                     break
                 else:
                     time.sleep(1)
