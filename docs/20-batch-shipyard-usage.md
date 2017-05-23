@@ -360,6 +360,7 @@ configuration file. Active or running tasks will be terminated first.
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
   * `--jobid` force scope to just this job id
+  * `--poll-until-tasks-complete` will poll until all tasks have completed
 * `term` will terminate jobs found in the jobs configuration file
   * `--all` will terminate all jobs found in the Batch account
   * `--jobid` force termination scope to just this job id

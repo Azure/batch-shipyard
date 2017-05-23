@@ -986,8 +986,8 @@ def _add_pool(
             ('No nodes could be allocated for pool: {}. If the pool is '
              'comprised entirely of low priority nodes, then there may not '
              'have been enough available capacity in the region to satisfy '
-             'your request. Please inspect the pool for errors and issue '
-             'pool resize to try again.').format(pool.id))
+             'your request. Please inspect the pool for resize errors and '
+             'issue pool resize to try again.').format(pool.id))
     # set up gluster on compute if specified
     if gluster_on_compute:
         _setup_glusterfs(
@@ -2141,14 +2141,21 @@ def action_jobs_list(batch_client, config):
     batch.list_jobs(batch_client, config)
 
 
-def action_jobs_listtasks(batch_client, config, jobid):
-    # type: (batchsc.BatchServiceClient, dict, str) -> None
+def action_jobs_listtasks(
+        batch_client, config, jobid, poll_until_tasks_complete):
+    # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param str jobid: job id
+    :param bool poll_until_tasks_complete: poll until tasks complete
     """
-    batch.list_tasks(batch_client, config, jobid)
+    while True:
+        all_complete = batch.list_tasks(batch_client, config, jobid=jobid)
+        if not poll_until_tasks_complete or all_complete:
+            break
+        time.sleep(5)
 
 
 def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):

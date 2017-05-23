@@ -1712,13 +1712,16 @@ def list_jobs(batch_client, config):
 
 def list_tasks(batch_client, config, jobid=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str) -> None
+    #        str, bool) -> bool
     """List tasks for specified jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to list tasks from
+    :rtype: bool
+    :return: if all tasks have completed under job(s)
     """
+    all_complete = True
     if util.is_none_or_empty(jobid):
         jobs = settings.job_specifications(config)
     else:
@@ -1762,6 +1765,8 @@ def list_tasks(batch_client, config, jobid=None):
                         jobid, task.id, task.state,
                         task.constraints.max_task_retry_count,
                         task.constraints.retention_time, *some_extra_info))
+                if task.state != batchmodels.TaskState.completed:
+                    all_complete = False
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
@@ -1771,6 +1776,7 @@ def list_tasks(batch_client, config, jobid=None):
                 raise
         if i == 0:
             logger.error('no tasks found for job {}'.format(jobid))
+    return all_complete
 
 
 def list_task_files(batch_client, config, jobid=None, taskid=None):
@@ -1919,9 +1925,10 @@ def _format_generic_task_id(tasknum):
 
 
 def _generate_next_generic_task_id(
-        batch_client, job_id, tasklist=None, reserved=None, task_map=None):
+        batch_client, job_id, tasklist=None, reserved=None, task_map=None,
+        last_task_id=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, str,
-    #        list, str, dict) -> Tuple[list, str]
+    #        list, str, dict, str) -> Tuple[list, str]
     """Generate the next generic task id
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -1929,6 +1936,7 @@ def _generate_next_generic_task_id(
     :param list tasklist: list of current (committed) tasks in job
     :param str reserved: reserved task id
     :param dict task_map: map of pending tasks to add to the job
+    :param str last_task_id: last task id
     :rtype: tuple
     :return: (list of committed task ids for job, next generic docker task id)
     """
@@ -1952,6 +1960,13 @@ def _generate_next_generic_task_id(
     id = _format_generic_task_id(tasknum)
     if task_map is not None:
         while id in task_map:
+            try:
+                if (last_task_id is not None and
+                        last_task_id.startswith(_GENERIC_DOCKER_TASK_PREFIX)):
+                    tasknum = int(last_task_id.split('-')[-1])
+                    last_task_id = None
+            except Exception:
+                last_task_id = None
             tasknum += 1
             id = _format_generic_task_id(tasknum)
     return tasklist, id
@@ -2056,7 +2071,7 @@ def add_jobs(
     preg = settings.docker_registry_private_settings(config)
     global_resources = settings.global_resources_docker_images(config)
     lastjob = None
-    lasttask = None
+    lasttaskid = None
     for jobspec in settings.job_specifications(config):
         job_id = settings.job_id(jobspec)
         # perform checks:
@@ -2220,7 +2235,8 @@ def add_jobs(
             if util.is_none_or_empty(_task_id):
                 existing_tasklist, _task_id = _generate_next_generic_task_id(
                     batch_client, job.id, tasklist=existing_tasklist,
-                    reserved=reserved_task_id, task_map=task_map)
+                    reserved=reserved_task_id, task_map=task_map,
+                    last_task_id=lasttaskid)
                 settings.set_task_id(_task, _task_id)
             if util.is_none_or_empty(settings.task_name(_task)):
                 settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
@@ -2391,7 +2407,7 @@ def add_jobs(
                     'duplicate task id detected: {} for job {}'.format(
                         task.id, job.id))
             task_map[task.id] = batchtask
-            lasttask = task.id
+            lasttaskid = task.id
         # add task collection to job
         _add_task_collection(batch_client, job.id, task_map)
         # update job if job autocompletion is needed
@@ -2406,4 +2422,4 @@ def add_jobs(
     if tail:
         stream_file_and_wait_for_task(
             batch_client, config, filespec='{},{},{}'.format(
-                lastjob, lasttask, tail), disk=False)
+                lastjob, lasttaskid, tail), disk=False)

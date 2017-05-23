@@ -88,8 +88,9 @@ for details.
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
 * `multi_instance` property must be defined for multinode executions
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` should be unset or the array can be empty
 

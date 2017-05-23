@@ -1268,15 +1268,20 @@ def jobs_list(ctx):
 @jobs.command('listtasks')
 @click.option(
     '--jobid', help='List tasks in the specified job id')
+@click.option(
+    '--poll-until-tasks-complete', is_flag=True,
+    help='Poll until all tasks are in completed state')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_list_tasks(ctx, jobid):
+def jobs_list_tasks(ctx, jobid, poll_until_tasks_complete):
     """List tasks within jobs"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config, jobid)
+    convoy.fleet.action_jobs_listtasks(
+        ctx.batch_client, ctx.config, jobid,
+        poll_until_tasks_complete)
 
 
 @jobs.command('termtasks')

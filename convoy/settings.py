@@ -2407,7 +2407,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):
-            if num_instances == 'pool_specification_vm_count_dedicated':
+            # TODO remove deprecation path
+            if (num_instances == 'pool_specification_vm_count_dedicated' or
+                    num_instances == 'pool_specification_vm_count'):
                 pool_vm_count = _pool_vm_count(config)
                 num_instances = pool_vm_count.dedicated
             elif num_instances == 'pool_specification_vm_count_low_priority':

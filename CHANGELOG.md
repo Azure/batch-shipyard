@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- `--poll-until-tasks-complete` option for `jobs listtasks` to block the CLI
+from exiting until all tasks under jobs for which the command is run
+complete
+
+### Fixed
+- Add missing deprecation path for `pool_specification_vm_count` for
+multi-instance tasks. Please upgrade your jobs configuration to explicitly
+use either `pool_specification_vm_count_dedicated` or
+`pool_specification_vm_count_low_priority`.
+- Speed up task collection additions by caching last task id
+
 ## [2.7.0b2] - 2017-05-18
 ### Changed
 - Allow the prior `vm_count` behavior, but provide a deprecation warning. The

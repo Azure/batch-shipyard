@@ -44,8 +44,9 @@ For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` array can be empty
 
