@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [2.7.0rc1] - 2017-05-24
 ### Added
 - `pool listimages` command which will list all common Docker images on
 all nodes and provide warning for mismatched images amongst compute nodes.
@@ -10,18 +11,18 @@ This functionality requires a provisioned SSH user and private key.
 documentation for the difference when specifying this option at either the
 job or task level.
 - `--poll-until-tasks-complete` option for `jobs listtasks` to block the CLI
-from exiting until all tasks under jobs for which the command is run
-complete
+from exiting until all tasks under jobs for which the command is run have
+completed
 - `--tty` option for `pool ssh` and `fs cluster ssh` to enable allocation
 of a pseudo-tty for the SSH session
 
 ### Changed
 - `remove_container_after_exit`, `retention_time`, `shm_size`, `infiniband`,
-`gpu` can now all be specified at the job-level and overriden at the task-level
+`gpu` can now be specified at the job-level and overriden at the task-level
 in the jobs configuration
-- `data_volumes` and `shared_data_volumes` can be specified at the job-level
-and any volumes specified at the task level will be *merged* with the
-job-level volumes to be exposed for the container
+- `data_volumes` and `shared_data_volumes` can now be specified at the
+job-level and any volumes specified at the task level will be *merged* with
+the job-level volumes to be exposed for the container
 
 ### Fixed
 - Add missing deprecation path for `pool_specification_vm_count` for
@@ -652,7 +653,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...HEAD
+[2.7.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...2.7.0rc1
 [2.7.0b2]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...2.7.0b2
 [2.7.0b1]: https://github.com/Azure/batch-shipyard/compare/2.6.2...2.7.0b1
 [2.6.2]: https://github.com/Azure/batch-shipyard/compare/2.6.1...2.6.2
