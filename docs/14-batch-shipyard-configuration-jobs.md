@@ -220,7 +220,7 @@ to the GPU devices on the host. If this property is set to `true`, Docker
 containers are instantiated via `nvidia-docker`. This requires N-series VM
 instances.
 * (optional) `data_volumes` is an array of `data_volume` aliases as defined
-in the global configuration file. These volumes will be mounted in the
+in the global configuration file. These volumes will be mounted in
 all containers under the job.
 * (optional) `shared_data_volumes` is an array of `shared_data_volume`
 aliases as defined in the global configuration file. These volumes will be

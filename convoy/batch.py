@@ -2366,8 +2366,6 @@ def add_jobs(
                 max_task_retry_count=task.max_task_retries,
                 max_wall_clock_time=task.max_wall_time,
             )
-            print(task_constraints.max_wall_clock_time)
-            print(task_constraints.max_task_retry_count)
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
