@@ -10,7 +10,7 @@ block=
 cascadecontainer=0
 encrypted=
 hpnssh=0
-gluster=0
+gluster_on_compute=0
 gpu=
 networkopt=0
 offer=
@@ -32,7 +32,7 @@ while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
             echo "-b block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
-            echo "-f set up glusterfs cluster"
+            echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
             echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
@@ -60,7 +60,7 @@ while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
             encrypted=${OPTARG,,}
             ;;
         f)
-            gluster=1
+            gluster_on_compute=1
             ;;
         g)
             gpu=$OPTARG
@@ -167,6 +167,31 @@ install_azurefile_docker_volume_driver() {
     # create docker volumes
     chmod +x azurefile-dockervolume-create.sh
     ./azurefile-dockervolume-create.sh
+}
+
+refresh_package_index() {
+    # refresh package index
+    set +e
+    retries=30
+    while [ $retries -gt 0 ]; do
+        if [ $1 == "ubuntuserver" ]; then
+            apt-get update
+        elif [[ $1 == centos* ]] || [[ $1 == "rhel" ]] || [[ $1 == "oracle-linux" ]]; then
+            yum makecache -y fast
+        elif [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
+            zypper -n --gpg-auto-import-keys ref
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "Could not update package index"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
 }
 
 # check sdb1 mount
@@ -304,7 +329,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         fi
     fi
     # refresh package index
-    apt-get update
+    refresh_package_index $offer
     # install required software first
     apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
         apt-transport-https ca-certificates curl software-properties-common
@@ -331,7 +356,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     # add repo
     add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
     # refresh index
-    apt-get update
+    refresh_package_index $offer
     # ensure docker opts service modifications are idempotent
     set +e
     grep '^DOCKER_OPTS=' /etc/default/docker
@@ -435,7 +460,7 @@ EOF
         set -e
     fi
     # set up glusterfs
-    if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+    if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
         apt-get install -y -q --no-install-recommends glusterfs-server
         if [[ ! -z $gfsenable ]]; then
             $gfsenable
@@ -511,7 +536,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     # add docker repo to yum
     yum install -y yum-utils
     yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    yum makecache -y fast
+    refresh_package_index $offer
     yum install -y docker-ce-$dockerversion
     # modify docker opts
     mkdir -p /mnt/resource/docker-tmp
@@ -529,7 +554,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         install_azurefile_docker_volume_driver $offer $sku
     fi
     # set up glusterfs
-    if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+    if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
         yum install -y epel-release centos-release-gluster38
         sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
         yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
@@ -586,7 +611,6 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             fi
             # add container repo for zypper
             zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
-            zypper -n --gpg-auto-import-keys ref
         elif [[ $offer == sles* ]]; then
             dockerversion=1.12.6-90.1
             if [[ $sku == "12-sp1" ]]; then
@@ -596,12 +620,13 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             fi
             # enable container module
             SUSEConnect -p sle-module-containers/12/x86_64 -r ''
-            zypper ref
         fi
         if [ -z $repodir ]; then
             echo "unsupported sku: $sku for offer: $offer"
             exit 1
         fi
+        # update index
+        refresh_package_index $offer
         # install docker engine
         zypper -n in docker-$dockerversion
         # modify docker opts, docker opts in /etc/sysconfig/docker
@@ -618,7 +643,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             install_azurefile_docker_volume_driver $offer $sku
         fi
         # set up glusterfs
-        if [ $gluster -eq 1 ]; then
+        if [ $gluster_on_compute -eq 1 ]; then
             zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
             zypper -n --gpg-auto-import-keys ref
             zypper -n in glusterfs

@@ -202,13 +202,17 @@ def check_for_invalid_config(config):
             'migrate your Docker images to Azure Container Registry, '
             'Docker Hub (public or private), or any other Internet '
             'accessible Docker registry solution.')
-    if isinstance(config['pool_specification']['vm_count'], int):
-        logger.warning(
-            'DEPRECATION WARNING: pool_specification:vm_count is directly '
-            'set with an integral value for dedicated nodes. This '
-            'configuration will not be supported in future releases. '
-            'Please update your configuration to include a complex property '
-            'of dedicated and/or low_priority nodes for vm_count.')
+    try:
+        if isinstance(config['pool_specification']['vm_count'], int):
+            logger.warning(
+                'DEPRECATION WARNING: pool_specification:vm_count is '
+                'directly set with an integral value for dedicated nodes. '
+                'This configuration will not be supported in future '
+                'releases. Please update your configuration to include a '
+                'complex property of dedicated and/or low_priority nodes '
+                'for vm_count.')
+    except KeyError:
+        pass
 
 
 def populate_global_settings(config, fs_storage):
@@ -1939,10 +1943,10 @@ def action_pool_list(batch_client):
 
 def action_pool_delete(
         batch_client, blob_client, queue_client, table_client, config,
-        wait=False):
+        pool_id=None, wait=False):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azurequeue.QueueService, azuretable.TableService, dict,
-    #        bool) -> None
+    #        str, bool) -> None
     """Action: Pool Delete
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -1950,20 +1954,22 @@ def action_pool_delete(
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param str pool_id: poolid to delete
     :param bool wait: wait for pool to delete
     """
     deleted = False
     try:
-        deleted = batch.del_pool(batch_client, config)
+        deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
     except batchmodels.BatchErrorException as ex:
         logger.exception(ex)
         if 'The specified pool does not exist' in ex.message.value:
             deleted = True
     if deleted:
         storage.cleanup_with_del_pool(
-            blob_client, queue_client, table_client, config)
+            blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
-            pool_id = settings.pool_id(config)
+            if util.is_none_or_empty(pool_id):
+                pool_id = settings.pool_id(config)
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
                 time.sleep(3)

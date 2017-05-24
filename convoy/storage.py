@@ -493,38 +493,39 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
             queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
-def create_storage_containers_remotefs(blob_client, config):
-    # type: (azureblob.BlockBlobService, dict) -> None
+def create_storage_containers_remotefs(blob_client):
+    # type: (azureblob.BlockBlobService) -> None
     """Create storage containers used for remotefs
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param dict config: configuration dict
     """
     contname = _STORAGE_CONTAINERS['blob_remotefs']
     logger.info('creating container: {}'.format(contname))
     blob_client.create_container(contname)
 
 
-def delete_storage_containers_remotefs(blob_client, config):
-    # type: (azureblob.BlockBlobService, dict) -> None
+def delete_storage_containers_remotefs(blob_client):
+    # type: (azureblob.BlockBlobService) -> None
     """Delete storage containers used for remotefs
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param dict config: configuration dict
     """
     contname = _STORAGE_CONTAINERS['blob_remotefs']
     logger.info('deleting container: {}'.format(contname))
     blob_client.delete_container(contname)
 
 
-def cleanup_with_del_pool(blob_client, queue_client, table_client, config):
+def cleanup_with_del_pool(
+        blob_client, queue_client, table_client, config, pool_id=None):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azuretable.TableService, dict, str) -> None
     """Special cleanup routine in combination with delete pool
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param str pool_id: pool id
     """
-    pool_id = settings.pool_id(config)
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config)
     if not util.confirm_action(
             config, 'delete/cleanup of Batch Shipyard metadata in storage '
             'containers associated with {} pool'.format(pool_id)):

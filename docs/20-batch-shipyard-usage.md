@@ -445,6 +445,8 @@ Batch Shipyard. It is recommended to use this command instead of deleting
 a pool directly from the Azure Portal, Batch Labs, or other tools as
 this action can conveniently remove all associated Batch Shipyard metadata on
 Azure Storage.
+  * `--poolid` will delete the specified pool instead of the pool from the
+    pool configuration file
   * `--wait` will wait for deletion to complete
 * `delnode` will delete the specified node from the pool
 * `dsu` will delete the SSH user defined in the pool configuration file

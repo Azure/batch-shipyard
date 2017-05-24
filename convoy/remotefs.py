@@ -767,7 +767,7 @@ def create_storage_cluster(
             config, 'create storage cluster {}'.format(sc_id)):
         return
     # create storage container
-    storage.create_storage_containers_remotefs(blob_client, config)
+    storage.create_storage_containers_remotefs(blob_client)
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -1848,7 +1848,7 @@ def delete_storage_cluster(
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
     # delete storage container
-    storage.delete_storage_containers_remotefs(blob_client, config)
+    storage.delete_storage_containers_remotefs(blob_client)
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')

@@ -2,14 +2,14 @@ adal==0.4.5
 azure-batch==3.0.0
 azure-keyvault==0.3.0
 azure-mgmt-batch==4.0.0
-azure-mgmt-compute==1.0.0rc1
-azure-mgmt-network==1.0.0rc3
-azure-mgmt-resource==1.1.0rc1
+azure-mgmt-compute==1.0.0
+azure-mgmt-network==1.0.0
+azure-mgmt-resource==1.1.0
 azure-storage==0.34.2
 blobxfer==0.12.1
 click==6.7
 future==0.16.0
-msrest==0.4.7
+msrest==0.4.8
 msrestazure==0.4.7
 pathlib2==2.2.1; python_version < '3.5'
 requests==2.14.2

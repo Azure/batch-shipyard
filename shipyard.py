@@ -1079,18 +1079,20 @@ def pool_list(ctx):
 
 @pool.command('del')
 @click.option(
+    '--poolid', help='Delete the specified pool')
+@click.option(
     '--wait', is_flag=True, help='Wait for pool deletion to complete')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_del(ctx, wait):
+def pool_del(ctx, poolid, wait):
     """Delete a pool from the Batch account"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_delete(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
-        ctx.table_client, ctx.config, wait=wait)
+        ctx.table_client, ctx.config, pool_id=poolid, wait=wait)
 
 
 @pool.command('resize')

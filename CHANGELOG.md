@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- `--poolid` parameter for `pool del` to specify a specific pool to delete
+
+### Changed
+- Prompt for confirmation for `jobs cmi`
+- Updated to latest dependencies
+
+### Fixed
+- Remote FS allocation issue with `vm_count` deprecation check
+- Better handling of package index refresh errors
+
 ## [2.7.0rc1] - 2017-05-24
 ### Added
 - `pool listimages` command which will list all common Docker images on

@@ -680,16 +680,19 @@ def resize_pool(batch_client, config, wait=False):
             addl_end_states=[batchmodels.ComputeNodeState.running])
 
 
-def del_pool(batch_client, config):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> bool
+def del_pool(batch_client, config, pool_id=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str) -> bool
     """Delete a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param str pool_id: pool id
     :rtype: bool
     :return: if pool was deleted
     """
-    pool_id = settings.pool_id(config)
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config)
     if not util.confirm_action(
             config, 'delete {} pool'.format(pool_id)):
         return False
@@ -957,6 +960,9 @@ def clean_mi_jobs(batch_client, config):
     """
     for job in settings.job_specifications(config):
         job_id = settings.job_id(job)
+        if not util.confirm_action(
+                config, 'cleanup {} job'.format(job_id)):
+            continue
         cleanup_job_id = 'shipyardcleanup-' + job_id
         cleanup_job = batchmodels.JobAddParameter(
             id=cleanup_job_id,
