@@ -1902,22 +1902,27 @@ def generate_docker_login_settings(config, for_ssh=False):
                 'docker login -u $DOCKER_LOGIN_USERNAME '
                 '-p $DOCKER_LOGIN_PASSWORD')
     # transform env and cmd into single command for ssh
-    if for_ssh:
+    if for_ssh and len(cmd) > 0:
         key = '${}'.format('DOCKER_LOGIN_PASSWORD')
-        pw = cmd[0][22:].replace(key, env[1].value)
-        cmd = cmd[1].replace(key, pw)
+        if encrypt:
+            pw = cmd[0][22:].replace(key, env[1].value)
+            cmd = cmd[1].replace(key, pw)
+        else:
+            pw = env[1].value
+            cmd = cmd[0].replace(key, pw)
         key = '${}'.format('DOCKER_LOGIN_USERNAME')
         cmd = cmd.replace(key, env[0].value)
-        key = 'openssl'
-        if key in cmd:
-            cmd = cmd.replace(key, 'sudo {}'.format(key))
-        key = '$AZ_BATCH_NODE_STARTUP_DIR'
-        if key in cmd:
-            start_mnt = '/'.join((
-                settings.temp_disk_mountpoint(config), 'batch', 'tasks',
-                'startup',
-            ))
-            cmd = cmd.replace(key, start_mnt)
+        if encrypt:
+            key = 'openssl'
+            if key in cmd:
+                cmd = cmd.replace(key, 'sudo {}'.format(key))
+            key = '$AZ_BATCH_NODE_STARTUP_DIR'
+            if key in cmd:
+                start_mnt = '/'.join((
+                    settings.temp_disk_mountpoint(config), 'batch', 'tasks',
+                    'startup',
+                ))
+                cmd = cmd.replace(key, start_mnt)
         return None, [cmd]
     return env, cmd
 
