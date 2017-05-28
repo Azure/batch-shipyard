@@ -187,7 +187,7 @@ The `cert` command has the following sub-commands:
 ```
   add     Add a certificate to a Batch account
   create  Create a certificate to use with a Batch...
-  del     Add a certificate to a Batch account
+  del     Deletes a certificate from the Batch account
   list    List all certificates in a Batch account
 ```
 * `add` will add a certificate to the Batch account
