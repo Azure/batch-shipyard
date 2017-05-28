@@ -2218,6 +2218,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         tdv = conf['data_volumes']
         if util.is_not_empty(tdv):
             if util.is_not_empty(data_volumes):
+                # check for intersection
+                if len(set(data_volumes).intersection(set(tdv))) > 0:
+                    raise ValueError('data volumes must be unique')
                 data_volumes.extend(tdv)
             else:
                 data_volumes = tdv
@@ -2246,6 +2249,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         tsdv = conf['shared_data_volumes']
         if util.is_not_empty(tsdv):
             if util.is_not_empty(shared_data_volumes):
+                # check for intersection
+                if len(set(shared_data_volumes).intersection(set(tsdv))) > 0:
+                    raise ValueError('shared data volumes must be unique')
                 shared_data_volumes.extend(tsdv)
             else:
                 shared_data_volumes = tsdv

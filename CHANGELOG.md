@@ -12,6 +12,8 @@
 ### Fixed
 - Remote FS allocation issue with `vm_count` deprecation check
 - Better handling of package index refresh errors
+- `pool udi` over SSH and no registry logins (#92)
+- Duplicate volume checks between job and task definitions
 
 ## [2.7.0rc1] - 2017-05-24
 ### Added
