@@ -8,6 +8,7 @@
 ### Changed
 - Prompt for confirmation for `jobs cmi`
 - Updated to latest dependencies
+- Split low-priority considerations into separate doc
 
 ### Fixed
 - Remote FS allocation issue with `vm_count` deprecation check
