@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [2.7.0] - 2017-05-31
 ### Added
 - `--poolid` parameter for `pool del` to specify a specific pool to delete
 
@@ -13,7 +14,7 @@
 ### Fixed
 - Remote FS allocation issue with `vm_count` deprecation check
 - Better handling of package index refresh errors
-- `pool udi` over SSH and no registry logins (#92)
+- `pool udi` over SSH issues (#92)
 - Duplicate volume checks between job and task definitions
 
 ## [2.7.0rc1] - 2017-05-24
@@ -667,7 +668,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0...HEAD
+[2.7.0]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...2.7.0
 [2.7.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...2.7.0rc1
 [2.7.0b2]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...2.7.0b2
 [2.7.0b1]: https://github.com/Azure/batch-shipyard/compare/2.6.2...2.7.0b1
