@@ -1,6 +1,19 @@
 {
     "pool_specification": {
         "id": "dockerpool",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            },
+            "custom_image": {
+                "image_uris": [
+                    "https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd"
+                ],
+                "node_agent": "batch.node.ubuntu 16.04"
+            }
+        },
         "vm_size": "STANDARD_D2_V2",
         "vm_count": {
             "dedicated": 4,
@@ -9,9 +22,6 @@
         "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
         "inter_node_communication_enabled": true,
-        "publisher": "Canonical",
-        "offer": "UbuntuServer",
-        "sku": "16.04-LTS",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,

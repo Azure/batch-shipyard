@@ -31,6 +31,7 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
+import math
 import os
 try:
     import pathlib2 as pathlib
@@ -88,10 +89,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '375.51/NVIDIA-Linux-x86_64-375.51.run'
+            '375.66/NVIDIA-Linux-x86_64-375.66.run'
         ),
         'sha256': (
-            '211aa1f44603c6f54f473b6daca0a83431b5bafd63ae3ad40f2e4bfa7cb857a4'
+            '59e37f570ba5f3d7148028e96684d77f347d49a54e3722189782fc9b17d201c0'
         ),
     },
     'license': (
@@ -103,6 +104,10 @@ _NVIDIA_DRIVER = {
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
+)
+_NODEPREP_CUSTOMIMAGE_FILE = (
+    'shipyard_nodeprep_customimage.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_customimage.sh')
 )
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
@@ -213,6 +218,13 @@ def check_for_invalid_config(config):
                 'for vm_count.')
     except KeyError:
         pass
+    if 'publisher' in config['pool_specification']:
+        logger.warning(
+            'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
+            'is set instead of a vm_configuration complex property. This '
+            'configuration will not be supported in future releases. '
+            'Please update your configuration to include a vm_configuration '
+            'property.')
 
 
 def populate_global_settings(config, fs_storage):
@@ -360,9 +372,16 @@ def _setup_azurefile_volume_driver(blob_client, config):
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
-    publisher = settings.pool_publisher(config, lower=True)
-    offer = settings.pool_offer(config, lower=True)
-    sku = settings.pool_sku(config, lower=True)
+    node_agent = settings.pool_custom_image_node_agent(config)
+    if (util.is_not_empty(node_agent) and
+            node_agent.lower() == 'batch.node.ubuntu 14.04'):
+        publisher = 'canoncial'
+        offer = 'ubuntuserver'
+        sku = '14.04'
+    else:
+        publisher = settings.pool_publisher(config, lower=True)
+        offer = settings.pool_offer(config, lower=True)
+        sku = settings.pool_sku(config, lower=True)
     # check to see if binary is downloaded
     bin = pathlib.Path(_ROOT_PATH, _AZUREFILE_DVD_BIN['target'])
     if (not bin.exists() or
@@ -691,6 +710,7 @@ def _add_pool(
         pass
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    custom_image_na = settings.pool_custom_image_node_agent(config)
     bc = settings.credentials_batch(config)
     vnet = None
     subnet = None
@@ -789,7 +809,7 @@ def _add_pool(
         dr.peer_to_peer.compression,
         preg.allow_public_docker_hub_pull_on_missing)
     # create resource files list
-    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE]
+    _rflist = [_JOBPREP_FILE, _BLOBXFER_FILE]
     if not bs.use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
@@ -806,7 +826,8 @@ def _add_pool(
         _rflist.append((afenv.name, afenv))
         _rflist.append((afvc.name, afvc))
     # gpu settings
-    if settings.is_gpu_pool(pool_settings.vm_size):
+    if (settings.is_gpu_pool(pool_settings.vm_size) and
+            util.is_none_or_empty(custom_image_na)):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
                 blob_client, config, pool_settings.vm_size)
@@ -821,53 +842,91 @@ def _add_pool(
             gpupkg.name)
     else:
         gpu_env = None
-    # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    skus_to_use = [
-        (nas, image_ref) for nas in node_agent_skus for image_ref in sorted(
-            nas.verified_image_references, key=lambda item: item.sku)
-        if image_ref.publisher.lower() == pool_settings.publisher.lower() and
-        image_ref.offer.lower() == pool_settings.offer.lower() and
-        image_ref.sku.lower() == pool_settings.sku.lower()
-    ]
-    try:
-        sku_to_use, image_ref_to_use = skus_to_use[-1]
-    except IndexError:
-        raise RuntimeError(
-            ('Could not find an Azure Batch Node Agent Sku for this '
-             'offer={} publisher={} sku={}. You can list the valid and '
-             'available Marketplace images with the command: pool '
-             'listskus').format(
-                 pool_settings.offer, pool_settings.publisher,
-                 pool_settings.sku))
+    # set vm configuration
+    if util.is_not_empty(custom_image_na):
+        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            os_disk=batchmodels.OSDisk(
+                image_uris=pool_settings.vm_configuration.image_uris,
+                caching=batchmodels.CachingType.read_write,
+            ),
+            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+        )
+        start_task = [
+            '{npf} {a}{b}{e}{f}{m}{n}{p}{r}{t}{v}{x}'.format(
+                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                r=' -r {}'.format(preg.container) if preg.container else '',
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            )
+        ]
+    else:
+        _rflist.append(_NODEPREP_FILE)
+        # pick latest sku
+        node_agent_skus = batch_client.account.list_node_agent_skus()
+        skus_to_use = [
+            (nas, image_ref) for nas in node_agent_skus
+            for image_ref in sorted(
+                    nas.verified_image_references, key=lambda item: item.sku)
+            if image_ref.publisher.lower() ==
+            pool_settings.publisher.lower() and
+            image_ref.offer.lower() == pool_settings.offer.lower() and
+            image_ref.sku.lower() == pool_settings.sku.lower()
+        ]
+        try:
+            sku_to_use, image_ref_to_use = skus_to_use[-1]
+        except IndexError:
+            raise RuntimeError(
+                ('Could not find an Azure Batch Node Agent Sku for this '
+                 'offer={} publisher={} sku={}. You can list the valid and '
+                 'available Marketplace images with the command: pool '
+                 'listskus').format(
+                     pool_settings.offer, pool_settings.publisher,
+                     pool_settings.sku))
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            image_reference=image_ref_to_use,
+            node_agent_sku_id=sku_to_use.id,
+        )
+        # create start task commandline
+        start_task = [
+            '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
+                npf=_NODEPREP_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                d=' -d' if bs.use_shipyard_docker_image else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                o=' -o {}'.format(pool_settings.offer),
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                r=' -r {}'.format(preg.container) if preg.container else '',
+                s=' -s {}'.format(pool_settings.sku),
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                w=' -w' if pool_settings.ssh.hpn_server_swap else '',
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            ),
+        ]
     # upload resource files
     sas_urls = storage.upload_resource_files(
         blob_client, config, _rflist)
     del _rflist
-    # create start task commandline
-    start_task = [
-        '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
-            npf=_NODEPREP_FILE[0],
-            a=' -a' if azurefile_vd else '',
-            b=' -b' if util.is_not_empty(block_for_gr) else '',
-            d=' -d' if bs.use_shipyard_docker_image else '',
-            e=' -e {}'.format(pfx.sha1) if encrypt else '',
-            f=' -f' if gluster_on_compute else '',
-            g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                sc_args) else '',
-            n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
-            o=' -o {}'.format(pool_settings.offer),
-            p=' -p {}'.format(
-                bs.storage_entity_prefix) if bs.storage_entity_prefix else '',
-            r=' -r {}'.format(preg.container) if preg.container else '',
-            s=' -s {}'.format(pool_settings.sku),
-            t=' -t {}'.format(torrentflags),
-            v=' -v {}'.format(__version__),
-            w=' -w' if pool_settings.ssh.hpn_server_swap else '',
-            x=' -x {}'.format(data._BLOBXFER_VERSION),
-        ),
-    ]
     # digest any input data
     addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, settings.pool_specification(config))
@@ -880,9 +939,7 @@ def _add_pool(
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
-        virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use.id),
+        virtual_machine_configuration=vmconfig,
         vm_size=pool_settings.vm_size,
         target_dedicated_nodes=pool_settings.vm_count.dedicated,
         target_low_priority_nodes=pool_settings.vm_count.low_priority,
@@ -930,7 +987,7 @@ def _add_pool(
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if pool_settings.gpu_driver:
+    if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
                 file_path=gpu_driver.name,
@@ -1059,10 +1116,7 @@ def _setup_glusterfs(
     )
     # create coordination command line
     if cmdline is None:
-        if settings.pool_offer(config, lower=True) == 'ubuntuserver':
-            tempdisk = '/mnt'
-        else:
-            tempdisk = '/mnt/resource'
+        tempdisk = settings.temp_disk_mountpoint(config)
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {}'.format(
                 shell_script[0], voltype.lower(), tempdisk)])
@@ -1446,9 +1500,14 @@ def _adjust_settings_for_pool_creation(config):
     """
     # get settings
     pool = settings.pool_settings(config)
-    publisher = pool.publisher.lower()
-    offer = pool.offer.lower()
-    sku = pool.sku.lower()
+    publisher = settings.pool_publisher(config, lower=True)
+    offer = settings.pool_offer(config, lower=True)
+    sku = settings.pool_sku(config, lower=True)
+    node_agent = settings.pool_custom_image_node_agent(config)
+    if util.is_not_empty(node_agent) and util.is_not_empty(sku):
+        raise ValueError(
+            'cannot specify both a platform_image and a custom_image in the '
+            'pool specification')
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
@@ -1480,16 +1539,30 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
     # check for valid image if gpu, currently only ubuntu 16.04 is supported
     if (settings.is_gpu_pool(pool.vm_size) and
+            util.is_none_or_empty(node_agent) and
             (publisher != 'canonical' and offer != 'ubuntuserver' and
              sku < '16.04')):
         allowed = False
     # oracle linux is not supported due to UEKR4 requirement
-    if not allowed:
+    if not allowed and util.is_none_or_empty(node_agent):
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '
              'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
+    # ensure enough vhds for custom image pools
+    if util.is_not_empty(node_agent):
+        vhds = len(pool.vm_configuration.image_uris)
+        if node_agent == 'batch.node.windows amd64':
+            vhds_req = int(math.ceil(pool.vm_count / 20))
+        else:
+            vhds_req = int(math.ceil(pool.vm_count / 40))
+        if vhds_req > vhds:
+            raise ValueError(
+                ('insufficient number of VHDs ({}) supplied for the number '
+                 'of compute nodes to allocate ({}). At least {} VHDs are '
+                 'required.').format(
+                     vhds, pool.vm_count, vhds_req))
     # adjust for shipyard container requirement
-    if shipyard_container_required:
+    if shipyard_container_required or util.is_not_empty(node_agent):
         settings.set_use_shipyard_docker_image(config, True)
         logger.warning(
             ('forcing shipyard docker image to be used due to '
@@ -1511,8 +1584,9 @@ def _adjust_settings_for_pool_creation(config):
         settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
-        if (pool.ssh.hpn_server_swap and publisher != 'canonical' and
-                offer != 'ubuntuserver'):
+        if (pool.ssh.hpn_server_swap and
+                ((publisher != 'canonical' and offer != 'ubuntuserver') or
+                 util.is_not_empty(node_agent))):
             logger.warning('cannot enable HPN SSH swap on {} {} {}'.format(
                 publisher, offer, sku))
             settings.set_hpn_server_swap(config, False)

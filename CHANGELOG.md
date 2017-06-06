@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- Custom image support, please see the pool configuration doc and custom
+image guide for more information.
+- `contrib` area with `packer` scripts
+
+### Changed
+- **Breaking Change:** `publisher`, `offer`, `sku` is now part of a complex
+property named `vm_configuration`:`platform_image`. This change is to
+accommodate custom images. The old configuration schema is now deprecated and
+will be removed in a future release.
+- Updated NVIDIA Tesla driver to 375.66
+
+### Fixed
+- Improved pool resize/allocation logic to fail early with low priority core
+quota reached with no dedicated nodes
+
 ## [2.7.0] - 2017-05-31
 ### Added
 - `--poolid` parameter for `pool del` to specify a specific pool to delete

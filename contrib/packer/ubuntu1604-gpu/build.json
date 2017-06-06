@@ -1,0 +1,56 @@
+{
+  "variables": {
+    "resource_group": "",
+    "storage_account": "",
+    "subscription_id": "",
+    "directory_id": "",
+    "application_id": "",
+    "auth_key": "",
+    "nvdriver": "NVIDIA-Linux-x86_64-375.66.run",
+    "packerscript": "packer.sh"
+  },
+  "builders": [
+      {
+          "type": "azure-arm",
+
+          "resource_group_name": "{{user `resource_group`}}",
+          "storage_account": "{{user `storage_account`}}",
+          "subscription_id": "{{user `subscription_id`}}",
+          "tenant_id": "{{user `directory_id`}}",
+          "client_id": "{{user `application_id`}}",
+          "client_secret": "{{user `auth_key`}}",
+
+          "capture_container_name": "images",
+          "capture_name_prefix": "packer",
+
+          "os_type": "Linux",
+          "image_publisher": "Canonical",
+          "image_offer": "UbuntuServer",
+          "image_sku": "16.04-LTS",
+
+          "location": "South Central US",
+          "vm_size": "STANDARD_NC6"
+      }
+  ],
+  "provisioners": [
+      {
+          "type": "file",
+          "source": "{{user `packerscript`}}",
+          "destination": "/tmp/{{user `packerscript`}}"
+      },
+      {
+          "type": "file",
+          "source": "{{user `nvdriver`}}",
+          "destination": "/tmp/{{ user `nvdriver`}}"
+      },
+      {
+          "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
+          "inline": [
+              "/tmp/{{user `packerscript`}} /tmp/{{user `nvdriver`}}",
+              "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
+          ],
+          "inline_shebang": "/bin/sh -x",
+          "type": "shell"
+      }
+  ]
+}

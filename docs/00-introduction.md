@@ -1,4 +1,4 @@
-# Batch Shipyard Documentation
+# Batch Shipyard Introduction
 This page is the starting point for those unfamiliar with either Azure Batch
 and/or Docker concepts.
 

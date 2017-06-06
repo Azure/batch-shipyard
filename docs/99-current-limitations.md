@@ -47,7 +47,6 @@ a ResizeError on the pool if not all compute nodes can be allocated.
 is restricted to Batch accounts with keys (non-AAD).
 * Virtual network support in Batch pools can only be used with
 UserSubscription Batch accounts.
-* Custom images with UserSubscription Batch accounts are not supported (yet).
 * Windows Server 2016, Clear Linux, and Oracle Linux are not supported with
 Batch Shipyard at this time.
 * Task dependencies are incompatible with multi-instance tasks. This is a

@@ -246,13 +246,15 @@ def _block_for_nodes_ready(
         # refresh pool to ensure that there is no dedicated resize error
         pool = batch_client.pool.get(pool_id)
         if util.is_not_empty(pool.resize_errors):
-            dedicated_failure = False
+            fatal_resize_error = False
             errors = []
             for err in pool.resize_errors:
                 errors.append('code={} msg={}'.format(err.code, err.message))
-                if 'Desired number of dedicated nodes' in err.message:
-                    dedicated_failure = True
-            if dedicated_failure:
+                if (err.code == 'AccountCoreQuotaReached' or
+                        (err.code == 'AccountLowPriorityCoreQuotaReached' and
+                         pool.target_dedicated_nodes == 0)):
+                    fatal_resize_error = True
+            if fatal_resize_error:
                 raise RuntimeError(
                     'Fatal resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
@@ -615,12 +617,14 @@ def list_pools(batch_client):
         else:
             errors = ''
         logger.info(
-            ('pool_id={} [state={} allocation_state={}{} vm_size={}, '
-             'vm_dedicated_count={} target_vm_dedicated_count={} '
-             'vm_low_priority_count={} '
+            ('pool_id={} [state={} allocation_state={}{} vm_size={} '
+             'node_agent={} vm_dedicated_count={} '
+             'target_vm_dedicated_count={} vm_low_priority_count={} '
              'target_vm_low_priority_count={}]'.format(
                  pool.id, pool.state, pool.allocation_state, errors,
-                 pool.vm_size, pool.current_dedicated_nodes,
+                 pool.vm_size,
+                 pool.virtual_machine_configuration.node_agent_sku_id,
+                 pool.current_dedicated_nodes,
                  pool.target_dedicated_nodes, pool.current_low_priority_nodes,
                  pool.target_low_priority_nodes)))
         i += 1

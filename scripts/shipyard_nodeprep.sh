@@ -23,7 +23,7 @@ sc_args=
 version=
 
 # process command line options
-while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
+while getopts "h?abde:fg:m:no:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -123,24 +123,25 @@ check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
     mount | grep /dev/sdb1 | grep fuseblk
-    if [ $? -eq 0 ]; then
+    rc=$?
+    set -e
+    if [ $rc -eq 0 ]; then
         echo "ERROR: /dev/sdb1 temp disk is mounted as fuseblk/ntfs"
         exit 1
     fi
-    set -e
 }
 
 check_for_nvidia_card() {
     set +e
     out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
-    if [ $? -ne 0 ]; then
-        echo $out
+    rc=$?
+    set -e
+    echo "$out"
+    if [ $rc -ne 0 ]; then
         echo "ERROR: No Nvidia card(s) detected!"
         exit 1
     fi
-    set -e
-    echo $out
 }
 
 install_azurefile_docker_volume_driver() {

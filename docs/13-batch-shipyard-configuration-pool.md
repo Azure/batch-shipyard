@@ -9,7 +9,20 @@ The pool schema is as follows:
 {
     "pool_specification": {
         "id": "dockerpool",
-        "vm_size": "STANDARD_A9",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            },
+            "custom_image": {
+                "image_uris": [
+                    "https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd"
+                ],
+                "node_agent": "batch.node.ubuntu 16.04"
+            }
+        },
+        "vm_size": "STANDARD_H16R",
         "vm_count": {
             "dedicated": 8,
             "low_priority": 0
@@ -17,9 +30,6 @@ The pool schema is as follows:
         "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
         "inter_node_communication_enabled": true,
-        "publisher": "OpenLogic",
-        "offer": "CentOS-HPC",
-        "sku": "7.1",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
@@ -83,6 +93,25 @@ The pool schema is as follows:
 
 The `pool_specification` property has the following members:
 * (required) `id` is the compute pool ID.
+* (required) `vm_configuration` specifies the image configuration for the
+VM. Either `platform_image` or `custom_image` must be specified. You cannot
+specify both. If using a custom image, please see the
+[Custom Image Guide](63-batch-shipyard-custom-images.md) first.
+  * (required for platform image) `platform_image` defines the Marketplace
+    platform image to use:
+    * (required for platform image) `publisher` is the publisher name of the
+      Marketplace VM image.
+    * (required for platform image) `offer` is the offer name of the
+      Marketplace VM image.
+    * (required for platform image) `sku` is the sku name of the Marketplace
+      VM image.
+  * (required for custom image) `custom_image` defines the custom image to
+    use:
+    * (required for custom image) `image_uris` defines a list of page blob
+      VHDs to use for the pool. These should be bare URIs with SAS keys.
+    * (required for custom image) `node_agent` is the node agent sku id to
+      use with this image. You can view supported base images and their
+      node agent sku ids with the `pool listskus` command.
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
@@ -113,9 +142,6 @@ that must communicate with each other such as MPI applications. This
 property cannot be enabled if there are positive values for both
 `dedicated and `low_priority` compute nodes specified above. This property
 will be force enabled if peer-to-peer replication is enabled.
-* (required) `publisher` is the publisher name of the Marketplace VM image.
-* (required) `offer` is the offer name of the Marketplace VM image.
-* (required) `sku` is the sku name of the Marketplace VM image.
 * (optional) `reboot_on_start_task_failed` allows Batch Shipyard to reboot the
 compute node in case there is a transient failure in node preparation (e.g.,
 network timeout, resolution failure or download problem). This defaults to

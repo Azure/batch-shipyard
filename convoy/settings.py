@@ -79,10 +79,23 @@ PoolVmCountSettings = collections.namedtuple(
         'low_priority',
     ]
 )
+PoolVmPlatformImageSettings = collections.namedtuple(
+    'PoolVmPlatformImageSettings', [
+        'publisher',
+        'offer',
+        'sku',
+    ]
+)
+PoolVmCustomImageSettings = collections.namedtuple(
+    'PoolVmCustomImageSettings', [
+        'image_uris',
+        'node_agent',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
-        'inter_node_communication_enabled', 'publisher', 'offer', 'sku',
+        'inter_node_communication_enabled', 'vm_configuration',
         'reboot_on_start_task_failed',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
@@ -402,7 +415,14 @@ def temp_disk_mountpoint(config, offer=None):
     :return: temporary disk mount point
     """
     if offer is None:
-        offer = pool_offer(config, lower=True)
+        vmconfig = _populate_pool_vm_configuration(config)
+        if isinstance(vmconfig, PoolVmPlatformImageSettings):
+            offer = pool_offer(config, lower=True)
+        else:
+            if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
+                offer = 'ubuntuserver'
+            else:
+                offer = None
     else:
         offer = offer.lower()
     if offer == 'ubuntuserver':
@@ -455,6 +475,47 @@ def _pool_vm_count(config):
         dedicated=_kv_read(conf, 'dedicated', 0),
         low_priority=_kv_read(conf, 'low_priority', 0),
     )
+
+
+def pool_vm_configuration(config, key):
+    # type: (dict, str) -> dict
+    """Get Pool VM configuration
+    :param dict config: configuration object
+    :param str key: vm config key
+    :rtype: str
+    :return: pool vm config
+    """
+    try:
+        conf = _kv_read_checked(
+            config['pool_specification']['vm_configuration'], key)
+    except KeyError:
+        conf = None
+    if conf is None:
+        return config['pool_specification']
+    else:
+        return conf
+
+
+def _populate_pool_vm_configuration(config):
+    # type: (dict) -> dict
+    """Populate Pool VM configuration
+    :param dict config: configuration object
+    :rtype: PoolVmPlatformImageSettings or PoolVmCustomImageSettings
+    :return: pool vm config
+    """
+    conf = pool_vm_configuration(config, 'platform_image')
+    if 'publisher' in conf:
+        return PoolVmPlatformImageSettings(
+            publisher=conf['publisher'],
+            offer=conf['offer'],
+            sku=conf['sku'],
+        )
+    else:
+        conf = pool_vm_configuration(config, 'custom_image')
+        return PoolVmCustomImageSettings(
+            image_uris=conf['image_uris'],
+            node_agent=conf['node_agent'],
+        )
 
 
 def pool_settings(config):
@@ -580,9 +641,7 @@ def pool_settings(config):
         resize_timeout=resize_timeout,
         max_tasks_per_node=max_tasks_per_node,
         inter_node_communication_enabled=inter_node_communication_enabled,
-        publisher=conf['publisher'],
-        offer=conf['offer'],
-        sku=conf['sku'],
+        vm_configuration=_populate_pool_vm_configuration(config),
         reboot_on_start_task_failed=reboot_on_start_task_failed,
         block_until_all_global_resources_loaded=block_until_all_gr,
         transfer_files_on_pool_creation=transfer_files_on_pool_creation,
@@ -669,8 +728,9 @@ def pool_publisher(config, lower=False):
     :rtype: str
     :return: pool publisher
     """
-    pub = config['pool_specification']['publisher']
-    return pub.lower() if lower else pub
+    conf = pool_vm_configuration(config, 'platform_image')
+    pub = _kv_read_checked(conf, 'publisher')
+    return pub.lower() if lower and util.is_not_empty(pub) else pub
 
 
 def pool_offer(config, lower=False):
@@ -681,8 +741,9 @@ def pool_offer(config, lower=False):
     :rtype: str
     :return: pool offer
     """
-    offer = config['pool_specification']['offer']
-    return offer.lower() if lower else offer
+    conf = pool_vm_configuration(config, 'platform_image')
+    offer = _kv_read_checked(conf, 'offer')
+    return offer.lower() if lower and util.is_not_empty(offer) else offer
 
 
 def pool_sku(config, lower=False):
@@ -693,8 +754,20 @@ def pool_sku(config, lower=False):
     :rtype: str
     :return: pool sku
     """
-    sku = config['pool_specification']['sku']
-    return sku.lower() if lower else sku
+    conf = pool_vm_configuration(config, 'platform_image')
+    sku = _kv_read_checked(conf, 'sku')
+    return sku.lower() if lower and util.is_not_empty(sku) else sku
+
+
+def pool_custom_image_node_agent(config):
+    # type: (dict) -> str
+    """Get Pool node agent from custom image
+    :param dict config: configuration object
+    :rtype: str
+    :return: pool node agent
+    """
+    conf = pool_vm_configuration(config, 'custom_image')
+    return _kv_read_checked(conf, 'node_agent')
 
 
 # CREDENTIALS SETTINGS
@@ -2074,21 +2147,38 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # get some pool props
     if cloud_pool is None:
         pool_id = poolconf.id
-        publisher = poolconf.publisher.lower()
-        offer = poolconf.offer.lower()
-        sku = poolconf.sku.lower()
         vm_size = poolconf.vm_size
         inter_node_comm = poolconf.inter_node_communication_enabled
+        is_custom_image = isinstance(
+            poolconf.vm_configuration, PoolVmCustomImageSettings)
+        if is_custom_image:
+            publisher = None
+            offer = None
+            sku = None
+            node_agent = poolconf.vm_configuration.node_agent
+        else:
+            publisher = poolconf.publisher.lower()
+            offer = poolconf.offer.lower()
+            sku = poolconf.sku.lower()
     else:
         pool_id = cloud_pool.id
-        publisher = cloud_pool.virtual_machine_configuration.image_reference.\
-            publisher.lower()
-        offer = cloud_pool.virtual_machine_configuration.image_reference.\
-            offer.lower()
-        sku = cloud_pool.virtual_machine_configuration.image_reference.sku.\
-            lower()
         vm_size = cloud_pool.vm_size.lower()
         inter_node_comm = cloud_pool.enable_inter_node_communication
+        is_custom_image = util.is_none_or_empty(
+            cloud_pool.virtual_machine_configuration.os_disk)
+        if is_custom_image:
+            publisher = None
+            offer = None
+            sku = None
+            node_agent = cloud_pool.virtual_machine_configuration.\
+                node_agent_sku_id.lower()
+        else:
+            publisher = cloud_pool.virtual_machine_configuration.\
+                image_reference.publisher.lower()
+            offer = cloud_pool.virtual_machine_configuration.\
+                image_reference.offer.lower()
+            sku = cloud_pool.virtual_machine_configuration.\
+                image_reference.sku.lower()
     # get user identity settings
     ui = _kv_read_checked(jobspec, 'user_identity', {})
     ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
@@ -2352,8 +2442,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot initialize a gpu task on nodes without '
                  'gpus, pool: {} vm_size: {}').format(pool_id, vm_size))
         # TODO other images as they become available with gpu support
-        if (publisher != 'canonical' and offer != 'ubuntuserver' and
-                sku < '16.04'):
+        if ((sku is None and node_agent != 'batch.node.ubuntu 16.04') or
+                (publisher != 'canonical' and offer != 'ubuntuserver' and
+                 (sku is not None and sku < '16.04'))):
             raise ValueError(
                 ('Unsupported gpu VM config, publisher={} offer={} '
                  'sku={}').format(publisher, offer, sku))
@@ -2378,11 +2469,12 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                      pool_id, vm_size))
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
-        if publisher == 'openlogic' and offer == 'centos-hpc':
+        if (publisher == 'openlogic' and offer == 'centos-hpc' or
+                node_agent.startswith('batch.node.centos')):
             run_opts.append('-v /etc/rdma:/etc/rdma:ro')
             run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
         elif (publisher == 'suse' and offer == 'sles-hpc' and
-              sku == '12-sp1'):
+              sku == '12-sp1' or node_agent.startswith('batch.node.opensuse')):
             run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
             run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
         else:
