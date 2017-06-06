@@ -49,6 +49,8 @@ factors that Batch Shipyard has no control over.
     regarding your request. Pull requests are always welcome!
 * How do I contribute a recipe?
   * Please see this [guide](98-contributing-recipes.md).
+* Does Batch Shipyard support Linux custom images?
+  * Yes, please see [the guide](63-batch-shipyard-custom-images.md).
 * Does Batch Shipyard support Windows Server Containers?
   * Not at this time, we are tracking the issue
     [here](https://github.com/Azure/batch-shipyard/issues/7).

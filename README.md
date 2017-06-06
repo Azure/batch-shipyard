@@ -63,6 +63,7 @@ tunneling to Docker Hosts on compute nodes
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
 * Support for execution on an
 [Azure Function App environment](https://github.com/Azure/batch-shipyard/blob/master/docs/60-batch-shipyard-site-extension.md)
+* Support for [custom host images](https://github.com/Azure/batch-shipyard/blob/master/docs/63-batch-shipyard-custom-images.md)
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available

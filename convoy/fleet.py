@@ -880,9 +880,11 @@ def _add_pool(
             for image_ref in sorted(
                     nas.verified_image_references, key=lambda item: item.sku)
             if image_ref.publisher.lower() ==
-            pool_settings.publisher.lower() and
-            image_ref.offer.lower() == pool_settings.offer.lower() and
-            image_ref.sku.lower() == pool_settings.sku.lower()
+            pool_settings.vm_configuration.publisher.lower() and
+            image_ref.offer.lower() ==
+            pool_settings.vm_configuration.offer.lower() and
+            image_ref.sku.lower() ==
+            pool_settings.vm_configuration.sku.lower()
         ]
         try:
             sku_to_use, image_ref_to_use = skus_to_use[-1]
@@ -912,11 +914,11 @@ def _add_pool(
                     sc_args) else '',
                 n=' -n' if settings.can_tune_tcp(
                     pool_settings.vm_size) else '',
-                o=' -o {}'.format(pool_settings.offer),
+                o=' -o {}'.format(pool_settings.vm_configuration.offer),
                 p=' -p {}'.format(bs.storage_entity_prefix)
                 if bs.storage_entity_prefix else '',
                 r=' -r {}'.format(preg.container) if preg.container else '',
-                s=' -s {}'.format(pool_settings.sku),
+                s=' -s {}'.format(pool_settings.vm_configuration.sku),
                 t=' -t {}'.format(torrentflags),
                 v=' -v {}'.format(__version__),
                 w=' -w' if pool_settings.ssh.hpn_server_swap else '',
@@ -1548,13 +1550,15 @@ def _adjust_settings_for_pool_creation(config):
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '
              'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
+    # compute total vm count
+    pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
     # ensure enough vhds for custom image pools
     if util.is_not_empty(node_agent):
         vhds = len(pool.vm_configuration.image_uris)
         if node_agent == 'batch.node.windows amd64':
-            vhds_req = int(math.ceil(pool.vm_count / 20))
+            vhds_req = int(math.ceil(pool_total_vm_count / 20))
         else:
-            vhds_req = int(math.ceil(pool.vm_count / 40))
+            vhds_req = int(math.ceil(pool_total_vm_count / 40))
         if vhds_req > vhds:
             raise ValueError(
                 ('insufficient number of VHDs ({}) supplied for the number '
@@ -1569,7 +1573,6 @@ def _adjust_settings_for_pool_creation(config):
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
     # adjust inter node comm setting
-    pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
     if pool_total_vm_count < 1:
         raise ValueError('invalid total vm_count: {}'.format(
             pool_total_vm_count))

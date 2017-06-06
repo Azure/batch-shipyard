@@ -2164,8 +2164,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         pool_id = cloud_pool.id
         vm_size = cloud_pool.vm_size.lower()
         inter_node_comm = cloud_pool.enable_inter_node_communication
-        is_custom_image = util.is_none_or_empty(
-            cloud_pool.virtual_machine_configuration.os_disk)
+        is_custom_image = (
+            cloud_pool.virtual_machine_configuration.os_disk is not None
+        )
         if is_custom_image:
             publisher = None
             offer = None

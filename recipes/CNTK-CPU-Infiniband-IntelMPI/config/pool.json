@@ -1,14 +1,18 @@
 {
     "pool_specification": {
         "id": "docker-cntk-rdma",
-        "vm_size": "STANDARD_A9",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "OpenLogic",
+                "offer": "CentOS-HPC",
+                "sku": "7.1"
+            }
+        },
+        "vm_size": "STANDARD_H16R",
         "vm_count": {
             "dedicated": 2
         },
         "inter_node_communication_enabled": true,
-        "publisher": "OpenLogic",
-        "offer": "CentOS-HPC",
-        "sku": "7.1",
         "ssh": {
             "username": "docker"
         },

@@ -158,6 +158,20 @@ check_for_nvidia() {
     fi
 }
 
+check_docker_root_dir() {
+    set +e
+    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    set -e
+    echo "$rootdir"
+    if [ -z "$rootdir" ]; then
+        echo "ERROR: could not determine docker graph root"
+    elif [[  "$rootdir" == /mnt* && "$1" == "ubuntu" ]] || [[ "$rootdir" == /mnt/resource* && "$1" != "ubuntu" ]]; then
+        echo "INFO: docker root is within ephemeral temp disk"
+    else
+        echo "WARNING: docker graph root is on the OS disk. Performance may be impacted."
+    fi
+}
+
 check_for_docker_host_engine() {
     set +e
     docker --version
@@ -171,11 +185,14 @@ check_for_docker_host_engine() {
 check_for_glusterfs_on_compute() {
     set +e
     gluster
-    if [ $? -ne 0 ]; then
-        echo "ERROR: gluster server not installed"
+    rc0=$?
+    glusterfs -V
+    rc1=$?
+    set -e
+    if [ $rc0 -ne 0 ] || [ $rc1 -ne 0 ]; then
+        echo "ERROR: gluster server and client not installed"
         exit 1
     fi
-    set -e
 }
 
 check_for_storage_cluster_software() {
@@ -309,11 +326,15 @@ fi
 
 # one-time setup
 if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
+    # do not fail script if this function fails
+    set +e
     optimize_tcp_network_settings $DISTRIB_ID $DISTRIB_RELEASE
+    set -e
 fi
 
 # check for docker host engine
 check_for_docker_host_engine
+check_docker_root_dir $DISTRIB_ID
 
 # TODO warn if graph is on os disk
 

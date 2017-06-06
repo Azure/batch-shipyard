@@ -1,8 +1,12 @@
 # Low Priority Compute Node Considerations
 Please read the following carefully concerning pools allocated with low-
-priority compute nodes.
+priority compute nodes. You may also want to read the
+[Azure Batch Low Priority Compute Node](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+documentation.
 
 ### Pool Allocation and Resizing
+* Low priority compute nodes can only be allocated with non-User Subscription
+Batch accounts.
 * Pool and compute node allocation may take up to the full resize timeout
 and not reach full allocation with low priority if a low priority node is
 pre-empted and the target number of low priority nodes cannot be reached.
