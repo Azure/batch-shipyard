@@ -31,6 +31,20 @@ You will need to ensure that your custom image is sufficiently prepared
 before using it as a source VHD for Batch Shipyard. The following
 sub-section will detail the reasons and requisites.
 
+### Inbound Traffic and Ports
+Azure Batch requires communication with each compute node for basic
+functionality such as task scheduling and health monitoring. If you have
+a software firewall enabled on your custom image, please ensure that inbound
+TCP traffic is allowed on ports 29876 and 29877. Port 22 for TCP traffic
+should also be allowed for SSH. Note that Azure Batch will apply the
+necessary inbound security rules to ports 29876 and 29877 through a Network
+Security Group on each network interface of the compute nodes to block traffic
+that does not originate from the Azure Batch service. Port 22, however, will
+be allowed from any source address in the Network Security Group. You can
+optionally reduce the allowable inbound address space for SSH on your
+software firewall rules or through the Azure Batch created Network Security
+Group applied to compute nodes.
+
 ### Batch Shipyard Node Preparation and Custom Images
 For non-custom images (i.e., platform images or Marketplace images), Batch
 Shipyard takes care of preparing the compute node with the necessary
@@ -81,6 +95,9 @@ server and client tooling must be installed and invocable so the shared
 data volume can be created amongst the compute nodes.
 
 ### Installed/Configured Software
+Batch Shipyard may install and/or configure a minimal amount of software
+to enusre that components and directives work as intended.
+
 #### Encryption Certificates and Credential Decryption
 If employing credential encryption, Batch Shipyard will exercise the necessary
 logic to decrypt any encrypted field if credential encryption is enabled.
