@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [2.8.0b1] - 2017-06-07
 ### Added
 - Custom image support, please see the pool configuration doc and custom
 image guide for more information.
@@ -684,7 +685,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.7.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...HEAD
+[2.8.0b1]: https://github.com/Azure/batch-shipyard/compare/2.7.0...2.8.0b1
 [2.7.0]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...2.7.0
 [2.7.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...2.7.0rc1
 [2.7.0b2]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...2.7.0b2

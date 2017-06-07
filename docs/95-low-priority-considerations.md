@@ -5,8 +5,8 @@ priority compute nodes. You may also want to read the
 documentation.
 
 ### Pool Allocation and Resizing
-* Low priority compute nodes can only be allocated with non-User Subscription
-Batch accounts.
+* Low priority compute nodes can only be allocated with Batch Service
+(i.e., not User Subscription) Batch accounts.
 * Pool and compute node allocation may take up to the full resize timeout
 and not reach full allocation with low priority if a low priority node is
 pre-empted and the target number of low priority nodes cannot be reached.

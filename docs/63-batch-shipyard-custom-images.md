@@ -103,13 +103,22 @@ scripts to create a custom image from an existing Marketplace platform image.
 When allocating a compute pool with a custom image, you must ensure the
 following:
 
-0. You have a User Subscription Batch account
-1. Custom image VHD is in your storage account as a page blob
+0. You will be deploying the pool with a *User Subscription* Batch account
+1. Custom image VHD is in your storage account as a page blob object
 2. The storage account is in the same subscription and region as your
-   *User Subscription* Batch account
+   User Subscription Batch account
 3. You have sufficiently replicated the custom image VHD across enough
-   storage accounts to support your compute pool
-4. You have URIs for all of these custom image VHDs. These URIs should not
-   include SAS information of any kind. They should be "bare" URLs.
-5. Your pool configuration file has the proper `vm_configuration` settings
+   storage accounts if your compute pool exceeds the single VHD limit. These
+   storage accounts are in the same subscription and region as your
+   User Subscription Batch account
+4. Your pool specification has the proper `vm_configuration` settings
    for `custom_image`
+   * You have `image_uris` for all of these custom image VHDs. These URIs
+     should not include SAS information of any kind. They should be "bare"
+     URLs.
+   * `node_agent` is populated with the correct node agent sku id which
+     corresponds to the distribution used in the custom image. For instance,
+     if your custom image is based on Ubuntu 16.04, you would use
+     `batch.node.ubuntu 16.04` as the `node_agent` value. You can view a
+     complete list of supported node agent sku ids with the `pool listskus`
+     command.

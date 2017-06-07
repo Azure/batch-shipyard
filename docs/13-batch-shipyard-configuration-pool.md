@@ -108,10 +108,10 @@ specify both. If using a custom image, please see the
   * (required for custom image) `custom_image` defines the custom image to
     use:
     * (required for custom image) `image_uris` defines a list of page blob
-      VHDs to use for the pool. These should be bare URIs with SAS keys.
+      VHDs to use for the pool. These should be bare URLs without SAS keys.
     * (required for custom image) `node_agent` is the node agent sku id to
-      use with this image. You can view supported base images and their
-      node agent sku ids with the `pool listskus` command.
+      use with this custom image. You can view supported base images and
+      their node agent sku ids with the `pool listskus` command.
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
@@ -201,7 +201,8 @@ data defined in `files` prior to pool creation and disable the option above
 downloaded as part of the compute node's preparation. Each array entry
 contains the following information:
   * `file_path` is the path within the node prep task working directory to
-    place the file on the compute node.
+    place the file on the compute node. This directory can be referenced
+    by the `$AZ_BATCH_NODE_STARTUP_DIR/wd` path.
   * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an Azure
     Blob Storage URL.
   * `file_mode` if the file mode to set for the file on the compute node.
