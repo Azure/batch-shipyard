@@ -165,7 +165,7 @@ check_docker_root_dir() {
     echo "$rootdir"
     if [ -z "$rootdir" ]; then
         echo "ERROR: could not determine docker graph root"
-    elif [[  "$rootdir" == /mnt* && "$1" == "ubuntu" ]] || [[ "$rootdir" == /mnt/resource* && "$1" != "ubuntu" ]]; then
+    elif [[  "$rootdir" == /mnt/* && "$1" == "ubuntu" ]] || [[ "$rootdir" == /mnt/resource/* && "$1" != "ubuntu" ]]; then
         echo "INFO: docker root is within ephemeral temp disk"
     else
         echo "WARNING: docker graph root is on the OS disk. Performance may be impacted."
