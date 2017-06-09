@@ -19,12 +19,12 @@ disks, so you will need to create page blobs with your VHD image.
 
 Due to Storage account throttling limits, you must limit the number of
 compute nodes served from a single storage account (and thus VHD). For
-the maximum performance, you should limit one VHD for every 40 VMs for Linux
+maximum performance, you should limit one VHD for every 40 VMs for Linux
 (or 20 VMs for Windows) and these VHDs should be on separate storage accounts
 within the same subscription in the same region as your Batch account.
 You can use [blobxfer](https://github.com/Azure/blobxfer) or
 [AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/)
-to copy your VHD images.
+to copy and/or replicate your VHD images.
 
 ## Provisioning a Custom Image
 You will need to ensure that your custom image is sufficiently prepared
@@ -38,12 +38,12 @@ a software firewall enabled on your custom image, please ensure that inbound
 TCP traffic is allowed on ports 29876 and 29877. Port 22 for TCP traffic
 should also be allowed for SSH. Note that Azure Batch will apply the
 necessary inbound security rules to ports 29876 and 29877 through a Network
-Security Group on each network interface of the compute nodes to block traffic
-that does not originate from the Azure Batch service. Port 22, however, will
-be allowed from any source address in the Network Security Group. You can
-optionally reduce the allowable inbound address space for SSH on your
-software firewall rules or through the Azure Batch created Network Security
-Group applied to compute nodes.
+Security Group on either the virtual network or each network interface of the
+compute nodes to block traffic that does not originate from the Azure Batch
+service. Port 22, however, will be allowed from any source address in the
+Network Security Group. You can optionally reduce the allowable inbound
+address space for SSH on your software firewall rules or through the Azure
+Batch created Network Security Group applied to compute nodes.
 
 ### Batch Shipyard Node Preparation and Custom Images
 For non-custom images (i.e., platform images or Marketplace images), Batch

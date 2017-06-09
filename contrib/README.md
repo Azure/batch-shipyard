@@ -1,4 +1,4 @@
-# Community Contributions for Batch-Shipyard
+# Community Contributions for Batch Shipyard
 This directory contains various community contributions for Batch Shipyard.
 
 ### Packer

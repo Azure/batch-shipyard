@@ -14,11 +14,18 @@ you can invoke as:
 You can also invoke `shipyard` from any directory if given the full path
 to the script.
 
-If on Windows or Mac, you will need to invoke the Python interpreter and pass
+If you are on Windows and installed using the `install.cmd` script, then
+you can invoke as:
+```shell
+shipyard.cmd
+```
+
+If on Mac, you will need to invoke the Python interpreter and pass
 the script as an argument. For example:
 ```
-C:\Python36\python.exe shipyard.py
+python shipyard.py
 ```
+
 The `-h` or `--help` option will list the available options, which are
 explained below.
 
@@ -34,7 +41,7 @@ Batch Shipyard functionality.
 [current limitations for other actions](99-current-limitations.md).
 3. Batch Shipyard pools that are deleted outside of Batch Shipyard will not
 have their associated metadata (in Azure Storage) cleaned up. Please use
-the `pool del` functionality. You can use the `storage` command to clean up
+the `pool del` command instead. You can use the `storage` command to clean up
 orphaned data if you accidentially deleted Batch Shipyard pools outside of
 Batch Shipyard.
 

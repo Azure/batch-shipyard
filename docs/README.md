@@ -11,7 +11,7 @@ and effectively running your batch-style Docker workloads on Azure Batch.
    * [Pool Configuration](13-batch-shipyard-configuration-pool.md)
    * [Jobs Configuration](14-batch-shipyard-configuration-jobs.md)
    * [FS Configuration](15-batch-shipyard-configuration-fs.md)
-5. [Usage](20-batch-shipyard-usage.md)
+5. [CLI Commands and Usage](20-batch-shipyard-usage.md)
 6. [Azure Functions and Batch Shipyard](60-batch-shipyard-site-extension.md)
 7. [Custom Image for Host Compute Nodes](63-batch-shipyard-custom-images.md)
 7. [Remote Filesystems](65-batch-shipyard-remote-fs.md)
