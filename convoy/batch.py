@@ -2433,11 +2433,11 @@ def add_jobs(
             lasttaskid = task.id
         # add task collection to job
         _add_task_collection(batch_client, job.id, task_map)
-        # update job if job autocompletion is needed
+        # patch job if job autocompletion is needed
         if auto_complete:
-            batch_client.job.update(
+            batch_client.job.patch(
                 job_id=job.id,
-                job_update_parameter=batchmodels.JobUpdateParameter(
+                job_patch_parameter=batchmodels.JobPatchParameter(
                     pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                     on_all_tasks_complete=batchmodels.
                     OnAllTasksComplete.terminate_job))

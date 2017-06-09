@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Patch job for auto completion (#97)
+
 ## [2.8.0b1] - 2017-06-07
 ### Added
 - Custom image support, please see the pool configuration doc and custom
