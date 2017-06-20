@@ -64,7 +64,7 @@ fi
 # check for anaconda
 set +e
 ANACONDA=0
-$PYTHON -c "from __future__ import print_function; import sys; print(sys.version)" | grep -Ei 'anaconda|continuum'
+$PYTHON -c "from __future__ import print_function; import sys; print(sys.version)" | grep -Ei 'anaconda|continuum|conda-forge'
 if [ $? -eq 0 ]; then
     # check for conda
     if hash conda 2> /dev/null; then
