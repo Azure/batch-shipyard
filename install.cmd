@@ -39,6 +39,10 @@ IF NOT "%PYTHONVER%"=="%PYTHONVER:continuum=%" (
 	echo Anaconda detected.
 	SET ANACONDA=1
 )
+IF NOT "%PYTHONVER%"=="%PYTHONVER:conda-forge=%" (
+	echo Anaconda detected.
+	SET ANACONDA=1
+)
 
 REM install env and requirements
 IF %ANACONDA% EQU 1 (
