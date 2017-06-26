@@ -140,7 +140,8 @@ standard managed disks. Regardless of the type of storage used to back
 managed disks, all data written is durable and persistent backed to Azure
 Storage.
 * (required) `disk_size_gb` is an integral value defining the size of the
-data disks to create. The maximum size is 1023 GB. If you are unfamiliar with
+data disks to create. Note that for managed disks, you are billed rounded
+up to the nearest provisioned size. If you are unfamiliar with
 how Azure prices managed disks with regard to the size of disk chosen,
 please refer to
 [this link](https://docs.microsoft.com/en-us/azure/storage/storage-managed-disks-overview#pricing-and-billing).

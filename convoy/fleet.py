@@ -894,8 +894,9 @@ def _add_pool(
                  'offer={} publisher={} sku={}. You can list the valid and '
                  'available Marketplace images with the command: pool '
                  'listskus').format(
-                     pool_settings.offer, pool_settings.publisher,
-                     pool_settings.sku))
+                     pool_settings.vm_configuration.offer,
+                     pool_settings.vm_configuration.publisher,
+                     pool_settings.vm_configuration.sku))
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id,

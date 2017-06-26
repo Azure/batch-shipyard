@@ -120,8 +120,8 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
              'job {}, please retry command with explicit --logdir '
              'parameter').format(taskid, jobid))
     # construct absolute logpath
-    logpath = pathlib.Path(settings.temp_disk_mountpoint(
-        config, pool.offer)) / 'batch' / 'tasks'
+    logpath = pathlib.Path(
+        settings.temp_disk_mountpoint(config)) / 'batch' / 'tasks'
     if logdir.startswith('$AZ_BATCH'):
         _tmp = logdir.index('/')
         _var = logdir[:_tmp]
