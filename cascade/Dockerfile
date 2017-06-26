@@ -1,6 +1,6 @@
 # Dockerfile for Azure/batch-shipyard (Cascade)
 
-FROM gliderlabs/alpine:3.4
+FROM alpine:3.6
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set environment variables
@@ -12,7 +12,7 @@ ENV libtorrent_version=1.0.11 \
 # build libtorrent-rasterbar for python3 and cleanup packaging
 RUN apk update \
     && apk add --update --no-cache \
-        musl build-base python3 python3-dev openssl-dev libffi-dev \
+        musl build-base python3 python3-dev libressl-dev libffi-dev \
         ca-certificates boost boost-dev boost-python3 file curl tar pigz \
         docker bash \
     && pip3 install --no-cache-dir --upgrade pip \
@@ -27,7 +27,7 @@ RUN apk update \
     && rm -rf libtorrent-rasterbar-${libtorrent_version} \
     && rm -f libtorrent-${libtorrent_version}.tar.gz \
     && apk del --purge \
-        build-base python3-dev openssl-dev libffi-dev python boost-dev \
+        build-base python3-dev libressl-dev libffi-dev python boost-dev \
         file curl \
     && apk add --no-cache boost-random \
     && rm /var/cache/apk/* \
