@@ -50,6 +50,7 @@ from . import keyvault
 from . import settings
 from . import storage
 from . import util
+from .version import __version__
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -645,6 +646,17 @@ def resize_pool(batch_client, config, wait=False):
     """
     pool = settings.pool_settings(config)
     _pool = batch_client.pool.get(pool.id)
+    # check pool metadata version
+    if util.is_none_or_empty(_pool.metadata):
+        logger.warning('pool version metadata not present')
+    else:
+        for md in _pool.metadata:
+            if (md.name == settings.get_metadata_version_name() and
+                    md.value != __version__):
+                logger.warning(
+                    'pool version metadata mismatch: pool={} cli={}'.format(
+                        md.value, __version__))
+                break
     logger.info(
         ('Resizing pool {} to {} compute nodes [current_dedicated_nodes={} '
          'current_low_priority_nodes={}]').format(
@@ -2209,6 +2221,12 @@ def add_jobs(
             uses_task_dependencies=uses_task_dependencies,
             job_preparation_task=jptask,
             job_release_task=jrtask,
+            metadata=[
+                batchmodels.MetadataItem(
+                    name=settings.get_metadata_version_name(),
+                    value=__version__,
+                ),
+            ],
         )
         lastjob = job.id
         logger.info('Adding job {} to pool {}'.format(job.id, pool.id))
@@ -2235,6 +2253,20 @@ def add_jobs(
                 # job release requirement
                 if multi_instance and auto_complete:
                     raise
+                else:
+                    # retrieve job and check for version consistency
+                    _job = batch_client.job.get(job.id)
+                    if util.is_none_or_empty(_job.metadata):
+                        logger.warning('job version metadata not present')
+                    else:
+                        for md in _job.metadata:
+                            if (md.name == settings.get_metadata_version_name()
+                                    and md.value != __version__):
+                                logger.warning(
+                                    ('job version metadata mismatch: '
+                                     'job={} cli={}').format(
+                                         md.value, __version__))
+                                break
             else:
                 raise
         del multi_instance

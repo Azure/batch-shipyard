@@ -40,6 +40,7 @@ except ImportError:
 from . import util
 
 # global defines
+_METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
 _TENSORBOARD_DOCKER_IMAGE = (
@@ -300,6 +301,15 @@ def _kv_read(conf, key, default=None):
     except KeyError:
         ret = default
     return ret
+
+
+def get_metadata_version_name():
+    # type: (None) -> str
+    """Get metadata version name
+    :rtype: str
+    :return: metadata version name
+    """
+    return _METADATA_VERSION_NAME
 
 
 def get_tensorboard_docker_image():

@@ -969,6 +969,12 @@ def _add_pool(
             ],
             resource_files=[],
         ),
+        metadata=[
+            batchmodels.MetadataItem(
+                name=settings.get_metadata_version_name(),
+                value=__version__,
+            ),
+        ],
     )
     if util.is_not_empty(block_for_gr):
         pool.start_task.environment_settings.append(
@@ -1308,6 +1314,17 @@ def _update_docker_images(
     if not force_ssh and pool.current_low_priority_nodes > 0:
         logger.debug('forcing update via SSH due to low priority nodes')
         force_ssh = True
+    # check pool metadata version
+    if util.is_none_or_empty(pool.metadata):
+        logger.warning('pool version metadata not present')
+    else:
+        for md in pool.metadata:
+            if (md.name == settings.get_metadata_version_name() and
+                    md.value != __version__):
+                logger.warning(
+                    'pool version metadata mismatch: pool={} cli={}'.format(
+                        md.value, __version__))
+                break
     # create coordination command line
     # 1. log in again in case of cred expiry
     # 2. pull images with respect to registry
