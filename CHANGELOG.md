@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [2.8.0rc1] - 2017-06-27
 ### Added
 - Version metadata added to pools and jobs with warnings generated for
 mismatches (#89)
@@ -701,7 +702,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...HEAD
+[2.8.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...2.8.0rc1
 [2.8.0b1]: https://github.com/Azure/batch-shipyard/compare/2.7.0...2.8.0b1
 [2.7.0]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...2.7.0
 [2.7.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...2.7.0rc1
