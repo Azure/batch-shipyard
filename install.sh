@@ -6,15 +6,17 @@ set -o pipefail
 # vars
 PYTHON=python
 PIP=pip
+SUDO=sudo
 VENV_NAME=
 
 # process options
-while getopts "h?3e:" opt; do
+while getopts "h?3ce:" opt; do
     case "$opt" in
         h|\?)
             echo "install.sh parameters"
             echo ""
             echo "-3 install for Python 3.3+"
+            echo "-c install for Cloud Shell"
             echo "-e [environment name] install to a virtual environment"
             echo ""
             exit 1
@@ -22,6 +24,12 @@ while getopts "h?3e:" opt; do
         3)
             PYTHON=python3
             PIP=pip3
+            ;;
+        c)
+            PYTHON=python3
+            PIP=pip3
+            VENV_NAME=cloudshell
+            SUDO=
             ;;
         e)
             VENV_NAME=$OPTARG
@@ -31,19 +39,21 @@ done
 shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 
-# check to ensure this is not being run directly as root
-if [ $(id -u) -eq 0 ]; then
-    echo "Installation cannot be performed as root or via sudo."
-    echo "Please install as a regular user."
-    exit 1
-fi
-
-# check for sudo
-if hash sudo 2> /dev/null; then
-    echo "sudo found."
-else
-    echo "sudo not found. Please install sudo first before proceeding."
-    exit 1
+# non-cloud shell environment checks
+if [ ! -z $SUDO ]; then
+    # check to ensure this is not being run directly as root
+    if [ $(id -u) -eq 0 ]; then
+        echo "Installation cannot be performed as root or via sudo."
+        echo "Please install as a regular user."
+        exit 1
+    fi
+    # check for sudo
+    if hash sudo 2> /dev/null; then
+        echo "sudo found."
+    else
+        echo "sudo not found. Please install sudo first before proceeding."
+        exit 1
+    fi
 fi
 
 # check that shipyard.py is in cwd
@@ -123,70 +133,80 @@ DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 
 # install requisite packages from distro repo
-if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
-    sudo apt-get update
-    if [ $PYTHON == "python" ]; then
-        PYTHON_PKGS="libpython-dev python-dev"
+if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
+    if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
+        $SUDO apt-get update
+        if [ $PYTHON == "python" ]; then
+            PYTHON_PKGS="libpython-dev python-dev"
+            if [ $ANACONDA -eq 0 ]; then
+                PYTHON_PKGS="$PYTHON_PKGS python-pip"
+            fi
+        else
+            PYTHON_PKGS="libpython3-dev python3-dev"
+            if [ $ANACONDA -eq 0 ]; then
+                PYTHON_PKGS="$PYTHON_PKGS python3-pip"
+            fi
+        fi
+        $SUDO apt-get install -y --no-install-recommends \
+            build-essential libssl-dev libffi-dev openssl \
+            openssh-client rsync $PYTHON_PKGS
+    elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
+        if [ $PYTHON == "python" ]; then
+            PYTHON_PKGS="python-devel"
+        else
+            if [ $(yum list installed epel-release) -ne 0 ]; then
+                echo "epel-release package not installed."
+                echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
+                exit 1
+            fi
+            if [ $(yum list installed python34) -ne 0 ]; then
+                echo "python34 epel package not installed."
+                echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
+                exit 1
+            fi
+            PYTHON_PKGS="python34-devel"
+        fi
+        $SUDO yum install -y gcc openssl-devel libffi-devel openssl \
+            openssh-clients rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
-            PYTHON_PKGS="$PYTHON_PKGS python-pip"
+            curl -fSsL https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
-    else
-        PYTHON_PKGS="libpython3-dev python3-dev"
+    elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
+        $SUDO zypper ref
+        if [ $PYTHON == "python" ]; then
+            PYTHON_PKGS="python-devel"
+        else
+            PYTHON_PKGS="python3-devel"
+        fi
+        $SUDO zypper -n in gcc libopenssl-devel libffi48-devel openssl \
+            openssh rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
-            PYTHON_PKGS="$PYTHON_PKGS python3-pip"
+            curl -fSsL https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
-    fi
-    sudo apt-get install -y --no-install-recommends \
-        build-essential libssl-dev libffi-dev openssl \
-        openssh-client rsync $PYTHON_PKGS
-elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
-    if [ $PYTHON == "python" ]; then
-        PYTHON_PKGS="python-devel"
     else
-        if [ $(yum list installed epel-release) -ne 0 ]; then
-            echo "epel-release package not installed."
-            echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
-            exit 1
-        fi
-        if [ $(yum list installed python34) -ne 0 ]; then
-            echo "python34 epel package not installed."
-            echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
-            exit 1
-        fi
-        PYTHON_PKGS="python34-devel"
+        echo "Unsupported distribution."
+        echo "Please refer to the Installation documentation for manual installation steps."
+        exit 1
     fi
-    sudo yum install -y gcc openssl-devel libffi-devel openssl \
-        openssh-clients rsync $PYTHON_PKGS
-    if [ $ANACONDA -eq 0 ]; then
-        curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
-    fi
-elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
-    sudo zypper ref
-    if [ $PYTHON == "python" ]; then
-        PYTHON_PKGS="python-devel"
-    else
-        PYTHON_PKGS="python3-devel"
-    fi
-    sudo zypper -n in gcc libopenssl-devel libffi48-devel openssl \
-        openssh rsync $PYTHON_PKGS
-    if [ $ANACONDA -eq 0 ]; then
-        curl -fSsL https://bootstrap.pypa.io/get-pip.py | sudo $PYTHON
-    fi
-else
-    echo "Unsupported distribution."
-    echo "Please refer to the Installation documentation for manual installation steps."
-    exit 1
 fi
 
 # create virtual env if required and install required python packages
 if [ ! -z $VENV_NAME ]; then
     # install virtual env if required
     if [ $INSTALL_VENV_BIN -eq 1 ]; then
-        sudo $PIP install virtualenv
+        if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
+            $SUDO $PIP install virtualenv
+        else
+            $PIP install --user virtualenv
+        fi
     fi
     if [ $ANACONDA -eq 0 ]; then
         # create venv if it doesn't exist
-        virtualenv -p $PYTHON $VENV_NAME
+        if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
+            virtualenv -p $PYTHON $VENV_NAME
+        else
+            $HOME/.local/bin/virtualenv -p $PYTHON $VENV_NAME
+        fi
         source $VENV_NAME/bin/activate
         $PIP install --upgrade pip setuptools
         $PIP install --upgrade -r requirements.txt
@@ -207,7 +227,7 @@ if [ ! -z $VENV_NAME ]; then
         source deactivate $VENV_NAME
     fi
 else
-    sudo $PIP install --upgrade pip setuptools
+    $SUDO $PIP install --upgrade pip setuptools
     $PIP install --upgrade --user -r requirements.txt
 fi
 

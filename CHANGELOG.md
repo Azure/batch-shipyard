@@ -5,6 +5,7 @@
 ### Added
 - Version metadata added to pools and jobs with warnings generated for
 mismatches (#89)
+- Cloud shell installation support
 
 ### Changed
 - Update Docker images to Alpine 3.6 (#65)
