@@ -2,13 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- Version metadata added to pools and jobs with warnings generated for
+mismatches (#89)
+
+### Changed
+- Update Docker images to Alpine 3.6 (#65)
+- Improve robustness of package downloads
+- Add retries for docker pull within cascade context
+- Download cascade.log on start up failures
+
 ### Fixed
 - Patch job for auto completion (#97)
+- Tensorboard command with custom images
+- conda-forge detection in scripts
 
 ## [2.8.0b1] - 2017-06-07
 ### Added
 - Custom image support, please see the pool configuration doc and custom
-image guide for more information.
+image guide for more information. (#94)
 - `contrib` area with `packer` scripts
 
 ### Changed

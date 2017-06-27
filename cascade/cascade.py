@@ -33,6 +33,7 @@ import logging
 import logging.handlers
 import os
 import pathlib
+import random
 import shutil
 import subprocess
 import sys
@@ -394,6 +395,44 @@ class DockerSaveThread(threading.Thread):
                     _DIRECTDL_DOWNLOADING.remove(self.resource)
                     _DIRECTDL.remove(self.resource)
 
+    def _pull(self, image: str) -> tuple:
+        """Docker image pull with registry normalization
+        :param str image: image to pull
+        :rtype: tuple
+        :return: tuple or return code, stdout, stderr
+        """
+        if _REGISTRY == 'registry.hub.docker.com':
+            src = image
+            _pub = True
+        else:
+            src = '{}/{}'.format(_REGISTRY, image)
+            _pub = False
+        proc = subprocess.Popen(
+            'docker pull {}'.format(src),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            universal_newlines=True)
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0 and _ALLOW_PUBLIC_PULL_WITH_PRIVATE:
+            logger.warning(
+                'could not pull from private registry, attempting '
+                'Docker Public Hub instead')
+            _pub = True
+            proc = subprocess.Popen(
+                'docker pull {}'.format(image),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+                universal_newlines=True)
+            stdout, stderr = proc.communicate()
+        if proc.returncode == 0 and not _pub:
+            # tag image to remove registry ip
+            subprocess.check_call(
+                'docker tag {} {}'.format(_REGISTRY, src, image),
+                shell=True)
+        return proc.returncode, stdout, stderr
+
     def _pull_and_save(self) -> None:
         """Thread main logic for pulling and saving docker image"""
         if _REGISTRY is None:
@@ -406,31 +445,31 @@ class DockerSaveThread(threading.Thread):
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
         logger.info('pulling image {} from {}'.format(image, _REGISTRY))
-        if _REGISTRY == 'registry.hub.docker.com':
-            subprocess.check_output(
-                'docker pull {}'.format(image), shell=True)
-        else:
-            _pub = False
-            try:
-                subprocess.check_output(
-                    'docker pull {}/{}'.format(_REGISTRY, image),
-                    shell=True)
-            except subprocess.CalledProcessError:
-                if _ALLOW_PUBLIC_PULL_WITH_PRIVATE:
-                    logger.warning(
-                        'could not pull from private registry, attempting '
-                        'Docker Public Hub instead')
-                    subprocess.check_output(
-                        'docker pull {}'.format(image), shell=True)
-                    _pub = True
-                else:
-                    raise
-            # tag image to remove registry ip
-            if not _pub:
-                subprocess.check_call(
-                    'docker tag {}/{} {}'.format(_REGISTRY, image, image),
-                    shell=True)
-            del _pub
+        npa_errors = 0
+        while True:
+            rc, stdout, stderr = self._pull(image)
+            if rc != 0:
+                fail = True
+                if 'toomanyrequests' in stdout or 'toomanyrequests' in stderr:
+                    logger.error(
+                        'Too many requests issued to registry server, '
+                        'retrying...')
+                    fail = False
+                    time.sleep(random.randint(5, 30))
+                elif 'no pull access' in stdout or 'no pull access' in stderr:
+                    npa_errors += 1
+                    if npa_errors < 3:
+                        fail = False
+                        logger.error(
+                            'No pull access to registry server, retrying in '
+                            'case of temporary overload...')
+                    time.sleep(random.randint(1, 10))
+                if fail:
+                    raise RuntimeError(
+                        'docker pull failed: stdout={} stderr={}'.format(
+                            stdout, stderr))
+            else:
+                break
         diff = (datetime.datetime.now() - start).total_seconds()
         logger.debug('took {} sec to pull docker image {} from {}'.format(
             diff, image, _REGISTRY))

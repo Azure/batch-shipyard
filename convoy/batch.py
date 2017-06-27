@@ -217,6 +217,12 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
             get_all_files_via_node(
                 batch_client, config,
                 filespec='{},{}'.format(node.id, 'startup/std*.txt'))
+            try:
+                get_all_files_via_node(
+                    batch_client, config,
+                    filespec='{},{}'.format(node.id, 'startup/wd/cascade.log'))
+            except batchmodels.BatchErrorException:
+                pass
 
 
 def _block_for_nodes_ready(
