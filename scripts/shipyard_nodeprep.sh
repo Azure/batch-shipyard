@@ -171,15 +171,15 @@ install_azurefile_docker_volume_driver() {
 }
 
 refresh_package_index() {
-    # refresh package index
+    offer=$1
     set +e
     retries=30
     while [ $retries -gt 0 ]; do
-        if [ $1 == "ubuntuserver" ]; then
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             apt-get update
-        elif [[ $1 == centos* ]] || [[ $1 == "rhel" ]] || [[ $1 == "oracle-linux" ]]; then
+        elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
             yum makecache -y fast
-        elif [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
+        elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             zypper -n --gpg-auto-import-keys ref
         fi
         if [ $? -eq 0 ]; then
@@ -188,6 +188,32 @@ refresh_package_index() {
         let retries=retries-1
         if [ $retries -eq 0 ]; then
             echo "Could not update package index"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+install_packages() {
+    offer=$1
+    shift
+    set +e
+    retries=30
+    while [ $retries -gt 0 ]; do
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
+            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
+        elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
+            yum install -y $*
+        elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
+            zypper -n in $*
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "Could not install packages: $*"
             exit 1
         fi
         sleep 1
@@ -332,11 +358,9 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     # refresh package index
     refresh_package_index $offer
     # install required software first
-    apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-        apt-transport-https ca-certificates curl software-properties-common
+    install_packages $offer apt-transport-https ca-certificates curl software-properties-common
     if [ $name == "ubuntu-trusty" ]; then
-        apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-            linux-image-extra-$(uname -r) linux-image-extra-virtual
+        install_packages $offer linux-image-extra-$(uname -r) linux-image-extra-virtual
     fi
     # add gpgkey for repo
     set +e
@@ -363,8 +387,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     grep '^DOCKER_OPTS=' /etc/default/docker
     if [ $? -ne 0 ]; then
         # install docker engine
-        apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-            docker-ce=$dockerversion$name
+        install_packages $offer docker-ce=$dockerversion$name
         set -e
         $srvstop
         set +e
@@ -378,7 +401,6 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/docker-tmp\" >> /etc/default/docker
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         fi
-
         if [[ $name == "ubuntu-xenial" ]] || [[ $name == "debian-jessie" ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
@@ -418,12 +440,10 @@ EOF
         nvdriver=${GPUARGS[1]}
         nvdocker=${GPUARGS[2]}
         # get development essentials for nvidia driver
-        apt-get install -y -q --no-install-recommends \
-            build-essential
+        install_packages $offer build-essential
         # get additional dependency if NV-series VMs
         if [ ${GPUARGS[0]} == "True" ]; then
-            apt-get install -y -q --no-install-recommends \
-                xserver-xorg-dev
+            install_packages $offer xserver-xorg-dev
         fi
         # install driver
         ./$nvdriver -s
@@ -462,7 +482,7 @@ EOF
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
-        apt-get install -y -q --no-install-recommends glusterfs-server
+        install_packages $offer glusterfs-server
         if [[ ! -z $gfsenable ]]; then
             $gfsenable
         fi
@@ -476,9 +496,9 @@ EOF
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
             if [ $server_type == "nfs" ]; then
-                apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
+                install_packages $offer nfs-common nfs4-acl-tools
             elif [ $server_type == "glusterfs" ]; then
-                apt-get install -y -q --no-install-recommends glusterfs-client acl
+                install_packages $offer glusterfs-client acl
             else
                 echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
@@ -488,13 +508,11 @@ EOF
     # install dependencies if not using cascade container
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
-        apt-get install -y -q --no-install-recommends \
-            build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
+        install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir azure-storage==0.34.2
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
-            apt-get install -y -q --no-install-recommends \
-                python3-libtorrent pigz
+            install_packages $offer python3-libtorrent pigz
         fi
     fi
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
@@ -535,10 +553,10 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         sysctl -p
     fi
     # add docker repo to yum
-    yum install -y yum-utils
+    install_packages $offer yum-utils
     yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     refresh_package_index $offer
-    yum install -y docker-ce-$dockerversion
+    install_packages $offer docker-ce-$dockerversion
     # modify docker opts
     mkdir -p /mnt/resource/docker-tmp
     sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
@@ -556,9 +574,9 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
-        yum install -y epel-release centos-release-gluster38
+        install_packages $offer epel-release centos-release-gluster38
         sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-        yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
+        install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server
         systemctl daemon-reload
         $gfsenable
         systemctl start glusterd
@@ -571,14 +589,14 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
             if [ $server_type == "nfs" ]; then
-                yum install -y nfs-utils nfs4-acl-tools
+                install_packages $offer nfs-utils nfs4-acl-tools
                 systemctl daemon-reload
                 $rpcbindenable
                 systemctl start rpcbind
             elif [ $server_type == "glusterfs" ]; then
-                yum install -y epel-release centos-release-gluster38
+                install_packages $offer epel-release centos-release-gluster38
                 sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
+                install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server acl
             else
                 echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
@@ -629,7 +647,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # update index
         refresh_package_index $offer
         # install docker engine
-        zypper -n in docker-$dockerversion
+        install_packages $offer docker-$dockerversion
         # modify docker opts, docker opts in /etc/sysconfig/docker
         mkdir -p /mnt/resource/docker-tmp
         sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
@@ -647,7 +665,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         if [ $gluster_on_compute -eq 1 ]; then
             zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
             zypper -n --gpg-auto-import-keys ref
-            zypper -n in glusterfs
+            install_packages $offer glusterfs
             systemctl daemon-reload
             systemctl enable glusterd
             systemctl start glusterd
@@ -660,14 +678,14 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 IFS=':' read -ra sc <<< "$sc_arg"
                 server_type=${sc[0]}
                 if [ $server_type == "nfs" ]; then
-                    zypper -n in nfs-client nfs4-acl-tools
+                    install_packages $offer nfs-client nfs4-acl-tools
                     systemctl daemon-reload
                     systemctl enable rpcbind
                     systemctl start rpcbind
                 elif [ $server_type == "glusterfs" ]; then
                     zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
                     zypper -n --gpg-auto-import-keys ref
-                    zypper -n in glusterfs acl
+                    install_packages $offer glusterfs acl
                 else
                     echo "Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
@@ -680,7 +698,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 echo "unsupported sku for intel mpi setup on SLES"
                 exit 1
             fi
-            zypper -n in lsb
+            install_packages $offer lsb
             rpm -Uvh --nodeps /opt/intelMPI/intel_mpi_packages/*.rpm
             mkdir -p /opt/intel/compilers_and_libraries/linux
             ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
