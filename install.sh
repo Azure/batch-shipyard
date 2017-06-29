@@ -120,6 +120,11 @@ else
         DISTRIB_ID=$ID
         DISTRIB_RELEASE=$VERSION_ID
     fi
+    # check for OS X
+    if [ -z ${DISTRIB_ID+x} ] && [ "$(uname)" == "Darwin" ]; then
+        DISTRIB_ID=$(uname)
+        DISTRIB_RELEASE=$(uname -a | cut -d' ' -f3)
+    fi
 fi
 
 if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
@@ -129,8 +134,10 @@ if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
 fi
 
 # lowercase vars
-DISTRIB_ID=${DISTRIB_ID,,}
-DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+if [ $DISTRIB_ID != "Darwin" ]; then
+    DISTRIB_ID=${DISTRIB_ID,,}
+    DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+fi
 
 # install requisite packages from distro repo
 if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
@@ -182,6 +189,14 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
             openssh rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
             curl -fSsL https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
+        fi
+    elif [ $DISTRIB_ID == "Darwin" ]; then
+        # check for pip, otherwise install it
+        if hash $PIP 2> /dev/null; then
+            echo "$PIP detected."
+        else
+            echo "$PIP not found, installing for Python"
+            $SUDO $PYTHON -m ensurepip
         fi
     else
         echo "Unsupported distribution."
