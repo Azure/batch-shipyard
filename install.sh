@@ -10,16 +10,21 @@ SUDO=sudo
 VENV_NAME=
 
 # process options
-while getopts "h?3ce:" opt; do
+while getopts "h?23ce:" opt; do
     case "$opt" in
         h|\?)
             echo "install.sh parameters"
             echo ""
+            echo "-2 install for Python 2.7"
             echo "-3 install for Python 3.3+"
             echo "-c install for Cloud Shell"
             echo "-e [environment name] install to a virtual environment"
             echo ""
             exit 1
+            ;;
+        2)
+            PYTHON=python
+            PIP=pip
             ;;
         3)
             PYTHON=python3

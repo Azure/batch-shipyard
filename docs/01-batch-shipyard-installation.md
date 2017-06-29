@@ -15,7 +15,18 @@ git clone https://github.com/Azure/batch-shipyard.git
 or [download the latest release](https://github.com/Azure/batch-shipyard/releases)
 and unpack the archive.
 
-### Step 2a: [Linux] Run the `install.sh` Script
+For the next step (if not using the Batch Shipyard CLI Docker image), refer
+to your operating system specific installation instructions:
+* [Linux](#linux-install)
+* [Mac OS X](#mac-install)
+* [Windows](#windows-install)
+* [Windows Subsystem for Linux](#wsl-install)
+
+Alternatively, you can install the Batch Shipyard CLI on your machine via
+[Docker](#docker-install). If using the Docker image, this is the only step
+needed and does not require any futher installation steps.
+
+### <a name="linux-install"></a>Step 2 [Linux]: Run the `install.sh` Script
 Batch Shipyard includes an installation script to simplify installation on
 a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
@@ -40,10 +51,10 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 2.7 in the virtual environment "shipyard.venv"
-./install.sh -e shipyard.venv
-# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
+# Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
 ./install.sh -3 -e shipyard.venv
+# Or install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -e shipyard.venv
 # Or to install for Anaconda Python3 in the environment "shipyard.venv". Note
 # that for Anaconda installations, the -e parameter is required
 ./install.sh -3 -e shipyard.venv
@@ -70,10 +81,10 @@ Alternatively, install directly into your "user" environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 2.7
-./install.sh
-# Or to install for Python 3.5+ (recommended) in the virtual environment "shipyard"
+# Install for Python 3.5+ (recommended) in the virtual environment "shipyard"
 ./install.sh -3
+# Or install for Python 2.7
+./install.sh
 # Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
@@ -113,7 +124,53 @@ The following distributions will not work with the `install.sh` script:
 Please follow the manual installation instructions found later in this
 document for these distributions.
 
-### Step 2b: [Windows] Run the `install.cmd` Script
+### <a name="mac-install"></a>Step 2 [Mac]: Run the `install.sh` Script
+It is recommended to follow the steps outlined on
+[this guide](http://docs.python-guide.org/en/latest/starting/install3/osx/#install3-osx)
+to install Batch Shipyard on a Python3 installation rather than the default
+Python 2.7 that is shipped with Mac OS X. However, if you prefer to use
+the system defaulted Python 2.7, the installation will work that environment
+as well.
+
+The `install.sh` script supports isolated installation through a virtual
+environment so that other system-wide or user python dependencies are left
+unmodified. To perform this style of installation, which is recommended,
+specify the virtual environment to create with the `-e` parameter. This option
+also does not require modifying your shell rc file for advanced data movement
+capability provided by Batch Shipyard.
+
+The recommended installation method with a virtual environment:
+```shell
+# Ensure you are not root
+# Obtain Batch Shipyard through git clone or downloading the archive and unpacking
+# Change directory to where Batch Shipyard was cloned or unpacked to
+cd batch-shipyard
+# Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
+./install.sh -3 -e shipyard.venv
+# Or to install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -e shipyard.venv
+```
+
+A helper script named `shipyard` will be generated with a successful
+installation. This helper script can be invoked in lieu of `shipyard.py`
+which will invoke shipyard with the appropriate interpreter and virtual
+environment, if created during installation.
+
+Do not delete the virtual environment directory (in the above example, a
+directory named `shipyard.venv` would be created), as this contains the
+virtual environment required for execution.
+
+Please note that although Anaconda environment installations are supported,
+there is a larger startup delay for invoking `shipyard` with Anaconda
+environments due to the delay in activating a conda environment.
+Python from [python.org](https://www.python.org) (CPython) is recommended as
+the execution environment which can be installed easily with the Homebrew
+as noted in the aforementioned guide.
+
+Please see the Upgrading section below for information on upgrading to a new
+release of Batch Shipyard.
+
+### <a name="windows-install"></a>Step 2 [Windows]: Run the `install.cmd` Script
 Batch Shipyard includes a installation command file that simplifies
 installing Batch Shipyard on [python.org (CPython)](https://www.python.org)
 and Anaconda. It is highly recommended to use Python 3.5 or higher (or an
@@ -164,23 +221,47 @@ proper interpreter.
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
-### Step 2c: [Mac] Pip Install Dependencies
-Please follow the steps outlined on
-[this guide](http://docs.python-guide.org/en/latest/starting/install/osx/)
-to ensure that you have a recent version of Python, a compiler and pip. It
-is recommended to use Python 3.5 or later for use with Batch Shipyard.
+### <a name="wsl-install"></a>Step 2 [Windows Subsytem for Linux]: Run the `install.sh` Script
+Windows Subsystem for Linux now comes with Python3 installed out of the box.
+This is the recommended Python interpreter to use with Batch Shipyard.
+First, you must enable and install Windows Subsystem for Linux. Please
+follow the [installation guide from Microsoft](https://msdn.microsoft.com/en-us/commandline/wsl/install_guide),
+if you have not enabled and installed it.
 
-Invoke `pip` and install using the `requirements.txt` file. For example:
+The `install.sh` script supports isolated installation through a virtual
+environment so that other system-wide or user python dependencies are left
+unmodified. To perform this style of installation, which is recommended,
+specify the virtual environment to create with the `-e` parameter. This option
+also does not require modifying your shell rc file for advanced data movement
+capability provided by Batch Shipyard.
+
+Once you have installed and activated the Windows Subsystem for Linux and
+Bash, the recommended installation method with a virtual environment is as
+follows:
 ```shell
+# Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Reference correct location of pip below if not found on path
-pip install --upgrade --user -r requirements.txt
+# Install for Python3 in the virtual environment "shipyard.venv"
+./install.sh -3 -e shipyard.venv
 ```
+
+A helper script named `shipyard` will be generated with a successful
+installation. This helper script can be invoked in lieu of `shipyard.py`
+which will invoke shipyard with the appropriate interpreter and virtual
+environment, if created during installation. For the purposes of usage
+documentation as it refers to either Linux or Windows, Batch Shipyard
+installations on Windows Subsystem for Linux should be considered as
+Linux.
+
+Do not delete the virtual environment directory (in the above example, a
+directory named `shipyard.venv` would be created), as this contains the
+virtual environment required for execution.
+
 Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
-## CLI Installation With Docker
+## <a name="docker-install"></a>Batch Shipyard CLI Installation via Docker
 If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then all of the required software is bundled in the image
 itself, however, you will need an installation of the Docker engine on
@@ -194,14 +275,14 @@ docker pull alfpark/batch-shipyard:cli-latest
 This will pull the cli Docker image of batch-shipyard to your local machine.
 You are now ready to execute it with `docker run`. Please see the
 [Batch Shipyard Usage](20-batch-shipyard-usage.md) guide for more information
-on how to execute the cli Docker image.
+on how to execute the Batch Shipyard CLI Docker image.
 
 ## Upgrading to New Releases
 To upgrade to a new release, simply execute `git pull` or download a new
 release archive and unpack. Next, upgrade the dependencies for your
 respective platform below.
 
-#### Linux
+#### Linux, Mac, and Windows Subsystem for Linux
 Rerun the `install.sh` script with the appropriate parameters for all
 upgrades. If you specified the `-3` and/or `-e <env name>` parameter, then
 these parameters must be used again for upgrades.
@@ -209,18 +290,20 @@ these parameters must be used again for upgrades.
 #### Windows
 Rerun the `install.cmd` script with the same virtual environment parameter.
 
-#### Mac
-Reissue the `pip install --upgrade --user -r requirements.txt` command.
-
 #### CLI Docker
 If using the CLI Docker image, simply re-issue the `docker pull` command
 above.
 
-## Windows and Mac Support
-Please note that while Batch Shipyard can run on Windows or Mac, these
-platforms are not the primary test environments and are not officially
-supported. Additionally, some functionality is not supported in Windows.
-For the best experience, please run Batch Shipyard from Linux.
+## Windows Support
+Please note that while Batch Shipyard can run on Windows, some functionality
+may not be supported in Windows out of the box such as SSH, scp, rsync, and
+credential encryption functionality. To ensure support for these features
+on Windows, please read the Data Movement and Optional Credential Encryption
+Support sections below.
+
+Alternatively, you can install Batch Shipyard on the
+[Windows Subsystem for Linux](#wsl-install) with full support for all
+functionality as if running on Linux natively.
 
 Note that if you are cloning the repository on Windows, please ensure that
 git or any text editor does not modify the Unix line-endings (LF) for any
@@ -303,12 +386,15 @@ storage. This is automatically installed if `pip install` is used with
 typically placed in `~/.local/bin`. This path will need to be added to your
 `PATH` environment variable.
 
-### Encryption Support
-Batch Shipyard supports encrypting credentials that are used by backend
-components within your pool deployment. In order to utilize this feature,
-you must have `openssl` (or `openssl.exe` on Windows) installed. The
-`install.sh` script ensures that OpenSSL is installed on Linux. The Docker
-CLI image also contains OpenSSL. You might be able to find
+### Optional Credential Encryption Support
+Batch Shipyard supports optionally
+[encrypting credentials](75-batch-shipyard-credential-encryption.md)
+that are used by backend components within your pool deployment (please
+refer to the referenced guide on if your scenario requires this
+functionality). In order to utilize this feature, you must have `openssl`
+(or `openssl.exe` on Windows) installed. The `install.sh` script ensures that
+OpenSSL is installed on Linux. The Docker CLI image also contains OpenSSL
+binaries. You might be able to find
 [OpenSSL binaries for Windows](https://wiki.openssl.org/index.php/Binaries)
 on the OpenSSL wiki.
 

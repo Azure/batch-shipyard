@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- Support Mac OS X and Windows Subsystem for Linux installations via
+`install.sh`
+- Guide for Windows Subsystem for Linux installations
+
+### Changed
+- Drop unsupported designations for Mac OS X and Windows
+
 ## [2.8.0rc1] - 2017-06-27
 ### Added
 - Version metadata added to pools and jobs with warnings generated for
@@ -17,7 +25,7 @@ mismatches (#89)
 ### Fixed
 - Patch job for auto completion (#97)
 - Tensorboard command with custom images
-- conda-forge detection in scripts
+- conda-forge detection in installation scripts (#100)
 
 ## [2.8.0b1] - 2017-06-07
 ### Added
