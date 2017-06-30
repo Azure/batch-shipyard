@@ -353,7 +353,7 @@ Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
 on how this feature works in Batch Shipyard.
 
 ## Full template
-An full template of a credentials file can be found
+A full template of a credentials file can be found
 [here](../config\_templates/fs.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.
 

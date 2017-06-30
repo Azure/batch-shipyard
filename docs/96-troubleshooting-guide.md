@@ -81,6 +81,10 @@ to see what the possible culprit for the issue is. If it appears to be
 transient, you can try to create the pool again. If it appears to be a Batch
 Shipyard issue, please report the issue on GitHub.
 
+Additionally, if you have specified an SSH user for your pool and there
+is a start task failure, you can still issue the command `pool asu` to add the
+pool SSH user and then `pool ssh` to SSH into the node to debug further.
+
 #### Compute Node does not start or is unusable
 If the compute node is "stuck" in starting state or enters unusable state,
 this indicates that there was an issue allocating the node from the Azure

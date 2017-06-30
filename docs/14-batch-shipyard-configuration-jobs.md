@@ -465,6 +465,6 @@ transferred again. This object currently supports `azure_batch` and
     This property may be null.
 
 ## Full template
-An full template of a credentials file can be found
+A full template of a credentials file can be found
 [here](../config\_templates/jobs.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

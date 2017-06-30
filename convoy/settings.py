@@ -388,6 +388,21 @@ def is_gpu_visualization_pool(vm_size):
     return False
 
 
+def get_gpu_type_from_vm_size(vm_size):
+    # type: (str) -> str
+    """Get GPU type as string
+    :param str vm_size: vm size
+    :rtype: str
+    :return: compute for gpgpu and visualization for viz
+    """
+    if is_gpu_compute_pool(vm_size):
+        return 'compute'
+    elif is_gpu_visualization_pool(vm_size):
+        return 'visualization'
+    else:
+        return None
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable

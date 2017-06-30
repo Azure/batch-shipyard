@@ -2,13 +2,20 @@
 
 ## [Unreleased]
 
+## [2.8.0rc2] - 2017-06-30
 ### Added
 - Support Mac OS X and Windows Subsystem for Linux installations via
-`install.sh`
+`install.sh` (#101)
 - Guide for Windows Subsystem for Linux installations
+- Automated Nvidia driver install for NV-series
 
 ### Changed
 - Drop unsupported designations for Mac OS X and Windows
+- Update Docker engine to 17.06 for Ubuntu, Debian, CentOS and 17.04 for
+OpenSUSE
+
+### Fixed
+- Regression in private registry image pulls
 
 ## [2.8.0rc1] - 2017-06-27
 ### Added
@@ -710,7 +717,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc2...HEAD
+[2.8.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...2.8.0rc2
 [2.8.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...2.8.0rc1
 [2.8.0b1]: https://github.com/Azure/batch-shipyard/compare/2.7.0...2.8.0b1
 [2.7.0]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...2.7.0

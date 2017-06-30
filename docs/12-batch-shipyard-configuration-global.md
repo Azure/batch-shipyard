@@ -449,6 +449,6 @@ one or all of `data_volumes` and `shared_data_volumes` if you do not require
 this functionality.
 
 ## Full template
-An full template of a credentials file can be found
+A full template of a credentials file can be found
 [here](../config\_templates/config.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

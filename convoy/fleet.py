@@ -94,12 +94,19 @@ _NVIDIA_DRIVER = {
         'sha256': (
             '59e37f570ba5f3d7148028e96684d77f347d49a54e3722189782fc9b17d201c0'
         ),
+        'target': 'resources/nvidia-driver.run'
+    },
+    'visualization': {
+        'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
+        'sha256': (
+            'f5e39c9abf6d48d9883cd61d8fec8c67f05c9d6a7cc8b450af0efa790fbbd1a7'
+        ),
+        'target': 'resources/nvidia-driver-grid.run'
     },
     'license': (
         'http://www.nvidia.com/content/DriverDownload-March2009'
         '/licence.php?lang=us'
     ),
-    'target': 'resources/nvidia-driver.run'
 }
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
@@ -289,14 +296,8 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
     :rtype: pathlib.Path
     :return: package path
     """
-    if settings.is_gpu_compute_pool(vm_size):
-        gpu_type = 'compute'
-    elif settings.is_gpu_visualization_pool(vm_size):
-        gpu_type = 'visualization'
-        raise RuntimeError(
-            ('pool consisting of {} nodes require gpu driver '
-             'configuration').format(vm_size))
-    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER['target'])
+    gpu_type = settings.get_gpu_type_from_vm_size(vm_size)
+    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER[gpu_type]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
             util.compute_sha256_for_file(pkg, False) !=
@@ -314,14 +315,14 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
             logger.info('NVIDIA Software License accepted')
         # download driver
         logger.debug('downloading NVIDIA driver to {}'.format(
-            _NVIDIA_DRIVER['target']))
+            _NVIDIA_DRIVER[gpu_type]['target']))
         response = requests.get(_NVIDIA_DRIVER[gpu_type]['url'], stream=True)
         with pkg.open('wb') as f:
             for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
                 if chunk:
                     f.write(chunk)
         logger.debug('wrote {} bytes to {}'.format(
-            pkg.stat().st_size, _NVIDIA_DRIVER['target']))
+            pkg.stat().st_size, _NVIDIA_DRIVER[gpu_type]['target']))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DRIVER[gpu_type]['sha256']):
@@ -833,7 +834,9 @@ def _add_pool(
                 blob_client, config, pool_settings.vm_size)
             _rflist.append((gpu_driver.name, gpu_driver))
         else:
-            gpu_driver = pathlib.Path(_NVIDIA_DRIVER['target'])
+            gpu_type = settings.get_gpu_type_from_vm_size(
+                pool_settings.vm_size)
+            gpu_driver = pathlib.Path(_NVIDIA_DRIVER[gpu_type]['target'])
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
         _rflist.append((gpupkg.name, gpupkg))
         gpu_env = '{}:{}:{}'.format(

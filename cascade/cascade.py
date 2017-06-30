@@ -429,7 +429,7 @@ class DockerSaveThread(threading.Thread):
         if proc.returncode == 0 and not _pub:
             # tag image to remove registry ip
             subprocess.check_call(
-                'docker tag {} {}'.format(_REGISTRY, src, image),
+                'docker tag {} {}'.format(src, image),
                 shell=True)
         return proc.returncode, stdout, stderr
 

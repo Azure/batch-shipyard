@@ -309,7 +309,7 @@ fi
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     # name will be appended to dockerversion
-    dockerversion=17.03.1~ce-0~
+    dockerversion=17.06.0~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
@@ -319,6 +319,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gfsstart="initctl start glusterfs-server"
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
         repo=https://download.docker.com/linux/ubuntu
+        dockerversion=${dockerversion}ubuntu
     elif [[ $sku == 16.04* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
@@ -329,6 +330,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gfsenable="systemctl enable glusterfs-server"
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
         repo=https://download.docker.com/linux/ubuntu
+        dockerversion=${dockerversion}ubuntu
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
@@ -339,6 +341,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gfsenable="systemctl enable glusterfs-server"
         gpgkey=https://download.docker.com/linux/debian/gpg
         repo=https://download.docker.com/linux/debian
+        dockerversion=${dockerversion}debian
     else
         echo "unsupported sku: $sku for offer: $offer"
         exit 1
@@ -387,7 +390,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     grep '^DOCKER_OPTS=' /etc/default/docker
     if [ $? -ne 0 ]; then
         # install docker engine
-        install_packages $offer docker-ce=$dockerversion$name
+        install_packages $offer docker-ce=$dockerversion
         set -e
         $srvstop
         set +e
@@ -427,8 +430,8 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         # split arg into two
         IFS=':' read -ra GPUARGS <<< "$gpu"
         # remove nouveau
-        apt-get --purge remove xserver-xorg-video-nouveau
         rmmod nouveau
+        apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
         # blacklist nouveau from being loaded if rebooted
 cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
 blacklist nouveau
@@ -447,6 +450,10 @@ EOF
         fi
         # install driver
         ./$nvdriver -s
+        # add flag to config template for GRID driver
+        if [ ${GPUARGS[0]} == "True" ]; then
+            echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf.template
+        fi
         # install nvidia-docker
         dpkg -i $nvdocker
         # enable and start nvidia docker service
@@ -527,7 +534,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
-        dockerversion=17.03.1.ce-1.el7.centos
+        dockerversion=17.06.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             srvstart="systemctl start docker.service"
@@ -553,7 +560,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         sysctl -p
     fi
     # add docker repo to yum
-    install_packages $offer yum-utils
+    install_packages $offer yum-utils device-mapper-persistent-data lvm2
     yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     refresh_package_index $offer
     install_packages $offer docker-ce-$dockerversion

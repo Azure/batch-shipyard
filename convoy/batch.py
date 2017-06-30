@@ -1925,15 +1925,25 @@ def generate_docker_login_settings(config, for_ssh=False):
                 '-p $DOCKER_LOGIN_PASSWORD')
     # transform env and cmd into single command for ssh
     if for_ssh and len(cmd) > 0:
+        srv = None
+        for ev in env:
+            if ev.name == 'DOCKER_LOGIN_PASSWORD':
+                pw = ev.value
+            elif ev.name == 'DOCKER_LOGIN_USERNAME':
+                user = ev.value
+            elif ev.name == 'DOCKER_LOGIN_SERVER':
+                srv = ev.value
         key = '${}'.format('DOCKER_LOGIN_PASSWORD')
         if encrypt:
-            pw = cmd[0][22:].replace(key, env[1].value)
+            pw = cmd[0][22:].replace(key, pw)
             cmd = cmd[1].replace(key, pw)
         else:
-            pw = env[1].value
             cmd = cmd[0].replace(key, pw)
         key = '${}'.format('DOCKER_LOGIN_USERNAME')
-        cmd = cmd.replace(key, env[0].value)
+        cmd = cmd.replace(key, user)
+        if util.is_not_empty(srv):
+            key = '${}'.format('DOCKER_LOGIN_SERVER')
+            cmd = cmd.replace(key, srv)
         if encrypt:
             key = 'openssl'
             if key in cmd:
