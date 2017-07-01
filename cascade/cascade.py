@@ -459,6 +459,7 @@ class DockerSaveThread(threading.Thread):
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
         logger.info('pulling image {} from {}'.format(image, _REGISTRY))
+        backoff = random.randint(2, 5)
         while True:
             rc, stdout, stderr = self._pull(image)
             if rc == 0:
@@ -467,7 +468,16 @@ class DockerSaveThread(threading.Thread):
                 logger.error(
                     'Too many requests issued to registry server, '
                     'retrying...')
-                time.sleep(random.randint(5, 30))
+                backoff = backoff << 1
+                endbackoff = backoff << 1
+                if endbackoff >= 300:
+                    endbackoff = 300
+                    if backoff > endbackoff:
+                        backoff = endbackoff
+                time.sleep(random.randint(backoff, endbackoff))
+                # reset if backoff reaches 5 min
+                if backoff >= 300:
+                    backoff = random.randint(2, 5)
             else:
                 raise RuntimeError(
                     'docker pull failed: stdout={} stderr={}'.format(

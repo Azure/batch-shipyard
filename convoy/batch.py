@@ -823,7 +823,7 @@ def del_node(batch_client, config, all_start_task_failed, node_id):
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param bool all_start_task_failed: reboot all start task failed nodes
+    :param bool all_start_task_failed: delete all start task failed nodes
     :param str node_id: node id to delete
     """
     node_ids = []
