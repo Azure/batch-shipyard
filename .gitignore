@@ -90,6 +90,7 @@ celerybeat-schedule
 
 # project specific ignores
 shipyard
+shipyard.cmd
 ssh_docker_tunnel_shipyard.sh
 id_rsa_shipyard*
 resources/azurefile-dockervolume-create.sh
@@ -97,4 +98,4 @@ resources/azurefile-dockervolumedriver
 resources/azurefile-dockervolumedriver.env
 resources/docker-registry-v2.tar.gz
 resources/nvidia-docker.deb
-resources/nvidia-driver.run
+resources/nvidia-driver*.run

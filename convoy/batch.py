@@ -30,6 +30,7 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import collections
 import datetime
 import fnmatch
 import getpass
@@ -39,6 +40,7 @@ try:
 except ImportError:
     import pathlib
 import os
+import ssl
 import tempfile
 import time
 # non-stdlib imports
@@ -64,6 +66,23 @@ _RUN_ELEVATED = batchmodels.UserIdentity(
         scope=batchmodels.AutoUserScope.pool,
         elevation_level=batchmodels.ElevationLevel.admin,
     )
+)
+NodeStateCountCollection = collections.namedtuple(
+    'NodeStateCountCollection', [
+        'creating',
+        'idle',
+        'leaving_pool',
+        'offline',
+        'preempted',
+        'rebooting',
+        'reimaging',
+        'running',
+        'start_task_failed',
+        'starting',
+        'unknown',
+        'unusable',
+        'waiting_for_start_task',
+    ]
 )
 
 
@@ -262,6 +281,7 @@ def _block_for_nodes_ready(
                          pool.target_dedicated_nodes == 0)):
                     fatal_resize_error = True
             if fatal_resize_error:
+                list_nodes(batch_client, config)
                 raise RuntimeError(
                     'Fatal resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
@@ -269,7 +289,17 @@ def _block_for_nodes_ready(
                 logger.error(
                     'Resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
-        nodes = list(batch_client.compute_node.list(pool.id))
+        # check pool allocation state
+        if pool.allocation_state == batchmodels.AllocationState.resizing:
+            nodes = []
+        else:
+            try:
+                nodes = list(batch_client.compute_node.list(pool.id))
+            except ssl.SSLError:
+                # SSL error happens sometimes on paging... this is probably
+                # a bug in the underlying msrest/msrestazure library that
+                # is reusing the SSL connection improperly
+                nodes = []
         # check if any nodes are in start task failed state
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
                 for node in nodes)):
@@ -301,7 +331,10 @@ def _block_for_nodes_ready(
                     _reboot_node(batch_client, pool.id, node.id, True)
                     reboot_map[node.id] += 1
                 # refresh node list to reflect rebooting states
-                nodes = list(batch_client.compute_node.list(pool.id))
+                try:
+                    nodes = list(batch_client.compute_node.list(pool.id))
+                except ssl.SSLError:
+                    nodes = []
             else:
                 # fast path check for start task failures in non-reboot mode
                 logger.error(
@@ -321,7 +354,6 @@ def _block_for_nodes_ready(
                  pool.target_low_priority_nodes) and
                 all(node.state in stopping_states for node in nodes)):
             if any(node.state not in end_states for node in nodes):
-                # list nodes of pool
                 list_nodes(batch_client, config)
                 raise RuntimeError(
                     ('Node(s) of pool {} not in {} state. Please inspect the '
@@ -336,12 +368,46 @@ def _block_for_nodes_ready(
             i = 0
             logger.debug(
                 ('waiting for {} dedicated nodes and {} low priority nodes '
-                 'to reach desired state').format(
+                 'to reach desired state in pool {} with '
+                 'allocation_state={}').format(
                      pool.target_dedicated_nodes,
-                     pool.target_low_priority_nodes))
-            for node in nodes:
-                logger.debug('{}: {}'.format(node.id, node.state))
+                     pool.target_low_priority_nodes,
+                     pool.id,
+                     pool.allocation_state))
+            if len(nodes) < 10:
+                for node in nodes:
+                    logger.debug('{}: {}'.format(node.id, node.state))
+            else:
+                logger.debug(_node_state_counts(nodes))
         time.sleep(10)
+
+
+def _node_state_counts(nodes):
+    # type: (List[batchmodels.ComputeNode]) -> NodeStateCountCollection
+    """Collate counts of various nodes
+    :param list nodes: list of nodes
+    :rtype: NodeStateCountCollection
+    :return: node state count collection
+    """
+    node_states = [node.state for node in nodes]
+    return NodeStateCountCollection(
+        creating=node_states.count(batchmodels.ComputeNodeState.creating),
+        idle=node_states.count(batchmodels.ComputeNodeState.idle),
+        leaving_pool=node_states.count(
+            batchmodels.ComputeNodeState.leaving_pool),
+        offline=node_states.count(batchmodels.ComputeNodeState.offline),
+        preempted=node_states.count(batchmodels.ComputeNodeState.preempted),
+        rebooting=node_states.count(batchmodels.ComputeNodeState.rebooting),
+        reimaging=node_states.count(batchmodels.ComputeNodeState.reimaging),
+        running=node_states.count(batchmodels.ComputeNodeState.running),
+        start_task_failed=node_states.count(
+            batchmodels.ComputeNodeState.start_task_failed),
+        starting=node_states.count(batchmodels.ComputeNodeState.starting),
+        unknown=node_states.count(batchmodels.ComputeNodeState.unknown),
+        unusable=node_states.count(batchmodels.ComputeNodeState.unusable),
+        waiting_for_start_task=node_states.count(
+            batchmodels.ComputeNodeState.waiting_for_start_task),
+    )
 
 
 def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
@@ -751,25 +817,45 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
         _reboot_node(batch_client, pool_id, node_id, False)
 
 
-def del_node(batch_client, config, node_id):
-    # type: (batch.BatchServiceClient, dict, str) -> None
+def del_node(batch_client, config, all_start_task_failed, node_id):
+    # type: (batch.BatchServiceClient, dict, bool, str) -> None
     """Delete a node in a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool all_start_task_failed: reboot all start task failed nodes
     :param str node_id: node id to delete
     """
-    if util.is_none_or_empty(node_id):
-        raise ValueError('node id is invalid')
+    node_ids = []
     pool_id = settings.pool_id(config)
-    if not util.confirm_action(
-            config, 'delete node {} from {} pool'.format(node_id, pool_id)):
+    if all_start_task_failed:
+        nodes = list(
+            batch_client.compute_node.list(
+                pool_id=pool_id,
+                compute_node_list_options=batchmodels.ComputeNodeListOptions(
+                    filter='state eq \'starttaskfailed\'',
+                ),
+            ))
+        for node in nodes:
+            if util.confirm_action(
+                    config, 'delete node {} from {} pool'.format(
+                        node.id, pool_id)):
+                node_ids.append(node.id)
+    else:
+        if util.is_none_or_empty(node_id):
+            raise ValueError('node id is invalid')
+        if util.confirm_action(
+                config, 'delete node {} from {} pool'.format(
+                    node_id, pool_id)):
+            node_ids.append(node_id)
+    if util.is_none_or_empty(node_ids):
+        logger.warning('no nodes to delete from pool: {}'.format(pool_id))
         return
-    logger.info('Deleting node {} from pool {}'.format(node_id, pool_id))
+    logger.info('Deleting nodes {} from pool {}'.format(node_ids, pool_id))
     batch_client.pool.remove_nodes(
         pool_id=pool_id,
         node_remove_parameter=batchmodels.NodeRemoveParameter(
-            node_list=[node_id],
+            node_list=node_ids,
         )
     )
 

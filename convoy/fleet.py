@@ -2280,15 +2280,16 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     util.subprocess_with_output(ssh_cmd)
 
 
-def action_pool_delnode(batch_client, config, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, str) -> None
+def action_pool_delnode(batch_client, config, all_start_task_failed, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool all_start_task_failed: reboot all start task failed nodes
     :param str nodeid: nodeid to delete
     """
-    batch.del_node(batch_client, config, nodeid)
+    batch.del_node(batch_client, config, all_start_task_failed, nodeid)
 
 
 def action_pool_rebootnode(

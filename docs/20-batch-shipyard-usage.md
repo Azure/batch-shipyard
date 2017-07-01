@@ -456,6 +456,9 @@ Azure Storage.
     pool configuration file
   * `--wait` will wait for deletion to complete
 * `delnode` will delete the specified node from the pool
+  * `--all-start-task-failed` will delete all nodes in the start task
+    failed state
+  * `--nodeid` is the node id to delete
 * `dsu` will delete the SSH user defined in the pool configuration file
 from all nodes in the specified pool
 * `grls` will retrieve all of the remote login settings for every node

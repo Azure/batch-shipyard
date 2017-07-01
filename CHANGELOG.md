@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- `--all-start-task-failed` parameter for `pool delnode`
+
+### Changed
+- Improve robustness of docker image pulls within node prep scripts
+- Restrict node list queries until pool allocation state emerges from resizing
+
+### Fixed
+- Remove nvidia gpu driver property from FFmpeg recipe
+- Further improve retry logic for docker image pulls in cascade
+
 ## [2.8.0rc2] - 2017-06-30
 ### Added
 - Support Mac OS X and Windows Subsystem for Linux installations via

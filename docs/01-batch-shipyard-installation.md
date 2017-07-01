@@ -129,8 +129,8 @@ It is recommended to follow the steps outlined on
 [this guide](http://docs.python-guide.org/en/latest/starting/install3/osx/#install3-osx)
 to install Batch Shipyard on a Python3 installation rather than the default
 Python 2.7 that is shipped with Mac OS X. However, if you prefer to use
-the system defaulted Python 2.7, the installation will work that environment
-as well.
+the system defaulted Python 2.7, the installation will work with that
+environment as well.
 
 The `install.sh` script supports isolated installation through a virtual
 environment so that other system-wide or user python dependencies are left

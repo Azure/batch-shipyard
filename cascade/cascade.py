@@ -395,6 +395,18 @@ class DockerSaveThread(threading.Thread):
                     _DIRECTDL_DOWNLOADING.remove(self.resource)
                     _DIRECTDL.remove(self.resource)
 
+    def _check_pull_output_overload(self, stdout: str, stderr: str) -> bool:
+        """Check output for registry overload errors
+        :param str stdout: stdout
+        :param str stderr: stderr
+        :rtype: bool
+        :return: if error appears to be overload from registry
+        """
+        if ('toomanyrequests' in stdout or 'toomanyrequests' in stderr or
+                'connection reset by peer' in stderr):
+            return True
+        return False
+
     def _pull(self, image: str) -> tuple:
         """Docker image pull with registry normalization
         :param str image: image to pull
@@ -414,7 +426,9 @@ class DockerSaveThread(threading.Thread):
             shell=True,
             universal_newlines=True)
         stdout, stderr = proc.communicate()
-        if proc.returncode != 0 and _ALLOW_PUBLIC_PULL_WITH_PRIVATE:
+        if (proc.returncode != 0 and _ALLOW_PUBLIC_PULL_WITH_PRIVATE and
+                not _pub and
+                not self._check_pull_output_overload(stdout, stderr)):
             logger.warning(
                 'could not pull from private registry, attempting '
                 'Docker Public Hub instead')
@@ -445,31 +459,19 @@ class DockerSaveThread(threading.Thread):
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
         logger.info('pulling image {} from {}'.format(image, _REGISTRY))
-        npa_errors = 0
         while True:
             rc, stdout, stderr = self._pull(image)
-            if rc != 0:
-                fail = True
-                if 'toomanyrequests' in stdout or 'toomanyrequests' in stderr:
-                    logger.error(
-                        'Too many requests issued to registry server, '
-                        'retrying...')
-                    fail = False
-                    time.sleep(random.randint(5, 30))
-                elif 'no pull access' in stdout or 'no pull access' in stderr:
-                    npa_errors += 1
-                    if npa_errors < 3:
-                        fail = False
-                        logger.error(
-                            'No pull access to registry server, retrying in '
-                            'case of temporary overload...')
-                    time.sleep(random.randint(1, 10))
-                if fail:
-                    raise RuntimeError(
-                        'docker pull failed: stdout={} stderr={}'.format(
-                            stdout, stderr))
-            else:
+            if rc == 0:
                 break
+            elif self._check_pull_output_overload(stdout, stderr):
+                logger.error(
+                    'Too many requests issued to registry server, '
+                    'retrying...')
+                time.sleep(random.randint(5, 30))
+            else:
+                raise RuntimeError(
+                    'docker pull failed: stdout={} stderr={}'.format(
+                        stdout, stderr))
         diff = (datetime.datetime.now() - start).total_seconds()
         logger.debug('took {} sec to pull docker image {} from {}'.format(
             diff, image, _REGISTRY))

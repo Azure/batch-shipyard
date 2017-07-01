@@ -81,6 +81,16 @@ done
 shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 
+contains() {
+    string="$1"
+    substring="$2"
+    if test "${string#*$substring}" != "$string"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
@@ -249,6 +259,35 @@ install_azurefile_docker_volume_driver() {
     ./azurefile-dockervolume-create.sh
 }
 
+docker_pull_image() {
+    image=$1
+    set +e
+    retries=60
+    while [ $retries -gt 0 ]; do
+        pull_out=$(docker pull $image 2>&1)
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            echo "$pull_out"
+            break
+        fi
+        # non-zero exit code: check if pull output has toomanyrequests or
+        # connection resets
+        if [ contains "$pull_out" "toomanyrequests" ] || [ contains "$pull_out" "connection reset by peer" ]; then
+            echo "WARNING: will retry:\n$pull_out"
+        else
+            echo "ERROR:\n$pull_out"
+            exit $rc
+        fi
+        let retries=retries-1
+        if [ $retries -le 0 ]; then
+            echo "ERROR: Could not pull docker image: $image"
+            exit $rc
+        fi
+        sleep $[($RANDOM % 5) + 1]s
+    done
+    set -e
+}
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -397,8 +436,8 @@ if [ ! -z $sc_args ]; then
 fi
 
 # retrieve docker images related to data movement
-docker pull alfpark/blobxfer:$blobxferversion
-docker pull alfpark/batch-shipyard:tfm-$version
+docker_pull_image alfpark/blobxfer:$blobxferversion
+docker_pull_image alfpark/batch-shipyard:tfm-$version
 
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
@@ -442,6 +481,8 @@ p2p=$p2p
 `env | grep DOCKER_LOGIN_`
 EOF
 chmod 600 $envfile
+# pull image
+docker_pull_image alfpark/batch-shipyard:cascade-$version
 # launch container
 docker run $detached --net=host --env-file $envfile \
     -v /var/run/docker.sock:/var/run/docker.sock \

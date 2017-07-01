@@ -119,6 +119,16 @@ if [ -z $version ]; then
     exit 1
 fi
 
+contains() {
+    string="$1"
+    substring="$2"
+    if test "${string#*$substring}" != "$string"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
@@ -187,7 +197,7 @@ refresh_package_index() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "Could not update package index"
+            echo "ERROR: Could not update package index"
             exit 1
         fi
         sleep 1
@@ -213,10 +223,39 @@ install_packages() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "Could not install packages: $*"
+            echo "ERROR: Could not install packages: $*"
             exit 1
         fi
         sleep 1
+    done
+    set -e
+}
+
+docker_pull_image() {
+    image=$1
+    set +e
+    retries=60
+    while [ $retries -gt 0 ]; do
+        pull_out=$(docker pull $image 2>&1)
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            echo "$pull_out"
+            break
+        fi
+        # non-zero exit code: check if pull output has toomanyrequests or
+        # connection resets
+        if [ contains "$pull_out" "toomanyrequests" ] || [ contains "$pull_out" "connection reset by peer" ]; then
+            echo "WARNING: will retry:\n$pull_out"
+        else
+            echo "ERROR:\n$pull_out"
+            exit $rc
+        fi
+        let retries=retries-1
+        if [ $retries -le 0 ]; then
+            echo "ERROR: Could not pull docker image: $image"
+            exit $rc
+        fi
+        sleep $[($RANDOM % 5) + 1]s
     done
     set -e
 }
@@ -269,10 +308,10 @@ fi
 
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
-    echo "$cascadefailed file exists, assuming cascade failure during node prep"
+    echo "ERROR: $cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
 elif [ -f $nodeprepfinished ]; then
-    echo "$nodeprepfinished file exists, assuming successful completion of node prep"
+    echo "INFO: $nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
 
@@ -343,11 +382,11 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         repo=https://download.docker.com/linux/debian
         dockerversion=${dockerversion}debian
     else
-        echo "unsupported sku: $sku for offer: $offer"
+        echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     if [ ! -z $gpu ] && [ $name != "ubuntu-xenial" ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
@@ -375,7 +414,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "Could not add key for docker repo"
+            echo "ERROR: Could not add key for docker repo"
             exit 1
         fi
         sleep 1
@@ -470,7 +509,7 @@ EOF
         set +e
         while :
         do
-            echo "Attempting to create nvidia-docker volume with version $nvdriverver"
+            echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
             docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
             if [ $? -eq 0 ]; then
                 break
@@ -479,7 +518,7 @@ EOF
                 NV_DIFF=$((($NV_NOW-$NV_START)/60))
                 # fail after 5 minutes of attempts
                 if [ $NV_DIFF -ge 5 ]; then
-                    echo "could not create nvidia-docker volume"
+                    echo "ERROR: could not create nvidia-docker volume"
                     exit 1
                 fi
                 sleep 1
@@ -507,7 +546,7 @@ EOF
             elif [ $server_type == "glusterfs" ]; then
                 install_packages $offer glusterfs-client acl
             else
-                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
             fi
         done
@@ -525,12 +564,12 @@ EOF
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "only supported through shipyard container"
+        echo "ERROR: only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
     if [ ! -z $gpu ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
@@ -542,7 +581,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
             # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
-            echo "oracle linux is not supported at this time"
+            echo "ERROR: oracle linux is not supported at this time"
             exit 1
         else
             srvenable="chkconfig docker on"
@@ -552,7 +591,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             rpcbindenable="chkconfig rpcbind on"
         fi
     else
-        echo "unsupported sku: $sku for offer: $offer"
+        echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     # reload network settings
@@ -605,7 +644,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
                 sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
                 install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server acl
             else
-                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
             fi
         done
@@ -613,12 +652,12 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "only supported through shipyard container"
+        echo "ERROR: only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
     if [ ! -z $gpu ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
@@ -648,7 +687,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             SUSEConnect -p sle-module-containers/12/x86_64 -r ''
         fi
         if [ -z $repodir ]; then
-            echo "unsupported sku: $sku for offer: $offer"
+            echo "ERROR: unsupported sku: $sku for offer: $offer"
             exit 1
         fi
         # update index
@@ -694,7 +733,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                     zypper -n --gpg-auto-import-keys ref
                     install_packages $offer glusterfs acl
                 else
-                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
                 fi
             done
@@ -702,7 +741,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # if hpc sku, set up intel mpi
         if [[ $offer == sles-hpc* ]]; then
             if [ $sku != "12-sp1" ]; then
-                echo "unsupported sku for intel mpi setup on SLES"
+                echo "ERROR: unsupported sku for intel mpi setup on SLES"
                 exit 1
             fi
             install_packages $offer lsb
@@ -712,13 +751,13 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         fi
     fi
 else
-    echo "unsupported offer: $offer (sku: $sku)"
+    echo "ERROR: unsupported offer: $offer (sku: $sku)"
     exit 1
 fi
 
 # retrieve docker images related to data movement
-docker pull alfpark/blobxfer:$blobxferversion
-docker pull alfpark/batch-shipyard:tfm-$version
+docker_pull_image alfpark/blobxfer:$blobxferversion
+docker_pull_image alfpark/batch-shipyard:tfm-$version
 
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
@@ -734,15 +773,15 @@ if [ ! -z $sc_args ]; then
     for sc_arg in ${sc_args[@]}; do
         IFS=':' read -ra sc <<< "$sc_arg"
         mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
-        echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
+        echo "INFO: Creating host directory for storage cluster $sc_arg at $mountpoint"
         mkdir -p $mountpoint
         chmod 777 $mountpoint
-        echo "Adding $mountpoint to fstab"
+        echo "INFO: Adding $mountpoint to fstab"
         # eval fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_entry="${fstabs[$i]}"
         echo $fstab_entry >> /etc/fstab
         tail -n1 /etc/fstab
-        echo "Mounting $mountpoint"
+        echo "INFO: Mounting $mountpoint"
         START=$(date -u +"%s")
         set +e
         while :
@@ -755,14 +794,14 @@ if [ ! -z $sc_args ]; then
                 DIFF=$((($NOW-$START)/60))
                 # fail after 5 minutes of attempts
                 if [ $DIFF -ge 5 ]; then
-                    echo "Could not mount storage cluster $sc_arg on: $mountpoint"
+                    echo "ERROR: Could not mount storage cluster $sc_arg on: $mountpoint"
                     exit 1
                 fi
                 sleep 1
             fi
         done
         set -e
-        echo "$mountpoint mounted."
+        echo "INFO: $mountpoint mounted."
         i=$(($i + 1))
     done
 fi
@@ -805,6 +844,8 @@ p2p=$p2p
 `env | grep DOCKER_LOGIN_`
 EOF
     chmod 600 $envfile
+    # pull image
+    docker_pull_image alfpark/batch-shipyard:cascade-$version
     # launch container
     docker run $detached --net=host --env-file $envfile \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -847,7 +888,7 @@ if [ $p2penabled -eq 0 ]; then
     wait $cascadepid
     rc=$?
     if [ $rc -ne 0 ]; then
-        echo "cascade exited with non-zero exit code: $rc"
+        echo "ERROR: cascade exited with non-zero exit code: $rc"
         rm -f $nodeprepfinished
         exit $rc
     fi
@@ -859,7 +900,7 @@ rm -f $cascadefailed
 
 # block until images ready if specified
 if [ ! -z $block ]; then
-    echo "blocking until images ready: $block"
+    echo "INFO: blocking until images ready: $block"
     IFS=',' read -ra RES <<< "$block"
     declare -a missing
     while :
@@ -870,7 +911,7 @@ if [ ! -z $block ]; then
             fi
         done
         if [ ${#missing[@]} -eq 0 ]; then
-            echo "all docker images present"
+            echo "INFO: all docker images present"
             break
         else
             unset missing

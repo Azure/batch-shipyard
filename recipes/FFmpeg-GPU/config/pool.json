@@ -15,11 +15,6 @@
         "ssh": {
             "username": "docker"
         },
-        "gpu": {
-            "nvidia_driver": {
-                "source": "<URL for nvidia driver for STANDARD_NV VMs>"
-            }
-        },
         "reboot_on_start_task_failed": false,
         "block_until_all_global_resources_loaded": true
     }
