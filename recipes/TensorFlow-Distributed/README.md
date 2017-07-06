@@ -16,12 +16,14 @@ GPUs:
 instances feature M60 GPUs for visualization workloads. Because TensorFlow is
 a GPU-accelerated compute application, it is best to choose `NC` VM instances.
 If not using GPUs, another appropriate SKU can be selected.
-* `publisher` should be `Canonical` if using GPUs. Other publishers will be
-supported once they are available for N-series VMs.
-* `offer` should be `UbuntuServer` if using GPUs. Other offers will be
-supported once they are available for N-series VMs.
-* `sku` should be `16.04-LTS` if using GPUs. Other skus will be supported
-once they are available for N-series VMs.
+* `vm_configuration` is the VM configuration
+  * `platform_image` specifies to use a platform image
+    * `publisher` should be `Canonical` or `OpenLogic` if using GPUs. Other
+      supported publishers can be used if not.
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
+      if using GPUs. Other supported offers can be used if not.
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS if using
+      GPUs. Other supported skus can be used if not.
 
 If on multiple CPUs:
 * `max_tasks_per_node` must be set to 1 or omitted

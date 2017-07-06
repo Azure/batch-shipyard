@@ -403,6 +403,37 @@ def get_gpu_type_from_vm_size(vm_size):
         return None
 
 
+def gpu_configuration_check(config, vm_size=None):
+    # type: (dict, str) -> bool
+    """Check if OS is allowed with a GPU VM
+    :param dict config: configuration dict
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if configuration is allowed
+    """
+    # if this is not a gpu sku, always allow
+    if util.is_none_or_empty(vm_size):
+        vm_size = pool_settings(config).vm_size
+    if not is_gpu_pool(vm_size):
+        return True
+    # always allow gpu with custom images
+    node_agent = pool_custom_image_node_agent(config)
+    if util.is_not_empty(node_agent):
+        return True
+    # check for platform image support
+    publisher = pool_publisher(config, lower=True)
+    offer = pool_offer(config, lower=True)
+    sku = pool_sku(config, lower=True)
+    if (publisher == 'canonical' and offer == 'ubuntuserver' and
+            sku > '16.04'):
+        return True
+    elif (publisher == 'openlogic' and
+          (offer == 'centos' or offer == 'centos-hpc') and sku == '7.3'):
+        return True
+    else:
+        return False
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable

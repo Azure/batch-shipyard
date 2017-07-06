@@ -73,6 +73,16 @@ _AZUREFILE_DVD_BIN = {
     ),
     'target': 'resources/azurefile-dockervolumedriver'
 }
+__NVIDIA_DOCKER_RPM = {
+    'url': (
+        'https://github.com/NVIDIA/nvidia-docker/releases/download/'
+        'v1.0.1/nvidia-docker-1.0.1-1.x86_64.rpm'
+    ),
+    'sha256': (
+        'f05dfe7fe655ed39c399db0d6362e351b059f2708c3e6da17f590a000237ec3a'
+    ),
+    'target': 'resources/nvidia-docker.rpm'
+}
 _NVIDIA_DOCKER = {
     'ubuntuserver': {
         'url': (
@@ -84,6 +94,8 @@ _NVIDIA_DOCKER = {
         ),
         'target': 'resources/nvidia-docker.deb'
     },
+    'centos': __NVIDIA_DOCKER_RPM,
+    'centos-hpc': __NVIDIA_DOCKER_RPM,
 }
 _NVIDIA_DRIVER = {
     'compute': {
@@ -339,9 +351,6 @@ def _setup_nvidia_docker_package(blob_client, config):
     :return: package path
     """
     offer = settings.pool_offer(config, lower=True)
-    if offer != 'ubuntuserver':
-        raise ValueError('Offer {} is unsupported with nvidia docker'.format(
-            offer))
     pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DOCKER[offer]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
@@ -1534,6 +1543,7 @@ def _adjust_settings_for_pool_creation(config):
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
+    # oracle linux is not supported due to UEKR4 requirement
     if publisher == 'canonical':
         if offer == 'ubuntuserver':
             if sku.startswith('14.04'):
@@ -1560,13 +1570,10 @@ def _adjust_settings_for_pool_creation(config):
         elif offer == 'opensuse-leap':
             if sku >= '42':
                 allowed = True
-    # check for valid image if gpu, currently only ubuntu 16.04 is supported
-    if (settings.is_gpu_pool(pool.vm_size) and
-            util.is_none_or_empty(node_agent) and
-            (publisher != 'canonical' and offer != 'ubuntuserver' and
-             sku < '16.04')):
-        allowed = False
-    # oracle linux is not supported due to UEKR4 requirement
+    # check if allowed for gpu (if gpu vm size)
+    if allowed:
+        allowed = settings.gpu_configuration_check(
+            config, vm_size=pool.vm_size)
     if not allowed and util.is_none_or_empty(node_agent):
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '

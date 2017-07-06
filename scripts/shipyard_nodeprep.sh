@@ -154,6 +154,93 @@ check_for_nvidia_card() {
     fi
 }
 
+install_nvidia_software() {
+    offer=$1
+    shift
+    # check for nvidia card
+    check_for_nvidia_card
+    # split arg into two
+    IFS=':' read -ra GPUARGS <<< "$gpu"
+    nvdriver=${GPUARGS[1]}
+    nvdocker=${GPUARGS[2]}
+    # remove nouveau
+    rmmod nouveau
+    # purge nouveau off system
+    if [ $offer == "ubuntuserver" ]; then
+        apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
+    elif [[ $offer == centos* ]]; then
+        yum erase -y xorg-x11-drv-nouveau
+    else
+        echo "ERROR: unsupported distribution for nvidia/GPU, offer: $offer"
+        exit 1
+    fi
+    # blacklist nouveau from being loaded if rebooted
+cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
+blacklist nouveau
+blacklist lbm-nouveau
+options nouveau modeset=0
+alias nouveau off
+alias lbm-nouveau off
+EOF
+    # get development essentials for nvidia driver
+    if [ $offer == "ubuntuserver" ]; then
+        install_packages $offer build-essential
+    elif [[ $offer == centos* ]]; then
+        install_packages $offer gcc binutils make "kernel-devel-$(uname -r)"
+    fi
+    # get additional dependency if NV-series VMs
+    if [ ${GPUARGS[0]} == "True" ]; then
+        if [ $offer == "ubuntuserver" ]; then
+            install_packages $offer xserver-xorg-dev
+        elif [[ $offer == centos* ]]; then
+            install_packages $offer xorg-x11-server-devel
+        fi
+    fi
+    # install driver
+    ./$nvdriver -s
+    # add flag to config template for GRID driver
+    if [ ${GPUARGS[0]} == "True" ]; then
+        echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf.template
+    fi
+    # install nvidia-docker
+    if [ $offer == "ubuntuserver" ]; then
+        dpkg -i $nvdocker
+    elif [[ $offer == centos* ]]; then
+        rpm -Uvh $nvdocker
+    fi
+    # enable and start nvidia docker service
+    systemctl enable nvidia-docker.service
+    systemctl start nvidia-docker.service
+    systemctl status nvidia-docker.service
+    # get driver version
+    nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
+    echo nvidia driver version $nvdriverver detected
+    # create the docker volume now to avoid volume driver conflicts for
+    # tasks. run this in a loop as it can fail if triggered too quickly
+    # after start
+    NV_START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
+        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
+        if [ $? -eq 0 ]; then
+            docker volume list
+            break
+        else
+            NV_NOW=$(date -u +"%s")
+            NV_DIFF=$((($NV_NOW-$NV_START)/60))
+            # fail after 5 minutes of attempts
+            if [ $NV_DIFF -ge 5 ]; then
+                echo "ERROR: could not create nvidia-docker volume"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
+}
+
 install_azurefile_docker_volume_driver() {
     chown root:root azurefile-dockervolumedriver*
     chmod 755 azurefile-dockervolumedriver
@@ -178,6 +265,8 @@ install_azurefile_docker_volume_driver() {
     # create docker volumes
     chmod +x azurefile-dockervolume-create.sh
     ./azurefile-dockervolume-create.sh
+    # list volumes
+    docker volume list
 }
 
 refresh_package_index() {
@@ -464,67 +553,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     $srvstatus
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
-        # check for nvidia card
-        check_for_nvidia_card
-        # split arg into two
-        IFS=':' read -ra GPUARGS <<< "$gpu"
-        # remove nouveau
-        rmmod nouveau
-        apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
-        # blacklist nouveau from being loaded if rebooted
-cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
-blacklist nouveau
-blacklist lbm-nouveau
-options nouveau modeset=0
-alias nouveau off
-alias lbm-nouveau off
-EOF
-        nvdriver=${GPUARGS[1]}
-        nvdocker=${GPUARGS[2]}
-        # get development essentials for nvidia driver
-        install_packages $offer build-essential
-        # get additional dependency if NV-series VMs
-        if [ ${GPUARGS[0]} == "True" ]; then
-            install_packages $offer xserver-xorg-dev
-        fi
-        # install driver
-        ./$nvdriver -s
-        # add flag to config template for GRID driver
-        if [ ${GPUARGS[0]} == "True" ]; then
-            echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf.template
-        fi
-        # install nvidia-docker
-        dpkg -i $nvdocker
-        # enable and start nvidia docker service
-        systemctl enable nvidia-docker.service
-        systemctl start nvidia-docker.service
-        systemctl status nvidia-docker.service
-        # get driver version
-        nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
-        echo nvidia driver version $nvdriverver detected
-        # create the docker volume now to avoid volume driver conflicts for
-        # tasks. run this in a loop as it can fail if triggered too quickly
-        # after start
-        NV_START=$(date -u +"%s")
-        set +e
-        while :
-        do
-            echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
-            docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
-            if [ $? -eq 0 ]; then
-                break
-            else
-                NV_NOW=$(date -u +"%s")
-                NV_DIFF=$((($NV_NOW-$NV_START)/60))
-                # fail after 5 minutes of attempts
-                if [ $NV_DIFF -ge 5 ]; then
-                    echo "ERROR: could not create nvidia-docker volume"
-                    exit 1
-                fi
-                sleep 1
-            fi
-        done
-        set -e
+        install_nvidia_software $offer
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
@@ -568,7 +597,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     # gpu is not supported on these offers
-    if [ ! -z $gpu ]; then
+    if [[ ! -z $gpu ]] && [[ $offer != centos* ]]; then
         echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
@@ -617,6 +646,10 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     # setup and start azure file docker volume driver
     if [ $azurefile -eq 1 ]; then
         install_azurefile_docker_volume_driver $offer $sku
+    fi
+    # install gpu related items
+    if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
+        install_nvidia_software $offer
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then

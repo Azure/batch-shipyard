@@ -97,5 +97,5 @@ resources/azurefile-dockervolume-create.sh
 resources/azurefile-dockervolumedriver
 resources/azurefile-dockervolumedriver.env
 resources/docker-registry-v2.tar.gz
-resources/nvidia-docker.deb
+resources/nvidia-docker.*
 resources/nvidia-driver*.run

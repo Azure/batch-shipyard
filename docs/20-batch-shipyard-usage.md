@@ -20,10 +20,11 @@ you can invoke as:
 shipyard.cmd
 ```
 
-If on Mac, you will need to invoke the Python interpreter and pass
-the script as an argument. For example:
+If you installed manually (i.e., did not use the installer scripts), then
+you will need to invoke the Python interpreter and pass the script as an
+argument. For example:
 ```
-python shipyard.py
+python3 shipyard.py
 ```
 
 The `-h` or `--help` option will list the available options, which are
