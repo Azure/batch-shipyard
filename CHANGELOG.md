@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
+## [2.8.0] - 2017-07-06
 ### Added
+- Support for CentOS 7.3 NC/NV gpu pools
 - `--all-start-task-failed` parameter for `pool delnode`
 
 ### Changed
@@ -728,7 +730,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0...HEAD
+[2.8.0]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc2...2.8.0
 [2.8.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...2.8.0rc2
 [2.8.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...2.8.0rc1
 [2.8.0b1]: https://github.com/Azure/batch-shipyard/compare/2.7.0...2.8.0b1
