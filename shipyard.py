@@ -1184,7 +1184,7 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
 @click.option(
     '--all-start-task-failed',
     is_flag=True,
-    help='Deleted all nodes with start task failed state')
+    help='Delete all nodes with start task failed state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')
 @common_options

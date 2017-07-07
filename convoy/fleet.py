@@ -2293,9 +2293,13 @@ def action_pool_delnode(batch_client, config, all_start_task_failed, nodeid):
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
-    :param bool all_start_task_failed: reboot all start task failed nodes
+    :param bool all_start_task_failed: delete all start task failed nodes
     :param str nodeid: nodeid to delete
     """
+    if all_start_task_failed and nodeid is not None:
+        raise ValueError(
+            'cannot specify all start task failed nodes and a specific '
+            'node id')
     batch.del_node(batch_client, config, all_start_task_failed, nodeid)
 
 
