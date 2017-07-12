@@ -1,8 +1,241 @@
 # Change Log
 
 ## [Unreleased]
+
+## [2.8.0] - 2017-07-06
+### Added
+- Support for CentOS 7.3 NC/NV gpu pools
+- `--all-start-task-failed` parameter for `pool delnode`
+
+### Changed
+- Improve robustness of docker image pulls within node prep scripts
+- Restrict node list queries until pool allocation state emerges from resizing
+
 ### Fixed
+- Remove nvidia gpu driver property from FFmpeg recipe
+- Further improve retry logic for docker image pulls in cascade
+
+## [2.8.0rc2] - 2017-06-30
+### Added
+- Support Mac OS X and Windows Subsystem for Linux installations via
+`install.sh` (#101)
+- Guide for Windows Subsystem for Linux installations
+- Automated Nvidia driver install for NV-series
+
+### Changed
+- Drop unsupported designations for Mac OS X and Windows
+- Update Docker engine to 17.06 for Ubuntu, Debian, CentOS and 17.04 for
+OpenSUSE
+
+### Fixed
+- Regression in private registry image pulls
+
+## [2.8.0rc1] - 2017-06-27
+### Added
+- Version metadata added to pools and jobs with warnings generated for
+mismatches (#89)
+- Cloud shell installation support
+
+### Changed
+- Update Docker images to Alpine 3.6 (#65)
+- Improve robustness of package downloads
+- Add retries for docker pull within cascade context
+- Download cascade.log on start up failures
+
+### Fixed
+- Patch job for auto completion (#97)
+- Tensorboard command with custom images
+- conda-forge detection in installation scripts (#100)
+
+## [2.8.0b1] - 2017-06-07
+### Added
+- Custom image support, please see the pool configuration doc and custom
+image guide for more information. (#94)
+- `contrib` area with `packer` scripts
+
+### Changed
+- **Breaking Change:** `publisher`, `offer`, `sku` is now part of a complex
+property named `vm_configuration`:`platform_image`. This change is to
+accommodate custom images. The old configuration schema is now deprecated and
+will be removed in a future release.
+- Updated NVIDIA Tesla driver to 375.66
+
+### Fixed
+- Improved pool resize/allocation logic to fail early with low priority core
+quota reached with no dedicated nodes
+
+## [2.7.0] - 2017-05-31
+### Added
+- `--poolid` parameter for `pool del` to specify a specific pool to delete
+
+### Changed
+- Prompt for confirmation for `jobs cmi`
+- Updated to latest dependencies
+- Split low-priority considerations into separate doc
+
+### Fixed
+- Remote FS allocation issue with `vm_count` deprecation check
+- Better handling of package index refresh errors
+- `pool udi` over SSH issues (#92)
+- Duplicate volume checks between job and task definitions
+
+## [2.7.0rc1] - 2017-05-24
+### Added
+- `pool listimages` command which will list all common Docker images on
+all nodes and provide warning for mismatched images amongst compute nodes.
+This functionality requires a provisioned SSH user and private key.
+- `max_wall_time` option for both jobs and tasks. Please consult the
+documentation for the difference when specifying this option at either the
+job or task level.
+- `--poll-until-tasks-complete` option for `jobs listtasks` to block the CLI
+from exiting until all tasks under jobs for which the command is run have
+completed
+- `--tty` option for `pool ssh` and `fs cluster ssh` to enable allocation
+of a pseudo-tty for the SSH session
+
+### Changed
+- `remove_container_after_exit`, `retention_time`, `shm_size`, `infiniband`,
+`gpu` can now be specified at the job-level and overriden at the task-level
+in the jobs configuration
+- `data_volumes` and `shared_data_volumes` can now be specified at the
+job-level and any volumes specified at the task level will be *merged* with
+the job-level volumes to be exposed for the container
+
+### Fixed
+- Add missing deprecation path for `pool_specification_vm_count` for
+multi-instance tasks. Please upgrade your jobs configuration to explicitly
+use either `pool_specification_vm_count_dedicated` or
+`pool_specification_vm_count_low_priority`.
+- Speed up task collection additions by caching last task id
+- Issues with pool resize and wait logic with low priority
+
+## [2.7.0b2] - 2017-05-18
+### Changed
+- Allow the prior `vm_count` behavior, but provide a deprecation warning. The
+old `vm_count` behavior will be removed in a future release. (#84)
+- Add tasks via collection (#86)
+- Log if node is dedicated in `pool listnodes`
+- Updated all recipes with new `vm_count` changes
+
+### Fixed
+- Improve pool resize wait logic for pools with mixed node types
+- Do not override workdir if specified (#87)
+- Prevent container scanning for data ingress from Azure Storage if include
+filter contains no wildcards (#88)
+
+## [2.7.0b1] - 2017-05-12
+### Added
+- Support for [Low Priority Batch Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+- `resize_timeout` can now be specified on the pool specification
+- `--clear-tables` option to `storage del` command which will delete
+blob containers and queues but clear table entries
+- `--ssh` option to `pool udi` command which will force the update Docker
+images command to update over SSH instead of through a Batch job. This is
+useful if you want to perform an out-of-band update of Docker image(s), e.g.,
+your pool is currently busy processing tasks and would not be able to
+accommodate another task.
+
+### Changed
+- **Breaking Change:** `vm_count` in the pool specification is now a
+complex property consisting of the properties `dedicated` and `low_priority`
+- Updated all dependencies to latest
+
+### Fixed
+- Improve node startup time for GPU NC-series by removing extraneous
+dependencies
+- `fs cluster ssh` storage cluster id and command argument ordering was
+inverted. This has been corrected to be as intended where the command
+is the last argument, e.g., `fs cluster ssh mynfs -- df -h`
+
+## [2.6.2] - 2017-05-05
+### Added
+- Docker image build for `develop` branch
+
+### Changed
+- Allow NVIDIA license agreement to be auto-confirmed via `-y` option
+- Use requests for file downloading since it is already being installed
+as a dependency
+- Update dependencies to latest versions
+
+### Fixed
+- TensorFlow image not being set if no suitable image is found for
+`misc tensorboard` command
+- Authentication for running images not present in global config sourced
+from a private registry
+
+## [2.6.1] - 2017-05-01
+### Added
+- `misc tensorboard` command added which automatically instantiates a
+Tensorboard instance on the compute node which is running or has ran a
+task that has generated TensorFlow summary operation compatible logs. An
+SSH tunnel is then created so you can view Tensorboard locally on the
+machine running Batch Shipyard. This requires a valid SSH user that has been
+provisioned via Batch Shipyard with private keys available. This command
+will work on Windows if `ssh.exe` is available in `%PATH%` or the current
+working directory. Please see the usage guide for more information about
+this command.
+- Pool-level `resource_files` support
+
+### Changed
+- Added optional `COMMAND` argument to `pool ssh` and `fs cluster ssh`
+commands. If `COMMAND` is specified, the command is run non-interactively
+with SSH on the target node.
+- Added some additional sanity checks in the node prep script
+- Updated TensorFlow-CPU and TensorFlow-GPU recipes to 1.1.0. Removed
+specialized Docker build for TensorFlow-GPU. Added `jobs-tb.json` files
+to TensorFlow-CPU and TensorFlow-GPU recipes as Tensorboard samples.
+- Optimize some Batch calls
+
+### Fixed
+- Site extension issues
+- SSH user add exception on Windows
+- `jobs del --termtasks` will now disable the job prior to running task
+termination to prevent active tasks in job from running while tasks are
+being terminated
+- `jobs listtasks` and `data listfiles` will now accept a `--jobid` that
+does not have to be in `jobs.json`
+- Data ingress on pool create issue with single node
+
+## [2.6.0] - 2017-04-20
+### Changed
+- Update to latest dependencies
+
+### Fixed
+- Checks that prevented ssh/scp/openssl interaction on Windows
+- SSH private key regression in data ingress direct to compute node
+
+## [2.6.0rc1] - 2017-04-14
+### Added
+- Richer SSH options with new `ssh_public_key_data` and `ssh_private_key`
+properties in `ssh` configuration blocks (for both `pool.json` and
+`fs.json`).
+  - `ssh_public_key_data` allows direct embedding of SSH public keys in
+    OpenSSH format into the config files.
+  - `ssh_private_key` specifies where the private key is located with
+    respect to pre-created public keys (either `ssh_public_key` or
+    `ssh_public_key_data`). This allows transparent `pool ssh` or
+    `fs cluster ssh` commands with pre-created keys.
+- RemoteFS-GlusterFS+BatchPool recipe
+
+### Changed
+- Docker installations are now pinned to a specific Docker version which
+should reduce sudden breaking changes introduced upstream by Docker and/or
+the distribution
+- Fault domains for multi-vm storage clusters are now set to 2 by default but
+can be configured using the `fault_domains` property. This was lowered from
+the prior default of 3 due to managed disks and availability set restrictions
+as some regions do not support 3 fault domains with this combination.
+- Updated NC-series Tesla driver to 375.51
+
+### Fixed
+- Broken Docker installations due to gpgkey changes
 - Possible race condition between disk setup and glusterfs volume create
+- Forbid SSH username to be the same as the samba username
+- Allow smbd.service to auto-restart with delay
+- Data ingress to glusterfs on compute with no remotefs settings
+
+### Removed
+- Host support for OpenSUSE 13.2 and SLES 12
 
 ## [2.6.0b3] - 2017-04-03
 ### Added
@@ -64,7 +297,7 @@ guide for more information. (#55)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
 - Support for
-[UserSubscription Batch accounts](https://blogs.technet.microsoft.com/windowshpc/2017/03/17/azure-batch-vnet-and-custom-image-support-for-virtual-machine-pools/)
+[UserSubscription Batch accounts](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
 - `allow_run_on_missing_image` option to jobs that allows tasks to execute
@@ -497,7 +730,19 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.8.0...HEAD
+[2.8.0]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc2...2.8.0
+[2.8.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...2.8.0rc2
+[2.8.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.8.0b1...2.8.0rc1
+[2.8.0b1]: https://github.com/Azure/batch-shipyard/compare/2.7.0...2.8.0b1
+[2.7.0]: https://github.com/Azure/batch-shipyard/compare/2.7.0rc1...2.7.0
+[2.7.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.7.0b2...2.7.0rc1
+[2.7.0b2]: https://github.com/Azure/batch-shipyard/compare/2.7.0b1...2.7.0b2
+[2.7.0b1]: https://github.com/Azure/batch-shipyard/compare/2.6.2...2.7.0b1
+[2.6.2]: https://github.com/Azure/batch-shipyard/compare/2.6.1...2.6.2
+[2.6.1]: https://github.com/Azure/batch-shipyard/compare/2.6.0...2.6.1
+[2.6.0]: https://github.com/Azure/batch-shipyard/compare/2.6.0rc1...2.6.0
+[2.6.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.6.0b3...2.6.0rc1
 [2.6.0b3]: https://github.com/Azure/batch-shipyard/compare/2.6.0b2...2.6.0b3
 [2.6.0b2]: https://github.com/Azure/batch-shipyard/compare/2.6.0b1...2.6.0b2
 [2.6.0b1]: https://github.com/Azure/batch-shipyard/compare/2.5.4...2.6.0b1

@@ -56,8 +56,6 @@ except NameError:
     raw_input = input
 
 
-# create logger
-logger = logging.getLogger(__name__)
 # global defines
 _PY2 = sys.version_info.major == 2
 _ON_WINDOWS = platform.system() == 'Windows'
@@ -82,16 +80,20 @@ def on_windows():
     return _ON_WINDOWS
 
 
-def setup_logger(logger):
-    # type: (logger) -> None
+def setup_logger(logger, logfile=None):
+    # type: (logger, str) -> None
     """Set up logger"""
     global _REGISTERED_LOGGER_HANDLERS
     logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
+    if is_none_or_empty(logfile):
+        handler = logging.StreamHandler()
+    else:
+        handler = logging.FileHandler(logfile, encoding='utf-8')
     formatter = logging.Formatter('%(asctime)s %(levelname)s - %(message)s')
     formatter.default_msec_format = '%s.%03d'
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    logger.propagate = False
     _REGISTERED_LOGGER_HANDLERS.append(handler)
 
 
@@ -105,10 +107,6 @@ def set_verbose_logger_handlers():
     formatter.default_msec_format = '%s.%03d'
     for handler in _REGISTERED_LOGGER_HANDLERS:
         handler.setFormatter(formatter)
-
-
-# set up util logger
-setup_logger(logger)
 
 
 def decode_string(string, encoding=None):
@@ -154,9 +152,7 @@ def is_none_or_empty(obj):
     :rtype: bool
     :return: if object is None or empty
     """
-    if obj is None or len(obj) == 0:
-        return True
-    return False
+    return obj is None or len(obj) == 0
 
 
 def is_not_empty(obj):
@@ -166,9 +162,7 @@ def is_not_empty(obj):
     :rtype: bool
     :return: if object is not None and length is > 0
     """
-    if obj is not None and len(obj) > 0:
-        return True
-    return False
+    return obj is not None and len(obj) > 0
 
 
 def get_input(prompt):

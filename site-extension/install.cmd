@@ -21,7 +21,14 @@ REM git clone repo
 taskkill /F /IM python.exe
 SET CLONEDIR=%HOME%\batch-shipyard
 IF EXIST "%CLONEDIR%" (
-    rd /s /q "%CLONEDIR%"
+    pushd "%CLONEDIR%"
+    git checkout master
+    git pull
+    IF %ERRORLEVEL% NEQ 0 (
+        cd %HOME%
+        rd /s /q "%CLONEDIR%"
+    )
+    popd
 )
 git clone "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
 IF %ERRORLEVEL% NEQ 0 (
@@ -46,4 +53,15 @@ IF %ERRORLEVEL% NEQ 0 (
     echo "pip install requirements.txt failed"
     exit /b 1
 )
+popd
+
+REM futurize isodate (for some reason this is sometimes installed as python2)
+REM futurize is installed as part of future pypi package
+SET FUTURIZE=%PYTHONHOME%\Scripts\futurize.exe
+IF NOT EXIST "%FUTURIZE%" (
+    echo "%FUTURIZE% does not exist!
+    exit /b 1
+)
+pushd "%PYTHONHOME%\Lib\site-packages\isodate"
+"%FUTURIZE%" -0 -w -n .
 popd

@@ -36,3 +36,34 @@ the download of the training file from the web endpoint:
 * `command` should contain the command to pass to the Docker run invocation.
 To run the MNIST convolutional example, the `command` would be:
 `python -u convolutional.py`
+
+### Tensorboard
+If you would like to tunnel Tensorboard to your local machine, use the
+`jobs-tb.json` file instead. This requires that a pool SSH user was added,
+and `ssh` or `ssh.exe` is available. This configuration will output summary
+data to the directory specified in the `--log_dir` parameter. After the job
+is submitted, you can start the remote Tensorboard instance with the command:
+
+```shell
+shipyard misc tensorboard
+```
+
+Which will output some text similar to the following:
+
+```
+>> Please connect to Tensorboard at http://localhost:6006/
+
+>> Note that Tensorboard may take a while to start if the Docker image is
+>> not present. Please keep retrying the URL every few seconds.
+
+>> Terminate your session with CTRL+C
+
+>> If you cannot terminate your session cleanly, run:
+     shipyard pool ssh --nodeid tvm-1518333292_4-20170428t151941z sudo docker kill 9e7879b8
+```
+
+With a web browser, navigate to http://localhost:6006/ where Tensorboard
+will be displayed.
+
+Note that the task does not have to be completed for Tensorboard to be run,
+it can be running while Tensorboard is running.

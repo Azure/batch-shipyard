@@ -8,6 +8,8 @@
             },
             "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 1,
+            "max_wall_time": "02:00:00",
+            "retention_time": "1.12:00:00",
             "allow_run_on_missing_image": false,
             "user_identity": {
                 "default_pool_admin": true,
@@ -16,6 +18,16 @@
                     "gid": 1001
                 }
             },
+            "remove_container_after_exit": true,
+            "shm_size": "256m",
+            "infiniband": false,
+            "gpu": false,
+            "data_volumes": [
+                "joblevelvol"
+            ],
+            "shared_data_volumes": [
+                "joblevelsharedvol"
+            ],
             "input_data": {
                 "azure_batch": [
                     {
@@ -106,6 +118,7 @@
                     ],
                     "max_task_retries": 1,
                     "retention_time": "1.12:00:00",
+                    "max_wall_time": "03:00:00",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",
                         "coordination_command": null,

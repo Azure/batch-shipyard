@@ -17,7 +17,9 @@
                 "hostname_prefix": "mystoragecluster",
                 "ssh": {
                     "username": "shipyard",
-                    "ssh_public_key": null,
+                    "ssh_public_key": "/path/to/rsa/publickey.pub",
+                    "ssh_public_key_data": "ssh-rsa ...",
+                    "ssh_private_key": "/path/to/rsa/privatekey",
                     "generated_file_export_path": null
                 },
                 "public_ip": {
@@ -77,6 +79,7 @@
                 },
                 "vm_count": 2,
                 "vm_size": "STANDARD_F8S",
+                "fault_domains": 2,
                 "vm_disk_map": {
                     "0": {
                         "disk_array": ["p10-disk0a", "p10-disk1a"],

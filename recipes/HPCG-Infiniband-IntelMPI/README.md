@@ -46,8 +46,9 @@ The `run_hpcg.sh` script has many configuration parameters:
   * `-y <ny>`: set ny to this value
   * `-z <nz>`: set nz to this value
 * `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` array can be empty
 

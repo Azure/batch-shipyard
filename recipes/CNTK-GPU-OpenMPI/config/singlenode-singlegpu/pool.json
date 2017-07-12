@@ -1,11 +1,17 @@
 {
     "pool_specification": {
         "id": "cntk-singlenode-singlegpu",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            }
+        },
         "vm_size": "STANDARD_NC6",
-        "vm_count": 1,
-        "publisher": "Canonical",
-        "offer": "UbuntuServer",
-        "sku": "16.04-LTS",
+        "vm_count": {
+            "dedicated": 1
+        },
         "ssh": {
             "username": "docker"
         },

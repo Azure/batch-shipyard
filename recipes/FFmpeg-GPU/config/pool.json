@@ -1,18 +1,19 @@
 {
     "pool_specification": {
         "id": "dockerffmpeg",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            }
+        },
         "vm_size": "STANDARD_NV6",
-        "vm_count": 1,
-        "publisher": "Canonical",
-        "offer": "UbuntuServer",
-        "sku": "16.04-LTS",
+        "vm_count": {
+            "dedicated": 1
+        },
         "ssh": {
             "username": "docker"
-        },
-        "gpu": {
-            "nvidia_driver": {
-                "source": "<URL for nvidia driver for STANDARD_NV VMs>"
-            }
         },
         "reboot_on_start_task_failed": false,
         "block_until_all_global_resources_loaded": true

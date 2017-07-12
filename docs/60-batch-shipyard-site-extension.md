@@ -25,15 +25,15 @@ Very basic plans may lead to startup delay in Batch Shipyard.
 ### Step 2: Install Python 3.X x64 Site Extension
 Now we'll install Python 3.x as a site extension as a pre-requisite for
 Batch Shipyard. To do this, navigate to your newly created Function App.
-In the Function app blade, select `Function app settings` toward the bottom.
+Select your function app and then select `Platform features` on the right.
 
 ![60-site-extension-step2-0.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-0.png)
 
-In the next blade, select `Go to Kudu`.
+In the next blade, select `Advanced tools (Kudu)`.
 
 ![60-site-extension-step2-1.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-1.png)
 
-Click on `Site Extensions` on the top navigation bar and then click on
+Click on `Extensions` on the top navigation bar and then click on
 `Gallery` below. This will load all of the available site extensions
 defaulted to [siteextensions.net](https://siteextensions.net/) which is the
 official nuget feed for Azure App Site Extensions.

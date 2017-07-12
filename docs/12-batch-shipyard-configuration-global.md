@@ -376,10 +376,10 @@ container at the path specified with `container_path`.
 shared storage volumes. In the first shared volume, `shipyardvol` is the alias
 of this volume:
 * `volume_driver` property specifies the Docker Volume Driver to use.
-Currently Batch Shipyard only supports the `volume_driver` as `azurefile` or
-`glusterfs_on_compute`. Note that `glusterfs_on_compute` is not a true Docker
-Volume Driver. For this volume (`shipyardvol`), as this is an Azure File
-shared volume, the `volume_driver` should be set as `azurefile`.
+Currently Batch Shipyard supports `azurefile`, `glusterfs_on_compute` or
+`storage_cluster` as the `volume_driver`. Note that `glusterfs_on_compute` is
+not a true Docker Volume Driver. For this volume (`shipyardvol`), as this is
+an Azure File shared volume, the `volume_driver` should be set as `azurefile`.
 * `storage_account_settings` is a link to the alias of the storage account
 specified that holds this Azure File Share.
 * `azure_file_share_name` is the name of the share name on Azure Files. Note
@@ -449,6 +449,6 @@ one or all of `data_volumes` and `shared_data_volumes` if you do not require
 this functionality.
 
 ## Full template
-An full template of a credentials file can be found
+A full template of a credentials file can be found
 [here](../config\_templates/config.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

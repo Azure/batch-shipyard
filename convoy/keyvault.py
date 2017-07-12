@@ -48,6 +48,25 @@ _SECRET_ENCODED_FORMAT_KEY = 'format'
 _SECRET_ENCODED_FORMAT_VALUE = 'zlib+base64'
 
 
+def _explode_secret_id(uri):
+    # type: (str) -> Tuple[str, str, str]
+    """Explode Secret Id URI into parts
+    :param str uri: secret id uri
+    :rtype: tuple
+    :return: base url, secret name, version
+    """
+    tmp = uri.split('/')
+    base_url = '/'.join(tmp[:3])
+    nparam = len(tmp[4:])
+    if nparam == 1:
+        return base_url, tmp[4], ''
+    elif nparam == 2:
+        return base_url, tmp[4], tmp[5]
+    else:
+        raise ValueError(
+            'cannot handle keyvault secret id uri: {}'.format(uri))
+
+
 def fetch_credentials_json(
         client, keyvault_uri, keyvault_credentials_secret_id):
     # type: (azure.keyvault.KeyVaultClient, str, str) -> dict
@@ -67,7 +86,8 @@ def fetch_credentials_json(
         raise RuntimeError(
             'cannot fetch credentials json from keyvault without a valid '
             'keyvault credentials secret id')
-    cred = client.get_secret(keyvault_credentials_secret_id)
+    cred = client.get_secret(
+        *_explode_secret_id(keyvault_credentials_secret_id))
     if util.is_none_or_empty(cred.value):
         raise ValueError(
             'credential json from secret id {} is invalid'.format(
@@ -165,7 +185,7 @@ def get_secret(client, secret_id, value_is_json=False):
         raise RuntimeError(
             'cannot retrieve secret {} with invalid KeyVault client'.format(
                 secret_id))
-    value = client.get_secret(secret_id).value
+    value = client.get_secret(*_explode_secret_id(secret_id)).value
     if value_is_json and util.is_not_empty(value):
         return json.loads(value)
     else:

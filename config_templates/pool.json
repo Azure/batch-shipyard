@@ -1,13 +1,27 @@
 {
     "pool_specification": {
         "id": "dockerpool",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            },
+            "custom_image": {
+                "image_uris": [
+                    "https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd"
+                ],
+                "node_agent": "batch.node.ubuntu 16.04"
+            }
+        },
         "vm_size": "STANDARD_D2_V2",
-        "vm_count": 5,
+        "vm_count": {
+            "dedicated": 4,
+            "low_priority": 8
+        },
+        "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
         "inter_node_communication_enabled": true,
-        "publisher": "Canonical",
-        "offer": "UbuntuServer",
-        "sku": "16.04.0-LTS",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
@@ -31,6 +45,13 @@
                 }
             ]
         },
+        "resource_files": [
+            {
+                "file_path": "",
+                "blob_source": "",
+                "file_mode": ""
+            }
+        ],
         "virtual_network": {
             "name": "",
             "resource_group": "",
@@ -43,8 +64,10 @@
         },
         "ssh": {
             "username": "docker",
-            "expiry_days": 7,
-            "ssh_public_key": null,
+            "expiry_days": 30,
+            "ssh_public_key": "/path/to/rsa/publickey.pub",
+            "ssh_public_key_data": "ssh-rsa ...",
+            "ssh_private_key": "/path/to/rsa/privatekey",
             "generate_docker_tunnel_script": true,
             "generated_file_export_path": null,
             "hpn_server_swap": false

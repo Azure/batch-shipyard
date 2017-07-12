@@ -38,8 +38,9 @@ to run the included benchmarks:
 * `infiniband` must be set to `false`
 * `multi_instance` property must be defined for NAMD tasks spanning multiple
 nodes.
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` array can be unset or empty
 

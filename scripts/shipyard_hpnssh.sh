@@ -7,7 +7,7 @@ offer=$1
 sku=$2
 
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
-    if [[ $sku == 14.04.* ]]; then
+    if [[ $sku == 14.04* ]]; then
         srvrestart="initctl restart sshd"
         mkdir /tmp/hpnssh
         pushd /tmp/hpnssh
@@ -17,7 +17,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         dpkg -i --force-confold openssh-*.deb
         popd
         rm -rf /tmp/hpnssh
-    elif [[ $sku == 16.04.* ]]; then
+    elif [[ $sku == 16.04* ]]; then
         srvrestart="systemctl restart sshd"
         mkdir /tmp/hpnssh
         pushd /tmp/hpnssh

@@ -1,12 +1,18 @@
 {
     "pool_specification": {
         "id": "cntk-multinode-multigpu",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            }
+        },
         "vm_size": "STANDARD_NC24",
-        "vm_count": 2,
+        "vm_count": {
+            "dedicated": 2
+        },
         "inter_node_communication_enabled": true,
-        "publisher": "Canonical",
-        "offer": "UbuntuServer",
-        "sku": "16.04-LTS",
         "ssh": {
             "username": "docker"
         },

@@ -4,7 +4,7 @@
             "id": "tensorflowjob",
             "tasks": [
                 {
-                    "image": "gcr.io/tensorflow/tensorflow:1.0.0",
+                    "image": "gcr.io/tensorflow/tensorflow:1.1.0",
                     "remove_container_after_exit": true,
                     "resource_files": [
                         {

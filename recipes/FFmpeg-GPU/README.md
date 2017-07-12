@@ -14,15 +14,11 @@ The pool configuration should enable the following properties:
 K80 GPUs for GPU compute acceleration while `NV` VM instances feature
 M60 GPUs for visualization workloads. Because FFmpeg is for transforming
 audio/video, it is best to choose `NV` VM instances.
-* `publisher` should be `Canonical`. Other publishers will be supported
-once they are available for N-series VMs.
-* `offer` should be `UbuntuServer`. Other offers will be supported once they
-are available for N-series VMs.
-* `sku` should be `16.04-LTS`. Other skus will be supported once they are
-available for N-series VMs.
-* `gpu` property should be specified with the following members:
-  * `nvidia_driver` property contains the following members:
-    * `source` is a URL for the driver installer .run file
+* `vm_configuration` is the VM configuration
+  * `platform_image` specifies to use a platform image
+    * `publisher` should be `Canonical` or `OpenLogic`.
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
 
 ### Global Configuration
 The global configuration should set the following properties:

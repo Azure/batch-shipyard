@@ -42,26 +42,28 @@ with integration to auto-link these filesystems to compute nodes with support fo
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
 to containers executed on compute nodes
+* Support for [Low Priority Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
 * Support for
 [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for
 [GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
-on [Azure N-Series VM instances](https://azure.microsoft.com/en-us/blog/azure-n-series-general-availability-on-december-1/)
+on [Azure N-Series VM instances](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu)
 * Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
 cluster applications on compute pools with automatic job completion and Docker
 task termination
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on HPC low-latency Azure VM instances:
-  * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-a8-a9-a10-a11-specs?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json): STANDARD\_A8, STANDARD\_A9
-  * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-sizes?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json#h-series): STANDARD\_H16R, STANDARD\_H16MR
-  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-windows-sizes?toc=%2fazure%2fvirtual-machines%2fwindows%2ftoc.json#n-series): STANDARD\_NC24R (not yet ready with Linux hosts)
+  * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_A8, STANDARD\_A9
+  * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_H16R, STANDARD\_H16MR
+  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R (not yet ready with Linux hosts)
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
 * Support for execution on an
 [Azure Function App environment](https://github.com/Azure/batch-shipyard/blob/master/docs/60-batch-shipyard-site-extension.md)
+* Support for [custom host images](https://github.com/Azure/batch-shipyard/blob/master/docs/63-batch-shipyard-custom-images.md)
 
 ## Installation
 Installation is typically an easy two-step process. The CLI is also available

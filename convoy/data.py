@@ -360,8 +360,8 @@ def _singlenode_transfer(dest, src, dst, username, ssh_private_key, rls):
                '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
                    dest.data_transfer.rsync_extra_options, recursive,
                    os.devnull, dest.data_transfer.scp_ssh_extra_options,
-                   ssh_private_key.resolve(), port,
-                   cmdsrc, username, ip, shellquote(dst)))
+                   ssh_private_key.resolve(), port, cmdsrc, username, ip,
+                   shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(
             dest.data_transfer.method))
@@ -581,21 +581,21 @@ def _spawn_next_transfer(
             cmd = ('scp -o StrictHostKeyChecking=no '
                    '-o UserKnownHostsFile={} -p {} -i {} '
                    '-P {} {} {}@{}:"{}"'.format(
-                       os.devnull, eo, ssh_private_key, port, shellquote(src),
-                       username, ip, shellquote(dst)))
+                       os.devnull, eo, ssh_private_key.resolve(), port,
+                       shellquote(src), username, ip, shellquote(dst)))
         else:
             cmd = ('ssh -T -x -o StrictHostKeyChecking=no '
                    '-o UserKnownHostsFile={} {} -i {} '
                    '-p {} {}@{} \'cat > "{}"\''.format(
-                       os.devnull, eo, ssh_private_key, port,
+                       os.devnull, eo, ssh_private_key.resolve(), port,
                        username, ip, shellquote(dst)))
     elif method == 'multinode_rsync+ssh':
         if begin is not None or end is not None:
             raise RuntimeError('cannot rsync with file offsets')
         cmd = ('rsync {} -e "ssh -T -x -o StrictHostKeyChecking=no '
                '-o UserKnownHostsFile={} {} -i {} -p {}" {} {}@{}:"{}"'.format(
-                   reo, os.devnull, eo, ssh_private_key, port, shellquote(src),
-                   username, ip, shellquote(dst)))
+                   reo, os.devnull, eo, ssh_private_key.resolve(), port,
+                   shellquote(src), username, ip, shellquote(dst)))
     else:
         raise ValueError('Unknown transfer method: {}'.format(method))
     if begin is None and end is None:
@@ -779,7 +779,7 @@ def wait_for_storage_threads(storage_threads):
 
 def ingress_data(
         batch_client, compute_client, network_client, config, rls=None,
-        kind=None, current_dedicated=None, to_fs=None):
+        kind=None, total_vm_count=None, to_fs=None):
     # type: (batch.BatchServiceClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict, dict, str,
     #        int, str) -> list
@@ -793,7 +793,7 @@ def ingress_data(
     :param dict config: configuration dict
     :param dict rls: remote login settings
     :param str kind: 'all', 'shared', 'storage', or 'remotefs'
-    :param int current_dedicated: current dedicated
+    :param int total_vm_count: total current vm count
     :param str to_fs: to remote filesystem
     :rtype: list
     :return: list of storage threads
@@ -821,10 +821,15 @@ def ingress_data(
                     'instead.')
             # check if this is going to a single vm
             if dest.shared_data_volume is None:
-                if current_dedicated == 1:
+                if total_vm_count == 1:
                     direct_single_node = True
-                elif current_dedicated is None:
-                    raise ValueError('current_dedicated is not set')
+                elif kind == 'storage':
+                    # this is to prevent total_vm_count check below for
+                    # non shared/all targets and will force continuation
+                    # of the loop below
+                    direct_single_node = True
+                elif total_vm_count is None:
+                    raise ValueError('total_vm_count is not set')
                 else:
                     raise RuntimeError(
                         'Cannot ingress data directly into compute node '
@@ -839,7 +844,7 @@ def ingress_data(
                         source.path, dest.shared_data_volume))
                 continue
             # get rfs settings
-            rfs = settings.remotefs_settings(config, to_fs)
+            rfs = None
             dst_rfs = False
             # set base dst path
             dst = '{}/batch/tasks/'.format(
@@ -859,6 +864,8 @@ def ingress_data(
                                 sdv, sdvkey):
                             if kind != 'remotefs' or sdvkey != to_fs:
                                 continue
+                            if rfs is None:
+                                rfs = settings.remotefs_settings(config, to_fs)
                             dst = rfs.storage_cluster.file_server.mountpoint
                             # add trailing directory separator if needed
                             if dst[-1] != '/':
@@ -878,13 +885,8 @@ def ingress_data(
                 if dst_rfs:
                     continue
             # set ssh info
-            ssh_private_key = None
-            # use default name for private key if not specified
             if dst_rfs:
                 username = rfs.storage_cluster.ssh.username
-                if dest.data_transfer.ssh_private_key is None:
-                    ssh_private_key = pathlib.Path(
-                        crypto.get_remotefs_ssh_key_prefix())
                 #  retrieve public ips from all vms in named storage cluster
                 rls = {}
                 for i in range(rfs.storage_cluster.vm_count):
@@ -904,9 +906,6 @@ def ingress_data(
                         )
             else:
                 username = pool.ssh.username
-                if dest.data_transfer.ssh_private_key is None:
-                    ssh_private_key = pathlib.Path(
-                        crypto.get_ssh_key_prefix())
             if rls is None:
                 logger.warning(
                     'skipping data ingress from {} to {} for pool with no '
@@ -917,12 +916,16 @@ def ingress_data(
                 raise RuntimeError(
                     'cannot ingress data to shared data volume without a '
                     'valid SSH user')
+            # try to get valid ssh private key (from various config blocks)
+            ssh_private_key = dest.data_transfer.ssh_private_key
             if ssh_private_key is None:
-                ssh_private_key = dest.data_transfer.ssh_private_key
-            if ssh_private_key is None or not ssh_private_key.exists():
-                raise RuntimeError(
-                    'ssh private key is invalid or does not exist: {}'.format(
-                        ssh_private_key))
+                ssh_private_key = pool.ssh.ssh_private_key
+            if ssh_private_key is None:
+                ssh_private_key = pathlib.Path(crypto.get_ssh_key_prefix())
+                if not ssh_private_key.exists():
+                    raise RuntimeError(
+                        'specified SSH private key is invalid or does not '
+                        'exist')
             logger.debug('using ssh_private_key from: {}'.format(
                 ssh_private_key))
             if (dest.data_transfer.method == 'scp' or
@@ -952,9 +955,9 @@ def ingress_data(
         elif dest.storage_account_settings is not None:
             if kind == 'shared':
                 logger.warning(
-                    'skipping data ingress from {} to {} for pool as ingress '
+                    'skipping data ingress from {} for pool as ingress '
                     'to Azure Blob/File Storage not specified'.format(
-                        source.path, storage))
+                        source.path))
                 continue
             if (dest.data_transfer.container is None and
                     dest.data_transfer.file_share is None):

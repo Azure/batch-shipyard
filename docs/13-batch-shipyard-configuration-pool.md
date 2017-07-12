@@ -9,13 +9,27 @@ The pool schema is as follows:
 {
     "pool_specification": {
         "id": "dockerpool",
-        "vm_size": "STANDARD_A9",
-        "vm_count": 10,
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS"
+            },
+            "custom_image": {
+                "image_uris": [
+                    "https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd"
+                ],
+                "node_agent": "batch.node.ubuntu 16.04"
+            }
+        },
+        "vm_size": "STANDARD_H16R",
+        "vm_count": {
+            "dedicated": 8,
+            "low_priority": 0
+        },
+        "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
         "inter_node_communication_enabled": true,
-        "publisher": "OpenLogic",
-        "offer": "CentOS-HPC",
-        "sku": "7.1",
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
         "transfer_files_on_pool_creation": false,
@@ -39,6 +53,13 @@ The pool schema is as follows:
                 }
             ]
         },
+        "resource_files": [
+            {
+                "file_path": "",
+                "blob_source": "",
+                "file_mode": ""
+            }
+        ],
         "virtual_network": {
             "name": "myvnet",
             "resource_group": "vnet-in-another-rg",
@@ -51,8 +72,10 @@ The pool schema is as follows:
         },
         "ssh": {
             "username": "docker",
-            "expiry_days": 7,
-            "ssh_public_key": null,
+            "expiry_days": 30,
+            "ssh_public_key": "/path/to/rsa/publickey.pub",
+            "ssh_public_key_data": "ssh-rsa ...",
+            "ssh_private_key": "/path/to/rsa/privatekey",
             "generate_docker_tunnel_script": true,
             "generated_file_export_path": null,
             "hpn_server_swap": false
@@ -70,10 +93,43 @@ The pool schema is as follows:
 
 The `pool_specification` property has the following members:
 * (required) `id` is the compute pool ID.
+* (required) `vm_configuration` specifies the image configuration for the
+VM. Either `platform_image` or `custom_image` must be specified. You cannot
+specify both. If using a custom image, please see the
+[Custom Image Guide](63-batch-shipyard-custom-images.md) first.
+  * (required for platform image) `platform_image` defines the Marketplace
+    platform image to use:
+    * (required for platform image) `publisher` is the publisher name of the
+      Marketplace VM image.
+    * (required for platform image) `offer` is the offer name of the
+      Marketplace VM image.
+    * (required for platform image) `sku` is the sku name of the Marketplace
+      VM image.
+  * (required for custom image) `custom_image` defines the custom image to
+    use:
+    * (required for custom image) `image_uris` defines a list of page blob
+      VHDs to use for the pool. These should be bare URLs without SAS keys.
+    * (required for custom image) `node_agent` is the node agent sku id to
+      use with this custom image. You can view supported base images and
+      their node agent sku ids with the `pool listskus` command.
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
-* (required) `vm_count` is the number of compute nodes to allocate.
+* (required) `vm_count` is the number of compute nodes to allocate. You may
+specify a mixed number of compute nodes in the following properties:
+  * (optional) `dedicated` is the number of dedicated compute nodes to
+    allocate. These nodes cannot be pre-empted. The default value is `0`.
+  * (optional) `low_priority` is the number of low-priority compute nodes to
+    allocate. These nodes may be pre-empted at any time. Workloads that
+    are amenable to `low_priority` nodes are those that do not have strict
+    deadlines for pickup and completion. Optimally, these types of jobs would
+    checkpoint their progress and be able to recover when re-scheduled.
+    The default value is `0`.
+* (optional) `resize_timeout` is the amount of time allowed for resize
+operations (note that creating a pool resizes from 0 to the specified number
+of nodes). The format for this property is a timedelta with a string
+representation of "d.HH:mm:ss". "HH:mm:ss" is required, but "d" is optional,
+if specified. If not specified, the default is 15 minutes.
 * (optional) `max_tasks_per_node` is the maximum number of concurrent tasks
 that can be running at any one time on a compute node. This defaults to a
 value of 1 if not specified. The maximum value for the property that Azure
@@ -82,11 +138,10 @@ Batch will accept is `4 x <# cores per compute node>`. For instance, for a
 allowable value for this property would be `8`.
 * (optional) `inter_node_communication_enabled` designates if this pool is set
 up for inter-node communication. This must be set to `true` for any containers
-that must communicate with each other such as MPI applications. This property
+that must communicate with each other such as MPI applications. This
+property cannot be enabled if there are positive values for both
+`dedicated and `low_priority` compute nodes specified above. This property
 will be force enabled if peer-to-peer replication is enabled.
-* (required) `publisher` is the publisher name of the Marketplace VM image.
-* (required) `offer` is the offer name of the Marketplace VM image.
-* (required) `sku` is the sku name of the Marketplace VM image.
 * (optional) `reboot_on_start_task_failed` allows Batch Shipyard to reboot the
 compute node in case there is a transient failure in node preparation (e.g.,
 network timeout, resolution failure or download problem). This defaults to
@@ -142,6 +197,16 @@ data defined in `files` prior to pool creation and disable the option above
       `data ingress` command.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
+* (optional) `resource_files` is an array of resource files that should be
+downloaded as part of the compute node's preparation. Each array entry
+contains the following information:
+  * `file_path` is the path within the node prep task working directory to
+    place the file on the compute node. This directory can be referenced
+    by the `$AZ_BATCH_NODE_STARTUP_DIR/wd` path.
+  * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an Azure
+    Blob Storage URL.
+  * `file_mode` if the file mode to set for the file on the compute node.
+    This is optional.
 * (optional) `virtual_network` is the property for specifying an ARM-based
 virtual network resource for the pool. This is only available for
 UserSubscription Batch accounts.
@@ -162,14 +227,23 @@ UserSubscription Batch accounts.
       20-bits.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
-created with pool creation.
+created with pool creation. If you are running Batch Shipyard on Windows,
+please refer to [these instructions](85-batch-shipyard-ssh-docker-tunnel.md#ssh-keygen)
+on how to generate an SSH keypair for use with Batch Shipyard.
   * (required) `username` is the user to create on the compute nodes.
   * (optional) `expiry_days` is the number of days from now for the account on
     the compute nodes to expire. The default is 30 days from invocation time.
   * (optional) `ssh_public_key` is the path to an existing SSH public key to
     use. If not specified, an RSA public/private keypair will be automatically
-    generated only on Linux. If this is `null` or not specified on Windows,
-    the SSH user is not created.
+    generated if `ssh-keygen` or `ssh-keygen.exe` can be found on the `PATH`.
+    This option cannot be specified with `ssh_public_key_data`.
+  * (optional) `ssh_public_key_data` is the raw RSA public key data in OpenSSH
+    format, e.g., a string starting with `ssh-rsa ...`. Only one key may be
+    specified. This option cannot be specified with `ssh_public_key`.
+  * (optional) `ssh_private_key` is the path to an existing SSH private key
+    to use against either `ssh_public_key` or `ssh_public_key_data` for
+    connecting to compute nodes. This option should only be specified
+    if either `ssh_public_key` or `ssh_public_key_data` are specified.
   * (optional) `generate_docker_tunnel_script` property directs script to
     generate an SSH tunnel script that can be used to connect to the remote
     Docker engine running on a compute node. This script can only be used on
@@ -181,8 +255,9 @@ created with pool creation.
     [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
     to be swapped with the standard distribution OpenSSH server. This is not
     supported on all Linux distributions and may be force disabled.
-* (required for `STANDARD_NV` instances, optional for `STANDARD_NC` instances)
-`gpu` property defines additional information for NVIDIA GPU-enabled VMs:
+* (optional) `gpu` property defines additional information for NVIDIA
+GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
+the driver for the `vm_size` specified.
   * `nvidia_driver` property contains the following required members:
     * `source` is the source url to download the driver.
 * (optional) `additional_node_prep_commands` is an array of additional commands
@@ -190,6 +265,6 @@ to execute on the compute node host as part of node preparation. This can
 be empty or omitted.
 
 ## Full template
-An full template of a credentials file can be found
+A full template of a credentials file can be found
 [here](../config\_templates/pool.json). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

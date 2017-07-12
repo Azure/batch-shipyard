@@ -25,7 +25,7 @@
     },
     "data_replication": {
         "peer_to_peer": {
-            "enabled": true,
+            "enabled": false,
             "compression": true,
             "concurrent_source_downloads": 10,
             "direct_download_seed_bias": null

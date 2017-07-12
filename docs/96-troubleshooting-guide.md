@@ -19,11 +19,15 @@ Anaconda has isolated environments which are conceptually equivalent to
 have separate packaging mechanisms than packages traditionally found on
 PyPI. As such, special attention should be given when installing Batch
 Shipyard into an Anaconda environment. It is highly recommended to use
-an Anaconda environment that provides Python 3.5 or higher.
+an Anaconda environment that provides Python 3.5 or higher if using Anaconda.
+In general, it is recommended to use [CPython](https://python.org) especially
+when installing into virtual environments (the recommended installation
+method) as the command lag can be much shorter.
 
-It is recommended to use the `install.sh` script to install on an Anaconda
-environment on Linux and the `install.cmd` command file to install on an
-Anaconda environment on Windows.
+However, if you do plan to use Anaconda, then it is recommended to use the
+`install.sh` script to install on an Anaconda environment on Linux and
+the `install.cmd` command file to install on an Anaconda environment on
+Windows.
 
 ## <a name="batchservice"></a>Azure Batch Service Issues
 #### Check Azure Batch Service Status
@@ -40,6 +44,24 @@ will be displayed. You can also query this information using Azure Portal
 or Batch Labs. If it appears that the resize error was transient,
 you can try to issue `pool resize` to begin the pool grow or shrink process
 again, or alternatively you can opt to recreate the pool.
+
+There are typically three common reasons for Resize Errors:
+1. Insufficient core quota: Non-UserSubscription Batch accounts by default
+have 20 cores associated with them. These core quota are managed independently
+of any core quota on the associated subscription. UserSubscription Batch
+Accounts have core quota that is associated with the subscription. Please
+follow [this guide](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
+for submitting a support request to increase your core quota.
+2. Operation(s) took longer than expected: Resizing the pool to a different
+target VM count may take longer than the specified timeout. In these cases,
+re-issue the resize command.
+3. Not enough IPs in the virtual network subnet: When creating a pool with
+a UserSubscription Batch account with a virtual network, you must ensure
+that there are sufficient number of VMs in your subnet. Batch Shipyard will
+attempt to validate this on your behalf if you specify the subnet's address
+range in the configuration. You can attempt to change the address range
+of the subnet indpendently (if pre-created) and issue the resize command
+again if you encounter this issue.
 
 #### Compute Node start task failure
 Batch Shipyard installs the Docker Host Engine and other requisite software
@@ -58,6 +80,10 @@ the directory where you ran `shipyard`. The files will be placed in
 to see what the possible culprit for the issue is. If it appears to be
 transient, you can try to create the pool again. If it appears to be a Batch
 Shipyard issue, please report the issue on GitHub.
+
+Additionally, if you have specified an SSH user for your pool and there
+is a start task failure, you can still issue the command `pool asu` to add the
+pool SSH user and then `pool ssh` to SSH into the node to debug further.
 
 #### Compute Node does not start or is unusable
 If the compute node is "stuck" in starting state or enters unusable state,
@@ -120,3 +146,11 @@ the number of compute nodes reaches the prior number. Additionally, if
 `max_tasks_per_node` is set to 1 or unspecified in `pool.json` and any
 task is running on any node, the update Docker images job will be blocked
 until that task completes.
+
+You can work around this behavior by providing the `--ssh` option to the
+`pool udi` command. This will use an SSH side-channel to upgrade the Docker
+images on the pool. Please note that this requires a provisioned SSH user
+and `ssh` or `ssh.exe` available.
+
+`pool udi` will always use the SSH side-channel method for pools containing
+a positive number of low priority nodes.

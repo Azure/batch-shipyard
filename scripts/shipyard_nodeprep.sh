@@ -3,39 +3,14 @@
 set -e
 set -o pipefail
 
-install_azurefile_docker_volume_driver() {
-    chown root:root azurefile-dockervolumedriver*
-    chmod 755 azurefile-dockervolumedriver
-    chmod 640 azurefile-dockervolumedriver.env
-    mv azurefile-dockervolumedriver /usr/bin
-    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
-    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
-        mv azurefile-dockervolumedriver.conf /etc/init
-        initctl reload-configuration
-        initctl start azurefile-dockervolumedriver
-    else
-        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
-            systemdloc=/usr/lib/systemd/system
-        else
-            systemdloc=/lib/systemd/system
-        fi
-        mv azurefile-dockervolumedriver.service $systemdloc
-        systemctl daemon-reload
-        systemctl enable azurefile-dockervolumedriver
-        systemctl start azurefile-dockervolumedriver
-    fi
-    # create docker volumes
-    chmod +x azurefile-dockervolume-create.sh
-    ./azurefile-dockervolume-create.sh
-}
-
+# globals
 azurefile=0
 blobxferversion=latest
 block=
 cascadecontainer=0
 encrypted=
 hpnssh=0
-gluster=0
+gluster_on_compute=0
 gpu=
 networkopt=0
 offer=
@@ -47,7 +22,8 @@ sku=
 sc_args=
 version=
 
-while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
+# process command line options
+while getopts "h?abde:fg:m:no:p:r:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -56,7 +32,7 @@ while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
             echo "-b block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
-            echo "-f set up glusterfs cluster"
+            echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
             echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
@@ -84,7 +60,7 @@ while getopts "h?abde:fg:nm:o:p:r:s:t:v:wx:" opt; do
             encrypted=${OPTARG,,}
             ;;
         f)
-            gluster=1
+            gluster_on_compute=1
             ;;
         g)
             gpu=$OPTARG
@@ -131,26 +107,254 @@ shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 # check args
 if [ -z $offer ]; then
-    echo "vm offer not specified"
+    echo "ERROR: vm offer not specified"
     exit 1
 fi
 if [ -z $sku ]; then
-    echo "vm sku not specified"
+    echo "ERROR: vm sku not specified"
     exit 1
 fi
 if [ -z $version ]; then
-    echo "batch-shipyard version not specified"
+    echo "ERROR: batch-shipyard version not specified"
     exit 1
 fi
 
-# TODO temporary check to look for buggy sdb1 mount
-set +e
-mount | grep /dev/sdb1 | grep fuseblk
-if [ $? -eq 0 ]; then
-    echo "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
-    exit 1
-fi
-set -e
+contains() {
+    string="$1"
+    substring="$2"
+    if test "${string#*$substring}" != "$string"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+check_for_buggy_ntfs_mount() {
+    # Check to ensure sdb1 mount is not mounted as ntfs
+    set +e
+    mount | grep /dev/sdb1 | grep fuseblk
+    rc=$?
+    set -e
+    if [ $rc -eq 0 ]; then
+        echo "ERROR: /dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+        exit 1
+    fi
+}
+
+check_for_nvidia_card() {
+    set +e
+    out=$(lspci)
+    echo "$out" | grep -i nvidia > /dev/null
+    rc=$?
+    set -e
+    echo "$out"
+    if [ $rc -ne 0 ]; then
+        echo "ERROR: No Nvidia card(s) detected!"
+        exit 1
+    fi
+}
+
+install_nvidia_software() {
+    offer=$1
+    shift
+    # check for nvidia card
+    check_for_nvidia_card
+    # split arg into two
+    IFS=':' read -ra GPUARGS <<< "$gpu"
+    nvdriver=${GPUARGS[1]}
+    nvdocker=${GPUARGS[2]}
+    # remove nouveau
+    rmmod nouveau
+    # purge nouveau off system
+    if [ $offer == "ubuntuserver" ]; then
+        apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
+    elif [[ $offer == centos* ]]; then
+        yum erase -y xorg-x11-drv-nouveau
+    else
+        echo "ERROR: unsupported distribution for nvidia/GPU, offer: $offer"
+        exit 1
+    fi
+    # blacklist nouveau from being loaded if rebooted
+cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
+blacklist nouveau
+blacklist lbm-nouveau
+options nouveau modeset=0
+alias nouveau off
+alias lbm-nouveau off
+EOF
+    # get development essentials for nvidia driver
+    if [ $offer == "ubuntuserver" ]; then
+        install_packages $offer build-essential
+    elif [[ $offer == centos* ]]; then
+        install_packages $offer gcc binutils make "kernel-devel-$(uname -r)"
+    fi
+    # get additional dependency if NV-series VMs
+    if [ ${GPUARGS[0]} == "True" ]; then
+        if [ $offer == "ubuntuserver" ]; then
+            install_packages $offer xserver-xorg-dev
+        elif [[ $offer == centos* ]]; then
+            install_packages $offer xorg-x11-server-devel
+        fi
+    fi
+    # install driver
+    ./$nvdriver -s
+    # add flag to config template for GRID driver
+    if [ ${GPUARGS[0]} == "True" ]; then
+        echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf.template
+    fi
+    # install nvidia-docker
+    if [ $offer == "ubuntuserver" ]; then
+        dpkg -i $nvdocker
+    elif [[ $offer == centos* ]]; then
+        rpm -Uvh $nvdocker
+    fi
+    # enable and start nvidia docker service
+    systemctl enable nvidia-docker.service
+    systemctl start nvidia-docker.service
+    systemctl status nvidia-docker.service
+    # get driver version
+    nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
+    echo nvidia driver version $nvdriverver detected
+    # create the docker volume now to avoid volume driver conflicts for
+    # tasks. run this in a loop as it can fail if triggered too quickly
+    # after start
+    NV_START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
+        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
+        if [ $? -eq 0 ]; then
+            docker volume list
+            break
+        else
+            NV_NOW=$(date -u +"%s")
+            NV_DIFF=$((($NV_NOW-$NV_START)/60))
+            # fail after 5 minutes of attempts
+            if [ $NV_DIFF -ge 5 ]; then
+                echo "ERROR: could not create nvidia-docker volume"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
+}
+
+install_azurefile_docker_volume_driver() {
+    chown root:root azurefile-dockervolumedriver*
+    chmod 755 azurefile-dockervolumedriver
+    chmod 640 azurefile-dockervolumedriver.env
+    mv azurefile-dockervolumedriver /usr/bin
+    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
+    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
+        mv azurefile-dockervolumedriver.conf /etc/init
+        initctl reload-configuration
+        initctl start azurefile-dockervolumedriver
+    else
+        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
+            systemdloc=/usr/lib/systemd/system
+        else
+            systemdloc=/lib/systemd/system
+        fi
+        mv azurefile-dockervolumedriver.service $systemdloc
+        systemctl daemon-reload
+        systemctl enable azurefile-dockervolumedriver
+        systemctl start azurefile-dockervolumedriver
+    fi
+    # create docker volumes
+    chmod +x azurefile-dockervolume-create.sh
+    ./azurefile-dockervolume-create.sh
+    # list volumes
+    docker volume list
+}
+
+refresh_package_index() {
+    offer=$1
+    set +e
+    retries=30
+    while [ $retries -gt 0 ]; do
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
+            apt-get update
+        elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
+            yum makecache -y fast
+        elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
+            zypper -n --gpg-auto-import-keys ref
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not update package index"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+install_packages() {
+    offer=$1
+    shift
+    set +e
+    retries=30
+    while [ $retries -gt 0 ]; do
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
+            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
+        elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
+            yum install -y $*
+        elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
+            zypper -n in $*
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not install packages: $*"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+docker_pull_image() {
+    image=$1
+    set +e
+    retries=60
+    while [ $retries -gt 0 ]; do
+        pull_out=$(docker pull $image 2>&1)
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            echo "$pull_out"
+            break
+        fi
+        # non-zero exit code: check if pull output has toomanyrequests or
+        # connection resets
+        if [ contains "$pull_out" "toomanyrequests" ] || [ contains "$pull_out" "connection reset by peer" ]; then
+            echo "WARNING: will retry:\n$pull_out"
+        else
+            echo "ERROR:\n$pull_out"
+            exit $rc
+        fi
+        let retries=retries-1
+        if [ $retries -le 0 ]; then
+            echo "ERROR: Could not pull docker image: $image"
+            exit $rc
+        fi
+        sleep $[($RANDOM % 5) + 1]s
+    done
+    set -e
+}
+
+# check sdb1 mount
+check_for_buggy_ntfs_mount
+
+# set python env vars
+LC_ALL=en_US.UTF-8
+PYTHONASYNCIODEBUG=1
 
 # store node prep start
 if command -v python3 > /dev/null 2>&1; then
@@ -162,10 +366,6 @@ fi
 # set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
-
-# set python env vars
-LC_ALL=en_US.UTF-8
-PYTHONASYNCIODEBUG=1
 
 # get ip address of eth0
 ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
@@ -197,10 +397,10 @@ fi
 
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
-    echo "$cascadefailed file exists, assuming cascade failure during node prep"
+    echo "ERROR: $cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
 elif [ -f $nodeprepfinished ]; then
-    echo "$nodeprepfinished file exists, assuming successful completion of node prep"
+    echo "INFO: $nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
 
@@ -236,78 +436,89 @@ fi
 # install docker host engine
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
+    # name will be appended to dockerversion
+    dockerversion=17.06.0~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
         srvstart="initctl start docker"
         srvstop="initctl stop docker"
+        srvstatus="initctl status docker"
         gfsstart="initctl start glusterfs-server"
+        gpgkey=https://download.docker.com/linux/ubuntu/gpg
+        repo=https://download.docker.com/linux/ubuntu
+        dockerversion=${dockerversion}ubuntu
     elif [[ $sku == 16.04* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
+        gpgkey=https://download.docker.com/linux/ubuntu/gpg
+        repo=https://download.docker.com/linux/ubuntu
+        dockerversion=${dockerversion}ubuntu
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
         srvenable="systemctl enable docker.service"
+        srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
+        gpgkey=https://download.docker.com/linux/debian/gpg
+        repo=https://download.docker.com/linux/debian
+        dockerversion=${dockerversion}debian
     else
-        echo "unsupported sku: $sku for offer: $offer"
+        echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     if [ ! -z $gpu ] && [ $name != "ubuntu-xenial" ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
     if [ $networkopt -eq 1 ]; then
-        service procps reload
-    fi
-    # check if docker apt source list file exists
-    aptsrc=/etc/apt/sources.list.d/docker.list
-    if [ ! -e $aptsrc ] || [ ! -s $aptsrc ]; then
-        # refresh package index
-        apt-get update
-        # install required software first
-        if [ $offer == "debian" ]; then
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-                apt-transport-https ca-certificates
+        if [ $name == "ubuntu-trusty" ]; then
+            service procps start
         else
-            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-                linux-image-extra-$(uname -r) linux-image-extra-virtual
+            service procps reload
         fi
-        set +e
-        retries=100
-        while [ $retries -gt 0 ]; do
-            apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-            if [ $? -eq 0 ]; then
-                break
-            fi
-            let retries=retries-1
-            if [ $retries -eq 0 ]; then
-                echo "Could not add key for docker repo"
-                exit 1
-            fi
-            sleep 1
-        done
-        set -e
-        echo deb https://apt.dockerproject.org/repo $name main > /etc/apt/sources.list.d/docker.list
     fi
-    # update package index with docker repo and purge old docker if it exists
-    apt-get update
-    apt-get purge -y -q lxc-docker
+    # refresh package index
+    refresh_package_index $offer
+    # install required software first
+    install_packages $offer apt-transport-https ca-certificates curl software-properties-common
+    if [ $name == "ubuntu-trusty" ]; then
+        install_packages $offer linux-image-extra-$(uname -r) linux-image-extra-virtual
+    fi
+    # add gpgkey for repo
+    set +e
+    retries=100
+    while [ $retries -gt 0 ]; do
+        curl -fsSL $gpgkey | apt-key add -
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not add key for docker repo"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+    # add repo
+    add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
+    # refresh index
+    refresh_package_index $offer
     # ensure docker opts service modifications are idempotent
     set +e
     grep '^DOCKER_OPTS=' /etc/default/docker
     if [ $? -ne 0 ]; then
         # install docker engine
-        apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-            docker-engine
+        install_packages $offer docker-ce=$dockerversion
         set -e
         $srvstop
         set +e
@@ -321,8 +532,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/docker-tmp\" >> /etc/default/docker
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         fi
-
-        if [[ $sku == 16.04* ]] || [[ $name == "debian-jessie" ]]; then
+        if [[ $name == "ubuntu-xenial" ]] || [[ $name == "debian-jessie" ]]; then
             sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
             set -e
@@ -339,67 +549,15 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         set +e
     fi
     set -e
+    # ensure docker daemon is running
+    $srvstatus
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
-        # split arg into two
-        IFS=':' read -ra GPUARGS <<< "$gpu"
-        # take special actions if we're on NV-series VMs
-        if [ ${GPUARGS[0]} == "True" ]; then
-            # remove nouveau
-            apt-get --purge remove xserver-xorg-video-nouveau
-            rmmod nouveau
-            # blacklist nouveau from being loaded if rebooted
-cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
-blacklist nouveau
-blacklist lbm-nouveau
-options nouveau modeset=0
-alias nouveau off
-alias lbm-nouveau off
-EOF
-        fi
-        nvdriver=${GPUARGS[1]}
-        nvdocker=${GPUARGS[2]}
-        # get development essentials for nvidia driver
-        apt-get install -y -q --no-install-recommends \
-            build-essential xserver-xorg-dev nvidia-modprobe
-        # install driver
-        ./$nvdriver -s
-        # install nvidia-docker
-        dpkg -i $nvdocker
-        # enable and start nvidia docker service
-        systemctl enable nvidia-docker.service
-        systemctl start nvidia-docker.service
-        systemctl status nvidia-docker.service
-        # get driver version
-        nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
-        echo nvidia driver version $nvdriverver detected
-        # create the docker volume now to avoid volume driver conflicts for
-        # tasks. run this in a loop as it can fail if triggered too quickly
-        # after start
-        NV_START=$(date -u +"%s")
-        set +e
-        while :
-        do
-            echo "Attempting to create nvidia-docker volume with version $nvdriverver"
-            docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
-            if [ $? -eq 0 ]; then
-                break
-            else
-                NV_NOW=$(date -u +"%s")
-                NV_DIFF=$((($NV_NOW-$NV_START)/60))
-                # fail after 5 minutes of attempts
-                if [ $NV_DIFF -ge 5 ]; then
-                    echo "could not create nvidia-docker volume"
-                    exit 1
-                fi
-                sleep 1
-            fi
-        done
-        set -e
+        install_nvidia_software $offer
     fi
     # set up glusterfs
-    if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
-        apt-get install -y -q --no-install-recommends glusterfs-server
+    if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+        install_packages $offer glusterfs-server
         if [[ ! -z $gfsenable ]]; then
             $gfsenable
         fi
@@ -409,19 +567,15 @@ EOF
     fi
     # install dependencies for storage cluster mount
     if [ ! -z $sc_args ]; then
-        nfs_installed=0
-        glusterfs_installed=0
         for sc_arg in ${sc_args[@]}; do
             IFS=':' read -ra sc <<< "$sc_arg"
             server_type=${sc[0]}
-            if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
-                apt-get install -y -q --no-install-recommends nfs-common nfs4-acl-tools
-                nfs_installed=1
-            elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
-                apt-get install -y -q --no-install-recommends glusterfs-client acl
-                glusterfs_installed=1
+            if [ $server_type == "nfs" ]; then
+                install_packages $offer nfs-common nfs4-acl-tools
+            elif [ $server_type == "glusterfs" ]; then
+                install_packages $offer glusterfs-client acl
             else
-                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
             fi
         done
@@ -429,38 +583,44 @@ EOF
     # install dependencies if not using cascade container
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
-        apt-get install -y -q --no-install-recommends \
-            build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-        pip3 install --no-cache-dir azure-storage==0.34.0
+        install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
+        pip3 install --no-cache-dir azure-storage==0.34.2
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
-            apt-get install -y -q --no-install-recommends \
-                python3-libtorrent pigz
+            install_packages $offer python3-libtorrent pigz
         fi
     fi
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "only supported through shipyard container"
+        echo "ERROR: only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
-    if [ ! -z $gpu ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+    if [[ ! -z $gpu ]] && [[ $offer != centos* ]]; then
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
+        dockerversion=17.06.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
+            srvstart="systemctl start docker.service"
+            srvstatus="systemctl status docker.service"
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
+            # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
+            echo "ERROR: oracle linux is not supported at this time"
+            exit 1
         else
             srvenable="chkconfig docker on"
+            srvstart="systemctl start docker.service"
+            srvstatus="systemctl status docker.service"
             gfsenable="chkconfig glusterd on"
             rpcbindenable="chkconfig rpcbind on"
         fi
     else
-        echo "unsupported sku: $sku for offer: $offer"
+        echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     # reload network settings
@@ -468,86 +628,69 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         sysctl -p
     fi
     # add docker repo to yum
-    yumrepo=/etc/yum.repos.d/docker.repo
-    if [ ! -e $yumrepo ] || [ ! -s $yumrepo ]; then
-        baseurl=
-        if [[ $offer == "oracle-linux" ]]; then
-            baseurl=https://yum.dockerproject.org/repo/main/oraclelinux/7
-            # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
-            echo "oracle linux is not supported at this time"
-            exit 1
-        else
-            baseurl=https://yum.dockerproject.org/repo/main/centos/7/
-        fi
-cat > $yumrepo << EOF
-[dockerrepo]
-name=Docker Repository
-baseurl=$baseurl
-enabled=1
-gpgcheck=1
-gpgkey=https://yum.dockerproject.org/gpg
-EOF
-        # update yum repo and install docker engine
-        yum install -y docker-engine
-        # modify docker opts
-        mkdir -p /mnt/resource/docker-tmp
-        sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
-        sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
-        sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
+    install_packages $offer yum-utils device-mapper-persistent-data lvm2
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    refresh_package_index $offer
+    install_packages $offer docker-ce-$dockerversion
+    # modify docker opts
+    mkdir -p /mnt/resource/docker-tmp
+    sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
+    sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
+    sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
+    sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
+    systemctl daemon-reload
+    # start docker service and enable docker daemon on boot
+    $srvenable
+    $srvstart
+    $srvstatus
+    # setup and start azure file docker volume driver
+    if [ $azurefile -eq 1 ]; then
+        install_azurefile_docker_volume_driver $offer $sku
+    fi
+    # install gpu related items
+    if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
+        install_nvidia_software $offer
+    fi
+    # set up glusterfs
+    if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
+        install_packages $offer epel-release centos-release-gluster38
+        sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+        install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server
         systemctl daemon-reload
-        # start docker service and enable docker daemon on boot
-        $srvenable
-        systemctl start docker.service
-        # setup and start azure file docker volume driver
-        if [ $azurefile -eq 1 ]; then
-            install_azurefile_docker_volume_driver $offer $sku
-        fi
-        # set up glusterfs
-        if [ $gluster -eq 1 ] && [ ! -f $nodeprepfinished ]; then
-            yum install -y epel-release centos-release-gluster38
-            sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-            yum install -y --enablerepo=centos-gluster38,epel glusterfs-server
-            systemctl daemon-reload
-            $gfsenable
-            systemctl start glusterd
-            # create brick directory
-            mkdir -p /mnt/resource/gluster
-        fi
-        # install dependencies for storage cluster mount
-        if [ ! -z $sc_args ]; then
-            nfs_installed=0
-            glusterfs_installed=0
-            for sc_arg in ${sc_args[@]}; do
-                IFS=':' read -ra sc <<< "$sc_arg"
-                server_type=${sc[0]}
-                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
-                    yum install -y nfs-utils nfs4-acl-tools
-                    systemctl daemon-reload
-                    $rpcbindenable
-                    systemctl start rpcbind
-                    nfs_installed=1
-                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
-                    yum install -y epel-release centos-release-gluster38
-                    sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                    yum install -y --enablerepo=centos-gluster38,epel glusterfs-client acl
-                    glusterfs_installed=1
-                else
-                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
-                    exit 1
-                fi
-            done
-        fi
+        $gfsenable
+        systemctl start glusterd
+        # create brick directory
+        mkdir -p /mnt/resource/gluster
+    fi
+    # install dependencies for storage cluster mount
+    if [ ! -z $sc_args ]; then
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ]; then
+                install_packages $offer nfs-utils nfs4-acl-tools
+                systemctl daemon-reload
+                $rpcbindenable
+                systemctl start rpcbind
+            elif [ $server_type == "glusterfs" ]; then
+                install_packages $offer epel-release centos-release-gluster38
+                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server acl
+            else
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                exit 1
+            fi
+        done
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "only supported through shipyard container"
+        echo "ERROR: only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
     if [ ! -z $gpu ]; then
-        echo "gpu unsupported on this sku: $sku for offer $offer"
+        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
@@ -558,34 +701,32 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # add Virtualization:containers repo for recent docker builds
         repodir=
         if [[ $offer == opensuse* ]]; then
-            if [[ $sku == "13.2" ]]; then
-                repodir=openSUSE_13.2
-            elif [[ $sku == "42.1" ]]; then
+            dockerversion=1.12.6-30.2
+            if [[ $sku == "42.1" ]]; then
                 repodir=openSUSE_Leap_42.1
+            elif [[ $sku == "42.2" ]]; then
+                repodir=openSUSE_Leap_42.2
             fi
             # add container repo for zypper
             zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
-            zypper -n --gpg-auto-import-keys ref
-            # uninstall existing docker
-            set +e
-            zypper -n rm docker
-            set -e
         elif [[ $offer == sles* ]]; then
-            if [[ $sku == "12" ]]; then
-                repodir=SLE_12
-            elif [[ $sku == "12-sp1" ]]; then
+            dockerversion=1.12.6-90.1
+            if [[ $sku == "12-sp1" ]]; then
                 repodir=SLE_12_SP1
+            elif [[ $sku == "12-sp2" ]]; then
+                repodir=SLE_12_SP2
             fi
             # enable container module
             SUSEConnect -p sle-module-containers/12/x86_64 -r ''
-            zypper ref
         fi
         if [ -z $repodir ]; then
-            echo "unsupported sku: $sku for offer: $offer"
+            echo "ERROR: unsupported sku: $sku for offer: $offer"
             exit 1
         fi
+        # update index
+        refresh_package_index $offer
         # install docker engine
-        zypper -n in docker
+        install_packages $offer docker-$dockerversion
         # modify docker opts, docker opts in /etc/sysconfig/docker
         mkdir -p /mnt/resource/docker-tmp
         sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
@@ -594,15 +735,16 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # start docker service and enable docker daemon on boot
         systemctl enable docker
         systemctl start docker
+        systemctl status docker
         # setup and start azure file docker volume driver
         if [ $azurefile -eq 1 ]; then
             install_azurefile_docker_volume_driver $offer $sku
         fi
         # set up glusterfs
-        if [ $gluster -eq 1 ]; then
+        if [ $gluster_on_compute -eq 1 ]; then
             zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
             zypper -n --gpg-auto-import-keys ref
-            zypper -n in glusterfs
+            install_packages $offer glusterfs
             systemctl daemon-reload
             systemctl enable glusterd
             systemctl start glusterd
@@ -611,24 +753,20 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         fi
         # install dependencies for storage cluster mount
         if [ ! -z $sc_args ]; then
-            nfs_installed=0
-            glusterfs_installed=0
             for sc_arg in ${sc_args[@]}; do
                 IFS=':' read -ra sc <<< "$sc_arg"
                 server_type=${sc[0]}
-                if [ $server_type == "nfs" ] && [ $nfs_installed -eq 0 ]; then
-                    zypper -n in nfs-client nfs4-acl-tools
+                if [ $server_type == "nfs" ]; then
+                    install_packages $offer nfs-client nfs4-acl-tools
                     systemctl daemon-reload
                     systemctl enable rpcbind
                     systemctl start rpcbind
-                    nfs_installed=1
-                elif [ $server_type == "glusterfs" ] && [ $glusterfs_installed -eq 0 ]; then
+                elif [ $server_type == "glusterfs" ]; then
                     zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
                     zypper -n --gpg-auto-import-keys ref
-                    zypper -n in glusterfs acl
-                    glusterfs_installed=1
+                    install_packages $offer glusterfs acl
                 else
-                    echo "Unknown file server type ${sc[0]} for ${sc[1]}"
+                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
                 fi
             done
@@ -636,23 +774,23 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # if hpc sku, set up intel mpi
         if [[ $offer == sles-hpc* ]]; then
             if [ $sku != "12-sp1" ]; then
-                echo "unsupported sku for intel mpi setup on SLES"
+                echo "ERROR: unsupported sku for intel mpi setup on SLES"
                 exit 1
             fi
-            zypper -n in lsb
+            install_packages $offer lsb
             rpm -Uvh --nodeps /opt/intelMPI/intel_mpi_packages/*.rpm
             mkdir -p /opt/intel/compilers_and_libraries/linux
             ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
         fi
     fi
 else
-    echo "unsupported offer: $offer (sku: $sku)"
+    echo "ERROR: unsupported offer: $offer (sku: $sku)"
     exit 1
 fi
 
 # retrieve docker images related to data movement
-docker pull alfpark/blobxfer:$blobxferversion
-docker pull alfpark/batch-shipyard:tfm-$version
+docker_pull_image alfpark/blobxfer:$blobxferversion
+docker_pull_image alfpark/batch-shipyard:tfm-$version
 
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
@@ -668,15 +806,15 @@ if [ ! -z $sc_args ]; then
     for sc_arg in ${sc_args[@]}; do
         IFS=':' read -ra sc <<< "$sc_arg"
         mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
-        echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
+        echo "INFO: Creating host directory for storage cluster $sc_arg at $mountpoint"
         mkdir -p $mountpoint
         chmod 777 $mountpoint
-        echo "Adding $mountpoint to fstab"
+        echo "INFO: Adding $mountpoint to fstab"
         # eval fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_entry="${fstabs[$i]}"
         echo $fstab_entry >> /etc/fstab
         tail -n1 /etc/fstab
-        echo "Mounting $mountpoint"
+        echo "INFO: Mounting $mountpoint"
         START=$(date -u +"%s")
         set +e
         while :
@@ -689,14 +827,14 @@ if [ ! -z $sc_args ]; then
                 DIFF=$((($NOW-$START)/60))
                 # fail after 5 minutes of attempts
                 if [ $DIFF -ge 5 ]; then
-                    echo "Could not mount storage cluster $sc_arg on: $mountpoint"
+                    echo "ERROR: Could not mount storage cluster $sc_arg on: $mountpoint"
                     exit 1
                 fi
                 sleep 1
             fi
         done
         set -e
-        echo "$mountpoint mounted."
+        echo "INFO: $mountpoint mounted."
         i=$(($i + 1))
     done
 fi
@@ -738,6 +876,9 @@ p2p=$p2p
 `env | grep AZ_BATCH_`
 `env | grep DOCKER_LOGIN_`
 EOF
+    chmod 600 $envfile
+    # pull image
+    docker_pull_image alfpark/batch-shipyard:cascade-$version
     # launch container
     docker run $detached --net=host --env-file $envfile \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -780,7 +921,7 @@ if [ $p2penabled -eq 0 ]; then
     wait $cascadepid
     rc=$?
     if [ $rc -ne 0 ]; then
-        echo "cascade exited with non-zero exit code: $rc"
+        echo "ERROR: cascade exited with non-zero exit code: $rc"
         rm -f $nodeprepfinished
         exit $rc
     fi
@@ -792,7 +933,7 @@ rm -f $cascadefailed
 
 # block until images ready if specified
 if [ ! -z $block ]; then
-    echo "blocking until images ready: $block"
+    echo "INFO: blocking until images ready: $block"
     IFS=',' read -ra RES <<< "$block"
     declare -a missing
     while :
@@ -803,7 +944,7 @@ if [ ! -z $block ]; then
             fi
         done
         if [ ${#missing[@]} -eq 0 ]; then
-            echo "all docker images present"
+            echo "INFO: all docker images present"
             break
         else
             unset missing

@@ -16,12 +16,11 @@ The pool configuration should enable the following properties:
 K80 GPUs for GPU compute acceleration while `NV` VM instances feature
 M60 GPUs for visualization workloads. Because CNTK is a GPU-accelerated
 compute application, it is best to choose `NC` VM instances.
-* `publisher` should be `Canonical`. Other publishers will be supported
-once they are available for N-series VMs.
-* `offer` should be `UbuntuServer`. Other offers will be supported once they
-are available for N-series VMs.
-* `sku` should be `16.04-LTS`. Other skus will be supported once they are
-available for N-series VMs.
+* `vm_configuration` is the VM configuration
+  * `platform_image` specifies to use a platform image
+    * `publisher` should be `Canonical` or `OpenLogic`.
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 
@@ -88,8 +87,9 @@ for details.
 * `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
 wrapper.
 * `multi_instance` property must be defined for multinode executions
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` should be unset or the array can be empty
 

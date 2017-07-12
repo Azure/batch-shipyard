@@ -99,7 +99,7 @@ gluster_poll_for_connections() {
     done
     set -e
     echo "$numpeers host(s) joined peering"
-    # delay to wait for after peer connections
+    # delay wait after peer connections
     sleep 5
 }
 
@@ -130,16 +130,9 @@ gluster_poll_for_volume() {
 
 }
 
-enable_and_start_glusterfs() {
-    systemctl enable glusterfs-server
-    # start service if not started
-    set +e
-    systemctl status glusterfs-server
-    if [ $? -ne 0 ]; then
-        set -e
-        systemctl start glusterfs-server
-    fi
-    set -e
+flush_glusterfs_firewall_rules() {
+    iptables -F INPUT
+    iptables -L INPUT
 }
 
 setup_glusterfs() {
@@ -431,15 +424,30 @@ EOF
         if [ $? -ne 0 ]; then
             set -e
             systemctl start nfs-kernel-server.service
+            systemctl status nfs-kernel-server.service
         fi
         set -e
     elif [ $server_type == "glusterfs" ]; then
-        apt-get install -y -q --no-install-recommends glusterfs-server
-        # reload unit files
-        systemctl daemon-reload
-        # ensure glusterfs server is stopped. we should not start it yet
+        # to prevent a race where the master (aka prober) script execution
+        # runs well before the child, we should block all gluster connection
+        # requests with iptables. we should not remove the filter rules
         # until all local disk setup has been completed.
-        systemctl stop glusterfs-server
+        iptables -A INPUT -p tcp --destination-port 24007:24008 -j REJECT
+        iptables -A INPUT -p tcp --destination-port 49152:49215 -j REJECT
+        # install glusterfs server
+        apt-get install -y -q --no-install-recommends glusterfs-server
+        # enable gluster service
+        systemctl enable glusterfs-server
+        # start service if not started
+        set +e
+        systemctl status glusterfs-server
+        if [ $? -ne 0 ]; then
+            set -e
+            systemctl start glusterfs-server
+            systemctl status glusterfs-server
+        fi
+        set -e
+        iptables -L INPUT
     else
         echo "server_type $server_type not supported."
         exit 1
@@ -726,7 +734,7 @@ if [ $attach_disks -eq 0 ]; then
     if [ $server_type == "nfs" ]; then
         setup_nfs
     elif [ $server_type == "glusterfs" ]; then
-        enable_and_start_glusterfs
+        flush_glusterfs_firewall_rules
         setup_glusterfs
     else
         echo "server_type $server_type not supported."
@@ -761,7 +769,7 @@ EOF
             # create user (disable login)
             useradd -N -g $smb_gid -p '!' -o -u $smb_uid -s /bin/bash -m -d /home/$smb_username $smb_username
             # add user to smb tdbsam
-            echo -ne "$smb_password\n$smb_password\n" | smbpasswd -a -s $smb_username
+            echo -ne "${smb_password}\n${smb_password}\n" | smbpasswd -a -s $smb_username
             smbpasswd -e $smb_username
             # modify smb.conf global
             sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto" /etc/samba/smb.conf
@@ -780,6 +788,13 @@ cat >> /etc/samba/smb.conf << EOF
   browseable = yes
 EOF
         fi
+        # reload unit files
+        systemctl daemon-reload
+        # add fix to attempt samba service restarts in case of failures.
+        # note that this will get overwritten if the systemd-sysv-generator
+        # is re-run (e.g., systemctl daemon-reload).
+        sed -i -e "s/^Restart=no/Restart=yes/g" /run/systemd/generator.late/smbd.service
+        sed -i "/^Restart=yes/a RestartSec=2" /run/systemd/generator.late/smbd.service
         # restart samba service
         systemctl restart smbd.service
     fi

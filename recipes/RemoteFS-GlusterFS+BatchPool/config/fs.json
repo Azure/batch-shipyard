@@ -1,0 +1,66 @@
+{
+    "remote_fs": {
+        "resource_group": "my-resource-group",
+        "location": "<Azure region, e.g., eastus>",
+        "managed_disks": {
+            "premium": true,
+            "disk_size_gb": 1023,
+            "disk_names": [
+                "p30-disk0a", "p30-disk1a",
+                "p30-disk0b", "p30-disk1b"
+            ]
+        },
+        "storage_clusters": {
+            "mystoragecluster": {
+                "hostname_prefix": "mystoragecluster",
+                "ssh": {
+                    "username": "shipyard"
+                },
+                "static_public_ip": false,
+                "virtual_network": {
+                    "name": "myvnet",
+                    "existing_ok": true,
+                    "address_space": "10.0.0.0/16",
+                    "subnet": {
+                        "name": "my-server-subnet",
+                        "address_prefix": "10.0.0.0/24"
+                    }
+                },
+                "network_security": {
+                    "ssh": ["*"],
+                    "glusterfs": ["<ip address prefix in cidr notation for allowable external clients>"]
+                },
+                "file_server": {
+                    "type": "glusterfs",
+                    "mountpoint": "/data",
+                    "mount_options": [
+                        "noatime",
+                        "nodiratime"
+                    ],
+                    "server_options": {
+                        "glusterfs": {
+                            "volume_name": "gv0",
+                            "volume_type": "distributed",
+                            "transport": "tcp",
+                            "performance.cache-size": "1 GB"
+                        }
+                    }
+                },
+                "vm_count": 2,
+                "vm_size": "STANDARD_F8S",
+                "vm_disk_map": {
+                    "0": {
+                        "disk_array": ["p30-disk0a", "p30-disk1a"],
+                        "filesystem": "btrfs",
+                        "raid_level": 0
+                    },
+                    "1": {
+                        "disk_array": ["p30-disk0b", "p30-disk1b"],
+                        "filesystem": "btrfs",
+                        "raid_level": 0
+                    }
+                }
+            }
+        }
+    }
+}

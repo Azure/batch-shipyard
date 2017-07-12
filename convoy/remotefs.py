@@ -612,14 +612,14 @@ def _create_virtual_machine_extension(
     # construct bootstrap command
     cmd = './{bsf} {c}{d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
         bsf=bootstrap_file,
-        c=' -c "{}"'.format(smb) if util.is_not_empty(smb) else '',
+        c=' -c \'{}\''.format(smb) if util.is_not_empty(smb) else '',
         d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
         f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
         i=' -i {}'.format(
             ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
         m=' -m {}'.format(rfs.storage_cluster.file_server.mountpoint),
         n=' -n' if settings.can_tune_tcp(rfs.storage_cluster.vm_size) else '',
-        o=' -o "{}"'.format(','.join(server_options)) if util.is_not_empty(
+        o=' -o \'{}\''.format(','.join(server_options)) if util.is_not_empty(
             server_options) else '',
         p=' -p' if premium else '',
         r=' -r {}'.format(rfs.storage_cluster.vm_disk_map[offset].raid_level),
@@ -684,11 +684,11 @@ def _create_availability_set(compute_client, rfs):
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         name=as_name,
-        # user maximums for ud/fd
+        # user maximums ud, fd from settings due to region variability
         parameters=computemodels.AvailabilitySet(
             location=rfs.location,
             platform_update_domain_count=20,
-            platform_fault_domain_count=3,
+            platform_fault_domain_count=rfs.storage_cluster.fault_domains,
             managed=True,
         )
     )
@@ -767,7 +767,7 @@ def create_storage_cluster(
             config, 'create storage cluster {}'.format(sc_id)):
         return
     # create storage container
-    storage.create_storage_containers_remotefs(blob_client, config)
+    storage.create_storage_containers_remotefs(blob_client)
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -838,21 +838,24 @@ def create_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    # create universal ssh key for all vms if not specified
-    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
-        _, ssh_pub_key = crypto.generate_ssh_keypair(
-            rfs.storage_cluster.ssh.generated_file_export_path,
-            crypto.get_remotefs_ssh_key_prefix())
+    # read or generate ssh keys
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_public_key_data):
+        key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
+        # create universal ssh key for all vms if not specified
         ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
-    with open(ssh_pub_key, 'rb') as fd:
-        key_data = fd.read().decode('utf8')
+        if ssh_pub_key is None:
+            _, ssh_pub_key = crypto.generate_ssh_keypair(
+                rfs.storage_cluster.ssh.generated_file_export_path,
+                crypto.get_remotefs_ssh_key_prefix())
+        # read public key data
+        with ssh_pub_key.open('rb') as fd:
+            key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
     )
-    del key_data
     # create vms
     async_ops['vms'] = {}
     for i in range(rfs.storage_cluster.vm_count):
@@ -1085,28 +1088,29 @@ def resize_storage_cluster(
                  nsg.name if nsg is not None else None,
                  nic.enable_accelerated_networking))
         nics[offset] = nic
-    # create universal ssh key for all vms if not specified
-    if util.is_none_or_empty(rfs.storage_cluster.ssh.ssh_public_key):
-        # check if ssh key exists first in default location
-        ssh_pub_key = pathlib.Path(
-            rfs.storage_cluster.ssh.generated_file_export_path,
-            crypto.get_remotefs_ssh_key_prefix() + '.pub')
-        if not ssh_pub_key.exists():
-            _, ssh_pub_key = crypto.generate_ssh_keypair(
-                rfs.storage_cluster.ssh.generated_file_export_path,
-                crypto.get_remotefs_ssh_key_prefix())
-        else:
-            ssh_pub_key = str(ssh_pub_key)
+    # read or generate ssh keys
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_public_key_data):
+        key_data = rfs.storage_cluster.ssh.ssh_public_key_data
     else:
+        # create universal ssh key for all vms if not specified
         ssh_pub_key = rfs.storage_cluster.ssh.ssh_public_key
-    with open(ssh_pub_key, 'rb') as fd:
-        key_data = fd.read().decode('utf8')
+        if ssh_pub_key is None:
+            # check if ssh key exists first in default location
+            ssh_pub_key = pathlib.Path(
+                rfs.storage_cluster.ssh.generated_file_export_path,
+                crypto.get_remotefs_ssh_key_prefix() + '.pub')
+            if not ssh_pub_key.exists():
+                _, ssh_pub_key = crypto.generate_ssh_keypair(
+                    rfs.storage_cluster.ssh.generated_file_export_path,
+                    crypto.get_remotefs_ssh_key_prefix())
+        # read public key data
+        with ssh_pub_key.open('rb') as fd:
+            key_data = fd.read().decode('utf8')
     ssh_pub_key = computemodels.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
     )
-    del key_data
     # create vms
     async_ops['vms'] = {}
     for i in new_vms:
@@ -1159,7 +1163,7 @@ def resize_storage_cluster(
             n=' -n {}'.format(
                 settings.get_file_server_glusterfs_volume_name(
                     rfs.storage_cluster)),
-            v=' -v "{}"'.format(voltype),
+            v=' -v \'{}\''.format(voltype),
         )
     ssh_priv_key, port, username, ip = ssh_info
     cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
@@ -1844,7 +1848,7 @@ def delete_storage_cluster(
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
     # delete storage container
-    storage.delete_storage_containers_remotefs(blob_client, config)
+    storage.delete_storage_containers_remotefs(blob_client)
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')
@@ -2236,9 +2240,12 @@ def _get_ssh_info(
                 network_client, rfs.storage_cluster.resource_group, vm)
         ip_address = nic.ip_configurations[0].private_ip_address
     # return connection info for vm
-    ssh_priv_key = pathlib.Path(
-        rfs.storage_cluster.ssh.generated_file_export_path,
-        crypto.get_remotefs_ssh_key_prefix())
+    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_private_key):
+        ssh_priv_key = pathlib.Path(rfs.storage_cluster.ssh.ssh_private_key)
+    else:
+        ssh_priv_key = pathlib.Path(
+            rfs.storage_cluster.ssh.generated_file_export_path,
+            crypto.get_remotefs_ssh_key_prefix())
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
@@ -2246,10 +2253,11 @@ def _get_ssh_info(
 
 
 def ssh_storage_cluster(
-        compute_client, network_client, config, sc_id, cardinal, hostname):
+        compute_client, network_client, config, sc_id, cardinal, hostname,
+        tty, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str) -> None
+    #        str, bool, tuple) -> None
     """SSH to a node in storage cluster
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -2259,15 +2267,26 @@ def ssh_storage_cluster(
     :param str sc_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command to execute
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
         compute_client, network_client, config, sc_id, cardinal, hostname)
+    if not ssh_priv_key.exists():
+        logger.error(
+            ('cannot SSH into remotefs cluster node with non-existant RSA '
+             'private key: {}').format(ssh_priv_key))
+        return
     # connect to vm
     logger.info(
         ('connecting to storage cluster {} virtual machine {}:{} with '
          'key {}').format(sc_id, ip, port, ssh_priv_key))
-    util.subprocess_with_output(
-        ['ssh', '-o', 'StrictHostKeyChecking=no',
-         '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-         '-i', str(ssh_priv_key), '-p', str(port),
-         '{}@{}'.format(username, ip)])
+    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_priv_key), '-p', str(port)]
+    if tty:
+        ssh_cmd.append('-t')
+    ssh_cmd.append('{}@{}'.format(username, ip))
+    if util.is_not_empty(command):
+        ssh_cmd.extend(command)
+    util.subprocess_with_output(ssh_cmd)

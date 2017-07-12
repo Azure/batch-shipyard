@@ -31,16 +31,14 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
+import math
 import os
 try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
+import requests
 import time
-try:
-    import urllib.request as urllibreq
-except ImportError:
-    import urllib as urllibreq
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
@@ -51,6 +49,7 @@ from . import batch
 from . import crypto
 from . import data
 from . import keyvault
+from . import misc
 from . import remotefs
 from . import resource
 from . import settings
@@ -62,6 +61,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
+_REQUEST_CHUNK_SIZE = 4194304
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _AZUREFILE_DVD_BIN = {
     'url': (
@@ -71,6 +71,17 @@ _AZUREFILE_DVD_BIN = {
     'sha256': (
         '288f809a1290ea8daf89d222507bda9b3709a9665cec8b70354a50252395e127'
     ),
+    'target': 'resources/azurefile-dockervolumedriver'
+}
+__NVIDIA_DOCKER_RPM = {
+    'url': (
+        'https://github.com/NVIDIA/nvidia-docker/releases/download/'
+        'v1.0.1/nvidia-docker-1.0.1-1.x86_64.rpm'
+    ),
+    'sha256': (
+        'f05dfe7fe655ed39c399db0d6362e351b059f2708c3e6da17f590a000237ec3a'
+    ),
+    'target': 'resources/nvidia-docker.rpm'
 }
 _NVIDIA_DOCKER = {
     'ubuntuserver': {
@@ -83,26 +94,39 @@ _NVIDIA_DOCKER = {
         ),
         'target': 'resources/nvidia-docker.deb'
     },
+    'centos': __NVIDIA_DOCKER_RPM,
+    'centos-hpc': __NVIDIA_DOCKER_RPM,
 }
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '375.39/NVIDIA-Linux-x86_64-375.39.run'
+            '375.66/NVIDIA-Linux-x86_64-375.66.run'
         ),
         'sha256': (
-            '91be5a20841678d671f32074e2901791fe12c00ce1f3b6b3c4199ce302da85a7'
+            '59e37f570ba5f3d7148028e96684d77f347d49a54e3722189782fc9b17d201c0'
         ),
+        'target': 'resources/nvidia-driver.run'
+    },
+    'visualization': {
+        'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
+        'sha256': (
+            'f5e39c9abf6d48d9883cd61d8fec8c67f05c9d6a7cc8b450af0efa790fbbd1a7'
+        ),
+        'target': 'resources/nvidia-driver-grid.run'
     },
     'license': (
         'http://www.nvidia.com/content/DriverDownload-March2009'
         '/licence.php?lang=us'
     ),
-    'target': 'resources/nvidia-driver.run'
 }
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
+)
+_NODEPREP_CUSTOMIMAGE_FILE = (
+    'shipyard_nodeprep_customimage.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_customimage.sh')
 )
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
@@ -154,12 +178,12 @@ _ALL_REMOTEFS_FILES = [
 ]
 
 
-def adjust_general_settings(config):
+def check_for_invalid_config(config):
     # type: (dict) -> None
-    """Adjust general settings
+    """Check for invalid configuration settings
     :param dict config: configuration dict
     """
-    # check for deprecated properties
+    # check for invalid properties, remove checks on next major release
     try:
         config['pool_specification']['ssh_docker_tunnel']
     except KeyError:
@@ -189,14 +213,37 @@ def adjust_general_settings(config):
             'found in global configuration. Please update your global '
             'configuration file. See the configuration doc for more '
             'information.')
-    # adjust encryption settings on windows
-    if util.on_windows():
-        enc = settings.batch_shipyard_encryption_enabled(config)
-        if enc:
+    # check for deprecated properties
+    try:
+        config['docker_registry']['azure_storage']
+    except KeyError:
+        pass
+    else:
+        logger.warning(
+            'DEPRECATION WARNING: docker_registry:azure_storage is '
+            'specified. Docker private registries backed by Azure Storage '
+            'blobs will not be supported in future releases. Please '
+            'migrate your Docker images to Azure Container Registry, '
+            'Docker Hub (public or private), or any other Internet '
+            'accessible Docker registry solution.')
+    try:
+        if isinstance(config['pool_specification']['vm_count'], int):
             logger.warning(
-                'disabling credential encryption due to script being run '
-                'from Windows')
-            settings.set_batch_shipyard_encryption_enabled(config, False)
+                'DEPRECATION WARNING: pool_specification:vm_count is '
+                'directly set with an integral value for dedicated nodes. '
+                'This configuration will not be supported in future '
+                'releases. Please update your configuration to include a '
+                'complex property of dedicated and/or low_priority nodes '
+                'for vm_count.')
+    except KeyError:
+        pass
+    if 'publisher' in config['pool_specification']:
+        logger.warning(
+            'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
+            'is set instead of a vm_configuration complex property. This '
+            'configuration will not be supported in future releases. '
+            'Please update your configuration to include a vm_configuration '
+            'property.')
 
 
 def populate_global_settings(config, fs_storage):
@@ -261,14 +308,8 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
     :rtype: pathlib.Path
     :return: package path
     """
-    if settings.is_gpu_compute_pool(vm_size):
-        gpu_type = 'compute'
-    elif settings.is_gpu_visualization_pool(vm_size):
-        gpu_type = 'visualization'
-        raise RuntimeError(
-            ('pool consisting of {} nodes require gpu driver '
-             'configuration').format(vm_size))
-    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER['target'])
+    gpu_type = settings.get_gpu_type_from_vm_size(vm_size)
+    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER[gpu_type]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
             util.compute_sha256_for_file(pkg, False) !=
@@ -278,16 +319,22 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
                 config,
                 msg=('agreement with License for Customer Use of NVIDIA '
                      'Software @ {}').format(_NVIDIA_DRIVER['license']),
-                allow_auto=False):
+                allow_auto=True):
             raise RuntimeError(
                 'Cannot proceed with deployment due to non-agreement with '
                 'license for NVIDIA driver')
+        else:
+            logger.info('NVIDIA Software License accepted')
         # download driver
         logger.debug('downloading NVIDIA driver to {}'.format(
-            _NVIDIA_DRIVER['target']))
-        response = urllibreq.urlopen(_NVIDIA_DRIVER[gpu_type]['url'])
+            _NVIDIA_DRIVER[gpu_type]['target']))
+        response = requests.get(_NVIDIA_DRIVER[gpu_type]['url'], stream=True)
         with pkg.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            pkg.stat().st_size, _NVIDIA_DRIVER[gpu_type]['target']))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DRIVER[gpu_type]['sha256']):
@@ -304,9 +351,6 @@ def _setup_nvidia_docker_package(blob_client, config):
     :return: package path
     """
     offer = settings.pool_offer(config, lower=True)
-    if offer != 'ubuntuserver':
-        raise ValueError('Offer {} is unsupported with nvidia docker'.format(
-            offer))
     pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DOCKER[offer]['target'])
     # check to see if package is downloaded
     if (not pkg.exists() or
@@ -315,9 +359,13 @@ def _setup_nvidia_docker_package(blob_client, config):
         # download package
         logger.debug('downloading NVIDIA docker to {}'.format(
             _NVIDIA_DOCKER[offer]['target']))
-        response = urllibreq.urlopen(_NVIDIA_DOCKER[offer]['url'])
+        response = requests.get(_NVIDIA_DOCKER[offer]['url'], stream=True)
         with pkg.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            pkg.stat().st_size, _NVIDIA_DOCKER[offer]['target']))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DOCKER[offer]['sha256']):
@@ -334,19 +382,30 @@ def _setup_azurefile_volume_driver(blob_client, config):
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
-    publisher = settings.pool_publisher(config, lower=True)
-    offer = settings.pool_offer(config, lower=True)
-    sku = settings.pool_sku(config, lower=True)
+    node_agent = settings.pool_custom_image_node_agent(config)
+    if (util.is_not_empty(node_agent) and
+            node_agent.lower() == 'batch.node.ubuntu 14.04'):
+        publisher = 'canoncial'
+        offer = 'ubuntuserver'
+        sku = '14.04'
+    else:
+        publisher = settings.pool_publisher(config, lower=True)
+        offer = settings.pool_offer(config, lower=True)
+        sku = settings.pool_sku(config, lower=True)
     # check to see if binary is downloaded
-    bin = pathlib.Path(_ROOT_PATH, 'resources/azurefile-dockervolumedriver')
+    bin = pathlib.Path(_ROOT_PATH, _AZUREFILE_DVD_BIN['target'])
     if (not bin.exists() or
             util.compute_sha256_for_file(bin, False) !=
             _AZUREFILE_DVD_BIN['sha256']):
         # download package
         logger.debug('downloading Azure File Docker Volume Driver')
-        response = urllibreq.urlopen(_AZUREFILE_DVD_BIN['url'])
+        response = requests.get(_AZUREFILE_DVD_BIN['url'], stream=True)
         with bin.open('wb') as f:
-            f.write(response.read())
+            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+        logger.debug('wrote {} bytes to {}'.format(
+            bin.stat().st_size, _AZUREFILE_DVD_BIN['target']))
         # check sha256
         if (util.compute_sha256_for_file(bin, False) !=
                 _AZUREFILE_DVD_BIN['sha256']):
@@ -661,6 +720,7 @@ def _add_pool(
         pass
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    custom_image_na = settings.pool_custom_image_node_agent(config)
     bc = settings.credentials_batch(config)
     vnet = None
     subnet = None
@@ -691,13 +751,17 @@ def _add_pool(
         allowable_addresses = (1 << (32 - mask)) - 4
         logger.debug('subnet {} mask is {} and allows {} addresses'.format(
             subnet.name, mask, allowable_addresses))
-        if allowable_addresses < pool_settings.vm_count:
+        pool_total_vm_count = (
+            pool_settings.vm_count.dedicated +
+            pool_settings.vm_count.low_priority
+        )
+        if allowable_addresses < pool_total_vm_count:
             raise RuntimeError(
                 ('subnet {} mask is {} and allows {} addresses but desired '
                  'pool vm_count is {}').format(
                      subnet.name, mask, allowable_addresses,
-                     pool_settings.vm_count))
-        elif int(allowable_addresses * 0.9) <= pool_settings.vm_count:
+                     pool_total_vm_count))
+        elif int(allowable_addresses * 0.9) <= pool_total_vm_count:
             # if within 90% tolerance, warn user due to potential
             # address shortage if other compute resources are in this subnet
             if not util.confirm_action(
@@ -705,7 +769,7 @@ def _add_pool(
                     msg=('subnet {} mask is {} and allows {} addresses '
                          'but desired pool vm_count is {}, proceed?').format(
                              subnet.name, mask, allowable_addresses,
-                             pool_settings.vm_count)):
+                             pool_total_vm_count)):
                 raise RuntimeError('Pool deployment rejected by user')
         logger.info('using virtual network subnet id: {}'.format(subnet.id))
     else:
@@ -755,7 +819,7 @@ def _add_pool(
         dr.peer_to_peer.compression,
         preg.allow_public_docker_hub_pull_on_missing)
     # create resource files list
-    _rflist = [_NODEPREP_FILE, _JOBPREP_FILE, _BLOBXFER_FILE]
+    _rflist = [_JOBPREP_FILE, _BLOBXFER_FILE]
     if not bs.use_shipyard_docker_image:
         _rflist.append(_CASCADE_FILE)
         _rflist.append(_SETUP_PR_FILE)
@@ -772,13 +836,16 @@ def _add_pool(
         _rflist.append((afenv.name, afenv))
         _rflist.append((afvc.name, afvc))
     # gpu settings
-    if settings.is_gpu_pool(pool_settings.vm_size):
+    if (settings.is_gpu_pool(pool_settings.vm_size) and
+            util.is_none_or_empty(custom_image_na)):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
                 blob_client, config, pool_settings.vm_size)
             _rflist.append((gpu_driver.name, gpu_driver))
         else:
-            gpu_driver = pathlib.Path(_NVIDIA_DRIVER['target'])
+            gpu_type = settings.get_gpu_type_from_vm_size(
+                pool_settings.vm_size)
+            gpu_driver = pathlib.Path(_NVIDIA_DRIVER[gpu_type]['target'])
         gpupkg = _setup_nvidia_docker_package(blob_client, config)
         _rflist.append((gpupkg.name, gpupkg))
         gpu_env = '{}:{}:{}'.format(
@@ -787,53 +854,94 @@ def _add_pool(
             gpupkg.name)
     else:
         gpu_env = None
-    # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    skus_to_use = [
-        (nas, image_ref) for nas in node_agent_skus for image_ref in sorted(
-            nas.verified_image_references, key=lambda item: item.sku)
-        if image_ref.publisher.lower() == pool_settings.publisher.lower() and
-        image_ref.offer.lower() == pool_settings.offer.lower() and
-        image_ref.sku.lower() == pool_settings.sku.lower()
-    ]
-    try:
-        sku_to_use, image_ref_to_use = skus_to_use[-1]
-    except IndexError:
-        raise RuntimeError(
-            ('Could not find an Azure Batch Node Agent Sku for this '
-             'offer={} publisher={} sku={}. You can list the valid and '
-             'available Marketplace images with the command: pool '
-             'listskus').format(
-                 pool_settings.offer, pool_settings.publisher,
-                 pool_settings.sku))
+    # set vm configuration
+    if util.is_not_empty(custom_image_na):
+        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            os_disk=batchmodels.OSDisk(
+                image_uris=pool_settings.vm_configuration.image_uris,
+                caching=batchmodels.CachingType.read_write,
+            ),
+            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+        )
+        start_task = [
+            '{npf} {a}{b}{e}{f}{m}{n}{p}{r}{t}{v}{x}'.format(
+                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                r=' -r {}'.format(preg.container) if preg.container else '',
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            )
+        ]
+    else:
+        _rflist.append(_NODEPREP_FILE)
+        # pick latest sku
+        node_agent_skus = batch_client.account.list_node_agent_skus()
+        skus_to_use = [
+            (nas, image_ref) for nas in node_agent_skus
+            for image_ref in sorted(
+                    nas.verified_image_references, key=lambda item: item.sku)
+            if image_ref.publisher.lower() ==
+            pool_settings.vm_configuration.publisher.lower() and
+            image_ref.offer.lower() ==
+            pool_settings.vm_configuration.offer.lower() and
+            image_ref.sku.lower() ==
+            pool_settings.vm_configuration.sku.lower()
+        ]
+        try:
+            sku_to_use, image_ref_to_use = skus_to_use[-1]
+        except IndexError:
+            raise RuntimeError(
+                ('Could not find an Azure Batch Node Agent Sku for this '
+                 'offer={} publisher={} sku={}. You can list the valid and '
+                 'available Marketplace images with the command: pool '
+                 'listskus').format(
+                     pool_settings.vm_configuration.offer,
+                     pool_settings.vm_configuration.publisher,
+                     pool_settings.vm_configuration.sku))
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            image_reference=image_ref_to_use,
+            node_agent_sku_id=sku_to_use.id,
+        )
+        # create start task commandline
+        start_task = [
+            '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
+                npf=_NODEPREP_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                d=' -d' if bs.use_shipyard_docker_image else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                o=' -o {}'.format(pool_settings.vm_configuration.offer),
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                r=' -r {}'.format(preg.container) if preg.container else '',
+                s=' -s {}'.format(pool_settings.vm_configuration.sku),
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                w=' -w' if pool_settings.ssh.hpn_server_swap else '',
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            ),
+        ]
     # upload resource files
     sas_urls = storage.upload_resource_files(
         blob_client, config, _rflist)
     del _rflist
-    # create start task commandline
-    start_task = [
-        '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
-            npf=_NODEPREP_FILE[0],
-            a=' -a' if azurefile_vd else '',
-            b=' -b' if util.is_not_empty(block_for_gr) else '',
-            d=' -d' if bs.use_shipyard_docker_image else '',
-            e=' -e {}'.format(pfx.sha1) if encrypt else '',
-            f=' -f' if gluster_on_compute else '',
-            g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
-            m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                sc_args) else '',
-            n=' -n' if settings.can_tune_tcp(pool_settings.vm_size) else '',
-            o=' -o {}'.format(pool_settings.offer),
-            p=' -p {}'.format(
-                bs.storage_entity_prefix) if bs.storage_entity_prefix else '',
-            r=' -r {}'.format(preg.container) if preg.container else '',
-            s=' -s {}'.format(pool_settings.sku),
-            t=' -t {}'.format(torrentflags),
-            v=' -v {}'.format(__version__),
-            w=' -w' if pool_settings.ssh.hpn_server_swap else '',
-            x=' -x {}'.format(data._BLOBXFER_VERSION),
-        ),
-    ]
     # digest any input data
     addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, settings.pool_specification(config))
@@ -846,11 +954,11 @@ def _add_pool(
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
-        virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use.id),
+        virtual_machine_configuration=vmconfig,
         vm_size=pool_settings.vm_size,
-        target_dedicated=pool_settings.vm_count,
+        target_dedicated_nodes=pool_settings.vm_count.dedicated,
+        target_low_priority_nodes=pool_settings.vm_count.low_priority,
+        resize_timeout=pool_settings.resize_timeout,
         max_tasks_per_node=pool_settings.max_tasks_per_node,
         enable_inter_node_communication=pool_settings.
         inter_node_communication_enabled,
@@ -873,6 +981,12 @@ def _add_pool(
             ],
             resource_files=[],
         ),
+        metadata=[
+            batchmodels.MetadataItem(
+                name=settings.get_metadata_version_name(),
+                value=__version__,
+            ),
+        ],
     )
     if util.is_not_empty(block_for_gr):
         pool.start_task.environment_settings.append(
@@ -894,13 +1008,24 @@ def _add_pool(
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if pool_settings.gpu_driver:
+    if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
                 file_path=gpu_driver.name,
                 blob_source=pool_settings.gpu_driver,
                 file_mode='0755')
         )
+    # add any additional specified resource files
+    if util.is_not_empty(pool_settings.resource_files):
+        for rf in pool_settings.resource_files:
+            pool.start_task.resource_files.append(
+                batchmodels.ResourceFile(
+                    file_path=rf.file_path,
+                    blob_source=rf.blob_source,
+                    file_mode=rf.file_mode,
+                )
+            )
+    # private registry settings
     if preg.storage_account:
         psa = settings.credentials_storage(config, preg.storage_account)
         pool.start_task.environment_settings.append(
@@ -914,10 +1039,12 @@ def _add_pool(
             )
         )
         del psa
+    # virtual network settings
     if subnet is not None:
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet.id,
         )
+    # storage cluster settings
     if util.is_not_empty(fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
@@ -933,86 +1060,46 @@ def _add_pool(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
     pool.start_task.environment_settings.extend(
-        _generate_docker_login_environment_variables(config, preg, encrypt)[0])
+        batch.generate_docker_login_settings(config)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
+    if util.is_none_or_empty(nodes):
+        raise RuntimeError(
+            ('No nodes could be allocated for pool: {}. If the pool is '
+             'comprised entirely of low priority nodes, then there may not '
+             'have been enough available capacity in the region to satisfy '
+             'your request. Please inspect the pool for resize errors and '
+             'issue pool resize to try again.').format(pool.id))
     # set up gluster on compute if specified
     if gluster_on_compute:
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
     # create admin user on each node if requested
-    batch.add_ssh_user(batch_client, config, nodes)
-    # log remote login settings
-    rls = batch.get_remote_login_settings(batch_client, config, nodes)
-    # ingress data to shared fs if specified
-    if pool_settings.transfer_files_on_pool_creation:
-        _pool = batch_client.pool.get(pool.id)
-        data.ingress_data(
-            batch_client, compute_client, network_client, config, rls=rls,
-            kind='shared', current_dedicated=_pool.current_dedicated)
-        del _pool
+    try:
+        batch.add_ssh_user(batch_client, config, nodes)
+    except Exception as e:
+        logger.exception(e)
+        logger.error(
+            'Could not add SSH users to nodes. Please ensure ssh-keygen is '
+            'available in your PATH or cwd. Skipping data ingress if '
+            'specified.')
+    else:
+        # log remote login settings
+        rls = batch.get_remote_login_settings(batch_client, config, nodes)
+        # ingress data to shared fs if specified
+        if pool_settings.transfer_files_on_pool_creation:
+            _pool = batch_client.pool.get(pool.id)
+            total_vm_count = (
+                _pool.current_dedicated_nodes +
+                _pool.current_low_priority_nodes
+            )
+            data.ingress_data(
+                batch_client, compute_client, network_client, config, rls=rls,
+                kind='shared', total_vm_count=total_vm_count)
+            del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
-
-
-def _generate_docker_login_environment_variables(config, preg, encrypt):
-    # type: (dict, DockerRegistrySettings, bool) -> tuple
-    """Generate docker login environment variables and command line
-    for re-login
-    :param dict config: configuration object
-    :param DockerRegistrySettings: docker registry settings
-    :param bool encrypt: encryption flag
-    :rtype: tuple
-    :return: (env vars, login cmds)
-    """
-    cmd = []
-    env = []
-    if preg.server:
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_SERVER', preg.server)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_USERNAME', preg.user)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_PASSWORD',
-                crypto.encrypt_string(encrypt, preg.password, config))
-        )
-        if encrypt:
-            cmd.append(
-                'DOCKER_LOGIN_PASSWORD='
-                '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                'openssl rsautl -decrypt -inkey '
-                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-        cmd.append(
-            'docker login -u $DOCKER_LOGIN_USERNAME '
-            '-p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER')
-    else:
-        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-        if hubuser:
-            env.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_USERNAME', hubuser)
-            )
-            env.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_PASSWORD',
-                    crypto.encrypt_string(encrypt, hubpw, config))
-            )
-            if encrypt:
-                cmd.append(
-                    'DOCKER_LOGIN_PASSWORD='
-                    '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                    'openssl rsautl -decrypt -inkey '
-                    '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-            cmd.append(
-                'docker login -u $DOCKER_LOGIN_USERNAME '
-                '-p $DOCKER_LOGIN_PASSWORD')
-    return env, cmd
 
 
 def _setup_glusterfs(
@@ -1050,10 +1137,7 @@ def _setup_glusterfs(
     )
     # create coordination command line
     if cmdline is None:
-        if settings.pool_offer(config, lower=True) == 'ubuntuserver':
-            tempdisk = '/mnt'
-        else:
-            tempdisk = '/mnt/resource'
+        tempdisk = settings.temp_disk_mountpoint(config)
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {}'.format(
                 shell_script[0], voltype.lower(), tempdisk)])
@@ -1073,7 +1157,7 @@ def _setup_glusterfs(
     batchtask = batchmodels.TaskAddParameter(
         id='gluster-setup',
         multi_instance_settings=batchmodels.MultiInstanceSettings(
-            number_of_instances=pool.current_dedicated,
+            number_of_instances=pool.current_dedicated_nodes,
             coordination_command_line=cmdline,
             common_resource_files=[
                 batchmodels.ResourceFile(
@@ -1121,14 +1205,78 @@ def _setup_glusterfs(
             batchtask.id, job_id))
 
 
-def _update_docker_images(batch_client, config, image=None, digest=None):
-    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
+    # type: (batchsc.BatchServiceClient, dict, batchmodels.CloudPool,
+    #        list) -> None
+    """Update docker images in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param batchmodels.CloudPool pool: cloud pool
+    :param list cmd: command
+    """
+    _pool = settings.pool_settings(config)
+    # get ssh settings
+    username = _pool.ssh.username
+    if util.is_none_or_empty(username):
+        raise ValueError('cannot update docker images without an SSH username')
+    ssh_private_key = _pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            _pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_private_key))
+    # iterate through all nodes
+    nodes = batch_client.compute_node.list(pool.id)
+    procs = []
+    failures = False
+    for node in nodes:
+        rls = batch_client.compute_node.get_remote_login_settings(
+            pool.id, node.id)
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
+            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
+            'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
+        ]
+        procs.append(util.subprocess_nowait(ssh_args, shell=False))
+        if len(procs) >= 40:
+            logger.debug('waiting for {} update processes to complete'.format(
+                len(procs)))
+            rcs = util.subprocess_wait_all(procs)
+            if any([x != 0 for x in rcs]):
+                failures = True
+            procs.clear()
+            del rcs
+    if len(procs) > 0:
+        logger.debug('waiting for {} update processes to complete'.format(
+            len(procs)))
+        rcs = util.subprocess_wait_all(procs)
+        if any([x != 0 for x in rcs]):
+            failures = True
+        procs.clear()
+        del rcs
+    if failures:
+        raise RuntimeError(
+            'failures detected updating docker image on pool: {}'.format(
+                pool.id))
+    else:
+        logger.info('docker image update completed for pool: {}'.format(
+            pool.id))
+
+
+def _update_docker_images(
+        batch_client, config, image=None, digest=None, force_ssh=False):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Update docker images in pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str image: docker image to update
     :param str digest: digest to update to
+    :param bool force_ssh: force update over SSH
     """
     # first check that peer-to-peer is disabled for pool
     pool_id = settings.pool_id(config)
@@ -1160,31 +1308,41 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
             images = [image]
         else:
             images = ['{}@{}'.format(image, digest)]
+    if util.is_none_or_empty(images):
+        logger.error('no images detected or specified to update')
+        return
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
-    # check pool current dedicated is > 0. There is no reason to run udi
+    # check pool current vms is > 0. There is no reason to run udi
     # if pool has no nodes in it. When the pool is resized up, the nodes
     # will always fetch either :latest if untagged or the latest :tag if
     # updated in the upstream registry
-    if pool.current_dedicated == 0:
+    if (pool.current_dedicated_nodes == 0 and
+            pool.current_low_priority_nodes == 0):
         logger.warning(
             ('not executing udi command as the current number of compute '
              'nodes is zero for pool {}').format(pool_id))
         return
-    # create job for update
-    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
-    job = batchmodels.JobAddParameter(
-        id=job_id,
-        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
-    )
+    if not force_ssh and pool.current_low_priority_nodes > 0:
+        logger.debug('forcing update via SSH due to low priority nodes')
+        force_ssh = True
+    # check pool metadata version
+    if util.is_none_or_empty(pool.metadata):
+        logger.warning('pool version metadata not present')
+    else:
+        for md in pool.metadata:
+            if (md.name == settings.get_metadata_version_name() and
+                    md.value != __version__):
+                logger.warning(
+                    'pool version metadata mismatch: pool={} cli={}'.format(
+                        md.value, __version__))
+                break
     # create coordination command line
     # 1. log in again in case of cred expiry
     # 2. pull images with respect to registry
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
-    encrypt = settings.batch_shipyard_encryption_enabled(config)
-    taskenv, coordcmd = _generate_docker_login_environment_variables(
-        config, preg, encrypt)
+    taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
     coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
     if registry != '':
         coordcmd.extend(
@@ -1192,8 +1350,17 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
     coordcmd.append(
         'docker images --filter dangling=true -q --no-trunc | '
         'xargs --no-run-if-empty docker rmi')
+    if force_ssh:
+        _update_docker_images_over_ssh(batch_client, config, pool, coordcmd)
+        return
     coordcmd.append('touch .udi_success')
     coordcmd = util.wrap_commands_in_shell(coordcmd)
+    # create job for update
+    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
+    job = batchmodels.JobAddParameter(
+        id=job_id,
+        pool_info=batchmodels.PoolInformation(pool_id=pool_id),
+    )
     # create task
     batchtask = batchmodels.TaskAddParameter(
         id='update-docker-images',
@@ -1202,9 +1369,9 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         user_identity=batch._RUN_ELEVATED,
     )
     # create multi-instance task for pools with more than 1 node
-    if pool.current_dedicated > 1:
+    if pool.current_dedicated_nodes > 1:
         batchtask.multi_instance_settings = batchmodels.MultiInstanceSettings(
-            number_of_instances=pool.current_dedicated,
+            number_of_instances=pool.current_dedicated_nodes,
             coordination_command_line=coordcmd,
         )
         # create application command line
@@ -1225,7 +1392,7 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
         time.sleep(1)
     # ensure all nodes have success file if multi-instance
     success = True
-    if pool.current_dedicated > 1:
+    if pool.current_dedicated_nodes > 1:
         nodes = batch_client.compute_node.list(pool_id)
         for node in nodes:
             try:
@@ -1255,6 +1422,109 @@ def _update_docker_images(batch_client, config, image=None, digest=None):
             batchtask.id, job_id))
 
 
+def _list_docker_images(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """List Docker images in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param batchmodels.CloudPool pool: cloud pool
+    """
+    _pool = settings.pool_settings(config)
+    pool = batch_client.pool.get(_pool.id)
+    if (pool.current_dedicated_nodes == 0 and
+            pool.current_low_priority_nodes == 0):
+        logger.warning('pool {} has no compute nodes'.format(pool.id))
+        return
+    # get ssh settings
+    username = _pool.ssh.username
+    if util.is_none_or_empty(username):
+        raise ValueError('cannot list docker images without an SSH username')
+    ssh_private_key = _pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            _pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_private_key))
+    # iterate through all nodes
+    nodes = batch_client.compute_node.list(pool.id)
+    procs = {}
+    stdout = {}
+    failures = False
+    for node in nodes:
+        rls = batch_client.compute_node.get_remote_login_settings(
+            pool.id, node.id)
+        cmd = 'sudo docker images --format "{{.ID}} {{.Repository}}:{{.Tag}}"'
+        ssh_args = [
+            'ssh', '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
+            '{}@{}'.format(username, rls.remote_login_ip_address), cmd,
+        ]
+        procs[node.id] = util.subprocess_nowait_pipe_stdout(
+            ssh_args, shell=False)
+        if len(procs) >= 40:
+            logger.debug('waiting for {} processes to complete'.format(
+                len(procs)))
+            for key in procs:
+                stdout[key] = procs[key].communicate()[0].decode(
+                    'utf8').split('\n')
+            rcs = util.subprocess_wait_all(list(procs.values()))
+            if any([x != 0 for x in rcs]):
+                failures = True
+            procs.clear()
+            del rcs
+    if len(procs) > 0:
+        logger.debug('waiting for {} processes to complete'.format(
+            len(procs)))
+        for key in procs:
+            stdout[key] = procs[key].communicate()[0].decode(
+                'utf8').split('\n')
+        rcs = util.subprocess_wait_all(list(procs.values()))
+        if any([x != 0 for x in rcs]):
+            failures = True
+        procs.clear()
+        del rcs
+    if failures:
+        raise RuntimeError(
+            'failures retrieving docker images on pool: {}'.format(
+                pool.id))
+    # process stdout
+    node_images = {}
+    all_images = {}
+    for key in stdout:
+        node_images[key] = set()
+        for out in stdout[key]:
+            if util.is_not_empty(out):
+                dec = out.split()
+                if (not dec[1].startswith('alfpark/batch-shipyard') and
+                        not dec[1].startswith('alfpark/blobxfer')):
+                    node_images[key].add(dec[0])
+                    if dec[0] not in all_images:
+                        all_images[dec[0]] = dec[1]
+    # find set intersection among all nodes
+    intersecting_images = set.intersection(*list(node_images.values()))
+    logger.info('Common Docker images across all nodes in pool {}:{}{}'.format(
+        pool.id,
+        os.linesep,
+        os.linesep.join(
+            ['{} {}'.format(key, all_images[key])
+             for key in intersecting_images])
+    ))
+    # find mismatched images on nodes
+    for node in node_images:
+        images = set(node_images[node])
+        diff = images.difference(intersecting_images)
+        if len(diff) > 0:
+            logger.warning('Docker images present only on node {}:{}{}'.format(
+                node, os.linesep,
+                os.linesep.join(
+                    ['{} {}'.format(key, all_images[key])
+                     for key in diff])
+            ))
+
+
 def _adjust_settings_for_pool_creation(config):
     # type: (dict) -> None
     """Adjust settings for pool creation
@@ -1262,12 +1532,18 @@ def _adjust_settings_for_pool_creation(config):
     """
     # get settings
     pool = settings.pool_settings(config)
-    publisher = pool.publisher.lower()
-    offer = pool.offer.lower()
-    sku = pool.sku.lower()
+    publisher = settings.pool_publisher(config, lower=True)
+    offer = settings.pool_offer(config, lower=True)
+    sku = settings.pool_sku(config, lower=True)
+    node_agent = settings.pool_custom_image_node_agent(config)
+    if util.is_not_empty(node_agent) and util.is_not_empty(sku):
+        raise ValueError(
+            'cannot specify both a platform_image and a custom_image in the '
+            'pool specification')
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
+    # oracle linux is not supported due to UEKR4 requirement
     if publisher == 'canonical':
         if offer == 'ubuntuserver':
             if sku.startswith('14.04'):
@@ -1294,29 +1570,40 @@ def _adjust_settings_for_pool_creation(config):
         elif offer == 'opensuse-leap':
             if sku >= '42':
                 allowed = True
-        elif offer == 'opensuse':
-            if sku == '13.2':
-                allowed = True
-    # check for valid image if gpu, currently only ubuntu 16.04 is supported
-    if (settings.is_gpu_pool(pool.vm_size) and
-            (publisher != 'canonical' and offer != 'ubuntuserver' and
-             sku < '16.04')):
-        allowed = False
-    # oracle linux is not supported due to UEKR4 requirement
-    if not allowed:
+    # check if allowed for gpu (if gpu vm size)
+    if allowed:
+        allowed = settings.gpu_configuration_check(
+            config, vm_size=pool.vm_size)
+    if not allowed and util.is_none_or_empty(node_agent):
         raise ValueError(
             ('Unsupported Docker Host VM Config, publisher={} offer={} '
              'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
+    # compute total vm count
+    pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
+    # ensure enough vhds for custom image pools
+    if util.is_not_empty(node_agent):
+        vhds = len(pool.vm_configuration.image_uris)
+        if node_agent == 'batch.node.windows amd64':
+            vhds_req = int(math.ceil(pool_total_vm_count / 20))
+        else:
+            vhds_req = int(math.ceil(pool_total_vm_count / 40))
+        if vhds_req > vhds:
+            raise ValueError(
+                ('insufficient number of VHDs ({}) supplied for the number '
+                 'of compute nodes to allocate ({}). At least {} VHDs are '
+                 'required.').format(
+                     vhds, pool.vm_count, vhds_req))
     # adjust for shipyard container requirement
-    if shipyard_container_required:
+    if shipyard_container_required or util.is_not_empty(node_agent):
         settings.set_use_shipyard_docker_image(config, True)
         logger.warning(
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
     # adjust inter node comm setting
-    if pool.vm_count < 1:
-        raise ValueError('invalid vm_count: {}'.format(pool.vm_count))
+    if pool_total_vm_count < 1:
+        raise ValueError('invalid total vm_count: {}'.format(
+            pool_total_vm_count))
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)
@@ -1328,8 +1615,9 @@ def _adjust_settings_for_pool_creation(config):
         settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
-        if (pool.ssh.hpn_server_swap and publisher != 'canonical' and
-                offer != 'ubuntuserver'):
+        if (pool.ssh.hpn_server_swap and
+                ((publisher != 'canonical' and offer != 'ubuntuserver') or
+                 util.is_not_empty(node_agent))):
             logger.warning('cannot enable HPN SSH swap on {} {} {}'.format(
                 publisher, offer, sku))
             settings.set_hpn_server_swap(config, False)
@@ -1344,6 +1632,12 @@ def _adjust_settings_for_pool_creation(config):
         settings.set_block_until_all_global_resources_loaded(config, False)
     # re-read pool settings
     pool = settings.pool_settings(config)
+    # ensure internode is not enabled for mix node pools
+    if (pool.inter_node_communication_enabled and
+            pool.vm_count.dedicated > 0 and pool.vm_count.low_priority > 0):
+        raise ValueError(
+            'inter node communication cannot be enabled with both '
+            'dedicated and low priority nodes')
     # glusterfs requires internode comms and more than 1 node
     try:
         num_gluster = 0
@@ -1356,9 +1650,19 @@ def _adjust_settings_for_pool_creation(config):
                     # user to reconfigure
                     raise ValueError(
                         'inter node communication in pool configuration '
-                        'must be enabled for glusterfs')
-                if pool.vm_count <= 1:
-                    raise ValueError('vm_count should exceed 1 for glusterfs')
+                        'must be enabled for glusterfs on compute')
+                if pool.vm_count.low_priority > 0:
+                    raise ValueError(
+                        'glusterfs on compute cannot be installed on pools '
+                        'with low priority nodes')
+                if pool.vm_count.dedicated <= 1:
+                    raise ValueError(
+                        'vm_count dedicated should exceed 1 for glusterfs '
+                        'on compute')
+                if pool.max_tasks_per_node > 1:
+                    raise ValueError(
+                        'max_tasks_per_node cannot exceed 1 for glusterfs '
+                        'on compute')
                 num_gluster += 1
                 try:
                     if settings.gluster_volume_type(sdv, sdvkey) != 'replica':
@@ -1369,31 +1673,10 @@ def _adjust_settings_for_pool_creation(config):
                     pass
         if num_gluster > 1:
             raise ValueError(
-                'cannot create more than one GlusterFS volume per pool')
+                'cannot create more than one GlusterFS on compute volume '
+                'per pool')
     except KeyError:
         pass
-    # adjust settings on windows
-    if util.on_windows():
-        if pool.ssh.ssh_public_key is None:
-            logger.warning(
-                'disabling ssh user creation due to script being run '
-                'from Windows and no public key is specified')
-            settings.remove_ssh_settings(config)
-        # ensure file transfer settings
-        if pool.transfer_files_on_pool_creation:
-            try:
-                direct = False
-                files = settings.global_resources_files(config)
-                for fdict in files:
-                    if settings.is_direct_transfer(fdict):
-                        direct = True
-                        break
-                if direct:
-                    raise RuntimeError(
-                        'cannot transfer files directly to compute nodes '
-                        'on Windows')
-            except KeyError:
-                pass
 
 
 def action_fs_disks_add(resource_client, compute_client, config):
@@ -1607,10 +1890,10 @@ def action_fs_cluster_status(
 
 def action_fs_cluster_ssh(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname):
+        cardinal, hostname, tty, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict, str, int,
-    #        str) -> None
+    #        str, bool, tuple) -> None
     """Action: Fs Cluster Ssh
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1620,6 +1903,8 @@ def action_fs_cluster_ssh(
     :param str storage_cluster_id: storage cluster id
     :param int cardinal: cardinal number
     :param str hostname: hostname
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command
     """
     if cardinal is not None and hostname is not None:
         raise ValueError('cannot specify both cardinal and hostname options')
@@ -1632,7 +1917,7 @@ def action_fs_cluster_ssh(
             raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
         compute_client, network_client, config, storage_cluster_id,
-        cardinal, hostname)
+        cardinal, hostname, tty, command)
 
 
 def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
@@ -1763,10 +2048,10 @@ def action_pool_list(batch_client):
 
 def action_pool_delete(
         batch_client, blob_client, queue_client, table_client, config,
-        wait=False):
+        pool_id=None, wait=False):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azurequeue.QueueService, azuretable.TableService, dict,
-    #        bool) -> None
+    #        str, bool) -> None
     """Action: Pool Delete
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -1774,20 +2059,22 @@ def action_pool_delete(
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param str pool_id: poolid to delete
     :param bool wait: wait for pool to delete
     """
     deleted = False
     try:
-        deleted = batch.del_pool(batch_client, config)
+        deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
     except batchmodels.BatchErrorException as ex:
         logger.exception(ex)
         if 'The specified pool does not exist' in ex.message.value:
             deleted = True
     if deleted:
         storage.cleanup_with_del_pool(
-            blob_client, queue_client, table_client, config)
+            blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
-            pool_id = settings.pool_id(config)
+            if util.is_none_or_empty(pool_id):
+                pool_id = settings.pool_id(config)
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
                 time.sleep(3)
@@ -1806,18 +2093,24 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     pool = settings.pool_settings(config)
     # check direction of resize
     _pool = batch_client.pool.get(pool.id)
-    if pool.vm_count == _pool.current_dedicated == _pool.target_dedicated:
+    if (pool.vm_count.dedicated == _pool.current_dedicated_nodes ==
+            _pool.target_dedicated_nodes and
+            pool.vm_count.low_priority == _pool.current_low_priority_nodes ==
+            _pool.target_low_priority_nodes):
         logger.error(
             'pool {} is already at {} nodes'.format(pool.id, pool.vm_count))
         return
-    resize_up = True
-    if pool.vm_count < _pool.target_dedicated:
-        resize_up = False
+    resize_up_d = False
+    resize_up_lp = False
+    if pool.vm_count.dedicated > _pool.current_dedicated_nodes:
+        resize_up_d = True
+    if pool.vm_count.low_priority > _pool.current_low_priority_nodes:
+        resize_up_lp = True
     del _pool
     create_ssh_user = False
     # try to get handle on public key, avoid generating another set
     # of keys
-    if resize_up:
+    if resize_up_d or resize_up_lp:
         if pool.ssh.username is None:
             logger.info('not creating ssh user on new nodes of pool {}'.format(
                 pool.id))
@@ -1853,6 +2146,10 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     logger.debug('glusterfs shared volume present: {}'.format(
         gluster_present))
     if gluster_present:
+        if resize_up_lp:
+            raise RuntimeError(
+                'cannot resize up a pool with glusterfs_on_compute and '
+                'low priority nodes')
         logger.debug('forcing wait to True due to glusterfs')
         wait = True
     # cache old nodes
@@ -1863,7 +2160,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     # resize pool
     nodes = batch.resize_pool(batch_client, config, wait)
     # add ssh user to new nodes if present
-    if create_ssh_user and resize_up:
+    if create_ssh_user and (resize_up_d or resize_up_lp):
         if wait:
             # get list of new nodes only
             new_nodes = [node for node in nodes if node.id not in old_nodes]
@@ -1876,15 +2173,15 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         else:
             logger.warning('ssh user was not added as --wait was not given')
     # add brick for new nodes
-    if gluster_present and resize_up:
+    if gluster_present and resize_up_d:
         # get pool current dedicated
         _pool = batch_client.pool.get(pool.id)
         # ensure current dedicated is the target
-        if pool.vm_count != _pool.current_dedicated:
+        if pool.vm_count.dedicated != _pool.current_dedicated_nodes:
             raise RuntimeError(
                 ('cannot perform glusterfs setup on new nodes, unexpected '
                  'current dedicated {} to vm_count {}').format(
-                     _pool.current_dedicated, pool.vm_count))
+                     _pool.current_dedicated_nodes, pool.vm_count.dedicated))
         del _pool
         # get internal ip addresses of new nodes
         new_nodes = [
@@ -1897,7 +2194,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         cmdline = util.wrap_commands_in_shell([
             '$AZ_BATCH_TASK_DIR/{} {} {} {} {} {}'.format(
                 _GLUSTERRESIZE_FILE[0], voltype.lower(), tempdisk,
-                pool.vm_count, masterip, ' '.join(new_nodes))])
+                pool.vm_count.dedicated, masterip, ' '.join(new_nodes))])
         # setup gluster
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERRESIZE_FILE,
@@ -1947,14 +2244,16 @@ def action_pool_dsu(batch_client, config):
     batch.del_ssh_user(batch_client, config)
 
 
-def action_pool_ssh(batch_client, config, cardinal, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, int, str) -> None
+def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
+    # type: (batchsc.BatchServiceClient, dict, int, str, bool, tuple) -> None
     """Action: Pool Ssh
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command to execute
     """
     if cardinal is not None and nodeid is not None:
         raise ValueError('cannot specify both cardinal and nodeid options')
@@ -1966,31 +2265,38 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid):
     if cardinal is not None and cardinal < 0:
             raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
-    ssh_priv_key = pathlib.Path(
-        pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
-    if not ssh_priv_key.exists():
+    ssh_private_key = pool.ssh.ssh_private_key
+    if ssh_private_key is None:
+        ssh_private_key = pathlib.Path(
+            pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+    if not ssh_private_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
-            ssh_priv_key))
+            ssh_private_key))
     ip, port = batch.get_remote_login_setting_for_node(
         batch_client, config, cardinal, nodeid)
     logger.info('connecting to node {}:{} with key {}'.format(
-        ip, port, ssh_priv_key))
-    util.subprocess_with_output(
-        ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-         'UserKnownHostsFile={}'.format(os.devnull),
-         '-i', str(ssh_priv_key), '-p', str(port),
-         '{}@{}'.format(pool.ssh.username, ip)])
+        ip, port, ssh_private_key))
+    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
+               'UserKnownHostsFile={}'.format(os.devnull),
+               '-i', str(ssh_private_key), '-p', str(port)]
+    if tty:
+        ssh_cmd.append('-t')
+    ssh_cmd.append('{}@{}'.format(pool.ssh.username, ip))
+    if util.is_not_empty(command):
+        ssh_cmd.extend(command)
+    util.subprocess_with_output(ssh_cmd)
 
 
-def action_pool_delnode(batch_client, config, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, str) -> None
+def action_pool_delnode(batch_client, config, all_start_task_failed, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool all_start_task_failed: reboot all start task failed nodes
     :param str nodeid: nodeid to delete
     """
-    batch.del_node(batch_client, config, nodeid)
+    batch.del_node(batch_client, config, all_start_task_failed, nodeid)
 
 
 def action_pool_rebootnode(
@@ -2010,19 +2316,30 @@ def action_pool_rebootnode(
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 
 
-def action_pool_udi(batch_client, config, image, digest):
-    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+def action_pool_udi(batch_client, config, image, digest, ssh):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Pool Udi
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param str image: image to update
     :param str digest: digest to update to
+    :param bool ssh: use direct SSH update mode
     """
     if digest is not None and image is None:
         raise ValueError(
             'cannot specify a digest to update to without the image')
-    _update_docker_images(batch_client, config, image, digest)
+    _update_docker_images(batch_client, config, image, digest, force_ssh=ssh)
+
+
+def action_pool_listimages(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Listimages
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    _list_docker_images(batch_client, config)
 
 
 def action_jobs_add(
@@ -2053,14 +2370,21 @@ def action_jobs_list(batch_client, config):
     batch.list_jobs(batch_client, config)
 
 
-def action_jobs_listtasks(batch_client, config, jobid):
-    # type: (batchsc.BatchServiceClient, dict, str) -> None
+def action_jobs_listtasks(
+        batch_client, config, jobid, poll_until_tasks_complete):
+    # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param str jobid: job id
+    :param bool poll_until_tasks_complete: poll until tasks complete
     """
-    batch.list_tasks(batch_client, config, jobid)
+    while True:
+        all_complete = batch.list_tasks(batch_client, config, jobid=jobid)
+        if not poll_until_tasks_complete or all_complete:
+            break
+        time.sleep(5)
 
 
 def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
@@ -2160,17 +2484,23 @@ def action_jobs_cmi(batch_client, config, delete):
         batch.del_clean_mi_jobs(batch_client, config)
 
 
-def action_storage_del(blob_client, queue_client, table_client, config):
+def action_storage_del(
+        blob_client, queue_client, table_client, config, clear_tables):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azuretable.TableService, dict, bool) -> None
     """Action: Storage Del
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param bool clear_tables: clear tables instead of deleting
     """
+    if clear_tables:
+        storage.clear_storage_containers(
+            blob_client, queue_client, table_client, config, tables_only=True)
     storage.delete_storage_containers(
-        blob_client, queue_client, table_client, config)
+        blob_client, queue_client, table_client, config,
+        skip_tables=clear_tables)
 
 
 def action_storage_clear(blob_client, queue_client, table_client, config):
@@ -2259,20 +2589,21 @@ def action_data_ingress(
     :param dict config: configuration dict
     :param str to_fs: ingress to remote filesystem
     """
-    pool_cd = None
+    pool_total_vm_count = None
     if util.is_none_or_empty(to_fs):
         try:
             # get pool current dedicated
             pool = batch_client.pool.get(settings.pool_id(config))
-            pool_cd = pool.current_dedicated
+            pool_total_vm_count = (
+                pool.current_dedicated_nodes + pool.current_low_priority_nodes
+            )
             del pool
             # ensure there are remote login settings
             rls = batch.get_remote_login_settings(
                 batch_client, config, nodes=None)
             # ensure nodes are at least idle/running for shared ingress
             kind = 'all'
-            if not batch.check_pool_nodes_runnable(
-                    batch_client, config):
+            if not batch.check_pool_nodes_runnable(batch_client, config):
                 kind = 'storage'
         except batchmodels.BatchErrorException as ex:
             if 'The specified pool does not exist' in ex.message.value:
@@ -2289,5 +2620,30 @@ def action_data_ingress(
                 'AAD credentials')
     storage_threads = data.ingress_data(
         batch_client, compute_client, network_client, config, rls=rls,
-        kind=kind, current_dedicated=pool_cd, to_fs=to_fs)
+        kind=kind, total_vm_count=pool_total_vm_count, to_fs=to_fs)
     data.wait_for_storage_threads(storage_threads)
+
+
+def action_misc_tensorboard(
+        batch_client, config, jobid, taskid, logdir, image):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, str) -> None
+    """Action: Misc Tensorboard
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to list
+    :param str taskid: task id to list
+    :param str logdir: log dir
+    :param str image: tensorflow image to use
+    """
+    if util.is_none_or_empty(jobid):
+        jobspecs = settings.job_specifications(config)
+        if len(jobspecs) != 1:
+            raise ValueError(
+                'The number of jobs in the specified jobs config is not '
+                'one. Please specify which job with --jobid.')
+        if util.is_not_empty(taskid):
+            raise ValueError(
+                'cannot specify a task to tunnel Tensorboard to without the '
+                'corresponding job id')
+    misc.tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image)

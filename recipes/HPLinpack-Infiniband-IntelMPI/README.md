@@ -51,8 +51,9 @@ many configuration parameters:
 * `additional_docker_run_options` json array should contain `"--privileged"`
 such that HPL can pin and interleave memory
 * `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count` or
-    `pool_current_dedicated`
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
   * `coordination_command` should be unset or `null`
   * `resource_files` array can be empty
 

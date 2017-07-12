@@ -38,8 +38,15 @@ for spec in "$@"; do
     fi
 
     include=
+    rr="."
     if [ ! -z $incl ]; then
-        include="--include $incl"
+        # for ingress only, if include doesn't have a wildcard, then make
+        # it the remote resource instead to prevent container scanning
+        if [[ $kind == "i" ]] && [[ "$incl" == "${incl//[\[\]|?*]/}" ]]; then
+            rr="$incl"
+        else
+            include="--include $incl"
+        fi
     fi
     if [ $kind == "i" ]; then
         # create destination directory
@@ -47,7 +54,7 @@ for spec in "$@"; do
         # ingress data from storage
         docker run --rm -t -v $location:/blobxfer -w /blobxfer \
             alfpark/blobxfer:$bxver $sa $container . \
-            --saskey $saskey --remoteresource . --download \
+            --saskey $saskey --remoteresource $rr --download \
             --no-progressbar $include $eo
     elif [ $kind == "e" ]; then
         # egress from compute node to storage

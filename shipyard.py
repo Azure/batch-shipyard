@@ -320,7 +320,7 @@ class CliContext(object):
                     self._read_json_file(self.json_jobs)
         # adjust settings
         if not skip_global_config:
-            convoy.fleet.adjust_general_settings(self.config)
+            convoy.fleet.check_for_invalid_config(self.config)
             convoy.fleet.populate_global_settings(self.config, fs_storage)
         # show config if specified
         if self.show_config:
@@ -351,6 +351,19 @@ def _confirm_option(f):
         expose_value=False,
         is_flag=True,
         help='Assume yes for all confirmation prompts',
+        callback=callback)(f)
+
+
+def _log_file_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.logfile = value
+        return value
+    return click.option(
+        '--log-file',
+        expose_value=False,
+        envvar='SHIPYARD_LOG_FILE',
+        help='Log to file',
         callback=callback)(f)
 
 
@@ -618,6 +631,7 @@ def common_options(f):
     f = _configdir_option(f)
     f = _verbose_option(f)
     f = _show_config_option(f)
+    # f = _log_file_option(f)
     f = _confirm_option(f)
     return f
 
@@ -808,17 +822,20 @@ def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
     type=int)
 @click.option(
     '--hostname', help='Hostname of remote fs vm to connect to')
+@click.option(
+    '--tty', is_flag=True, help='Allocate a pseudo-tty')
 @common_options
 @fs_cluster_options
+@click.argument('command', nargs=-1)
 @aad_options
 @pass_cli_context
-def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname):
+def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname, tty, command):
     """Interactively login via SSH to a filesystem storage cluster virtual
     machine in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_cluster_ssh(
         ctx.compute_client, ctx.network_client, ctx.config,
-        storage_cluster_id, cardinal, hostname)
+        storage_cluster_id, cardinal, hostname, tty, command)
 
 
 @fs.group()
@@ -888,15 +905,18 @@ def storage(ctx):
 
 
 @storage.command('del')
+@click.option(
+    '--clear-tables', is_flag=True, help='Clear tables instead of deleting')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_del(ctx):
+def storage_del(ctx, clear_tables):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
-        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config,
+        clear_tables)
 
 
 @storage.command('clear')
@@ -1059,18 +1079,20 @@ def pool_list(ctx):
 
 @pool.command('del')
 @click.option(
+    '--poolid', help='Delete the specified pool')
+@click.option(
     '--wait', is_flag=True, help='Wait for pool deletion to complete')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_del(ctx, wait):
+def pool_del(ctx, poolid, wait):
     """Delete a pool from the Batch account"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_delete(
         ctx.batch_client, ctx.blob_client, ctx.queue_client,
-        ctx.table_client, ctx.config, wait=wait)
+        ctx.table_client, ctx.config, pool_id=poolid, wait=wait)
 
 
 @pool.command('resize')
@@ -1143,19 +1165,26 @@ def pool_dsu(ctx):
     type=int)
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to connect to')
+@click.option(
+    '--tty', is_flag=True, help='Allocate a pseudo-tty')
+@click.argument('command', nargs=-1)
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_ssh(ctx, cardinal, nodeid):
+def pool_ssh(ctx, cardinal, nodeid, tty, command):
     """Interactively login via SSH to a node in the pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_ssh(
-        ctx.batch_client, ctx.config, cardinal, nodeid)
+        ctx.batch_client, ctx.config, cardinal, nodeid, tty, command)
 
 
 @pool.command('delnode')
+@click.option(
+    '--all-start-task-failed',
+    is_flag=True,
+    help='Deleted all nodes with start task failed state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')
 @common_options
@@ -1163,10 +1192,11 @@ def pool_ssh(ctx, cardinal, nodeid):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_delnode(ctx, nodeid):
+def pool_delnode(ctx, all_start_task_failed, nodeid):
     """Delete a node from a pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_delnode(ctx.batch_client, ctx.config, nodeid)
+    convoy.fleet.action_pool_delnode(
+        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
 
 
 @pool.command('rebootnode')
@@ -1193,15 +1223,30 @@ def pool_rebootnode(ctx, all_start_task_failed, nodeid):
     '--image', help='Docker image[:tag] to update')
 @click.option(
     '--digest', help='Digest to update image to')
+@click.option(
+    '--ssh', help='Update over SSH instead of using a Batch job')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_udi(ctx, image, digest):
+def pool_udi(ctx, image, digest, ssh):
     """Update Docker images in a pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_udi(ctx.batch_client, ctx.config, image, digest)
+    convoy.fleet.action_pool_udi(
+        ctx.batch_client, ctx.config, image, digest, ssh)
+
+
+@pool.command('listimages')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_listimages(ctx):
+    """List Docker images in the pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
 
 
 @cli.group()
@@ -1246,15 +1291,20 @@ def jobs_list(ctx):
 @jobs.command('listtasks')
 @click.option(
     '--jobid', help='List tasks in the specified job id')
+@click.option(
+    '--poll-until-tasks-complete', is_flag=True,
+    help='Poll until all tasks are in completed state')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_list_tasks(ctx, jobid):
+def jobs_list_tasks(ctx, jobid, poll_until_tasks_complete):
     """List tasks within jobs"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_listtasks(ctx.batch_client, ctx.config, jobid)
+    convoy.fleet.action_jobs_listtasks(
+        ctx.batch_client, ctx.config, jobid,
+        poll_until_tasks_complete)
 
 
 @jobs.command('termtasks')
@@ -1448,6 +1498,36 @@ def data_ingress(ctx, to_fs):
     convoy.fleet.action_data_ingress(
         ctx.batch_client, ctx.compute_client, ctx.network_client, ctx.config,
         to_fs)
+
+
+@cli.group()
+@pass_cli_context
+def misc(ctx):
+    """Miscellaneous actions"""
+    pass
+
+
+@misc.command('tensorboard')
+@click.option(
+    '--jobid', help='Tensorboard to the specified job id')
+@click.option(
+    '--taskid', help='Tensorboard to the specified task id')
+@click.option(
+    '--logdir', help='logdir for Tensorboard')
+@click.option(
+    '--image',
+    help='Use specified TensorFlow Docker image instead. tensorboard.py '
+    'must be in the expected location in the Docker image.')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def misc_tensorboard(ctx, jobid, taskid, logdir, image):
+    """Create a tunnel to a Tensorboard instance for a specific task"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_misc_tensorboard(
+        ctx.batch_client, ctx.config, jobid, taskid, logdir, image)
 
 
 if __name__ == '__main__':

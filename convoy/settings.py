@@ -40,8 +40,15 @@ except ImportError:
 from . import util
 
 # global defines
+_METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
+_TENSORBOARD_DOCKER_IMAGE = (
+    'gcr.io/tensorflow/tensorflow:1.1.0',
+    '/usr/local/lib/python2.7/dist-packages/tensorflow'
+    '/tensorboard/tensorboard.py',
+    6006
+)
 _GPU_COMPUTE_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
 ))
@@ -67,22 +74,41 @@ _VM_TCP_NO_TUNE = (
     'standard_d1_v2', 'standard_f1'
 )
 # named tuples
+PoolVmCountSettings = collections.namedtuple(
+    'PoolVmCountSettings', [
+        'dedicated',
+        'low_priority',
+    ]
+)
+PoolVmPlatformImageSettings = collections.namedtuple(
+    'PoolVmPlatformImageSettings', [
+        'publisher',
+        'offer',
+        'sku',
+    ]
+)
+PoolVmCustomImageSettings = collections.namedtuple(
+    'PoolVmCustomImageSettings', [
+        'image_uris',
+        'node_agent',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
-        'id', 'vm_size', 'vm_count', 'max_tasks_per_node',
-        'inter_node_communication_enabled', 'publisher', 'offer', 'sku',
+        'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
+        'inter_node_communication_enabled', 'vm_configuration',
         'reboot_on_start_task_failed',
         'block_until_all_global_resources_loaded',
-        'transfer_files_on_pool_creation',
-        'input_data', 'gpu_driver', 'ssh', 'additional_node_prep_commands',
+        'transfer_files_on_pool_creation', 'input_data', 'resource_files',
+        'gpu_driver', 'ssh', 'additional_node_prep_commands',
         'virtual_network',
     ]
 )
 SSHSettings = collections.namedtuple(
     'SSHSettings', [
-        'username', 'expiry_days', 'ssh_public_key',
-        'generate_docker_tunnel_script', 'generated_file_export_path',
-        'hpn_server_swap',
+        'username', 'expiry_days', 'ssh_public_key', 'ssh_public_key_data',
+        'ssh_private_key', 'generate_docker_tunnel_script',
+        'generated_file_export_path', 'hpn_server_swap',
     ]
 )
 AADSettings = collections.namedtuple(
@@ -167,8 +193,9 @@ TaskSettings = collections.namedtuple(
         'id', 'image', 'name', 'docker_run_options', 'environment_variables',
         'environment_variables_keyvault_secret_id', 'envfile',
         'resource_files', 'command', 'infiniband', 'gpu', 'depends_on',
-        'depends_on_range', 'max_task_retries', 'retention_time',
-        'docker_run_cmd', 'docker_exec_cmd', 'multi_instance',
+        'depends_on_range', 'max_task_retries', 'max_wall_time',
+        'retention_time', 'docker_run_cmd', 'docker_exec_cmd',
+        'multi_instance',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -231,7 +258,7 @@ PublicIpSettings = collections.namedtuple(
 StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'resource_group', 'virtual_network', 'network_security',
-        'file_server', 'vm_count', 'vm_size', 'public_ip',
+        'file_server', 'vm_count', 'vm_size', 'fault_domains', 'public_ip',
         'hostname_prefix', 'ssh', 'vm_disk_map',
     ]
 )
@@ -261,7 +288,7 @@ def _kv_read_checked(conf, key, default=None):
 
 
 def _kv_read(conf, key, default=None):
-    # type: (dict, str, obj) ->w obj
+    # type: (dict, str, obj) -> obj
     """Read a key as some value
     :param dict conf: configuration dict
     :param str key: conf key
@@ -274,6 +301,25 @@ def _kv_read(conf, key, default=None):
     except KeyError:
         ret = default
     return ret
+
+
+def get_metadata_version_name():
+    # type: (None) -> str
+    """Get metadata version name
+    :rtype: str
+    :return: metadata version name
+    """
+    return _METADATA_VERSION_NAME
+
+
+def get_tensorboard_docker_image():
+    # type: (None) -> Tuple[str, str]
+    """Get tensorboard docker image
+    :rtype: tuple
+    :return: (tensorboard docker image,
+        absolute path to tensorboard.py, container port)
+    """
+    return _TENSORBOARD_DOCKER_IMAGE
 
 
 def get_gluster_default_volume_name():
@@ -342,6 +388,52 @@ def is_gpu_visualization_pool(vm_size):
     return False
 
 
+def get_gpu_type_from_vm_size(vm_size):
+    # type: (str) -> str
+    """Get GPU type as string
+    :param str vm_size: vm size
+    :rtype: str
+    :return: compute for gpgpu and visualization for viz
+    """
+    if is_gpu_compute_pool(vm_size):
+        return 'compute'
+    elif is_gpu_visualization_pool(vm_size):
+        return 'visualization'
+    else:
+        return None
+
+
+def gpu_configuration_check(config, vm_size=None):
+    # type: (dict, str) -> bool
+    """Check if OS is allowed with a GPU VM
+    :param dict config: configuration dict
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if configuration is allowed
+    """
+    # if this is not a gpu sku, always allow
+    if util.is_none_or_empty(vm_size):
+        vm_size = pool_settings(config).vm_size
+    if not is_gpu_pool(vm_size):
+        return True
+    # always allow gpu with custom images
+    node_agent = pool_custom_image_node_agent(config)
+    if util.is_not_empty(node_agent):
+        return True
+    # check for platform image support
+    publisher = pool_publisher(config, lower=True)
+    offer = pool_offer(config, lower=True)
+    sku = pool_sku(config, lower=True)
+    if (publisher == 'canonical' and offer == 'ubuntuserver' and
+            sku > '16.04'):
+        return True
+    elif (publisher == 'openlogic' and
+          (offer == 'centos' or offer == 'centos-hpc') and sku == '7.3'):
+        return True
+    else:
+        return False
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable
@@ -379,7 +471,14 @@ def temp_disk_mountpoint(config, offer=None):
     :return: temporary disk mount point
     """
     if offer is None:
-        offer = pool_offer(config, lower=True)
+        vmconfig = _populate_pool_vm_configuration(config)
+        if isinstance(vmconfig, PoolVmPlatformImageSettings):
+            offer = pool_offer(config, lower=True)
+        else:
+            if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
+                offer = 'ubuntuserver'
+            else:
+                offer = None
     else:
         offer = offer.lower()
     if offer == 'ubuntuserver':
@@ -418,6 +517,63 @@ def pool_specification(config):
     return config['pool_specification']
 
 
+def _pool_vm_count(config):
+    # type: (dict) -> PoolVmCountSettings
+    """Get Pool vm count settings
+    :param dict config: configuration object
+    :rtype: PoolVmCountSettings
+    :return: pool vm count settings
+    """
+    conf = pool_specification(config)['vm_count']
+    if isinstance(conf, int):
+        conf = {'dedicated': conf}
+    return PoolVmCountSettings(
+        dedicated=_kv_read(conf, 'dedicated', 0),
+        low_priority=_kv_read(conf, 'low_priority', 0),
+    )
+
+
+def pool_vm_configuration(config, key):
+    # type: (dict, str) -> dict
+    """Get Pool VM configuration
+    :param dict config: configuration object
+    :param str key: vm config key
+    :rtype: str
+    :return: pool vm config
+    """
+    try:
+        conf = _kv_read_checked(
+            config['pool_specification']['vm_configuration'], key)
+    except KeyError:
+        conf = None
+    if conf is None:
+        return config['pool_specification']
+    else:
+        return conf
+
+
+def _populate_pool_vm_configuration(config):
+    # type: (dict) -> dict
+    """Populate Pool VM configuration
+    :param dict config: configuration object
+    :rtype: PoolVmPlatformImageSettings or PoolVmCustomImageSettings
+    :return: pool vm config
+    """
+    conf = pool_vm_configuration(config, 'platform_image')
+    if 'publisher' in conf:
+        return PoolVmPlatformImageSettings(
+            publisher=conf['publisher'],
+            offer=conf['offer'],
+            sku=conf['sku'],
+        )
+    else:
+        conf = pool_vm_configuration(config, 'custom_image')
+        return PoolVmCustomImageSettings(
+            image_uris=conf['image_uris'],
+            node_agent=conf['node_agent'],
+        )
+
+
 def pool_settings(config):
     # type: (dict) -> PoolSettings
     """Get Pool settings
@@ -430,6 +586,11 @@ def pool_settings(config):
         max_tasks_per_node = conf['max_tasks_per_node']
     except KeyError:
         max_tasks_per_node = 1
+    resize_timeout = _kv_read_checked(conf, 'resize_timeout')
+    if util.is_not_empty(resize_timeout):
+        resize_timeout = util.convert_string_to_timedelta(resize_timeout)
+    else:
+        resize_timeout = None
     try:
         inter_node_communication_enabled = conf[
             'inter_node_communication_enabled']
@@ -454,38 +615,69 @@ def pool_settings(config):
             raise KeyError()
     except KeyError:
         input_data = None
+    # get additional resource files
     try:
-        ssh_username = conf['ssh']['username']
+        rfs = conf['resource_files']
+        if util.is_none_or_empty(rfs):
+            raise KeyError()
+        resource_files = []
+        for rf in rfs:
+            try:
+                fm = rf['file_mode']
+                if util.is_none_or_empty(fm):
+                    raise KeyError()
+            except KeyError:
+                fm = None
+            resource_files.append(
+                ResourceFileSettings(
+                    file_path=rf['file_path'],
+                    blob_source=rf['blob_source'],
+                    file_mode=fm,
+                )
+            )
+    except KeyError:
+        resource_files = None
+    # ssh settings
+    try:
+        sshconf = conf['ssh']
+        ssh_username = _kv_read_checked(sshconf, 'username')
         if util.is_none_or_empty(ssh_username):
             raise KeyError()
     except KeyError:
         ssh_username = None
-    try:
-        ssh_expiry_days = conf['ssh']['expiry_days']
-        if ssh_expiry_days is not None and ssh_expiry_days <= 0:
-            raise KeyError()
-    except KeyError:
-        ssh_expiry_days = 30
-    try:
-        ssh_public_key = conf['ssh']['ssh_public_key']
-        if util.is_none_or_empty(ssh_public_key):
-            raise KeyError()
-    except KeyError:
+        ssh_expiry_days = None
         ssh_public_key = None
-    try:
-        ssh_gen_docker_tunnel = conf['ssh']['generate_docker_tunnel_script']
-    except KeyError:
-        ssh_gen_docker_tunnel = False
-    try:
-        ssh_gen_file_path = conf['ssh']['generated_file_export_path']
-        if util.is_none_or_empty(ssh_gen_file_path):
-            raise KeyError()
-    except KeyError:
-        ssh_gen_file_path = '.'
-    try:
-        ssh_hpn = conf['ssh']['hpn_server_swap']
-    except KeyError:
-        ssh_hpn = False
+        ssh_public_key_data = None
+        ssh_private_key = None
+        ssh_gen_docker_tunnel = None
+        ssh_gen_file_path = None
+        ssh_hpn = None
+    else:
+        ssh_expiry_days = _kv_read(sshconf, 'expiry_days', 30)
+        if ssh_expiry_days <= 0:
+            ssh_expiry_days = 30
+        ssh_public_key = _kv_read_checked(sshconf, 'ssh_public_key')
+        if util.is_not_empty(ssh_public_key):
+            ssh_public_key = pathlib.Path(ssh_public_key)
+        ssh_public_key_data = _kv_read_checked(sshconf, 'ssh_public_key_data')
+        ssh_private_key = _kv_read_checked(sshconf, 'ssh_private_key')
+        if util.is_not_empty(ssh_private_key):
+            ssh_private_key = pathlib.Path(ssh_private_key)
+        if (ssh_public_key is not None and
+                util.is_not_empty(ssh_public_key_data)):
+            raise ValueError(
+                'cannot specify both an SSH public key file and data')
+        if (ssh_public_key is None and
+                util.is_none_or_empty(ssh_public_key_data) and
+                ssh_private_key is not None):
+            raise ValueError(
+                'cannot specify an SSH private key with no public '
+                'key specified')
+        ssh_gen_docker_tunnel = _kv_read(
+            sshconf, 'generate_docker_tunnel_script', False)
+        ssh_gen_file_path = _kv_read_checked(
+            sshconf, 'generated_file_export_path', '.')
+        ssh_hpn = _kv_read(sshconf, 'hpn_server_swap', False)
     try:
         gpu_driver = conf['gpu']['nvidia_driver']['source']
         if util.is_none_or_empty(gpu_driver):
@@ -501,20 +693,22 @@ def pool_settings(config):
     return PoolSettings(
         id=conf['id'],
         vm_size=conf['vm_size'].lower(),  # normalize
-        vm_count=conf['vm_count'],
+        vm_count=_pool_vm_count(config),
+        resize_timeout=resize_timeout,
         max_tasks_per_node=max_tasks_per_node,
         inter_node_communication_enabled=inter_node_communication_enabled,
-        publisher=conf['publisher'],
-        offer=conf['offer'],
-        sku=conf['sku'],
+        vm_configuration=_populate_pool_vm_configuration(config),
         reboot_on_start_task_failed=reboot_on_start_task_failed,
         block_until_all_global_resources_loaded=block_until_all_gr,
         transfer_files_on_pool_creation=transfer_files_on_pool_creation,
         input_data=input_data,
+        resource_files=resource_files,
         ssh=SSHSettings(
             username=ssh_username,
             expiry_days=ssh_expiry_days,
             ssh_public_key=ssh_public_key,
+            ssh_public_key_data=ssh_public_key_data,
+            ssh_private_key=ssh_private_key,
             generate_docker_tunnel_script=ssh_gen_docker_tunnel,
             generated_file_export_path=ssh_gen_file_path,
             hpn_server_swap=ssh_hpn,
@@ -527,14 +721,6 @@ def pool_settings(config):
             default_create_nonexistant=False,
         ),
     )
-
-
-def remove_ssh_settings(config):
-    # type: (dict) -> None
-    """Remove ssh settings from pool specification
-    :param dict config: configuration object
-    """
-    config['pool_specification'].pop('ssh', None)
 
 
 def set_block_until_all_global_resources_loaded(config, flag):
@@ -590,17 +776,6 @@ def pool_id(config, lower=False):
     return id.lower() if lower else id
 
 
-def pool_vm_count(config):
-    # type: (dict) -> int
-    """Get Pool vm count
-    :param dict config: configuration object
-    :param bool lower: lowercase return
-    :rtype: int
-    :return: pool vm count
-    """
-    return config['pool_specification']['vm_count']
-
-
 def pool_publisher(config, lower=False):
     # type: (dict, bool) -> str
     """Get Pool publisher
@@ -609,8 +784,9 @@ def pool_publisher(config, lower=False):
     :rtype: str
     :return: pool publisher
     """
-    pub = config['pool_specification']['publisher']
-    return pub.lower() if lower else pub
+    conf = pool_vm_configuration(config, 'platform_image')
+    pub = _kv_read_checked(conf, 'publisher')
+    return pub.lower() if lower and util.is_not_empty(pub) else pub
 
 
 def pool_offer(config, lower=False):
@@ -621,8 +797,9 @@ def pool_offer(config, lower=False):
     :rtype: str
     :return: pool offer
     """
-    offer = config['pool_specification']['offer']
-    return offer.lower() if lower else offer
+    conf = pool_vm_configuration(config, 'platform_image')
+    offer = _kv_read_checked(conf, 'offer')
+    return offer.lower() if lower and util.is_not_empty(offer) else offer
 
 
 def pool_sku(config, lower=False):
@@ -633,8 +810,20 @@ def pool_sku(config, lower=False):
     :rtype: str
     :return: pool sku
     """
-    sku = config['pool_specification']['sku']
-    return sku.lower() if lower else sku
+    conf = pool_vm_configuration(config, 'platform_image')
+    sku = _kv_read_checked(conf, 'sku')
+    return sku.lower() if lower and util.is_not_empty(sku) else sku
+
+
+def pool_custom_image_node_agent(config):
+    # type: (dict) -> str
+    """Get Pool node agent from custom image
+    :param dict config: configuration object
+    :rtype: str
+    :return: pool node agent
+    """
+    conf = pool_vm_configuration(config, 'custom_image')
+    return _kv_read_checked(conf, 'node_agent')
 
 
 # CREDENTIALS SETTINGS
@@ -1182,13 +1371,15 @@ def data_replication_settings(config):
         p2p_compression = conf['compression']
     except KeyError:
         p2p_compression = True
+    pool_vm_count = _pool_vm_count(config)
+    total_vm_count = pool_vm_count.dedicated + pool_vm_count.low_priority
     try:
         p2p_concurrent_source_downloads = conf['concurrent_source_downloads']
         if (p2p_concurrent_source_downloads is None or
                 p2p_concurrent_source_downloads < 1):
             raise KeyError()
     except KeyError:
-        p2p_concurrent_source_downloads = pool_vm_count(config) // 6
+        p2p_concurrent_source_downloads = total_vm_count // 6
         if p2p_concurrent_source_downloads < 1:
             p2p_concurrent_source_downloads = 1
     try:
@@ -1197,7 +1388,7 @@ def data_replication_settings(config):
                 p2p_direct_download_seed_bias < 1):
             raise KeyError()
     except KeyError:
-        p2p_direct_download_seed_bias = pool_vm_count(config) // 10
+        p2p_direct_download_seed_bias = total_vm_count // 10
         if p2p_direct_download_seed_bias < 1:
             p2p_direct_download_seed_bias = 1
     return DataReplicationSettings(
@@ -1356,11 +1547,10 @@ def files_destination_settings(fdict):
             split <<= 20
     except KeyError:
         split = None
-    try:
-        ssh_private_key = pathlib.Path(
-            conf['data_transfer']['ssh_private_key'])
-    except (KeyError, TypeError):
-        ssh_private_key = None
+    ssh_private_key = _kv_read_checked(
+        conf['data_transfer'], 'ssh_private_key')
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
     try:
         container = conf['data_transfer']['container']
         if util.is_none_or_empty(container):
@@ -1855,6 +2045,19 @@ def job_max_task_retries(conf):
     return max_task_retries
 
 
+def job_max_wall_time(conf):
+    # type: (dict) -> int
+    """Get maximum wall time for any task of a job
+    :param dict conf: job configuration object
+    :rtype: datetime.timedelta
+    :return: max wall time
+    """
+    max_wall_time = _kv_read_checked(conf, 'max_wall_time')
+    if util.is_not_empty(max_wall_time):
+        max_wall_time = util.convert_string_to_timedelta(max_wall_time)
+    return max_wall_time
+
+
 def job_allow_run_on_missing(conf):
     # type: (dict) -> int
     """Get allow task run on missing image
@@ -2000,21 +2203,39 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # get some pool props
     if cloud_pool is None:
         pool_id = poolconf.id
-        publisher = poolconf.publisher.lower()
-        offer = poolconf.offer.lower()
-        sku = poolconf.sku.lower()
         vm_size = poolconf.vm_size
         inter_node_comm = poolconf.inter_node_communication_enabled
+        is_custom_image = isinstance(
+            poolconf.vm_configuration, PoolVmCustomImageSettings)
+        if is_custom_image:
+            publisher = None
+            offer = None
+            sku = None
+            node_agent = poolconf.vm_configuration.node_agent
+        else:
+            publisher = poolconf.publisher.lower()
+            offer = poolconf.offer.lower()
+            sku = poolconf.sku.lower()
     else:
         pool_id = cloud_pool.id
-        publisher = cloud_pool.virtual_machine_configuration.image_reference.\
-            publisher.lower()
-        offer = cloud_pool.virtual_machine_configuration.image_reference.\
-            offer.lower()
-        sku = cloud_pool.virtual_machine_configuration.image_reference.sku.\
-            lower()
         vm_size = cloud_pool.vm_size.lower()
         inter_node_comm = cloud_pool.enable_inter_node_communication
+        is_custom_image = (
+            cloud_pool.virtual_machine_configuration.os_disk is not None
+        )
+        if is_custom_image:
+            publisher = None
+            offer = None
+            sku = None
+            node_agent = cloud_pool.virtual_machine_configuration.\
+                node_agent_sku_id.lower()
+        else:
+            publisher = cloud_pool.virtual_machine_configuration.\
+                image_reference.publisher.lower()
+            offer = cloud_pool.virtual_machine_configuration.\
+                image_reference.offer.lower()
+            sku = cloud_pool.virtual_machine_configuration.\
+                image_reference.sku.lower()
     # get user identity settings
     ui = _kv_read_checked(jobspec, 'user_identity', {})
     ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
@@ -2045,8 +2266,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise KeyError()
         if len(depends_on_range) != 2:
             raise ValueError('depends_on_range requires 2 elements exactly')
-        if (type(depends_on_range[0]) is not int or
-                type(depends_on_range[1]) is not int):
+        if not (isinstance(depends_on_range[0], int) and
+                isinstance(depends_on_range[1], int)):
             raise ValueError('depends_on_range requires integral members only')
     except KeyError:
         depends_on_range = None
@@ -2078,23 +2299,24 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     except KeyError:
         run_opts = []
     # parse remove container option
+    rm_container = False
     try:
         rm_container = conf['remove_container_after_exit']
     except KeyError:
-        pass
-    else:
-        if rm_container and '--rm' not in run_opts:
-            run_opts.append('--rm')
+        rm_container = _kv_read(jobspec, 'remove_container_after_exit', False)
+    if rm_container and '--rm' not in run_opts:
+        run_opts.append('--rm')
+    del rm_container
     # parse /dev/shm option
+    shm_size = None
     try:
         shm_size = conf['shm_size']
-        if util.is_none_or_empty(shm_size):
-            raise KeyError()
     except KeyError:
-        pass
-    else:
-        if not any(x.startswith('--shm-size=') for x in run_opts):
-            run_opts.append('--shm-size={}'.format(shm_size))
+        shm_size = _kv_read_checked(jobspec, 'shm_size')
+    if (util.is_not_empty(shm_size) and
+            not any(x.startswith('--shm-size=') for x in run_opts)):
+        run_opts.append('--shm-size={}'.format(shm_size))
+    del shm_size
     # parse name option, if not specified use task id
     try:
         name = conf['name']
@@ -2138,13 +2360,21 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     except KeyError:
         command = None
     # parse data volumes
+    data_volumes = _kv_read_checked(jobspec, 'data_volumes')
     try:
-        data_volumes = conf['data_volumes']
-        if util.is_none_or_empty(data_volumes):
-            raise KeyError()
+        tdv = conf['data_volumes']
+        if util.is_not_empty(tdv):
+            if util.is_not_empty(data_volumes):
+                # check for intersection
+                if len(set(data_volumes).intersection(set(tdv))) > 0:
+                    raise ValueError('data volumes must be unique')
+                data_volumes.extend(tdv)
+            else:
+                data_volumes = tdv
+        del tdv
     except KeyError:
         pass
-    else:
+    if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:
             try:
@@ -2159,14 +2389,23 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             else:
                 run_opts.append('-v {}'.format(
                     dv[dvkey]['container_path']))
+    del data_volumes
     # parse shared data volumes
+    shared_data_volumes = _kv_read_checked(jobspec, 'shared_data_volumes')
     try:
-        shared_data_volumes = conf['shared_data_volumes']
-        if util.is_none_or_empty(shared_data_volumes):
-            raise KeyError()
+        tsdv = conf['shared_data_volumes']
+        if util.is_not_empty(tsdv):
+            if util.is_not_empty(shared_data_volumes):
+                # check for intersection
+                if len(set(shared_data_volumes).intersection(set(tsdv))) > 0:
+                    raise ValueError('shared data volumes must be unique')
+                shared_data_volumes.extend(tsdv)
+            else:
+                shared_data_volumes = tsdv
+        del tsdv
     except KeyError:
         pass
-    else:
+    if util.is_not_empty(shared_data_volumes):
         sdv = global_resources_shared_data_volumes(config)
         for sdvkey in shared_data_volumes:
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
@@ -2182,6 +2421,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             else:
                 run_opts.append('-v {}:{}'.format(
                     sdvkey, shared_data_volume_container_path(sdv, sdvkey)))
+    del shared_data_volumes
     # append user identity options
     attach_ui = False
     if ui.default_pool_admin:
@@ -2222,24 +2462,36 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise KeyError()
     except KeyError:
         max_task_retries = None
+    # max wall time
+    try:
+        max_wall_time = conf['max_wall_time']
+        if max_wall_time is None:
+            raise KeyError()
+        else:
+            max_wall_time = util.convert_string_to_timedelta(max_wall_time)
+    except KeyError:
+        max_wall_time = None
     # retention time
     try:
         retention_time = conf['retention_time']
-        if util.is_none_or_empty(retention_time):
-            raise KeyError()
-        retention_time = util.convert_string_to_timedelta(retention_time)
     except KeyError:
+        retention_time = _kv_read_checked(jobspec, 'retention_time')
+    if util.is_not_empty(retention_time):
+        retention_time = util.convert_string_to_timedelta(retention_time)
+    else:
         retention_time = None
     # infiniband
+    infiniband = False
     try:
         infiniband = conf['infiniband']
     except KeyError:
-        infiniband = False
+        infiniband = _kv_read(jobspec, 'infiniband', False)
     # gpu
+    gpu = False
     try:
         gpu = conf['gpu']
     except KeyError:
-        gpu = False
+        gpu = _kv_read(jobspec, 'gpu', False)
     # adjust for gpu settings
     if gpu:
         if not is_gpu_pool(vm_size):
@@ -2247,8 +2499,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot initialize a gpu task on nodes without '
                  'gpus, pool: {} vm_size: {}').format(pool_id, vm_size))
         # TODO other images as they become available with gpu support
-        if (publisher != 'canonical' and offer != 'ubuntuserver' and
-                sku < '16.04'):
+        if ((sku is None and node_agent != 'batch.node.ubuntu 16.04') or
+                (publisher != 'canonical' and offer != 'ubuntuserver' and
+                 (sku is not None and sku < '16.04'))):
             raise ValueError(
                 ('Unsupported gpu VM config, publisher={} offer={} '
                  'sku={}').format(publisher, offer, sku))
@@ -2273,11 +2526,12 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                      pool_id, vm_size))
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
-        if publisher == 'openlogic' and offer == 'centos-hpc':
+        if (publisher == 'openlogic' and offer == 'centos-hpc' or
+                node_agent.startswith('batch.node.centos')):
             run_opts.append('-v /etc/rdma:/etc/rdma:ro')
             run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
         elif (publisher == 'suse' and offer == 'sles-hpc' and
-              sku == '12-sp1'):
+              sku == '12-sp1' or node_agent.startswith('batch.node.opensuse')):
             run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
             run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
         else:
@@ -2294,8 +2548,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # mount batch root dir
     run_opts.append(
         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
-    # set working directory
-    run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+    # set working directory if not already set
+    if not any((x.startswith('-w ') or x.startswith('--workdir '))
+               for x in run_opts):
+        run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
     # always add option for envfile
     envfile = '.shipyard.envlist'
     run_opts.append('--env-file {}'.format(envfile))
@@ -2345,15 +2601,24 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):
-            if num_instances == 'pool_specification_vm_count':
-                num_instances = pool_vm_count(config)
-            elif num_instances == 'pool_current_dedicated':
+            # TODO remove deprecation path
+            if (num_instances == 'pool_specification_vm_count_dedicated' or
+                    num_instances == 'pool_specification_vm_count'):
+                pool_vm_count = _pool_vm_count(config)
+                num_instances = pool_vm_count.dedicated
+            elif num_instances == 'pool_specification_vm_count_low_priority':
+                pool_vm_count = _pool_vm_count(config)
+                num_instances = pool_vm_count.low_priority
+            elif (num_instances == 'pool_current_dedicated' or
+                  num_instances == 'pool_current_low_priority'):
                 if cloud_pool is None:
                     raise RuntimeError(
                         ('Cannot retrieve current dedicated count for '
                          'pool: {}. Ensure pool exists.)'.format(pool_id)))
-                else:
-                    num_instances = cloud_pool.current_dedicated
+                if num_instances == 'pool_current_dedicated':
+                    num_instances = cloud_pool.current_dedicated_nodes
+                elif num_instances == 'pool_current_low_priority':
+                    num_instances = cloud_pool.current_low_priority_nodes
             else:
                 raise ValueError(
                     ('multi instance num instances setting '
@@ -2394,6 +2659,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         envfile=envfile,
         resource_files=resource_files,
         max_task_retries=max_task_retries,
+        max_wall_time=max_wall_time,
         retention_time=retention_time,
         command=command,
         infiniband=infiniband,
@@ -2478,6 +2744,9 @@ def fileserver_settings(config, vm_count):
             raise ValueError(
                 'samba account password is invalid for username {}'.format(
                     smb_account.username))
+        if '\n' in smb_account.password:
+            raise ValueError(
+                'samba account password contains invalid characters')
         if smb_account.uid is None or smb_account.gid is None:
             raise ValueError(
                 ('samba account uid and/or gid is invalid for '
@@ -2550,6 +2819,10 @@ def remotefs_settings(config, sc_id=None):
         raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
+    sc_fault_domains = _kv_read(sc_conf, 'fault_domains', 2)
+    if sc_fault_domains < 2 or sc_fault_domains > 3:
+        raise ValueError('fault_domains must be in range [2, 3]: {}'.format(
+            sc_fault_domains))
     sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
     # public ip settings
     pip_conf = _kv_read_checked(sc_conf, 'public_ip', {})
@@ -2605,7 +2878,8 @@ def remotefs_settings(config, sc_id=None):
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
         _reserved = frozenset([
-            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs', 'beegfs'
+            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs',
+            'beegfs', 'cephfs',
         ])
         for key in ns_conf['custom_inbound_rules']:
             # ensure key is not reserved
@@ -2633,8 +2907,26 @@ def remotefs_settings(config, sc_id=None):
     ssh_conf = sc_conf['ssh']
     sc_ssh_username = _kv_read_checked(ssh_conf, 'username')
     sc_ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    if util.is_not_empty(sc_ssh_public_key):
+        sc_ssh_public_key = pathlib.Path(sc_ssh_public_key)
+    sc_ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
+    sc_ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
+    if util.is_not_empty(sc_ssh_private_key):
+        sc_ssh_private_key = pathlib.Path(sc_ssh_private_key)
+    if (sc_ssh_public_key is not None and
+            util.is_not_empty(sc_ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (sc_ssh_public_key is None and
+            util.is_none_or_empty(sc_ssh_public_key_data) and
+            sc_ssh_private_key is not None):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
     sc_ssh_gen_file_path = _kv_read_checked(
         ssh_conf, 'generated_file_export_path', '.')
+    # ensure ssh username and samba username are not the same
+    if file_server.samba.account.username == sc_ssh_username:
+        raise ValueError(
+            'SSH username and samba account username cannot be the same')
     # sc vm disk map settings
     vmd_conf = sc_conf['vm_disk_map']
     _disk_set = frozenset(md_disk_names)
@@ -2694,6 +2986,7 @@ def remotefs_settings(config, sc_id=None):
             file_server=file_server,
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
+            fault_domains=sc_fault_domains,
             public_ip=PublicIpSettings(
                 enabled=sc_pip_enabled,
                 static=sc_pip_static,
@@ -2703,6 +2996,8 @@ def remotefs_settings(config, sc_id=None):
                 username=sc_ssh_username,
                 expiry_days=9999,
                 ssh_public_key=sc_ssh_public_key,
+                ssh_public_key_data=sc_ssh_public_key_data,
+                ssh_private_key=sc_ssh_private_key,
                 generate_docker_tunnel_script=False,
                 generated_file_export_path=sc_ssh_gen_file_path,
                 hpn_server_swap=False,

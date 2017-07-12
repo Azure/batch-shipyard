@@ -141,13 +141,18 @@ This NAMD-TCP recipe contains information on how to Dockerize distributed
 compute nodes using TCP.
 
 ## <a name="remotefs"></a>RemoteFS Provisioning
-#### [RemoteFS-NFS](./RemoteFS-NFS)
-This RemoteFS-NFS recipe contains information on how to provision a sample
-single VM NFS server.
-
 #### [RemoteFS-GlusterFS](./RemoteFS-GlusterFS)
 This RemoteFS-GlusterFS recipe contains information on how to provision a
 sample multi-VM GlusterFS storage cluster.
+
+#### [RemoteFS-GlusterFS+BatchPool](./RemoteFS-GlusterFS+BatchPool)
+This RemoteFS-GlusterFS+BatchPool recipe contains information on how to
+provision a Batch pool and automatically link it against a provisioned
+GlusterFS storage cluster.
+
+#### [RemoteFS-NFS](./RemoteFS-NFS)
+This RemoteFS-NFS recipe contains information on how to provision a sample
+single VM NFS server.
 
 ## <a name="video"></a>Video Processing
 #### [FFmpeg-GPU](./FFmpeg-GPU)

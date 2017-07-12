@@ -13,12 +13,11 @@ The pool configuration should enable the following properties:
 K80 GPUs for GPU compute acceleration while `NV` VM instances feature
 M60 GPUs for visualization workloads. Because Torch is a GPU-accelerated
 compute application, it is best to choose `NC` VM instances.
-* `publisher` should be `Canonical`. Other publishers will be supported
-once they are available for N-series VMs.
-* `offer` should be `UbuntuServer`. Other offers will be supported once they
-are available for N-series VMs.
-* `sku` should be `16.04-LTS`. Other skus will be supported once they are
-available for N-series VMs.
+* `vm_configuration` is the VM configuration
+  * `platform_image` specifies to use a platform image
+    * `publisher` should be `Canonical` or `OpenLogic`.
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
 
 ### Global Configuration
 The global configuration should set the following properties:
