@@ -155,13 +155,12 @@ DockerRegistrySettings = collections.namedtuple(
 )
 DataReplicationSettings = collections.namedtuple(
     'DataReplicationSettings', [
-        'peer_to_peer', 'non_peer_to_peer_concurrent_downloading',
+        'peer_to_peer', 'concurrent_source_downloads',
     ]
 )
 PeerToPeerSettings = collections.namedtuple(
     'PeerToPeerSettings', [
-        'enabled', 'compression', 'concurrent_source_downloads',
-        'direct_download_seed_bias',
+        'enabled', 'compression', 'direct_download_seed_bias',
     ]
 )
 SourceSettings = collections.namedtuple(
@@ -1356,9 +1355,9 @@ def data_replication_settings(config):
     except KeyError:
         conf = {}
     try:
-        nonp2pcd = conf['non_peer_to_peer_concurrent_downloading']
+        concurrent_source_downloads = conf['concurrent_source_downloads']
     except KeyError:
-        nonp2pcd = True
+        concurrent_source_downloads = 10
     try:
         conf = config['data_replication']['peer_to_peer']
     except KeyError:
@@ -1374,15 +1373,6 @@ def data_replication_settings(config):
     pool_vm_count = _pool_vm_count(config)
     total_vm_count = pool_vm_count.dedicated + pool_vm_count.low_priority
     try:
-        p2p_concurrent_source_downloads = conf['concurrent_source_downloads']
-        if (p2p_concurrent_source_downloads is None or
-                p2p_concurrent_source_downloads < 1):
-            raise KeyError()
-    except KeyError:
-        p2p_concurrent_source_downloads = total_vm_count // 6
-        if p2p_concurrent_source_downloads < 1:
-            p2p_concurrent_source_downloads = 1
-    try:
         p2p_direct_download_seed_bias = conf['direct_download_seed_bias']
         if (p2p_direct_download_seed_bias is None or
                 p2p_direct_download_seed_bias < 1):
@@ -1395,10 +1385,9 @@ def data_replication_settings(config):
         peer_to_peer=PeerToPeerSettings(
             enabled=p2p_enabled,
             compression=p2p_compression,
-            concurrent_source_downloads=p2p_concurrent_source_downloads,
             direct_download_seed_bias=p2p_direct_download_seed_bias
         ),
-        non_peer_to_peer_concurrent_downloading=nonp2pcd
+        concurrent_source_downloads=concurrent_source_downloads,
     )
 
 

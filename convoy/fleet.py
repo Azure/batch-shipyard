@@ -814,7 +814,7 @@ def _add_pool(
     preg = settings.docker_registry_private_settings(config)
     # create torrent flags
     torrentflags = '{}:{}:{}:{}:{}'.format(
-        dr.peer_to_peer.enabled, dr.non_peer_to_peer_concurrent_downloading,
+        dr.peer_to_peer.enabled, dr.concurrent_source_downloads,
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression,
         preg.allow_public_docker_hub_pull_on_missing)
@@ -1997,14 +1997,14 @@ def action_pool_listskus(batch_client):
 
 def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, queue_client, table_client, config):
+        batch_client, blob_client, table_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azureblob.BlockBlobService, azuretable.TableService,
+    #        dict) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -2016,7 +2016,6 @@ def action_pool_add(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
@@ -2025,12 +2024,10 @@ def action_pool_add(
         raise RuntimeError(
             'attempting to create a pool that already exists: {}'.format(
                 settings.pool_id(config)))
-    storage.create_storage_containers(
-        blob_client, queue_client, table_client, config)
-    storage.clear_storage_containers(
-        blob_client, queue_client, table_client, config)
+    storage.create_storage_containers(blob_client, table_client, config)
+    storage.clear_storage_containers(blob_client, table_client, config)
     _adjust_settings_for_pool_creation(config)
-    storage.populate_queues(queue_client, table_client, config)
+    storage.populate_global_resource_blobs(blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config
@@ -2067,9 +2064,12 @@ def action_pool_delete(
         deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
     except batchmodels.BatchErrorException as ex:
         logger.exception(ex)
-        if 'The specified pool does not exist' in ex.message.value:
+        if ('The specified pool does not exist' in ex.message.value or
+                'The specified pool has been marked for deletion' in
+                ex.message.value):
             deleted = True
     if deleted:
+        # TODO remove queue_client in 3.0
         storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
@@ -2507,17 +2507,14 @@ def action_storage_del(
         skip_tables=clear_tables)
 
 
-def action_storage_clear(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+def action_storage_clear(blob_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict) -> None
     """Action: Storage Clear
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
-    storage.clear_storage_containers(
-        blob_client, queue_client, table_client, config)
+    storage.clear_storage_containers(blob_client, table_client, config)
 
 
 def action_data_stream(batch_client, config, filespec, disk):

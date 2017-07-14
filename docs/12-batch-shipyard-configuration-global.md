@@ -32,13 +32,12 @@ The global config schema is as follows:
         }
     },
     "data_replication": {
+        "concurrent_source_downloads": 10,
         "peer_to_peer": {
             "enabled": true,
             "compression": true,
-            "concurrent_source_downloads": 10,
             "direct_download_seed_bias": null
         },
-        "non_peer_to_peer_concurrent_downloading": true
     },
     "global_resources": {
         "docker_images": [
@@ -215,9 +214,9 @@ describes members of the non-Docker Hub private registries supported:
 
 The `data_replication` property is used to configure the internal image
 replication mechanism between compute nodes within a compute pool. The
-`non_peer_to_peer_concurrent_downloading` property specifies if it is ok
-to allow unfettered concurrent downloading from the source registry among
-all compute nodes. The following options apply to `peer_to_peer` data
+`concurrent_source_downloads` property specifies the number of nodes that
+can concurrently download the source images in parallel. The default, if
+not specified, is 10. The following options apply to `peer_to_peer` data
 replication options:
 * (optional) `enabled` property enables or disables private peer-to-peer
 transfer. Note that for compute pools with a relatively small number of VMs,
@@ -227,8 +226,6 @@ in the case of an Azure Storage-backed private registry can benefit from
 peer-to-peer image replication.
 * `compression` property enables or disables compression of image files. It
 is strongly recommended to keep this enabled.
-* `concurrent_source_downloads` property specifies the number of
-simultaneous downloads allowed to each image.
 * `direct_download_seed_bias` property sets the number of direct download
 seeds to prefer per image before switching to peer-to-peer transfer.
 

@@ -24,13 +24,12 @@
         }
     },
     "data_replication": {
+        "concurrent_source_downloads": null,
         "peer_to_peer": {
             "enabled": false,
             "compression": true,
-            "concurrent_source_downloads": 10,
             "direct_download_seed_bias": null
-        },
-        "non_peer_to_peer_concurrent_downloading": true
+        }
     },
     "global_resources": {
         "docker_images": [

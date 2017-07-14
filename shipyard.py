@@ -928,7 +928,7 @@ def storage_clear(ctx):
     """Clear Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_clear(
-        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.blob_client, ctx.table_client, ctx.config)
 
 
 @cli.group()
@@ -1062,7 +1062,7 @@ def pool_add(ctx):
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
-        ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.table_client, ctx.config)
 
 
 @pool.command('list')

@@ -368,13 +368,18 @@ def _block_for_nodes_ready(
             i = 0
             logger.debug(
                 ('waiting for {} dedicated nodes and {} low priority nodes '
-                 'to reach desired state in pool {} with '
-                 'allocation_state={}').format(
+                 'of size {} to reach desired state in pool {} '
+                 '[resize_timeout={} allocation_state={} '
+                 'allocation_state_transition_time={}]').format(
                      pool.target_dedicated_nodes,
                      pool.target_low_priority_nodes,
+                     pool.vm_size,
                      pool.id,
-                     pool.allocation_state))
-            if len(nodes) < 10:
+                     pool.resize_timeout,
+                     pool.allocation_state,
+                     pool.allocation_state_transition_time,
+                 ))
+            if len(nodes) <= 5:
                 for node in nodes:
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
