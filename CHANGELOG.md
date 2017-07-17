@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- From Scratch: Step-by-Step guide
+
 ## [2.8.0] - 2017-07-06
 ### Added
 - Support for CentOS 7.3 NC/NV gpu pools

@@ -75,6 +75,11 @@ remove them with the following commands:
 ./shipyard pool del --configdir config
 ```
 
+## Step-by-step Tutorial
+The [From Scratch: Step-by-step](05-batch-shipyard-from-scratch-step-by-step.md)
+guide will provide detailed steps on how to construct your own set of
+configuration files to execute on Batch Shipyard.
+
 ## Commandline Usage Guide
 [Batch Shipyard Usage](20-batch-shipyard-usage.md) contains explanations for
 all of the actions available with commandline interface.
