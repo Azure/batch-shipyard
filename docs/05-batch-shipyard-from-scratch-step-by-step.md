@@ -16,7 +16,6 @@ account, you can create one via the
 [Azure Portal](https://azure.microsoft.com/en-us/documentation/articles/batch-account-create-portal/),
 [Azure CLI 2.0](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli), or
 [Azure PowerShell](https://azure.microsoft.com/en-us/documentation/articles/batch-powershell-cmdlets-get-started/).
-
 Note the account service URL and account key after creating your Batch account.
 
 You can create a standard general purpose
@@ -155,7 +154,8 @@ following JSON into your `pool.json` file.
 Here, we want to create a pool with an ID `mypool` that is an Ubuntu 16.04
 VM. We have also indicated that the Azure VM size should be `STANDARD_D1_V2`
 with a count of `1` dedicated node. Note that Azure Batch supports
-`low_priority` nodes as well.
+[`low_priority` nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+as well.
 
 ### Step 6: Submit your work
 Now that you have all 4 configuration files created, we can now submit our
