@@ -45,6 +45,7 @@ import azure.batch.models as batchmodels
 import azure.mgmt.batch.models as batchmgmtmodels
 import azure.mgmt.compute.models as computemodels
 # local imports
+from . import autoscale
 from . import batch
 from . import crypto
 from . import data
@@ -720,6 +721,16 @@ def _add_pool(
         pass
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    # get autoscale settings
+    if settings.is_pool_autoscale_enabled(config, pas=pool_settings.autoscale):
+        asenable = True
+        asformula = autoscale.get_formula(pool_settings)
+        asei = pool_settings.autoscale.evaluation_interval
+    else:
+        asenable = False
+        asformula = None
+        asei = None
+    logger.debug('autoscale enabled: {}'.format(asenable))
     custom_image_na = settings.pool_custom_image_node_agent(config)
     bc = settings.credentials_batch(config)
     vnet = None
@@ -956,8 +967,12 @@ def _add_pool(
         id=pool_settings.id,
         virtual_machine_configuration=vmconfig,
         vm_size=pool_settings.vm_size,
-        target_dedicated_nodes=pool_settings.vm_count.dedicated,
-        target_low_priority_nodes=pool_settings.vm_count.low_priority,
+        target_dedicated_nodes=(
+            pool_settings.vm_count.dedicated if not asenable else None
+        ),
+        target_low_priority_nodes=(
+            pool_settings.vm_count.low_priority if not asenable else None
+        ),
         resize_timeout=pool_settings.resize_timeout,
         max_tasks_per_node=pool_settings.max_tasks_per_node,
         enable_inter_node_communication=pool_settings.
@@ -981,6 +996,9 @@ def _add_pool(
             ],
             resource_files=[],
         ),
+        enable_auto_scale=asenable,
+        auto_scale_formula=asformula,
+        auto_scale_evaluation_interval=asei,
         metadata=[
             batchmodels.MetadataItem(
                 name=settings.get_metadata_version_name(),
@@ -1063,7 +1081,14 @@ def _add_pool(
         batch.generate_docker_login_settings(config)[0])
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
-    if util.is_none_or_empty(nodes):
+    _pool = batch_client.pool.get(pool.id)
+    pool_current_vm_count = (
+        _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
+    )
+    pool_target_vm_count = (
+        _pool.target_dedicated_nodes + _pool.target_low_priority_nodes
+    )
+    if util.is_none_or_empty(nodes) and pool_target_vm_count > 0:
         raise RuntimeError(
             ('No nodes could be allocated for pool: {}. If the pool is '
              'comprised entirely of low priority nodes, then there may not '
@@ -1071,33 +1096,33 @@ def _add_pool(
              'your request. Please inspect the pool for resize errors and '
              'issue pool resize to try again.').format(pool.id))
     # set up gluster on compute if specified
-    if gluster_on_compute:
+    if gluster_on_compute and pool_current_vm_count > 0:
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
     # create admin user on each node if requested
-    try:
-        batch.add_ssh_user(batch_client, config, nodes)
-    except Exception as e:
-        logger.exception(e)
-        logger.error(
-            'Could not add SSH users to nodes. Please ensure ssh-keygen is '
-            'available in your PATH or cwd. Skipping data ingress if '
-            'specified.')
-    else:
-        # log remote login settings
-        rls = batch.get_remote_login_settings(batch_client, config, nodes)
-        # ingress data to shared fs if specified
-        if pool_settings.transfer_files_on_pool_creation:
-            _pool = batch_client.pool.get(pool.id)
-            total_vm_count = (
-                _pool.current_dedicated_nodes +
-                _pool.current_low_priority_nodes
-            )
-            data.ingress_data(
-                batch_client, compute_client, network_client, config, rls=rls,
-                kind='shared', total_vm_count=total_vm_count)
-            del _pool
+    if pool_current_vm_count > 0:
+        try:
+            batch.add_ssh_user(batch_client, config, nodes)
+        except Exception as e:
+            logger.exception(e)
+            logger.error(
+                'Could not add SSH users to nodes. Please ensure ssh-keygen '
+                'is available in your PATH or cwd. Skipping data ingress if '
+                'specified.')
+        else:
+            # log remote login settings
+            rls = batch.get_remote_login_settings(batch_client, config, nodes)
+            # ingress data to shared fs if specified
+            if pool_settings.transfer_files_on_pool_creation:
+                total_vm_count = (
+                    _pool.current_dedicated_nodes +
+                    _pool.current_low_priority_nodes
+                )
+                data.ingress_data(
+                    batch_client, compute_client, network_client, config,
+                    rls=rls, kind='shared', total_vm_count=total_vm_count)
+                del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 
@@ -1600,19 +1625,18 @@ def _adjust_settings_for_pool_creation(config):
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
-    # adjust inter node comm setting
-    if pool_total_vm_count < 1:
-        raise ValueError('invalid total vm_count: {}'.format(
-            pool_total_vm_count))
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)
-    # ensure settings p2p/internode settings are compatible
-    if dr.peer_to_peer.enabled and not pool.inter_node_communication_enabled:
-        logger.warning(
-            'force enabling inter-node communication due to peer-to-peer '
-            'transfer')
-        settings.set_inter_node_communication_enabled(config, True)
+    # ensure settings p2p/as/internode settings are compatible
+    if dr.peer_to_peer.enabled:
+        if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
+            raise ValueError('cannot enable peer-to-peer and autoscale')
+        if pool.inter_node_communication_enabled:
+            logger.warning(
+                'force enabling inter-node communication due to peer-to-peer '
+                'transfer')
+            settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
         if (pool.ssh.hpn_server_swap and
@@ -1644,6 +1668,11 @@ def _adjust_settings_for_pool_creation(config):
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
             if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
+                if settings.is_pool_autoscale_enabled(
+                        config, pas=pool.autoscale):
+                    raise ValueError(
+                        'glusterfs on compute cannot be installed on an '
+                        'autoscale-enabled pool')
                 if not pool.inter_node_communication_enabled:
                     # do not modify value and proceed since this interplays
                     # with p2p settings, simply raise exception and force
@@ -1677,6 +1706,9 @@ def _adjust_settings_for_pool_creation(config):
                 'per pool')
     except KeyError:
         pass
+    # check pool count of 0 and ssh
+    if pool_total_vm_count == 0 and util.is_not_empty(pool.ssh.username):
+        logger.warning('cannot add SSH user with zero target nodes')
 
 
 def action_fs_disks_add(resource_client, compute_client, config):
@@ -2344,6 +2376,46 @@ def action_pool_listimages(batch_client, config):
     :param dict config: configuration dict
     """
     _list_docker_images(batch_client, config)
+
+
+def action_pool_autoscale_disable(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Disable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_disable(batch_client, config)
+
+
+def action_pool_autoscale_enable(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Enable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_enable(batch_client, config)
+
+
+def action_pool_autoscale_evaluate(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Evaluate
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_evaluate(batch_client, config)
+
+
+def action_pool_autoscale_lastexec(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Lastexec
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_lastexec(batch_client, config)
 
 
 def action_jobs_add(

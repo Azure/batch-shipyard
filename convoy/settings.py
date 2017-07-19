@@ -31,6 +31,7 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
+import datetime
 try:
     import pathlib2 as pathlib
 except ImportError:
@@ -93,6 +94,24 @@ PoolVmCustomImageSettings = collections.namedtuple(
         'node_agent',
     ]
 )
+PoolAutoscaleScenarioSettings = collections.namedtuple(
+    'PoolAutoscaleScenarioSettings', [
+        'name',
+        'maximum_vm_count',
+        'node_deallocation_option',
+        'sample_lookback_interval',
+        'required_sample_percentage',
+        'bias_last_sample',
+        'bias_node_type',
+    ]
+)
+PoolAutoscaleSettings = collections.namedtuple(
+    'PoolAutoscaleSettings', [
+        'evaluation_interval',
+        'formula',
+        'scenario',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
@@ -101,7 +120,7 @@ PoolSettings = collections.namedtuple(
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
         'gpu_driver', 'ssh', 'additional_node_prep_commands',
-        'virtual_network',
+        'virtual_network', 'autoscale',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -516,14 +535,16 @@ def pool_specification(config):
     return config['pool_specification']
 
 
-def _pool_vm_count(config):
-    # type: (dict) -> PoolVmCountSettings
+def _pool_vm_count(config, conf=None):
+    # type: (dict, dict) -> PoolVmCountSettings
     """Get Pool vm count settings
     :param dict config: configuration object
+    :param dict conf: vm_count object
     :rtype: PoolVmCountSettings
     :return: pool vm count settings
     """
-    conf = pool_specification(config)['vm_count']
+    if conf is None:
+        conf = pool_specification(config)['vm_count']
     if isinstance(conf, int):
         conf = {'dedicated': conf}
     return PoolVmCountSettings(
@@ -571,6 +592,69 @@ def _populate_pool_vm_configuration(config):
             image_uris=conf['image_uris'],
             node_agent=conf['node_agent'],
         )
+
+
+def pool_autoscale_settings(config):
+    # type: (dict) -> PoolAutoscaleSettings
+    """Get Pool autoscale settings
+    :param dict config: configuration object
+    :rtype: PoolAutoscaleSettings
+    :return: pool autoscale settings from specification
+    """
+    conf = pool_specification(config)
+    conf = _kv_read_checked(conf, 'autoscale', {})
+    ei = _kv_read_checked(conf, 'evaluation_interval')
+    if util.is_not_empty(ei):
+        ei = util.convert_string_to_timedelta(ei)
+    else:
+        ei = datetime.timedelta(minutes=15)
+    scenconf = _kv_read_checked(conf, 'scenario')
+    if scenconf is not None:
+        mvc = _kv_read_checked(scenconf, 'maximum_vm_count', {})
+        ndo = _kv_read_checked(
+            scenconf, 'node_deallocation_option', 'taskcompletion')
+        if (ndo is not None and
+                ndo not in (
+                    'requeue', 'terminate', 'taskcompletion', 'retaineddata')):
+            raise ValueError(
+                'invalid node_deallocation_option: {}'.format(ndo))
+        sli = _kv_read_checked(scenconf, 'sample_lookback_interval')
+        if util.is_not_empty(sli):
+            sli = util.convert_string_to_timedelta(sli)
+        else:
+            sli = datetime.timedelta(minutes=10)
+        scenario = PoolAutoscaleScenarioSettings(
+            name=_kv_read_checked(scenconf, 'name').lower(),
+            maximum_vm_count=_pool_vm_count(config, conf=mvc),
+            node_deallocation_option=ndo,
+            sample_lookback_interval=sli,
+            required_sample_percentage=_kv_read(
+                scenconf, 'required_sample_percentage', 70),
+            bias_last_sample=_kv_read(
+                scenconf, 'bias_last_sample', True),
+            bias_node_type=_kv_read_checked(
+                scenconf, 'bias_node_type'),
+        )
+    else:
+        scenario = None
+    return PoolAutoscaleSettings(
+        evaluation_interval=ei,
+        formula=_kv_read_checked(conf, 'formula'),
+        scenario=scenario,
+    )
+
+
+def is_pool_autoscale_enabled(config, pas=None):
+    # type: (dict, PoolAutoscaleSettings) -> bool
+    """Check if pool autoscale is enabled
+    :param dict config: configuration object
+    :param PoolAutoscaleSettings pas: pool autoscale settings
+    :rtype: bool
+    :return: if pool autoscale is enabled
+    """
+    if pas is None:
+        pas = pool_autoscale_settings(config)
+    return util.is_not_empty(pas.formula) or pas.scenario is not None
 
 
 def pool_settings(config):
@@ -719,6 +803,7 @@ def pool_settings(config):
             default_existing_ok=True,
             default_create_nonexistant=False,
         ),
+        autoscale=pool_autoscale_settings(config),
     )
 
 

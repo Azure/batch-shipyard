@@ -46,6 +46,7 @@ import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 # local imports
+from . import autoscale
 from . import crypto
 from . import data
 from . import keyvault
@@ -710,6 +711,41 @@ def list_pools(batch_client):
         logger.error('no pools found')
 
 
+def _check_metadata_mismatch(mdtype, metadata, req_ge=None):
+    # type: (str, List[batchmodels.MetadataItem], str) -> None
+    """Check for metadata mismatch
+    :param str mdtype: metadata type (e.g., pool, job)
+    :param list metadata: list of metadata items
+    :param str req_ge: required greater than or equal to
+    """
+    if util.is_none_or_empty(metadata):
+        if req_ge is not None:
+            raise RuntimeError(
+                ('{} version metadata not present but version {} is '
+                 'required').format(mdtype, req_ge))
+        else:
+            logger.warning('{} version metadata not present'.format(mdtype))
+    else:
+        for md in metadata:
+            if md.name == settings.get_metadata_version_name():
+                if md.value != __version__:
+                    logger.warning(
+                        '{} version metadata mismatch: {}={} cli={}'.format(
+                            mdtype, mdtype, md.value, __version__))
+                if req_ge is not None:
+                    # split version into tuple
+                    mdt = md.value.split('.')
+                    mdt = tuple((int(mdt[0]), int(mdt[1]), mdt[2]))
+                    rv = req_ge.split('.')
+                    rv = tuple((int(rv[0]), int(rv[1]), rv[2]))
+                    if mdt < rv:
+                        raise RuntimeError(
+                            ('{} version of {} does not meet the version '
+                             'requirement of at least {}').format(
+                                 mdtype, md.value, req_ge))
+                break
+
+
 def resize_pool(batch_client, config, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        bool) -> list
@@ -724,16 +760,7 @@ def resize_pool(batch_client, config, wait=False):
     pool = settings.pool_settings(config)
     _pool = batch_client.pool.get(pool.id)
     # check pool metadata version
-    if util.is_none_or_empty(_pool.metadata):
-        logger.warning('pool version metadata not present')
-    else:
-        for md in _pool.metadata:
-            if (md.name == settings.get_metadata_version_name() and
-                    md.value != __version__):
-                logger.warning(
-                    'pool version metadata mismatch: pool={} cli={}'.format(
-                        md.value, __version__))
-                break
+    _check_metadata_mismatch('pool', _pool.metadata)
     logger.info(
         ('Resizing pool {} to {} compute nodes [current_dedicated_nodes={} '
          'current_low_priority_nodes={}]').format(
@@ -792,6 +819,114 @@ def del_pool(batch_client, config, pool_id=None):
     logger.info('Deleting pool: {}'.format(pool_id))
     batch_client.pool.delete(pool_id)
     return True
+
+
+def pool_autoscale_disable(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Enable autoscale formula
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool_id = settings.pool_id(config)
+    batch_client.pool.disable_auto_scale(pool_id=pool_id)
+    logger.info('autoscale disabled for pool {}'.format(pool_id))
+
+
+def pool_autoscale_enable(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Enable autoscale formula
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool = settings.pool_settings(config)
+    _pool = batch_client.pool.get(pool.id)
+    # check pool metadata
+    # TODO fix req version to current release version until 2.9.0
+    _check_metadata_mismatch('pool', _pool.metadata, req_ge='2.8.0')
+    asformula = None
+    asei = None
+    if not _pool.enable_auto_scale:
+        # check if an autoscale formula exists in config
+        if not settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
+            if not util.confirm_action(
+                    config,
+                    ('enable dummy formula for pool {} as no autoscale '
+                     'formula exists').format(pool.id)):
+                logger.error('not enabling autoscale for pool {}'.format(
+                    pool.id))
+                return
+            # set dummy formula
+            asformula = (
+                '$TargetDedicatedNodes = {}; '
+                '$TargetLowPriorityNodes = {};'
+            ).format(
+                _pool.target_dedicated_nodes, _pool.target_low_priority_nodes)
+    if asformula is None:
+        asformula = autoscale.get_formula(pool)
+        asei = pool.autoscale.evaluation_interval
+    # enable autoscale
+    batch_client.pool.enable_auto_scale(
+        pool_id=pool.id,
+        auto_scale_formula=asformula,
+        auto_scale_evaluation_interval=asei,
+    )
+    logger.info('autoscale enabled/updated for pool {}'.format(pool.id))
+
+
+def _output_autoscale_result(result):
+    # type: (batchmodels.AutoScaleRun) -> None
+    """Output autoscale evalute or last exec results
+    :param batchmodels.AutoScaleRun result: result
+    """
+    if result is None:
+        logger.error(
+            'autoscale result is invalid, ensure autoscale is enabled')
+        return
+    if result.error is not None:
+        logger.error('autoscale evaluate error: code={} message={}'.format(
+            result.error.code, result.error.message))
+    else:
+        logger.info('autoscale result: {}'.format(result.results))
+        logger.info('last autoscale evaluation: {}'.format(result.timestamp))
+
+
+def pool_autoscale_evaluate(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Evaluate autoscale formula
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool = settings.pool_settings(config)
+    if not settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
+        logger.error(
+            ('cannot evaluate autoscale for pool {}, not enabled or '
+             'no formula').format(pool.id))
+        return
+    result = batch_client.pool.evaluate_auto_scale(
+        pool_id=pool.id,
+        auto_scale_formula=autoscale.get_formula(pool),
+    )
+    _output_autoscale_result(result)
+
+
+def pool_autoscale_lastexec(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
+    """Get last execution of the autoscale formula
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    if not pool.enable_auto_scale:
+        logger.error(
+            ('last execution information not available for autoscale '
+             'disabled pool {}').format(pool_id))
+        return
+    _output_autoscale_result(pool.auto_scale_run)
 
 
 def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
@@ -2363,17 +2498,7 @@ def add_jobs(
                 else:
                     # retrieve job and check for version consistency
                     _job = batch_client.job.get(job.id)
-                    if util.is_none_or_empty(_job.metadata):
-                        logger.warning('job version metadata not present')
-                    else:
-                        for md in _job.metadata:
-                            if (md.name == settings.get_metadata_version_name()
-                                    and md.value != __version__):
-                                logger.warning(
-                                    ('job version metadata mismatch: '
-                                     'job={} cli={}').format(
-                                         md.value, __version__))
-                                break
+                    _check_metadata_mismatch('job', _job.metadata)
             else:
                 raise
         del multi_instance

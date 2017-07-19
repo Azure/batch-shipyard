@@ -21,6 +21,22 @@
         },
         "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
+        "autoscale": {
+            "evaluation_interval": "00:05:00",
+            "scenario": {
+                "name": "active_tasks",
+                "maximum_vm_count": {
+                    "dedicated": 16,
+                    "low_priority": 8
+                },
+                "node_deallocation_option": "taskcompletion",
+                "sample_lookback_interval": "00:10:00",
+                "required_sample_percentage": 70,
+                "bias_last_sample": true,
+                "bias_node_type": "low_priority"
+            },
+            "formula": ""
+        },
         "inter_node_communication_enabled": true,
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,

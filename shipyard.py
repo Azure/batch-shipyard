@@ -1249,6 +1249,61 @@ def pool_listimages(ctx):
     convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
 
 
+@pool.group()
+@pass_cli_context
+def autoscale(ctx):
+    """Pool autoscale actions"""
+    pass
+
+
+@autoscale.command('disable')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_disable(ctx):
+    """Disable autoscale on a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_disable(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('enable')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_enable(ctx):
+    """Enable autoscale on a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_enable(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('evaluate')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_evaluate(ctx):
+    """Evaluate autoscale formula"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_evaluate(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('lastexec')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_lastexec(ctx):
+    """Get the result of the last execution of the autoscale formula"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_lastexec(ctx.batch_client, ctx.config)
+
+
 @cli.group()
 @pass_cli_context
 def jobs(ctx):

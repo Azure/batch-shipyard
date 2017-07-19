@@ -249,7 +249,7 @@ def _add_global_resource(
             resource = '{}:{}'.format(prefix, gr)
             resource_sha1 = hashlib.sha1(
                 resource.encode('utf8')).hexdigest()
-            logger.info('adding global resource: {} {}'.format(
+            logger.info('adding global resource: {} hash={}'.format(
                 resource, resource_sha1))
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],

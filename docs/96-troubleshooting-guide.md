@@ -73,14 +73,6 @@ Alternatively, you can issue the command
 `pool rebootnode --all-start-task-failed` which will attempt to reboot the
 nodes that have entered this state.
 
-Please note that the start task requires downloading some files that are
-uploaded to your Azure Storage account with the command `pool add`. These
-files have SAS tokens which allow the Batch compute node to authenticate
-with the Azure Storage service to download the files. These SAS tokens have
-a finite expiration with a default of 30 days. You can adjust this expiration
-by modifying the setting `batch_shipyard`:`generated_sas_expiry_days` to
-your desired value if you expect your pool to last longer than the default.
-
 If the compute node fails to start properly, Batch Shipyard will automatically
 download the compute node's stdout and stderr files for the start task into
 the directory where you ran `shipyard`. The files will be placed in
