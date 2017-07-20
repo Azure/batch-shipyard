@@ -47,7 +47,7 @@ orphaned data if you accidentially deleted Batch Shipyard pools outside of
 Batch Shipyard.
 
 ## Commands and Sub-commands
-`shipyard` (and `shipyard.py`) is invoked with a command and a sub-command as
+`shipyard` (and `shipyard.py`) is invoked with a commands and sub-commands as
 positional arguments, i.e.:
 ```shell
 shipyard <command> <subcommand> <options>
@@ -446,6 +446,7 @@ The `pool` command has the following sub-commands:
 ```
   add         Add a pool to the Batch account
   asu         Add an SSH user to all nodes in pool
+  autoscale   Pool autoscale actions
   del         Delete a pool from the Batch account
   delnode     Delete a node from a pool
   dsu         Delete an SSH user from all nodes in pool
@@ -463,6 +464,13 @@ The `pool` command has the following sub-commands:
 Batch account
 * `asu` will add the SSH user defined in the pool configuration file to
 all nodes in the specified pool
+* `autoscale` will invoke the autoscale subcommand. The autoscale
+subcommand has 4 subcommands:
+  * `disable` will disable autoscale on the pool
+  * `enable` will enable autoscale on the pool
+  * `evaluate` will evaluate the autoscale formula in the pool configuration
+    file
+  * `lastexec` will query the last execution information for autoscale
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard. It is recommended to use this command instead of deleting

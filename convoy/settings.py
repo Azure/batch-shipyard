@@ -610,7 +610,9 @@ def pool_autoscale_settings(config):
         ei = datetime.timedelta(minutes=15)
     scenconf = _kv_read_checked(conf, 'scenario')
     if scenconf is not None:
-        mvc = _kv_read_checked(scenconf, 'maximum_vm_count', {})
+        mvc = _kv_read_checked(scenconf, 'maximum_vm_count')
+        if mvc is None:
+            raise ValueError('maximum_vm_count must be specified')
         ndo = _kv_read_checked(
             scenconf, 'node_deallocation_option', 'taskcompletion')
         if (ndo is not None and

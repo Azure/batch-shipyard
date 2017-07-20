@@ -160,7 +160,7 @@ before scheduling tasks to another node). `spread` will schedule tasks
 evenly across compute nodes before packing.
 * (optional) `autoscale` designates the autoscale settings for the pool. If
 specified, the `vm_count` becomes the minimum number of virtual machines for
-each node type.
+each node type for `scenario` based autoscale.
   * (optional) `evaluation_interval` is the time interval between autoscale
     evaluations performed by the service. The format for this property is a
     timedelta with a string representation of "d.HH:mm:ss". "HH:mm:ss" is
@@ -168,9 +168,12 @@ each node type.
     is 15 minutes. The smallest value that can be specified is 5 minutes.
   * (optional) `scenario` is a pre-set autoscale scenario where a formula
     will be generated with the parameters specified within this property.
-    * (required) `name` is the autoscale scenario name to apply. Please see
-      the [autoscale guide](30-batch-shipyard-autoscale.md) for valid values.
-    * (optional) `maximum_vm_count` is the maximum number of compute nodes
+    * (required) `name` is the autoscale scenario name to apply. Valid
+      values are `active_tasks`, `pending_tasks`, `workday`,
+      `workday_with_offpeak_max_low_priority`, `weekday`, `weekend`.
+      Please see the [autoscale guide](30-batch-shipyard-autoscale.md) for
+      more information about these scenarios.
+    * (required) `maximum_vm_count` is the maximum number of compute nodes
       that can be allocated from an autoscale evaluation. It is useful to
       have these limits in place as to control the top-end scale of the
       autoscale scenario. Specifying a negative value for either of the
