@@ -2469,6 +2469,7 @@ def add_jobs(
                     value=__version__,
                 ),
             ],
+            priority=settings.job_priority(jobspec),
         )
         lastjob = job.id
         logger.info('Adding job {} to pool {}'.format(job.id, pool.id))

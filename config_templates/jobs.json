@@ -10,6 +10,7 @@
             "max_task_retries": 1,
             "max_wall_time": "02:00:00",
             "retention_time": "1.12:00:00",
+            "priority": 0,
             "allow_run_on_missing_image": false,
             "user_identity": {
                 "default_pool_admin": true,

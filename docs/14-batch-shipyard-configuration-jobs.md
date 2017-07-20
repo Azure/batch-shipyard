@@ -17,6 +17,8 @@ The jobs schema is as follows:
             "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
             "max_task_retries": 3,
             "max_wall_time": "02:00:00",
+            "retention_time": "1.12:00:00",
+            "priority": 0,
             "allow_run_on_missing_image": false,
             "user_identity": {
                 "default_pool_admin": true,
@@ -181,6 +183,11 @@ compute node to clean up all of the task directories under this job
 36 hours after the task completed. The default, if unspecified, is
 effectively infinite - i.e., task data is retained forever on the compute
 node that ran the task.
+* (optional) `priority` is an integral number that indicates the job priority.
+Tasks within jobs with higher priority are run ahead of those with lower
+priority, however, tasks that are already running with lower priority are
+not preempted. Valid values are within the range of [-1000, 1000] and the
+default is `0`.
 * (optional) `allow_run_on_missing_image` allows tasks with a Docker image
 reference that was not pre-loaded on to the compute node via
 `global_resources`:`docker_images` in the global configuration to be able to

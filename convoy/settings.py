@@ -2072,6 +2072,19 @@ def job_auto_complete(conf):
     return ac
 
 
+def job_priority(conf):
+    # type: (dict) -> int
+    """Get job priority setting
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: job autocomplete
+    """
+    pri = _kv_read(conf, 'priority', 0)
+    if pri < -1000 or pri > 1000:
+        raise ValueError('job priority is invalid: {}'.format(pri))
+    return pri
+
+
 def job_environment_variables(conf):
     # type: (dict) -> str
     """Get env vars of a job specification
