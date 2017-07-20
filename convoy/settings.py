@@ -120,7 +120,7 @@ PoolSettings = collections.namedtuple(
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
         'gpu_driver', 'ssh', 'additional_node_prep_commands',
-        'virtual_network', 'autoscale',
+        'virtual_network', 'autoscale', 'node_fill_type',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -804,6 +804,7 @@ def pool_settings(config):
             default_create_nonexistant=False,
         ),
         autoscale=pool_autoscale_settings(config),
+        node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
     )
 
 

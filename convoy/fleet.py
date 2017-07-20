@@ -731,11 +731,20 @@ def _add_pool(
         asformula = None
         asei = None
     logger.debug('autoscale enabled: {}'.format(asenable))
+    # task scheduling policy settings
+    if util.is_not_empty(pool_settings.node_fill_type):
+        task_scheduling_policy = batchmodels.TaskSchedulingPolicy(
+            node_fill_type=batchmodels.ComputeNodeFillType(
+                pool_settings.node_fill_type),
+        )
+    else:
+        task_scheduling_policy = None
+    # custom image settings
     custom_image_na = settings.pool_custom_image_node_agent(config)
+    # check for virtual network settings
     bc = settings.credentials_batch(config)
     vnet = None
     subnet = None
-    # check for virtual network settings
     if (pool_settings.virtual_network is not None and
             util.is_not_empty(pool_settings.virtual_network.name)):
         if util.is_none_or_empty(pool_settings.virtual_network.subnet_name):
@@ -1005,6 +1014,7 @@ def _add_pool(
                 value=__version__,
             ),
         ],
+        task_scheduling_policy=task_scheduling_policy,
     )
     if util.is_not_empty(block_for_gr):
         pool.start_task.environment_settings.append(

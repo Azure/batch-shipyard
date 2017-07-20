@@ -29,6 +29,7 @@ The pool schema is as follows:
         },
         "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
+        "node_fill_type": "pack",
         "autoscale": {
             "evaluation_interval": "00:05:00",
             "scenario": {
@@ -152,6 +153,11 @@ value of 1 if not specified. The maximum value for the property that Azure
 Batch will accept is `4 x <# cores per compute node>`. For instance, for a
 `STANDARD_F2` instance, because the virtual machine has 2 cores, the maximum
 allowable value for this property would be `8`.
+* (optional) `node_fill_type` is the task scheduling compute node fill type
+policy to apply. `pack`, which is the default, attempts to pack the
+maximum number of tasks on a node (controlled through `max_tasks_per_node`
+before scheduling tasks to another node). `spread` will schedule tasks
+evenly across compute nodes before packing.
 * (optional) `autoscale` designates the autoscale settings for the pool. If
 specified, the `vm_count` becomes the minimum number of virtual machines for
 each node type.
