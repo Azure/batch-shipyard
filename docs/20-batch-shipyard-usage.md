@@ -340,8 +340,11 @@ The `jobs` command has the following sub-commands:
   cmi        Cleanup multi-instance jobs
   del        Delete jobs
   deltasks   Delete specified tasks in jobs
+  disable    Disable jobs
+  enable     Enable jobs
   list       List jobs
   listtasks  List tasks within jobs
+  migrate    Migrate jobs to another pool
   term       Terminate jobs
   termtasks  Terminate specified tasks in jobs
 ```
@@ -365,11 +368,24 @@ configuration file. Active or running tasks will be terminated first.
   * `--jobid` force deletion scope to just this job id
   * `--taskid` force deletion scope to just this task id
   * `--wait` will wait for deletion to complete
+* `disable` will disable jobs
+  * `--jobid` force disable scope to just this job id
+  * `--requeue` requeue running tasks
+  * `--terminate` terminate running tasks
+  * `--wait` wait for running tasks to complete
+* `enable` will enable jobs
+  * `--jobid` force enable scope to just this job id
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
   * `--jobid` force scope to just this job id
   * `--poll-until-tasks-complete` will poll until all tasks have completed
+* `migrate` will migrate jobs to another pool
+  * `--jobid` force migration scope to just this job id
+  * `--poolid` force migration to this specified pool id
+  * `--requeue` requeue running tasks
+  * `--terminate` terminate running tasks
+  * `--wait` wait for running tasks to complete
 * `term` will terminate jobs found in the jobs configuration file
   * `--all` will terminate all jobs found in the Batch account
   * `--jobid` force termination scope to just this job id

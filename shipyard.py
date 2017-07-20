@@ -1460,6 +1460,64 @@ def jobs_cmi(ctx, delete):
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
 
 
+@jobs.command('migrate')
+@click.option(
+    '--jobid', help='Migrate only the specified job id')
+@click.option(
+    '--poolid', help='Target specified pool id rather than from configuration')
+@click.option(
+    '--requeue', is_flag=True, help='Requeue running tasks in job')
+@click.option(
+    '--terminate', is_flag=True, help='Terminate running tasks in job')
+@click.option(
+    '--wait', is_flag=True, help='Wait for running tasks to complete in job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_migrate(ctx, jobid, poolid, requeue, terminate, wait):
+    """Migrate jobs to another pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_migrate(
+        ctx.batch_client, ctx.config, jobid, poolid, requeue, terminate, wait)
+
+
+@jobs.command('disable')
+@click.option(
+    '--jobid', help='Disable only the specified job id')
+@click.option(
+    '--requeue', is_flag=True, help='Requeue running tasks in job')
+@click.option(
+    '--terminate', is_flag=True, help='Terminate running tasks in job')
+@click.option(
+    '--wait', is_flag=True, help='Wait for running tasks to complete in job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_disable(ctx, jobid, requeue, terminate, wait):
+    """Disable jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_disable(
+        ctx.batch_client, ctx.config, jobid, requeue, terminate, wait)
+
+
+@jobs.command('enable')
+@click.option(
+    '--jobid', help='Enable only the specified job id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_enable(ctx, jobid):
+    """Enable jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_enable(ctx.batch_client, ctx.config, jobid)
+
+
 @cli.group()
 @pass_cli_context
 def data(ctx):

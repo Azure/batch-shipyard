@@ -1000,6 +1000,146 @@ def del_node(batch_client, config, all_start_task_failed, node_id):
     )
 
 
+def check_pool_for_job_migration(
+        batch_client, config, jobid=None, poolid=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str) -> None
+    """Check pool for job migration eligibility
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id to migrate
+    :param str poolid: pool id to update to
+    """
+    if poolid is None:
+        poolid = settings.pool_id(config)
+    if jobid is None:
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for _job in jobs:
+        job_id = settings.job_id(_job)
+        job = batch_client.job.get(job_id=job_id)
+        if (job.state == batchmodels.JobState.completed or
+                job.state == batchmodels.JobState.deleting or
+                job.state == batchmodels.JobState.terminating):
+            raise RuntimeError(
+                'cannot migrate job {} in state {}'.format(job_id, job.state))
+        if job.pool_info.auto_pool_specification is not None:
+            raise RuntimeError(
+                'cannot migrate job {} with an autopool specification'.format(
+                    job_id))
+        if job.pool_info.pool_id == poolid:
+            raise RuntimeError(
+                'cannot migrate job {} to the same pool {}'.format(
+                    job_id, poolid))
+
+
+def update_job_with_pool(batch_client, config, jobid=None, poolid=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str) -> None
+    """Update job with different pool id
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id to update
+    :param str poolid: pool id to update to
+    """
+    if poolid is None:
+        poolid = settings.pool_id(config)
+    if jobid is None:
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for _job in jobs:
+        job_id = settings.job_id(_job)
+        batch_client.job.patch(
+            job_id=job_id,
+            job_patch_parameter=batchmodels.JobPatchParameter(
+                pool_info=batchmodels.PoolInformation(
+                    pool_id=poolid)
+            )
+        )
+        logger.info('updated job {} to target pool {}'.format(
+            job_id, poolid))
+
+
+def disable_jobs(
+        batch_client, config, disable_tasks_action, jobid=None,
+        disabling_state_ok=False, terminate_tasks=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str, bool, bool) -> None
+    """Disable jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str disable_tasks_action: disable tasks action
+    :param str jobid: job id to disable
+    :param bool disabling_state_ok: disabling state is ok to proceed
+    :param bool terminate_tasks: terminate tasks after disable
+    """
+    if jobid is None:
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for job in jobs:
+        job_id = settings.job_id(job)
+        try:
+            batch_client.job.disable(
+                job_id=job_id,
+                disable_tasks=batchmodels.DisableJobOption(
+                    disable_tasks_action),
+            )
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if ('The specified job is already in a completed state' in
+                    ex.message.value):
+                pass
+        else:
+            # wait for job to enter disabled/completed/deleting state
+            while True:
+                _job = batch_client.job.get(
+                    job_id=job_id,
+                    job_get_options=batchmodels.JobGetOptions(
+                        select='id,state')
+                )
+                if ((disabling_state_ok and
+                     _job.state == batchmodels.JobState.disabling) or
+                        _job.state == batchmodels.JobState.disabled or
+                        _job.state == batchmodels.JobState.completed or
+                        _job.state == batchmodels.JobState.deleting):
+                    break
+                time.sleep(1)
+            logger.info('job {} disabled'.format(job_id))
+            if terminate_tasks:
+                terminate_tasks(
+                    batch_client, config, jobid=job_id, wait=True)
+
+
+def enable_jobs(batch_client, config, jobid=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str) -> None
+    """Enable jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id to enable
+    """
+    if jobid is None:
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    for job in jobs:
+        job_id = settings.job_id(job)
+        try:
+            batch_client.job.enable(job_id=job_id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if ('The specified job is already in a completed state' in
+                    ex.message.value):
+                pass
+        else:
+            logger.info('job {} enabled'.format(job_id))
+
+
 def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        str, bool, bool) -> None
@@ -1030,32 +1170,9 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
                 logger.debug(
                     'disabling job {} first due to task termination'.format(
                         job_id))
-                try:
-                    batch_client.job.disable(
-                        job_id,
-                        disable_tasks=batchmodels.DisableJobOption.wait
-                    )
-                except batchmodels.batch_error.BatchErrorException as ex:
-                    if ('The specified job is already in a completed state' in
-                            ex.message.value):
-                        pass
-                else:
-                    # wait for job to enter non-active/enabling state
-                    while True:
-                        _job = batch_client.job.get(
-                            job_id,
-                            job_get_options=batchmodels.JobGetOptions(
-                                select='id,state')
-                        )
-                        if (_job.state == batchmodels.JobState.disabling or
-                                _job.state == batchmodels.JobState.disabled or
-                                _job.state == batchmodels.JobState.completed or
-                                _job.state == batchmodels.JobState.deleting):
-                            break
-                        time.sleep(1)
-                    # terminate tasks with forced wait
-                    terminate_tasks(
-                        batch_client, config, jobid=job_id, wait=True)
+                disable_jobs(
+                    batch_client, config, 'wait', jobid=job_id,
+                    disabling_state_ok=True, terminate_tasks=True)
             # delete job
             batch_client.job.delete(job_id)
         except batchmodels.batch_error.BatchErrorException as ex:

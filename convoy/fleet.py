@@ -2570,6 +2570,80 @@ def action_jobs_cmi(batch_client, config, delete):
         batch.del_clean_mi_jobs(batch_client, config)
 
 
+def action_jobs_migrate(
+        batch_client, config, jobid, poolid, requeue, terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool,
+    #        bool) -> None
+    """Action: Jobs Migrate
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to migrate to in lieu of config
+    :param str poolid: pool id to migrate to in lieu of config
+    :param bool requeue: requeue action
+    :param bool terminate: terminate action
+    :param bool wait: wait action
+    """
+    if [requeue, terminate, wait].count(True) != 1:
+        raise ValueError(
+            'must specify only one option of --requeue, --terminate, --wait')
+    if requeue:
+        action = 'requeue'
+    elif terminate:
+        action = 'terminate'
+    elif wait:
+        action = 'wait'
+    # check jobs to see if targetted pool id is the same
+    batch.check_pool_for_job_migration(
+        batch_client, config, jobid=jobid, poolid=poolid)
+    if not util.confirm_action(config, msg='migrate jobs'):
+        return
+    # disable job and wait for disabled state
+    batch.disable_jobs(batch_client, config, action, jobid=jobid)
+    # patch job
+    batch.update_job_with_pool(
+        batch_client, config, jobid=jobid, poolid=poolid)
+    # enable job
+    batch.enable_jobs(batch_client, config, jobid=jobid)
+
+
+def action_jobs_disable(
+        batch_client, config, jobid, requeue, terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, bool, bool,
+    #        bool) -> None
+    """Action: Jobs Disable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to migrate to in lieu of config
+    :param bool requeue: requeue action
+    :param bool terminate: terminate action
+    :param bool wait: wait action
+    """
+    if [requeue, terminate, wait].count(True) != 1:
+        raise ValueError(
+            'must specify only one option of --requeue, --terminate, --wait')
+    if requeue:
+        action = 'requeue'
+    elif terminate:
+        action = 'terminate'
+    elif wait:
+        action = 'wait'
+    batch.disable_jobs(
+        batch_client, config, action, jobid=jobid, disabling_state_ok=True)
+
+
+def action_jobs_enable(batch_client, config, jobid):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Jobs Enable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to migrate to in lieu of config
+    """
+    batch.enable_jobs(batch_client, config, jobid=jobid)
+
+
 def action_storage_del(
         blob_client, queue_client, table_client, config, clear_tables):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
