@@ -18,7 +18,8 @@ The example MNIST training sample will be used on one Azure Batch compute node
 regardless of which Deep Learning framework you prefer for the following.
 
 1. [Installation of Batch Shipyard](01-batch-shipyard-installation.md)
-to your local machine has been completed.
+to your local machine has been completed or you are using Batch Shipyard
+from within Azure Cloud Shell.
 2. Create a directory to hold your configuration files. For this quickstart
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe

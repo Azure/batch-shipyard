@@ -6,8 +6,8 @@ groups available in `/etc/group` with the `busybox` Docker image.
 
 Please ensure that you have followed the
 [Batch Shipyard installation guide](01-batch-shipyard-installation.md)
-and have completed the installation (or have pulled the Batch Shipyard
-Docker CLI image) to your machine.
+and have completed the installation (or pulled the Batch Shipyard Docker CLI
+image) to your machine or are using Batch Shipyard on Azure Cloud Shell.
 
 ### Step 0: Azure Batch and Azure Storage Accounts
 You will need to create an Azure Batch and a general purpose Azure Storage

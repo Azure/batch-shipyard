@@ -14,6 +14,14 @@ Additionally, Batch Shipyard provides the ability to provision and manage
 entire [standalone remote file systems (storage clusters)](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
 in Azure, independent of any integrated Azure Batch functionality.
 
+Batch Shipyard is now integrated directly into
+[Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
+and you can execute any Batch Shipyard workload using your web browser or
+the Microsoft Azure
+[Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
+and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
+app.
+
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) installation tuned
 for Azure Batch compute nodes
@@ -66,6 +74,12 @@ tunneling to Docker Hosts on compute nodes
 * Support for [custom host images](https://github.com/Azure/batch-shipyard/blob/master/docs/63-batch-shipyard-custom-images.md)
 
 ## Installation
+### Azure Cloud Shell
+Batch Shipyard is now integrated into Azure Cloud Shell with no installation
+required. Simply request a Cloud Shell session and type `shipyard` to invoke
+the CLI.
+
+### Local Installation
 Installation is typically an easy two-step process. The CLI is also available
 as a Docker image:
 [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard).

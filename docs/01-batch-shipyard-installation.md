@@ -6,6 +6,17 @@ If you wish to install Batch Shipyard into your Azure App Service (e.g.,
 Azure Function App) environment, please see
 [this guide](60-batch-shipyard-site-extension.md).
 
+## Azure Cloud Shell
+Batch Shipyard is now integrated into
+[Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
+with no installation required. Simply request a Cloud Shell session and type
+`shipyard` to invoke the CLI. Data stored in your home directory or
+`clouddrive` will persist between Cloud Shell sessions.
+
+Note that Azure Cloud Shell may not have the most recent release of
+Batch Shipyard. You can see the version of Batch Shipyard installed with
+the command `shipyard --version`.
+
 ## Installation
 ### Step 1: Acquire Batch Shipyard
 Clone the repository:
