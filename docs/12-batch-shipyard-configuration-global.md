@@ -153,9 +153,9 @@ distributed environment.
 to prefix storage containers (blob containers, tables, queues) with. If not
 specified, defaults to `shipyard`.
 * (optional) `generated_sas_expiry_days` property is used to set the number of
-days any generated SAS key by Batch Shipyard is valid for. The default is 30
-days. This is useful if you have long-lived pools and want to ensure that
-SAS keys are valid for longer periods of time.
+days any non-resource file generated SAS key by Batch Shipyard is valid for.
+The default is effectively unlimited. This is useful if you want to set SAS
+keys are only valid for a preferred period of time.
 * (optional) `encryption` object is used to define credential encryption which
 contains the following members:
   * (required) `enabled` property enables or disables this feature.

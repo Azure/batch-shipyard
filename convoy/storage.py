@@ -47,8 +47,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
 _DOCKER_HUB_REGISTRY = 'docker.io'
-_DEFAULT_SAS_EXPIRY_DAYS = 180
-_DEFAULT_RF_SAS_EXPIRY_DAYS = 365 * 30
+_DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
@@ -354,7 +353,7 @@ def upload_resource_files(blob_client, config, files):
                 _STORAGE_CONTAINERS['blob_resourcefiles'], file[0],
                 permission=azureblob.BlobPermissions.READ,
                 expiry=datetime.datetime.utcnow() +
-                datetime.timedelta(days=_DEFAULT_RF_SAS_EXPIRY_DAYS)
+                datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
             )
         )
     return sas_urls
