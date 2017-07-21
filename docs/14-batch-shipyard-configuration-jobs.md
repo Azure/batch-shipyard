@@ -19,7 +19,6 @@ The jobs schema is as follows:
             "max_wall_time": "02:00:00",
             "retention_time": "1.12:00:00",
             "priority": 0,
-            "allow_run_on_missing_image": false,
             "user_identity": {
                 "default_pool_admin": true,
                 "specific_user": {
@@ -27,6 +26,11 @@ The jobs schema is as follows:
                     "gid": 1000
                 }
             },
+            "auto_pool": {
+                "pool_lifetime": "job",
+                "keep_alive": false
+            },
+            "allow_run_on_missing_image": false,
             "remove_container_after_exit": true,
             "shm_size": "256m",
             "infiniband": false,
@@ -188,12 +192,6 @@ Tasks within jobs with higher priority are run ahead of those with lower
 priority, however, tasks that are already running with lower priority are
 not preempted. Valid values are within the range of [-1000, 1000] and the
 default is `0`.
-* (optional) `allow_run_on_missing_image` allows tasks with a Docker image
-reference that was not pre-loaded on to the compute node via
-`global_resources`:`docker_images` in the global configuration to be able to
-run. Note that you should attempt to specify all Docker images that you intend
-to run in the `global_resources`:`docker_images` property in the global
-configuration to minimize scheduling to task execution latency.
 * (optional) `user_identity` property is to define which user to run the
 container as. By default, if this property is not defined, the container will
 be run as the root user. However, it may be required to run the container
@@ -208,6 +206,25 @@ mutually exclusive of one another.
     user.
     * (required) `uid` is the user id of the user
     * (required) `gid` is the group id of the user
+* (optional) `auto_pool` will create a compute pool on demand for
+the job as specified in the pool configuration. Note that storage resources
+required by Batch Shipyard may not be automatically cleaned up when using
+autopools. Utilizing `jobs term` or `jobs del` without any jobid scoping
+will attempt to clean up storage resources. Otherwise, you will need to use
+`storage del` or `storage clear` to clean up storage resources manually.
+  * (optional) `pool_lifetime` specifies the lifetime of the pool. Valid
+    values are `job` and `job_schedule`. You may not specify `job_schedule`
+    for non-recurring jobs. The default is `job`.
+  * (optional) `keep_alive` specifies if the pool should be kept even after
+    its lifetime expires. The default is `false`. Note that setting this
+    value to `false` and setting `auto_complete` to `true` will automatically
+    delete the compute pool once all tasks under the job complete.
+* (optional) `allow_run_on_missing_image` allows tasks with a Docker image
+reference that was not pre-loaded on to the compute node via
+`global_resources`:`docker_images` in the global configuration to be able to
+run. Note that you should attempt to specify all Docker images that you intend
+to run in the `global_resources`:`docker_images` property in the global
+configuration to minimize scheduling to task execution latency.
 * (optional) `remove_container_after_exit` property specifies if all
 containers under the job should be automatically removed/cleaned up after
 the task exits. This defaults to `false`.

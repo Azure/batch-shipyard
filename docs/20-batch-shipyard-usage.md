@@ -357,7 +357,9 @@ to the Batch pool
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.
   * `--delete` will delete any stale cleanup jobs
-* `del` will delete jobs specified in the jobs configuration file
+* `del` will delete jobs specified in the jobs configuration file. If an
+autopool is specified for all jobs and a jobid option is not specified,
+the storage associated with the autopool will be cleaned up.
   * `--all` will delete all jobs found in the Batch account
   * `--jobid` force deletion scope to just this job id
   * `--termtasks` will manually terminate tasks prior to deletion. Termination
@@ -386,7 +388,9 @@ file
   * `--requeue` requeue running tasks
   * `--terminate` terminate running tasks
   * `--wait` wait for running tasks to complete
-* `term` will terminate jobs found in the jobs configuration file
+* `term` will terminate jobs found in the jobs configuration file. If an
+autopool is specified for all jobs and a jobid option is not specified,
+the storage associated with the autopool will be cleaned up.
   * `--all` will terminate all jobs found in the Batch account
   * `--jobid` force termination scope to just this job id
   * `--termtasks` will manually terminate tasks prior to termination.
@@ -523,8 +527,11 @@ The `storage` command has the following sub-commands:
 ```
 * `clear` will clear the Azure Storage containers used by Batch Shipyard
 for metadata purposes
+  * `--poolid` will target a specific pool id rather than from configuration
 * `del` will delete the Azure Storage containers used by Batch Shipyard
 for metadata purposes
+  * `--clear-tables` will clear tables instead of deleting them
+  * `--poolid` will target a specific pool id
 
 ## Example Invocations
 ```shell

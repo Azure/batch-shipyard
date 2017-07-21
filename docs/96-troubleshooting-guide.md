@@ -85,6 +85,16 @@ Additionally, if you have specified an SSH user for your pool and there
 is a start task failure, you can still issue the command `pool asu` to add the
 pool SSH user and then `pool ssh` to SSH into the node to debug further.
 
+Please note that the start task requires downloading some files that are
+uploaded to your Azure Storage account with the command `pool add`. These
+files have SAS tokens which allow the Batch compute node to authenticate
+with the Azure Storage service to download the files. These SAS tokens are
+bound to the storage account key for which they were generated with. If you
+change/regenerate your storage account key that these SAS tokens were
+originally generated with, then the compute nodes will fail to start as
+these files will no longer be able to be downloaded. You will need to
+recreate your pool in these situations.
+
 #### Compute Node does not start or is unusable
 If the compute node is "stuck" in starting state or enters unusable state,
 this indicates that there was an issue allocating the node from the Azure

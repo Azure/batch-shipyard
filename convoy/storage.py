@@ -215,15 +215,18 @@ def create_file_share_saskey(
     )
 
 
-def _construct_partition_key_from_config(config):
-    # type: (dict) -> str
+def _construct_partition_key_from_config(config, pool_id=None):
+    # type: (dict, str) -> str
     """Construct partition key from config
     :param dict config: configuration dict
+    :param str pool_id: use specified pool id instead
     :rtype: str
     :return: partition key
     """
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config, lower=True)
     return '{}${}'.format(
-        settings.credentials_batch(config).account, settings.pool_id(config))
+        settings.credentials_batch(config).account, pool_id)
 
 
 def _add_global_resource(
@@ -408,9 +411,13 @@ def _clear_blobs(blob_client, container):
     :param str container: container to clear blobs from
     """
     logger.info('deleting blobs: {}'.format(container))
-    blobs = blob_client.list_blobs(container)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
+    try:
+        blobs = blob_client.list_blobs(container)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(container))
+    else:
+        for blob in blobs:
+            blob_client.delete_blob(container, blob.name)
 
 
 def _clear_blob_task_resourcefiles(blob_client, container, config):
@@ -423,19 +430,24 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
     bs = settings.batch_shipyard_settings(config)
     envfileloc = '{}taskrf-'.format(bs.storage_entity_prefix)
     logger.info('deleting blobs with prefix: {}'.format(envfileloc))
-    blobs = blob_client.list_blobs(container, prefix=envfileloc)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
+    try:
+        blobs = blob_client.list_blobs(container, prefix=envfileloc)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(container))
+    else:
+        for blob in blobs:
+            blob_client.delete_blob(container, blob.name)
 
 
-def _clear_table(table_client, table_name, config):
+def _clear_table(table_client, table_name, config, pool_id=None):
+    # type: (azuretable.TableService, str, dict, str) -> None
     """Clear table entities
     :param azure.storage.table.TableService table_client: table client
     :param str table_name: table name
     :param dict config: configuration dict
+    :param str pool_id: use specified pool id instead
     """
-    # type: (azuretable.TableService, str, dict) -> None
-    pk = _construct_partition_key_from_config(config)
+    pk = _construct_partition_key_from_config(config, pool_id=pool_id)
     logger.debug('clearing table (pk={}): {}'.format(pk, table_name))
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}\''.format(pk))
@@ -454,14 +466,15 @@ def _clear_table(table_client, table_name, config):
 
 
 def clear_storage_containers(
-        blob_client, table_client, config, tables_only=False):
+        blob_client, table_client, config, tables_only=False, pool_id=None):
     # type: (azureblob.BlockBlobService, azuretable.TableService, dict,
-    #        bool) -> None
+    #        bool, str) -> None
     """Clear storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool tables_only: clear only tables
+    :param str pool_id: use specified pool id instead
     """
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
@@ -470,7 +483,9 @@ def clear_storage_containers(
                 _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             try:
-                _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
+                _clear_table(
+                    table_client, _STORAGE_CONTAINERS[key], config,
+                    pool_id=pool_id)
             except azure.common.AzureMissingResourceHttpError:
                 if key != 'table_perf' or bs.store_timing_metrics:
                     raise

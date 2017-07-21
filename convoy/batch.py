@@ -2302,6 +2302,32 @@ def generate_docker_login_settings(config, for_ssh=False):
     return env, cmd
 
 
+def check_jobs_for_auto_pool(config):
+    # type: (dict) -> bool
+    """Check jobs for auto pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :rtype: bool
+    :return: if auto pool is enabled
+    """
+    # ensure all jobspecs uniformly have autopool or all off
+    autopool = []
+    for jobspec in settings.job_specifications(config):
+        if settings.job_auto_pool(jobspec) is None:
+            autopool.append(False)
+        else:
+            autopool.append(True)
+    if autopool.count(False) == len(autopool):
+        logger.debug('autopool not detected for jobs')
+        return False
+    elif autopool.count(True) == len(autopool):
+        logger.debug('autopool detected for jobs')
+        return True
+    else:
+        raise ValueError('all jobs must have auto_pool enabled or disabled')
+
+
 def _format_generic_task_id(tasknum):
     # type: (int) -> str
     """Format a generic task id from a task number
@@ -2425,17 +2451,18 @@ def _add_task_collection(batch_client, job_id, task_map):
 
 
 def add_jobs(
-        batch_client, blob_client, keyvault_client, config, jpfile, bxfile,
-        recreate=False, tail=None):
+        batch_client, blob_client, keyvault_client, config, autopool, jpfile,
+        bxfile, recreate=False, tail=None):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        azure.keyvault.KeyVaultClient, dict, tuple, tuple, bool,
-    #        str) -> None
+    #        azure.keyvault.KeyVaultClient, dict,
+    #        batchmodels.PoolSpecification, tuple, tuple, bool, str) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
+    :param batchmodels.PoolSpecification autopool: auto pool specification
     :param tuple jpfile: jobprep file
     :param tuple bxfile: blobxfer file
     :param bool recreate: recreate job if completed
@@ -2447,16 +2474,17 @@ def add_jobs(
     try:
         cloud_pool = batch_client.pool.get(pool.id)
     except batchmodels.batch_error.BatchErrorException as ex:
-        if 'The specified pool does not exist.' in ex.message.value:
-            logger.error('{} pool does not exist'.format(pool.id))
-            if util.confirm_action(
-                    config, 'add jobs to nonexistant pool {}'.format(pool.id)):
-                cloud_pool = None
-            else:
-                logger.error(
-                    'not submitting jobs to nonexistant pool {}'.format(
-                        pool.id))
-                return
+        if 'The specified pool does not exist' in ex.message.value:
+            cloud_pool = None
+            if autopool is None:
+                logger.error('{} pool does not exist'.format(pool.id))
+                if not util.confirm_action(
+                        config,
+                        'add jobs to nonexistant pool {}'.format(pool.id)):
+                    logger.error(
+                        'not submitting jobs to nonexistant pool {}'.format(
+                            pool.id))
+                    return
         else:
             raise
     preg = settings.docker_registry_private_settings(config)
@@ -2572,10 +2600,32 @@ def add_jobs(
                     user_identity=_RUN_ELEVATED,
                     rerun_on_node_reboot_after_success=False,
                 )
+        # construct pool info
+        if autopool is None:
+            pool_info = batchmodels.PoolInformation(pool_id=pool.id)
+        else:
+            autopool_settings = settings.job_auto_pool(jobspec)
+            if autopool_settings is None:
+                raise ValueError(
+                    'auto_pool settings is invalid for job {}'.format(
+                        settings.job_id(jobspec)))
+            if autopool_settings.pool_lifetime == 'job_schedule':
+                autopool_plo = batchmodels.PoolLifetimeOption.job_schedule
+            else:
+                autopool_plo = batchmodels.PoolLifetimeOption(
+                    autopool_settings.pool_lifetime)
+            pool_info = batchmodels.PoolInformation(
+                auto_pool_specification=batchmodels.AutoPoolSpecification(
+                    auto_pool_id_prefix=pool.id,
+                    pool_lifetime_option=autopool_plo,
+                    keep_alive=autopool_settings.keep_alive,
+                    pool=autopool,
+                )
+            )
         # create job
         job = batchmodels.JobAddParameter(
             id=settings.job_id(jobspec),
-            pool_info=batchmodels.PoolInformation(pool_id=pool.id),
+            pool_info=pool_info,
             constraints=job_constraints,
             uses_task_dependencies=uses_task_dependencies,
             job_preparation_task=jptask,
@@ -2820,7 +2870,6 @@ def add_jobs(
             batch_client.job.patch(
                 job_id=job.id,
                 job_patch_parameter=batchmodels.JobPatchParameter(
-                    pool_info=batchmodels.PoolInformation(pool_id=pool.id),
                     on_all_tasks_complete=batchmodels.
                     OnAllTasksComplete.terminate_job))
     # tail file if specified

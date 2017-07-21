@@ -907,28 +907,32 @@ def storage(ctx):
 @storage.command('del')
 @click.option(
     '--clear-tables', is_flag=True, help='Clear tables instead of deleting')
+@click.option(
+    '--poolid', help='Delete storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_del(ctx, clear_tables):
+def storage_del(ctx, clear_tables, poolid):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config,
-        clear_tables)
+        clear_tables, poolid)
 
 
 @storage.command('clear')
+@click.option(
+    '--poolid', help='Clear storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_clear(ctx):
+def storage_clear(ctx, poolid):
     """Clear Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_clear(
-        ctx.blob_client, ctx.table_client, ctx.config)
+        ctx.blob_client, ctx.table_client, ctx.config, poolid)
 
 
 @cli.group()
@@ -1327,8 +1331,9 @@ def jobs_add(ctx, recreate, tail):
     """Add jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_add(
-        ctx.batch_client, ctx.blob_client, ctx.keyvault_client, ctx.config,
-        recreate, tail)
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
+        ctx.table_client, ctx.keyvault_client, ctx.config, recreate, tail)
 
 
 @jobs.command('list')
@@ -1402,7 +1407,8 @@ def jobs_term(ctx, all, jobid, termtasks, wait):
     """Terminate jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_term(
-        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
+        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
+        ctx.config, all, jobid, termtasks, wait)
 
 
 @jobs.command('del')
@@ -1423,7 +1429,8 @@ def jobs_del(ctx, all, jobid, termtasks, wait):
     """Delete jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_del(
-        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
+        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
+        ctx.config, all, jobid, termtasks, wait)
 
 
 @jobs.command('deltasks')

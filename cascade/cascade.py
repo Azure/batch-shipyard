@@ -63,12 +63,10 @@ _TORRENT_STATE = [
     'seeding', 'allocating', 'checking fastresume'
 ]
 _TORRENT_SESSION = None
-_BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
-_POOLID = os.environ['AZ_BATCH_POOL_ID']
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
 _SHARED_DIR = os.environ['AZ_BATCH_NODE_SHARED_DIR']
 _TORRENT_DIR = pathlib.Path(_SHARED_DIR, '.torrents')
-_PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
+_PARTITION_KEY = None
 _LR_LOCK_ASYNC = asyncio.Lock()
 _PT_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
@@ -140,22 +138,32 @@ def _setup_logger() -> None:
     logger.info('logger initialized, log file: {}'.format(logloc))
 
 
-def _setup_container_names(sep: str) -> None:
-    """Set up storage container names
+def _setup_storage_names(sep: str) -> None:
+    """Set up storage names
     :param str sep: storage container prefix
     """
+    global _PARTITION_KEY, _PREFIX
+    # transform pool id if necessary
+    poolid = os.environ['AZ_BATCH_POOL_ID'].lower()
+    autopool = os.environ.get('SHIPYARD_AUTOPOOL', default=None)
+    # remove guid portion of pool id if autopool
+    if autopool is not None:
+        poolid = poolid[:-37]
+    # set partition key
+    batchaccount = os.environ['AZ_BATCH_ACCOUNT_NAME'].lower()
+    _PARTITION_KEY = '{}${}'.format(batchaccount, poolid)
+    # set container names
     if sep is None or len(sep) == 0:
         raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_globalresources'] = '-'.join(
-        (sep + 'gr', _BATCHACCOUNT.lower(), _POOLID.lower()))
+        (sep + 'gr', batchaccount, poolid))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'tor', _BATCHACCOUNT.lower(), _POOLID.lower()))
+        (sep + 'tor', batchaccount, poolid))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
-    global _PREFIX
     _PREFIX = sep
 
 
@@ -1193,7 +1201,7 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
 def main():
     """Main function"""
     global _ENABLE_P2P, _CONCURRENT_DOWNLOADS_ALLOWED, \
-        _ALLOW_PUBLIC_PULL_WITH_PRIVATE
+        _ALLOW_PUBLIC_PULL_WITH_PRIVATE, _POOL_ID
     # get command-line args
     args = parseargs()
     p2popts = args.p2popts.split(':')
@@ -1235,8 +1243,8 @@ def main():
         ipaddress = args.ipaddress
     logger.debug('ip address: {}'.format(ipaddress))
 
-    # set up container names
-    _setup_container_names(args.prefix)
+    # set up storage names
+    _setup_storage_names(args.prefix)
 
     # create storage credentials
     blob_client, table_client = _create_credentials()

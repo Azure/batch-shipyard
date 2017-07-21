@@ -112,6 +112,12 @@ PoolAutoscaleSettings = collections.namedtuple(
         'scenario',
     ]
 )
+PoolAutopoolSettings = collections.namedtuple(
+    'PoolAutopoolSettings', [
+        'pool_lifetime',
+        'keep_alive',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
@@ -2074,6 +2080,24 @@ def job_auto_complete(conf):
     return ac
 
 
+def job_auto_pool(conf):
+    # type: (dict) -> PoolAutopoolSettings
+    """Get job autopool setting
+    :param dict conf: job configuration object
+    :rtype: PoolAutopoolSettings
+    :return: job autopool settings
+    """
+    ap = _kv_read_checked(conf, 'auto_pool')
+    if ap is not None:
+        return PoolAutopoolSettings(
+            pool_lifetime=_kv_read_checked(
+                ap, 'pool_lifetime', 'job').lower(),
+            keep_alive=_kv_read(ap, 'keep_alive', False),
+        )
+    else:
+        return None
+
+
 def job_priority(conf):
     # type: (dict) -> int
     """Get job priority setting
@@ -2303,9 +2327,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             sku = None
             node_agent = poolconf.vm_configuration.node_agent
         else:
-            publisher = poolconf.publisher.lower()
-            offer = poolconf.offer.lower()
-            sku = poolconf.sku.lower()
+            publisher = poolconf.vm_configuration.publisher.lower()
+            offer = poolconf.vm_configuration.offer.lower()
+            sku = poolconf.vm_configuration.sku.lower()
     else:
         pool_id = cloud_pool.id
         vm_size = cloud_pool.vm_size.lower()
