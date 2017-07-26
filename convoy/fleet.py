@@ -2215,18 +2215,22 @@ def action_pool_delete(
     try:
         deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
     except batchmodels.BatchErrorException as ex:
-        logger.exception(ex)
         if ('The specified pool does not exist' in ex.message.value or
                 'The specified pool has been marked for deletion' in
                 ex.message.value):
             deleted = True
+        else:
+            logger.exception(ex)
     if deleted:
+        # reset storage settings to target poolid if required
+        if util.is_not_empty(pool_id):
+            populate_global_settings(config, False, pool_id=pool_id)
+        else:
+            pool_id = settings.pool_id(config)
         # TODO remove queue_client in 3.0
         storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
-            if util.is_none_or_empty(pool_id):
-                pool_id = settings.pool_id(config)
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
                 time.sleep(3)

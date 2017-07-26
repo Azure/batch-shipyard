@@ -548,6 +548,6 @@ def cleanup_with_del_pool(
             'containers associated with {} pool'.format(pool_id)):
         return
     clear_storage_containers(
-        blob_client, table_client, config, tables_only=True)
+        blob_client, table_client, config, tables_only=True, pool_id=pool_id)
     delete_storage_containers(
         blob_client, queue_client, table_client, config, skip_tables=True)
