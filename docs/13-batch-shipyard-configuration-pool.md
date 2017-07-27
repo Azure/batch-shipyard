@@ -186,7 +186,8 @@ each node type for `scenario` based autoscale.
       to apply. When a pool is resized down and a node is selected for
       removal, what action is performed for the running task is specified
       with this option. The valid values are: `requeue`, `terminate`,
-      `taskcompletion`, and `retaineddata`. Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables) for more information.
+      `taskcompletion`, and `retaineddata`. The default is `taskcompletion`.
+      Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables) for more information.
     * (optional) `sample_lookback_interval` is the time interval to lookback
       for past history for certain scenarios such as autoscale based on
       active and pending tasks. The format for this property is a timedelta

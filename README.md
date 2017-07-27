@@ -53,8 +53,10 @@ to containers executed on compute nodes
 * Support for [Low Priority Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
 * Support for Azure Batch "auto" concepts, including [autoscale](https://github.com/Azure/batch-shipyard/blob/master/docs/30-batch-shipyard-autoscale.md) and autopool
 to dynamically scale and control computing resources on-demand
-* Support for
-[Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
+* Support for [Task Factories](https://github.com/Azure/batch-shipyard/blob/master/docs/35-batch-shipyard-task-factory.md)
+with the ability to generate parametric (parameter) sweeps and replicate
+tasks
+* Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for
 [GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
@@ -67,6 +69,7 @@ for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_A8, STANDARD\_A9
   * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_H16R, STANDARD\_H16MR
   * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R (not yet ready with Linux hosts)
+* Support for live job migration between pools
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes
 * Support for credential management through

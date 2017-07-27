@@ -63,6 +63,28 @@ The jobs schema is as follows:
             },
             "tasks": [
                 {
+                    "task_factory": {
+                        "parametric_sweep": {
+                            "product": [
+                                {
+                                    "start": 0,
+                                    "stop": 10,
+                                    "step": 1
+                                }
+                            ],
+                            "combinations": {
+                                "iterable": ["ABC", "012"],
+                                "length": 2,
+                                "replacement": false
+                            },
+                            "permutations": {
+                                "iterable": "ABCDEF",
+                                "length": 3
+                            },
+                            "zip": ["ab", "01"]
+                        },
+                        "repeat": 3
+                    },
                     "id": null,
                     "depends_on": [
                         "taskid-a", "taskid-b", "taskid-c"
@@ -287,12 +309,43 @@ transferred again. This object currently supports `azure_batch` and
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
 * (required) `tasks` is an array of tasks to add to the job.
+  * (optional) `task_factory` is a way to dyanmically generate tasks. This
+    enables parameter sweeps and task repetition without having to
+    explicitly generate a task array with different parameters for the
+    `command`. Please see the
+    [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
+    information.
+    * (optional) `parametric_sweep` is a parameter sweep task factory. This
+      has multiple modes of task generation,and only one may be specified.
+      * (optional) `product` is a potentially nested parameter generator.
+        If one set of `start`, `stop`, `step` properties are specified, then
+        a simple range of values is generated. In the example above, the
+        integers 0 to 9 are provided as arguments to the `command`
+        property. If another set of `start`, `stop`, `step` properties are
+        specified, then these are nested within the prior set.
+      * (optional) `combinations` generates `length` subsequences of
+        parameters from the `iterable`. Combinations are emitted in
+        lexicographic sort order.
+        * (optional) `iterable` is the iterable to generate parameters from
+        * (optional) `length` is the subsequence "r" length
+        * (optional) `replacement` allows individual elements to be
+          repeated more than once.
+      * (optional) `permutations` generates `length` permutations of
+        parameters from the `iterable`. Permutations are emitted in
+        lexicographic sort order.
+        * (optional) `iterable` is the iterable to generate parameters from
+        * (optional) `length` is the subsequence "r" length
+      * (optional) `zip` generates parameters where the i-th parameter
+        contains the i-th element from each iterable.
+    * (optional) `repeat` will create N number of identical tasks.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is
     formatted as `dockertask-NNNNN` where `NNNNN` starts from `00000` and is
     increased by 1 for each task added to the same job. If there are more
     than `99999` autonamed tasks in a job then the numbering is not
-    padded for tasks exceeding 5 digits.
+    padded for tasks exceeding 5 digits. `id` should not be specified in
+    conjunction with the `task_factory` property as `id`s will be
+    automatically generated.
   * (optional) `depends_on` is an array of task ids for which this container
     invocation (task) depends on and must run to successful completion prior
     to this task executing.
@@ -486,7 +539,13 @@ transferred again. This object currently supports `azure_batch` and
     task is a multi-instance task, then this `command` is the application
     command and is executed with `docker exec` in the running Docker container
     context from the `coordination_command` in the `multi_instance` property.
-    This property may be null.
+    This property may be null. Note that if you are using a `task_factory`
+    for the specification, then task factory arguments are applied to the
+    `command`. Therefore, Python-style string formatting options (excluding
+    keyword formatting) are required for `parametric_sweep` task factories:
+    either `{}` positional or `{0}` numbering style formatters. Please see the
+    [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
+    information.
 
 ## Full template
 A full template of a credentials file can be found

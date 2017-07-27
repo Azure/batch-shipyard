@@ -55,6 +55,28 @@
             },
             "tasks": [
                 {
+                    "task_factory": {
+                        "parametric_sweep": {
+                            "product": [
+                                {
+                                    "start": 0,
+                                    "stop": 10,
+                                    "step": 1
+                                }
+                            ],
+                            "combinations": {
+                                "iterable": ["ABC", "012"],
+                                "length": 2,
+                                "replacement": false
+                            },
+                            "permutations": {
+                                "iterable": "ABCDEF",
+                                "length": 3
+                            },
+                            "zip": ["ab", "01"]
+                        },
+                        "repeat": 3
+                    },
                     "id": null,
                     "image": "busybox",
                     "name": null,

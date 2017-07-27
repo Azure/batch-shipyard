@@ -45,6 +45,11 @@ Network Security Group. You can optionally reduce the allowable inbound
 address space for SSH on your software firewall rules or through the Azure
 Batch created Network Security Group applied to compute nodes.
 
+### Outbound Traffic and Ports
+Azure Batch compute nodes must be able to communicate with Azure Storage
+servers. Please ensure that oubound TCP traffic is allowed on port 443 for
+HTTPS connections.
+
 ### Ephemeral (Temporary) Disk
 Azure VMs have ephemeral temporary local disks attached to them which are
 not persisted back to Azure Storage. Azure Batch utilizes this space for some

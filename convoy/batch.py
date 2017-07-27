@@ -61,7 +61,7 @@ util.setup_logger(logger)
 # global defines
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
-_GENERIC_DOCKER_TASK_PREFIX = 'dockertask-'
+_GENERIC_DOCKER_TASK_PREFIX = 'task-'
 _RUN_ELEVATED = batchmodels.UserIdentity(
     auto_user=batchmodels.AutoUserSpecification(
         scope=batchmodels.AutoUserScope.pool,

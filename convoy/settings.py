@@ -31,7 +31,9 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
+import copy
 import datetime
+import itertools
 try:
     import pathlib2 as pathlib
 except ImportError:
@@ -2046,6 +2048,72 @@ def job_specifications(config):
     return config['job_specifications']
 
 
+def _generate_task(task):
+    # type: (dict) -> TaskSettings
+    """Generate a task given a config
+    :param dict config: configuration object
+    :rtype: TaskSettings
+    :return: generated task
+    """
+    # retrieve type of task factory
+    task_factory = task['task_factory']
+    if 'repeat' in task_factory:
+        for _ in range(0, task_factory['repeat']):
+            taskcopy = copy.deepcopy(task)
+            taskcopy.pop('task_factory')
+            yield taskcopy
+    elif 'parametric_sweep' in task_factory:
+        sweep = task['task_factory']['parametric_sweep']
+        if 'product' in sweep:
+            product = []
+            for chain in sweep['product']:
+                product.append(
+                    range(
+                        chain['start'],
+                        chain['stop'],
+                        chain['step']
+                    )
+                )
+            for arg in itertools.product(*product):
+                taskcopy = copy.deepcopy(task)
+                taskcopy.pop('task_factory')
+                taskcopy['command'] = taskcopy['command'].format(*arg)
+                yield taskcopy
+        elif 'combinations' in sweep:
+            iterable = sweep['combinations']['iterable']
+            try:
+                if sweep['combinations']['replacement']:
+                    func = itertools.combinations_with_replacement
+                else:
+                    func = itertools.combinations
+            except KeyError:
+                func = itertools.combinations
+            for arg in func(iterable, sweep['combinations']['length']):
+                taskcopy = copy.deepcopy(task)
+                taskcopy.pop('task_factory')
+                taskcopy['command'] = taskcopy['command'].format(*arg)
+                yield taskcopy
+        elif 'permutations' in sweep:
+            iterable = sweep['permutations']['iterable']
+            for arg in itertools.permutations(
+                    iterable, sweep['permutations']['length']):
+                taskcopy = copy.deepcopy(task)
+                taskcopy.pop('task_factory')
+                taskcopy['command'] = taskcopy['command'].format(*arg)
+                yield taskcopy
+        elif 'zip' in sweep:
+            iterables = sweep['zip']
+            for arg in zip(*iterables):
+                taskcopy = copy.deepcopy(task)
+                taskcopy.pop('task_factory')
+                taskcopy['command'] = taskcopy['command'].format(*arg)
+                yield taskcopy
+        else:
+            raise ValueError('unknown parametric sweep type: {}'.format(sweep))
+    else:
+        raise ValueError('unknown task factory type: {}'.format(task_factory))
+
+
 def job_tasks(conf):
     # type: (dict) -> list
     """Get all tasks for job
@@ -2053,7 +2121,12 @@ def job_tasks(conf):
     :rtype: list
     :return: list of tasks
     """
-    return conf['tasks']
+    for _task in conf['tasks']:
+        if 'task_factory' in _task:
+            for task in _generate_task(_task):
+                yield task
+        else:
+            yield _task
 
 
 def job_id(conf):

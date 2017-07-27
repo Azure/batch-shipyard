@@ -111,6 +111,8 @@ the autoscale formula does not result in target node counts that exceed
 ### Formula-based Autoscaling
 Formula-based autoscaling allows users with expertise in creating autoscale
 formulas to create their own formula and apply it to a Batch Shipyard pool.
+These formulas should be specified on the `formula` member within the
+`autoscale` property.
 
 For more information about how to create your own custom autoscale formula,
 please visit this
