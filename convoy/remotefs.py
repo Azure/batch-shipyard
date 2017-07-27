@@ -1044,7 +1044,7 @@ def resize_storage_cluster(
     for i in pe_vms:
         vm = pe_vms[i]['vm']
         ssh_info = _get_ssh_info(
-            compute_client, network_client, config, None, vm.name)
+            compute_client, network_client, config, sc_id, None, vm.name)
         break
     if settings.verbose(config):
         logger.debug('prober vm: {}'.format(ssh_info))
@@ -1378,7 +1378,7 @@ def expand_storage_cluster(
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
             )
         ssh_priv_key, port, username, ip = _get_ssh_info(
-            compute_client, network_client, config, None, vm.name)
+            compute_client, network_client, config, sc_id, None, vm.name)
         cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
                '-o', 'UserKnownHostsFile={}'.format(os.devnull),
                '-i', str(ssh_priv_key), '-p', str(port),

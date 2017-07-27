@@ -238,13 +238,16 @@ def check_for_invalid_config(config):
                 'for vm_count.')
     except KeyError:
         pass
-    if 'publisher' in config['pool_specification']:
-        logger.warning(
-            'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
-            'is set instead of a vm_configuration complex property. This '
-            'configuration will not be supported in future releases. '
-            'Please update your configuration to include a vm_configuration '
-            'property.')
+    try:
+        if 'publisher' in config['pool_specification']:
+            logger.warning(
+                'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
+                'is set instead of a vm_configuration complex property. This '
+                'configuration will not be supported in future releases. '
+                'Please update your configuration to include a '
+                'vm_configuration property.')
+    except KeyError:
+        pass
 
 
 def populate_global_settings(config, fs_storage, pool_id=None):
