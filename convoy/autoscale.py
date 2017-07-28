@@ -79,6 +79,18 @@ def _formula_tasks(pool):
             ),
             'reqVMs = {}TaskAvg / maxTasksPerNode'.format(task_type),
         ]
+        if pool.autoscale.scenario.rebalance_preemption_percentage is not None:
+            req_vms.extend([
+                'preemptsamplepercent = '
+                '$PreemptedNodeCount.GetSamplePercent(sli)',
+                'lastpreemptsample = val($PreemptedNodeCount.GetSample(1), 0)',
+                'preemptedavg = avg($PreemptedNodeCount.GetSample(sli))',
+                ('preemptcount = preemptsamplepercent < {} ? '
+                 'max(0, lastpreemptsample) : (lastpreemptsample > '
+                 'preemptedavg ? avg(lastpreemptsample, preemptedavg) : '
+                 'min(lastpreemptsample, preemptedavg))').format(
+                     pool.autoscale.scenario.required_sample_percentage),
+            ])
     else:
         req_vms = [
             'sli = TimeInterval_Second * {}'.format(
@@ -91,17 +103,41 @@ def _formula_tasks(pool):
             'reqVMs = ({}TaskAvg > 0 && reqVMs < 1) ? 1 : reqVMs'.format(
                 task_type),
         ]
+        if pool.autoscale.scenario.rebalance_preemption_percentage is not None:
+            req_vms.extend([
+                'preemptcount = avg($PreemptedNodeCount.GetSample('
+                'sli, {}))'.format(
+                    pool.autoscale.scenario.required_sample_percentage),
+            ])
+    if pool.autoscale.scenario.rebalance_preemption_percentage is not None:
+        req_vms.extend([
+            'currenttotal = $CurrentDedicatedNodes + '
+            '$CurrentLowPriorityNodes',
+            'preemptedpercent = currenttotal > 0 ? '
+            'preemptcount / currenttotal : 0',
+            'rebalance = preemptedpercent >= {}'.format(
+                pool.autoscale.scenario.rebalance_preemption_percentage),
+        ])
+    else:
+        req_vms.extend([
+            'preemptcount = 0',
+            'rebalance = 0 == 1',
+        ])
     req_vms = ';\n'.join(req_vms)
-    if pool.autoscale.scenario.bias_node_type is None:
+    if pool.autoscale.scenario.bias_node_type == 'auto':
         target_vms = [
             'divisor = (maxTargetDedicated == 0 || '
             'maxTargetLowPriority == 0) ? 1 : 2',
             'dedicatedVMs = max(minTargetDedicated, reqVMs / divisor)',
             'dedicatedVMs = min(maxTargetDedicated, '
             '(dedicatedVMs > 0 && dedicatedVMs < 1) ? 1 : dedicatedVMs)',
+            'remainingVMs = reqVMs - dedicatedVMs',
+            'redistVMs = rebalance ? '
+            'min(preemptcount, remainingVMs) : 0',
+            'dedicatedVMs = min(maxTargetDedicated, dedicatedVMs + redistVMs)',
+            'lowPriVMs = min(maxTargetLowPriority, reqVMs - dedicatedVMs)',
             '$TargetDedicatedNodes = dedicatedVMs',
-            '$TargetLowPriorityNodes = max(minTargetLowPriority, '
-            'min(maxTargetLowPriority, reqVMs - dedicatedVMs))',
+            '$TargetLowPriorityNodes = max(minTargetLowPriority, lowPriVMs)',
         ]
     elif pool.autoscale.scenario.bias_node_type == 'dedicated':
         target_vms = [
@@ -113,11 +149,16 @@ def _formula_tasks(pool):
         ]
     elif pool.autoscale.scenario.bias_node_type == 'low_priority':
         target_vms = [
-            'lowPriVms = min(maxTargetLowPriority, '
+            'lowPriVMs = min(maxTargetLowPriority, '
             'max(minTargetLowPriority, reqVMs))',
-            '$TargetLowPriorityNodes = lowPriVms',
-            '$TargetDedicatedNodes = max(minTargetDedicated, '
-            'min(maxTargetDedicated, reqVMs - lowPriVms))',
+            'remainingVMs = min(maxTargetDedicated, reqVMs - lowPriVMs)',
+            'redistVMs = rebalance ? '
+            'min(preemptcount, lowPriVMs) : 0',
+            'lowPriVMs = min(maxTargetLowPriority, '
+            'max(minTargetLowPriority, max(0, reqVMs - redistVMs)))',
+            'remainingVMs = min(maxTargetDedicated, reqVMs - lowPriVMs)',
+            '$TargetLowPriorityNodes = lowPriVMs',
+            '$TargetDedicatedNodes = max(minTargetDedicated, remainingVMs)',
         ]
     else:
         raise ValueError(
@@ -182,7 +223,7 @@ def _formula_day_of_week(pool):
         raise ValueError('autoscale scenario name invalid: {}'.format(
             pool.autoscale.scenario.name))
     if pool.autoscale.scenario.name != 'workday_with_offpeak_max_low_priority':
-        if pool.autoscale.scenario.bias_node_type is None:
+        if pool.autoscale.scenario.bias_node_type == 'auto':
             target_vms.append(
                 '$TargetDedicatedNodes = isPeakTime ? '
                 'maxTargetDedicated : minTargetDedicated')

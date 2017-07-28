@@ -82,6 +82,10 @@ applies only to `active_tasks` and `pending_tasks` scenarios.
 node over the other when making a decision on how many of each node to
 allocate. By default, allocation is equal-weighted but can be selected to
 favor either `dedicated` or `low_priority`. This applies to all scenarios.
+* `rebalance_preemption_percentage` will rebalance the compute nodes to bias
+for dedicated nodes when the pre-empted node count reaches the indicated
+threshold percentage of the total current dedicated and low priority nodes.
+This applies only to `active_tasks` and `pending_tasks` scenarios.
 
 An example autoscale specification in the pool configuration may be:
 ```json

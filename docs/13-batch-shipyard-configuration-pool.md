@@ -203,10 +203,14 @@ each node type for `scenario` based autoscale.
       to averages. The default is `true`.
     * (optional) `bias_node_type` will bias the the autoscale scenario, if
       applicable, to favor one type of node over the other when making a
-      decision on how many of each node to allocate. The default is `null`
+      decision on how many of each node to allocate. The default is `auto`
       or equal weight to both `dedicated` and `low_priority` nodes. Valid
       values are `null` (or omitting the property), `dedicated`, or
       `low_priority`.
+    * (optional) `rebalance_preemption_percentage` will rebalance the compute
+      nodes to bias for dedicated nodes when the pre-empted node count reaches
+      the indicated threshold percentage of the total current dedicated and
+      low priority nodes. The default is `null` or no rebalancing is performed.
   * (optional) `formula` is a custom autoscale formula to apply to the pool.
     If both `formula` and `scenario` are specified, then `formula` is used.
 * (optional) `inter_node_communication_enabled` designates if this pool is set

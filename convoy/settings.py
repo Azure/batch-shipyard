@@ -103,6 +103,7 @@ PoolAutoscaleScenarioSettings = collections.namedtuple(
         'node_deallocation_option',
         'sample_lookback_interval',
         'required_sample_percentage',
+        'rebalance_preemption_percentage',
         'bias_last_sample',
         'bias_node_type',
     ]
@@ -640,10 +641,12 @@ def pool_autoscale_settings(config):
             sample_lookback_interval=sli,
             required_sample_percentage=_kv_read(
                 scenconf, 'required_sample_percentage', 70),
+            rebalance_preemption_percentage=_kv_read(
+                scenconf, 'rebalance_preemption_percentage', None),
             bias_last_sample=_kv_read(
                 scenconf, 'bias_last_sample', True),
             bias_node_type=_kv_read_checked(
-                scenconf, 'bias_node_type'),
+                scenconf, 'bias_node_type', 'auto').lower(),
         )
     else:
         scenario = None
