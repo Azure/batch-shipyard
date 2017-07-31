@@ -145,7 +145,7 @@ array.
 The `combinations` `parametric_sweep` generates `length` subsequences of
 parameters from the `iterable`. Combinations are emitted in lexicographic
 sort order. Combinations with replacement can be specified by setting the
-`replacement` option to `true. For example:
+`replacement` option to `true`. For example:
 
 ```json
     "task_factory": {
@@ -219,10 +219,7 @@ contains the i-th element from each iterable. For example:
 ```json
     "task_factory": {
         "parametric_sweep": {
-            "permutations": {
-               "iterable": ["abc", "012", "def"],
-               "length": 2
-            }
+            "zip": ["abc", "012", "def"]
         }
     },
     "command": "/bin/bash -c \"echo {0}; echo {1}; echo {2}\""
