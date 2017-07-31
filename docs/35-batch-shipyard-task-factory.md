@@ -18,13 +18,23 @@ you can direct Batch Shipyard to generate a set of tasks given a
 
 Note that you can attach only one `task_factory` specification to one
 task specification within the `tasks` array. However, you can have multiple
-task specifications in the `tasks` array thus allow for multiple and
+task specifications in the `tasks` array thus allowing for multiple and
 potentially different types of task factories per job.
 
 Now we'll dive into each type of task factory available in Batch Shipyard.
 
 ### Repeat
 A `repeat` task factory simply replicates the `command` N number of times.
+For example:
+
+```json
+    "task_factory": {
+        "repeat": 3
+    },
+    "command": "/bin/bash -c \"sleep 1\""
+```
+
+would create three tasks with identical commands of `/bin/bash -c "sleep 1"`.
 
 ### Parametric (Parameter) Sweep
 A `parametric_sweep` will generate parameters to apply to the `command`
@@ -47,19 +57,15 @@ as:
                 }
             ]
         }
-    }
-```
-
-The associated `command` would require either `{}` or `{0}` formatting to
-specify where to substitute the generated argument value within the
-`command` string. For example, with the following:
-
-```json
+    },
     "command": "/bin/bash -c \"sleep {0}\""
 ```
 
-and the `task_factory` specified above, Batch Shipyard would generate 10
-tasks:
+As shown above, the associated `command` requires either `{}` or `{0}`
+Python-style string formatting to specify where to substitute the generated
+argument value within the `command` string.
+
+This `task_factory` example specified above would create 10 tasks:
 
 ```
   Task 0:
@@ -97,12 +103,7 @@ one would create two or more `start`, `stop`, `step` objects in the
                 }
             ]
         }
-    }
-```
-
-with the `command` template of:
-
-```json
+    },
     "command": "/bin/bash -c \"sleep {0}; sleep {1}\""
 ```
 
@@ -155,12 +156,7 @@ sort order. Combinations with replacement can be specified by setting the
                "replacement": false
             }
         }
-    }
-```
-
-with the `command` template of:
-
-```json
+    },
     "command": "/bin/bash -c \"echo {0}; echo {1}\""
 ```
 
@@ -190,12 +186,7 @@ sort order. For example:
                "length": 2
             }
         }
-    }
-```
-
-with the `command` template of:
-
-```json
+    },
     "command": "/bin/bash -c \"echo {0}; echo {1}\""
 ```
 
@@ -233,12 +224,7 @@ contains the i-th element from each iterable. For example:
                "length": 2
             }
         }
-    }
-```
-
-with the `command` template of:
-
-```json
+    },
     "command": "/bin/bash -c \"echo {0}; echo {1}; echo {2}\""
 ```
 
