@@ -4,7 +4,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "gcr.io/tensorflow/tensorflow:1.1.0-gpu"
+            "gcr.io/tensorflow/tensorflow:latest-gpu"
         ]
     }
 }
