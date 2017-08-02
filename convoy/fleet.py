@@ -102,10 +102,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '375.66/NVIDIA-Linux-x86_64-375.66.run'
+            '384.59/NVIDIA-Linux-x86_64-384.59.run'
         ),
         'sha256': (
-            '59e37f570ba5f3d7148028e96684d77f347d49a54e3722189782fc9b17d201c0'
+            '7b53bdee6e396cb271b57f77455fe5c561e655ca3fbba015dae0de3d6c11542b'
         ),
         'target': 'resources/nvidia-driver.run'
     },
@@ -1364,7 +1364,8 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
             '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
             'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
         ]
-        procs.append(util.subprocess_nowait(ssh_args, shell=False))
+        procs.append(util.subprocess_nowait_pipe_stdout(
+            ssh_args, shell=False, pipe_stderr=True))
         if len(procs) >= 40:
             logger.debug('waiting for {} update processes to complete'.format(
                 len(procs)))

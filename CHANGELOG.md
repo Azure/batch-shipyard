@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- `remove_container_after_exit` now defaults to `true`
+- Nvidia Tesla driver updated to 384.59
+- TensorFlow recipes updated for 1.2.1. TensorFlow-Distributed `launcher.sh`
+script is now generalized to take a script as the first parameter and
+relocated to `/shipyard/launcher.sh`.
+
+### Fixed
+- Task termination with force failing due to new task generators
+
 ## [2.9.0b1] - 2017-07-31
 ### Added
 - Autoscale support. Please see the Autoscale guide for more information.

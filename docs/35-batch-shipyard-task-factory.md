@@ -14,7 +14,9 @@ code to generate the jobs JSON configuration.
 
 A task factory is simply a task generator for a job. With this functionality,
 you can direct Batch Shipyard to generate a set of tasks given a
-`task_factory` property which is then transforms the `command`, if applicable.
+`task_factory` property. If applicable, parameters specified in the
+`task_factory` are then applied to the `command` resulting in a transformed
+task.
 
 Note that you can attach only one `task_factory` specification to one
 task specification within the `tasks` array. However, you can have multiple

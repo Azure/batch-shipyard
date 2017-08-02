@@ -68,7 +68,7 @@ task termination
 for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_A8, STANDARD\_A9
   * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_H16R, STANDARD\_H16MR
-  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R (not yet ready with Linux hosts)
+  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R
 * Support for live job migration between pools
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes

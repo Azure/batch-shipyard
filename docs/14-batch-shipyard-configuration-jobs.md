@@ -318,11 +318,11 @@ transferred again. This object currently supports `azure_batch` and
     * (optional) `parametric_sweep` is a parameter sweep task factory. This
       has multiple modes of task generation,and only one may be specified.
       * (optional) `product` is a potentially nested parameter generator.
-        If one set of `start`, `stop`, `step` properties are specified, then
-        a simple range of values is generated. In the example above, the
-        integers 0 to 9 are provided as arguments to the `command`
-        property. If another set of `start`, `stop`, `step` properties are
-        specified, then these are nested within the prior set.
+        If one set of `start` (inclusive), `stop` (exclusive), `step`
+        properties are specified, then a simple range of values are generated.
+        In the example above, the integers 0 to 9 are provided as arguments
+        to the `command` property. If another set of `start`, `stop`, `step`
+        properties are specified, then these are nested within the prior set.
       * (optional) `combinations` generates `length` subsequences of
         parameters from the `iterable`. Combinations are emitted in
         lexicographic sort order.

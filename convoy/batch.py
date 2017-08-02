@@ -1065,7 +1065,7 @@ def update_job_with_pool(batch_client, config, jobid=None, poolid=None):
 
 def disable_jobs(
         batch_client, config, disable_tasks_action, jobid=None,
-        disabling_state_ok=False, terminate_tasks=False):
+        disabling_state_ok=False, term_tasks=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        str, str, bool, bool) -> None
     """Disable jobs
@@ -1075,7 +1075,7 @@ def disable_jobs(
     :param str disable_tasks_action: disable tasks action
     :param str jobid: job id to disable
     :param bool disabling_state_ok: disabling state is ok to proceed
-    :param bool terminate_tasks: terminate tasks after disable
+    :param bool term_tasks: terminate tasks after disable
     """
     if jobid is None:
         jobs = settings.job_specifications(config)
@@ -1109,7 +1109,7 @@ def disable_jobs(
                     break
                 time.sleep(1)
             logger.info('job {} disabled'.format(job_id))
-            if terminate_tasks:
+            if term_tasks:
                 terminate_tasks(
                     batch_client, config, jobid=job_id, wait=True)
 
@@ -1171,7 +1171,7 @@ def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
                         job_id))
                 disable_jobs(
                     batch_client, config, 'wait', jobid=job_id,
-                    disabling_state_ok=True, terminate_tasks=True)
+                    disabling_state_ok=True, term_tasks=True)
             # delete job
             batch_client.job.delete(job_id)
         except batchmodels.batch_error.BatchErrorException as ex:
@@ -1518,8 +1518,9 @@ def _send_docker_kill_signal(
             jobs = settings.job_specifications(config)
             for job in jobs:
                 if job_id == settings.job_id(job):
-                    tasks = settings.job_tasks(job)
-                    task_name = settings.task_name(tasks[0])
+                    for task in settings.job_tasks(job):
+                        task_name = settings.task_name(task)
+                        break
                     break
         except KeyError:
             pass

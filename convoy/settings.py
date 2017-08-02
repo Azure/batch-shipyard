@@ -47,7 +47,7 @@ _METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
 _TENSORBOARD_DOCKER_IMAGE = (
-    'gcr.io/tensorflow/tensorflow:1.1.0',
+    'gcr.io/tensorflow/tensorflow',
     '/usr/local/lib/python2.7/dist-packages/tensorflow'
     '/tensorboard/tensorboard.py',
     6006
@@ -2506,7 +2506,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     try:
         rm_container = conf['remove_container_after_exit']
     except KeyError:
-        rm_container = _kv_read(jobspec, 'remove_container_after_exit', False)
+        rm_container = _kv_read(jobspec, 'remove_container_after_exit', True)
     if rm_container and '--rm' not in run_opts:
         run_opts.append('--rm')
     del rm_container
@@ -2727,6 +2727,12 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA, pool: {} vm_size: {}').format(
                      pool_id, vm_size))
+        # common run opts
+        run_opts.append('--net=host')
+        run_opts.append('--ulimit memlock=9223372036854775807')
+        run_opts.append('--device=/dev/infiniband/rdma_cm')
+        run_opts.append('--device=/dev/infiniband/uverbs0')
+        run_opts.append('-v /opt/intel:/opt/intel:ro')
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
         if (publisher == 'openlogic' and offer == 'centos-hpc' or
@@ -2737,17 +2743,11 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
               sku == '12-sp1' or node_agent.startswith('batch.node.opensuse')):
             run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
             run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
+            run_opts.append('--device=/dev/hvnd_rdma')
         else:
             raise ValueError(
                 ('Unsupported infiniband VM config, publisher={} '
                  'offer={}').format(publisher, offer))
-        # add infiniband run opts
-        run_opts.append('-v /opt/intel:/opt/intel:ro')
-        run_opts.append('--net=host')
-        run_opts.append('--ulimit memlock=9223372036854775807')
-        run_opts.append('--device=/dev/hvnd_rdma')
-        run_opts.append('--device=/dev/infiniband/rdma_cm')
-        run_opts.append('--device=/dev/infiniband/uverbs0')
     # mount batch root dir
     run_opts.append(
         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')

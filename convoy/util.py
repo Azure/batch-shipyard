@@ -415,18 +415,24 @@ def subprocess_nowait(cmd, shell=False, cwd=None, env=None):
 
 
 def subprocess_nowait_pipe_stdout(
-        cmd, shell=False, cwd=None, env=None):
+        cmd, shell=False, cwd=None, env=None, pipe_stderr=False):
     # type: (str, bool, str, dict) -> subprocess.Process
     """Subprocess command and do not wait for subprocess
     :param str cmd: command line to execute
     :param bool shell: use shell in Popen
     :param str cwd: current working directory
     :param dict env: env vars to use
+    :param bool pipe_stderr: redirect stderr to pipe as well
     :rtype: subprocess.Process
     :return: subprocess process handle
     """
-    return subprocess.Popen(
-        cmd, shell=shell, stdout=subprocess.PIPE, cwd=cwd, env=env)
+    if pipe_stderr:
+        return subprocess.Popen(
+            cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=cwd, env=env)
+    else:
+        return subprocess.Popen(
+            cmd, shell=shell, stdout=subprocess.PIPE, cwd=cwd, env=env)
 
 
 def subprocess_attach_stdin(cmd, shell=False):
