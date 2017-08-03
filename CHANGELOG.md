@@ -11,6 +11,7 @@ relocated to `/shipyard/launcher.sh`.
 
 ### Fixed
 - Task termination with force failing due to new task generators
+- pool udi over SSH terminal mangling
 
 ## [2.9.0b1] - 2017-07-31
 ### Added

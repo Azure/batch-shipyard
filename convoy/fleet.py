@@ -1361,7 +1361,7 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile={}'.format(os.devnull),
             '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
-            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
+            '{}@{}'.format(username, rls.remote_login_ip_address),
             'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
         ]
         procs.append(util.subprocess_nowait_pipe_stdout(
