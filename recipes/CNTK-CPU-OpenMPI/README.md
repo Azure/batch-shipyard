@@ -44,10 +44,9 @@ this image name.
 * `command` should contain the command to pass to the Docker run invocation.
 For this example, we will run the MNIST convolutional example with Data
 augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. The
-application `command` to
-run would be:
+application `command` to run would be:
 `"/cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -- --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
-  * `run_cntk.sh` has two parameters
+  * [`run_cntk.sh`](docker/run_cntk.sh) has two parameters
     * `-s` for the Python script to run
     * `-w` for the working directory (not required for this example to run)
     * `--` parameters specified after this are given verbatim to the

@@ -4,7 +4,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "alfpark/cntk:2.0beta4-gpu-openmpi-refdata"
+            "alfpark/cntk:2.1-gpu-1bitsgd-py35-cuda8-cudnn6-refdata"
         ]
     }
 }
