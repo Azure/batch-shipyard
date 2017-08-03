@@ -487,6 +487,7 @@ Azure Storage.
 * `delnode` will delete the specified node from the pool
   * `--all-start-task-failed` will delete all nodes in the start task
     failed state
+  * `--all-unusable` will delete all nodes in the unusable state
   * `--nodeid` is the node id to delete
 * `dsu` will delete the SSH user defined in the pool configuration file
 from all nodes in the specified pool

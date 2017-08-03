@@ -1720,7 +1720,7 @@ def _adjust_settings_for_pool_creation(config):
     # adjust for shipyard container requirement
     if shipyard_container_required or util.is_not_empty(node_agent):
         settings.set_use_shipyard_docker_image(config, True)
-        logger.warning(
+        logger.debug(
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
@@ -2447,20 +2447,23 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     util.subprocess_with_output(ssh_cmd)
 
 
-def action_pool_delnode(batch_client, config, all_start_task_failed, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
+def action_pool_delnode(
+        batch_client, config, all_start_task_failed, all_unusable, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param bool all_start_task_failed: delete all start task failed nodes
+    :param bool all_unusable: delete all unusable nodes
     :param str nodeid: nodeid to delete
     """
-    if all_start_task_failed and nodeid is not None:
+    if (all_start_task_failed or all_unusable) and nodeid is not None:
         raise ValueError(
-            'cannot specify all start task failed nodes and a specific '
-            'node id')
-    batch.del_node(batch_client, config, all_start_task_failed, nodeid)
+            'cannot specify all start task failed nodes or unusable with '
+            'a specific node id')
+    batch.del_node(
+        batch_client, config, all_start_task_failed, all_unusable, nodeid)
 
 
 def action_pool_rebootnode(
@@ -2475,7 +2478,7 @@ def action_pool_rebootnode(
     """
     if all_start_task_failed and nodeid is not None:
         raise ValueError(
-            'cannot specify all start task failed nodes and a specific '
+            'cannot specify all start task failed nodes with a specific '
             'node id')
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 

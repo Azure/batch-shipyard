@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- Delete unusable nodes from pool with `--all-unusable` option for
+`pool delnode`
+
 ### Changed
 - `remove_container_after_exit` now defaults to `true`
 - Nvidia Tesla driver updated to 384.59

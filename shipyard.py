@@ -1188,7 +1188,11 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
 @click.option(
     '--all-start-task-failed',
     is_flag=True,
-    help='Delete all nodes with start task failed state')
+    help='Delete all nodes in start task failed state')
+@click.option(
+    '--all-unusable',
+    is_flag=True,
+    help='Delete all nodes in unusable state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')
 @common_options
@@ -1196,18 +1200,19 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_delnode(ctx, all_start_task_failed, nodeid):
+def pool_delnode(ctx, all_start_task_failed, all_unusable, nodeid):
     """Delete a node from a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_delnode(
-        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
+        ctx.batch_client, ctx.config, all_start_task_failed, all_unusable,
+        nodeid)
 
 
 @pool.command('rebootnode')
 @click.option(
     '--all-start-task-failed',
     is_flag=True,
-    help='Reboot all nodes with start task failed state')
+    help='Reboot all nodes in start task failed state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to reboot')
 @common_options
