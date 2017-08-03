@@ -1,4 +1,4 @@
-# CNTK-CPU-Infiniband-IntelMPI
+# CNTK-GPU-Infiniband-IntelMPI
 This recipe shows how to run [CNTK](https://cntk.ai/) on GPUs across
 Infiniband/RDMA enabled Azure VMs via Intel MPI.
 

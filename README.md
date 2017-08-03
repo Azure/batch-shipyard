@@ -51,7 +51,7 @@ full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
 to containers executed on compute nodes
 * Support for [Low Priority Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
-* Support for Azure Batch "auto" concepts, including [autoscale](https://github.com/Azure/batch-shipyard/blob/master/docs/30-batch-shipyard-autoscale.md) and autopool
+* Support for [pool autoscale](https://github.com/Azure/batch-shipyard/blob/master/docs/30-batch-shipyard-autoscale.md) and autopool
 to dynamically scale and control computing resources on-demand
 * Support for [Task Factories](https://github.com/Azure/batch-shipyard/blob/master/docs/35-batch-shipyard-task-factory.md)
 with the ability to generate parametric (parameter) sweeps and replicate

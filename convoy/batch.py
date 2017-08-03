@@ -842,8 +842,7 @@ def pool_autoscale_enable(batch_client, config):
     pool = settings.pool_settings(config)
     _pool = batch_client.pool.get(pool.id)
     # check pool metadata
-    # TODO fix req version to current release version until 2.9.0
-    _check_metadata_mismatch('pool', _pool.metadata, req_ge='2.8.0')
+    _check_metadata_mismatch('pool', _pool.metadata, req_ge='2.9.0')
     asformula = None
     asei = None
     if not _pool.enable_auto_scale:

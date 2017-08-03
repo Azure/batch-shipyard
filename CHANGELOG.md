@@ -13,6 +13,8 @@
 - TensorFlow recipes updated for 1.2.1. TensorFlow-Distributed `launcher.sh`
 script is now generalized to take a script as the first parameter and
 relocated to `/shipyard/launcher.sh`.
+- CNTK recipes updated for 2.1. `run_cntk.sh` script now takes in CNTK
+Python scripts for execution.
 
 ### Fixed
 - Task termination with force failing due to new task generators

@@ -39,7 +39,7 @@ while getopts "h?s:w:" opt; do
             script=${OPTARG}
             ;;
         w)
-            workdir="--wdir ${OPTARG}"
+            workdir="-wdir ${OPTARG}"
             ;;
     esac
 done
@@ -69,6 +69,6 @@ else
     np=$(($nodes * $ngpus))
     echo "num mpi processes: $np"
     # execute mpi job
-    mpirun -np $np -ppn $ngpus -hosts $AZ_BATCH_HOST_LIST \
+    mpirun -np $np -ppn $ngpus -hosts $AZ_BATCH_HOST_LIST $workdir \
        /bin/bash -i -c "python -u $script $*"
 fi
