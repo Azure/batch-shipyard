@@ -1,4 +1,4 @@
-# Dockerfile for CNTK-CPU-OpenMPI for use with Batch Shipyard on Azure Batch
+# Dockerfile for CNTK-GPU-OpenMPI for use with Batch Shipyard on Azure Batch
 
 FROM nvidia/cuda:8.0-runtime-ubuntu14.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>

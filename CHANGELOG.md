@@ -5,6 +5,7 @@
 ### Added
 - Delete unusable nodes from pool with `--all-unusable` option for
 `pool delnode`
+- CNTK-GPU-Infiniband-IntelMPI recipe
 
 ### Changed
 - `remove_container_after_exit` now defaults to `true`

@@ -1,0 +1,20 @@
+{
+    "job_specifications": [
+        {
+            "id": "cntkjob",
+            "auto_complete": true,
+            "tasks": [
+                {
+                    "image": "alfpark/cntk:2.1-gpu-1bitsgd-py36-cuda8-cudnn6-intelmpi-refdata",
+                    "remove_container_after_exit": true,
+                    "command": "/cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py -- --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output",
+                    "infiniband": true,
+                    "gpu": true,
+                    "multi_instance": {
+                        "num_instances": "pool_current_dedicated"
+                    }
+                }
+            ]
+        }
+    ]
+}

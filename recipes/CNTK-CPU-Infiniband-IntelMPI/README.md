@@ -19,7 +19,7 @@ The pool configuration should enable the following properties:
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid CNTK CPU-enabled
-Docker image that can be run with Intel MPI. Images denoted with `intelmpi`
+Docker image that can be run with Intel MPI. Images denoted with `cpu-intelmpi`
 tags found in [alfpark/cntk](https://hub.docker.com/r/alfpark/cntk/) are
 compatible with Azure VMs. Images denoted with `refdata` tag suffixes found in
 [alfpark/cntk](https://hub.docker.com/r/alfpark/cntk/)
