@@ -83,6 +83,52 @@ The jobs schema is as follows:
                             },
                             "zip": ["ab", "01"]
                         },
+                        "random": {
+                            "generate": 3,
+                            "seed": null,
+                            "integer": {
+                                "start": 0,
+                                "stop": 10,
+                                "step": 1
+                            },
+                            "distribution": {
+                                "uniform": {
+                                    "min": 0,
+                                    "max": 1
+                                },
+                                "triangular": {
+                                    "low": 0,
+                                    "high": 1,
+                                    "mode": null
+                                },
+                                "beta": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "exponential": {
+                                    "lambda": 2
+                                },
+                                "gamma": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "gauss": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "lognormal": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "pareto": {
+                                    "alpha": 1
+                                },
+                                "weibull": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                }
+                            }
+                        },
                         "repeat": 3
                     },
                     "id": null,
@@ -317,27 +363,52 @@ transferred again. This object currently supports `azure_batch` and
     [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
     information.
     * (optional) `parametric_sweep` is a parameter sweep task factory. This
-      has multiple modes of task generation,and only one may be specified.
+      has multiple modes of task generation and only one may be specified.
       * (optional) `product` is a potentially nested parameter generator.
         If one set of `start` (inclusive), `stop` (exclusive), `step`
-        properties are specified, then a simple range of values are generated.
-        In the example above, the integers 0 to 9 are provided as arguments
-        to the `command` property. If another set of `start`, `stop`, `step`
-        properties are specified, then these are nested within the prior set.
+        properties are specified (all required parameters), then a simple
+        range of values are generated. In the example above, the integers 0
+        to 9 are provided as arguments to the `command` property. If another
+        set of `start`, `stop`, `step` properties are specified, then these
+        are nested within the prior set.
       * (optional) `combinations` generates `length` subsequences of
         parameters from the `iterable`. Combinations are emitted in
         lexicographic sort order.
-        * (optional) `iterable` is the iterable to generate parameters from
-        * (optional) `length` is the subsequence "r" length
+        * (required) `iterable` is the iterable to generate parameters from
+        * (required) `length` is the subsequence "r" length
         * (optional) `replacement` allows individual elements to be
           repeated more than once.
       * (optional) `permutations` generates `length` permutations of
         parameters from the `iterable`. Permutations are emitted in
         lexicographic sort order.
-        * (optional) `iterable` is the iterable to generate parameters from
-        * (optional) `length` is the subsequence "r" length
+        * (required) `iterable` is the iterable to generate parameters from
+        * (required) `length` is the subsequence "r" length
       * (optional) `zip` generates parameters where the i-th parameter
         contains the i-th element from each iterable.
+    * (optional) `random` is a random task factory. This has multiple
+      modes of task generation and only one may be specified.
+      * (required) `generate` will generate N number of random values and
+        thus N number of tasks
+      * (optional) `seed` will initialize the internal state to the specified
+        seed
+      * (optional) `integer` will generate random integers
+        * (required) `start` is the inclusive beginning of the random range
+        * (required) `stop` is the exclusive end of the random range
+        * (required) `step` is the stepping between potential random numbers
+          within the range
+      * (optional) `distribution` will generate random floating point values
+        given a distribution. The
+        [distribution](https://docs.python.org/3.6/library/random.html#real-valued-distributions)
+        can be one of (please refer to the docs for required properties):
+        * (optional) `uniform` for uniform distribution
+        * (optional) `triangular` for triangular distribution
+        * (optional) `beta` for beta distribution
+        * (optional) `exponential` for exponential distribution
+        * (optional) `gamma` for gamma distribution
+        * (optional) `gauss` for Gaussian distribution
+        * (optional) `lognormal` for Log normal distribution
+        * (optional) `pareto` for Pareto distribution
+        * (optional) `weibull` for Weibull distribution
     * (optional) `repeat` will create N number of identical tasks.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is

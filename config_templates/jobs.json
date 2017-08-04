@@ -75,6 +75,52 @@
                             },
                             "zip": ["ab", "01"]
                         },
+                        "random": {
+                            "generate": 3,
+                            "seed": null,
+                            "integer": {
+                                "start": 0,
+                                "stop": 10,
+                                "step": 1
+                            },
+                            "distribution": {
+                                "uniform": {
+                                    "min": 0,
+                                    "max": 1
+                                },
+                                "triangular": {
+                                    "low": 0,
+                                    "high": 1,
+                                    "mode": null
+                                },
+                                "beta": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "exponential": {
+                                    "lambda": 2
+                                },
+                                "gamma": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "gauss": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "lognormal": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "pareto": {
+                                    "alpha": 1
+                                },
+                                "weibull": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                }
+                            }
+                        },
                         "repeat": 3
                     },
                     "id": null,

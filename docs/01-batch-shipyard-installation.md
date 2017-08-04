@@ -1,12 +1,12 @@
 # Batch Shipyard Installation
-Installation is an easy two-step process: fetch the code and run the
-install script to download and setup dependencies.
+Installation is an easy two-step process if not using Azure Cloud Shell:
+fetch the code and run the install script to download and setup dependencies.
 
 If you wish to install Batch Shipyard into your Azure App Service (e.g.,
 Azure Function App) environment, please see
 [this guide](60-batch-shipyard-site-extension.md).
 
-## Azure Cloud Shell
+### Azure Cloud Shell
 Batch Shipyard is now integrated into
 [Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
 with no installation required. Simply request a Cloud Shell session and type
@@ -16,6 +16,9 @@ with no installation required. Simply request a Cloud Shell session and type
 Note that Azure Cloud Shell may not have the most recent release of
 Batch Shipyard. You can see the version of Batch Shipyard installed with
 the command `shipyard --version`.
+
+If you wish to install Batch Shipyard on your machine, please proceed to the
+next section.
 
 ## Installation
 ### Step 1: Acquire Batch Shipyard
