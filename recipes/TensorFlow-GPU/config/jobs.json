@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "gcr.io/tensorflow/tensorflow:latest-gpu",
-                    "remove_container_after_exit": true,
                     "resource_files": [
                         {
                             "file_path": "convolutional.py",

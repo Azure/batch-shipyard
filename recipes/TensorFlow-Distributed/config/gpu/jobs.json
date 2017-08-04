@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/tensorflow:1.2.1-gpu",
-                    "remove_container_after_exit": true,
                     "command": "/bin/bash -c \"/shipyard/launcher.sh /shipyard/mnist_replica.py\"",
                     "gpu": true,
                     "multi_instance": {

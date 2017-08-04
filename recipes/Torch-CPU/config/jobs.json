@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "alfpark/torch:cpu",
-                    "remove_container_after_exit": true,
                     "command": "/root/torch/run_mnist.sh"
                 }
             ]

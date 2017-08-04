@@ -249,7 +249,8 @@ to run in the `global_resources`:`docker_images` property in the global
 configuration to minimize scheduling to task execution latency.
 * (optional) `remove_container_after_exit` property specifies if all
 containers under the job should be automatically removed/cleaned up after
-the task exits. This defaults to `false`.
+the task exits. Note that this only cleans up the Docker container and not
+the associated Batch task. This defaults to `true`.
 * (optional) `shm_size` property specifies the size of `/dev/shm` in all
 containers under the job. The default is `64m`. The postfix unit can be
 designated as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`

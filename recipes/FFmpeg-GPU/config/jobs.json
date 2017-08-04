@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "alfpark/ffmpeg:3.2.1-nvenc",
-                    "remove_container_after_exit": true,
                     "resource_files": [
                         {
                             "file_path": "samplevideo.mp4",

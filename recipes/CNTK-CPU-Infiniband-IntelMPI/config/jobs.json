@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/cntk:2.1-cpu-1bitsgd-py36-intelmpi-refdata",
-                    "remove_container_after_exit": true,
                     "command": "/cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -- -q 1 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output",
                     "infiniband": true,
                     "multi_instance": {
