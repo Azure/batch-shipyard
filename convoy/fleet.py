@@ -2509,6 +2509,17 @@ def action_pool_listimages(batch_client, config):
     _list_docker_images(batch_client, config)
 
 
+def action_pool_stats(batch_client, config, pool_id):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Pool Stats
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str pool_id: pool id
+    """
+    batch.pool_stats(batch_client, config, pool_id=pool_id)
+
+
 def action_pool_autoscale_disable(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
     """Action: Pool Autoscale Disable
@@ -2865,6 +2876,17 @@ def action_jobs_enable(batch_client, config, jobid):
     :param str jobid: job id to migrate to in lieu of config
     """
     batch.enable_jobs(batch_client, config, jobid=jobid)
+
+
+def action_jobs_stats(batch_client, config, job_id):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Jobs Stats
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str job_id: job id
+    """
+    batch.job_stats(batch_client, config, jobid=job_id)
 
 
 def action_storage_del(

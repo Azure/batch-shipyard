@@ -1178,7 +1178,7 @@ def pool_dsu(ctx):
 @aad_options
 @pass_cli_context
 def pool_ssh(ctx, cardinal, nodeid, tty, command):
-    """Interactively login via SSH to a node in the pool"""
+    """Interactively login via SSH to a node in a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_ssh(
         ctx.batch_client, ctx.config, cardinal, nodeid, tty, command)
@@ -1253,9 +1253,23 @@ def pool_udi(ctx, image, digest, ssh):
 @aad_options
 @pass_cli_context
 def pool_listimages(ctx):
-    """List Docker images in the pool"""
+    """List Docker images in a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
+
+
+@pool.command('stats')
+@click.option('--poolid', help='Get stats on specified pool')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_stats(ctx, poolid):
+    """Get statistics about a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_stats(
+        ctx.batch_client, ctx.config, pool_id=poolid)
 
 
 @pool.group()
@@ -1528,6 +1542,19 @@ def jobs_enable(ctx, jobid):
     """Enable jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_enable(ctx.batch_client, ctx.config, jobid)
+
+
+@jobs.command('stats')
+@click.option('--jobid', help='Get stats only on the specified job id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_stats(ctx, jobid):
+    """Get statistics about jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_stats(ctx.batch_client, ctx.config, job_id=jobid)
 
 
 @cli.group()

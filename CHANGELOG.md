@@ -5,6 +5,8 @@
 ### Added
 - `random` and `file` task factories. See task factory guide for more
 information.
+- Summary statistics: `pool stats` and `jobs stats`. See the usage doc for
+more information.
 - Delete unusable nodes from pool with `--all-unusable` option for
 `pool delnode`
 - CNTK-GPU-Infiniband-IntelMPI recipe
@@ -34,6 +36,8 @@ guide for more information.
 - Job priority support
 - Job migration support
 - Compute node fill type support
+- New commands: `jobs enable` and `jobs disable`. Please see the usage doc
+for more information.
 - From Scratch: Step-by-Step guide
 - Azure Cloud Shell information
 

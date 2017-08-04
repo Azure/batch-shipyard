@@ -388,6 +388,8 @@ file
   * `--requeue` requeue running tasks
   * `--terminate` terminate running tasks
   * `--wait` wait for running tasks to complete
+* `stats` will generate a statistics summary of a job or jobs
+  * `--jobid` will query the specified job instead of all jobs
 * `term` will terminate jobs found in the jobs configuration file. If an
 autopool is specified for all jobs and a jobid option is not specified,
 the storage associated with the autopool will be cleaned up.
@@ -456,12 +458,13 @@ The `pool` command has the following sub-commands:
   dsu         Delete an SSH user from all nodes in pool
   grls        Get remote login settings for all nodes in...
   list        List all pools in the Batch account
-  listimages  List Docker images in the pool
+  listimages  List Docker images in a pool
   listnodes   List nodes in pool
   listskus    List available VM configurations available to...
   rebootnode  Reboot a node or nodes in a pool
   resize      Resize a pool
-  ssh         Interactively login via SSH to a node in the...
+  ssh         Interactively login via SSH to a node in a...
+  stats       Get statistics about a pool
   udi         Update Docker images in a pool
 ```
 * `add` will add the pool defined in the pool configuration file to the
@@ -514,6 +517,9 @@ configuration file
     the pool to connect to as listed by `grls`
   * `--nodeid` is the node id to connect to in the pool
   * `--tty` allocates a pseudo-terminal
+* `stats` will generate a statistics summary of the pool
+  * `--poolid` will query the specified pool instead of the pool from the
+    pool configuration file
 * `udi` will update Docker images on all compute nodes of the pool. This
 command requires a valid SSH user.
   * `--image` will restrict the update to just the image or image:tag
