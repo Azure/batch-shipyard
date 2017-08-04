@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [2.9.0b2] - 2017-08-04
 ### Added
 - `random` and `file` task factories. See task factory guide for more
 information.
@@ -779,7 +780,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.0b2...HEAD
+[2.9.0b2]: https://github.com/Azure/batch-shipyard/compare/2.9.0b1...2.9.0b2
 [2.9.0b1]: https://github.com/Azure/batch-shipyard/compare/2.8.0...2.9.0b1
 [2.8.0]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc2...2.8.0
 [2.8.0rc2]: https://github.com/Azure/batch-shipyard/compare/2.8.0rc1...2.8.0rc2
