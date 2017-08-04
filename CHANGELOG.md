@@ -3,12 +3,17 @@
 ## [Unreleased]
 
 ### Added
+- `random` and `file` task factories. See task factory guide for more
+information.
 - Delete unusable nodes from pool with `--all-unusable` option for
 `pool delnode`
 - CNTK-GPU-Infiniband-IntelMPI recipe
 
 ### Changed
 - `remove_container_after_exit` now defaults to `true`
+- `input_data`:`azure_storage` files with an include filter that does not
+include wildcards (i.e., targets a single file) will now be placed at
+the `destination` directly as specified.
 - Nvidia Tesla driver updated to 384.59
 - TensorFlow recipes updated for 1.2.1. TensorFlow-Distributed `launcher.sh`
 script is now generalized to take a script as the first parameter and

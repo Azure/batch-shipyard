@@ -1524,7 +1524,7 @@ def _send_docker_kill_signal(
             jobs = settings.job_specifications(config)
             for job in jobs:
                 if job_id == settings.job_id(job):
-                    for task in settings.job_tasks(job):
+                    for task in settings.job_tasks(config, job):
                         task_name = settings.task_name(task)
                         break
                     break
@@ -2521,7 +2521,7 @@ def add_jobs(
                 'allow run on missing image and allow public docker hub '
                 'pull on missing are both enabled. Note that allow public '
                 'pull on missing will not work in this situation.')
-        for task in settings.job_tasks(jobspec):
+        for task in settings.job_tasks(config, jobspec):
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
             if di not in global_resources:
@@ -2693,7 +2693,7 @@ def add_jobs(
         del _job_env_vars_secid
         # add all tasks under job
         task_map = {}
-        for _task in settings.job_tasks(jobspec):
+        for _task in settings.job_tasks(config, jobspec):
             _task_id = settings.task_id(_task)
             if util.is_none_or_empty(_task_id):
                 existing_tasklist, _task_id = _generate_next_generic_task_id(

@@ -85,8 +85,8 @@
                             },
                             "distribution": {
                                 "uniform": {
-                                    "min": 0,
-                                    "max": 1
+                                    "a": 0,
+                                    "b": 1
                                 },
                                 "triangular": {
                                     "low": 0,
@@ -120,6 +120,15 @@
                                     "beta": 1
                                 }
                             }
+                        },
+                        "file": {
+                            "azure_storage": {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "somecontainer",
+                                "include": [],
+                                "exclude": []
+                            },
+                            "task_filepath": "file_name"
                         },
                         "repeat": 3
                     },

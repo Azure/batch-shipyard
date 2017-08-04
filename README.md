@@ -54,8 +54,8 @@ to containers executed on compute nodes
 * Support for [pool autoscale](https://github.com/Azure/batch-shipyard/blob/master/docs/30-batch-shipyard-autoscale.md) and autopool
 to dynamically scale and control computing resources on-demand
 * Support for [Task Factories](https://github.com/Azure/batch-shipyard/blob/master/docs/35-batch-shipyard-task-factory.md)
-with the ability to generate parametric (parameter) sweeps and replicate
-tasks
+with the ability to generate tasks based on parametric (parameter) sweeps,
+randomized input, file enumeration, and replication
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for

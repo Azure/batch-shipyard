@@ -93,8 +93,8 @@ The jobs schema is as follows:
                             },
                             "distribution": {
                                 "uniform": {
-                                    "min": 0,
-                                    "max": 1
+                                    "a": 0,
+                                    "b": 1
                                 },
                                 "triangular": {
                                     "low": 0,
@@ -128,6 +128,15 @@ The jobs schema is as follows:
                                     "beta": 1
                                 }
                             }
+                        },
+                        "file": {
+                            "azure_storage": {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "somecontainer",
+                                "include": [],
+                                "exclude": []
+                            },
+                            "task_filepath": "file_name"
                         },
                         "repeat": 3
                     },
@@ -409,10 +418,30 @@ transferred again. This object currently supports `azure_batch` and
         * (optional) `lognormal` for Log normal distribution
         * (optional) `pareto` for Pareto distribution
         * (optional) `weibull` for Weibull distribution
+    * (optional) `file` is a file-based task factory. This will generate a
+      task for each file enumerated. The `command` should be keyword
+      formatted with any combination of: `file_path`,
+      `file_path_with_container`, `file_name`, or `file_name_no_extension`.
+      Please see the
+      [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
+      information.
+      * (required) `azure_storage specifies the azure storage settings to
+        use for the file task factory.
+        * (required) `storage_account_settings` is the storage account link to
+          enumerate files from
+        * (required) `container` or `file_share` specifies either a container
+          or a file share to enumerate files from. These are mutually
+          exclusive.
+        * (optional) `include` are include filters
+        * (optional) `exclude` are exclude filters
+      * (required) `task_filepath` specifies how to place the file relative
+        to the task working directory (i.e., `$AZ_BATCH_TASK_WORKING_DIR`).
+        This can be one of: `file_path`, `file_path_with_container`,
+        `file_name`, or `file_name_no_extension`.
     * (optional) `repeat` will create N number of identical tasks.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is
-    formatted as `dockertask-NNNNN` where `NNNNN` starts from `00000` and is
+    formatted as `task-NNNNN` where `NNNNN` starts from `00000` and is
     increased by 1 for each task added to the same job. If there are more
     than `99999` autonamed tasks in a job then the numbering is not
     padded for tasks exceeding 5 digits. `id` should not be specified in
