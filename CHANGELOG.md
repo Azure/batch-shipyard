@@ -2,14 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- `custom` task factory. See the task factory guide for more information.
+
 ## [2.9.0b2] - 2017-08-04
 ### Added
-- `random` and `file` task factories. See task factory guide for more
+- `random` and `file` task factories. See the task factory guide for more
 information.
 - Summary statistics: `pool stats` and `jobs stats`. See the usage doc for
 more information.
 - Delete unusable nodes from pool with `--all-unusable` option for
 `pool delnode`
+- CentOS-HPC 7.3 support
 - CNTK-GPU-Infiniband-IntelMPI recipe
 
 ### Changed

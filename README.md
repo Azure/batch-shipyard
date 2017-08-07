@@ -55,7 +55,8 @@ to containers executed on compute nodes
 to dynamically scale and control computing resources on-demand
 * Support for [Task Factories](https://github.com/Azure/batch-shipyard/blob/master/docs/35-batch-shipyard-task-factory.md)
 with the ability to generate tasks based on parametric (parameter) sweeps,
-randomized input, file enumeration, and replication
+randomized input, file enumeration, replication, and custom Python code-based
+generators
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for

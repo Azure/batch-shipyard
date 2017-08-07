@@ -1337,7 +1337,7 @@ def job_stats(batch_client, config, jobid=None):
         ])
     if len(task_times) > 0:
         log.extend([
-            '* Task end-to-end time:',
+            '* Task end-to-end time (completed):',
             '  * Mean: {}'.format(
                 datetime.timedelta(seconds=(sum(task_times) / len(task_times)))
             ),

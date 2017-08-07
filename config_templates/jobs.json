@@ -130,6 +130,15 @@
                             },
                             "task_filepath": "file_name"
                         },
+                        "custom": {
+                            "module": "mypkg.mymodule",
+                            "package": null,
+                            "input_args": ["a", "b", "c"],
+                            "input_kwargs": {
+                                "abc": "012",
+                                "def": "345"
+                            }
+                        },
                         "repeat": 3
                     },
                     "id": null,

@@ -138,6 +138,15 @@ The jobs schema is as follows:
                             },
                             "task_filepath": "file_name"
                         },
+                        "custom": {
+                            "module": "mypkg.mymodule",
+                            "package": null,
+                            "input_args": ["a", "b", "c"],
+                            "input_kwargs": {
+                                "abc": "012",
+                                "def": "345"
+                            }
+                        },
                         "repeat": 3
                     },
                     "id": null,
@@ -425,7 +434,7 @@ transferred again. This object currently supports `azure_batch` and
       Please see the
       [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
       information.
-      * (required) `azure_storage specifies the azure storage settings to
+      * (required) `azure_storage` specifies the azure storage settings to
         use for the file task factory.
         * (required) `storage_account_settings` is the storage account link to
           enumerate files from
@@ -438,6 +447,23 @@ transferred again. This object currently supports `azure_batch` and
         to the task working directory (i.e., `$AZ_BATCH_TASK_WORKING_DIR`).
         This can be one of: `file_path`, `file_path_with_container`,
         `file_name`, or `file_name_no_extension`.
+    * (optional) `custom` is a custom task factory where the logic for
+      parameter generation exists in a custom Python module that can be
+      imported at runtime. Please see the
+      [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
+      information.
+      * (required) `module` specifies the Python module to import. This must
+        be valid and resolvable by `importlib`. This module must define a
+        `generate` generator function that is callable with `*args` and
+        `**kwargs`. The `generate` generator function must yield an iterable
+        to pass to the `command` for transformation.
+      * (optional) `package` is required if `module` is specified in
+        relative terms (i.e., the anchor for package resolution).
+      * (optional) `input_args` are positional arguments to pass to the
+        `generate` generator function.
+      * (optional) `input_kwargs` are keyword arguments to pass to the
+        `generate` generator function. This should be a dictionary where
+        all keys are strings.
     * (optional) `repeat` will create N number of identical tasks.
   * (optional) `id` is the task id. Note that if the task `id` is null or
     empty then a generic task id will be assigned. The generic task id is

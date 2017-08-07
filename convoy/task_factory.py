@@ -35,6 +35,7 @@ import copy
 import datetime
 import fnmatch
 import functools
+import importlib
 import itertools
 import random
 try:
@@ -314,7 +315,37 @@ def generate_task(task, storage_settings):
     """
     # retrieve type of task factory
     task_factory = task['task_factory']
-    if 'file' in task_factory:
+    if 'custom' in task_factory:
+        try:
+            pkg = task_factory['custom']['package']
+        except KeyError:
+            pkg = None
+        module = importlib.import_module(
+            task_factory['custom']['module'], package=pkg)
+        try:
+            input_args = task_factory['custom']['input_args']
+        except KeyError:
+            input_args = None
+        try:
+            input_kwargs = task_factory['custom']['input_kwargs']
+        except KeyError:
+            input_kwargs = None
+        if input_args is not None:
+            if input_kwargs is not None:
+                args = module.generate(*input_args, **input_kwargs)
+            else:
+                args = module.generate(*input_args)
+        else:
+            if input_kwargs is not None:
+                args = module.generate(**input_kwargs)
+            else:
+                args = module.generate()
+        for arg in args:
+            taskcopy = copy.deepcopy(task)
+            taskcopy.pop('task_factory')
+            taskcopy['command'] = taskcopy['command'].format(*arg)
+            yield taskcopy
+    elif 'file' in task_factory:
         for file in _get_storage_entities(task_factory, storage_settings):
             taskcopy = copy.deepcopy(task)
             taskcopy.pop('task_factory')

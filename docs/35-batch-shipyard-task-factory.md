@@ -25,11 +25,21 @@ potentially different types of task factories per job.
 
 Now we'll dive into each type of task factory available in Batch Shipyard.
 
+#### Quick Navigation
+1. [Parametric Sweep: Product](#ps-product)
+2. [Parametric Sweep: Combinations](#ps-combinations)
+3. [Parametric Sweep: Permutations](#ps-permutations)
+4. [Parametric Sweep: Zip](#ps-zip)
+5. [Random](#random)
+6. [Repeat](#repeat)
+7. [File](#file)
+8. [Custom](#custom)
+
 ## Parametric (Parameter) Sweep
 A `parametric_sweep` will generate parameters to apply to the `command`
 according to the type of sweep.
 
-### Product
+### <a name="ps-product"></a>Product
 A `product` `parametric_sweep` can perform nested or unnested parameter
 generation. For example, if you need to generate a range of integers from
 0 to 9 with a step size of 1 (thus 10 integers total), you would specify this
@@ -130,7 +140,7 @@ would generate 9 tasks (i.e., `3 * 3` sets of parameters):
 You can nest an arbitrary number of parameter sets within the `product`
 array.
 
-### Combinations
+### <a name="ps-combinations"></a>Combinations
 The `combinations` `parametric_sweep` generates `length` subsequences of
 parameters from the `iterable`. Combinations are emitted in lexicographic
 sort order. Combinations with replacement can be specified by setting the
@@ -162,7 +172,7 @@ would generate 3 tasks:
   /bin/bash -c "echo 012; echo def"
 ```
 
-### Permutations
+### <a name="ps-permutations"></a>Permutations
 The `permutations` `parametric_sweep` generates `length` permutations of
 parameters from the `iterable`. Permutations are emitted in lexicographic
 sort order. For example:
@@ -201,7 +211,7 @@ would generate 6 tasks:
   /bin/bash -c "echo def; echo 012"
 ```
 
-### Zip
+### <a name="ps-zip"></a>Zip
 The `zip` `parametric_sweep` generates parameters where the i-th parameter
 contains the i-th element from each iterable. For example:
 
@@ -227,7 +237,7 @@ would generate 3 tasks:
   /bin/bash -c "echo c; echo 2; echo f"
 ```
 
-## Random
+## <a name="random"></a>Random
 A `random` task factory will generate random values for the `command` up to
 N times as specified by the `generate` property. The `random` task factory
 can generate both integral and floating point (real) values.
@@ -271,8 +281,18 @@ functionality as required by your scenario. For example:
 will generate 3 tasks with random floating point values pulled from a
 uniform distribution between 0.0 and 1.0.
 
-There are many more distributions available, please see the jobs configuration
-guide in conjunction with the
+The following distributions are available:
+* `uniform`
+* `triangular`
+* `beta`
+* `exponential`
+* `gamma`
+* `gauss`
+* `lognormal`
+* `pareto`
+* `weibull`
+
+For more information, please see the
 [distribution](https://docs.python.org/3.6/library/random.html#real-valued-distributions)
 property explanations.
 
@@ -289,7 +309,7 @@ For example:
 
 would create three tasks with identical commands of `/bin/bash -c "sleep 1"`.
 
-## File
+## <a name="file"></a>File
 A `file` task factory will generate tasks by enumerating a target storage
 container or file share for entities and then applying any specified keyword
 arguments to the `command`.
@@ -345,7 +365,7 @@ This would generate 4 tasks:
   /bin/bash -c "echo url=<full blob url with sas> full_path=mycontainer/archived/old1.bin file_path=archived/old1.bin file_name=old1.bin file_name_no_extension=old1"
 ```
 
-Each of task would automatically download each blob "assigned" to it
+Each task would automatically download each blob "assigned" to it
 automatically in the task's working directory as specified by the
 `task_filepath` property. This property has the following valid values,
 similar to the keyword arguments above:
@@ -376,6 +396,93 @@ Please note that a point in time listing of the blob container or file share
 is performed when the `jobs add` is called. Any modification of the
 container or file share during `jobs add` will result in non-deterministic
 behavior or even potentially unstable execution of the submission process.
+
+## <a name="custom"></a>Custom
+A `custom` task factory will generate tasks by calling a custom Python-based
+`generate` generator function supplied by the user. This is accomplished by
+importing a user-defined Python module which has a defined `generate`
+generator function.
+
+For example, suppose we create a directory named `foo` in our Batch Shipyard
+installation directory and have our custom generator as follows:
+
+```
+batch-shipyard
+|-- foo
+    |-- __init__.py
+    +-- generator.py
+```
+
+Inside the `foo` directory we have a bare `__init__.py` file and a file named
+`generator.py` which will contain our logic to generate parameters. Note that
+the custom task factory does not have to reside within your Batch Shipyard
+installation directory, but must be resolvable by `importlib.import_module()`.
+
+Inside `generator.py` resides our logic to generate parameters for the
+task factory. The one required function to implement must be named
+`generate`. For example, let's suppose we want to generate a range of
+parameters for each argument given:
+
+```python
+# in file generator.py
+
+def generate(*args, **kwargs):
+    for arg in args:
+        for x in range(0, arg):
+            yield (x,)
+```
+
+The `generate` function acceps two variadic parameters: `*args` and `**kwargs`
+which correspond to the configuration `input_args` and `input_kwargs`,
+respectively. If using `input_kwargs`, then the json dictionary specified
+must have only string-based keys. You can use any combination of `input_args`
+and `input_kwargs` or no input if not required. In this example, for each
+positional argument (i.e., `*args`), we are creating a range from `0` to that
+argument value and `yield`ing the result as a iterable (tuple). Yielding
+the result as an iterable is mandatory as the return value is unpacked and
+applied to the `command`. This allows for multiple parameters to be generated
+and applied for each generated task. An example corresponding configuration
+may be similar to the following:
+
+```json
+"task_factory": {
+    "custom": {
+        "module": "foo.generator",
+        "input_args": [1, 2, 3],
+    }
+},
+"command": "/bin/bash -c \"sleep {}\""
+```
+
+which would result in 6 tasks:
+```
+  Task 0:
+  /bin/bash -c "sleep 0"
+
+  Task 1:
+  /bin/bash -c "sleep 0"
+
+  Task 2:
+  /bin/bash -c "sleep 1"
+
+  Task 3:
+  /bin/bash -c "sleep 0"
+
+  Task 4:
+  /bin/bash -c "sleep 1"
+
+  Task 5:
+  /bin/bash -c "sleep 2"
+```
+
+Of course, this example is contrived and custom task factory logic will
+invariably be more complex. Your generator function can be dependent upon
+any Python package that is needed to accomodate complex task factory parameter
+generation scenarios. Please note that if you have installed your Batch
+Shipyard enviornment into a virtual environment and your dependencies are
+non-local (i.e., not in the Batch Shipyard directory), then you need to
+ensure that your dependencies are properly installed in the correct
+environment.
 
 ## Configuration guide
 Please see the [jobs configuration guide](14-batch-shipyard-configuration-jobs.md)
