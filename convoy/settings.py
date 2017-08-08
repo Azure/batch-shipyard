@@ -37,6 +37,7 @@ try:
 except ImportError:
     import pathlib
 # non-stdlib imports
+import dateutil.parser
 # local imports
 from . import task_factory
 from . import util
@@ -207,6 +208,22 @@ DataTransferSettings = collections.namedtuple(
         'rsync_extra_options', 'split_files_megabytes',
         'max_parallel_transfers_per_node',
         'container', 'file_share', 'blobxfer_extra_options',
+    ]
+)
+JobScheduleSettings = collections.namedtuple(
+    'JobScheduleSettings', [
+        'do_not_run_until', 'do_not_run_after', 'start_window',
+        'recurrence_interval',
+    ]
+)
+JobManagerSettings = collections.namedtuple(
+    'JobManagerSettings', [
+        'allow_low_priority_node', 'run_exclusive',
+    ]
+)
+JobRecurrenceSettings = collections.namedtuple(
+    'JobRecurrenceSettings', [
+        'schedule', 'job_manager',
     ]
 )
 UserIdentitySettings = collections.namedtuple(
@@ -2136,6 +2153,49 @@ def job_auto_pool(conf):
             pool_lifetime=_kv_read_checked(
                 ap, 'pool_lifetime', 'job').lower(),
             keep_alive=_kv_read(ap, 'keep_alive', False),
+        )
+    else:
+        return None
+
+
+def job_recurrence(conf):
+    # type: (dict) -> JobRecurrenceSettings
+    """Get job recurrence setting
+    :param dict conf: job configuration object
+    :rtype: JobRecurrenceSettings
+    :return: job recurrence settings
+    """
+    rec = _kv_read_checked(conf, 'recurrence')
+    if rec is not None:
+        do_not_run_until = _kv_read_checked(
+            rec['schedule'], 'do_not_run_until')
+        if do_not_run_until is not None:
+            do_not_run_until = dateutil.parser.parse(do_not_run_until)
+        do_not_run_after = _kv_read_checked(
+            rec['schedule'], 'do_not_run_after')
+        if do_not_run_after is not None:
+            do_not_run_after = dateutil.parser.parse(do_not_run_after)
+        start_window = _kv_read_checked(rec['schedule'], 'start_window')
+        if start_window is not None:
+            start_window = util.convert_string_to_timedelta(start_window)
+        recurrence_interval = _kv_read_checked(
+            rec['schedule'], 'recurrence_interval')
+        if recurrence_interval is not None:
+            recurrence_interval = util.convert_string_to_timedelta(
+                recurrence_interval)
+        jm = _kv_read_checked(rec, 'job_manager', {})
+        return JobRecurrenceSettings(
+            schedule=JobScheduleSettings(
+                do_not_run_until=do_not_run_until,
+                do_not_run_after=do_not_run_after,
+                start_window=start_window,
+                recurrence_interval=recurrence_interval,
+            ),
+            job_manager=JobManagerSettings(
+                allow_low_priority_node=_kv_read(
+                    jm, 'allow_low_priority_node', True),
+                run_exclusive=_kv_read(jm, 'run_exclusive', False),
+            )
         )
     else:
         return None

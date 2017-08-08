@@ -791,6 +791,7 @@ fi
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
 docker_pull_image alfpark/batch-shipyard:tfm-$version
+docker_pull_image alfpark/batch-shipyard:rjm-$version
 
 # login to registry server
 if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then

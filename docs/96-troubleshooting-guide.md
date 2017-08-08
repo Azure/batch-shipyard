@@ -100,8 +100,9 @@ If the compute node is "stuck" in starting state or enters unusable state,
 this indicates that there was an issue allocating the node from the Azure
 Cloud. Azure Batch automatically tries to recover from such situations, but
 may not be able to on occasion. In these circumstances, it is best
-to delete the specific node with `pool delnode` and then resize back up with
-`pool resize` or recreate the pool.
+to delete the specific node with `pool delnode` (with `--all-unusable` if
+nodes are stuck in unsuable state) and then resize back up with `pool resize`
+or recreate the pool.
 
 #### Compute Node is stuck in waiting for start task
 Compute nodes that appear to be "stuck" in waiting for start task may not be
@@ -139,7 +140,8 @@ has completed but has failed.
 
 ## <a name="docker"></a>Docker Issues
 #### `pool udi` command doesn't run
-The pool update Docker images command runs as a normal job. Thus, your compute
+The pool update Docker images command runs as a normal job if your pool is
+comprised entirely of dedicated compute nodes. Thus, your compute
 nodes must be able to accommodate this update job and task. If your pool only
 has one node in it, it will run as a single task under a job. If the node in
 this pool is busy and the `max_tasks_per_node` in your `pool.json` is either

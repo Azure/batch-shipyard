@@ -22,6 +22,18 @@
                 "pool_lifetime": "job",
                 "keep_alive": false
             },
+            "recurrence": {
+                "schedule": {
+                    "do_not_run_until": "",
+                    "do_not_run_after": "",
+                    "start_window": "",
+                    "recurrence_interval": ""
+                },
+                "job_manager": {
+                    "allow_low_priority_node": true,
+                    "run_exclusive": false
+                }
+            },
             "allow_run_on_missing_image": false,
             "remove_container_after_exit": true,
             "shm_size": "256m",

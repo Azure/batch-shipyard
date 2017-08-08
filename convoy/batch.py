@@ -35,11 +35,12 @@ import datetime
 import fnmatch
 import getpass
 import logging
+import os
 try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
-import os
+import pickle
 import ssl
 import tempfile
 import time
@@ -62,6 +63,7 @@ util.setup_logger(logger)
 # global defines
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
+_TASKMAP_PICKLE_FILE = 'taskmap.pickle'
 _RUN_ELEVATED = batchmodels.UserIdentity(
     auto_user=batchmodels.AutoUserSpecification(
         scope=batchmodels.AutoUserScope.pool,
@@ -2801,6 +2803,7 @@ def add_jobs(
     lasttaskid = None
     for jobspec in settings.job_specifications(config):
         job_id = settings.job_id(jobspec)
+        lastjob = job_id
         # perform checks:
         # 1. check docker images in task against pre-loaded on pool
         # 2. if tasks have dependencies, set it if so
@@ -2930,53 +2933,116 @@ def add_jobs(
                     pool=autopool,
                 )
             )
-        # create job
-        job = batchmodels.JobAddParameter(
-            id=settings.job_id(jobspec),
-            pool_info=pool_info,
-            constraints=job_constraints,
-            uses_task_dependencies=uses_task_dependencies,
-            job_preparation_task=jptask,
-            job_release_task=jrtask,
-            metadata=[
-                batchmodels.MetadataItem(
-                    name=settings.get_metadata_version_name(),
-                    value=__version__,
-                ),
-            ],
-            priority=settings.job_priority(jobspec),
-        )
-        lastjob = job.id
-        logger.info('Adding job {} to pool {}'.format(job.id, pool.id))
-        try:
-            batch_client.job.add(job)
-            if settings.verbose(config) and jptask is not None:
-                logger.debug('Job prep command: {}'.format(
-                    jptask.command_line))
-        except batchmodels.batch_error.BatchErrorException as ex:
-            if ('The specified job is already in a completed state.' in
-                    ex.message.value):
-                if recreate:
-                    # get job state
-                    _job = batch_client.job.get(job.id)
-                    if _job.state == batchmodels.JobState.completed:
-                        del_jobs(
-                            batch_client, config, jobid=job.id, wait=True)
-                        time.sleep(1)
-                        batch_client.job.add(job)
-                else:
-                    raise
-            elif 'The specified job already exists' in ex.message.value:
-                # cannot re-use an existing job if multi-instance due to
-                # job release requirement
-                if multi_instance and auto_complete:
-                    raise
-                else:
-                    # retrieve job and check for version consistency
-                    _job = batch_client.job.get(job.id)
-                    _check_metadata_mismatch('job', _job.metadata)
+        # create jobschedule
+        recurrence = settings.job_recurrence(jobspec)
+        if recurrence is not None:
+            if not auto_complete:
+                logger.warning(
+                    ('recurrence specified for job schedule {}, but '
+                     'auto_complete is disabled').format(job_id))
+                on_all_tasks_complete = (
+                    batchmodels.OnAllTasksComplete.no_action
+                )
             else:
-                raise
+                on_all_tasks_complete = (
+                    batchmodels.OnAllTasksComplete.terminate_job
+                )
+            jobschedule = batchmodels.JobScheduleAddParameter(
+                id=job_id,
+                schedule=batchmodels.Schedule(
+                    do_not_run_until=recurrence.schedule.do_not_run_until,
+                    do_not_run_after=recurrence.schedule.do_not_run_after,
+                    start_window=recurrence.schedule.start_window,
+                    recurrence_interval=recurrence.schedule.
+                    recurrence_interval,
+                ),
+                job_specification=batchmodels.JobSpecification(
+                    pool_info=pool_info,
+                    priority=settings.job_priority(jobspec),
+                    uses_task_dependencies=uses_task_dependencies,
+                    on_all_tasks_complete=on_all_tasks_complete,
+                    constraints=job_constraints,
+                    job_manager_task=batchmodels.JobManagerTask(
+                        id='shipyard-jmtask',
+                        command_line=util.wrap_commands_in_shell([
+                            'env | grep AZ_BATCH_ > .shipyard-jmtask.envlist',
+                            ('docker run --rm --env-file '
+                             '.shipyard-jmtask.envlist '
+                             '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
+                             '-w $AZ_BATCH_TASK_WORKING_DIR '
+                             'alfpark/batch-shipyard:rjm-{}').format(
+                                 __version__),
+                        ]),
+                        kill_job_on_completion=False,
+                        user_identity=_RUN_ELEVATED,
+                        run_exclusive=recurrence.job_manager.run_exclusive,
+                        authentication_token_settings=batchmodels.
+                        AuthenticationTokenSettings(
+                            access=[batchmodels.AccessScope.job]),
+                        allow_low_priority_node=recurrence.job_manager.
+                        allow_low_priority_node,
+                        resource_files=[],
+                    ),
+                    job_preparation_task=jptask,
+                    job_release_task=jrtask,
+                    metadata=[
+                        batchmodels.MetadataItem(
+                            name=settings.get_metadata_version_name(),
+                            value=__version__,
+                        ),
+                    ],
+                )
+            )
+        else:
+            jobschedule = None
+        del recurrence
+        # create job
+        if jobschedule is None:
+            job = batchmodels.JobAddParameter(
+                id=job_id,
+                pool_info=pool_info,
+                constraints=job_constraints,
+                uses_task_dependencies=uses_task_dependencies,
+                job_preparation_task=jptask,
+                job_release_task=jrtask,
+                metadata=[
+                    batchmodels.MetadataItem(
+                        name=settings.get_metadata_version_name(),
+                        value=__version__,
+                    ),
+                ],
+                priority=settings.job_priority(jobspec),
+            )
+            logger.info('Adding job {} to pool {}'.format(job_id, pool.id))
+            try:
+                batch_client.job.add(job)
+                if settings.verbose(config) and jptask is not None:
+                    logger.debug('Job prep command: {}'.format(
+                        jptask.command_line))
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if ('The specified job is already in a completed state.' in
+                        ex.message.value):
+                    if recreate:
+                        # get job state
+                        _job = batch_client.job.get(job_id)
+                        if _job.state == batchmodels.JobState.completed:
+                            del_jobs(
+                                batch_client, config, jobid=job_id, wait=True)
+                            time.sleep(1)
+                            batch_client.job.add(job)
+                    else:
+                        raise
+                elif 'The specified job already exists' in ex.message.value:
+                    # cannot re-use an existing job if multi-instance due to
+                    # job release requirement
+                    if multi_instance and auto_complete:
+                        raise
+                    else:
+                        # retrieve job and check for version consistency
+                        _job = batch_client.job.get(job_id)
+                        _check_metadata_mismatch('job', _job.metadata)
+                else:
+                    raise
         del multi_instance
         del mi_docker_container_name
         del uses_task_dependencies
@@ -2996,12 +3062,12 @@ def add_jobs(
             _task_id = settings.task_id(_task)
             if util.is_none_or_empty(_task_id):
                 existing_tasklist, _task_id = _generate_next_generic_task_id(
-                    batch_client, config, job.id, tasklist=existing_tasklist,
+                    batch_client, config, job_id, tasklist=existing_tasklist,
                     reserved=reserved_task_id, task_map=task_map,
                     last_task_id=lasttaskid)
                 settings.set_task_id(_task, _task_id)
             if util.is_none_or_empty(settings.task_name(_task)):
-                settings.set_task_name(_task, '{}-{}'.format(job.id, _task_id))
+                settings.set_task_name(_task, '{}-{}'.format(job_id, _task_id))
             del _task_id
             task = settings.task_settings(
                 cloud_pool, config, pool, jobspec, _task, missing_images)
@@ -3023,7 +3089,7 @@ def add_jobs(
             sas_urls = None
             if util.is_not_empty(env_vars) or task.infiniband or task.gpu:
                 envfileloc = '{}taskrf-{}/{}{}'.format(
-                    bs.storage_entity_prefix, job.id, task.id, task.envfile)
+                    bs.storage_entity_prefix, job_id, task.id, task.envfile)
                 f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
                 fname = f.name
                 try:
@@ -3168,20 +3234,56 @@ def add_jobs(
             if task.id in task_map:
                 raise RuntimeError(
                     'duplicate task id detected: {} for job {}'.format(
-                        task.id, job.id))
+                        task.id, job_id))
             task_map[task.id] = batchtask
             lasttaskid = task.id
-        # add task collection to job
-        _add_task_collection(batch_client, job.id, task_map)
-        # patch job if job autocompletion is needed
-        if auto_complete:
-            batch_client.job.patch(
-                job_id=job.id,
-                job_patch_parameter=batchmodels.JobPatchParameter(
-                    on_all_tasks_complete=batchmodels.
-                    OnAllTasksComplete.terminate_job))
+        # submit job schedule if required
+        if jobschedule is not None:
+            taskmaploc = '{}jsrf-{}/{}'.format(
+                bs.storage_entity_prefix, job_id, _TASKMAP_PICKLE_FILE)
+            # pickle and upload task map
+            f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
+            fname = f.name
+            try:
+                with open(fname, 'wb') as f:
+                    pickle.dump(task_map, f, protocol=pickle.HIGHEST_PROTOCOL)
+                f.close()
+                sas_urls = storage.upload_resource_files(
+                    blob_client, config, [(taskmaploc, fname)])
+            finally:
+                os.unlink(fname)
+                del f
+                del fname
+            if len(sas_urls) != 1:
+                raise RuntimeError('unexpected number of sas urls')
+            # attach as resource file to jm task
+            jobschedule.job_specification.job_manager_task.resource_files.\
+                append(
+                    batchmodels.ResourceFile(
+                        file_path=_TASKMAP_PICKLE_FILE,
+                        blob_source=next(iter(sas_urls.values())),
+                        file_mode='0640',
+                    )
+                )
+            # submit job schedule
+            logger.info('Adding jobschedule {} to pool {}'.format(
+                job_id, pool.id))
+            batch_client.job_schedule.add(jobschedule)
+        else:
+            # add task collection to job
+            _add_task_collection(batch_client, job_id, task_map)
+            # patch job if job autocompletion is needed
+            if auto_complete:
+                batch_client.job.patch(
+                    job_id=job_id,
+                    job_patch_parameter=batchmodels.JobPatchParameter(
+                        on_all_tasks_complete=batchmodels.
+                        OnAllTasksComplete.terminate_job))
     # tail file if specified
     if tail:
-        stream_file_and_wait_for_task(
-            batch_client, config, filespec='{},{},{}'.format(
-                lastjob, lasttaskid, tail), disk=False)
+        if jobschedule is not None:
+            logger.warning('cannot tail a file from a jobschedule task')
+        else:
+            stream_file_and_wait_for_task(
+                batch_client, config, filespec='{},{},{}'.format(
+                    lastjob, lasttaskid, tail), disk=False)
