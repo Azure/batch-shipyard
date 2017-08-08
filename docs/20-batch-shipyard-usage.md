@@ -338,14 +338,15 @@ The `jobs` command has the following sub-commands:
 ```
   add        Add jobs
   cmi        Cleanup multi-instance jobs
-  del        Delete jobs
+  del        Delete jobs and job schedules
   deltasks   Delete specified tasks in jobs
-  disable    Disable jobs
-  enable     Enable jobs
+  disable    Disable jobs and job schedules
+  enable     Enable jobs and job schedules
   list       List jobs
   listtasks  List tasks within jobs
-  migrate    Migrate jobs to another pool
-  term       Terminate jobs
+  migrate    Migrate jobs or job schedules to another pool
+  stats      Get statistics about jobs
+  term       Terminate jobs and job schedules
   termtasks  Terminate specified tasks in jobs
 ```
 * `add` will add all jobs and tasks defined in the jobs configuration file
@@ -357,11 +358,15 @@ to the Batch pool
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.
   * `--delete` will delete any stale cleanup jobs
-* `del` will delete jobs specified in the jobs configuration file. If an
-autopool is specified for all jobs and a jobid option is not specified,
-the storage associated with the autopool will be cleaned up.
-  * `--all` will delete all jobs found in the Batch account
+* `del` will delete jobs and job scheudles specified in the jobs
+configuration file. If an autopool is specified for all jobs and a jobid
+option is not specified, the storage associated with the autopool will be
+cleaned up.
+  * `--all-jobs` will delete all jobs found in the Batch account
+  * `--all-jobschedules` will delete all job schedules found in the Batch
+    account
   * `--jobid` force deletion scope to just this job id
+  * `--jobscheduleid` force deletion scope to just this job schedule id
   * `--termtasks` will manually terminate tasks prior to deletion. Termination
     of running tasks requires a valid SSH user.
   * `--wait` will wait for deletion to complete
@@ -370,31 +375,39 @@ configuration file. Active or running tasks will be terminated first.
   * `--jobid` force deletion scope to just this job id
   * `--taskid` force deletion scope to just this task id
   * `--wait` will wait for deletion to complete
-* `disable` will disable jobs
+* `disable` will disable jobs or job schedules
   * `--jobid` force disable scope to just this job id
+  * `--jobscheduleid` force disable scope to just this job schedule id
   * `--requeue` requeue running tasks
   * `--terminate` terminate running tasks
   * `--wait` wait for running tasks to complete
-* `enable` will enable jobs
+* `enable` will enable jobs or job schedules
   * `--jobid` force enable scope to just this job id
+  * `--jobscheduleid` force enable scope to just this job schedule id
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
+  * `--all` list all tasks in all jobs in the account
   * `--jobid` force scope to just this job id
   * `--poll-until-tasks-complete` will poll until all tasks have completed
-* `migrate` will migrate jobs to another pool
+* `migrate` will migrate jobs or job schedules to another pool
   * `--jobid` force migration scope to just this job id
+  * `--jobscheduleid` force migration scope to just this job schedule id
   * `--poolid` force migration to this specified pool id
   * `--requeue` requeue running tasks
   * `--terminate` terminate running tasks
   * `--wait` wait for running tasks to complete
 * `stats` will generate a statistics summary of a job or jobs
   * `--jobid` will query the specified job instead of all jobs
-* `term` will terminate jobs found in the jobs configuration file. If an
-autopool is specified for all jobs and a jobid option is not specified,
-the storage associated with the autopool will be cleaned up.
-  * `--all` will terminate all jobs found in the Batch account
+* `term` will terminate jobs and job schedules found in the jobs
+configuration file. If an autopool is specified for all jobs and a jobid
+option is not specified, the storage associated with the autopool will be
+cleaned up.
+  * `--all-jobs` will terminate all jobs found in the Batch account
+  * `--all-jobschedules` will terminate all job schedules found in the Batch
+    account
   * `--jobid` force termination scope to just this job id
+  * `--jobscheduleid` force termination scope to just this job schedule id
   * `--termtasks` will manually terminate tasks prior to termination.
     Termination of running tasks requires a valid SSH user.
   * `--wait` will wait for termination to complete

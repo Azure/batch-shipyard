@@ -2637,17 +2637,21 @@ def action_jobs_list(batch_client, config):
 
 
 def action_jobs_listtasks(
-        batch_client, config, jobid, poll_until_tasks_complete):
-    # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
+        batch_client, config, all, jobid, poll_until_tasks_complete):
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool all: all jobs
     :param str jobid: job id
     :param bool poll_until_tasks_complete: poll until tasks complete
     """
+    if all and jobid is not None:
+        raise ValueError('cannot specify both --all and --jobid')
     while True:
-        all_complete = batch.list_tasks(batch_client, config, jobid=jobid)
+        all_complete = batch.list_tasks(
+            batch_client, config, all=all, jobid=jobid)
         if not poll_until_tasks_complete or all_complete:
             break
         time.sleep(5)
@@ -2693,29 +2697,44 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
         batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
 
 
-def action_jobs_term(
-        batch_client, blob_client, queue_client, table_client, config, all,
-        jobid, termtasks, wait):
+def action_jobs_del_or_term(
+        batch_client, blob_client, queue_client, table_client, config,
+        delete, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
     #        azurequeue.QueueService, azuretable.TableService, dict, bool,
-    #        str, bool, bool) -> None
-    """Action: Jobs Term
+    #        bool, str, str, bool, bool) -> None
+    """Action: Jobs Del or Term
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
-    :param bool all: all jobs
+    :param bool all_jobs: all jobs
+    :param bool all_jobschedules: all job schedules
     :param str jobid: job id
+    :param str jobscheduleid: job schedule id
     :param bool termtasks: terminate tasks prior
     :param bool wait: wait for action to complete
     """
-    if all:
+    if jobid is not None and jobscheduleid is not None:
+        raise ValueError('cannot specify both --jobid and --jobscheduleid')
+    if all_jobs:
         if jobid is not None:
-            raise ValueError('cannot specify both --all and --jobid')
-        batch.terminate_all_jobs(
-            batch_client, config, termtasks=termtasks, wait=wait)
+            raise ValueError('cannot specify both --all-jobs and --jobid')
+        batch.delete_or_terminate_all_jobs(
+            batch_client, config, delete, termtasks=termtasks, wait=wait)
+    elif all_jobschedules:
+        if jobscheduleid is not None:
+            raise ValueError(
+                'cannot specify both --all-jobschedules and --jobscheduleid')
+        if termtasks:
+            raise ValueError(
+                'Cannot specify --termtasks with --all-jobschedules. '
+                'Please terminate tasks with each individual job first.')
+        batch.delete_or_terminate_all_job_schedules(
+            batch_client, config, delete, wait=wait)
     else:
         # check for autopool
         if util.is_none_or_empty(jobid):
@@ -2732,56 +2751,9 @@ def action_jobs_term(
         else:
             autopool = False
         # terminate the jobs
-        batch.terminate_jobs(
-            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
-        # if autopool, delete the storage
-        if autopool:
-            # TODO remove queue_client in 3.0
-            storage.cleanup_with_del_pool(
-                blob_client, queue_client, table_client, config)
-
-
-def action_jobs_del(
-        batch_client, blob_client, queue_client, table_client, config, all,
-        jobid, termtasks, wait):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azurequeue.QueueService, azuretable.TableService, dict, bool,
-    #        str, bool, bool) -> None
-    """Action: Jobs Del
-    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
-        batch client
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
-    :param dict config: configuration dict
-    :param bool all: all jobs
-    :param str jobid: job id
-    :param bool termtasks: terminate tasks prior
-    :param bool wait: wait for action to complete
-    """
-    if all:
-        if jobid is not None:
-            raise ValueError('cannot specify both --all and --jobid')
-        batch.del_all_jobs(
-            batch_client, config, termtasks=termtasks, wait=wait)
-    else:
-        # check for autopool
-        if util.is_none_or_empty(jobid):
-            autopool = batch.check_jobs_for_auto_pool(config)
-            if autopool:
-                # check if a pool id with existing pool id exists
-                try:
-                    batch_client.pool.get(settings.pool_id(config))
-                except batchmodels.BatchErrorException as ex:
-                    if 'The specified pool does not exist' in ex.message.value:
-                        pass
-                else:
-                    autopool = False
-        else:
-            autopool = False
-        # delete the jobs
-        batch.del_jobs(
-            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
+        batch.delete_or_terminate_jobs(
+            batch_client, config, delete, jobid=jobid,
+            jobscheduleid=jobscheduleid, termtasks=termtasks, wait=wait)
         # if autopool, delete the storage
         if autopool:
             # TODO remove queue_client in 3.0
@@ -2805,77 +2777,101 @@ def action_jobs_cmi(batch_client, config, delete):
 
 
 def action_jobs_migrate(
-        batch_client, config, jobid, poolid, requeue, terminate, wait):
-    # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool,
+        batch_client, config, jobid, jobscheduleid, poolid, requeue,
+        terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, bool, bool,
     #        bool) -> None
     """Action: Jobs Migrate
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param str jobid: job id to migrate to in lieu of config
+    :param str jobscheduleid: job schedule id to migrate to in lieu of config
     :param str poolid: pool id to migrate to in lieu of config
     :param bool requeue: requeue action
     :param bool terminate: terminate action
     :param bool wait: wait action
     """
-    if [requeue, terminate, wait].count(True) != 1:
-        raise ValueError(
-            'must specify only one option of --requeue, --terminate, --wait')
+    if jobid is not None:
+        if jobscheduleid is not None:
+            raise ValueError('cannot specify both --jobid and --jobscheduleid')
+        if [requeue, terminate, wait].count(True) != 1:
+            raise ValueError(
+                'must specify only one option of --requeue, --terminate, '
+                '--wait')
     if requeue:
         action = 'requeue'
     elif terminate:
         action = 'terminate'
     elif wait:
         action = 'wait'
+    else:
+        action = None
     # check jobs to see if targetted pool id is the same
     batch.check_pool_for_job_migration(
-        batch_client, config, jobid=jobid, poolid=poolid)
-    if not util.confirm_action(config, msg='migrate jobs'):
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid,
+        poolid=poolid)
+    if not util.confirm_action(
+            config, msg='migration of jobs or job schedules'):
         return
     # disable job and wait for disabled state
-    batch.disable_jobs(batch_client, config, action, jobid=jobid)
+    batch.disable_jobs(
+        batch_client, config, action, jobid=jobid, jobscheduleid=jobscheduleid,
+        suppress_confirm=True)
     # patch job
     batch.update_job_with_pool(
-        batch_client, config, jobid=jobid, poolid=poolid)
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid,
+        poolid=poolid)
     # enable job
-    batch.enable_jobs(batch_client, config, jobid=jobid)
+    batch.enable_jobs(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid)
 
 
 def action_jobs_disable(
-        batch_client, config, jobid, requeue, terminate, wait):
-    # type: (batchsc.BatchServiceClient, dict, str, bool, bool,
+        batch_client, config, jobid, jobscheduleid, requeue, terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool,
     #        bool) -> None
     """Action: Jobs Disable
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
-    :param str jobid: job id to migrate to in lieu of config
+    :param str jobid: job id to disable to in lieu of config
+    :param str jobscheduleid: job schedule id to disable to in lieu of config
     :param bool requeue: requeue action
     :param bool terminate: terminate action
     :param bool wait: wait action
     """
-    if [requeue, terminate, wait].count(True) != 1:
-        raise ValueError(
-            'must specify only one option of --requeue, --terminate, --wait')
+    if jobid is not None:
+        if jobscheduleid is not None:
+            raise ValueError('cannot specify both --jobid and --jobscheduleid')
+        if [requeue, terminate, wait].count(True) != 1:
+            raise ValueError(
+                'must specify only one option of --requeue, --terminate, '
+                '--wait')
     if requeue:
         action = 'requeue'
     elif terminate:
         action = 'terminate'
     elif wait:
         action = 'wait'
+    else:
+        action = None
     batch.disable_jobs(
-        batch_client, config, action, jobid=jobid, disabling_state_ok=True)
+        batch_client, config, action, jobid=jobid,
+        jobscheduleid=jobscheduleid, disabling_state_ok=True)
 
 
-def action_jobs_enable(batch_client, config, jobid):
-    # type: (batchsc.BatchServiceClient, dict, str) -> None
+def action_jobs_enable(batch_client, config, jobid, jobscheduleid):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Jobs Enable
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
-    :param str jobid: job id to migrate to in lieu of config
+    :param str jobid: job id to enable to in lieu of config
+    :param str jobscheduleid: job schedule id to enable to in lieu of config
     """
-    batch.enable_jobs(batch_client, config, jobid=jobid)
+    batch.enable_jobs(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid)
 
 
 def action_jobs_stats(batch_client, config, job_id):

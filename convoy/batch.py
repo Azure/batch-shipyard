@@ -169,19 +169,26 @@ def list_certificates_in_account(batch_client):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     """
     i = 0
+    log = ['list of certificates']
     certs = batch_client.certificate.list()
     for cert in certs:
         if cert.delete_certificate_error is not None:
-            ce = 'delete_error=(code={} msg={})'.format(
+            ce = '  * delete error: {}: {}'.format(
                 cert.delete_certificate_error.code,
                 cert.delete_certificate_error.message)
         else:
-            ce = ''
-        logger.info('{}={} [state={}{}]'.format(
-            cert.thumbprint_algorithm, cert.thumbprint, cert.state, ce))
+            ce = '  * no delete errors'
+        log.extend([
+            '* thumbprint: {}'.format(cert.thumbprint),
+            '  * thumbprint algorithm: {}'.format(cert.thumbprint_algorithm),
+            '  * state: {}'.format(cert.state),
+            ce,
+        ])
         i += 1
     if i == 0:
         logger.error('no certificates found')
+    else:
+        logger.info(os.linesep.join(log))
 
 
 def del_certificate_from_account(batch_client, config):
@@ -284,7 +291,7 @@ def _block_for_nodes_ready(
                          pool.target_dedicated_nodes == 0)):
                     fatal_resize_error = True
             if fatal_resize_error:
-                list_nodes(batch_client, config)
+                pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
                     'Fatal resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
@@ -321,7 +328,7 @@ def _block_for_nodes_ready(
                         _retrieve_outputs_from_failed_nodes(
                             batch_client, config, nodeid=node.id)
                     if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
-                        list_nodes(batch_client, config)
+                        pool_stats(batch_client, config, pool_id=pool_id)
                         raise RuntimeError(
                             ('Ran out of reboot retries for recovery. '
                              'Please inspect both the node status above and '
@@ -344,7 +351,7 @@ def _block_for_nodes_ready(
                     'Detected start task failure, attempting to retrieve '
                     'stdout/stderr for error diagnosis from nodes')
                 _retrieve_outputs_from_failed_nodes(batch_client, config)
-                list_nodes(batch_client, config)
+                pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
                     ('Please inspect both the node status above and '
                      'stdout.txt/stderr.txt files within the '
@@ -357,7 +364,7 @@ def _block_for_nodes_ready(
                  pool.target_low_priority_nodes) and
                 all(node.state in stopping_states for node in nodes)):
             if any(node.state not in end_states for node in nodes):
-                list_nodes(batch_client, config)
+                pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
                     ('Node(s) of pool {} not in {} state. Please inspect the '
                      'state of nodes in the pool above. If this appears to '
@@ -448,7 +455,7 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
     nodes = _block_for_nodes_ready(
         batch_client, config, stopping_states, end_states, pool_id,
         settings.pool_settings(config).reboot_on_start_task_failed)
-    list_nodes(batch_client, config, nodes=nodes)
+    pool_stats(batch_client, config, pool_id=pool_id)
     return nodes
 
 
@@ -688,29 +695,39 @@ def list_pools(batch_client):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     """
     i = 0
+    log = ['list of pools']
     pools = batch_client.pool.list()
     for pool in pools:
         if util.is_not_empty(pool.resize_errors):
-            errors = []
+            errors = ['  * resize errors:']
             for err in pool.resize_errors:
-                errors.append('code={} msg={}'.format(err.code, err.message))
-            errors = ' resize_error=({})'.format(' '.join(errors))
+                errors.append('    * {}: {}'.format(err.code, err.message))
         else:
-            errors = ''
-        logger.info(
-            ('pool_id={} [state={} allocation_state={}{} vm_size={} '
-             'node_agent={} vm_dedicated_count={} '
-             'target_vm_dedicated_count={} vm_low_priority_count={} '
-             'target_vm_low_priority_count={}]'.format(
-                 pool.id, pool.state, pool.allocation_state, errors,
-                 pool.vm_size,
-                 pool.virtual_machine_configuration.node_agent_sku_id,
-                 pool.current_dedicated_nodes,
-                 pool.target_dedicated_nodes, pool.current_low_priority_nodes,
-                 pool.target_low_priority_nodes)))
+            errors = ['  * no resize errors']
+        entry = [
+            '* pool id: {}'.format(pool.id),
+            '  * vm size: {}'.format(pool.vm_size),
+            '  * state: {}'.format(pool.state),
+            '  * allocation state: {}'.format(pool.allocation_state),
+        ]
+        entry.extend(errors)
+        entry.extend([
+            '  * vm count:',
+            '    * dedicated:',
+            '      * current: {}'.format(pool.current_dedicated_nodes),
+            '      * target: {}'.format(pool.target_dedicated_nodes),
+            '    * low priority:',
+            '      * current: {}'.format(pool.current_low_priority_nodes),
+            '      * target: {}'.format(pool.target_low_priority_nodes),
+            '  * node agent: {}'.format(
+                pool.virtual_machine_configuration.node_agent_sku_id),
+        ])
+        log.extend(entry)
         i += 1
     if i == 0:
         logger.error('no pools found')
+    else:
+        logger.info(os.linesep.join(log))
 
 
 def _check_metadata_mismatch(mdtype, metadata, req_ge=None):
@@ -1181,14 +1198,15 @@ def del_node(
 
 
 def check_pool_for_job_migration(
-        batch_client, config, jobid=None, poolid=None):
+        batch_client, config, jobid=None, jobscheduleid=None, poolid=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, str) -> None
-    """Check pool for job migration eligibility
+    #        str, str, str) -> None
+    """Check pool for job or job schedule migration eligibility
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to migrate
+    :param str jobscheduleid: job schedule id to migrate
     :param str poolid: pool id to update to
     """
     if poolid is None:
@@ -1196,33 +1214,55 @@ def check_pool_for_job_migration(
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
-        jobs = [{'id': jobid}]
+        jobs = [{'id': jobid or jobscheduleid}]
     for _job in jobs:
+        recurrence = (
+            True if jobscheduleid is not None else
+            settings.job_recurrence(_job)
+        )
+        if recurrence is not None:
+            text = 'job schedule'
+        else:
+            text = 'job'
         job_id = settings.job_id(_job)
-        job = batch_client.job.get(job_id=job_id)
-        if (job.state == batchmodels.JobState.completed or
-                job.state == batchmodels.JobState.deleting or
-                job.state == batchmodels.JobState.terminating):
+        if recurrence is not None:
+            job = batch_client.job_schedule.get(job_schedule_id=job_id)
+            if (job.state == batchmodels.JobScheduleState.completed or
+                    job.state == batchmodels.JobScheduleState.deleting or
+                    job.state == batchmodels.JobScheduleState.terminating):
+                raise RuntimeError(
+                    'cannot migrate {} {} in state {}'.format(
+                        text, job_id, job.state))
+            poolinfo = job.job_specification.pool_info
+        else:
+            job = batch_client.job.get(job_id=job_id)
+            if (job.state == batchmodels.JobState.completed or
+                    job.state == batchmodels.JobState.deleting or
+                    job.state == batchmodels.JobState.terminating):
+                raise RuntimeError(
+                    'cannot migrate {} {} in state {}'.format(
+                        text, job_id, job.state))
+            poolinfo = job.pool_info
+        if poolinfo.auto_pool_specification is not None:
             raise RuntimeError(
-                'cannot migrate job {} in state {}'.format(job_id, job.state))
-        if job.pool_info.auto_pool_specification is not None:
+                'cannot migrate {} {} with an autopool specification'.format(
+                    text, job_id))
+        if poolinfo.pool_id == poolid:
             raise RuntimeError(
-                'cannot migrate job {} with an autopool specification'.format(
-                    job_id))
-        if job.pool_info.pool_id == poolid:
-            raise RuntimeError(
-                'cannot migrate job {} to the same pool {}'.format(
-                    job_id, poolid))
+                'cannot migrate {} {} to the same pool {}'.format(
+                    text, job_id, poolid))
 
 
-def update_job_with_pool(batch_client, config, jobid=None, poolid=None):
+def update_job_with_pool(
+        batch_client, config, jobid=None, jobscheduleid=None, poolid=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, str) -> None
+    #        str, str, str) -> None
     """Update job with different pool id
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to update
+    :param str jobscheduleid: job schedule id to update
     :param str poolid: pool id to update to
     """
     if poolid is None:
@@ -1230,18 +1270,48 @@ def update_job_with_pool(batch_client, config, jobid=None, poolid=None):
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
-        jobs = [{'id': jobid}]
+        jobs = [{'id': jobid or jobscheduleid}]
     for _job in jobs:
-        job_id = settings.job_id(_job)
-        batch_client.job.patch(
-            job_id=job_id,
-            job_patch_parameter=batchmodels.JobPatchParameter(
-                pool_info=batchmodels.PoolInformation(
-                    pool_id=poolid)
-            )
+        recurrence = (
+            True if jobscheduleid is not None else
+            settings.job_recurrence(_job)
         )
-        logger.info('updated job {} to target pool {}'.format(
-            job_id, poolid))
+        if recurrence is not None:
+            text = 'job schedule'
+        else:
+            text = 'job'
+        job_id = settings.job_id(_job)
+        if recurrence is not None:
+            # get existing job spec and patch over pool info
+            js = batch_client.job_schedule.get(
+                job_schedule_id=job_id).job_specification
+            js.pool_info = batchmodels.PoolInformation(pool_id=poolid)
+            # fix constraints
+            if (js.constraints is not None and
+                    js.constraints.max_wall_clock_time.days > 9e5):
+                js.constraints.max_wall_clock_time = None
+            js.job_manager_task.constraints = None
+            js.job_preparation_task.constraints = None
+            if js.job_release_task is not None:
+                js.job_release_task.max_wall_clock_time = None
+                js.job_release_task.retention_time = None
+            batch_client.job_schedule.patch(
+                job_schedule_id=job_id,
+                job_schedule_patch_parameter=batchmodels.
+                JobSchedulePatchParameter(
+                    job_specification=js,
+                )
+            )
+        else:
+            batch_client.job.patch(
+                job_id=job_id,
+                job_patch_parameter=batchmodels.JobPatchParameter(
+                    pool_info=batchmodels.PoolInformation(
+                        pool_id=poolid)
+                )
+            )
+        logger.info('updated {} {} to target pool {}'.format(
+            text, job_id, poolid))
 
 
 def job_stats(batch_client, config, jobid=None):
@@ -1371,175 +1441,121 @@ def job_stats(batch_client, config, jobid=None):
 
 def disable_jobs(
         batch_client, config, disable_tasks_action, jobid=None,
-        disabling_state_ok=False, term_tasks=False):
+        jobscheduleid=None, disabling_state_ok=False, term_tasks=False,
+        suppress_confirm=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        str, str, bool, bool) -> None
-    """Disable jobs
+    """Disable jobs or job schedules
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str disable_tasks_action: disable tasks action
     :param str jobid: job id to disable
+    :param str jobscheduleid: job schedule id to disable
     :param bool disabling_state_ok: disabling state is ok to proceed
     :param bool term_tasks: terminate tasks after disable
+    :param bool suppress_confirm: suppress confirmation
     """
-    if jobid is None:
+    if jobid is None and jobscheduleid is None:
         jobs = settings.job_specifications(config)
     else:
-        jobs = [{'id': jobid}]
+        jobs = [{'id': jobid or jobscheduleid}]
     for job in jobs:
+        recurrence = (
+            True if jobscheduleid is not None else settings.job_recurrence(job)
+        )
+        if recurrence is not None:
+            text = 'job schedule'
+        else:
+            text = 'job'
         job_id = settings.job_id(job)
+        if not suppress_confirm and not util.confirm_action(
+                config, 'disable {} {}'.format(text, job_id)):
+            continue
+        logger.info('disabling {}: {}'.format(text, job_id))
         try:
-            batch_client.job.disable(
-                job_id=job_id,
-                disable_tasks=batchmodels.DisableJobOption(
-                    disable_tasks_action),
-            )
+            if recurrence is not None:
+                batch_client.job_schedule.disable(job_schedule_id=job_id)
+            else:
+                batch_client.job.disable(
+                    job_id=job_id,
+                    disable_tasks=batchmodels.DisableJobOption(
+                        disable_tasks_action),
+                )
         except batchmodels.batch_error.BatchErrorException as ex:
-            if ('The specified job is already in a completed state' in
-                    ex.message.value):
-                pass
+            if 'completed state.' in ex.message.value:
+                logger.error('{} is already completed'.format(job_id))
+            elif 'does not exist' in ex.message.value:
+                logger.error('{} {} does not exist'.format(text, job_id))
+            else:
+                raise
         else:
             # wait for job to enter disabled/completed/deleting state
             while True:
-                _job = batch_client.job.get(
-                    job_id=job_id,
-                    job_get_options=batchmodels.JobGetOptions(
-                        select='id,state')
-                )
-                if ((disabling_state_ok and
-                     _job.state == batchmodels.JobState.disabling) or
-                        _job.state == batchmodels.JobState.disabled or
-                        _job.state == batchmodels.JobState.completed or
-                        _job.state == batchmodels.JobState.deleting):
-                    break
+                if recurrence is not None:
+                    _js = batch_client.job_schedule.get(
+                        job_schedule_id=job_id,
+                        job_schedule_get_options=batchmodels.
+                        JobScheduleGetOptions(select='id,state')
+                    )
+                    if (_js.state == batchmodels.JobScheduleState.disabled or
+                            _js.state ==
+                            batchmodels.JobScheduleState.completed or
+                            _js.state ==
+                            batchmodels.JobScheduleState.deleting):
+                        break
+                else:
+                    _job = batch_client.job.get(
+                        job_id=job_id,
+                        job_get_options=batchmodels.JobGetOptions(
+                            select='id,state')
+                    )
+                    if ((disabling_state_ok and
+                         _job.state == batchmodels.JobState.disabling) or
+                            _job.state == batchmodels.JobState.disabled or
+                            _job.state == batchmodels.JobState.completed or
+                            _job.state == batchmodels.JobState.deleting):
+                        break
                 time.sleep(1)
-            logger.info('job {} disabled'.format(job_id))
+            logger.info('{} {} disabled'.format(text, job_id))
             if term_tasks:
                 terminate_tasks(
                     batch_client, config, jobid=job_id, wait=True)
 
 
-def enable_jobs(batch_client, config, jobid=None):
+def enable_jobs(batch_client, config, jobid=None, jobscheduleid=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str) -> None
-    """Enable jobs
+    #        str, str) -> None
+    """Enable jobs or job schedules
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str jobid: job id to enable
+    :param str jobscheduleid: job schedule id to enable
     """
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
-        jobs = [{'id': jobid}]
+        jobs = [{'id': jobid or jobscheduleid}]
     for job in jobs:
+        recurrence = (
+            True if jobscheduleid is not None else settings.job_recurrence(job)
+        )
+        if recurrence is not None:
+            text = 'job schedule'
+        else:
+            text = 'job'
         job_id = settings.job_id(job)
         try:
-            batch_client.job.enable(job_id=job_id)
+            if recurrence is not None:
+                batch_client.job_schedule.enable(job_schedule_id=job_id)
+            else:
+                batch_client.job.enable(job_id=job_id)
         except batchmodels.batch_error.BatchErrorException as ex:
-            if ('The specified job is already in a completed state' in
-                    ex.message.value):
+            if 'completed state.' in ex.message.value:
                 pass
         else:
-            logger.info('job {} enabled'.format(job_id))
-
-
-def del_jobs(batch_client, config, jobid=None, termtasks=False, wait=False):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, bool, bool) -> None
-    """Delete jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param dict config: configuration dict
-    :param str jobid: job id to delete
-    :param bool termtasks: terminate tasks manually prior
-    :param bool wait: wait for jobs to delete
-    """
-    if jobid is None:
-        jobs = settings.job_specifications(config)
-    else:
-        jobs = [{'id': jobid}]
-    nocheck = set()
-    for job in jobs:
-        job_id = settings.job_id(job)
-        if not util.confirm_action(
-                config, 'delete {} job'.format(job_id)):
-            nocheck.add(job_id)
-            continue
-        logger.info('Deleting job: {}'.format(job_id))
-        try:
-            if termtasks:
-                # disable job first to prevent active tasks from
-                # getting processed
-                logger.debug(
-                    'disabling job {} first due to task termination'.format(
-                        job_id))
-                disable_jobs(
-                    batch_client, config, 'wait', jobid=job_id,
-                    disabling_state_ok=True, term_tasks=True)
-            # delete job
-            batch_client.job.delete(job_id)
-        except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The specified job does not exist' in ex.message.value:
-                logger.error('{} job does not exist'.format(job_id))
-                nocheck.add(job_id)
-                continue
-            else:
-                raise
-    if wait:
-        for job in jobs:
-            job_id = settings.job_id(job)
-            if job_id in nocheck:
-                continue
-            try:
-                logger.debug('waiting for job {} to delete'.format(job_id))
-                while True:
-                    batch_client.job.get(
-                        job_id,
-                        job_get_options=batchmodels.JobGetOptions(select='id')
-                    )
-                    time.sleep(1)
-            except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' in ex.message.value:
-                    logger.info('job {} does not exist'.format(job_id))
-                    continue
-                else:
-                    raise
-
-
-def del_all_jobs(batch_client, config, termtasks=False, wait=False):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool, bool) -> None
-    """Delete all jobs
-    :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param dict config: configuration dict
-    :param bool termtasks: terminate tasks prior
-    :param bool wait: wait for jobs to delete
-    """
-    check = set()
-    logger.debug('Getting list of all jobs...')
-    jobs = batch_client.job.list()
-    for job in jobs:
-        if not util.confirm_action(
-                config, 'delete {} job'.format(job.id)):
-            continue
-        if termtasks:
-            terminate_tasks(batch_client, config, jobid=job.id, wait=True)
-        logger.info('Deleting job: {}'.format(job.id))
-        batch_client.job.delete(job.id)
-        check.add(job.id)
-    if wait:
-        for job_id in check:
-            try:
-                logger.debug('waiting for job {} to delete'.format(job_id))
-                while True:
-                    batch_client.job.get(job_id)
-                    time.sleep(1)
-            except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' not in ex.message.value:
-                    raise
+            logger.info('{} {} enabled'.format(text, job_id))
 
 
 def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
@@ -1714,40 +1730,153 @@ def del_clean_mi_jobs(batch_client, config):
             pass
 
 
-def terminate_jobs(
-        batch_client, config, jobid=None, termtasks=False, wait=False):
+def delete_or_terminate_jobs(
+        batch_client, config, delete, jobid=None, jobscheduleid=None,
+        termtasks=False, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, bool, bool) -> None
-    """Terminate jobs
+    #        bool, str, str, bool, bool) -> None
+    """Delete or terminate jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool delete: delete instead of terminate
     :param str jobid: job id to terminate
+    :param str jobscheduleid: job schedule id to terminate
     :param bool termtasks: terminate tasks manually prior
     :param bool wait: wait for job to terminate
     """
-    if termtasks:
-        terminate_tasks(batch_client, config, jobid=jobid, wait=True)
-    if jobid is None:
+    if delete:
+        action = 'delete'
+        action_present = 'deleting'
+        action_past = 'deleted'
+    else:
+        action = 'terminate'
+        action_present = 'terminating'
+        action_past = 'terminated'
+    if jobid is None and jobscheduleid is None:
         jobs = settings.job_specifications(config)
     else:
-        jobs = [{'id': jobid}]
+        jobs = [{'id': jobid or jobscheduleid}]
+    if termtasks:
+        terminate_tasks(batch_client, config, jobid=jobid, wait=True)
     nocheck = set()
     for job in jobs:
+        recurrence = (
+            True if jobscheduleid is not None else settings.job_recurrence(job)
+        )
+        if recurrence is not None:
+            text = 'job schedule'
+        else:
+            text = 'job'
         job_id = settings.job_id(job)
         if not util.confirm_action(
-                config, 'terminate {} job'.format(job_id)):
+                config, '{} {} {}'.format(action, text, job_id)):
             nocheck.add(job_id)
             continue
-        logger.info('Terminating job: {}'.format(job_id))
-        batch_client.job.terminate(job_id)
+        logger.info('{} {}: {}'.format(action_present, text, job_id))
+        try:
+            if recurrence is not None:
+                if delete:
+                    batch_client.job_schedule.delete(job_id)
+                else:
+                    batch_client.job_schedule.terminate(job_id)
+            else:
+                if delete:
+                    batch_client.job.delete(job_id)
+                else:
+                    batch_client.job.terminate(job_id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if delete and 'does not exist' in ex.message.value:
+                logger.error('{} {} does not exist'.format(job_id, text))
+                nocheck.add(job_id)
+                continue
+            elif 'completed state.' in ex.message.value:
+                logger.debug('{} {} already completed'.format(text, job_id))
+            else:
+                raise
     if wait:
         for job in jobs:
+            recurrence = (
+                True if jobscheduleid is not None else
+                settings.job_recurrence(job)
+            )
+            if recurrence is not None:
+                text = 'job schedule'
+            else:
+                text = 'job'
             job_id = settings.job_id(job)
             if job_id in nocheck:
                 continue
             try:
-                logger.debug('waiting for job {} to terminate'.format(job_id))
+                logger.debug('waiting for {} {} to {}'.format(
+                    text, job_id, action))
+                while True:
+                    if recurrence is not None:
+                        _js = batch_client.job_schedule.get(job_id)
+                        if _js.state == batchmodels.JobScheduleState.completed:
+                            break
+                    else:
+                        _job = batch_client.job.get(job_id)
+                        if _job.state == batchmodels.JobState.completed:
+                            break
+                    time.sleep(1)
+                logger.info('{} {} {}'.format(text, job_id, action_past))
+            except batchmodels.batch_error.BatchErrorException as ex:
+                if 'does not exist' in ex.message.value:
+                    if delete:
+                        logger.info('{} {} does not exist'.format(
+                            text, job_id))
+                else:
+                    raise
+
+
+def delete_or_terminate_all_jobs(
+        batch_client, config, delete, termtasks=False, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool, bool, bool) -> None
+    """Delete or terminate all jobs
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param bool delete: delete instead of terminate
+    :param bool termtasks: terminate tasks prior
+    :param bool wait: wait for jobs to terminate
+    """
+    if delete:
+        action = 'delete'
+        action_present = 'deleting'
+    else:
+        action = 'terminate'
+        action_present = 'terminating'
+    check = set()
+    logger.debug('Getting list of all jobs')
+    jobs = batch_client.job.list()
+    for job in jobs:
+        if not util.confirm_action(
+                config, '{} {} job'.format(action, job.id)):
+            continue
+        if termtasks:
+            terminate_tasks(batch_client, config, jobid=job.id, wait=True)
+        logger.info('{} job: {}'.format(action_present, job.id))
+        try:
+            if delete:
+                batch_client.job.delete(job.id)
+            else:
+                batch_client.job.terminate(job.id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if delete and 'does not exist' in ex.message.value:
+                logger.error('{} job does not exist'.format(job.id))
+                continue
+            elif 'already in a completed state' in ex.message.value:
+                logger.debug('job {} already completed'.format(job.id))
+            else:
+                raise
+        else:
+            check.add(job.id)
+    if wait:
+        for job_id in check:
+            try:
+                logger.debug('waiting for job {} to {}'.format(job_id, action))
                 while True:
                     _job = batch_client.job.get(job_id)
                     if _job.state == batchmodels.JobState.completed:
@@ -1758,39 +1887,60 @@ def terminate_jobs(
                     raise
 
 
-def terminate_all_jobs(batch_client, config, termtasks=False, wait=False):
+def delete_or_terminate_all_job_schedules(
+        batch_client, config, delete, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        bool, bool) -> None
-    """Terminate all jobs
+    """Delete or terminate all job schedules
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param bool termtasks: terminate tasks prior
+    :param bool delete: delete instead of terminate
     :param bool wait: wait for jobs to terminate
     """
+    if delete:
+        action = 'delete'
+        action_present = 'deleting'
+    else:
+        action = 'terminate'
+        action_present = 'terminating'
     check = set()
-    logger.debug('Getting list of all jobs...')
-    jobs = batch_client.job.list()
-    for job in jobs:
+    logger.debug('Getting list of all job schedules')
+    jobschedules = batch_client.job_schedule.list()
+    for js in jobschedules:
         if not util.confirm_action(
-                config, 'terminate {} job'.format(job.id)):
+                config, '{} job schedule {}'.format(action, js.id)):
             continue
-        if termtasks:
-            terminate_tasks(batch_client, config, jobid=job.id, wait=True)
-        logger.info('Terminating job: {}'.format(job.id))
-        batch_client.job.terminate(job.id)
-        check.add(job.id)
+        logger.info('{} job schedule: {}'.format(action_present, js.id))
+        try:
+            if delete:
+                batch_client.job_schedule.delete(js.id)
+            else:
+                batch_client.job_schedule.terminate(js.id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if delete and 'does not exist' in ex.message.value:
+                logger.error('{} job schedule does not exist'.format(js.id))
+                continue
+            elif 'already in completed state' in ex.message.value:
+                logger.debug('job schedule {} already completed'.format(
+                    js.id))
+            else:
+                raise
+        else:
+            check.add(js.id)
     if wait:
-        for job_id in check:
+        for js_id in check:
             try:
-                logger.debug('waiting for job {} to terminate'.format(job_id))
+                logger.debug('waiting for job schedule {} to {}'.format(
+                    js_id, action))
                 while True:
-                    _job = batch_client.job.get(job_id)
-                    if _job.state == batchmodels.JobState.completed:
+                    _js = batch_client.job_schedule.get(js_id)
+                    if _js.state == batchmodels.JobScheduleState.completed:
                         break
                     time.sleep(1)
             except batchmodels.batch_error.BatchErrorException as ex:
-                if 'The specified job does not exist' not in ex.message.value:
+                if ('The specified job schedule does not exist'
+                        not in ex.message.value):
                     raise
 
 
@@ -1972,33 +2122,67 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
     """
     if util.is_none_or_empty(pool_id):
         pool_id = settings.pool_id(config)
-    logger.debug('listing nodes for pool {}'.format(pool_id))
+    log = ['compute nodes for pool {}'.format(pool_id)]
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
+    i = 0
     for node in nodes:
+        i += 1
+        errors = ['  * errors:']
         if node.errors is not None:
-            info = ' error=(code={} message={})'.format(
-                node.errors.code, node.errors.message)
+            for err in node.errors:
+                errors.append('    * {}: {}'.format(err.code, err.message))
         else:
-            info = ''
+            errors = ['  * no errors']
+        st = ['  * start task:']
         if node.start_task_info is not None:
             if node.start_task_info.failure_info is not None:
-                info += (' start_task_failure_info=(category={} code={} '
-                         'message={})').format(
-                             node.start_task_info.failure_info.category,
-                             node.start_task_info.failure_info.code,
-                             node.start_task_info.failure_info.message)
+                st.append(
+                    '    * failure info: {}, {}: {}'.format(
+                        node.start_task_info.failure_info.category,
+                        node.start_task_info.failure_info.code,
+                        node.start_task_info.failure_info.message
+                    )
+                )
             else:
-                info += ' start_task_exit_code={}'.format(
-                    node.start_task_info.exit_code)
-        logger.info(
-            ('node_id={} [state={}{} scheduling_state={} ip_address={} '
-             'vm_size={} dedicated={} total_tasks_run={} '
-             'running_tasks_count={} total_tasks_succeeded={}]').format(
-                 node.id, node.state, info, node.scheduling_state,
-                 node.ip_address, node.vm_size, node.is_dedicated,
-                 node.total_tasks_run, node.running_tasks_count,
-                 node.total_tasks_succeeded))
+                if node.start_task_info.end_time is not None:
+                    duration = (
+                        node.start_task_info.end_time -
+                        node.start_task_info.start_time
+                    )
+                else:
+                    duration = 'n/a'
+                st.extend([
+                    '    * exit code: {}'.format(
+                        node.start_task_info.exit_code),
+                    '    * started: {}'.format(
+                        node.start_task_info.start_time),
+                    '    * completed: {}'.format(
+                        node.start_task_info.end_time),
+                    '    * duration: {}'.format(duration),
+                ])
+        else:
+            st = ['  * no start task info']
+        entry = [
+            '* node id: {}'.format(node.id),
+            '  * state: {}'.format(node.state),
+            '  * scheduling state: {}'.format(node.scheduling_state),
+        ]
+        entry.extend(errors)
+        entry.extend(st)
+        entry.extend([
+            '  * vm size: {}'.format(node.vm_size),
+            '  * dedicated: {}'.format(node.is_dedicated),
+            '  * ip address: {}'.format(node.ip_address),
+            '  * running tasks: {}'.format(node.running_tasks_count),
+            '  * total tasks run: {}'.format(node.total_tasks_run),
+            '  * total tasks succeeded: {}'.format(node.total_tasks_succeeded),
+        ])
+        log.extend(entry)
+    if i == 0:
+        logger.error('no nodes exist for pool {}'.format(pool_id))
+    else:
+        logger.info(os.linesep.join(log))
 
 
 def get_remote_login_settings(batch_client, config, nodes=None):
@@ -2385,70 +2569,126 @@ def list_jobs(batch_client, config):
     :param dict config: configuration dict
     """
     jobs = batch_client.job.list()
+    log = ['list of jobs:']
     i = 0
     for job in jobs:
-        logger.info('job_id={} [state={} pool_id={}]'.format(
-            job.id, job.state, job.pool_info.pool_id))
+        if job.execution_info.end_time is not None:
+            duration = (
+                job.execution_info.end_time - job.execution_info.start_time
+            )
+        else:
+            duration = 'n/a'
+        log.extend([
+            '* job id: {}'.format(job.id),
+            '  * state: {}'.format(job.state),
+            '  * pool id: {}'.format(job.pool_info.pool_id),
+            '  * started: {}'.format(job.execution_info.start_time),
+            '  * completed: {}'.format(job.execution_info.end_time),
+            '  * duration: {}'.format(duration),
+        ])
         i += 1
     if i == 0:
         logger.error('no jobs found')
+    else:
+        logger.info(os.linesep.join(log))
+    i = 0
+    log = ['list of job schedules:']
+    jobschedules = batch_client.job_schedule.list()
+    for js in jobschedules:
+        log.extend([
+            '* job schedule id: {}'.format(js.id),
+            '  * state: {}'.format(js.state),
+            '  * pool id: {}'.format(js.job_specification.pool_info.pool_id),
+            '  * do not run until: {}'.format(js.schedule.do_not_run_until),
+            '  * do not run after: {}'.format(js.schedule.do_not_run_after),
+            '  * recurrence interval: {}'.format(
+                js.schedule.recurrence_interval),
+            '  * next run time: {}'.format(
+                js.execution_info.next_run_time),
+            '  * recent job: {}'.format(
+                js.execution_info.recent_job.id
+                if js.execution_info.recent_job is not None else None),
+            '  * created: {}'.format(js.creation_time),
+            '  * completed: {}'.format(js.execution_info.end_time),
+        ])
+        i += 1
+    if i == 0:
+        logger.error('no job schedules found')
+    else:
+        logger.info(os.linesep.join(log))
 
 
-def list_tasks(batch_client, config, jobid=None):
+def list_tasks(batch_client, config, all=False, jobid=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        str, bool) -> bool
+    #        bool, str, bool) -> bool
     """List tasks for specified jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool all: all jobs
     :param str jobid: job id to list tasks from
     :rtype: bool
     :return: if all tasks have completed under job(s)
     """
     all_complete = True
-    if util.is_none_or_empty(jobid):
-        jobs = settings.job_specifications(config)
+    if all:
+        jobs = batch_client.job.list()
     else:
-        jobs = [{'id': jobid}]
+        if util.is_none_or_empty(jobid):
+            jobs = settings.job_specifications(config)
+        else:
+            jobs = [{'id': jobid}]
     for job in jobs:
-        jobid = settings.job_id(job)
+        if all:
+            jobid = job.id
+        else:
+            jobid = settings.job_id(job)
+        log = ['list of tasks for job {}'.format(jobid)]
         i = 0
         try:
             tasks = batch_client.task.list(jobid)
             for task in tasks:
+                fi = None
                 if task.execution_info is not None:
                     if task.execution_info.failure_info is not None:
-                        ei = (' failure_info=(category={} code={} '
-                              'message={})').format(
-                                  task.execution_info.failure_info.category,
-                                  task.execution_info.failure_info.code,
-                                  task.execution_info.failure_info.message)
+                        fi = '    * failure info: {}, {}: {}'.format(
+                            task.execution_info.failure_info.category,
+                            task.execution_info.failure_info.code,
+                            task.execution_info.failure_info.message)
+                    if (task.execution_info.end_time is not None and
+                            task.execution_info.start_time is not None):
+                        duration = (task.execution_info.end_time -
+                                    task.execution_info.start_time)
                     else:
-                        if (task.execution_info.end_time is not None and
-                                task.execution_info.start_time is not None):
-                            duration = (task.execution_info.end_time -
-                                        task.execution_info.start_time)
-                        else:
-                            duration = 'n/a'
-                        ei = (' start_time={} end_time={} duration={} '
-                              'exit_code={}').format(
-                                  task.execution_info.start_time,
-                                  task.execution_info.end_time,
-                                  duration,
-                                  task.execution_info.exit_code)
-                else:
-                    ei = ''
-                some_extra_info = ('none', 'none', ei)
-                if task.node_info is not None:
-                    some_extra_info = (
-                                task.node_info.pool_id,
-                                task.node_info.node_id, ei)
-                logger.info(
-                    'job_id={} task_id={} [state={} max_retries={} '
-                    'retention_time={} pool_id={} node_id={}{}]'.format(
-                        jobid, task.id, task.state,
-                        task.constraints.max_task_retry_count,
-                        task.constraints.retention_time, *some_extra_info))
+                        duration = 'n/a'
+                log.extend([
+                    '* task id: {}'.format(task.id),
+                    '  * job id: {}'.format(jobid),
+                    '  * state: {}'.format(task.state),
+                    '  * max retries: {}'.format(
+                        task.constraints.max_task_retry_count),
+                    '  * retention time: {}'.format(
+                        task.constraints.retention_time),
+                    '  * execution details:',
+                    '    * pool id: {}'.format(
+                        task.node_info.pool_id if task.node_info is not None
+                        else 'n/a'),
+                    '    * node id: {}'.format(
+                        task.node_info.node_id if task.node_info is not None
+                        else 'n/a'),
+                    '    * started: {}'.format(
+                        task.execution_info.start_time
+                        if task.execution_info is not None else 'n/a'),
+                    '    * completed: {}'.format(
+                        task.execution_info.end_time
+                        if task.execution_info is not None else 'n/a'),
+                    '    * duration: {}'.format(duration),
+                    '    * exit code: {}'.format(
+                        task.execution_info.exit_code
+                        if task.execution_info is not None else 'n/a'),
+                ])
+                if fi is not None:
+                    log[-1].append(fi)
                 if task.state != batchmodels.TaskState.completed:
                     all_complete = False
                 i += 1
@@ -2460,6 +2700,8 @@ def list_tasks(batch_client, config, jobid=None):
                 raise
         if i == 0:
             logger.error('no tasks found for job {}'.format(jobid))
+        else:
+            logger.info(os.linesep.join(log))
     return all_complete
 
 
@@ -2479,6 +2721,7 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
         jobs = [{'id': jobid}]
     for job in jobs:
         jobid = settings.job_id(job)
+        log = ['task file list for job {}'.format(jobid)]
         i = 0
         try:
             tasks = batch_client.task.list(
@@ -2488,21 +2731,28 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
                 if taskid is not None and taskid != task.id:
                     continue
                 j = 0
+                entry = [
+                    '* task id: {}'.format(task.id),
+                    '  * job id: {}'.format(jobid),
+                ]
                 files = batch_client.file.list_from_task(
-                    jobid, taskid, recursive=True)
+                    jobid, task.id, recursive=True)
                 for file in files:
                     if file.is_directory:
                         continue
-                    logger.info(
-                        'task_id={} file={} [job_id={} lmt={} '
-                        'bytes={}]'.format(
-                            taskid, file.name, jobid,
-                            file.properties.last_modified,
-                            file.properties.content_length))
+                    entry.extend([
+                        '  * file: {}'.format(file.name),
+                        '    * last modified: {}'.format(
+                            file.properties.last_modified),
+                        '    * bytes: {}'.format(
+                            file.properties.content_length),
+                    ])
                     j += 1
                 if j == 0:
-                    logger.error('no files found for task {} job {}'.format(
-                        taskid, jobid))
+                    entry.append(
+                        '  * no files found'
+                    )
+                log.extend(entry)
                 i += 1
         except batchmodels.batch_error.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
@@ -2512,6 +2762,8 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
                 raise
         if i == 0:
             logger.error('no tasks found for job {}'.format(jobid))
+        else:
+            logger.info(os.linesep.join(log))
 
 
 def generate_docker_login_settings(config, for_ssh=False):
@@ -2667,20 +2919,24 @@ def _generate_next_generic_task_id(
     # get prefix and padding settings
     prefix = settings.autogenerated_task_id_prefix(config)
     padding = settings.autogenerated_task_id_zfill(config)
+    delimiter = prefix if util.is_not_empty(prefix) else ' '
     # get filtered, sorted list of generic docker task ids
     try:
         if util.is_none_or_empty(tasklist):
             tasklist = batch_client.task.list(
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
-                    filter='startswith(id, \'{}\')'.format(prefix),
+                    filter='startswith(id, \'{}\')'.format(prefix)
+                    if util.is_not_empty(prefix) else None,
                     select='id'))
             tasklist = list(tasklist)
-        tasknum = sorted([int(x.id.split('-')[-1]) for x in tasklist])[-1] + 1
-    except (batchmodels.batch_error.BatchErrorException, IndexError):
+        tasknum = sorted(
+            [int(x.id.split(delimiter)[-1]) for x in tasklist])[-1] + 1
+    except (batchmodels.batch_error.BatchErrorException, IndexError,
+            TypeError):
         tasknum = 0
     if reserved is not None:
-        tasknum_reserved = int(reserved.split('-')[-1])
+        tasknum_reserved = int(reserved.split(delimiter)[-1])
         while tasknum == tasknum_reserved:
             tasknum += 1
     id = _format_generic_task_id(prefix, padding, tasknum)
@@ -2689,7 +2945,7 @@ def _generate_next_generic_task_id(
             try:
                 if (last_task_id is not None and
                         last_task_id.startswith(prefix)):
-                    tasknum = int(last_task_id.split('-')[-1])
+                    tasknum = int(last_task_id.split(delimiter)[-1])
                     last_task_id = None
             except Exception:
                 last_task_id = None
@@ -3025,8 +3281,9 @@ def add_jobs(
                         # get job state
                         _job = batch_client.job.get(job_id)
                         if _job.state == batchmodels.JobState.completed:
-                            del_jobs(
-                                batch_client, config, jobid=job_id, wait=True)
+                            delete_or_terminate_jobs(
+                                batch_client, config, True, jobid=job_id,
+                                wait=True)
                             time.sleep(1)
                             batch_client.job.add(job)
                     else:

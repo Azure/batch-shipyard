@@ -1369,6 +1369,8 @@ def jobs_list(ctx):
 
 @jobs.command('listtasks')
 @click.option(
+    '--all', is_flag=True, help='List tasks in all jobs in account')
+@click.option(
     '--jobid', help='List tasks in the specified job id')
 @click.option(
     '--poll-until-tasks-complete', is_flag=True,
@@ -1378,11 +1380,11 @@ def jobs_list(ctx):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_list_tasks(ctx, jobid, poll_until_tasks_complete):
+def jobs_list_tasks(ctx, all, jobid, poll_until_tasks_complete):
     """List tasks within jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_listtasks(
-        ctx.batch_client, ctx.config, jobid,
+        ctx.batch_client, ctx.config, all, jobid,
         poll_until_tasks_complete)
 
 
@@ -1410,9 +1412,14 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 
 @jobs.command('term')
 @click.option(
-    '--all', is_flag=True, help='Terminate all jobs in Batch account')
+    '--all-jobs', is_flag=True, help='Terminate all jobs in Batch account')
+@click.option(
+    '--all-jobschedules', is_flag=True,
+    help='Terminate all job schedules in Batch account')
 @click.option(
     '--jobid', help='Terminate just the specified job id')
+@click.option(
+    '--jobscheduleid', help='Terminate just the specified job schedule id')
 @click.option(
     '--termtasks', is_flag=True, help='Terminate tasks running in job first')
 @click.option(
@@ -1422,19 +1429,27 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_term(ctx, all, jobid, termtasks, wait):
-    """Terminate jobs"""
+def jobs_term(
+        ctx, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
+    """Terminate jobs and job schedules"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_term(
+    convoy.fleet.action_jobs_del_or_term(
         ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
-        ctx.config, all, jobid, termtasks, wait)
+        ctx.config, False, all_jobs, all_jobschedules, jobid, jobscheduleid,
+        termtasks, wait)
 
 
 @jobs.command('del')
 @click.option(
-    '--all', is_flag=True, help='Delete all jobs in Batch account')
+    '--all-jobs', is_flag=True, help='Delete all jobs in Batch account')
+@click.option(
+    '--all-jobschedules', is_flag=True,
+    help='Delete all job schedules in Batch account')
 @click.option(
     '--jobid', help='Delete just the specified job id')
+@click.option(
+    '--jobscheduleid', help='Delete just the specified job schedule id')
 @click.option(
     '--termtasks', is_flag=True, help='Terminate tasks running in job first')
 @click.option(
@@ -1444,12 +1459,15 @@ def jobs_term(ctx, all, jobid, termtasks, wait):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_del(ctx, all, jobid, termtasks, wait):
-    """Delete jobs"""
+def jobs_del(
+        ctx, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
+    """Delete jobs and job schedules"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_del(
+    convoy.fleet.action_jobs_del_or_term(
         ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
-        ctx.config, all, jobid, termtasks, wait)
+        ctx.config, True, all_jobs, all_jobschedules, jobid, jobscheduleid,
+        termtasks, wait)
 
 
 @jobs.command('deltasks')
@@ -1490,6 +1508,8 @@ def jobs_cmi(ctx, delete):
 @click.option(
     '--jobid', help='Migrate only the specified job id')
 @click.option(
+    '--jobscheduleid', help='Migrate only the specified job schedule id')
+@click.option(
     '--poolid', help='Target specified pool id rather than from configuration')
 @click.option(
     '--requeue', is_flag=True, help='Requeue running tasks in job')
@@ -1502,16 +1522,19 @@ def jobs_cmi(ctx, delete):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_migrate(ctx, jobid, poolid, requeue, terminate, wait):
-    """Migrate jobs to another pool"""
+def jobs_migrate(ctx, jobid, jobscheduleid, poolid, requeue, terminate, wait):
+    """Migrate jobs or job schedules to another pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_migrate(
-        ctx.batch_client, ctx.config, jobid, poolid, requeue, terminate, wait)
+        ctx.batch_client, ctx.config, jobid, jobscheduleid, poolid, requeue,
+        terminate, wait)
 
 
 @jobs.command('disable')
 @click.option(
     '--jobid', help='Disable only the specified job id')
+@click.option(
+    '--jobscheduleid', help='Disable only the specified job schedule id')
 @click.option(
     '--requeue', is_flag=True, help='Requeue running tasks in job')
 @click.option(
@@ -1523,25 +1546,29 @@ def jobs_migrate(ctx, jobid, poolid, requeue, terminate, wait):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_disable(ctx, jobid, requeue, terminate, wait):
-    """Disable jobs"""
+def jobs_disable(ctx, jobid, jobscheduleid, requeue, terminate, wait):
+    """Disable jobs and job schedules"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_disable(
-        ctx.batch_client, ctx.config, jobid, requeue, terminate, wait)
+        ctx.batch_client, ctx.config, jobid, jobscheduleid, requeue,
+        terminate, wait)
 
 
 @jobs.command('enable')
 @click.option(
     '--jobid', help='Enable only the specified job id')
+@click.option(
+    '--jobscheduleid', help='Enable only the specified job schedule id')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_enable(ctx, jobid):
-    """Enable jobs"""
+def jobs_enable(ctx, jobid, jobscheduleid):
+    """Enable jobs and job schedules"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_enable(ctx.batch_client, ctx.config, jobid)
+    convoy.fleet.action_jobs_enable(
+        ctx.batch_client, ctx.config, jobid, jobscheduleid)
 
 
 @jobs.command('stats')
