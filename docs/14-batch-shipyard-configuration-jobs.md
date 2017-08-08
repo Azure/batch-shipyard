@@ -30,6 +30,18 @@ The jobs schema is as follows:
                 "pool_lifetime": "job",
                 "keep_alive": false
             },
+            "recurrence": {
+                "schedule": {
+                    "do_not_run_until": null,
+                    "do_not_run_after": null,
+                    "start_window": null,
+                    "recurrence_interval": "00:05:00"
+                },
+                "job_manager": {
+                    "allow_low_priority_node": true,
+                    "run_exclusive": false
+                }
+            },
             "allow_run_on_missing_image": false,
             "remove_container_after_exit": true,
             "shm_size": "256m",
@@ -244,7 +256,9 @@ specified `tasks` under the job will be added to the existing job.
 * (optional) `auto_complete` enables auto-completion of the job for which
 the specified tasks are run under. When run with multi-instance tasks, this
 performs automatic cleanup of the Docker container which is run in detached
-mode. The default is `false`.
+mode. The default is `false`. It is important to set this value to `true`
+if you do not have logic in your tasks to terminate or delete your job when
+using a job `recurrence`.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job. Note that
 environment variables are not expanded and are passed as-is. You will need
@@ -299,12 +313,46 @@ autopools. Utilizing `jobs term` or `jobs del` without any jobid scoping
 will attempt to clean up storage resources. Otherwise, you will need to use
 `storage del` or `storage clear` to clean up storage resources manually.
   * (optional) `pool_lifetime` specifies the lifetime of the pool. Valid
-    values are `job` and `job_schedule`. You may not specify `job_schedule`
-    for non-recurring jobs. The default is `job`.
+    values are `job` and `job_schedule`. `job_schedule` is only valid if
+    the `recurrence` property is also specified. The default is `job`.
   * (optional) `keep_alive` specifies if the pool should be kept even after
     its lifetime expires. The default is `false`. Note that setting this
     value to `false` and setting `auto_complete` to `true` will automatically
     delete the compute pool once all tasks under the job complete.
+* (optional) `recurrence` will create a schedule to run the job and tasks at
+a set interval.
+  * (required) `schedule` is the recurring schedule specification
+    * (optional) `do_not_run_until` is a datetime specification that prevents
+      the job from running until this date and time is reached. This string
+      should be in a
+      [parseable date time format](http://dateutil.readthedocs.io/en/stable/parser.html).
+      The default is to run immediately (i.e., `null`).
+    * (optional) `do_not_run_after` is a datetime specification that prevents
+      the job from running after this date and time is reached. This string
+      should be in a
+      [parseable date time format](http://dateutil.readthedocs.io/en/stable/parser.html).
+      The default has no limit (i.e., `null`).
+    * (optional) `start_window` is the time window for when the job should
+      be created according to this schedule to the maximum delta for which
+      the job can be created. This is essentially the scheduling window for
+      the job. If this property is non-`null` and the job cannot be created
+      within this time window, then the job scheduling opportunity is
+      forfeit until the next recurrence. The default is no limit
+      (i.e., `null`). If the `start_window` exceeds the `recurrence_interval`
+      then this is logically equivalent to setting the `start_window` to
+      `null`. The format for this property is a timedelta with a string
+      representation of "d.HH:mm:ss".
+    * (required) `recurrence_interval` is the recurrence interval for the
+      job. The format for this property is a timedelta with a string
+      representation of "d.HH:mm:ss". The minimum value is `00:01:00` or
+      1 minute. Note that a recurring job schedule can only have at most
+      one active job. If a prior recurrence of the job is still active when
+      the next recurrence fires, no new job is created. An important
+      implication is that even if you set this property to a minimum value
+      of 1 minute, there may be delays in completing the job and triggering
+      the next which may artificially increase the time between recurrences.
+      It is important to set the `auto_complete` setting to `true` if your
+      tasks have no logic to terminate or delete the parent job.
 * (optional) `allow_run_on_missing_image` allows tasks with a Docker image
 reference that was not pre-loaded on to the compute node via
 `global_resources`:`docker_images` in the global configuration to be able to
