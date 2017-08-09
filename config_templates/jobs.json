@@ -31,7 +31,8 @@
                 },
                 "job_manager": {
                     "allow_low_priority_node": true,
-                    "run_exclusive": false
+                    "run_exclusive": false,
+                    "monitor_task_completion": false
                 }
             },
             "allow_run_on_missing_image": false,

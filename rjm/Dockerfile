@@ -4,7 +4,7 @@ FROM alpine:3.6
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # copy in files
-COPY recurrent_jm.py requirements.txt /opt/batch-shipyard/
+COPY recurrent_job_manager.py requirements.txt /opt/batch-shipyard/
 
 # add base packages and python dependencies
 RUN apk update \
@@ -22,4 +22,4 @@ RUN apk update \
 RUN python3 -m compileall -f /opt/batch-shipyard
 
 # set entrypoint
-ENTRYPOINT ["/opt/batch-shipyard/recurrent_jm.py"]
+ENTRYPOINT ["/opt/batch-shipyard/recurrent_job_manager.py"]

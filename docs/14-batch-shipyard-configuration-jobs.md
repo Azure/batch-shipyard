@@ -39,7 +39,8 @@ The jobs schema is as follows:
                 },
                 "job_manager": {
                     "allow_low_priority_node": true,
-                    "run_exclusive": false
+                    "run_exclusive": false,
+                    "monitor_task_completion": false
                 }
             },
             "allow_run_on_missing_image": false,
@@ -256,9 +257,9 @@ specified `tasks` under the job will be added to the existing job.
 * (optional) `auto_complete` enables auto-completion of the job for which
 the specified tasks are run under. When run with multi-instance tasks, this
 performs automatic cleanup of the Docker container which is run in detached
-mode. The default is `false`. It is important to set this value to `true`
-if you do not have logic in your tasks to terminate or delete your job when
-using a job `recurrence`.
+mode. The default is `false`. If creating a job `recurrence`, utilizing
+`auto_complete` is one way to have recurrent job instances created from a
+schedule to complete such that the next job recurrence can be created.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job. Note that
 environment variables are not expanded and are passed as-is. You will need
@@ -351,8 +352,34 @@ a set interval.
       implication is that even if you set this property to a minimum value
       of 1 minute, there may be delays in completing the job and triggering
       the next which may artificially increase the time between recurrences.
-      It is important to set the `auto_complete` setting to `true` if your
+      It is important to set either the `auto_complete` or the
+      `job_manager`:`monitor_task_completion` setting to `true` if your
       tasks have no logic to terminate or delete the parent job.
+  * (optional) `job_manager` property controls the job manager execution. The
+    job manager is the task that is automatically created and run on a compute
+    node that submits the `tasks` at the given `recurrence_interval`.
+    * (optional) `allow_low_priority_node` allows the job manager to run
+      on a low priority node. The default is `true`. Sometimes it is necessary
+      to guarantee that the job manager is not preempted, if so, set this
+      value to `false` and ensure that your pool has dedicated nodes
+      provisioned.
+    * (optional) `run_exclusive` forces the job manager to run on a compute
+      node where there are no other tasks running. The default is `false`.
+      This is only relevant when the pool's `max_tasks_per_node` setting is
+      greater than 1.
+    * (optional) `monitor_task_completion` allows the job manager to monitor
+      the tasks in the job for completion instead of relying on
+      `auto_complete`. The advantage for doing so is that the job can move
+      much more quickly into completed state thus allowing the next job
+      recurrence to be created for very small values of `recurrence_interval`.
+      In order to properly utilize this feature, you must either set
+      your pool's `max_tasks_per_node` to greater than 1 or have more than
+      one compute node in your pool. If neither of these conditions are met,
+      then the tasks that the job manager creates will be blocked as there
+      will be no free scheduling slots to accommodate them (since the job
+      manager task occupies a scheduling slot itself). The default is
+      `false`. Setting both this value and `auto_complete` to `true` will
+      result in `auto_complete` as `true` behavior.
 * (optional) `allow_run_on_missing_image` allows tasks with a Docker image
 reference that was not pre-loaded on to the compute node via
 `global_resources`:`docker_images` in the global configuration to be able to

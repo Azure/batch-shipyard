@@ -25,10 +25,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 # stdlib imports
+import argparse
 import logging
 import logging.handlers
 import os
 import pickle
+import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
 import azure.batch.batch_service_client as batch
@@ -170,8 +172,60 @@ def _add_task_collection(batch_client, job_id, task_map):
         len(task_map), job_id))
 
 
+def _monitor_tasks(batch_client, job_id, numtasks):
+    # type: (batch.BatchServiceClient, str, int) -> None
+    """Monitor tasks for completion
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job to add to
+    :param int numtasks: number of tasks
+    """
+    i = 0
+    j = 0
+    while True:
+        try:
+            task_counts = batch_client.job.get_task_counts(job_id=job_id)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            logger.exception(ex)
+        else:
+            if (task_counts.validation_status ==
+                    batchmodels.TaskCountValidationStatus.validated):
+                j = 0
+                if task_counts.completed == numtasks:
+                    logger.info(task_counts)
+                    logger.info('all {} tasks completed'.format(numtasks))
+                    break
+            else:
+                # unvalidated, perform manual list tasks
+                j += 1
+                if j % 10 == 0:
+                    j = 0
+                    try:
+                        tasks = batch_client.task.list(
+                            job_id=job_id,
+                            task_list_options=batchmodels.TaskListOptions(
+                                select='id,state')
+                        )
+                        states = [task.state for task in tasks]
+                    except batchmodels.batch_error.BatchErrorException as ex:
+                        logger.exception(ex)
+                    else:
+                        if (states.count(batchmodels.TaskState.completed) ==
+                                numtasks):
+                            logger.info('all {} tasks completed'.format(
+                                numtasks))
+                            break
+            i += 1
+            if i % 15 == 0:
+                i = 0
+                logger.debug(task_counts)
+        time.sleep(2)
+
+
 def main():
     """Main function"""
+    # get command-line args
+    args = parseargs()
     # get job id
     job_id = os.environ['AZ_BATCH_JOB_ID']
     # create batch client
@@ -182,6 +236,25 @@ def main():
         task_map = pickle.load(f, fix_imports=True)
     # submit tasks to job
     _add_task_collection(batch_client, job_id, task_map)
+    # monitor tasks for completion
+    if not args.monitor:
+        logger.info('not monitoring tasks for completion')
+    else:
+        logger.info('monitoring tasks for completion')
+        _monitor_tasks(batch_client, job_id, len(task_map))
+
+
+def parseargs():
+    """Parse program arguments
+    :rtype: argparse.Namespace
+    :return: parsed arguments
+    """
+    parser = argparse.ArgumentParser(
+        description='rjm: Azure Batch Shipyard recurrent job manager')
+    parser.set_defaults(monitor=False)
+    parser.add_argument(
+        '--monitor', action='store_true', help='monitor tasks for completion')
+    return parser.parse_args()
 
 
 if __name__ == '__main__':

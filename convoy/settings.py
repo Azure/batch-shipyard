@@ -218,7 +218,7 @@ JobScheduleSettings = collections.namedtuple(
 )
 JobManagerSettings = collections.namedtuple(
     'JobManagerSettings', [
-        'allow_low_priority_node', 'run_exclusive',
+        'allow_low_priority_node', 'run_exclusive', 'monitor_task_completion',
     ]
 )
 JobRecurrenceSettings = collections.namedtuple(
@@ -2213,6 +2213,8 @@ def job_recurrence(conf):
                 allow_low_priority_node=_kv_read(
                     jm, 'allow_low_priority_node', True),
                 run_exclusive=_kv_read(jm, 'run_exclusive', False),
+                monitor_task_completion=_kv_read(
+                    jm, 'monitor_task_completion', False),
             )
         )
     else:

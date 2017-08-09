@@ -285,7 +285,7 @@ def _block_for_nodes_ready(
             fatal_resize_error = False
             errors = []
             for err in pool.resize_errors:
-                errors.append('code={} msg={}'.format(err.code, err.message))
+                errors.append('{}: {}'.format(err.code, err.message))
                 if (err.code == 'AccountCoreQuotaReached' or
                         (err.code == 'AccountLowPriorityCoreQuotaReached' and
                          pool.target_dedicated_nodes == 0)):
@@ -3191,16 +3191,28 @@ def add_jobs(
         # create jobschedule
         recurrence = settings.job_recurrence(jobspec)
         if recurrence is not None:
-            if not auto_complete:
-                logger.warning(
-                    ('recurrence specified for job schedule {}, but '
-                     'auto_complete is disabled').format(job_id))
-                on_all_tasks_complete = (
-                    batchmodels.OnAllTasksComplete.no_action
-                )
+            if recurrence.job_manager.monitor_task_completion:
+                kill_job_on_completion = True
             else:
+                kill_job_on_completion = False
+            if auto_complete:
+                if kill_job_on_completion:
+                    logger.warning(
+                        ('overriding monitor_task_completion with '
+                         'auto_complete for job schedule {}').format(
+                             job_id))
+                    kill_job_on_completion = False
                 on_all_tasks_complete = (
                     batchmodels.OnAllTasksComplete.terminate_job
+                )
+            else:
+                if not kill_job_on_completion:
+                    logger.warning(
+                        ('recurrence specified for job schedule {}, but '
+                         'auto_complete and monitor_task_completion are '
+                         'both disabled').format(job_id))
+                on_all_tasks_complete = (
+                    batchmodels.OnAllTasksComplete.no_action
                 )
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
@@ -3225,10 +3237,12 @@ def add_jobs(
                              '.shipyard-jmtask.envlist '
                              '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
                              '-w $AZ_BATCH_TASK_WORKING_DIR '
-                             'alfpark/batch-shipyard:rjm-{}').format(
-                                 __version__),
+                             'alfpark/batch-shipyard:rjm-{}{}').format(
+                                 __version__,
+                                 ' --monitor' if kill_job_on_completion else ''
+                             )
                         ]),
-                        kill_job_on_completion=False,
+                        kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
                         run_exclusive=recurrence.job_manager.run_exclusive,
                         authentication_token_settings=batchmodels.
