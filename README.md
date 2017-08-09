@@ -72,7 +72,7 @@ for MPI on HPC low-latency Azure VM instances:
   * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
-* Support for live job migration between pools
+* Support for live job and job schedule migration between pools
 * Automatic setup of SSH users to all nodes in the compute pool and optional
 tunneling to Docker Hosts on compute nodes
 * Support for credential management through
