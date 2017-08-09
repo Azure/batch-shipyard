@@ -3207,13 +3207,46 @@ def add_jobs(
                 )
             else:
                 if not kill_job_on_completion:
-                    logger.warning(
+                    logger.error(
                         ('recurrence specified for job schedule {}, but '
                          'auto_complete and monitor_task_completion are '
                          'both disabled').format(job_id))
+                    if not util.confirm_action(
+                            config, 'continue adding job schedule {}'.format(
+                                job_id)):
+                        continue
                 on_all_tasks_complete = (
                     batchmodels.OnAllTasksComplete.no_action
                 )
+            # check pool settings for kill job on completion
+            if kill_job_on_completion:
+                if cloud_pool is not None:
+                    total_vms = (
+                        cloud_pool.current_dedicated_nodes +
+                        cloud_pool.current_low_priority_nodes
+                        if recurrence.job_manager.allow_low_priority_node
+                        else 0
+                    )
+                    total_slots = cloud_pool.max_tasks_per_node * total_vms
+                else:
+                    total_vms = (
+                        pool.vm_count.dedicated +
+                        pool.vm_count.low_priority
+                        if recurrence.job_manager.allow_low_priority_node
+                        else 0
+                    )
+                    total_slots = pool.max_tasks_per_node * total_vms
+                if total_slots == 1:
+                    logger.error(
+                        ('Only 1 scheduling slot available which is '
+                         'incompatible with the monitor_task_completion '
+                         'setting. Please add more nodes to pool {}.').format(
+                             pool.id)
+                    )
+                    if not util.confirm_action(
+                            config, 'continue adding job schedule {}'.format(
+                                job_id)):
+                        continue
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
                 schedule=batchmodels.Schedule(
