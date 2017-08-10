@@ -387,8 +387,7 @@ def _block_for_nodes_ready(
                      pool.id,
                      pool.resize_timeout,
                      pool.allocation_state,
-                     pool.allocation_state_transition_time,
-                 ))
+                     pool.allocation_state_transition_time))
             if len(nodes) <= 5:
                 for node in nodes:
                     logger.debug('{}: {}'.format(node.id, node.state))
@@ -902,7 +901,7 @@ def pool_stats(batch_client, config, pool_id=None):
         pool.current_dedicated_nodes + pool.current_low_priority_nodes
     ) * pool.max_tasks_per_node
     busy_task_slots_fraction = (
-        0 if total_task_slots == 0 else
+        0 if runnable_task_slots == 0 else
         total_running_tasks / runnable_task_slots
     )
     version = 'N/A'
@@ -1002,7 +1001,7 @@ def pool_stats(batch_client, config, pool_id=None):
         '  * Runnable: {0} ({1:.2f}% of total)'.format(
             runnable_task_slots,
             100 * (
-                runnable_task_slots / total_task_slots
+                (runnable_task_slots / total_task_slots)
                 if total_task_slots > 0 else 0
             ),
         ),
@@ -3272,8 +3271,8 @@ def add_jobs(
                              '-w $AZ_BATCH_TASK_WORKING_DIR '
                              'alfpark/batch-shipyard:rjm-{}{}').format(
                                  __version__,
-                                 ' --monitor' if kill_job_on_completion else ''
-                             )
+                                 ' --monitor' if kill_job_on_completion
+                                 else '')
                         ]),
                         kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
