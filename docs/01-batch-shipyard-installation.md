@@ -46,9 +46,9 @@ a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
-Please ensure that your target Python distribution is 2.7 or 3.3+. It is
+Please ensure that your target Python distribution is 2.7 or 3.4+. It is
 recommended to install Batch Shipyard on Python 3.5 or later. Although Python
-3.5 or later is recommended, if you cannot easily install Python 3.5+ on
+3.5+ is recommended, if you cannot easily install Python 3.5+ on
 your system but Python 2.7 is available, then please use that version of
 Python to avoid installation hassles with a Python interpreter.
 
@@ -187,7 +187,7 @@ release of Batch Shipyard.
 ### <a name="windows-install"></a>Step 2 [Windows]: Run the `install.cmd` Script
 Batch Shipyard includes a installation command file that simplifies
 installing Batch Shipyard on [python.org (CPython)](https://www.python.org)
-and Anaconda. It is highly recommended to use Python 3.5 or higher (or an
+and Anaconda. It is highly recommended to use Python 3.5 or later (or an
 Anaconda equivalent). The use of the `install.cmd` script installs Batch
 Shipyard into a virtual environment. For example:
 ```shell
@@ -212,10 +212,10 @@ environments due to the delay in activating a conda environment.
 Python from [python.org](https://www.python.org) (CPython) is recommended as
 the execution environment.
 
-If you are installing on Python < 3.5 on Windows, you will need a compiler
+If you are installing on Python 3.4 on Windows, you will need a compiler
 that matches the CRT of the CPython version you are using. For Python 2.7,
 you can download the necessary development headers and compiler
-[from Microsoft](http://aka.ms/vcpython27). If you are on Python 3.3 or 3.4
+[from Microsoft](http://aka.ms/vcpython27). If you are on Python 3.4
 on Windows, it is recommended to upgrade to Python 3.5 or later so that you
 do not need a compiler to install the dependencies.
 
@@ -330,7 +330,7 @@ properly.
 ## Manual Installation
 ### Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
-with Python 2.7 or 3.3+, although 3.5+ is highly recommended. You will also
+with Python 2.7 or 3.4+, although 3.5+ is highly recommended. You will also
 need to install dependent Python packages that Batch Shipyard requires.
 Installation can be performed using the [requirements.txt](../requirements.txt)
 file via the command `pip install --upgrade --user -r requirements.txt` (or
@@ -366,8 +366,8 @@ zypper -n in gcc libopenssl-devel libffi48-devel python-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
-#### Note about Python 3.3+
-If installing for Python 3.3+, then simply use the Python3 equivalents for
+#### Note about Python 3.4+
+If installing for Python 3.4+, then simply use the Python3 equivalents for
 the python dependencies. For example, on Ubuntu/Debian:
 ```
 apt-get update

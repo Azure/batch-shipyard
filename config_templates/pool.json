@@ -34,7 +34,8 @@
                 "sample_lookback_interval": "00:10:00",
                 "required_sample_percentage": 70,
                 "bias_last_sample": true,
-                "bias_node_type": "low_priority"
+                "bias_node_type": "low_priority",
+                "rebalance_preemption_percentage": 50
             },
             "formula": ""
         },

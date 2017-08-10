@@ -2422,6 +2422,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     task_id = conf['id']
     if util.is_none_or_empty(task_id):
         raise ValueError('task id is invalid')
+    # check task id length
+    if len(task_id) > 64:
+        raise ValueError('task id exceeds 64 characters')
     image = conf['image']
     if util.is_none_or_empty(image):
         raise ValueError('image is invalid')

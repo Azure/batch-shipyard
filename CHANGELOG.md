@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Python 3.3 is no longer supported (due to `cryptography` dropping support
+for 3.3).
+
 ## [2.9.0rc1] - 2017-08-09
 ### Added
 - Recurring job support (job schedules). Please see jobs configuration doc
