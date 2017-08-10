@@ -7,3 +7,4 @@
 *.ps1 text eol=crlf
 *.xdt text eol=crlf
 *.nuspec text eol=crlf
+appveyor.yml text eol=crlf

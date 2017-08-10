@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>batch-shipyard</id>
-    <version>2.6.0.4</version>
+    <version>0.0.0</version>
     <title>Batch Shipyard</title>
     <authors>Fred Park</authors>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>

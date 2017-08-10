@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/Azure/batch-shipyard.svg?branch=master)](https://travis-ci.org/Azure/batch-shipyard)
+[![Build status](https://ci.appveyor.com/api/projects/status/3a0j0gww57o6nkpw/branch/master?svg=true)](https://ci.appveyor.com/project/alfpark/batch-shipyard)
 [![Docker Pulls](https://img.shields.io/docker/pulls/alfpark/batch-shipyard.svg)](https://hub.docker.com/r/alfpark/batch-shipyard)
 [![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:cli-latest.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
 

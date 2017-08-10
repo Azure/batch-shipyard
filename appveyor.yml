@@ -1,0 +1,50 @@
+version: '{branch}-{build}'
+
+clone_depth: 5
+
+cache:
+    - '%LOCALAPPDATA%\pip\Cache'
+
+environment:
+    matrix:
+        - PYTHON: "C:\\Python27-x64"
+          PYTHON_VERSION: "2.7"
+          PYTHON_ARCH: "64"
+
+        - PYTHON: "C:\\Python36-x64"
+          PYTHON_VERSION: "3.6"
+          PYTHON_ARCH: "64"
+
+init:
+    - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
+
+install:
+    - pip install -r requirements.txt
+    - pip install flake8
+
+build: off
+
+test_script:
+    - flake8 --statistics shipyard.py convoy\\*.py
+    - IF "%PYTHON_VERSION%"=="3.6" (
+      flake8 --statistics cascade\\*.py tfm\\*.py rjm\\*.py
+      )
+
+after_test:
+    - echo is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME%
+    - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
+      nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &&
+      7z l batch-shipyard.*.nupkg &&
+      appveyor PushArtifact batch-shipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg
+      )
+
+deploy:
+    - provider: NuGet
+      server: https://www.siteextensions.net
+      api_key:
+          secure: 7rnRHiBwGPW086Rgcn+acev2aG53VmVFnoklGqr589FJtHaMfJBL8gz/R35ZLh3+
+      skip_symbols: true
+      artifact: /.*\.nupkg/
+      on:
+          appveyor_repo_tag: true
+

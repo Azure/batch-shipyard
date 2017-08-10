@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- Automatic site-extensions NuGet package updates with tagged releases via
+AppVeyor builds
+
 ### Changed
 - Python 3.3 is no longer supported (due to `cryptography` dropping support
 for 3.3).
