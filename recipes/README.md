@@ -51,6 +51,12 @@ This CNTK-CPU-Infiniband-IntelMPI recipe contains information on how to
 Dockerize [CNTK](https://cntk.ai/) for CPUs, including execution across
 multiple Infiniband/RDMA Azure VMs with multi-instance tasks.
 
+#### [CNTK-GPU-Infiniband-IntelMPI](./CNTK-GPU-Infiniband-IntelMPI)
+This CNTK-GPU-Infiniband-IntelMPI recipe contains information on how to
+Dockerize [CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs,
+including execution across multiple Infiniband/RDMA Azure VMs with
+multi-instance tasks.
+
 #### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
 This CNTK-CPU-OpenMPI recipe contains information on how to Dockerize
 [CNTK](https://cntk.ai/) for CPUs, including execution across multiple

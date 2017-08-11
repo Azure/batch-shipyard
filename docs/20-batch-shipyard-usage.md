@@ -47,7 +47,7 @@ orphaned data if you accidentially deleted Batch Shipyard pools outside of
 Batch Shipyard.
 
 ## Commands and Sub-commands
-`shipyard` (and `shipyard.py`) is invoked with a command and a sub-command as
+`shipyard` (and `shipyard.py`) is invoked with a commands and sub-commands as
 positional arguments, i.e.:
 ```shell
 shipyard <command> <subcommand> <options>
@@ -338,11 +338,15 @@ The `jobs` command has the following sub-commands:
 ```
   add        Add jobs
   cmi        Cleanup multi-instance jobs
-  del        Delete jobs
+  del        Delete jobs and job schedules
   deltasks   Delete specified tasks in jobs
+  disable    Disable jobs and job schedules
+  enable     Enable jobs and job schedules
   list       List jobs
   listtasks  List tasks within jobs
-  term       Terminate jobs
+  migrate    Migrate jobs or job schedules to another pool
+  stats      Get statistics about jobs
+  term       Terminate jobs and job schedules
   termtasks  Terminate specified tasks in jobs
 ```
 * `add` will add all jobs and tasks defined in the jobs configuration file
@@ -354,9 +358,15 @@ to the Batch pool
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.
   * `--delete` will delete any stale cleanup jobs
-* `del` will delete jobs specified in the jobs configuration file
-  * `--all` will delete all jobs found in the Batch account
+* `del` will delete jobs and job scheudles specified in the jobs
+configuration file. If an autopool is specified for all jobs and a jobid
+option is not specified, the storage associated with the autopool will be
+cleaned up.
+  * `--all-jobs` will delete all jobs found in the Batch account
+  * `--all-jobschedules` will delete all job schedules found in the Batch
+    account
   * `--jobid` force deletion scope to just this job id
+  * `--jobscheduleid` force deletion scope to just this job schedule id
   * `--termtasks` will manually terminate tasks prior to deletion. Termination
     of running tasks requires a valid SSH user.
   * `--wait` will wait for deletion to complete
@@ -365,14 +375,39 @@ configuration file. Active or running tasks will be terminated first.
   * `--jobid` force deletion scope to just this job id
   * `--taskid` force deletion scope to just this task id
   * `--wait` will wait for deletion to complete
+* `disable` will disable jobs or job schedules
+  * `--jobid` force disable scope to just this job id
+  * `--jobscheduleid` force disable scope to just this job schedule id
+  * `--requeue` requeue running tasks
+  * `--terminate` terminate running tasks
+  * `--wait` wait for running tasks to complete
+* `enable` will enable jobs or job schedules
+  * `--jobid` force enable scope to just this job id
+  * `--jobscheduleid` force enable scope to just this job schedule id
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
+  * `--all` list all tasks in all jobs in the account
   * `--jobid` force scope to just this job id
   * `--poll-until-tasks-complete` will poll until all tasks have completed
-* `term` will terminate jobs found in the jobs configuration file
-  * `--all` will terminate all jobs found in the Batch account
+* `migrate` will migrate jobs or job schedules to another pool
+  * `--jobid` force migration scope to just this job id
+  * `--jobscheduleid` force migration scope to just this job schedule id
+  * `--poolid` force migration to this specified pool id
+  * `--requeue` requeue running tasks
+  * `--terminate` terminate running tasks
+  * `--wait` wait for running tasks to complete
+* `stats` will generate a statistics summary of a job or jobs
+  * `--jobid` will query the specified job instead of all jobs
+* `term` will terminate jobs and job schedules found in the jobs
+configuration file. If an autopool is specified for all jobs and a jobid
+option is not specified, the storage associated with the autopool will be
+cleaned up.
+  * `--all-jobs` will terminate all jobs found in the Batch account
+  * `--all-jobschedules` will terminate all job schedules found in the Batch
+    account
   * `--jobid` force termination scope to just this job id
+  * `--jobscheduleid` force termination scope to just this job schedule id
   * `--termtasks` will manually terminate tasks prior to termination.
     Termination of running tasks requires a valid SSH user.
   * `--wait` will wait for termination to complete
@@ -430,23 +465,32 @@ The `pool` command has the following sub-commands:
 ```
   add         Add a pool to the Batch account
   asu         Add an SSH user to all nodes in pool
+  autoscale   Pool autoscale actions
   del         Delete a pool from the Batch account
   delnode     Delete a node from a pool
   dsu         Delete an SSH user from all nodes in pool
   grls        Get remote login settings for all nodes in...
   list        List all pools in the Batch account
-  listimages  List Docker images in the pool
+  listimages  List Docker images in a pool
   listnodes   List nodes in pool
   listskus    List available VM configurations available to...
   rebootnode  Reboot a node or nodes in a pool
   resize      Resize a pool
-  ssh         Interactively login via SSH to a node in the...
+  ssh         Interactively login via SSH to a node in a...
+  stats       Get statistics about a pool
   udi         Update Docker images in a pool
 ```
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
 * `asu` will add the SSH user defined in the pool configuration file to
 all nodes in the specified pool
+* `autoscale` will invoke the autoscale subcommand. The autoscale
+subcommand has 4 subcommands:
+  * `disable` will disable autoscale on the pool
+  * `enable` will enable autoscale on the pool
+  * `evaluate` will evaluate the autoscale formula in the pool configuration
+    file
+  * `lastexec` will query the last execution information for autoscale
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard. It is recommended to use this command instead of deleting
@@ -459,6 +503,7 @@ Azure Storage.
 * `delnode` will delete the specified node from the pool
   * `--all-start-task-failed` will delete all nodes in the start task
     failed state
+  * `--all-unusable` will delete all nodes in the unusable state
   * `--nodeid` is the node id to delete
 * `dsu` will delete the SSH user defined in the pool configuration file
 from all nodes in the specified pool
@@ -485,6 +530,9 @@ configuration file
     the pool to connect to as listed by `grls`
   * `--nodeid` is the node id to connect to in the pool
   * `--tty` allocates a pseudo-terminal
+* `stats` will generate a statistics summary of the pool
+  * `--poolid` will query the specified pool instead of the pool from the
+    pool configuration file
 * `udi` will update Docker images on all compute nodes of the pool. This
 command requires a valid SSH user.
   * `--image` will restrict the update to just the image or image:tag
@@ -499,8 +547,11 @@ The `storage` command has the following sub-commands:
 ```
 * `clear` will clear the Azure Storage containers used by Batch Shipyard
 for metadata purposes
+  * `--poolid` will target a specific pool id rather than from configuration
 * `del` will delete the Azure Storage containers used by Batch Shipyard
 for metadata purposes
+  * `--clear-tables` will clear tables instead of deleting them
+  * `--poolid` will target a specific pool id
 
 ## Example Invocations
 ```shell
@@ -529,11 +580,11 @@ The above invocation will add the jobs specified in the jobs.json file to
 the designated pool.
 
 ```shell
-shipyard data stream --configdir . --filespec job1,dockertask-000,stdout.txt
+shipyard data stream --configdir . --filespec job1,task-00000,stdout.txt
 
 # ... or use environment variables instead
 
-SHIPYARD_CONFIGDIR=. shipyard data stream --filespec job1,dockertask-000,stdout.txt
+SHIPYARD_CONFIGDIR=. shipyard data stream --filespec job1,task-00000,stdout.txt
 ```
 The above invocation will stream the stdout.txt file from the job `job1` and
 task `task1` from a live compute node. Because all portions of the

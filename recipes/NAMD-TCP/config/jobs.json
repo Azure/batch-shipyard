@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/namd:2.11-tcp",
-                    "remove_container_after_exit": true,
                     "command": "/sw/run_namd.sh apoa1 100",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated",

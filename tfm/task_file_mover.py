@@ -133,7 +133,7 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='tfm: Azure Batch task file mover')
+        description='tfm: Azure Batch Shipyard task file mover')
     parser.set_defaults(dst='.')
     parser.add_argument('jobid', help='job id')
     parser.add_argument('taskid', help='task id')

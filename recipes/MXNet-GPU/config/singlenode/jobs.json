@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "alfpark/mxnet:gpu",
-                    "remove_container_after_exit": true,
                     "command": "/mxnet/run_mxnet.sh mnist-py . --model-prefix $AZ_BATCH_TASK_WORKING_DIR/mnist-model",
                     "gpu": true
                 }

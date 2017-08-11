@@ -29,6 +29,11 @@ do
 done
 worker_hosts=${worker_hosts::-1}
 
+# get script
+script=$1
+shift
+
+echo "script: $script"
 echo "num nodes: ${#HOSTS[@]}"
 echo "master node: $master"
 echo "ps hosts: $ps_hosts"
@@ -40,7 +45,7 @@ if [ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]; then
     # master node
     ti=${task_index[$master]}
     echo "master node: $ipaddress task index: $ti"
-    python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=ps --task_index=$ti --data_dir=./master --num_gpus=0 $* > ps-$ti.log 2>&1 &
+    python $script --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=ps --task_index=$ti --data_dir=./master --num_gpus=0 $* > ps-$ti.log 2>&1 &
     masterpid=$!
 fi
 
@@ -52,16 +57,17 @@ do
     ti=${task_index[$node]}
     echo "worker node: $node task index: $ti"
     if [ $node == $master ]; then
-        python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=./worker-$ti --num_gpus=0 $* > worker-$ti.log 2>&1 &
+        python $script --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=./worker-$ti --num_gpus=0 $* > worker-$ti.log 2>&1 &
         waitpids=("${waitpids[@]}" "$!")
     else
-        ssh $node "python /sw/mnist_replica.py --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti --num_gpus=0 $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1" &
+        ssh $node "python $script --ps_hosts=$ps_hosts --worker_hosts=$worker_hosts --job_name=worker --task_index=$ti --data_dir=$AZ_BATCH_TASK_WORKING_DIR/worker-$ti --num_gpus=0 $* > $AZ_BATCH_TASK_WORKING_DIR/worker-$ti.log 2>&1" &
         waitpids=("${waitpids[@]}" "$!")
     fi
 done
 
 # because the grpc server does not automatically exit, we need to
 # wait for all of the child processes in waitpids to complete first
+set +e
 declare -a donepids
 while :
 do
@@ -77,6 +83,7 @@ do
         sleep 1
     fi
 done
+set -e
 
 # kill master process
 kill -9 $masterpid

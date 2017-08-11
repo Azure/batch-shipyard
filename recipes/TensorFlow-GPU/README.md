@@ -23,16 +23,17 @@ compute application, it is best to choose `NC` VM instances.
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
 Docker image. The official Google
-[gcr.io/tensorflow/tensorflow:1.1.0-gpu](https://www.tensorflow.org/install/install_linux#InstallingDocker)
-docker image can be used for this recipe.
+[TensorFlow GPU Docker images](https://www.tensorflow.org/install/install_linux#gpu_support)
+can be used for this recipe (e.g., gcr.io/tensorflow/tensorflow:latest-gpu)
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array to run the
 [MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
 This array should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
-e.g., `gcr.io/tensorflow/tensorflow:1.1.0-gpu`
+* `image` should be the name of the Docker image for this container invocation
+that matches the global configuration Docker image,
+e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:
   * `file_path` is the local file path which should be set to
@@ -53,7 +54,7 @@ data to the directory specified in the `--log_dir` parameter. After the job
 is submitted, you can start the remote Tensorboard instance with the command:
 
 ```shell
-shipyard misc tensorboard --image gcr.io/tensorflow/tensorflow:1.1.0-gpu
+shipyard misc tensorboard
 ```
 
 Which will output some text similar to the following:

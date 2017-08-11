@@ -5,9 +5,8 @@
             "auto_complete": true,
             "tasks": [
                 {
-                    "image": "alfpark/tensorflow:0.11.0-cpu",
-                    "remove_container_after_exit": true,
-                    "command": "/bin/bash /sw/launcher.sh",
+                    "image": "alfpark/tensorflow:1.2.1-cpu",
+                    "command": "/bin/bash -c \"/shipyard/launcher.sh /shipyard/mnist_replica.py\"",
                     "multi_instance": {
                         "num_instances": "pool_current_dedicated"
                     }

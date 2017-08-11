@@ -45,6 +45,7 @@ import azure.batch.models as batchmodels
 import azure.mgmt.batch.models as batchmgmtmodels
 import azure.mgmt.compute.models as computemodels
 # local imports
+from . import autoscale
 from . import batch
 from . import crypto
 from . import data
@@ -101,10 +102,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '375.66/NVIDIA-Linux-x86_64-375.66.run'
+            '384.59/NVIDIA-Linux-x86_64-384.59.run'
         ),
         'sha256': (
-            '59e37f570ba5f3d7148028e96684d77f347d49a54e3722189782fc9b17d201c0'
+            '7b53bdee6e396cb271b57f77455fe5c561e655ca3fbba015dae0de3d6c11542b'
         ),
         'target': 'resources/nvidia-driver.run'
     },
@@ -237,20 +238,24 @@ def check_for_invalid_config(config):
                 'for vm_count.')
     except KeyError:
         pass
-    if 'publisher' in config['pool_specification']:
-        logger.warning(
-            'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
-            'is set instead of a vm_configuration complex property. This '
-            'configuration will not be supported in future releases. '
-            'Please update your configuration to include a vm_configuration '
-            'property.')
+    try:
+        if 'publisher' in config['pool_specification']:
+            logger.warning(
+                'DEPRECATION WARNING: pool_specification:publisher/offer/sku '
+                'is set instead of a vm_configuration complex property. This '
+                'configuration will not be supported in future releases. '
+                'Please update your configuration to include a '
+                'vm_configuration property.')
+    except KeyError:
+        pass
 
 
-def populate_global_settings(config, fs_storage):
+def populate_global_settings(config, fs_storage, pool_id=None):
     # type: (dict, bool) -> None
     """Populate global settings from config
     :param dict config: configuration dict
     :param bool fs_storage: adjust for fs context
+    :param str pool_id: pool id override
     """
     bs = settings.batch_shipyard_settings(config)
     sc = settings.credentials_storage(config, bs.storage_account_settings)
@@ -258,10 +263,13 @@ def populate_global_settings(config, fs_storage):
         # set postfix to empty for now, it will be populated with the
         # storage cluster during the actual calls
         postfix = ''
+        if util.is_not_empty(pool_id):
+            raise ValueError('pool id specified for fs_storage')
     else:
         bc = settings.credentials_batch(config)
-        postfix = '-'.join(
-            (bc.account.lower(), settings.pool_id(config, lower=True)))
+        if util.is_none_or_empty(pool_id):
+            pool_id = settings.pool_id(config, lower=True)
+        postfix = '-'.join((bc.account.lower(), pool_id))
     storage.set_storage_configuration(
         bs.storage_entity_prefix,
         postfix,
@@ -670,7 +678,7 @@ def _create_storage_cluster_mount_args(
     return (fstab_mount, sc_arg)
 
 
-def _add_pool(
+def _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
@@ -679,7 +687,8 @@ def _add_pool(
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
     #        azureblob.BlockBlobService, dict) -> None
-    """Add a Batch pool to account
+    """Construct a pool add parameter object for create pool along with
+    uploading resource files
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -720,11 +729,30 @@ def _add_pool(
         pass
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    # get autoscale settings
+    if settings.is_pool_autoscale_enabled(config, pas=pool_settings.autoscale):
+        asenable = True
+        asformula = autoscale.get_formula(pool_settings)
+        asei = pool_settings.autoscale.evaluation_interval
+    else:
+        asenable = False
+        asformula = None
+        asei = None
+    logger.debug('autoscale enabled: {}'.format(asenable))
+    # task scheduling policy settings
+    if util.is_not_empty(pool_settings.node_fill_type):
+        task_scheduling_policy = batchmodels.TaskSchedulingPolicy(
+            node_fill_type=batchmodels.ComputeNodeFillType(
+                pool_settings.node_fill_type),
+        )
+    else:
+        task_scheduling_policy = None
+    # custom image settings
     custom_image_na = settings.pool_custom_image_node_agent(config)
+    # check for virtual network settings
     bc = settings.credentials_batch(config)
     vnet = None
     subnet = None
-    # check for virtual network settings
     if (pool_settings.virtual_network is not None and
             util.is_not_empty(pool_settings.virtual_network.name)):
         if util.is_none_or_empty(pool_settings.virtual_network.subnet_name):
@@ -800,12 +828,6 @@ def _add_pool(
             block_for_gr = ','.join([x for x in images])
         else:
             logger.warning('no docker images specified in global resources')
-    # ingress data to Azure Blob Storage if specified
-    storage_threads = []
-    if pool_settings.transfer_files_on_pool_creation:
-        storage_threads = data.ingress_data(
-            batch_client, compute_client, network_client, config, rls=None,
-            kind='storage')
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
@@ -814,7 +836,7 @@ def _add_pool(
     preg = settings.docker_registry_private_settings(config)
     # create torrent flags
     torrentflags = '{}:{}:{}:{}:{}'.format(
-        dr.peer_to_peer.enabled, dr.non_peer_to_peer_concurrent_downloading,
+        dr.peer_to_peer.enabled, dr.concurrent_source_downloads,
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression,
         preg.allow_public_docker_hub_pull_on_missing)
@@ -956,8 +978,12 @@ def _add_pool(
         id=pool_settings.id,
         virtual_machine_configuration=vmconfig,
         vm_size=pool_settings.vm_size,
-        target_dedicated_nodes=pool_settings.vm_count.dedicated,
-        target_low_priority_nodes=pool_settings.vm_count.low_priority,
+        target_dedicated_nodes=(
+            pool_settings.vm_count.dedicated if not asenable else None
+        ),
+        target_low_priority_nodes=(
+            pool_settings.vm_count.low_priority if not asenable else None
+        ),
         resize_timeout=pool_settings.resize_timeout,
         max_tasks_per_node=pool_settings.max_tasks_per_node,
         enable_inter_node_communication=pool_settings.
@@ -981,12 +1007,16 @@ def _add_pool(
             ],
             resource_files=[],
         ),
+        enable_auto_scale=asenable,
+        auto_scale_formula=asformula,
+        auto_scale_evaluation_interval=asei,
         metadata=[
             batchmodels.MetadataItem(
                 name=settings.get_metadata_version_name(),
                 value=__version__,
             ),
         ],
+        task_scheduling_policy=task_scheduling_policy,
     )
     if util.is_not_empty(block_for_gr):
         pool.start_task.environment_settings.append(
@@ -1061,9 +1091,102 @@ def _add_pool(
         )
     pool.start_task.environment_settings.extend(
         batch.generate_docker_login_settings(config)[0])
+    return (pool_settings, gluster_on_compute, pool)
+
+
+def _construct_auto_pool_specification(
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient,
+    #        azure.batch.batch_service_client.BatchServiceClient,
+    #        azureblob.BlockBlobService, dict) -> None
+    """Construct an auto pool specification
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    # upload resource files and construct pool add parameter object
+    pool_settings, gluster_on_compute, pool = _construct_pool_object(
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config)
+    # convert pool add parameter object to a pool specification object
+    poolspec = batchmodels.PoolSpecification(
+        vm_size=pool.vm_size,
+        virtual_machine_configuration=pool.virtual_machine_configuration,
+        max_tasks_per_node=pool.max_tasks_per_node,
+        task_scheduling_policy=pool.task_scheduling_policy,
+        resize_timeout=pool.resize_timeout,
+        target_dedicated_nodes=pool.target_dedicated_nodes,
+        target_low_priority_nodes=pool.target_low_priority_nodes,
+        enable_auto_scale=pool.enable_auto_scale,
+        auto_scale_formula=pool.auto_scale_formula,
+        auto_scale_evaluation_interval=pool.auto_scale_evaluation_interval,
+        enable_inter_node_communication=pool.enable_inter_node_communication,
+        network_configuration=pool.network_configuration,
+        start_task=pool.start_task,
+        certificate_references=pool.certificate_references,
+        metadata=pool.metadata,
+    )
+    # add auto pool env var for cascade
+    poolspec.start_task.environment_settings.append(
+        batchmodels.EnvironmentSetting('SHIPYARD_AUTOPOOL', 1)
+    )
+    return poolspec
+
+
+def _add_pool(
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient,
+    #        azure.batch.batch_service_client.BatchServiceClient,
+    #        azureblob.BlockBlobService, dict) -> None
+    """Add a Batch pool to account
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    """
+    # upload resource files and construct pool add parameter object
+    pool_settings, gluster_on_compute, pool = _construct_pool_object(
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, config)
+    # ingress data to Azure Blob Storage if specified
+    storage_threads = []
+    if pool_settings.transfer_files_on_pool_creation:
+        storage_threads = data.ingress_data(
+            batch_client, compute_client, network_client, config, rls=None,
+            kind='storage')
     # create pool
     nodes = batch.create_pool(batch_client, config, pool)
-    if util.is_none_or_empty(nodes):
+    _pool = batch_client.pool.get(pool.id)
+    pool_current_vm_count = (
+        _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
+    )
+    pool_target_vm_count = (
+        _pool.target_dedicated_nodes + _pool.target_low_priority_nodes
+    )
+    if util.is_none_or_empty(nodes) and pool_target_vm_count > 0:
         raise RuntimeError(
             ('No nodes could be allocated for pool: {}. If the pool is '
              'comprised entirely of low priority nodes, then there may not '
@@ -1071,33 +1194,33 @@ def _add_pool(
              'your request. Please inspect the pool for resize errors and '
              'issue pool resize to try again.').format(pool.id))
     # set up gluster on compute if specified
-    if gluster_on_compute:
+    if gluster_on_compute and pool_current_vm_count > 0:
         _setup_glusterfs(
             batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
             cmdline=None)
     # create admin user on each node if requested
-    try:
-        batch.add_ssh_user(batch_client, config, nodes)
-    except Exception as e:
-        logger.exception(e)
-        logger.error(
-            'Could not add SSH users to nodes. Please ensure ssh-keygen is '
-            'available in your PATH or cwd. Skipping data ingress if '
-            'specified.')
-    else:
-        # log remote login settings
-        rls = batch.get_remote_login_settings(batch_client, config, nodes)
-        # ingress data to shared fs if specified
-        if pool_settings.transfer_files_on_pool_creation:
-            _pool = batch_client.pool.get(pool.id)
-            total_vm_count = (
-                _pool.current_dedicated_nodes +
-                _pool.current_low_priority_nodes
-            )
-            data.ingress_data(
-                batch_client, compute_client, network_client, config, rls=rls,
-                kind='shared', total_vm_count=total_vm_count)
-            del _pool
+    if pool_current_vm_count > 0:
+        try:
+            batch.add_ssh_user(batch_client, config, nodes)
+        except Exception as e:
+            logger.exception(e)
+            logger.error(
+                'Could not add SSH users to nodes. Please ensure ssh-keygen '
+                'is available in your PATH or cwd. Skipping data ingress if '
+                'specified.')
+        else:
+            # log remote login settings
+            rls = batch.get_remote_login_settings(batch_client, config, nodes)
+            # ingress data to shared fs if specified
+            if pool_settings.transfer_files_on_pool_creation:
+                total_vm_count = (
+                    _pool.current_dedicated_nodes +
+                    _pool.current_low_priority_nodes
+                )
+                data.ingress_data(
+                    batch_client, compute_client, network_client, config,
+                    rls=rls, kind='shared', total_vm_count=total_vm_count)
+                del _pool
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 
@@ -1238,10 +1361,11 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile={}'.format(os.devnull),
             '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
-            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
+            '{}@{}'.format(username, rls.remote_login_ip_address),
             'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
         ]
-        procs.append(util.subprocess_nowait(ssh_args, shell=False))
+        procs.append(util.subprocess_nowait_pipe_stdout(
+            ssh_args, shell=False, pipe_stderr=True))
         if len(procs) >= 40:
             logger.debug('waiting for {} update processes to complete'.format(
                 len(procs)))
@@ -1596,23 +1720,22 @@ def _adjust_settings_for_pool_creation(config):
     # adjust for shipyard container requirement
     if shipyard_container_required or util.is_not_empty(node_agent):
         settings.set_use_shipyard_docker_image(config, True)
-        logger.warning(
+        logger.debug(
             ('forcing shipyard docker image to be used due to '
              'VM config, publisher={} offer={} sku={}').format(
                  publisher, offer, sku))
-    # adjust inter node comm setting
-    if pool_total_vm_count < 1:
-        raise ValueError('invalid total vm_count: {}'.format(
-            pool_total_vm_count))
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)
-    # ensure settings p2p/internode settings are compatible
-    if dr.peer_to_peer.enabled and not pool.inter_node_communication_enabled:
-        logger.warning(
-            'force enabling inter-node communication due to peer-to-peer '
-            'transfer')
-        settings.set_inter_node_communication_enabled(config, True)
+    # ensure settings p2p/as/internode settings are compatible
+    if dr.peer_to_peer.enabled:
+        if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
+            raise ValueError('cannot enable peer-to-peer and autoscale')
+        if pool.inter_node_communication_enabled:
+            logger.warning(
+                'force enabling inter-node communication due to peer-to-peer '
+                'transfer')
+            settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
         if (pool.ssh.hpn_server_swap and
@@ -1644,6 +1767,11 @@ def _adjust_settings_for_pool_creation(config):
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
             if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
+                if settings.is_pool_autoscale_enabled(
+                        config, pas=pool.autoscale):
+                    raise ValueError(
+                        'glusterfs on compute cannot be installed on an '
+                        'autoscale-enabled pool')
                 if not pool.inter_node_communication_enabled:
                     # do not modify value and proceed since this interplays
                     # with p2p settings, simply raise exception and force
@@ -1677,6 +1805,34 @@ def _adjust_settings_for_pool_creation(config):
                 'per pool')
     except KeyError:
         pass
+    # check pool count of 0 and ssh
+    if pool_total_vm_count == 0 and util.is_not_empty(pool.ssh.username):
+        logger.warning('cannot add SSH user with zero target nodes')
+
+
+def _check_settings_for_auto_pool(config):
+    # type: (dict) -> None
+    """Check settings for autopool
+    :param dict config: configuration dict
+    """
+    # check glusterfs on compute
+    try:
+        sdv = settings.global_resources_shared_data_volumes(config)
+        for sdvkey in sdv:
+            if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
+                raise ValueError(
+                    'GlusterFS on compute is not possible with autopool')
+                break
+    except KeyError:
+        pass
+    # get settings
+    pool = settings.pool_settings(config)
+    # check local data movement to pool
+    if pool.transfer_files_on_pool_creation:
+        raise ValueError('Cannot ingress data on pool creation with autopool')
+    # check ssh
+    if util.is_not_empty(pool.ssh.username):
+        logger.warning('cannot add SSH user with autopool')
 
 
 def action_fs_disks_add(resource_client, compute_client, config):
@@ -1997,14 +2153,14 @@ def action_pool_listskus(batch_client):
 
 def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, queue_client, table_client, config):
+        batch_client, blob_client, table_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+    #        azureblob.BlockBlobService, azuretable.TableService,
+    #        dict) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -2016,7 +2172,6 @@ def action_pool_add(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
@@ -2025,12 +2180,10 @@ def action_pool_add(
         raise RuntimeError(
             'attempting to create a pool that already exists: {}'.format(
                 settings.pool_id(config)))
-    storage.create_storage_containers(
-        blob_client, queue_client, table_client, config)
-    storage.clear_storage_containers(
-        blob_client, queue_client, table_client, config)
+    storage.create_storage_containers(blob_client, table_client, config)
+    storage.clear_storage_containers(blob_client, table_client, config)
     _adjust_settings_for_pool_creation(config)
-    storage.populate_queues(queue_client, table_client, config)
+    storage.populate_global_resource_blobs(blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config
@@ -2066,15 +2219,22 @@ def action_pool_delete(
     try:
         deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
     except batchmodels.BatchErrorException as ex:
-        logger.exception(ex)
-        if 'The specified pool does not exist' in ex.message.value:
+        if ('The specified pool does not exist' in ex.message.value or
+                'The specified pool has been marked for deletion' in
+                ex.message.value):
             deleted = True
+        else:
+            logger.exception(ex)
     if deleted:
+        # reset storage settings to target poolid if required
+        if util.is_not_empty(pool_id):
+            populate_global_settings(config, False, pool_id=pool_id)
+        else:
+            pool_id = settings.pool_id(config)
+        # TODO remove queue_client in 3.0
         storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
-            if util.is_none_or_empty(pool_id):
-                pool_id = settings.pool_id(config)
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
                 time.sleep(3)
@@ -2287,16 +2447,23 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     util.subprocess_with_output(ssh_cmd)
 
 
-def action_pool_delnode(batch_client, config, all_start_task_failed, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
+def action_pool_delnode(
+        batch_client, config, all_start_task_failed, all_unusable, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
-    :param bool all_start_task_failed: reboot all start task failed nodes
+    :param bool all_start_task_failed: delete all start task failed nodes
+    :param bool all_unusable: delete all unusable nodes
     :param str nodeid: nodeid to delete
     """
-    batch.del_node(batch_client, config, all_start_task_failed, nodeid)
+    if (all_start_task_failed or all_unusable) and nodeid is not None:
+        raise ValueError(
+            'cannot specify all start task failed nodes or unusable with '
+            'a specific node id')
+    batch.del_node(
+        batch_client, config, all_start_task_failed, all_unusable, nodeid)
 
 
 def action_pool_rebootnode(
@@ -2311,7 +2478,7 @@ def action_pool_rebootnode(
     """
     if all_start_task_failed and nodeid is not None:
         raise ValueError(
-            'cannot specify all start task failed nodes and a specific '
+            'cannot specify all start task failed nodes with a specific '
             'node id')
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 
@@ -2342,22 +2509,121 @@ def action_pool_listimages(batch_client, config):
     _list_docker_images(batch_client, config)
 
 
+def action_pool_stats(batch_client, config, pool_id):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Pool Stats
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str pool_id: pool id
+    """
+    batch.pool_stats(batch_client, config, pool_id=pool_id)
+
+
+def action_pool_autoscale_disable(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Disable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_disable(batch_client, config)
+
+
+def action_pool_autoscale_enable(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Enable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_enable(batch_client, config)
+
+
+def action_pool_autoscale_evaluate(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Evaluate
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_evaluate(batch_client, config)
+
+
+def action_pool_autoscale_lastexec(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
+    """Action: Pool Autoscale Lastexec
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    batch.pool_autoscale_lastexec(batch_client, config)
+
+
 def action_jobs_add(
-        batch_client, blob_client, keyvault_client, config, recreate, tail):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
+        resource_client, compute_client, network_client, batch_mgmt_client,
+        batch_client, blob_client, table_client, keyvault_client, config,
+        recreate, tail):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.mgmt.batch.BatchManagementClient,
+    #        azure.batch.batch_service_client.BatchServiceClient,
+    #        azureblob.BlockBlobService, azuretable.TableService,
     #        azure.keyvault.KeyVaultClient, dict, bool, str) -> None
     """Action: Jobs Add
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.table.TableService table_client: table client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param bool recreate: recreate jobs if completed
     :param str tail: file to tail or last job and task added
     """
+    # check for job autopools
+    autopool = batch.check_jobs_for_auto_pool(config)
+    if autopool:
+        # check to ensure pool id is within 20 chars
+        pool_id = settings.pool_id(config)
+        if len(pool_id) > 20:
+            raise ValueError(
+                'pool id must be less than 21 characters: {}'.format(pool_id))
+        # check if a pool id with existing pool id exists
+        try:
+            batch_client.pool.get(pool_id)
+        except batchmodels.BatchErrorException as ex:
+            if 'The specified pool does not exist' in ex.message.value:
+                pass
+        else:
+            raise RuntimeError(
+                'pool with id of {} already exists'.format(pool_id))
+        # create storage containers and clear
+        storage.create_storage_containers(blob_client, table_client, config)
+        storage.clear_storage_containers(blob_client, table_client, config)
+        _adjust_settings_for_pool_creation(config)
+        storage.populate_global_resource_blobs(
+            blob_client, table_client, config)
+        # create autopool specification object
+        autopool = _construct_auto_pool_specification(
+            resource_client, compute_client, network_client, batch_mgmt_client,
+            batch_client, blob_client, config
+        )
+        # check settings and warn
+        _check_settings_for_auto_pool(config)
+    else:
+        autopool = None
+    # add jobs
     batch.add_jobs(
-        batch_client, blob_client, keyvault_client, config, _JOBPREP_FILE,
-        _BLOBXFER_FILE, recreate, tail)
+        batch_client, blob_client, keyvault_client, config, autopool,
+        _JOBPREP_FILE, _BLOBXFER_FILE, recreate, tail)
 
 
 def action_jobs_list(batch_client, config):
@@ -2371,17 +2637,21 @@ def action_jobs_list(batch_client, config):
 
 
 def action_jobs_listtasks(
-        batch_client, config, jobid, poll_until_tasks_complete):
-    # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
+        batch_client, config, all, jobid, poll_until_tasks_complete):
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
     """Action: Jobs Listtasks
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool all: all jobs
     :param str jobid: job id
     :param bool poll_until_tasks_complete: poll until tasks complete
     """
+    if all and jobid is not None:
+        raise ValueError('cannot specify both --all and --jobid')
     while True:
-        all_complete = batch.list_tasks(batch_client, config, jobid=jobid)
+        all_complete = batch.list_tasks(
+            batch_client, config, all=all, jobid=jobid)
         if not poll_until_tasks_complete or all_complete:
             break
         time.sleep(5)
@@ -2427,46 +2697,68 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
         batch_client, config, jobid=jobid, taskid=taskid, wait=wait)
 
 
-def action_jobs_term(batch_client, config, all, jobid, termtasks, wait):
-    # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
-    """Action: Jobs Term
+def action_jobs_del_or_term(
+        batch_client, blob_client, queue_client, table_client, config,
+        delete, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
+    #        azurequeue.QueueService, azuretable.TableService, dict, bool,
+    #        bool, str, str, bool, bool) -> None
+    """Action: Jobs Del or Term
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
-    :param bool all: all jobs
+    :param bool all_jobs: all jobs
+    :param bool all_jobschedules: all job schedules
     :param str jobid: job id
+    :param str jobscheduleid: job schedule id
     :param bool termtasks: terminate tasks prior
     :param bool wait: wait for action to complete
     """
-    if all:
+    if jobid is not None and jobscheduleid is not None:
+        raise ValueError('cannot specify both --jobid and --jobscheduleid')
+    if all_jobs:
         if jobid is not None:
-            raise ValueError('cannot specify both --all and --jobid')
-        batch.terminate_all_jobs(
-            batch_client, config, termtasks=termtasks, wait=wait)
+            raise ValueError('cannot specify both --all-jobs and --jobid')
+        batch.delete_or_terminate_all_jobs(
+            batch_client, config, delete, termtasks=termtasks, wait=wait)
+    elif all_jobschedules:
+        if jobscheduleid is not None:
+            raise ValueError(
+                'cannot specify both --all-jobschedules and --jobscheduleid')
+        if termtasks:
+            raise ValueError(
+                'Cannot specify --termtasks with --all-jobschedules. '
+                'Please terminate tasks with each individual job first.')
+        batch.delete_or_terminate_all_job_schedules(
+            batch_client, config, delete, wait=wait)
     else:
-        batch.terminate_jobs(
-            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
-
-
-def action_jobs_del(batch_client, config, all, jobid, termtasks, wait):
-    # type: (batchsc.BatchServiceClient, dict, bool, str, bool, bool) -> None
-    """Action: Jobs Del
-    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
-        batch client
-    :param dict config: configuration dict
-    :param bool all: all jobs
-    :param str jobid: job id
-    :param bool termtasks: terminate tasks prior
-    :param bool wait: wait for action to complete
-    """
-    if all:
-        if jobid is not None:
-            raise ValueError('cannot specify both --all and --jobid')
-        batch.del_all_jobs(
-            batch_client, config, termtasks=termtasks, wait=wait)
-    else:
-        batch.del_jobs(
-            batch_client, config, jobid=jobid, termtasks=termtasks, wait=wait)
+        # check for autopool
+        if util.is_none_or_empty(jobid):
+            autopool = batch.check_jobs_for_auto_pool(config)
+            if autopool:
+                # check if a pool id with existing pool id exists
+                try:
+                    batch_client.pool.get(settings.pool_id(config))
+                except batchmodels.BatchErrorException as ex:
+                    if 'The specified pool does not exist' in ex.message.value:
+                        pass
+                else:
+                    autopool = False
+        else:
+            autopool = False
+        # terminate the jobs
+        batch.delete_or_terminate_jobs(
+            batch_client, config, delete, jobid=jobid,
+            jobscheduleid=jobscheduleid, termtasks=termtasks, wait=wait)
+        # if autopool, delete the storage
+        if autopool:
+            # TODO remove queue_client in 3.0
+            storage.cleanup_with_del_pool(
+                blob_client, queue_client, table_client, config)
 
 
 def action_jobs_cmi(batch_client, config, delete):
@@ -2484,36 +2776,153 @@ def action_jobs_cmi(batch_client, config, delete):
         batch.del_clean_mi_jobs(batch_client, config)
 
 
+def action_jobs_migrate(
+        batch_client, config, jobid, jobscheduleid, poolid, requeue,
+        terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, bool, bool,
+    #        bool) -> None
+    """Action: Jobs Migrate
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to migrate to in lieu of config
+    :param str jobscheduleid: job schedule id to migrate to in lieu of config
+    :param str poolid: pool id to migrate to in lieu of config
+    :param bool requeue: requeue action
+    :param bool terminate: terminate action
+    :param bool wait: wait action
+    """
+    if jobid is not None:
+        if jobscheduleid is not None:
+            raise ValueError('cannot specify both --jobid and --jobscheduleid')
+        if [requeue, terminate, wait].count(True) != 1:
+            raise ValueError(
+                'must specify only one option of --requeue, --terminate, '
+                '--wait')
+    if requeue:
+        action = 'requeue'
+    elif terminate:
+        action = 'terminate'
+    elif wait:
+        action = 'wait'
+    else:
+        action = None
+    # check jobs to see if targetted pool id is the same
+    batch.check_pool_for_job_migration(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid,
+        poolid=poolid)
+    if not util.confirm_action(
+            config, msg='migration of jobs or job schedules'):
+        return
+    # disable job and wait for disabled state
+    batch.disable_jobs(
+        batch_client, config, action, jobid=jobid, jobscheduleid=jobscheduleid,
+        suppress_confirm=True)
+    # patch job
+    batch.update_job_with_pool(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid,
+        poolid=poolid)
+    # enable job
+    batch.enable_jobs(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid)
+
+
+def action_jobs_disable(
+        batch_client, config, jobid, jobscheduleid, requeue, terminate, wait):
+    # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool,
+    #        bool) -> None
+    """Action: Jobs Disable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to disable to in lieu of config
+    :param str jobscheduleid: job schedule id to disable to in lieu of config
+    :param bool requeue: requeue action
+    :param bool terminate: terminate action
+    :param bool wait: wait action
+    """
+    if jobid is not None:
+        if jobscheduleid is not None:
+            raise ValueError('cannot specify both --jobid and --jobscheduleid')
+        if [requeue, terminate, wait].count(True) != 1:
+            raise ValueError(
+                'must specify only one option of --requeue, --terminate, '
+                '--wait')
+    if requeue:
+        action = 'requeue'
+    elif terminate:
+        action = 'terminate'
+    elif wait:
+        action = 'wait'
+    else:
+        action = None
+    batch.disable_jobs(
+        batch_client, config, action, jobid=jobid,
+        jobscheduleid=jobscheduleid, disabling_state_ok=True)
+
+
+def action_jobs_enable(batch_client, config, jobid, jobscheduleid):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
+    """Action: Jobs Enable
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id to enable to in lieu of config
+    :param str jobscheduleid: job schedule id to enable to in lieu of config
+    """
+    batch.enable_jobs(
+        batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid)
+
+
+def action_jobs_stats(batch_client, config, job_id):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Jobs Stats
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str job_id: job id
+    """
+    batch.job_stats(batch_client, config, jobid=job_id)
+
+
 def action_storage_del(
-        blob_client, queue_client, table_client, config, clear_tables):
+        blob_client, queue_client, table_client, config, clear_tables, poolid):
     # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict, bool) -> None
+    #        azuretable.TableService, dict, bool, str) -> None
     """Action: Storage Del
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool clear_tables: clear tables instead of deleting
+    :param str poolid: pool id to target
     """
+    # reset storage settings to target poolid
+    if util.is_not_empty(poolid):
+        populate_global_settings(config, False, pool_id=poolid)
     if clear_tables:
         storage.clear_storage_containers(
-            blob_client, queue_client, table_client, config, tables_only=True)
+            blob_client, table_client, config, tables_only=True,
+            pool_id=poolid)
     storage.delete_storage_containers(
         blob_client, queue_client, table_client, config,
         skip_tables=clear_tables)
 
 
-def action_storage_clear(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+def action_storage_clear(blob_client, table_client, config, poolid):
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict,
+    #        str) -> None
     """Action: Storage Clear
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param str poolid: pool id to target
     """
+    # reset storage settings to target poolid
+    if util.is_not_empty(poolid):
+        populate_global_settings(config, False, pool_id=poolid)
     storage.clear_storage_containers(
-        blob_client, queue_client, table_client, config)
+        blob_client, table_client, config, pool_id=poolid)
 
 
 def action_data_stream(batch_client, config, filespec, disk):

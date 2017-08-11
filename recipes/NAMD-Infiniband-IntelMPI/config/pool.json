@@ -5,7 +5,7 @@
             "platform_image": {
                 "publisher": "OpenLogic",
                 "offer": "CentOS-HPC",
-                "sku": "7.1"
+                "sku": "7.3"
             }
         },
         "vm_size": "STANDARD_H16R",

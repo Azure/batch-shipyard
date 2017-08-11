@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "alfpark/keras:gpu",
-                    "remove_container_after_exit": true,
                     "command": "python /keras/examples/mnist_cnn.py",
                     "gpu": true
                 }
