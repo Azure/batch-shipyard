@@ -10,7 +10,7 @@
             "max_task_retries": 1,
             "max_wall_time": "02:00:00",
             "retention_time": "1.12:00:00",
-            "allow_run_on_missing_image": false,
+            "priority": 0,
             "user_identity": {
                 "default_pool_admin": true,
                 "specific_user": {
@@ -18,6 +18,24 @@
                     "gid": 1001
                 }
             },
+            "auto_pool": {
+                "pool_lifetime": "job",
+                "keep_alive": false
+            },
+            "recurrence": {
+                "schedule": {
+                    "do_not_run_until": null,
+                    "do_not_run_after": null,
+                    "start_window": null,
+                    "recurrence_interval": "00:05:00"
+                },
+                "job_manager": {
+                    "allow_low_priority_node": true,
+                    "run_exclusive": false,
+                    "monitor_task_completion": false
+                }
+            },
+            "allow_run_on_missing_image": false,
             "remove_container_after_exit": true,
             "shm_size": "256m",
             "infiniband": false,
@@ -50,6 +68,92 @@
             },
             "tasks": [
                 {
+                    "task_factory": {
+                        "parametric_sweep": {
+                            "product": [
+                                {
+                                    "start": 0,
+                                    "stop": 10,
+                                    "step": 1
+                                }
+                            ],
+                            "combinations": {
+                                "iterable": ["ABC", "012"],
+                                "length": 2,
+                                "replacement": false
+                            },
+                            "permutations": {
+                                "iterable": "ABCDEF",
+                                "length": 3
+                            },
+                            "zip": ["ab", "01"]
+                        },
+                        "random": {
+                            "generate": 3,
+                            "seed": null,
+                            "integer": {
+                                "start": 0,
+                                "stop": 10,
+                                "step": 1
+                            },
+                            "distribution": {
+                                "uniform": {
+                                    "a": 0,
+                                    "b": 1
+                                },
+                                "triangular": {
+                                    "low": 0,
+                                    "high": 1,
+                                    "mode": null
+                                },
+                                "beta": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "exponential": {
+                                    "lambda": 2
+                                },
+                                "gamma": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                },
+                                "gauss": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "lognormal": {
+                                    "mu": 1,
+                                    "sigma": 0.1
+                                },
+                                "pareto": {
+                                    "alpha": 1
+                                },
+                                "weibull": {
+                                    "alpha": 1,
+                                    "beta": 1
+                                }
+                            }
+                        },
+                        "file": {
+                            "azure_storage": {
+                                "storage_account_settings": "mystorageaccount",
+                                "container": "somecontainer",
+                                "include": [],
+                                "exclude": []
+                            },
+                            "task_filepath": "file_name"
+                        },
+                        "custom": {
+                            "module": "mypkg.mymodule",
+                            "package": null,
+                            "input_args": ["a", "b", "c"],
+                            "input_kwargs": {
+                                "abc": "012",
+                                "def": "345"
+                            }
+                        },
+                        "repeat": 3
+                    },
                     "id": null,
                     "image": "busybox",
                     "name": null,

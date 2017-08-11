@@ -1,6 +1,6 @@
 # Dockerfile for TensorFlow-GPU-Distributed for use with Batch Shipyard on Azure Batch
 
-FROM alfpark/tensorflow:1.0.0-gpu-base
+FROM gcr.io/tensorflow/tensorflow:1.2.1-gpu
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 COPY ssh_config /root/.ssh/config
@@ -20,7 +20,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod 700 /root/.ssh \
     && cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
-COPY launcher.sh mnist_replica.py /sw/
-
+# make sshd listen on 23 and run by default
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
+
+# make launcher and sample available to all
+COPY launcher.sh mnist_replica.py /shipyard/
+RUN chmod 755 /shipyard \
+    && chmod 777 /shipyard/*

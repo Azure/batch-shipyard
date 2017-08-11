@@ -3,19 +3,20 @@
 FROM alpine:3.6
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
+# copy in files
+COPY task_file_mover.py task_file_mover.sh requirements.txt /opt/batch-shipyard/
+
 # add base packages and python dependencies
 RUN apk update \
     && apk add --update --no-cache \
         musl build-base python3 python3-dev libressl-dev libffi-dev \
         ca-certificates libressl bash \
     && pip3 install --no-cache-dir --upgrade pip \
-    && pip3 install --no-cache-dir --upgrade azure-batch==1.1.0 \
+    && pip3 install --no-cache-dir --upgrade -r /opt/batch-shipyard/requirements.txt \
     && apk del --purge \
         build-base python3-dev libressl-dev libffi-dev \
-    && rm /var/cache/apk/*
-
-# copy in files
-COPY task_file_mover.py task_file_mover.sh /opt/batch-shipyard/
+    && rm /var/cache/apk/* \
+    && rm -f /opt/batch-shipyard/requirements.txt
 
 # pre-compile files
 RUN python3 -m compileall -f /opt/batch-shipyard

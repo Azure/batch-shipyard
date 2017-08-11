@@ -907,28 +907,32 @@ def storage(ctx):
 @storage.command('del')
 @click.option(
     '--clear-tables', is_flag=True, help='Clear tables instead of deleting')
+@click.option(
+    '--poolid', help='Delete storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_del(ctx, clear_tables):
+def storage_del(ctx, clear_tables, poolid):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
         ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config,
-        clear_tables)
+        clear_tables, poolid)
 
 
 @storage.command('clear')
+@click.option(
+    '--poolid', help='Clear storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @pass_cli_context
-def storage_clear(ctx):
+def storage_clear(ctx, poolid):
     """Clear Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_clear(
-        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.blob_client, ctx.table_client, ctx.config, poolid)
 
 
 @cli.group()
@@ -1062,7 +1066,7 @@ def pool_add(ctx):
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
-        ctx.queue_client, ctx.table_client, ctx.config)
+        ctx.table_client, ctx.config)
 
 
 @pool.command('list')
@@ -1174,7 +1178,7 @@ def pool_dsu(ctx):
 @aad_options
 @pass_cli_context
 def pool_ssh(ctx, cardinal, nodeid, tty, command):
-    """Interactively login via SSH to a node in the pool"""
+    """Interactively login via SSH to a node in a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_ssh(
         ctx.batch_client, ctx.config, cardinal, nodeid, tty, command)
@@ -1184,7 +1188,11 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
 @click.option(
     '--all-start-task-failed',
     is_flag=True,
-    help='Deleted all nodes with start task failed state')
+    help='Delete all nodes in start task failed state')
+@click.option(
+    '--all-unusable',
+    is_flag=True,
+    help='Delete all nodes in unusable state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to delete')
 @common_options
@@ -1192,18 +1200,19 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_delnode(ctx, all_start_task_failed, nodeid):
+def pool_delnode(ctx, all_start_task_failed, all_unusable, nodeid):
     """Delete a node from a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_delnode(
-        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
+        ctx.batch_client, ctx.config, all_start_task_failed, all_unusable,
+        nodeid)
 
 
 @pool.command('rebootnode')
 @click.option(
     '--all-start-task-failed',
     is_flag=True,
-    help='Reboot all nodes with start task failed state')
+    help='Reboot all nodes in start task failed state')
 @click.option(
     '--nodeid', help='NodeId of compute node in pool to reboot')
 @common_options
@@ -1244,9 +1253,78 @@ def pool_udi(ctx, image, digest, ssh):
 @aad_options
 @pass_cli_context
 def pool_listimages(ctx):
-    """List Docker images in the pool"""
+    """List Docker images in a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
+
+
+@pool.command('stats')
+@click.option('--poolid', help='Get stats on specified pool')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_stats(ctx, poolid):
+    """Get statistics about a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_stats(
+        ctx.batch_client, ctx.config, pool_id=poolid)
+
+
+@pool.group()
+@pass_cli_context
+def autoscale(ctx):
+    """Pool autoscale actions"""
+    pass
+
+
+@autoscale.command('disable')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_disable(ctx):
+    """Disable autoscale on a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_disable(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('enable')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_enable(ctx):
+    """Enable autoscale on a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_enable(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('evaluate')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_evaluate(ctx):
+    """Evaluate autoscale formula"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_evaluate(ctx.batch_client, ctx.config)
+
+
+@autoscale.command('lastexec')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def autoscale_lastexec(ctx):
+    """Get the result of the last execution of the autoscale formula"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_autoscale_lastexec(ctx.batch_client, ctx.config)
 
 
 @cli.group()
@@ -1272,8 +1350,9 @@ def jobs_add(ctx, recreate, tail):
     """Add jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_add(
-        ctx.batch_client, ctx.blob_client, ctx.keyvault_client, ctx.config,
-        recreate, tail)
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
+        ctx.table_client, ctx.keyvault_client, ctx.config, recreate, tail)
 
 
 @jobs.command('list')
@@ -1290,6 +1369,8 @@ def jobs_list(ctx):
 
 @jobs.command('listtasks')
 @click.option(
+    '--all', is_flag=True, help='List tasks in all jobs in account')
+@click.option(
     '--jobid', help='List tasks in the specified job id')
 @click.option(
     '--poll-until-tasks-complete', is_flag=True,
@@ -1299,11 +1380,11 @@ def jobs_list(ctx):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_list_tasks(ctx, jobid, poll_until_tasks_complete):
+def jobs_list_tasks(ctx, all, jobid, poll_until_tasks_complete):
     """List tasks within jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_listtasks(
-        ctx.batch_client, ctx.config, jobid,
+        ctx.batch_client, ctx.config, all, jobid,
         poll_until_tasks_complete)
 
 
@@ -1331,9 +1412,14 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 
 @jobs.command('term')
 @click.option(
-    '--all', is_flag=True, help='Terminate all jobs in Batch account')
+    '--all-jobs', is_flag=True, help='Terminate all jobs in Batch account')
+@click.option(
+    '--all-jobschedules', is_flag=True,
+    help='Terminate all job schedules in Batch account')
 @click.option(
     '--jobid', help='Terminate just the specified job id')
+@click.option(
+    '--jobscheduleid', help='Terminate just the specified job schedule id')
 @click.option(
     '--termtasks', is_flag=True, help='Terminate tasks running in job first')
 @click.option(
@@ -1343,18 +1429,27 @@ def jobs_termtasks(ctx, force, jobid, taskid, wait):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_term(ctx, all, jobid, termtasks, wait):
-    """Terminate jobs"""
+def jobs_term(
+        ctx, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
+    """Terminate jobs and job schedules"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_term(
-        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
+    convoy.fleet.action_jobs_del_or_term(
+        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
+        ctx.config, False, all_jobs, all_jobschedules, jobid, jobscheduleid,
+        termtasks, wait)
 
 
 @jobs.command('del')
 @click.option(
-    '--all', is_flag=True, help='Delete all jobs in Batch account')
+    '--all-jobs', is_flag=True, help='Delete all jobs in Batch account')
+@click.option(
+    '--all-jobschedules', is_flag=True,
+    help='Delete all job schedules in Batch account')
 @click.option(
     '--jobid', help='Delete just the specified job id')
+@click.option(
+    '--jobscheduleid', help='Delete just the specified job schedule id')
 @click.option(
     '--termtasks', is_flag=True, help='Terminate tasks running in job first')
 @click.option(
@@ -1364,11 +1459,15 @@ def jobs_term(ctx, all, jobid, termtasks, wait):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_del(ctx, all, jobid, termtasks, wait):
-    """Delete jobs"""
+def jobs_del(
+        ctx, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait):
+    """Delete jobs and job schedules"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_del(
-        ctx.batch_client, ctx.config, all, jobid, termtasks, wait)
+    convoy.fleet.action_jobs_del_or_term(
+        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
+        ctx.config, True, all_jobs, all_jobschedules, jobid, jobscheduleid,
+        termtasks, wait)
 
 
 @jobs.command('deltasks')
@@ -1403,6 +1502,86 @@ def jobs_cmi(ctx, delete):
     """Cleanup multi-instance jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
+
+
+@jobs.command('migrate')
+@click.option(
+    '--jobid', help='Migrate only the specified job id')
+@click.option(
+    '--jobscheduleid', help='Migrate only the specified job schedule id')
+@click.option(
+    '--poolid', help='Target specified pool id rather than from configuration')
+@click.option(
+    '--requeue', is_flag=True, help='Requeue running tasks in job')
+@click.option(
+    '--terminate', is_flag=True, help='Terminate running tasks in job')
+@click.option(
+    '--wait', is_flag=True, help='Wait for running tasks to complete in job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_migrate(ctx, jobid, jobscheduleid, poolid, requeue, terminate, wait):
+    """Migrate jobs or job schedules to another pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_migrate(
+        ctx.batch_client, ctx.config, jobid, jobscheduleid, poolid, requeue,
+        terminate, wait)
+
+
+@jobs.command('disable')
+@click.option(
+    '--jobid', help='Disable only the specified job id')
+@click.option(
+    '--jobscheduleid', help='Disable only the specified job schedule id')
+@click.option(
+    '--requeue', is_flag=True, help='Requeue running tasks in job')
+@click.option(
+    '--terminate', is_flag=True, help='Terminate running tasks in job')
+@click.option(
+    '--wait', is_flag=True, help='Wait for running tasks to complete in job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_disable(ctx, jobid, jobscheduleid, requeue, terminate, wait):
+    """Disable jobs and job schedules"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_disable(
+        ctx.batch_client, ctx.config, jobid, jobscheduleid, requeue,
+        terminate, wait)
+
+
+@jobs.command('enable')
+@click.option(
+    '--jobid', help='Enable only the specified job id')
+@click.option(
+    '--jobscheduleid', help='Enable only the specified job schedule id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_enable(ctx, jobid, jobscheduleid):
+    """Enable jobs and job schedules"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_enable(
+        ctx.batch_client, ctx.config, jobid, jobscheduleid)
+
+
+@jobs.command('stats')
+@click.option('--jobid', help='Get stats only on the specified job id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def jobs_stats(ctx, jobid):
+    """Get statistics about jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_stats(ctx.batch_client, ctx.config, job_id=jobid)
 
 
 @cli.group()

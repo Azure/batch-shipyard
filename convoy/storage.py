@@ -46,11 +46,13 @@ from . import util
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_DEFAULT_SAS_EXPIRY_DAYS = 30
+_DOCKER_HUB_REGISTRY = 'docker.io'
+_DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
 _STORAGEACCOUNTEP = None
 _STORAGE_CONTAINERS = {
+    'blob_globalresources': None,
     'blob_resourcefiles': None,
     'blob_torrents': None,
     'blob_remotefs': None,
@@ -60,7 +62,7 @@ _STORAGE_CONTAINERS = {
     'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
-    'queue_globalresources': None,
+    'queue_globalresources': None,  # TODO remove in 3.0
 }
 
 
@@ -78,6 +80,8 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         raise ValueError('storage_entity_prefix is invalid')
     global _STORAGEACCOUNT, _STORAGEACCOUNTKEY, _STORAGEACCOUNTEP, \
         _DEFAULT_SAS_EXPIRY_DAYS
+    _STORAGE_CONTAINERS['blob_globalresources'] = '-'.join(
+        (sep + 'gr', postfix))
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
         (sep + 'rf', postfix))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
@@ -89,6 +93,7 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
+    # TODO remove in 3.0
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'gr', postfix))
     # ensure all storage containers are between 3 and 63 chars in length
@@ -150,7 +155,7 @@ def get_storageaccount_endpoint():
 def create_blob_container_saskey(
         storage_settings, container, kind, create_container=False):
     # type: (StorageCredentialsSettings, str, str, bool) -> str
-    """Create a saskey for a blob container with a 7day expiry time
+    """Create a saskey for a blob container
     :param StorageCredentialsSettings storage_settings: storage settings
     :param str container: container
     :param str kind: ingress or egress
@@ -181,7 +186,7 @@ def create_blob_container_saskey(
 def create_file_share_saskey(
         storage_settings, file_share, kind, create_share=False):
     # type: (StorageCredentialSettings, str, str, bool) -> str
-    """Create a saskey for a file share with a 7day expiry time
+    """Create a saskey for a file share
     :param StorageCredentialsSettings storage_settings: storage settings
     :param str file_share: file share
     :param str kind: ingress or egress
@@ -209,27 +214,30 @@ def create_file_share_saskey(
     )
 
 
-def _construct_partition_key_from_config(config):
-    # type: (dict) -> str
+def _construct_partition_key_from_config(config, pool_id=None):
+    # type: (dict, str) -> str
     """Construct partition key from config
     :param dict config: configuration dict
+    :param str pool_id: use specified pool id instead
     :rtype: str
     :return: partition key
     """
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config, lower=True)
     return '{}${}'.format(
-        settings.credentials_batch(config).account, settings.pool_id(config))
+        settings.credentials_batch(config).account, pool_id)
 
 
 def _add_global_resource(
-        queue_client, table_client, config, pk, p2pcsd, grtype):
+        blob_client, table_client, config, pk, dr, grtype):
     # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
-    #        bool, str) -> None
+    #        settings.DataReplicationSettings, str) -> None
     """Add global resources
-    :param azure.storage.queue.QueueService queue_client: queue client
+    :param azure.storage.blob.BlockService blob_client: blob client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str pk: partition key
-    :param int p2pcsd: peer-to-peer concurrent source downloads
+    :param settings.DataReplicationSettings dr: data replication settings
     :param str grtype: global resources type
     """
     try:
@@ -237,36 +245,42 @@ def _add_global_resource(
             prefix = 'docker'
             resources = settings.global_resources_docker_images(config)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(
+                'global resource type: {}'.format(grtype))
         for gr in resources:
             resource = '{}:{}'.format(prefix, gr)
-            logger.info('adding global resource: {}'.format(resource))
+            resource_sha1 = hashlib.sha1(
+                resource.encode('utf8')).hexdigest()
+            logger.info('adding global resource: {} hash={}'.format(
+                resource, resource_sha1))
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],
                 {
                     'PartitionKey': pk,
-                    'RowKey': hashlib.sha1(
-                        resource.encode('utf8')).hexdigest(),
+                    'RowKey': resource_sha1,
                     'Resource': resource,
                 }
             )
-            for _ in range(0, p2pcsd):
-                queue_client.put_message(
-                    _STORAGE_CONTAINERS['queue_globalresources'], resource)
+            for i in range(0, dr.concurrent_source_downloads):
+                blob_client.create_blob_from_bytes(
+                    container_name=_STORAGE_CONTAINERS['blob_globalresources'],
+                    blob_name='{}.{}'.format(resource_sha1, i),
+                    blob=b'',
+                )
     except KeyError:
         pass
 
 
-def populate_queues(queue_client, table_client, config):
-    # type: (azurequeue.QueueService, azuretable.TableService, dict) -> None
-    """Populate queues
-    :param azure.storage.queue.QueueService queue_client: queue client
+def populate_global_resource_blobs(blob_client, table_client, config):
+    # type: (azureblob.BlockService, azuretable.TableService, dict) -> None
+    """Populate global resource blobs
+    :param azure.storage.blob.BlockService blob_client: blob client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
     pk = _construct_partition_key_from_config(config)
     preg = settings.docker_registry_private_settings(config)
-    # populate registry table now if not a azure storage backed registry
+    # populate registry table now if not an azure storage backed registry
     if util.is_none_or_empty(preg.storage_account):
         if util.is_not_empty(preg.server):
             # populate registry table with private registry server
@@ -274,7 +288,7 @@ def populate_queues(queue_client, table_client, config):
             port = preg.port
         else:
             # populate registry table with public docker hub
-            rk = 'registry.hub.docker.com'
+            rk = _DOCKER_HUB_REGISTRY
             port = 80
         # add entity to table
         table_client.insert_or_replace_entity(
@@ -289,8 +303,7 @@ def populate_queues(queue_client, table_client, config):
     dr = settings.data_replication_settings(config)
     # add global resources
     _add_global_resource(
-        queue_client, table_client, config, pk,
-        dr.peer_to_peer.concurrent_source_downloads, 'docker_images')
+        blob_client, table_client, config, pk, dr, 'docker_images')
 
 
 def _check_file_and_upload(blob_client, file, container):
@@ -385,6 +398,7 @@ def delete_storage_containers(
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
         elif key.startswith('queue_'):
+            # TODO remove in 3.0
             logger.debug('deleting queue: {}'.format(_STORAGE_CONTAINERS[key]))
             queue_client.delete_queue(_STORAGE_CONTAINERS[key])
 
@@ -396,9 +410,13 @@ def _clear_blobs(blob_client, container):
     :param str container: container to clear blobs from
     """
     logger.info('deleting blobs: {}'.format(container))
-    blobs = blob_client.list_blobs(container)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
+    try:
+        blobs = blob_client.list_blobs(container)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(container))
+    else:
+        for blob in blobs:
+            blob_client.delete_blob(container, blob.name)
 
 
 def _clear_blob_task_resourcefiles(blob_client, container, config):
@@ -411,19 +429,24 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
     bs = settings.batch_shipyard_settings(config)
     envfileloc = '{}taskrf-'.format(bs.storage_entity_prefix)
     logger.info('deleting blobs with prefix: {}'.format(envfileloc))
-    blobs = blob_client.list_blobs(container, prefix=envfileloc)
-    for blob in blobs:
-        blob_client.delete_blob(container, blob.name)
+    try:
+        blobs = blob_client.list_blobs(container, prefix=envfileloc)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(container))
+    else:
+        for blob in blobs:
+            blob_client.delete_blob(container, blob.name)
 
 
-def _clear_table(table_client, table_name, config):
+def _clear_table(table_client, table_name, config, pool_id=None):
+    # type: (azuretable.TableService, str, dict, str) -> None
     """Clear table entities
     :param azure.storage.table.TableService table_client: table client
     :param str table_name: table name
     :param dict config: configuration dict
+    :param str pool_id: use specified pool id instead
     """
-    # type: (azuretable.TableService, str, dict) -> None
-    pk = _construct_partition_key_from_config(config)
+    pk = _construct_partition_key_from_config(config, pool_id=pool_id)
     logger.debug('clearing table (pk={}): {}'.format(pk, table_name))
     ents = table_client.query_entities(
         table_name, filter='PartitionKey eq \'{}\''.format(pk))
@@ -442,15 +465,15 @@ def _clear_table(table_client, table_name, config):
 
 
 def clear_storage_containers(
-        blob_client, queue_client, table_client, config, tables_only=False):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict, bool) -> None
+        blob_client, table_client, config, tables_only=False, pool_id=None):
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict,
+    #        bool, str) -> None
     """Clear storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool tables_only: clear only tables
+    :param str pool_id: use specified pool id instead
     """
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
@@ -459,21 +482,18 @@ def clear_storage_containers(
                 _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             try:
-                _clear_table(table_client, _STORAGE_CONTAINERS[key], config)
+                _clear_table(
+                    table_client, _STORAGE_CONTAINERS[key], config,
+                    pool_id=pool_id)
             except azure.common.AzureMissingResourceHttpError:
                 if key != 'table_perf' or bs.store_timing_metrics:
                     raise
-        elif not tables_only and key.startswith('queue_'):
-            logger.info('clearing queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.clear_messages(_STORAGE_CONTAINERS[key])
 
 
-def create_storage_containers(blob_client, queue_client, table_client, config):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict) -> None
+def create_storage_containers(blob_client, table_client, config):
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict) -> None
     """Create storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
@@ -488,9 +508,6 @@ def create_storage_containers(blob_client, queue_client, table_client, config):
                 continue
             logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.create_table(_STORAGE_CONTAINERS[key])
-        elif key.startswith('queue_'):
-            logger.info('creating queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.create_queue(_STORAGE_CONTAINERS[key])
 
 
 def create_storage_containers_remotefs(blob_client):
@@ -531,6 +548,6 @@ def cleanup_with_del_pool(
             'containers associated with {} pool'.format(pool_id)):
         return
     clear_storage_containers(
-        blob_client, queue_client, table_client, config, tables_only=True)
+        blob_client, table_client, config, tables_only=True, pool_id=pool_id)
     delete_storage_containers(
         blob_client, queue_client, table_client, config, skip_tables=True)

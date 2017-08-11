@@ -1,0 +1,22 @@
+{
+    "pool_specification": {
+        "id": "docker-cntk-gpu-rdma",
+        "vm_configuration": {
+            "platform_image": {
+                "publisher": "OpenLogic",
+                "offer": "CentOS-HPC",
+                "sku": "7.3"
+            }
+        },
+        "vm_size": "STANDARD_NC24R",
+        "vm_count": {
+            "dedicated": 2
+        },
+        "inter_node_communication_enabled": true,
+        "ssh": {
+            "username": "docker"
+        },
+        "reboot_on_start_task_failed": false,
+        "block_until_all_global_resources_loaded": true
+    }
+}

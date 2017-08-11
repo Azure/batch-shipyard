@@ -43,6 +43,10 @@ for spec in "$@"; do
         # for ingress only, if include doesn't have a wildcard, then make
         # it the remote resource instead to prevent container scanning
         if [[ $kind == "i" ]] && [[ "$incl" == "${incl//[\[\]|?*]/}" ]]; then
+            IFS='/' read -ra locparts <<< "$location"
+            unset 'locparts[-1]'
+            location=$(join_by '/' "${locparts[@]}")
+            eo="$eo --collate ."
             rr="$incl"
         else
             include="--include $incl"

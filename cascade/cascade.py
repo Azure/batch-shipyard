@@ -33,6 +33,7 @@ import logging
 import logging.handlers
 import os
 import pathlib
+import queue
 import random
 import shutil
 import subprocess
@@ -42,7 +43,6 @@ import time
 # non-stdlib imports
 import azure.common
 import azure.storage.blob as azureblob
-import azure.storage.queue as azurequeue
 import azure.storage.table as azuretable
 try:
     import libtorrent
@@ -56,23 +56,22 @@ logger = logging.getLogger('cascade')
 _ON_WINDOWS = sys.platform == 'win32'
 _DEFAULT_PORT_BEGIN = 6881
 _DEFAULT_PORT_END = 6891
+_DOCKER_HUB_REGISTRY = 'docker.io'
 _DOCKER_TAG = 'docker:'
 _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
     'seeding', 'allocating', 'checking fastresume'
 ]
 _TORRENT_SESSION = None
-_BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
-_POOLID = os.environ['AZ_BATCH_POOL_ID']
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
 _SHARED_DIR = os.environ['AZ_BATCH_NODE_SHARED_DIR']
 _TORRENT_DIR = pathlib.Path(_SHARED_DIR, '.torrents')
-_PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
+_PARTITION_KEY = None
 _LR_LOCK_ASYNC = asyncio.Lock()
 _PT_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
 _ENABLE_P2P = True
-_NON_P2P_CONCURRENT_DOWNLOADING = True
+_CONCURRENT_DOWNLOADS_ALLOWED = 10
 _COMPRESSION = True
 _SEED_BIAS = 3
 _ALLOW_PUBLIC_PULL_WITH_PRIVATE = False
@@ -81,23 +80,23 @@ _REGISTRY = None
 _RECORD_PERF = int(os.getenv('SHIPYARD_TIMING', default='0'))
 # mutable global state
 _CBHANDLES = {}
-_QUEUE_MESSAGES = {}
+_BLOB_LEASES = {}
 _DHT_ROUTERS = []
 _PREFIX = None
 _STORAGE_CONTAINERS = {
+    'blob_globalresources': None,
     'blob_torrents': None,
     'table_dht': None,
     'table_registry': None,
     'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
-    'queue_globalresources': None,
 }
 _TORRENTS = {}
 _PENDING_TORRENTS = {}
 _TORRENT_REVERSE_LOOKUP = {}
-_DIRECTDL = []
-_DIRECTDL_DOWNLOADING = []
+_DIRECTDL_QUEUE = queue.Queue()
+_DIRECTDL_DOWNLOADING = set()
 _GR_DONE = False
 _LAST_DHT_INFO_DUMP = None
 _THREAD_EXCEPTIONS = []
@@ -139,36 +138,42 @@ def _setup_logger() -> None:
     logger.info('logger initialized, log file: {}'.format(logloc))
 
 
-def _setup_container_names(sep: str) -> None:
-    """Set up storage container names
+def _setup_storage_names(sep: str) -> None:
+    """Set up storage names
     :param str sep: storage container prefix
     """
+    global _PARTITION_KEY, _PREFIX
+    # transform pool id if necessary
+    poolid = os.environ['AZ_BATCH_POOL_ID'].lower()
+    autopool = os.environ.get('SHIPYARD_AUTOPOOL', default=None)
+    # remove guid portion of pool id if autopool
+    if autopool is not None:
+        poolid = poolid[:-37]
+    # set partition key
+    batchaccount = os.environ['AZ_BATCH_ACCOUNT_NAME'].lower()
+    _PARTITION_KEY = '{}${}'.format(batchaccount, poolid)
+    # set container names
     if sep is None or len(sep) == 0:
         raise ValueError('storage_entity_prefix is invalid')
+    _STORAGE_CONTAINERS['blob_globalresources'] = '-'.join(
+        (sep + 'gr', batchaccount, poolid))
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'tor', _BATCHACCOUNT.lower(), _POOLID.lower()))
+        (sep + 'tor', batchaccount, poolid))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
-    _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
-        (sep + 'gr', _BATCHACCOUNT.lower(), _POOLID.lower()))
-    global _PREFIX
     _PREFIX = sep
 
 
 def _create_credentials() -> tuple:
     """Create storage credentials
     :rtype: tuple
-    :return: (blob_client, queue_client, table_client)
+    :return: (blob_client, table_client)
     """
     sa, ep, sakey = os.environ['SHIPYARD_STORAGE_ENV'].split(':')
     blob_client = azureblob.BlockBlobService(
-        account_name=sa,
-        account_key=sakey,
-        endpoint_suffix=ep)
-    queue_client = azurequeue.QueueService(
         account_name=sa,
         account_key=sakey,
         endpoint_suffix=ep)
@@ -176,7 +181,7 @@ def _create_credentials() -> tuple:
         account_name=sa,
         account_key=sakey,
         endpoint_suffix=ep)
-    return blob_client, queue_client, table_client
+    return blob_client, table_client
 
 
 async def _record_perf_async(
@@ -284,30 +289,32 @@ def add_dht_node(ip: str, port: int):
         _DHT_ROUTERS.append(ip)
 
 
-def _renew_queue_message_lease(
+def _renew_blob_lease(
         loop: asyncio.BaseEventLoop,
-        queue_client: azure.storage.queue.QueueService,
-        queue_key: str, cb_key: str, msg_id: str):
-    """Renew a storage queue message lease
+        blob_client: azure.storage.blob.BlockBlobService,
+        container_key: str, resource: str, blob_name: str):
+    """Renew a storage blob lease
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param str queue_key: queue name key index into _STORAGE_CONTAINERS
-    :param str cb_key: callback handle key
-    :param str msg_id: message id
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str container_key: blob container index into _STORAGE_CONTAINERS
+    :param str resource: resource
+    :param str blob_name: blob name
     """
-    msg = queue_client.update_message(
-        _STORAGE_CONTAINERS[queue_key],
-        message_id=msg_id,
-        pop_receipt=_QUEUE_MESSAGES[msg_id],
-        visibility_timeout=45)
-    if msg.pop_receipt is None:
-        raise RuntimeError(
-            'update message failed for id={} pr={}'.format(
-                msg_id, _QUEUE_MESSAGES[msg_id]))
-    _QUEUE_MESSAGES[msg_id] = msg.pop_receipt
-    _CBHANDLES[cb_key] = loop.call_later(
-        15, _renew_queue_message_lease, loop, queue_client, queue_key, cb_key,
-        msg_id)
+    try:
+        lease_id = blob_client.renew_blob_lease(
+            container_name=_STORAGE_CONTAINERS[container_key],
+            blob_name=blob_name,
+            lease_id=_BLOB_LEASES[resource],
+        )
+    except azure.common.AzureException as e:
+        logger.exception(e)
+        _BLOB_LEASES.pop(resource)
+        _CBHANDLES.pop(resource)
+    else:
+        _BLOB_LEASES[resource] = lease_id
+        _CBHANDLES[resource] = loop.call_later(
+            15, _renew_blob_lease, loop, blob_client, container_key, resource,
+            blob_name)
 
 
 def scantree(path):
@@ -345,55 +352,54 @@ class DockerSaveThread(threading.Thread):
     """Docker Save Thread"""
     def __init__(
             self, blob_client: azure.storage.blob.BlockBlobService,
-            queue_client: azure.storage.queue.QueueService,
             table_client: azure.storage.table.TableService,
-            resource: str, msg_id: str, nglobalresources: int):
+            resource: str, blob_name: str, nglobalresources: int):
         """DockerSaveThread ctor
         :param azure.storage.blob.BlockBlobService blob_client: blob client
-        :param azure.storage.queue.QueueService queue_client: queue client
         :param azure.storage.table.TableService table_client: table client
         :param str resource: resource
-        :param str msg_id: queue message id
+        :param str blob_name: resource blob name
         :param int nglobalresources: number of global resources
         """
         threading.Thread.__init__(self)
         self.blob_client = blob_client
-        self.queue_client = queue_client
         self.table_client = table_client
         self.resource = resource
-        self.msg_id = msg_id
+        self.blob_name = blob_name
         self.nglobalresources = nglobalresources
+        # add to downloading set
         with _DIRECTDL_LOCK:
-            _DIRECTDL_DOWNLOADING.append(self.resource)
+            _DIRECTDL_DOWNLOADING.add(self.resource)
 
     def run(self) -> None:
         """Thread main run function"""
-        success = False
         try:
             self._pull_and_save()
-            success = True
         except Exception as ex:
             logger.exception(ex)
             _THREAD_EXCEPTIONS.append(ex)
         finally:
             # cancel callback
-            if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
+            try:
                 _CBHANDLES[self.resource].cancel()
-                _CBHANDLES.pop(self.resource)
-                # release queue message
-                self.queue_client.update_message(
-                    _STORAGE_CONTAINERS['queue_globalresources'],
-                    message_id=self.msg_id,
-                    pop_receipt=_QUEUE_MESSAGES[self.msg_id],
-                    visibility_timeout=0)
-                _QUEUE_MESSAGES.pop(self.msg_id)
-                logger.debug(
-                    'queue message released for {}'.format(self.resource))
-            # remove from downloading list
-            if success:
-                with _DIRECTDL_LOCK:
-                    _DIRECTDL_DOWNLOADING.remove(self.resource)
-                    _DIRECTDL.remove(self.resource)
+            except KeyError as e:
+                logger.exception(e)
+            _CBHANDLES.pop(self.resource)
+            # release blob lease
+            try:
+                self.blob_client.release_blob_lease(
+                    container_name=_STORAGE_CONTAINERS['blob_globalresources'],
+                    blob_name=self.blob_name,
+                    lease_id=_BLOB_LEASES[self.resource],
+                )
+            except azure.common.AzureException as e:
+                logger.exception(e)
+            _BLOB_LEASES.pop(self.resource)
+            logger.debug(
+                'blob lease released for {}'.format(self.resource))
+            # remove from downloading set
+            with _DIRECTDL_LOCK:
+                _DIRECTDL_DOWNLOADING.remove(self.resource)
 
     def _check_pull_output_overload(self, stdout: str, stderr: str) -> bool:
         """Check output for registry overload errors
@@ -413,7 +419,7 @@ class DockerSaveThread(threading.Thread):
         :rtype: tuple
         :return: tuple or return code, stdout, stderr
         """
-        if _REGISTRY == 'registry.hub.docker.com':
+        if _REGISTRY == _DOCKER_HUB_REGISTRY:
             src = image
             _pub = True
         else:
@@ -603,94 +609,87 @@ class DockerSaveThread(threading.Thread):
 async def _direct_download_resources_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azure.storage.blob.BlockBlobService,
-        queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
         ipaddress: str, nglobalresources: int) -> None:
     """Direct download resource logic
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
     :param int nglobalresources: number of global resources
     """
-    # iterate through downloads to see if there are any torrents available
+    # ensure we are not downloading too many sources at once
     with _DIRECTDL_LOCK:
-        if len(_DIRECTDL) == 0:
+        if len(_DIRECTDL_DOWNLOADING) > _CONCURRENT_DOWNLOADS_ALLOWED:
             return
-    # go through queue and find resources we can download
-    msgs = queue_client.get_messages(
-        _STORAGE_CONTAINERS['queue_globalresources'], num_messages=1,
-        visibility_timeout=60)
-    if len(msgs) == 0:
-        return
-    msg = None
-    _rmdl = []
-    _release_list = []
+    # retrieve a resouorce from dl queue
     _start_torrent_list = []
-    with _DIRECTDL_LOCK:
-        for _msg in msgs:
-            if (msg is None and _msg.content in _DIRECTDL and
-                    _msg.content not in _DIRECTDL_DOWNLOADING):
-                if _ENABLE_P2P:
-                    nseeds = _get_torrent_num_seeds(
-                        table_client, _msg.content)
-                    if nseeds < _SEED_BIAS:
-                        msg = _msg
-                    else:
-                        _start_torrent_list.append(_msg)
-                        _rmdl.append(_msg.content)
-                        _release_list.append(_msg)
-                else:
-                    msg = _msg
-            else:
-                _release_list.append(_msg)
-    # renew lease and create renew callback
-    if msg is not None:
-        if _ENABLE_P2P or not _NON_P2P_CONCURRENT_DOWNLOADING:
-            _QUEUE_MESSAGES[msg.id] = msg.pop_receipt
-            _CBHANDLES[msg.content] = loop.call_later(
-                15, _renew_queue_message_lease, loop, queue_client,
-                'queue_globalresources', msg.content, msg.id)
-        else:
-            _release_list.append(msg)
-    # release all messages in release list
-    for _msg in _release_list:
+    _seen = set()
+    while True:
         try:
-            queue_client.update_message(
-                _STORAGE_CONTAINERS['queue_globalresources'],
-                message_id=_msg.id,
-                pop_receipt=_msg.pop_receipt,
-                visibility_timeout=0)
-        except azure.common.AzureMissingResourceHttpError as ex:
-            # message not exist can happen if there are large delays from
-            # message lease till now
-            if ex.status_code != 404:
-                raise
-    # start any torrents
-    for _msg in _start_torrent_list:
-        _start_torrent_via_storage(blob_client, table_client, _msg.content)
-    # remove messages out of rmdl
-    if len(_rmdl) > 0:
+            resource = _DIRECTDL_QUEUE.get()
+        except queue.Empty:
+            break
+        else:
+            if resource in _seen:
+                _DIRECTDL_QUEUE.put(resource)
+                resource = None
+                break
+            _seen.add(resource)
+        # check if torrent is available for resource
         with _DIRECTDL_LOCK:
-            for dl in _rmdl:
-                try:
-                    logger.info(
-                        'removing resource {} from direct downloads'.format(
-                            dl))
-                    _DIRECTDL.remove(dl)
-                except ValueError:
-                    pass
-    if msg is None:
-        return
+            if resource not in _DIRECTDL_DOWNLOADING:
+                if _ENABLE_P2P:
+                    nseeds = _get_torrent_num_seeds(table_client, resource)
+                    if nseeds >= _SEED_BIAS:
+                        _start_torrent_list.append(resource)
+                        resource = None
+                        break
+                else:
+                    break
+            else:
+                _DIRECTDL_QUEUE.put(resource)
+                resource = None
+    del _seen
+    # attempt to get a blob lease
+    if resource is not None:
+        lease_id = None
+        blob_name = None
+        for i in range(0, _CONCURRENT_DOWNLOADS_ALLOWED):
+            blob_name = '{}.{}'.format(compute_resource_hash(resource), i)
+            try:
+                lease_id = blob_client.acquire_blob_lease(
+                    container_name=_STORAGE_CONTAINERS['blob_globalresources'],
+                    blob_name=blob_name,
+                    lease_duration=60,
+                )
+                break
+            except azure.common.AzureConflictHttpError:
+                blob_name = None
+                pass
+        if lease_id is None:
+            logger.debug(
+                'no available blobs to lease for resource: {}'.format(
+                    resource))
+            _DIRECTDL_QUEUE.put(resource)
+            return
+        # create lease renew callback
+        logger.debug('blob lease {} acquired for resource {}'.format(
+            lease_id, resource))
+        _BLOB_LEASES[resource] = lease_id
+        _CBHANDLES[resource] = loop.call_later(
+            15, _renew_blob_lease, loop, blob_client, 'blob_globalresources',
+            resource, blob_name)
+    # start any torrents
+    for resource in _start_torrent_list:
+        _start_torrent_via_storage(blob_client, table_client, resource)
     del _start_torrent_list
-    del _release_list
-    del _rmdl
+    if resource is None:
+        return
     # pull and save docker image in thread
-    if msg.content.startswith(_DOCKER_TAG):
+    if resource.startswith(_DOCKER_TAG):
         thr = DockerSaveThread(
-            blob_client, queue_client, table_client, msg.content, msg.id,
-            nglobalresources)
+            blob_client, table_client, resource, blob_name, nglobalresources)
         thr.start()
     else:
         # TODO download via blob, explode uri to get container/blob
@@ -980,13 +979,11 @@ async def manage_torrents_async(
 async def download_monitor_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azure.storage.blob.BlockBlobService,
-        queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
         ipaddress: str, nglobalresources: int) -> None:
     """Download monitor
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
     :param int nglobalresource: number of global resources
@@ -999,10 +996,9 @@ async def download_monitor_async(
         )
     while True:
         # check if there are any direct downloads
-        if len(_DIRECTDL) > 0:
+        if _DIRECTDL_QUEUE.qsize() > 0:
             await _direct_download_resources_async(
-                loop, blob_client, queue_client, table_client, ipaddress,
-                nglobalresources)
+                loop, blob_client, table_client, ipaddress, nglobalresources)
         # if not in peer-to-peer mode, allow exit
         if not _ENABLE_P2P and _GR_DONE:
             break
@@ -1100,8 +1096,7 @@ def _check_resource_has_torrent(
         add_to_dict = True
     if add_to_dict:
         logger.info('adding {} as resource to download'.format(resource))
-        with _DIRECTDL_LOCK:
-            _DIRECTDL.append(resource)
+        _DIRECTDL_QUEUE.put(resource)
         return False
     else:
         logger.info('found torrent for resource {}'.format(resource))
@@ -1113,13 +1108,11 @@ def _check_resource_has_torrent(
 def distribute_global_resources(
         loop: asyncio.BaseEventLoop,
         blob_client: azure.storage.blob.BlockBlobService,
-        queue_client: azure.storage.queue.QueueService,
         table_client: azure.storage.table.TableService,
         ipaddress: str) -> None:
     """Distribute global services/resources
     :param asyncio.BaseEventLoop loop: event loop
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
     :param azure.storage.table.TableService table_client: table client
     :param str ipaddress: ip address
     """
@@ -1153,14 +1146,13 @@ def distribute_global_resources(
                 _check_resource_has_torrent(
                     blob_client, table_client, ent['Resource'])
             else:
-                with _DIRECTDL_LOCK:
-                    _DIRECTDL.append(ent['Resource'])
+                _DIRECTDL_QUEUE.put(ent['Resource'])
     if nentities == 0:
         logger.info('no global resources specified')
         return
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
-        loop, blob_client, queue_client, table_client, ipaddress, nentities))
+        loop, blob_client, table_client, ipaddress, nentities))
 
 
 def _set_registry(table_client: azure.storage.table.TableService) -> None:
@@ -1208,14 +1200,18 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
 
 def main():
     """Main function"""
-    global _ENABLE_P2P, _NON_P2P_CONCURRENT_DOWNLOADING, \
-        _ALLOW_PUBLIC_PULL_WITH_PRIVATE
+    global _ENABLE_P2P, _CONCURRENT_DOWNLOADS_ALLOWED, \
+        _ALLOW_PUBLIC_PULL_WITH_PRIVATE, _POOL_ID
     # get command-line args
     args = parseargs()
     p2popts = args.p2popts.split(':')
     _ENABLE_P2P = p2popts[0] == 'true'
-    _NON_P2P_CONCURRENT_DOWNLOADING = p2popts[1]
+    _CONCURRENT_DOWNLOADS_ALLOWED = int(p2popts[1])
     _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
+    logger.info('max concurrent downloads: {}'.format(
+        _CONCURRENT_DOWNLOADS_ALLOWED))
+    logger.info('allow public pull with private: {}'.format(
+        _ALLOW_PUBLIC_PULL_WITH_PRIVATE))
     # set p2p options
     if _ENABLE_P2P:
         if not _LIBTORRENT_IMPORTED:
@@ -1230,9 +1226,6 @@ def main():
         # create torrent directory
         logger.debug('creating torrent dir: {}'.format(_TORRENT_DIR))
         _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
-    else:
-        logger.info('non-p2p concurrent downloading: {}'.format(
-            _NON_P2P_CONCURRENT_DOWNLOADING))
     del p2popts
 
     # get event loop
@@ -1250,11 +1243,11 @@ def main():
         ipaddress = args.ipaddress
     logger.debug('ip address: {}'.format(ipaddress))
 
-    # set up container names
-    _setup_container_names(args.prefix)
+    # set up storage names
+    _setup_storage_names(args.prefix)
 
     # create storage credentials
-    blob_client, queue_client, table_client = _create_credentials()
+    blob_client, table_client = _create_credentials()
 
     # set registry
     _set_registry(table_client)
@@ -1262,8 +1255,7 @@ def main():
     del args
 
     # distribute global resources
-    distribute_global_resources(
-        loop, blob_client, queue_client, table_client, ipaddress)
+    distribute_global_resources(loop, blob_client, table_client, ipaddress)
 
 
 def parseargs():
@@ -1282,12 +1274,6 @@ def parseargs():
         '--ipaddress', help='ip address')
     parser.add_argument(
         '--prefix', help='storage container prefix')
-    parser.add_argument(
-        '--no-torrent', action='store_false', dest='torrent',
-        help='disable peer-to-peer transfer')
-    parser.add_argument(
-        '--nonp2pcd', action='store_true',
-        help='non-p2p concurrent downloading')
     return parser.parse_args()
 
 

@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/namd:2.11-icc-mkl-intelmpi",
-                    "remove_container_after_exit": true,
                     "command": "/sw/run_namd.sh apoa1 1000",
                     "infiniband": true,
                     "multi_instance": {

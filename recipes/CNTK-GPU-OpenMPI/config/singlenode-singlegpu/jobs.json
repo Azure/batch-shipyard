@@ -4,9 +4,8 @@
             "id": "cntkjob",
             "tasks": [
                 {
-                    "image": "alfpark/cntk:2.0beta4-gpu-openmpi-refdata",
-                    "remove_container_after_exit": true,
-                    "command": "/cntk/run_convnet_mnist_gpu.sh",
+                    "image": "microsoft/cntk:2.1-gpu-python3.5-cuda8.0-cudnn6.0",
+                    "command": "/bin/bash -c \"source /cntk/activate-cntk && cd /cntk/Examples/Image/DataSets/MNIST && python -u install_mnist.py && cd /cntk/Examples/Image/Classification/ConvNet/Python && python -u ConvNet_MNIST.py\"",
                     "gpu": true
                 }
             ]

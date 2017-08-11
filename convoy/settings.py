@@ -31,12 +31,15 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
+import datetime
 try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
 # non-stdlib imports
+import dateutil.parser
 # local imports
+from . import task_factory
 from . import util
 
 # global defines
@@ -44,7 +47,7 @@ _METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
 _TENSORBOARD_DOCKER_IMAGE = (
-    'gcr.io/tensorflow/tensorflow:1.1.0',
+    'gcr.io/tensorflow/tensorflow',
     '/usr/local/lib/python2.7/dist-packages/tensorflow'
     '/tensorboard/tensorboard.py',
     6006
@@ -93,6 +96,31 @@ PoolVmCustomImageSettings = collections.namedtuple(
         'node_agent',
     ]
 )
+PoolAutoscaleScenarioSettings = collections.namedtuple(
+    'PoolAutoscaleScenarioSettings', [
+        'name',
+        'maximum_vm_count',
+        'node_deallocation_option',
+        'sample_lookback_interval',
+        'required_sample_percentage',
+        'rebalance_preemption_percentage',
+        'bias_last_sample',
+        'bias_node_type',
+    ]
+)
+PoolAutoscaleSettings = collections.namedtuple(
+    'PoolAutoscaleSettings', [
+        'evaluation_interval',
+        'formula',
+        'scenario',
+    ]
+)
+PoolAutopoolSettings = collections.namedtuple(
+    'PoolAutopoolSettings', [
+        'pool_lifetime',
+        'keep_alive',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
@@ -101,7 +129,7 @@ PoolSettings = collections.namedtuple(
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
         'gpu_driver', 'ssh', 'additional_node_prep_commands',
-        'virtual_network',
+        'virtual_network', 'autoscale', 'node_fill_type',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -155,13 +183,12 @@ DockerRegistrySettings = collections.namedtuple(
 )
 DataReplicationSettings = collections.namedtuple(
     'DataReplicationSettings', [
-        'peer_to_peer', 'non_peer_to_peer_concurrent_downloading',
+        'peer_to_peer', 'concurrent_source_downloads',
     ]
 )
 PeerToPeerSettings = collections.namedtuple(
     'PeerToPeerSettings', [
-        'enabled', 'compression', 'concurrent_source_downloads',
-        'direct_download_seed_bias',
+        'enabled', 'compression', 'direct_download_seed_bias',
     ]
 )
 SourceSettings = collections.namedtuple(
@@ -183,9 +210,31 @@ DataTransferSettings = collections.namedtuple(
         'container', 'file_share', 'blobxfer_extra_options',
     ]
 )
+JobScheduleSettings = collections.namedtuple(
+    'JobScheduleSettings', [
+        'do_not_run_until', 'do_not_run_after', 'start_window',
+        'recurrence_interval',
+    ]
+)
+JobManagerSettings = collections.namedtuple(
+    'JobManagerSettings', [
+        'allow_low_priority_node', 'run_exclusive', 'monitor_task_completion',
+    ]
+)
+JobRecurrenceSettings = collections.namedtuple(
+    'JobRecurrenceSettings', [
+        'schedule', 'job_manager',
+    ]
+)
 UserIdentitySettings = collections.namedtuple(
     'UserIdentitySettings', [
         'default_pool_admin', 'specific_user_uid', 'specific_user_gid',
+    ]
+)
+TaskFactoryStorageSettings = collections.namedtuple(
+    'TaskFactoryStorageSettings', [
+        'storage_settings', 'storage_link_name', 'container', 'file_share',
+        'include', 'exclude',
     ]
 )
 TaskSettings = collections.namedtuple(
@@ -517,14 +566,16 @@ def pool_specification(config):
     return config['pool_specification']
 
 
-def _pool_vm_count(config):
-    # type: (dict) -> PoolVmCountSettings
+def _pool_vm_count(config, conf=None):
+    # type: (dict, dict) -> PoolVmCountSettings
     """Get Pool vm count settings
     :param dict config: configuration object
+    :param dict conf: vm_count object
     :rtype: PoolVmCountSettings
     :return: pool vm count settings
     """
-    conf = pool_specification(config)['vm_count']
+    if conf is None:
+        conf = pool_specification(config)['vm_count']
     if isinstance(conf, int):
         conf = {'dedicated': conf}
     return PoolVmCountSettings(
@@ -572,6 +623,73 @@ def _populate_pool_vm_configuration(config):
             image_uris=conf['image_uris'],
             node_agent=conf['node_agent'],
         )
+
+
+def pool_autoscale_settings(config):
+    # type: (dict) -> PoolAutoscaleSettings
+    """Get Pool autoscale settings
+    :param dict config: configuration object
+    :rtype: PoolAutoscaleSettings
+    :return: pool autoscale settings from specification
+    """
+    conf = pool_specification(config)
+    conf = _kv_read_checked(conf, 'autoscale', {})
+    ei = _kv_read_checked(conf, 'evaluation_interval')
+    if util.is_not_empty(ei):
+        ei = util.convert_string_to_timedelta(ei)
+    else:
+        ei = datetime.timedelta(minutes=15)
+    scenconf = _kv_read_checked(conf, 'scenario')
+    if scenconf is not None:
+        mvc = _kv_read_checked(scenconf, 'maximum_vm_count')
+        if mvc is None:
+            raise ValueError('maximum_vm_count must be specified')
+        ndo = _kv_read_checked(
+            scenconf, 'node_deallocation_option', 'taskcompletion')
+        if (ndo is not None and
+                ndo not in (
+                    'requeue', 'terminate', 'taskcompletion', 'retaineddata')):
+            raise ValueError(
+                'invalid node_deallocation_option: {}'.format(ndo))
+        sli = _kv_read_checked(scenconf, 'sample_lookback_interval')
+        if util.is_not_empty(sli):
+            sli = util.convert_string_to_timedelta(sli)
+        else:
+            sli = datetime.timedelta(minutes=10)
+        scenario = PoolAutoscaleScenarioSettings(
+            name=_kv_read_checked(scenconf, 'name').lower(),
+            maximum_vm_count=_pool_vm_count(config, conf=mvc),
+            node_deallocation_option=ndo,
+            sample_lookback_interval=sli,
+            required_sample_percentage=_kv_read(
+                scenconf, 'required_sample_percentage', 70),
+            rebalance_preemption_percentage=_kv_read(
+                scenconf, 'rebalance_preemption_percentage', None),
+            bias_last_sample=_kv_read(
+                scenconf, 'bias_last_sample', True),
+            bias_node_type=_kv_read_checked(
+                scenconf, 'bias_node_type', 'auto').lower(),
+        )
+    else:
+        scenario = None
+    return PoolAutoscaleSettings(
+        evaluation_interval=ei,
+        formula=_kv_read_checked(conf, 'formula'),
+        scenario=scenario,
+    )
+
+
+def is_pool_autoscale_enabled(config, pas=None):
+    # type: (dict, PoolAutoscaleSettings) -> bool
+    """Check if pool autoscale is enabled
+    :param dict config: configuration object
+    :param PoolAutoscaleSettings pas: pool autoscale settings
+    :rtype: bool
+    :return: if pool autoscale is enabled
+    """
+    if pas is None:
+        pas = pool_autoscale_settings(config)
+    return util.is_not_empty(pas.formula) or pas.scenario is not None
 
 
 def pool_settings(config):
@@ -720,6 +838,8 @@ def pool_settings(config):
             default_existing_ok=True,
             default_create_nonexistant=False,
         ),
+        autoscale=pool_autoscale_settings(config),
+        node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
     )
 
 
@@ -1356,9 +1476,9 @@ def data_replication_settings(config):
     except KeyError:
         conf = {}
     try:
-        nonp2pcd = conf['non_peer_to_peer_concurrent_downloading']
+        concurrent_source_downloads = conf['concurrent_source_downloads']
     except KeyError:
-        nonp2pcd = True
+        concurrent_source_downloads = 10
     try:
         conf = config['data_replication']['peer_to_peer']
     except KeyError:
@@ -1374,15 +1494,6 @@ def data_replication_settings(config):
     pool_vm_count = _pool_vm_count(config)
     total_vm_count = pool_vm_count.dedicated + pool_vm_count.low_priority
     try:
-        p2p_concurrent_source_downloads = conf['concurrent_source_downloads']
-        if (p2p_concurrent_source_downloads is None or
-                p2p_concurrent_source_downloads < 1):
-            raise KeyError()
-    except KeyError:
-        p2p_concurrent_source_downloads = total_vm_count // 6
-        if p2p_concurrent_source_downloads < 1:
-            p2p_concurrent_source_downloads = 1
-    try:
         p2p_direct_download_seed_bias = conf['direct_download_seed_bias']
         if (p2p_direct_download_seed_bias is None or
                 p2p_direct_download_seed_bias < 1):
@@ -1395,10 +1506,9 @@ def data_replication_settings(config):
         peer_to_peer=PeerToPeerSettings(
             enabled=p2p_enabled,
             compression=p2p_compression,
-            concurrent_source_downloads=p2p_concurrent_source_downloads,
             direct_download_seed_bias=p2p_direct_download_seed_bias
         ),
-        non_peer_to_peer_concurrent_downloading=nonp2pcd
+        concurrent_source_downloads=concurrent_source_downloads,
     )
 
 
@@ -1963,14 +2073,67 @@ def job_specifications(config):
     return config['job_specifications']
 
 
-def job_tasks(conf):
-    # type: (dict) -> list
+def autogenerated_task_id_prefix(config):
+    # type: (dict) -> str
+    """Get the autogenerated task id prefix to use
+    :param dict config: configuration object
+    :rtype: str
+    :return: auto-gen task id prefix
+    """
+    conf = _kv_read_checked(
+        config['batch_shipyard'], 'autogenerated_task_id', {}
+    )
+    # do not use _kv_read_checked for prefix we want to allow empty string
+    try:
+        prefix = conf['prefix']
+        if prefix is None:
+            raise KeyError()
+    except KeyError:
+        prefix = 'task-'
+    return prefix
+
+
+def autogenerated_task_id_zfill(config):
+    # type: (dict) -> int
+    """Get the autogenerated task zfill setting to use
+    :param dict config: configuration object
+    :rtype: int
+    :return: auto-gen task number zfill
+    """
+    conf = _kv_read_checked(
+        config['batch_shipyard'], 'autogenerated_task_id', {}
+    )
+    return _kv_read(conf, 'zfill_width', 5)
+
+
+def job_tasks(config, conf):
+    # type: (dict, dict) -> list
     """Get all tasks for job
     :param dict config: configuration object
+    :param dict conf: job configuration object
     :rtype: list
     :return: list of tasks
     """
-    return conf['tasks']
+    for _task in conf['tasks']:
+        if 'task_factory' in _task:
+            # get storage settings if applicable
+            if 'file' in _task['task_factory']:
+                az = _task['task_factory']['file']['azure_storage']
+                tfstorage = TaskFactoryStorageSettings(
+                    storage_settings=credentials_storage(
+                        config, data_storage_account_settings(az)),
+                    storage_link_name=az['storage_account_settings'],
+                    container=data_container(az),
+                    file_share=data_file_share(az),
+                    include=_kv_read_checked(az, 'include'),
+                    exclude=_kv_read_checked(az, 'exclude'),
+                )
+            else:
+                tfstorage = None
+            for task in task_factory.generate_task(_task, tfstorage):
+                yield task
+        else:
+            yield _task
 
 
 def job_id(conf):
@@ -1995,6 +2158,80 @@ def job_auto_complete(conf):
     except KeyError:
         ac = False
     return ac
+
+
+def job_auto_pool(conf):
+    # type: (dict) -> PoolAutopoolSettings
+    """Get job autopool setting
+    :param dict conf: job configuration object
+    :rtype: PoolAutopoolSettings
+    :return: job autopool settings
+    """
+    ap = _kv_read_checked(conf, 'auto_pool')
+    if ap is not None:
+        return PoolAutopoolSettings(
+            pool_lifetime=_kv_read_checked(
+                ap, 'pool_lifetime', 'job').lower(),
+            keep_alive=_kv_read(ap, 'keep_alive', False),
+        )
+    else:
+        return None
+
+
+def job_recurrence(conf):
+    # type: (dict) -> JobRecurrenceSettings
+    """Get job recurrence setting
+    :param dict conf: job configuration object
+    :rtype: JobRecurrenceSettings
+    :return: job recurrence settings
+    """
+    rec = _kv_read_checked(conf, 'recurrence')
+    if rec is not None:
+        do_not_run_until = _kv_read_checked(
+            rec['schedule'], 'do_not_run_until')
+        if do_not_run_until is not None:
+            do_not_run_until = dateutil.parser.parse(do_not_run_until)
+        do_not_run_after = _kv_read_checked(
+            rec['schedule'], 'do_not_run_after')
+        if do_not_run_after is not None:
+            do_not_run_after = dateutil.parser.parse(do_not_run_after)
+        start_window = _kv_read_checked(rec['schedule'], 'start_window')
+        if start_window is not None:
+            start_window = util.convert_string_to_timedelta(start_window)
+        recurrence_interval = util.convert_string_to_timedelta(
+            _kv_read_checked(rec['schedule'], 'recurrence_interval')
+        )
+        jm = _kv_read_checked(rec, 'job_manager', {})
+        return JobRecurrenceSettings(
+            schedule=JobScheduleSettings(
+                do_not_run_until=do_not_run_until,
+                do_not_run_after=do_not_run_after,
+                start_window=start_window,
+                recurrence_interval=recurrence_interval,
+            ),
+            job_manager=JobManagerSettings(
+                allow_low_priority_node=_kv_read(
+                    jm, 'allow_low_priority_node', True),
+                run_exclusive=_kv_read(jm, 'run_exclusive', False),
+                monitor_task_completion=_kv_read(
+                    jm, 'monitor_task_completion', False),
+            )
+        )
+    else:
+        return None
+
+
+def job_priority(conf):
+    # type: (dict) -> int
+    """Get job priority setting
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: job autocomplete
+    """
+    pri = _kv_read(conf, 'priority', 0)
+    if pri < -1000 or pri > 1000:
+        raise ValueError('job priority is invalid: {}'.format(pri))
+    return pri
 
 
 def job_environment_variables(conf):
@@ -2213,9 +2450,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             sku = None
             node_agent = poolconf.vm_configuration.node_agent
         else:
-            publisher = poolconf.publisher.lower()
-            offer = poolconf.offer.lower()
-            sku = poolconf.sku.lower()
+            publisher = poolconf.vm_configuration.publisher.lower()
+            offer = poolconf.vm_configuration.offer.lower()
+            sku = poolconf.vm_configuration.sku.lower()
     else:
         pool_id = cloud_pool.id
         vm_size = cloud_pool.vm_size.lower()
@@ -2303,7 +2540,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     try:
         rm_container = conf['remove_container_after_exit']
     except KeyError:
-        rm_container = _kv_read(jobspec, 'remove_container_after_exit', False)
+        rm_container = _kv_read(jobspec, 'remove_container_after_exit', True)
     if rm_container and '--rm' not in run_opts:
         run_opts.append('--rm')
     del rm_container
@@ -2524,6 +2761,12 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA, pool: {} vm_size: {}').format(
                      pool_id, vm_size))
+        # common run opts
+        run_opts.append('--net=host')
+        run_opts.append('--ulimit memlock=9223372036854775807')
+        run_opts.append('--device=/dev/infiniband/rdma_cm')
+        run_opts.append('--device=/dev/infiniband/uverbs0')
+        run_opts.append('-v /opt/intel:/opt/intel:ro')
         # only centos-hpc and sles-hpc:12-sp1 are supported
         # for infiniband
         if (publisher == 'openlogic' and offer == 'centos-hpc' or
@@ -2534,17 +2777,11 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
               sku == '12-sp1' or node_agent.startswith('batch.node.opensuse')):
             run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
             run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
+            run_opts.append('--device=/dev/hvnd_rdma')
         else:
             raise ValueError(
                 ('Unsupported infiniband VM config, publisher={} '
                  'offer={}').format(publisher, offer))
-        # add infiniband run opts
-        run_opts.append('-v /opt/intel:/opt/intel:ro')
-        run_opts.append('--net=host')
-        run_opts.append('--ulimit memlock=9223372036854775807')
-        run_opts.append('--device=/dev/hvnd_rdma')
-        run_opts.append('--device=/dev/infiniband/rdma_cm')
-        run_opts.append('--device=/dev/infiniband/uverbs0')
     # mount batch root dir
     run_opts.append(
         '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')

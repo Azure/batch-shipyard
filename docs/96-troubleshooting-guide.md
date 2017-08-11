@@ -85,13 +85,24 @@ Additionally, if you have specified an SSH user for your pool and there
 is a start task failure, you can still issue the command `pool asu` to add the
 pool SSH user and then `pool ssh` to SSH into the node to debug further.
 
+Please note that the start task requires downloading some files that are
+uploaded to your Azure Storage account with the command `pool add`. These
+files have SAS tokens which allow the Batch compute node to authenticate
+with the Azure Storage service to download the files. These SAS tokens are
+bound to the storage account key for which they were generated with. If you
+change/regenerate your storage account key that these SAS tokens were
+originally generated with, then the compute nodes will fail to start as
+these files will no longer be able to be downloaded. You will need to
+recreate your pool in these situations.
+
 #### Compute Node does not start or is unusable
 If the compute node is "stuck" in starting state or enters unusable state,
 this indicates that there was an issue allocating the node from the Azure
 Cloud. Azure Batch automatically tries to recover from such situations, but
 may not be able to on occasion. In these circumstances, it is best
-to delete the specific node with `pool delnode` and then resize back up with
-`pool resize` or recreate the pool.
+to delete the specific node with `pool delnode` (with `--all-unusable` if
+nodes are stuck in unsuable state) and then resize back up with `pool resize`
+or recreate the pool.
 
 #### Compute Node is stuck in waiting for start task
 Compute nodes that appear to be "stuck" in waiting for start task may not be
@@ -129,7 +140,8 @@ has completed but has failed.
 
 ## <a name="docker"></a>Docker Issues
 #### `pool udi` command doesn't run
-The pool update Docker images command runs as a normal job. Thus, your compute
+The pool update Docker images command runs as a normal job if your pool is
+comprised entirely of dedicated compute nodes. Thus, your compute
 nodes must be able to accommodate this update job and task. If your pool only
 has one node in it, it will run as a single task under a job. If the node in
 this pool is busy and the `max_tasks_per_node` in your `pool.json` is either

@@ -6,7 +6,6 @@
             "tasks": [
                 {
                     "image": "alfpark/linpack:cpu-intel-mkl",
-                    "remove_container_after_exit": true,
                     "command": "/sw/run_hplinpack.sh -n 32000",
                     "infiniband": true,
                     "additional_docker_run_options": [

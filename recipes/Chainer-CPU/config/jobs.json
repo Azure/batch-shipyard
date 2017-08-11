@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "chainer/chainer",
-                    "remove_container_after_exit": true,
                     "resource_files": [
                         {
                             "file_path": "train_mnist.py",

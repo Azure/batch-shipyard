@@ -8,7 +8,7 @@
                 "sku": "16.04-LTS"
             }
         },
-        "vm_size": "STANDARD_D4_V2",
+        "vm_size": "STANDARD_D3_V2",
         "vm_count": {
             "dedicated": 2
         },

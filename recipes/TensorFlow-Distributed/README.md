@@ -37,19 +37,19 @@ The global configuration should set the following properties:
 image that can work with multi-instance tasks. The
 [alfpark/tensorflow](https://hub.docker.com/r/alfpark/tensorflow)
 images have been prepared by using Google's TensorFlow Dockerfile as a base
-and extending the image to work with Batch Shipyard along with optimizations
-for `STANDARD_NC` VMs (NVIDIA K80).
+and extending the image to work with Batch Shipyard.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `image` should be the name of the Docker image for this container invocation,
-e.g., `alfpark/tensorflow/0.11.0-gpu` or `alfpark/tensorflow/0.11.0-cpu`
+e.g., `alfpark/tensorflow:1.2.1-gpu` or `alfpark/tensorflow:1.2.1-cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 To run the example MNIST replica example, the `command` would look
-like: `"/bin/bash /sw/launcher.sh"`. The launcher will automatically detect
-the number of GPUs and pass the correct number to the TensorFlow script.
-Please see the [launcher.sh](docker/gpu/launcher.sh) for the launcher source.
+like: `"/bin/bash -c \"/shipyard/launcher.sh /shipyard/mnist_replica.py\""`.
+The launcher will automatically detect the number of GPUs and pass the correct
+number to the TensorFlow script. Please see the
+[launcher.sh](docker/gpu/launcher.sh) for the launcher source.
 * `gpu` must be set to `true` if run on GPUs. This enables invoking the
 `nvidia-docker` wrapper. This property should be omitted or set to `false`
 if run on CPUs.

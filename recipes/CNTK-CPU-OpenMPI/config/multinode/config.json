@@ -4,15 +4,7 @@
     },
     "global_resources": {
         "docker_images": [
-            "alfpark/cntk:2.0beta4-cpu-openmpi-refdata"
-        ],
-        "docker_volumes": {
-            "shared_data_volumes": {
-                "glustervol": {
-                    "volume_driver": "glusterfs_on_compute",
-                    "container_path": "$AZ_BATCH_NODE_SHARED_DIR/gfs"
-                }
-            }
-        }
+            "alfpark/cntk:2.1-cpu-py35-refdata"
+        ]
     }
 }

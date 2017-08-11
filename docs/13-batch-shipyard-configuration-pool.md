@@ -29,6 +29,23 @@ The pool schema is as follows:
         },
         "resize_timeout": "00:20:00",
         "max_tasks_per_node": 1,
+        "node_fill_type": "pack",
+        "autoscale": {
+            "evaluation_interval": "00:05:00",
+            "scenario": {
+                "name": "active_tasks",
+                "maximum_vm_count": {
+                    "dedicated": 16,
+                    "low_priority": 8
+                },
+                "node_deallocation_option": "taskcompletion",
+                "sample_lookback_interval": "00:10:00",
+                "required_sample_percentage": 70,
+                "bias_last_sample": true,
+                "bias_node_type": "low_priority"
+            },
+            "formula": ""
+        },
         "inter_node_communication_enabled": true,
         "reboot_on_start_task_failed": true,
         "block_until_all_global_resources_loaded": true,
@@ -136,6 +153,66 @@ value of 1 if not specified. The maximum value for the property that Azure
 Batch will accept is `4 x <# cores per compute node>`. For instance, for a
 `STANDARD_F2` instance, because the virtual machine has 2 cores, the maximum
 allowable value for this property would be `8`.
+* (optional) `node_fill_type` is the task scheduling compute node fill type
+policy to apply. `pack`, which is the default, attempts to pack the
+maximum number of tasks on a node (controlled through `max_tasks_per_node`
+before scheduling tasks to another node). `spread` will schedule tasks
+evenly across compute nodes before packing.
+* (optional) `autoscale` designates the autoscale settings for the pool. If
+specified, the `vm_count` becomes the minimum number of virtual machines for
+each node type for `scenario` based autoscale.
+  * (optional) `evaluation_interval` is the time interval between autoscale
+    evaluations performed by the service. The format for this property is a
+    timedelta with a string representation of "d.HH:mm:ss". "HH:mm:ss" is
+    required, but "d" is optional, if specified. If not specified, the default
+    is 15 minutes. The smallest value that can be specified is 5 minutes.
+  * (optional) `scenario` is a pre-set autoscale scenario where a formula
+    will be generated with the parameters specified within this property.
+    * (required) `name` is the autoscale scenario name to apply. Valid
+      values are `active_tasks`, `pending_tasks`, `workday`,
+      `workday_with_offpeak_max_low_priority`, `weekday`, `weekend`.
+      Please see the [autoscale guide](30-batch-shipyard-autoscale.md) for
+      more information about these scenarios.
+    * (required) `maximum_vm_count` is the maximum number of compute nodes
+      that can be allocated from an autoscale evaluation. It is useful to
+      have these limits in place as to control the top-end scale of the
+      autoscale scenario. Specifying a negative value for either of the
+      following properties will result in effectively no maximum limit.
+      * (optional) `dedicated` is the maximum number of dedicated compute
+        nodes that can be allocated.
+      * (optional) `low_priority` is the maximum number of low priority
+        compute nodes that can be allocated.
+    * (optional) `node_deallocation_option` is the node deallocation option
+      to apply. When a pool is resized down and a node is selected for
+      removal, what action is performed for the running task is specified
+      with this option. The valid values are: `requeue`, `terminate`,
+      `taskcompletion`, and `retaineddata`. The default is `taskcompletion`.
+      Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables) for more information.
+    * (optional) `sample_lookback_interval` is the time interval to lookback
+      for past history for certain scenarios such as autoscale based on
+      active and pending tasks. The format for this property is a timedelta
+      with a string representation of "d.HH:mm:ss". "HH:mm:ss" is required,
+      but "d" is optional, if specified. If not specified, the default is
+      10 minutes.
+    * (optional) `required_sample_percentage` is the required percentage of
+      samples that must be present during the `sample_lookback_interval`.
+      If not specified, the default is 70.
+    * (optional) `bias_last_sample` will bias the autoscale scenario, if
+      applicable, to use the last sample during history computation. This can
+      be enabled to more quickly respond to changes in history with respect
+      to averages. The default is `true`.
+    * (optional) `bias_node_type` will bias the the autoscale scenario, if
+      applicable, to favor one type of node over the other when making a
+      decision on how many of each node to allocate. The default is `auto`
+      or equal weight to both `dedicated` and `low_priority` nodes. Valid
+      values are `null` (or omitting the property), `dedicated`, or
+      `low_priority`.
+    * (optional) `rebalance_preemption_percentage` will rebalance the compute
+      nodes to bias for dedicated nodes when the pre-empted node count reaches
+      the indicated threshold percentage of the total current dedicated and
+      low priority nodes. The default is `null` or no rebalancing is performed.
+  * (optional) `formula` is a custom autoscale formula to apply to the pool.
+    If both `formula` and `scenario` are specified, then `formula` is used.
 * (optional) `inter_node_communication_enabled` designates if this pool is set
 up for inter-node communication. This must be set to `true` for any containers
 that must communicate with each other such as MPI applications. This

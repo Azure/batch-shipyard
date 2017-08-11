@@ -5,7 +5,6 @@
             "tasks": [
                 {
                     "image": "alfpark/caffe:cpu",
-                    "remove_container_after_exit": true,
                     "command": "/caffe/run_mnist.sh"
                 }
             ]

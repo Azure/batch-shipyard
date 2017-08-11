@@ -6,7 +6,7 @@ MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 # set environment variables
 # currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
 ENV libtorrent_version=1.0.11 \
-    CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.5
+    CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.6
 
 # add base packages, python dependencies, create script directory,
 # build libtorrent-rasterbar for python3 and cleanup packaging
@@ -16,7 +16,7 @@ RUN apk update \
         ca-certificates boost boost-dev boost-python3 file curl tar pigz \
         docker bash \
     && pip3 install --no-cache-dir --upgrade pip \
-    && pip3 install --no-cache-dir --upgrade azure-storage==0.34.2 \
+    && pip3 install --no-cache-dir --upgrade azure-storage==0.35.1 \
     && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version//./_}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
     && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
     && cd libtorrent-rasterbar-${libtorrent_version} \
