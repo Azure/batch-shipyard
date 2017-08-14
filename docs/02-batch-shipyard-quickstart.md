@@ -8,6 +8,7 @@ quickstart example, you may select any of the following Deep Learning
 frameworks to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](../recipes/Caffe-CPU)
+* [Caffe2-CPU](../recipes/Caffe2-CPU)
 * [Chainer-CPU](../recipes/Chainer-CPU)
 * [Keras+Theano-CPU](../recipes/Keras+Theano-CPU)
 * [MXNet-CPU](../recipes/MXNet-CPU)
@@ -26,6 +27,7 @@ guide, create a directory named `config`.
 of your choice to the `config` directory:
    * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
    * [Caffe-CPU](../recipes/Caffe-CPU/config/)
+   * [Caffe2-CPU](../recipes/Caffe2-CPU/config/)
    * [Chainer-CPU](../recipes/Chainer-CPU/config/)
    * [Keras+Theano-CPU](../recipes/Keras+Theano-CPU/config/)
    * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
@@ -58,7 +60,7 @@ SHIPYARD_CONFIGDIR=config ./shipyard pool add
 # ... wait for pool to allocate ...
 
 # add the training job and tail the output
-# if CNTK-CPU-OpenMPI, Chainer-CPU, Keras+Theano-CPU, MXNet-CPU, TensorFlow-CPU, or Torch-CPU
+# if CNTK-CPU-OpenMPI, Caffe2-CPU, Chainer-CPU, Keras+Theano-CPU, MXNet-CPU, TensorFlow-CPU, or Torch-CPU
 ./shipyard jobs add --configdir config --tail stdout.txt
 # if Caffe-CPU
 ./shipyard jobs add --configdir config --tail stderr.txt

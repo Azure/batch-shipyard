@@ -1,0 +1,10 @@
+{
+    "batch_shipyard": {
+        "storage_account_settings": "mystorageaccount"
+    },
+    "global_resources": {
+        "docker_images": [
+            "caffe2ai/caffe2:c2v0.8.1.cpu.full.ubuntu14.04"
+        ]
+    }
+}

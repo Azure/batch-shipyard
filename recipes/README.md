@@ -77,6 +77,14 @@ This Caffe-GPU recipe contains information on how to Dockerize
 [Caffe](http://caffe.berkeleyvision.org/) on GPUs for use with N-Series Azure
 VMs.
 
+#### [Caffe2-CPU](./Caffe2-CPU)
+This Caffe2-CPU recipe contains information on how to Dockerize
+[Caffe2](https://caffe2.ai/) for use on Azure Batch compute nodes.
+
+#### [Caffe2-GPU](./Caffe2-GPU)
+This Caffe2-GPU recipe contains information on how to Dockerize
+[Caffe2](https://caffe2.ai/) on GPUs for use with N-Series Azure VMs.
+
 #### [Chainer-CPU](./Chainer-CPU)
 This Chainer-CPU recipe contains information on how to Dockerize
 [Chainer](http://chainer.org/) for use on Azure Batch compute nodes.

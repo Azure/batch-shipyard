@@ -1,0 +1,19 @@
+{
+    "job_specifications": [
+        {
+            "id": "caffe2job",
+            "tasks": [
+                {
+                    "image": "caffe2ai/caffe2:c2v0.8.1.cpu.full.ubuntu14.04",
+                    "resource_files": [
+                        {
+                            "file_path": "mnist.py",
+                            "blob_source": "https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/Caffe2-CPU/scripts/mnist.py"
+                        }
+                    ],
+                    "command": "python -u mnist.py"
+                }
+            ]
+        }
+    ]
+}
