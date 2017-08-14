@@ -368,8 +368,10 @@ def _block_for_nodes_ready(
                 raise RuntimeError(
                     ('Node(s) of pool {} not in {} state. Please inspect the '
                      'state of nodes in the pool above. If this appears to '
-                     'be a transient error, please retry pool creation by '
-                     'deleting and recreating the pool.').format(
+                     'be a transient error, please retry pool creation or '
+                     'the resize operation. If any unusable nodes exist, you '
+                     'can delete them with "pool delnode --all-unusable" '
+                     'first prior to retrying the resize operation.').format(
                          pool.id, end_states))
             else:
                 return nodes
@@ -3055,6 +3057,8 @@ def add_jobs(
     global_resources = settings.global_resources_docker_images(config)
     lastjob = None
     lasttaskid = None
+    jobschedule = None
+    tasksadded = False
     for jobspec in settings.job_specifications(config):
         job_id = settings.job_id(jobspec)
         lastjob = job_id
@@ -3581,10 +3585,13 @@ def add_jobs(
                     job_patch_parameter=batchmodels.JobPatchParameter(
                         on_all_tasks_complete=batchmodels.
                         OnAllTasksComplete.terminate_job))
+        tasksadded = True
     # tail file if specified
     if tail:
-        if jobschedule is not None:
-            logger.warning('cannot tail a file from a jobschedule task')
+        if not tasksadded:
+            logger.error('no tasks added, so cannot tail a file')
+        elif jobschedule is not None:
+            logger.error('cannot tail a file from a jobschedule task')
         else:
             stream_file_and_wait_for_task(
                 batch_client, config, filespec='{},{},{}'.format(
