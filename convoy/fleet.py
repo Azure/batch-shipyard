@@ -581,8 +581,7 @@ def _create_storage_cluster_mount_args(
                 srcpath=sc.file_server.mountpoint,
                 scid=sc_id,
                 fstype=sc.file_server.type,
-                mo=mo,
-            )
+                mo=mo)
     elif sc.file_server.type == 'glusterfs':
         # walk vms and find non-overlapping ud/fds
         primary_ip = None
@@ -612,8 +611,8 @@ def _create_storage_cluster_mount_args(
                 primary_ud = ud
                 primary_fd = fd
             if backup_ip is None:
-                if (primary_ip == backup_ip or primary_ud == ud
-                        or primary_fd == fd):
+                if (primary_ip == backup_ip or primary_ud == ud or
+                        primary_fd == fd):
                     continue
                 backup_ip = remote_ip
                 backup_ud = ud
@@ -659,8 +658,7 @@ def _create_storage_cluster_mount_args(
                 srcpath=settings.get_file_server_glusterfs_volume_name(sc),
                 scid=sc_id,
                 fstype=sc.file_server.type,
-                mo=mo,
-            )
+                mo=mo)
     else:
         raise NotImplementedError(
             ('cannot handle file_server type {} for storage '
@@ -912,7 +910,9 @@ def _construct_pool_object(
         skus_to_use = [
             (nas, image_ref) for nas in node_agent_skus
             for image_ref in sorted(
-                    nas.verified_image_references, key=lambda item: item.sku)
+                nas.verified_image_references,
+                key=lambda item: item.sku
+            )
             if image_ref.publisher.lower() ==
             pool_settings.vm_configuration.publisher.lower() and
             image_ref.offer.lower() ==
@@ -1835,6 +1835,51 @@ def _check_settings_for_auto_pool(config):
         logger.warning('cannot add SSH user with autopool')
 
 
+def _check_resource_client(resource_client):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient) -> None
+    """Check resource client validity"""
+    if resource_client is None:
+        raise RuntimeError(
+            'resource management client is invalid, ensure you have '
+            'specified proper "management" credentials')
+
+
+def _check_compute_client(compute_client):
+    # type: (azure.mgmt.resource.compute.ComputeManagementClient) -> None
+    """Check compute client validity"""
+    if compute_client is None:
+        raise RuntimeError(
+            'compute management client is invalid, ensure you have '
+            'specified proper "management" credentials')
+
+
+def _check_network_client(network_client):
+    # type: (azure.mgmt.resource.network.NetworkManagementClient) -> None
+    """Check network client validity"""
+    if network_client is None:
+        raise RuntimeError(
+            'network management client is invalid, ensure you have '
+            'specified proper "management" credentials')
+
+
+def _check_keyvault_client(keyvault_client):
+    # type: (azure.keyvault.KeyVaultClient) -> None
+    """Check keyvault client validity"""
+    if keyvault_client is None:
+        raise RuntimeError(
+            'keyvault client is invalid, ensure you have specified '
+            'proper "keyvault" credentials')
+
+
+def _check_batch_client(batch_client):
+    # type: (batchsc.BatchServiceClient) -> None
+    """Check batch client validity"""
+    if batch_client is None:
+        raise RuntimeError(
+            'batch client is invalid, ensure you have specified '
+            'proper "batch" credentials')
+
+
 def action_fs_disks_add(resource_client, compute_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict) -> None
@@ -1845,6 +1890,8 @@ def action_fs_disks_add(resource_client, compute_client, config):
         compute client
     :param dict config: configuration dict
     """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
     remotefs.create_managed_disks(resource_client, compute_client, config)
 
 
@@ -1861,6 +1908,7 @@ def action_fs_disks_del(
     :param bool all: delete all in resource group
     :param bool wait: wait for operation to complete
     """
+    _check_compute_client(compute_client)
     remotefs.delete_managed_disks(
         compute_client, config, name, resource_group, all, wait,
         confirm_override=False)
@@ -1877,6 +1925,7 @@ def action_fs_disks_list(
     :param str resource_group: resource group
     :param bool restrict_scope: restrict scope to config
     """
+    _check_compute_client(compute_client)
     remotefs.list_disks(compute_client, config, resource_group, restrict_scope)
 
 
@@ -1898,6 +1947,9 @@ def action_fs_cluster_add(
     :param dict config: configuration dict
     :param str storage_cluster_id: storage cluster id
     """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     storage.set_storage_remotefs_container(storage_cluster_id)
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
@@ -1919,6 +1971,8 @@ def action_fs_cluster_resize(
     :param dict config: configuration dict
     :param str storage_cluster_id: storage cluster id
     """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     remotefs.resize_storage_cluster(
         compute_client, network_client, blob_client, config,
         storage_cluster_id, _REMOTEFSPREP_FILE[0], _REMOTEFSADDBRICK_FILE[0],
@@ -1950,6 +2004,9 @@ def action_fs_cluster_del(
     :param bool generate_from_prefix: generate resources from hostname prefix
     :param bool wait: wait for deletion to complete
     """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     if (generate_from_prefix and
             (delete_all_resources or delete_data_disks or
              delete_virtual_network)):
@@ -1978,6 +2035,8 @@ def action_fs_cluster_expand(
     :param str storage_cluster_id: storage cluster id
     :param bool rebalance: rebalance filesystem
     """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     if remotefs.expand_storage_cluster(
             compute_client, network_client, config, storage_cluster_id,
             _REMOTEFSPREP_FILE[0], rebalance):
@@ -1997,6 +2056,7 @@ def action_fs_cluster_suspend(
     :param str storage_cluster_id: storage cluster id
     :param bool wait: wait for suspension to complete
     """
+    _check_compute_client(compute_client)
     remotefs.suspend_storage_cluster(
         compute_client, config, storage_cluster_id, wait)
 
@@ -2015,6 +2075,8 @@ def action_fs_cluster_start(
     :param str storage_cluster_id: storage cluster id
     :param bool wait: wait for restart to complete
     """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     remotefs.start_storage_cluster(
         compute_client, config, storage_cluster_id, wait)
     if wait:
@@ -2039,6 +2101,8 @@ def action_fs_cluster_status(
     :param bool detail: detailed status
     :param bool hosts: dump info for /etc/hosts
     """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     remotefs.stat_storage_cluster(
         compute_client, network_client, config, storage_cluster_id,
         _REMOTEFSSTAT_FILE[0], detail, hosts)
@@ -2062,6 +2126,8 @@ def action_fs_cluster_ssh(
     :param bool tty: allocate pseudo-tty
     :param tuple command: command
     """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
     if cardinal is not None and hostname is not None:
         raise ValueError('cannot specify both cardinal and hostname options')
     if cardinal is None and hostname is None:
@@ -2084,6 +2150,7 @@ def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
     :param str keyvault_uri: keyvault uri
     :param str name: secret name
     """
+    _check_keyvault_client(keyvault_client)
     keyvault.store_credentials_json(
         keyvault_client, config, keyvault_uri, name)
 
@@ -2095,6 +2162,7 @@ def action_keyvault_del(keyvault_client, keyvault_uri, name):
     :param str keyvault_uri: keyvault uri
     :param str name: secret name
     """
+    _check_keyvault_client(keyvault_client)
     keyvault.delete_secret(keyvault_client, keyvault_uri, name)
 
 
@@ -2104,6 +2172,7 @@ def action_keyvault_list(keyvault_client, keyvault_uri):
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param str keyvault_uri: keyvault uri
     """
+    _check_keyvault_client(keyvault_client)
     keyvault.list_secrets(keyvault_client, keyvault_uri)
 
 
@@ -2122,6 +2191,7 @@ def action_cert_add(batch_client, config):
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.add_certificate_to_account(batch_client, config, False)
 
 
@@ -2130,6 +2200,7 @@ def action_cert_list(batch_client):
     """Action: Cert List
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     """
+    _check_batch_client(batch_client)
     batch.list_certificates_in_account(batch_client)
 
 
@@ -2139,6 +2210,7 @@ def action_cert_del(batch_client, config):
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.del_certificate_from_account(batch_client, config)
 
 
@@ -2148,6 +2220,7 @@ def action_pool_listskus(batch_client):
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     """
+    _check_batch_client(batch_client)
     batch.list_node_agent_skus(batch_client)
 
 
@@ -2175,6 +2248,7 @@ def action_pool_add(
     :param azure.storage.table.TableService table_client: table client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     # first check if pool exists to prevent accidential metadata clear
     if batch_client.pool.exists(settings.pool_id(config)):
         raise RuntimeError(
@@ -2196,6 +2270,7 @@ def action_pool_list(batch_client):
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     """
+    _check_batch_client(batch_client)
     batch.list_pools(batch_client)
 
 
@@ -2215,6 +2290,7 @@ def action_pool_delete(
     :param str pool_id: poolid to delete
     :param bool wait: wait for pool to delete
     """
+    _check_batch_client(batch_client)
     deleted = False
     try:
         deleted = batch.del_pool(batch_client, config, pool_id=pool_id)
@@ -2250,6 +2326,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
     :param dict config: configuration dict
     :param bool wait: wait for operation to complete
     """
+    _check_batch_client(batch_client)
     pool = settings.pool_settings(config)
     # check direction of resize
     _pool = batch_client.pool.get(pool.id)
@@ -2368,6 +2445,7 @@ def action_pool_grls(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.get_remote_login_settings(batch_client, config)
     batch.generate_ssh_tunnel_script(
         batch_client, settings.pool_settings(config), None, None)
@@ -2380,6 +2458,7 @@ def action_pool_listnodes(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.list_nodes(batch_client, config)
 
 
@@ -2390,6 +2469,7 @@ def action_pool_asu(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.add_ssh_user(batch_client, config)
     action_pool_grls(batch_client, config)
 
@@ -2401,6 +2481,7 @@ def action_pool_dsu(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.del_ssh_user(batch_client, config)
 
 
@@ -2415,6 +2496,7 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
     """
+    _check_batch_client(batch_client)
     if cardinal is not None and nodeid is not None:
         raise ValueError('cannot specify both cardinal and nodeid options')
     if cardinal is None and nodeid is None:
@@ -2458,6 +2540,7 @@ def action_pool_delnode(
     :param bool all_unusable: delete all unusable nodes
     :param str nodeid: nodeid to delete
     """
+    _check_batch_client(batch_client)
     if (all_start_task_failed or all_unusable) and nodeid is not None:
         raise ValueError(
             'cannot specify all start task failed nodes or unusable with '
@@ -2476,6 +2559,7 @@ def action_pool_rebootnode(
     :param bool all_start_task_failed: reboot all start task failed nodes
     :param str nodeid: nodeid to reboot
     """
+    _check_batch_client(batch_client)
     if all_start_task_failed and nodeid is not None:
         raise ValueError(
             'cannot specify all start task failed nodes with a specific '
@@ -2493,6 +2577,7 @@ def action_pool_udi(batch_client, config, image, digest, ssh):
     :param str digest: digest to update to
     :param bool ssh: use direct SSH update mode
     """
+    _check_batch_client(batch_client)
     if digest is not None and image is None:
         raise ValueError(
             'cannot specify a digest to update to without the image')
@@ -2506,6 +2591,7 @@ def action_pool_listimages(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     _list_docker_images(batch_client, config)
 
 
@@ -2517,6 +2603,7 @@ def action_pool_stats(batch_client, config, pool_id):
     :param dict config: configuration dict
     :param str pool_id: pool id
     """
+    _check_batch_client(batch_client)
     batch.pool_stats(batch_client, config, pool_id=pool_id)
 
 
@@ -2527,6 +2614,7 @@ def action_pool_autoscale_disable(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.pool_autoscale_disable(batch_client, config)
 
 
@@ -2537,6 +2625,7 @@ def action_pool_autoscale_enable(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.pool_autoscale_enable(batch_client, config)
 
 
@@ -2547,6 +2636,7 @@ def action_pool_autoscale_evaluate(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.pool_autoscale_evaluate(batch_client, config)
 
 
@@ -2557,6 +2647,7 @@ def action_pool_autoscale_lastexec(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.pool_autoscale_lastexec(batch_client, config)
 
 
@@ -2588,6 +2679,7 @@ def action_jobs_add(
     :param bool recreate: recreate jobs if completed
     :param str tail: file to tail or last job and task added
     """
+    _check_batch_client(batch_client)
     # check for job autopools
     autopool = batch.check_jobs_for_auto_pool(config)
     if autopool:
@@ -2633,6 +2725,7 @@ def action_jobs_list(batch_client, config):
         batch client
     :param dict config: configuration dict
     """
+    _check_batch_client(batch_client)
     batch.list_jobs(batch_client, config)
 
 
@@ -2647,6 +2740,7 @@ def action_jobs_listtasks(
     :param str jobid: job id
     :param bool poll_until_tasks_complete: poll until tasks complete
     """
+    _check_batch_client(batch_client)
     if all and jobid is not None:
         raise ValueError('cannot specify both --all and --jobid')
     while True:
@@ -2668,6 +2762,7 @@ def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
     :param bool wait: wait for action to complete
     :param bool force: force docker kill even if completed
     """
+    _check_batch_client(batch_client)
     if taskid is not None and jobid is None:
         raise ValueError(
             'cannot specify a task to terminate without the corresponding '
@@ -2689,6 +2784,7 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
     :param str taskid: task id
     :param bool wait: wait for action to complete
     """
+    _check_batch_client(batch_client)
     if taskid is not None and jobid is None:
         raise ValueError(
             'cannot specify a task to delete without the corresponding '
@@ -2718,6 +2814,7 @@ def action_jobs_del_or_term(
     :param bool termtasks: terminate tasks prior
     :param bool wait: wait for action to complete
     """
+    _check_batch_client(batch_client)
     if jobid is not None and jobscheduleid is not None:
         raise ValueError('cannot specify both --jobid and --jobscheduleid')
     if all_jobs:
@@ -2769,6 +2866,7 @@ def action_jobs_cmi(batch_client, config, delete):
     :param dict config: configuration dict
     :param bool delete: delete all cmi jobs
     """
+    _check_batch_client(batch_client)
     if delete:
         batch.del_clean_mi_jobs(batch_client, config)
     else:
@@ -2792,6 +2890,7 @@ def action_jobs_migrate(
     :param bool terminate: terminate action
     :param bool wait: wait action
     """
+    _check_batch_client(batch_client)
     if jobid is not None:
         if jobscheduleid is not None:
             raise ValueError('cannot specify both --jobid and --jobscheduleid')
@@ -2841,6 +2940,7 @@ def action_jobs_disable(
     :param bool terminate: terminate action
     :param bool wait: wait action
     """
+    _check_batch_client(batch_client)
     if jobid is not None:
         if jobscheduleid is not None:
             raise ValueError('cannot specify both --jobid and --jobscheduleid')
@@ -2870,6 +2970,7 @@ def action_jobs_enable(batch_client, config, jobid, jobscheduleid):
     :param str jobid: job id to enable to in lieu of config
     :param str jobscheduleid: job schedule id to enable to in lieu of config
     """
+    _check_batch_client(batch_client)
     batch.enable_jobs(
         batch_client, config, jobid=jobid, jobscheduleid=jobscheduleid)
 
@@ -2882,6 +2983,7 @@ def action_jobs_stats(batch_client, config, job_id):
     :param dict config: configuration dict
     :param str job_id: job id
     """
+    _check_batch_client(batch_client)
     batch.job_stats(batch_client, config, jobid=job_id)
 
 
@@ -2934,6 +3036,7 @@ def action_data_stream(batch_client, config, filespec, disk):
     :param str filespec: filespec of file to retrieve
     :param bool disk: write streamed data to disk instead
     """
+    _check_batch_client(batch_client)
     batch.stream_file_and_wait_for_task(batch_client, config, filespec, disk)
 
 
@@ -2946,6 +3049,7 @@ def action_data_listfiles(batch_client, config, jobid, taskid):
     :param str jobid: job id to list
     :param str taskid: task id to list
     """
+    _check_batch_client(batch_client)
     if taskid is not None and jobid is None:
         raise ValueError(
             'cannot specify a task to list files without the corresponding '
@@ -2962,6 +3066,7 @@ def action_data_getfile(batch_client, config, all, filespec):
     :param bool all: retrieve all files
     :param str filespec: filespec of file to retrieve
     """
+    _check_batch_client(batch_client)
     if all:
         batch.get_all_files_via_task(batch_client, config, filespec)
     else:
@@ -2977,6 +3082,7 @@ def action_data_getfilenode(batch_client, config, all, nodeid):
     :param bool all: retrieve all files
     :param str nodeid: node id to retrieve file from
     """
+    _check_batch_client(batch_client)
     if all:
         batch.get_all_files_via_node(batch_client, config, nodeid)
     else:
@@ -3045,6 +3151,7 @@ def action_misc_tensorboard(
     :param str logdir: log dir
     :param str image: tensorflow image to use
     """
+    _check_batch_client(batch_client)
     if util.is_none_or_empty(jobid):
         jobspecs = settings.job_specifications(config)
         if len(jobspecs) != 1:
