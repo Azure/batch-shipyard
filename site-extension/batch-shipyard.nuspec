@@ -17,5 +17,6 @@
   <files>
     <file src="*.cmd" target="content" />
     <file src="applicationHost.xdt" target="content" />
+    <file src="version.txt" target="content" />
   </files>
 </package>

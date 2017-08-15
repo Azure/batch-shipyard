@@ -17,6 +17,13 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+REM get version
+SET /P SHIPYARDVER=<version.txt
+IF NOT EXIST "%SHIPYARDVER%" (
+    echo "Could not read Batch Shipyard version tag"
+    exit /b 1
+)
+
 REM git clone repo
 taskkill /F /IM python.exe
 SET CLONEDIR=%HOME%\batch-shipyard
@@ -30,7 +37,7 @@ IF EXIST "%CLONEDIR%" (
     )
     popd
 )
-git clone "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
+git clone --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
 IF %ERRORLEVEL% NEQ 0 (
     echo "git clone failed"
     exit /b 1
