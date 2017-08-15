@@ -1,11 +1,13 @@
 # Batch Shipyard Quickstart
-It is recommended to review the full
-[in-depth configuration guide](10-batch-shipyard-configuration.md) for
-explanations of all of the configuration options available for Batch Shipyard.
-However, for those wanting to jump in and deploy an application quickly,
-this doc will provide step-by-step instructions. For the following
-quickstart example, you may select any of the following Deep Learning
-frameworks to quickly get started:
+If you are interested in executing Deep Learning workloads on Batch Shipyard
+and want to jump in without having to install anything, you can utilize the
+[Deep Learning Jupyter Notebooks](../contrib/notebooks/deep_learning)
+on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
+
+If you would like to use jump in and use Batch Shipyard from the command line,
+this doc will provide step-by-step instructions. Although Batch Shipyard
+supports various types of workloads, for the following quickstart example,
+we will select from the following Deep Learning recipes to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](../recipes/Caffe-CPU)
 * [Caffe2-CPU](../recipes/Caffe2-CPU)
@@ -87,9 +89,9 @@ configuration files to execute on Batch Shipyard.
 all of the actions available with commandline interface.
 
 ## In-Depth Configuration Guide
-[Batch Shipyard Configuration](10-batch-shipyard-configuration.md) contains
-explanations of all of the Batch Shipyard configuration options within the
-config files.
+It is recommended to review the full
+[in-depth configuration guide](10-batch-shipyard-configuration.md) for
+explanations of all of the configuration options available for Batch Shipyard.
 
 ## Graphical Interfaces
 You can also use the [Azure Portal](https://portal.azure.com) or

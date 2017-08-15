@@ -18,7 +18,12 @@ Batch Shipyard. You can see the version of Batch Shipyard installed with
 the command `shipyard --version`.
 
 If you wish to install Batch Shipyard on your machine, please proceed to the
-next section.
+Installation section.
+
+### Jupyter Notebooks
+There are community contributed [Jupyter notebooks](../contrib/notebooks) to
+help you quickly get started if you prefer that environment instead of a
+commandline.
 
 ## Installation
 ### Step 1: Acquire Batch Shipyard
