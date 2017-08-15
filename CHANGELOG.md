@@ -2,13 +2,20 @@
 
 ## [Unreleased]
 
+## [2.9.0] - 2017-08-15
 ### Added
+- Deep learning Jupyter notebooks (thanks to @msalvaris and @thdeltei)
 - Automatic site-extensions NuGet package updates with tagged releases via
 AppVeyor builds
+- Caffe2-CPU and Caffe2-GPU Recipes
 
 ### Changed
 - Python 3.3 is no longer supported (due to `cryptography` dropping support
 for 3.3).
+
+### Fixed
+- Provide more helpful feedback for invalid clients
+- Fix provisioning clusters with disks larger than 2TB
 
 ## [2.9.0rc1] - 2017-08-09
 ### Added
@@ -808,7 +815,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.0...HEAD
+[2.9.0]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...2.9.0
 [2.9.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.9.0b2...2.9.0rc1
 [2.9.0b2]: https://github.com/Azure/batch-shipyard/compare/2.9.0b1...2.9.0b2
 [2.9.0b1]: https://github.com/Azure/batch-shipyard/compare/2.8.0...2.9.0b1
