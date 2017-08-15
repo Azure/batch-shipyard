@@ -473,7 +473,7 @@ for disk in "${data_disks[@]}"; do
     part1=$(partprobe -d -s $disk | cut -d' ' -f4)
     if [ -z $part1 ]; then
         echo "$disk: partition 1 not found. Partitioning $disk."
-        echo -e "n\np\n1\n\n\nw" | fdisk $disk
+        parted -a opt -s $disk mklabel gpt mkpart primary 0% 100%
     else
         echo "$disk: partition 1 found. Skipping partitioning."
         skipped_part=("${skipped_part[@]}" "$disk")

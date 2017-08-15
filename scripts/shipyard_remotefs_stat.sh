@@ -119,6 +119,9 @@ else
     exit 1
 fi
 
+# dump mounted filesystems
+df -h
+
 # get raid status
 if [ $raid_level -ge 0 ]; then
     echo ""

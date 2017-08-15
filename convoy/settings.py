@@ -67,7 +67,7 @@ _PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
     'standard_ds', 'standard_gs',
 ))
 _PREMIUM_STORAGE_INSTANCE_SUFFIXES = frozenset((
-    's',
+    's', 's_v3',
 ))
 _VM_TCP_NO_TUNE = (
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
