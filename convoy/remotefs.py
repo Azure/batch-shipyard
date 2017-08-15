@@ -2240,8 +2240,8 @@ def _get_ssh_info(
                 network_client, rfs.storage_cluster.resource_group, vm)
         ip_address = nic.ip_configurations[0].private_ip_address
     # return connection info for vm
-    if util.is_not_empty(rfs.storage_cluster.ssh.ssh_private_key):
-        ssh_priv_key = pathlib.Path(rfs.storage_cluster.ssh.ssh_private_key)
+    if rfs.storage_cluster.ssh.ssh_private_key is not None:
+        ssh_priv_key = rfs.storage_cluster.ssh.ssh_private_key
     else:
         ssh_priv_key = pathlib.Path(
             rfs.storage_cluster.ssh.generated_file_export_path,
