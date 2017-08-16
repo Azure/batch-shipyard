@@ -6,7 +6,7 @@
     <title>Batch Shipyard</title>
     <authors>Fred Park</authors>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>Execute jobs on Azure Batch via Batch Shipyard. Requires Python.</description>
+    <description>Execute containerized jobs on Azure Batch via Batch Shipyard. Requires Python.</description>
     <iconUrl>https://azurecomcdn.azureedge.net/cvt-4c210654e280636c85b81aae4511f99613c7de5d03801bf44dc15fe823371003/images/page/services/batch/we-take-care-of-scale.png</iconUrl>
     <projectUrl>https://github.com/Azure/batch-shipyard</projectUrl>
     <licenseUrl>https://github.com/Azure/batch-shipyard/blob/master/LICENSE</licenseUrl>

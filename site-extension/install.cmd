@@ -29,18 +29,19 @@ taskkill /F /IM python.exe
 SET CLONEDIR=%HOME%\batch-shipyard
 IF EXIST "%CLONEDIR%" (
     pushd "%CLONEDIR%"
-    git checkout master
-    git pull
+    git fetch --tags
+    git checkout %SHIPYARDVER%
     IF %ERRORLEVEL% NEQ 0 (
-        cd %HOME%
-        rd /s /q "%CLONEDIR%"
+        echo "Could not git fetch to tag %SHIPYARDVER% at %CLONEDIR%"
+        exit /b 1
     )
     popd
-)
-git clone --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
-IF %ERRORLEVEL% NEQ 0 (
-    echo "git clone failed"
-    exit /b 1
+) ELSE (
+    git clone --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
+    IF %ERRORLEVEL% NEQ 0 (
+        echo "Could not git clone to tag %SHIPYARDVER% at %CLONEDIR%"
+        exit /b 1
+    )
 )
 
 REM create cmd file
