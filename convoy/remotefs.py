@@ -768,6 +768,8 @@ def create_storage_cluster(
         return
     # create storage container
     storage.create_storage_containers_remotefs(blob_client)
+    # upload scripts to blob storage for customscript vm extension
+    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -862,8 +864,6 @@ def create_storage_cluster(
         async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
             _create_virtual_machine, compute_client, rfs, availset, nics,
             disk_map, ssh_pub_key, i))
-    # upload scripts to blob storage for customscript vm extension
-    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # wait for vms to be created
     logger.info(
         'waiting for {} virtual machines to be created'.format(
@@ -1011,6 +1011,10 @@ def resize_storage_cluster(
     if not util.confirm_action(
             config, 'resize storage cluster {}'.format(sc_id)):
         return False
+    # re-create storage container in case it got deleted
+    storage.create_storage_containers_remotefs(blob_client)
+    # upload scripts to blob storage for customscript vm extension
+    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # create static private ip block, start offset at 4
     private_ips = [
         x for x in ip_from_address_prefix(
@@ -1117,8 +1121,6 @@ def resize_storage_cluster(
         async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
             _create_virtual_machine, compute_client, rfs, availset, nics,
             disk_map, ssh_pub_key, i))
-    # upload scripts to blob storage for customscript vm extension
-    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
     # gather all new private ips
     new_private_ips = {}
     for offset in nics:
@@ -1151,8 +1153,9 @@ def resize_storage_cluster(
                 i, settings.verbose(config)),
             max_retries=0,
         )
-    logger.debug('adding {} bricks to gluster volume'.format(
-        len(async_ops['vmext'])))
+    logger.debug(
+        'adding {} bricks to gluster volume, this may take a while'.format(
+            len(async_ops['vmext'])))
     # execute special add brick script
     script_cmd = \
         '/opt/batch-shipyard/{asf} {c}{d}{i}{n}{v}'.format(
@@ -1356,7 +1359,9 @@ def expand_storage_cluster(
     if len(async_ops) == 0:
         logger.error('no operations started for expansion')
         return False
-    logger.debug('waiting for disks to attach to virtual machines')
+    logger.debug(
+        'waiting for disks to attach to virtual machines, this may '
+        'take a while')
     for offset in async_ops:
         premium, op = async_ops[offset]
         vm = op.result()
