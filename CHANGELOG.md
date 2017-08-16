@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.9.1] - 2017-08-16
+### Changed
+- Use multi-stage build for Cascade to improve build times and reduce
+Docker image size
+
+### Fixed
+- RemoteFS issues in resize and expand
+- Various site extension issues, will now proper install/upgrade to the
+associated tagged version
+
 ## [2.9.0] - 2017-08-15
 ### Added
 - Deep learning Jupyter notebooks (thanks to @msalvaris and @thdeltei)
@@ -815,7 +825,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.1...HEAD
+[2.9.1]: https://github.com/Azure/batch-shipyard/compare/2.9.0...2.9.1
 [2.9.0]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...2.9.0
 [2.9.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.9.0b2...2.9.0rc1
 [2.9.0b2]: https://github.com/Azure/batch-shipyard/compare/2.9.0b1...2.9.0b2
