@@ -19,7 +19,8 @@ IF %ERRORLEVEL% NEQ 0 (
 
 REM get version
 SET /P SHIPYARDVER=<version.txt
-IF NOT EXIST "%SHIPYARDVER%" (
+echo "Batch Shipyard tag %SHIPYARDVER%"
+IF "%SHIPYARDVER%"=="" (
     echo "Could not read Batch Shipyard version tag"
     exit /b 1
 )
@@ -45,9 +46,9 @@ IF EXIST "%CLONEDIR%" (
 )
 
 REM create cmd file
-(echo @echo off) > "%CLONEDIR%\shipyard.cmd"
-(echo SET PYTHON=%PYTHON%) >> "%CLONEDIR%\shipyard.cmd"
-type shipyard.cmd >> "%CLONEDIR%\shipyard.cmd"
+(echo @echo off)> "%CLONEDIR%\shipyard.cmd"
+(echo SET PYTHON=%PYTHON%)>> "%CLONEDIR%\shipyard.cmd"
+type shipyard.cmd>> "%CLONEDIR%\shipyard.cmd"
 
 REM install requirements
 pushd "%CLONEDIR%"

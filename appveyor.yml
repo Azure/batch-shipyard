@@ -33,7 +33,7 @@ test_script:
 after_test:
     - echo is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME%
     - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
-      echo %APPVEYOR_REPO_TAG_NAME% > site-extension\\version.txt &&
+      echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &&
       nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &&
       7z l batch-shipyard.*.nupkg &&
       appveyor PushArtifact batch-shipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg
