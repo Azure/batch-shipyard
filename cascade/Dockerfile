@@ -1,35 +1,29 @@
 # Dockerfile for Azure/batch-shipyard (Cascade)
 
+# base image containing libtorrent
+FROM alfpark/libtorrent:1.0.11-py36
+
 FROM alpine:3.6
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
-# set environment variables
-# currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
-ENV libtorrent_version=1.0.11 \
-    CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.6
+# copy libtorrent dynlib and python package from base
+COPY --from=0 /usr/lib/libtorrent-rasterbar.so.8.0.0 /usr/lib/
+COPY --from=0 /usr/lib/python3.6/site-packages/*libtorrent* /usr/lib/python3.6/site-packages/
 
-# add base packages, python dependencies, create script directory,
-# build libtorrent-rasterbar for python3 and cleanup packaging
+# add dependencies, symlink libtorrent, create script directory
 RUN apk update \
     && apk add --update --no-cache \
         musl build-base python3 python3-dev libressl-dev libffi-dev \
-        ca-certificates boost boost-dev boost-python3 file curl tar pigz \
-        docker bash \
+        ca-certificates boost boost-python3 boost-random \
+        tar pigz docker bash \
     && pip3 install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --upgrade azure-storage==0.35.1 \
-    && curl -SL https://github.com/arvidn/libtorrent/releases/download/libtorrent-${libtorrent_version//./_}/libtorrent-rasterbar-${libtorrent_version}.tar.gz -o libtorrent-${libtorrent_version}.tar.gz \
-    && tar zxvpf libtorrent-${libtorrent_version}.tar.gz \
-    && cd libtorrent-rasterbar-${libtorrent_version} \
-    && ./configure --prefix=/usr --enable-debug=no --enable-python-binding --with-boost-system=boost_system \
-    && make -j2 install \
+    && ln -s /usr/lib/libboost_python3.so.1.62.0 /usr/lib/libboost_python.so.1.62.0 \
+    && ln -s /usr/lib/libtorrent-rasterbar.so.8.0.0 /usr/lib/libtorrent-rasterbar.so \
+    && ln -s /usr/lib/libtorrent-rasterbar.so.8.0.0 /usr/lib/libtorrent-rasterbar.so.8 \
     && ldconfig /usr/lib \
-    && cd .. \
-    && rm -rf libtorrent-rasterbar-${libtorrent_version} \
-    && rm -f libtorrent-${libtorrent_version}.tar.gz \
     && apk del --purge \
-        build-base python3-dev libressl-dev libffi-dev python boost-dev \
-        file curl \
-    && apk add --no-cache boost-random \
+        build-base python3-dev libressl-dev libffi-dev \
     && rm /var/cache/apk/* \
     && mkdir -p /opt/batch-shipyard
 
