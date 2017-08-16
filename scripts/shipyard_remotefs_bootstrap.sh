@@ -26,6 +26,22 @@ raid_level=-1
 mount_options=
 
 # functions
+wait_for_device() {
+    local device=$1
+    local START=$(date -u +"%s")
+    echo "Waiting for device $device..."
+    while [ ! -b $device ]; do
+        local NOW=$(date -u +"%s")
+        local DIFF=$((($NOW-$START)/60))
+        # fail after 5 minutes of waiting
+        if [ $DIFF -ge 5 ]; then
+            echo "Could not find device $device"
+            exit 1
+        fi
+        sleep 1
+    done
+}
+
 setup_nfs() {
     # amend /etc/exports if needed
     add_exports=0
@@ -474,6 +490,13 @@ for disk in "${data_disks[@]}"; do
     if [ -z $part1 ]; then
         echo "$disk: partition 1 not found. Partitioning $disk."
         parted -a opt -s $disk mklabel gpt mkpart primary 0% 100%
+        part1=$(partprobe -d -s $disk | cut -d' ' -f4)
+        if [ -z $part1 ]; then
+            echo "$disk: partition 1 not found after partitioning."
+            exit 1
+        fi
+        # wait for block device
+        wait_for_device $disk$part1
     else
         echo "$disk: partition 1 found. Skipping partitioning."
         skipped_part=("${skipped_part[@]}" "$disk")

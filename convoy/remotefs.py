@@ -427,8 +427,12 @@ def _create_network_interface(
             raise
     if util.is_none_or_empty(pips):
         pip = None
+        logger.debug('not assigning public ip to network interface {}'.format(
+            nic_name))
     else:
         pip = pips[offset]
+        logger.debug('assigning public ip {} to network interface {}'.format(
+            pip.name, nic_name))
     # create network ip config
     if private_ips is None:
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
@@ -1052,9 +1056,9 @@ def resize_storage_cluster(
         break
     if settings.verbose(config):
         logger.debug('prober vm: {}'.format(ssh_info))
-    # wait for pips
+    # wait for public ips
     pips = None
-    if util.is_not_empty(pips):
+    if 'pips' in async_ops:
         logger.debug('waiting for public ips to be created')
         pips = {}
         for offset in async_ops['pips']:
@@ -1176,20 +1180,27 @@ def resize_storage_cluster(
     cmd.extend(script_cmd.split())
     if settings.verbose(config):
         logger.debug('add brick command: {}'.format(cmd))
-    proc = util.subprocess_nowait_pipe_stdout(cmd)
-    stdout = proc.communicate()[0]
+    proc = util.subprocess_nowait_pipe_stdout(cmd, pipe_stderr=True)
+    stdout, stderr = proc.communicate()
     logline = 'add brick script completed with ec={}'.format(proc.returncode)
-    if proc.returncode != 0:
-        logger.error(logline)
-    else:
-        logger.info(logline)
-    del logline
     if util.is_not_empty(stdout):
         stdout = stdout.decode('utf8')
         if util.on_windows():
             stdout = stdout.replace('\n', os.linesep)
-        logger.debug('add brick output:{}{}'.format(os.linesep, stdout))
+    if util.is_not_empty(stderr):
+        stderr = stderr.decode('utf8')
+        if util.on_windows():
+            stderr = stderr.replace('\n', os.linesep)
+    if proc.returncode != 0:
+        logger.error(logline)
+        logger.error('add brick stdout:{}{}'.format(os.linesep, stdout))
+        logger.error('add brick stderr:{}{}'.format(os.linesep, stderr))
+    else:
+        logger.info(logline)
+        logger.debug('add brick stdout:{}{}'.format(os.linesep, stdout))
+    del logline
     del stdout
+    del stderr
     # wait for new vms to finish custom script extension processing
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in async_ops['vmext']:
@@ -1213,6 +1224,10 @@ def resize_storage_cluster(
              'vm_size={} {}]').format(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 vm.hardware_profile.vm_size, ipinfo))
+    if proc.returncode == 0:
+        logger.info('storage cluster {} resized'.format(sc_id))
+    else:
+        logger.critical('failed to resize cluster {}'.format(sc_id))
 
 
 def expand_storage_cluster(
@@ -1360,8 +1375,8 @@ def expand_storage_cluster(
         logger.error('no operations started for expansion')
         return False
     logger.debug(
-        'waiting for disks to attach to virtual machines, this may '
-        'take a while')
+        'waiting for disks to attach to virtual machines and expanding '
+        'the gluster volume, this may take a while')
     for offset in async_ops:
         premium, op = async_ops[offset]
         vm = op.result()
@@ -1391,16 +1406,23 @@ def expand_storage_cluster(
         cmd.extend(script_cmd.split())
         if settings.verbose(config):
             logger.debug('bootstrap command: {}'.format(cmd))
-        proc = util.subprocess_nowait_pipe_stdout(cmd)
-        stdout = proc.communicate()[0]
+        proc = util.subprocess_nowait_pipe_stdout(cmd, pipe_stderr=True)
+        stdout, stderr = proc.communicate()
         if util.is_not_empty(stdout):
             stdout = stdout.decode('utf8')
             if util.on_windows():
                 stdout = stdout.replace('\n', os.linesep)
+        if util.is_not_empty(stderr):
+            stderr = stderr.decode('utf8')
+            if util.on_windows():
+                stderr = stderr.replace('\n', os.linesep)
         vms[offset]['status'] = proc.returncode
         vms[offset]['stdout'] = '>>stdout>> {}:{}{}'.format(
             vm.name, os.linesep, stdout)
+        vms[offset]['stderr'] = '>>stderr>> {}:{}{}'.format(
+            vm.name, os.linesep, stderr)
     logger.info('disk attach operations completed')
+    succeeded = True
     for key in vms:
         entry = vms[key]
         vm = entry['vm']
@@ -1412,7 +1434,13 @@ def expand_storage_cluster(
         else:
             logger.error(log)
             logger.error(entry['stdout'])
-    return True
+            logger.error(entry['stderr'])
+            succeeded = False
+    if succeeded:
+        logger.info('storage cluster {} expanded'.format(sc_id))
+    else:
+        logger.critical('failed to expand cluster {}'.format(sc_id))
+    return succeeded
 
 
 def _get_resource_names_from_virtual_machine(
