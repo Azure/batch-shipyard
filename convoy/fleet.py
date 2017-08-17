@@ -732,6 +732,9 @@ def _construct_pool_object(
         asenable = True
         asformula = autoscale.get_formula(pool_settings)
         asei = pool_settings.autoscale.evaluation_interval
+        if pool_settings.resize_timeout is not None:
+            logger.warning(
+                'ignoring resize timeout for autoscale-enabled pool')
     else:
         asenable = False
         asformula = None
@@ -984,7 +987,7 @@ def _construct_pool_object(
         target_low_priority_nodes=(
             pool_settings.vm_count.low_priority if not asenable else None
         ),
-        resize_timeout=pool_settings.resize_timeout,
+        resize_timeout=pool_settings.resize_timeout if not asenable else None,
         max_tasks_per_node=pool_settings.max_tasks_per_node,
         enable_inter_node_communication=pool_settings.
         inter_node_communication_enabled,
