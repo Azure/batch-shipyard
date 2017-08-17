@@ -390,7 +390,8 @@ file
   * `--all` list all tasks in all jobs in the account
   * `--jobid` force scope to just this job id
   * `--poll-until-tasks-complete` will poll until all tasks have completed
-* `migrate` will migrate jobs or job schedules to another pool
+* `migrate` will migrate jobs or job schedules to another pool. Ensure that
+the new target pool has the Docker images required to run the job.
   * `--jobid` force migration scope to just this job id
   * `--jobscheduleid` force migration scope to just this job schedule id
   * `--poolid` force migration to this specified pool id

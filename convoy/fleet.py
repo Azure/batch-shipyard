@@ -2916,6 +2916,9 @@ def action_jobs_migrate(
     if not util.confirm_action(
             config, msg='migration of jobs or job schedules'):
         return
+    logger.warning(
+        'ensure that the new target pool has the proper Docker images '
+        'loaded, or you have enabled allow_run_on_missing_image')
     # disable job and wait for disabled state
     batch.disable_jobs(
         batch_client, config, action, jobid=jobid, jobscheduleid=jobscheduleid,
