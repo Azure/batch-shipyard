@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.9.3] - 2017-08-29
+### Fixed
+- Ignore `resize_timeout` for autoscale-enabled pools
+- Present a warning for `jobs migrate` indicating Docker image requirements
+- Various doc typos and updates
+
 ## [2.9.2] - 2017-08-16
 ### Added
 - Deep learning Jupyter notebooks (thanks to @msalvaris and @thdeltei)
@@ -820,7 +826,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.3...HEAD
+[2.9.3]: https://github.com/Azure/batch-shipyard/compare/2.9.2...2.9.3
 [2.9.2]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...2.9.2
 [2.9.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.9.0b2...2.9.0rc1
 [2.9.0b2]: https://github.com/Azure/batch-shipyard/compare/2.9.0b1...2.9.0b2
