@@ -4,8 +4,8 @@ and want to jump in without having to install anything, you can utilize the
 [Deep Learning Jupyter Notebooks](../contrib/notebooks/deep_learning)
 on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
 
-If you would like to use jump in and use Batch Shipyard from the command line,
-this doc will provide step-by-step instructions. Although Batch Shipyard
+If you would like to use Batch Shipyard from the command line, this quickstart
+doc will provide step-by-step instructions. Although Batch Shipyard
 supports various types of workloads, for the following quickstart example,
 we will select from the following Deep Learning recipes to quickly get started:
 * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)

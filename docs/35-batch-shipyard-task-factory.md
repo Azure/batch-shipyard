@@ -1,7 +1,8 @@
 # Batch Shipyard and Task Factories
 The focus of this article is to describe the task factory concept and how it
 can be utilized to generate arbitrary task arrays. This is particularly useful
-in creating parameter (parametric) sweeps or repeated tasks.
+in creating parameter (parametric) sweeps, replicated/repeated tasks, or
+assigning generated parameters for tasks.
 
 # Task Factory
 The normal configuration structure for a job in Batch Shipyard is through the
@@ -399,8 +400,8 @@ behavior or even potentially unstable execution of the submission process.
 
 ## <a name="custom"></a>Custom
 A `custom` task factory will generate tasks by calling a custom Python-based
-`generate` generator function supplied by the user. This is accomplished by
-importing a user-defined Python module which has a defined `generate`
+generator function named `generate` supplied by the user. This is accomplished
+by importing a user-defined Python module which has a defined `generate`
 generator function.
 
 For example, suppose we create a directory named `foo` in our Batch Shipyard
@@ -479,7 +480,7 @@ Of course, this example is contrived and custom task factory logic will
 invariably be more complex. Your generator function can be dependent upon
 any Python package that is needed to accomodate complex task factory parameter
 generation scenarios. Please note that if you have installed your Batch
-Shipyard enviornment into a virtual environment and your dependencies are
+Shipyard environment into a virtual environment and your dependencies are
 non-local (i.e., not in the Batch Shipyard directory), then you need to
 ensure that your dependencies are properly installed in the correct
 environment.

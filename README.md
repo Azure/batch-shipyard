@@ -62,15 +62,15 @@ generators
 allowing complex processing pipelines and DAGs with Docker containers
 * Transparent support for
 [GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
-on [Azure N-Series VM instances](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu)
+on [Azure N-Series VM instances](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu)
 * Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
 cluster applications on compute pools with automatic job completion and Docker
 task termination
 * Transparent assist for running Docker containers utilizing Infiniband/RDMA
 for MPI on HPC low-latency Azure VM instances:
-  * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_A8, STANDARD\_A9
-  * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/a8-a9-a10-a11-specs): STANDARD\_H16R, STANDARD\_H16MR
-  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu): STANDARD\_NC24R
+  * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_A8, STANDARD\_A9
+  * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_H16R, STANDARD\_H16MR
+  * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools
@@ -115,9 +115,5 @@ See the [CHANGELOG.md](https://github.com/Azure/batch-shipyard/blob/master/CHANG
 file.
 
 * * *
-This project has adopted the
-[Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the
-[Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any
-additional questions or comments.
+Please see this project's [Code of Conduct](CODE_OF_CONDUCT.md) and
+[Contributing](CONTRIBUTING.md) guidelines.

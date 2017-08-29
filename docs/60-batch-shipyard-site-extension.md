@@ -41,8 +41,7 @@ official nuget feed for Azure App Site Extensions.
 ![60-site-extension-step2-2.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-2.png)
 
 You should select the latest version of Python 3.X x64 that is available.
-At the time of this writing, Python 3.6.1 x64 was the latest available. Click
-the `+` icon to install this site extension to your Azure Function App
+Click the `+` icon to install this site extension to your Azure Function App
 environment.
 
 ![60-site-extension-step2-3.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-3.png)
