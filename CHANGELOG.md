@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Missing `join_by` function in blobxfer helper script
+
 ## [2.9.3] - 2017-08-29
 ### Fixed
 - Ignore `resize_timeout` for autoscale-enabled pools

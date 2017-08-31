@@ -4,6 +4,8 @@ set -e
 set -o pipefail
 set -f
 
+function join_by { local IFS="$1"; shift; echo "$*"; }
+
 for spec in "$@"; do
     # unencrypted = bxver:kind:encrypted:sa:ep:saskey:container:include:eo:location
     # encrypted   = bxver:kind:encrypted:<encrypted context>:include:eo:location

@@ -48,4 +48,5 @@ deploy:
       artifact: /.*\.nupkg/
       on:
           appveyor_repo_tag: true
+          PYTHON_VERSION: "3.6"
 
