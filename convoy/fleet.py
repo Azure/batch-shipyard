@@ -1360,15 +1360,10 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool.id, node.id)
-        ssh_args = [
-            'ssh', '-o', 'StrictHostKeyChecking=no',
-            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
-            '{}@{}'.format(username, rls.remote_login_ip_address),
-            'sudo /bin/bash -c "{}"'.format(' && '.join(cmd)),
-        ]
-        procs.append(util.subprocess_nowait_pipe_stdout(
-            ssh_args, shell=False, pipe_stderr=True))
+        procs.append(crypto.connect_or_exec_ssh_command(
+            rls.remote_login_ip_address, rls.remote_login_port,
+            ssh_private_key, username, sync=False,
+            command=['sudo', '/bin/bash -c "{}"'.format(' && '.join(cmd))]))
         if len(procs) >= 40:
             logger.debug('waiting for {} update processes to complete'.format(
                 len(procs)))
@@ -1582,15 +1577,13 @@ def _list_docker_images(batch_client, config):
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool.id, node.id)
-        cmd = 'sudo docker images --format "{{.ID}} {{.Repository}}:{{.Tag}}"'
-        ssh_args = [
-            'ssh', '-o', 'StrictHostKeyChecking=no',
-            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
-            '{}@{}'.format(username, rls.remote_login_ip_address), cmd,
-        ]
-        procs[node.id] = util.subprocess_nowait_pipe_stdout(
-            ssh_args, shell=False)
+        procs[node.id] = crypto.connect_or_exec_ssh_command(
+            rls.remote_login_ip_address, rls.remote_login_port,
+            ssh_private_key, username, sync=False,
+            command=[
+                'sudo', 'docker', 'images', '--format',
+                '"{{.ID}} {{.Repository}}:{{.Tag}}"'
+            ])
         if len(procs) >= 40:
             logger.debug('waiting for {} processes to complete'.format(
                 len(procs)))
@@ -2514,22 +2507,11 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     if ssh_private_key is None:
         ssh_private_key = pathlib.Path(
             pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
-    if not ssh_private_key.exists():
-        raise RuntimeError('SSH private key file not found at: {}'.format(
-            ssh_private_key))
     ip, port = batch.get_remote_login_setting_for_node(
         batch_client, config, cardinal, nodeid)
-    logger.info('connecting to node {}:{} with key {}'.format(
-        ip, port, ssh_private_key))
-    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no', '-o',
-               'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_private_key), '-p', str(port)]
-    if tty:
-        ssh_cmd.append('-t')
-    ssh_cmd.append('{}@{}'.format(pool.ssh.username, ip))
-    if util.is_not_empty(command):
-        ssh_cmd.extend(command)
-    util.subprocess_with_output(ssh_cmd)
+    crypto.connect_or_exec_ssh_command(
+        ip, port, ssh_private_key, pool.ssh.username, tty=tty,
+        command=command)
 
 
 def action_pool_delnode(

@@ -33,11 +33,13 @@ from builtins import (  # noqa
 import collections
 import getpass
 import logging
+import os
 try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
 import tempfile
+import stat
 import subprocess
 # local imports
 from . import settings
@@ -98,6 +100,68 @@ def generate_ssh_keypair(export_path, prefix=None):
     subprocess.check_call(
         ['ssh-keygen', '-f', str(privkey), '-t', 'rsa', '-N', ''''''])
     return (privkey, pubkey)
+
+
+def check_ssh_private_key_filemode(ssh_private_key):
+    # type: (pathlib.Path) -> bool
+    """Check SSH private key filemode
+    :param pathlib.Path ssh_private_key: SSH private key
+    :rtype: bool
+    :return: private key filemode is ok
+    """
+    def _mode_check(fstat, flag):
+        return bool(fstat & flag)
+    fstat = ssh_private_key.stat().st_mode
+    modes = frozenset((stat.S_IRWXG, stat.S_IRWXO))
+    return not any([_mode_check(fstat, x) for x in modes])
+
+
+def connect_or_exec_ssh_command(
+        remote_ip, remote_port, ssh_private_key, username, sync=True,
+        shell=False, tty=False, ssh_args=None, command=None):
+    # type: (str, int, pathlib.Path, str, bool, bool, tuple, tuple) -> bool
+    """Connect to node via SSH or execute SSH command
+    :param str remote_ip: remote ip address
+    :param int remote_port: remote port
+    :param pathlib.Path ssh_private_key: SSH private key
+    :param str username: username
+    :param bool sync: synchronous execution
+    :param bool shell: execute with shell
+    :param bool tty: allocate pseudo-tty
+    :param tuple ssh_args: ssh args
+    :param tuple command: command
+    :rtype: int or subprocess.Process
+    :return: return code or subprocess handle
+    """
+    if not ssh_private_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_private_key))
+    # ensure file mode is set properly for the private key
+    if not check_ssh_private_key_filemode(ssh_private_key):
+        raise RuntimeError(
+            'SSH private key filemode is too permissive: {}'.format(
+                ssh_private_key))
+    # execute SSH command
+    ssh_cmd = [
+        'ssh', '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+        '-i', str(ssh_private_key), '-p', str(remote_port),
+    ]
+    if tty:
+        ssh_cmd.append('-t')
+    if util.is_not_empty(ssh_args):
+        ssh_cmd.extend(ssh_args)
+    ssh_cmd.append('{}@{}'.format(username, remote_ip))
+    if util.is_not_empty(command):
+        ssh_cmd.extend(command)
+    logger.info('{} node {}:{} with key {}'.format(
+        'connecting to' if util.is_none_or_empty(command)
+        else 'executing command on', remote_ip, remote_port, ssh_private_key))
+    if sync:
+        return util.subprocess_with_output(ssh_cmd, shell=shell)
+    else:
+        return util.subprocess_nowait_pipe_stdout(
+            ssh_cmd, shell=shell, pipe_stderr=True)
 
 
 def derive_private_key_pem_from_pfx(pfxfile, passphrase=None, pemfile=None):

@@ -1161,26 +1161,22 @@ def resize_storage_cluster(
         'adding {} bricks to gluster volume, this may take a while'.format(
             len(async_ops['vmext'])))
     # execute special add brick script
-    script_cmd = \
-        '/opt/batch-shipyard/{asf} {c}{d}{i}{n}{v}'.format(
-            asf=addbrick_file,
-            c=' -c {}'.format(rfs.storage_cluster.vm_count),
-            d=' -d {}'.format(','.join(vm_hostnames)),
-            i=' -i {}'.format(','.join(list(new_private_ips.values()))),
-            n=' -n {}'.format(
-                settings.get_file_server_glusterfs_volume_name(
-                    rfs.storage_cluster)),
-            v=' -v \'{}\''.format(voltype),
-        )
-    ssh_priv_key, port, username, ip = ssh_info
-    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
-           '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-           '-i', str(ssh_priv_key), '-p', str(port),
-           '{}@{}'.format(username, ip), 'sudo']
-    cmd.extend(script_cmd.split())
+    script_cmd = '/opt/batch-shipyard/{asf} {c}{d}{i}{n}{v}'.format(
+        asf=addbrick_file,
+        c=' -c {}'.format(rfs.storage_cluster.vm_count),
+        d=' -d {}'.format(','.join(vm_hostnames)),
+        i=' -i {}'.format(','.join(list(new_private_ips.values()))),
+        n=' -n {}'.format(
+            settings.get_file_server_glusterfs_volume_name(
+                rfs.storage_cluster)),
+        v=' -v \'{}\''.format(voltype),
+    )
     if settings.verbose(config):
-        logger.debug('add brick command: {}'.format(cmd))
-    proc = util.subprocess_nowait_pipe_stdout(cmd, pipe_stderr=True)
+        logger.debug('add brick command: {}'.format(script_cmd))
+    ssh_priv_key, port, username, ip = ssh_info
+    proc = crypto.connect_or_exec_ssh_command(
+        ip, port, ssh_priv_key, username, sync=False,
+        command=['sudo', script_cmd])
     stdout, stderr = proc.communicate()
     logline = 'add brick script completed with ec={}'.format(proc.returncode)
     if util.is_not_empty(stdout):
@@ -1399,14 +1395,11 @@ def expand_storage_cluster(
             )
         ssh_priv_key, port, username, ip = _get_ssh_info(
             compute_client, network_client, config, sc_id, None, vm.name)
-        cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
-               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_priv_key), '-p', str(port),
-               '{}@{}'.format(username, ip), 'sudo']
-        cmd.extend(script_cmd.split())
         if settings.verbose(config):
-            logger.debug('bootstrap command: {}'.format(cmd))
-        proc = util.subprocess_nowait_pipe_stdout(cmd, pipe_stderr=True)
+            logger.debug('bootstrap command: {}'.format(script_cmd))
+        proc = crypto.connect_or_exec_ssh_command(
+            ip, port, ssh_priv_key, username, sync=False,
+            command=['sudo', script_cmd])
         stdout, stderr = proc.communicate()
         if util.is_not_empty(stdout):
             stdout = stdout.decode('utf8')
@@ -2153,12 +2146,9 @@ def stat_storage_cluster(
                     rfs.storage_cluster.vm_disk_map[offset].raid_level),
                 s=' -s {}'.format(rfs.storage_cluster.file_server.type),
             )
-            cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
-                   '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-                   '-i', str(ssh_priv_key), '-p', str(port),
-                   '{}@{}'.format(username, ip), 'sudo']
-            cmd.extend(script_cmd.split())
-            proc = util.subprocess_nowait_pipe_stdout(cmd)
+            proc = crypto.connect_or_exec_ssh_command(
+                ip, port, ssh_priv_key, username, sync=False,
+                command=['sudo', script_cmd])
             stdout = proc.communicate()[0]
             if util.is_not_empty(stdout):
                 stdout = stdout.decode('utf8')
@@ -2305,21 +2295,5 @@ def ssh_storage_cluster(
     """
     ssh_priv_key, port, username, ip = _get_ssh_info(
         compute_client, network_client, config, sc_id, cardinal, hostname)
-    if not ssh_priv_key.exists():
-        logger.error(
-            ('cannot SSH into remotefs cluster node with non-existant RSA '
-             'private key: {}').format(ssh_priv_key))
-        return
-    # connect to vm
-    logger.info(
-        ('connecting to storage cluster {} virtual machine {}:{} with '
-         'key {}').format(sc_id, ip, port, ssh_priv_key))
-    ssh_cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
-               '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-               '-i', str(ssh_priv_key), '-p', str(port)]
-    if tty:
-        ssh_cmd.append('-t')
-    ssh_cmd.append('{}@{}'.format(username, ip))
-    if util.is_not_empty(command):
-        ssh_cmd.extend(command)
-    util.subprocess_with_output(ssh_cmd)
+    crypto.connect_or_exec_ssh_command(
+        ip, port, ssh_priv_key, username, tty=tty, command=command)

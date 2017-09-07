@@ -78,6 +78,10 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
         raise RuntimeError(
             ('cannot tunnel to remote Tensorboard with non-existant RSA '
              'private key: {}').format(ssh_priv_key))
+    if not crypto.check_ssh_private_key_filemode(ssh_priv_key):
+        raise RuntimeError(
+            'SSH private key filemode is too permissive: {}'.format(
+                ssh_priv_key))
     # populate jobid if empty
     if util.is_none_or_empty(jobid):
         jobspecs = settings.job_specifications(config)

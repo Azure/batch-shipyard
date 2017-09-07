@@ -613,6 +613,11 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
                 ('cannot generate tunnel script with non-existant RSA '
                  'private key: {}').format(ssh_priv_key))
             return
+        if not crypto.check_ssh_private_key_filemode(ssh_priv_key):
+            logger.warning(
+                ('cannot generate tunnel script with private SSH key that '
+                 'is too permissive: {}').format(ssh_priv_key))
+            return
         ssh_args = [
             'ssh', '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile={}'.format(os.devnull),
@@ -1988,16 +1993,14 @@ def _send_docker_kill_signal(
     for target in targets:
         rls = batch_client.compute_node.get_remote_login_settings(
             target[0], target[1])
-        ssh_args = [
-            'ssh', '-o', 'StrictHostKeyChecking=no',
-            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-            '-i', str(ssh_private_key), '-p', str(rls.remote_login_port),
-            '-t', '{}@{}'.format(username, rls.remote_login_ip_address),
-            ('sudo /bin/bash -c "docker kill {tn}; '
-             'docker ps -qa -f name={tn} | '
-             'xargs --no-run-if-empty docker rm -v"').format(tn=task_name)
+        command = [
+            'sudo',
+            ('/bin/bash -c "docker kill {tn}; docker ps -qa -f name={tn} | '
+             'xargs --no-run-if-empty docker rm -v"').format(tn=task_name),
         ]
-        rc = util.subprocess_with_output(ssh_args, shell=False)
+        rc = crypto.connect_or_exec_ssh_command(
+            rls.remote_login_ip_address, rls.remote_login_port,
+            ssh_private_key, username, sync=True, tty=True, command=command)
         if rc != 0:
             logger.error('docker kill failed with return code: {}'.format(rc))
 
