@@ -1375,7 +1375,7 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
             rcs = util.subprocess_wait_all(procs)
             if any([x != 0 for x in rcs]):
                 failures = True
-            procs.clear()
+            procs = []
             del rcs
     if len(procs) > 0:
         logger.debug('waiting for {} update processes to complete'.format(
@@ -1383,7 +1383,7 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
         rcs = util.subprocess_wait_all(procs)
         if any([x != 0 for x in rcs]):
             failures = True
-        procs.clear()
+        procs = []
         del rcs
     if failures:
         raise RuntimeError(
