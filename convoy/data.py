@@ -151,7 +151,7 @@ def _process_batch_input_data(config, input_data, on_task):
     :param dict input_data: config spec with input_data
     :param bool on_task: if this is originating from a task spec
     :rtype: list
-    :return: args to pass to blobxfer script
+    :return: args to pass to tfm
     """
     # get batch creds
     bc = settings.credentials_batch(config)
@@ -902,8 +902,7 @@ def ingress_data(
                     rls[vm_name] = \
                         batchmodels.ComputeNodeGetRemoteLoginSettingsResult(
                             remote_login_ip_address=pip.ip_address,
-                            remote_login_port=22,
-                        )
+                            remote_login_port=22)
             else:
                 username = pool.ssh.username
             if rls is None:

@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+printenv
+docker build --build-arg GIT_BRANCH=$SOURCE_BRANCH --build-arg GIT_COMMIT=$GIT_SHA1 -t $IMAGE_NAME .

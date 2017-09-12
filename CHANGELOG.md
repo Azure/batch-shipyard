@@ -2,8 +2,14 @@
 
 ## [Unreleased]
 
+## [2.9.4] - 2017-09-12
+### Changed
+- Update dependencies to latest available
+- Improve Docker builds
+
 ### Fixed
-- Missing `join_by` function in blobxfer helper script
+- Missing `join_by` function in blobxfer helper script (#115)
+- Fix `clear()` for `pool udi` with Python 2.7 (#118)
 
 ## [2.9.3] - 2017-08-29
 ### Fixed
@@ -829,7 +835,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.4...HEAD
+[2.9.4]: https://github.com/Azure/batch-shipyard/compare/2.9.3...2.9.4
 [2.9.3]: https://github.com/Azure/batch-shipyard/compare/2.9.2...2.9.3
 [2.9.2]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...2.9.2
 [2.9.0rc1]: https://github.com/Azure/batch-shipyard/compare/2.9.0b2...2.9.0rc1
