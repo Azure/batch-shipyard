@@ -61,7 +61,7 @@ add_attribution() {
     echo "$license" >> $TPNFILE
 }
 
-cat << EOF > $TPNFILE
+cat << 'EOF' > $TPNFILE
 Do Not Translate or Localize
 
 This product incorporates copyrighted material from the open source projects

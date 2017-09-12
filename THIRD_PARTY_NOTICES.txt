@@ -9,7 +9,7 @@ You may find a copy of the Corresponding Source code, if and as required under
 the Third Party IP License, at http://3rdpartysource.microsoft.com. You may
 also obtain a copy of the source code for a period of three years after our
 last shipment of this product, if and as required under the Third Party IP
-license, by sending a check or money order for US.00 to:
+license, by sending a check or money order for US$5.00 to:
 
 Source Code Compliance Team
 Microsoft Corporation
