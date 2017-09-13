@@ -1083,6 +1083,7 @@ def credentials_batch(config):
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
     resource_group = _kv_read_checked(conf, 'resource_group')
+    test_cluster = _kv_read(conf, 'test_cluster', False)
     # get subscription id from management section
     try:
         subscription_id = _kv_read_checked(
@@ -1092,7 +1093,10 @@ def credentials_batch(config):
     # parse location from url
     tmp = account_service_url.split('.')
     location = tmp[1]
-    acct_from_url = tmp[0].split('/')[-1]
+    if test_cluster:
+        acct_from_url = account_service_url.split('/')[-1]
+    else:
+        acct_from_url = tmp[0].split('/')[-1]
     if util.is_none_or_empty(account):
         account = acct_from_url
     else:
