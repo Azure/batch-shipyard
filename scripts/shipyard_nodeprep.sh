@@ -198,9 +198,10 @@ EOF
     fi
     # install driver
     ./$nvdriver -s
-    # add flag to config template for GRID driver
+    # add flag to config for GRID driver
     if [ ${GPUARGS[0]} == "True" ]; then
-        echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf.template
+        cp /etc/nvidia/gridd.conf.template /etc/nvidia/gridd.conf
+        echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf
     fi
     # install nvidia-docker
     if [ $offer == "ubuntuserver" ]; then
