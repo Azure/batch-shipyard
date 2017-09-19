@@ -474,7 +474,9 @@ def gpu_configuration_check(config, vm_size=None):
     publisher = pool_publisher(config, lower=True)
     offer = pool_offer(config, lower=True)
     sku = pool_sku(config, lower=True)
-    if (publisher == 'canonical' and offer == 'ubuntuserver' and
+    if publisher == 'microsoft-azure-batch':
+        return True
+    elif (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku > '16.04'):
         return True
     elif (publisher == 'openlogic' and
@@ -482,6 +484,24 @@ def gpu_configuration_check(config, vm_size=None):
         return True
     else:
         return False
+
+
+def is_native_docker_pool(config, vm_config=None):
+    # type: (dict, any) -> bool
+    """Check if vm configuration has native docker support
+    :param dict config: configuration dict
+    :param any vm_config: vm configuration
+    :rtype: bool
+    :return: if vm configuration has native docker support
+    """
+    if vm_config is None:
+        vm_config = _populate_pool_vm_configuration(config)
+    if isinstance(vm_config, PoolVmCustomImageSettings):
+        return False
+    if (vm_config.publisher == 'microsoft-azure-batch' and
+            'container' in vm_config.offer):
+        return True
+    return False
 
 
 def is_rdma_pool(vm_size):
@@ -526,12 +546,12 @@ def temp_disk_mountpoint(config, offer=None):
             offer = pool_offer(config, lower=True)
         else:
             if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
-                offer = 'ubuntuserver'
+                offer = 'ubuntu'
             else:
                 offer = None
     else:
         offer = offer.lower()
-    if offer == 'ubuntuserver':
+    if offer.startswith('ubuntu'):
         return '/mnt'
     else:
         return '/mnt/resource'
@@ -613,17 +633,47 @@ def _populate_pool_vm_configuration(config):
     """
     conf = pool_vm_configuration(config, 'platform_image')
     if 'publisher' in conf:
-        return PoolVmPlatformImageSettings(
-            publisher=conf['publisher'],
-            offer=conf['offer'],
-            sku=conf['sku'],
+        vm_config = PoolVmPlatformImageSettings(
+            publisher=conf['publisher'].lower(),
+            offer=conf['offer'].lower(),
+            sku=conf['sku'].lower(),
             version=_kv_read_checked(conf, 'version', default='latest'),
         )
+        # auto convert vm config to native if specified
+        if _kv_read(conf, 'native', default=False):
+            if (vm_config.publisher == 'canonical' and
+                    vm_config.offer == 'ubuntuserver' and
+                    vm_config.sku == '16.04-lts'):
+                vm_config = PoolVmPlatformImageSettings(
+                    publisher='microsoft-azure-batch',
+                    offer='ubuntu-server-container-preview',
+                    sku='16-04-lts',
+                    version='latest',
+                )
+            elif (vm_config.publisher == 'openlogic' and
+                  vm_config.offer == 'centos' and
+                  vm_config.sku == '7.3'):
+                vm_config = PoolVmPlatformImageSettings(
+                    publisher='microsoft-azure-batch',
+                    offer='centos-container-preview',
+                    sku='7-3',
+                    version='latest',
+                )
+            elif (vm_config.publisher == 'openlogic' and
+                  vm_config.offer == 'centos-hpc' and
+                  vm_config.sku == '7.3'):
+                vm_config = PoolVmPlatformImageSettings(
+                    publisher='microsoft-azure-batch',
+                    offer='centos-container-rdma-preview',
+                    sku='7-3',
+                    version='latest',
+                )
+        return vm_config
     else:
         conf = pool_vm_configuration(config, 'custom_image')
         return PoolVmCustomImageSettings(
             image_uris=conf['image_uris'],
-            node_agent=conf['node_agent'],
+            node_agent=conf['node_agent'].lower(),
         )
 
 
@@ -2424,6 +2474,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     :rtype: TaskSettings
     :return: task settings
     """
+    native = is_native_docker_pool(config, vm_config=poolconf.vm_configuration)
     # id must be populated by the time this function is invoked
     task_id = conf['id']
     if util.is_none_or_empty(task_id):
@@ -2445,6 +2496,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         else:
             registry = ''
         del preg
+        if native:
+            registry = ''
         image = '{}{}'.format(registry, image)
     # get some pool props
     if cloud_pool is None:
@@ -2744,13 +2797,6 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise RuntimeError(
                 ('cannot initialize a gpu task on nodes without '
                  'gpus, pool: {} vm_size: {}').format(pool_id, vm_size))
-        # TODO other images as they become available with gpu support
-        if ((sku is None and node_agent != 'batch.node.ubuntu 16.04') or
-                (publisher != 'canonical' and offer != 'ubuntuserver' and
-                 (sku is not None and sku < '16.04'))):
-            raise ValueError(
-                ('Unsupported gpu VM config, publisher={} offer={} '
-                 'sku={}').format(publisher, offer, sku))
         # set docker commands with nvidia docker wrapper
         docker_run_cmd = 'nvidia-docker run'
         docker_exec_cmd = 'nvidia-docker exec'
@@ -2759,7 +2805,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         docker_run_cmd = 'docker run'
         docker_exec_cmd = 'docker exec'
     # adjust for infiniband
-    if infiniband:
+    if infiniband and not native:
         if not inter_node_comm:
             raise RuntimeError(
                 ('cannot initialize an infiniband task on a '
@@ -2791,16 +2837,18 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
             raise ValueError(
                 ('Unsupported infiniband VM config, publisher={} '
                  'offer={}').format(publisher, offer))
-    # mount batch root dir
-    run_opts.append(
-        '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
-    # set working directory if not already set
-    if not any((x.startswith('-w ') or x.startswith('--workdir '))
-               for x in run_opts):
-        run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+    if not native:
+        # mount batch root dir
+        run_opts.append(
+            '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
+        # set working directory if not already set
+        if not any((x.startswith('-w ') or x.startswith('--workdir '))
+                   for x in run_opts):
+            run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
     # always add option for envfile
     envfile = '.shipyard.envlist'
-    run_opts.append('--env-file {}'.format(envfile))
+    if not native:
+        run_opts.append('--env-file {}'.format(envfile))
     # populate mult-instance settings
     if is_multi_instance_task(conf):
         if not inter_node_comm:
@@ -2833,17 +2881,20 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 'multi_instance']['coordination_command']
             if util.is_none_or_empty(coordination_command):
                 raise KeyError()
+            coordination_command = '{}'.format(' ' + coordination_command)
         except KeyError:
-            coordination_command = None
-        cc_args = [
-            'env | grep AZ_BATCH_ >> {}'.format(envfile),
-            '{} {} {}{}'.format(
-                docker_run_cmd,
-                ' '.join(run_opts),
-                image,
-                '{}'.format(' ' + coordination_command)
-                if coordination_command else '')
-        ]
+            coordination_command = ''
+        if native:
+            cc_args = [coordination_command]
+        else:
+            cc_args = [
+                'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                '{} {} {}{}'.format(
+                    docker_run_cmd,
+                    ' '.join(run_opts),
+                    image,
+                    coordination_command),
+            ]
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):

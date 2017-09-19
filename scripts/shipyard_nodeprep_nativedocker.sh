@@ -6,32 +6,23 @@ set -o pipefail
 # globals
 azurefile=0
 blobxferversion=latest
-block=
 encrypted=
 gluster_on_compute=0
 networkopt=0
-p2p=
-p2penabled=0
-prefix=
-privatereg=
 sc_args=
 version=
 
 # process command line options
-while getopts "h?abef:m:np:r:t:v:x:" opt; do
+while getopts "h?aef:m:nv:x:" opt; do
     case "$opt" in
         h|\?)
-            echo "shipyard_nodeprep_customimage.sh parameters"
+            echo "shipyard_nodeprep_nativedocker.sh parameters"
             echo ""
             echo "-a install azurefile docker volume driver"
-            echo "-b block until resources loaded"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
-            echo "-p [prefix] storage container prefix"
-            echo "-r [container:archive:image id] private registry"
-            echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
             echo "-v [version] batch-shipyard version"
             echo "-x [blobxfer version] blobxfer version"
             echo ""
@@ -39,9 +30,6 @@ while getopts "h?abef:m:np:r:t:v:x:" opt; do
             ;;
         a)
             azurefile=1
-            ;;
-        b)
-            block=$SHIPYARD_DOCKER_IMAGES_PRELOAD
             ;;
         e)
             encrypted=${OPTARG,,}
@@ -54,21 +42,6 @@ while getopts "h?abef:m:np:r:t:v:x:" opt; do
             ;;
         n)
             networkopt=1
-            ;;
-        p)
-            prefix="--prefix $OPTARG"
-            ;;
-        r)
-            privatereg=$OPTARG
-            ;;
-        t)
-            p2p=${OPTARG,,}
-            IFS=':' read -ra p2pflags <<< "$p2p"
-            if [ ${p2pflags[0]} == "true" ]; then
-                p2penabled=1
-            else
-                p2penabled=0
-            fi
             ;;
         v)
             version=$OPTARG
@@ -192,47 +165,6 @@ check_for_docker_host_engine() {
     set -e
 }
 
-check_for_glusterfs_on_compute() {
-    set +e
-    gluster
-    rc0=$?
-    glusterfs -V
-    rc1=$?
-    set -e
-    if [ $rc0 -ne 0 ] || [ $rc1 -ne 0 ]; then
-        echo "ERROR: gluster server and client not installed"
-        exit 1
-    fi
-}
-
-check_for_storage_cluster_software() {
-    rc=0
-    if [ ! -z $sc_args ]; then
-        for sc_arg in ${sc_args[@]}; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
-                set +e
-                mount.nfs4 -V
-                rc=$?
-                set -e
-            elif [ $server_type == "glusterfs" ]; then
-                set +e
-                glusterfs -V
-                rc=$?
-                set -e
-            else
-                echo "Unknown file server type ${sc[0]} for ${sc[1]}"
-                exit 1
-            fi
-        done
-    fi
-    if [ $rc -ne 0 ]; then
-        echo "ERROR: required storage cluster software to mount $sc_args not installed"
-        exit 1
-    fi
-}
-
 install_azurefile_docker_volume_driver() {
     chown root:root azurefile-dockervolumedriver*
     chmod 755 azurefile-dockervolumedriver
@@ -288,6 +220,30 @@ docker_pull_image() {
     set -e
 }
 
+install_packages() {
+    distrib=$1
+    shift
+    set +e
+    retries=30
+    while [ $retries -gt 0 ]; do
+        if [[ $distrib == "ubuntu" ]]; then
+            apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
+        elif [[ $distrib == centos* ]]; then
+            yum install -y $*
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not install packages: $*"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -338,12 +294,8 @@ if [ ! -z $encrypted ]; then
     # remove pfx-related files
     rm -f $pfxfile $pfxfile.pw
     # decrypt creds
-    SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
         DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    fi
-    if [ ! -z $privatereg ]; then
-        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
 fi
 
@@ -355,10 +307,7 @@ if [ $p2penabled -eq 1 ]; then
 fi
 
 # check if we're coming up from a reboot
-if [ -f $cascadefailed ]; then
-    echo "$cascadefailed file exists, assuming cascade failure during node prep"
-    exit 1
-elif [ -f $nodeprepfinished ]; then
+if [ -f $nodeprepfinished ]; then
     echo "$nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
@@ -383,13 +332,61 @@ if [ $azurefile -eq 1 ]; then
     install_azurefile_docker_volume_driver $DISTRIB_ID $DISTRIB_RELEASE
 fi
 
-# check for gluster
+# install gluster on compute
 if [ $gluster_on_compute -eq 1 ]; then
-    check_for_glusterfs_on_compute
+    if [ $DISTRIB_ID == "ubuntu" ]; then
+        install_packages $DISTRIB_ID glusterfs-server
+        systemctl enable glusterfs-server
+        systemctl start glusterfs-server
+        # create brick directory
+        mkdir -p /mnt/gluster
+    elif [[ $DISTRIB_ID == centos* ]]; then
+        install_packages $DISTRIB_ID epel-release centos-release-gluster38
+        sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+        install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server
+        systemctl daemon-reload
+        chkconfig glusterd on
+        systemctl start glusterd
+        # create brick directory
+        mkdir -p /mnt/resource/gluster
+    fi
 fi
 
-# check for storage cluster software
-check_for_storage_cluster_software
+# install storage cluster software
+if [ ! -z $sc_args ]; then
+    if [ $DISTRIB_ID == "ubuntu" ]; then
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ]; then
+                install_packages $DISTRIB_ID nfs-common nfs4-acl-tools
+            elif [ $server_type == "glusterfs" ]; then
+                install_packages $DISTRIB_ID glusterfs-client acl
+            else
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                exit 1
+            fi
+        done
+    elif [[ $DISTRIB_ID == centos* ]]; then
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            server_type=${sc[0]}
+            if [ $server_type == "nfs" ]; then
+                install_packages $DISTRIB_ID nfs-utils nfs4-acl-tools
+                systemctl daemon-reload
+                systemctl enable rpcbind
+                systemctl start rpcbind
+            elif [ $server_type == "glusterfs" ]; then
+                install_packages $DISTRIB_ID epel-release centos-release-gluster38
+                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server acl
+            else
+                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                exit 1
+            fi
+        done
+    fi
+fi
 
 # mount any storage clusters
 if [ ! -z $sc_args ]; then
@@ -445,86 +442,3 @@ fi
 
 # touch node prep finished file to preserve idempotency
 touch $nodeprepfinished
-# touch cascade failed file, this will be removed once cascade is successful
-touch $cascadefailed
-
-# execute cascade
-set +e
-cascadepid=
-envfile=
-detached=
-if [ $p2penabled -eq 1 ]; then
-    detached="-d"
-else
-    detached="--rm"
-fi
-# store docker cascade start
-if command -v python3 > /dev/null 2>&1; then
-    drpstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
-else
-    drpstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
-fi
-# create env file
-envfile=.docker_cascade_envfile
-cat > $envfile << EOF
-prefix=$prefix
-ipaddress=$ipaddress
-offer=$offer
-sku=$sku
-npstart=$npstart
-drpstart=$drpstart
-privatereg=$privatereg
-p2p=$p2p
-`env | grep SHIPYARD_`
-`env | grep AZ_BATCH_`
-`env | grep DOCKER_LOGIN_`
-EOF
-chmod 600 $envfile
-# pull image
-docker_pull_image alfpark/batch-shipyard:cascade-$version
-# launch container
-docker run $detached --net=host --env-file $envfile \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
-    -w $AZ_BATCH_TASK_WORKING_DIR \
-    -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-    alfpark/batch-shipyard:cascade-$version &
-cascadepid=$!
-
-# if not in p2p mode, then wait for cascade exit
-if [ $p2penabled -eq 0 ]; then
-    wait $cascadepid
-    rc=$?
-    if [ $rc -ne 0 ]; then
-        echo "cascade exited with non-zero exit code: $rc"
-        rm -f $nodeprepfinished
-        exit $rc
-    fi
-fi
-set -e
-
-# remove cascade failed file
-rm -f $cascadefailed
-
-# block until images ready if specified
-if [ ! -z $block ]; then
-    echo "blocking until images ready: $block"
-    IFS=',' read -ra RES <<< "$block"
-    declare -a missing
-    while :
-        do
-        for image in "${RES[@]}";  do
-            if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
-                missing=("${missing[@]}" "$image")
-            fi
-        done
-        if [ ${#missing[@]} -eq 0 ]; then
-            echo "all docker images present"
-            break
-        else
-            unset missing
-        fi
-        sleep 2
-    done
-    rm -f $envfile
-fi

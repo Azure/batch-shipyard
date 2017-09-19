@@ -1591,9 +1591,10 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
     :param str taskid: task id to terminate
     :param bool wait: wait for task to terminate
     """
-    # first terminate tasks, force wait for completion
-    terminate_tasks(
-        batch_client, config, jobid=jobid, taskid=taskid, wait=True)
+    # first terminate tasks if non-native, force wait for completion
+    if not settings.is_native_docker_pool(config):
+        terminate_tasks(
+            batch_client, config, jobid=jobid, taskid=taskid, wait=True)
     # proceed with deletion
     if jobid is None:
         jobs = settings.job_specifications(config)
@@ -2035,18 +2036,22 @@ def terminate_tasks(
     :param bool wait: wait for task to terminate
     :param bool force: force task docker kill signal regardless of state
     """
+    native = settings.is_native_docker_pool(config)
     # get ssh login settings
-    pool = settings.pool_settings(config)
-    if util.is_none_or_empty(pool.ssh.username):
-        raise ValueError(
-            'cannot terminate docker container without an SSH username')
-    ssh_private_key = pool.ssh.ssh_private_key
-    if ssh_private_key is None:
-        ssh_private_key = pathlib.Path(
-            pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
-    if not ssh_private_key.exists():
-        raise RuntimeError('SSH private key file not found at: {}'.format(
-            ssh_private_key))
+    if not native:
+        pool = settings.pool_settings(config)
+        if util.is_none_or_empty(pool.ssh.username):
+            raise ValueError(
+                'cannot terminate non-native container without an SSH '
+                'username')
+        ssh_private_key = pool.ssh.ssh_private_key
+        if ssh_private_key is None:
+            ssh_private_key = pathlib.Path(
+                pool.ssh.generated_file_export_path,
+                crypto.get_ssh_key_prefix())
+        if not ssh_private_key.exists():
+            raise RuntimeError('SSH private key file not found at: {}'.format(
+                ssh_private_key))
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -2067,7 +2072,8 @@ def terminate_tasks(
         for task in tasks:
             _task = batch_client.task.get(job_id, task)
             # if completed, skip
-            if _task.state == batchmodels.TaskState.completed and not force:
+            if (_task.state == batchmodels.TaskState.completed and
+                    (not force or native)):
                 logger.debug(
                     'Skipping termination of completed task {} on '
                     'job {}'.format(task, job_id))
@@ -2080,7 +2086,8 @@ def terminate_tasks(
                 continue
             logger.info('Terminating task: {}'.format(task))
             # directly send docker kill signal if running
-            if _task.state == batchmodels.TaskState.running or force:
+            if ((_task.state == batchmodels.TaskState.running or force) and
+                    not native):
                 if (_task.multi_instance_settings is not None and
                         _task.multi_instance_settings.number_of_instances > 1):
                     task_is_mi = True
@@ -3056,6 +3063,8 @@ def add_jobs(
     # get the pool inter-node comm setting
     bs = settings.batch_shipyard_settings(config)
     pool = settings.pool_settings(config)
+    native = settings.is_native_docker_pool(
+        config, vm_config=pool.vm_configuration)
     try:
         cloud_pool = batch_client.pool.get(pool.id)
     except batchmodels.batch_error.BatchErrorException as ex:
@@ -3147,16 +3156,17 @@ def add_jobs(
             )
         # construct job prep
         jpcmd = []
-        if len(missing_images) > 0 and allow_run_on_missing:
-            # we don't want symmetric difference as we just want to
-            # block on pre-loaded images only
-            gr = list(set(global_resources) - set(missing_images))
-        else:
-            gr = global_resources
-        if len(gr) > 0:
-            jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
-                jpfile[0], ' '.join(gr)))
-        del gr
+        if not native:
+            if len(missing_images) > 0 and allow_run_on_missing:
+                # we don't want symmetric difference as we just want to
+                # block on pre-loaded images only
+                gr = list(set(global_resources) - set(missing_images))
+            else:
+                gr = global_resources
+            if len(gr) > 0:
+                jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
+                    jpfile[0], ' '.join(gr)))
+            del gr
         # job prep: digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
@@ -3423,30 +3433,39 @@ def add_jobs(
                             f.write('{}={}\n'.format(
                                 key, env_vars[key]).encode('utf8'))
                     if task.infiniband:
-                        f.write(b'I_MPI_FABRICS=shm:dapl\n')
-                        f.write(b'I_MPI_DAPL_PROVIDER=ofa-v2-ib0\n')
-                        f.write(b'I_MPI_DYNAMIC_CONNECTION=0\n')
-                        # create a manpath entry for potentially buggy
-                        # intel mpivars.sh
-                        f.write(b'MANPATH=/usr/share/man:/usr/local/man\n')
+                        ib_env = {
+                            'I_MPI_FABRICS': 'shm:dapl',
+                            'I_MPI_DAPL_PROVIDER': 'ofa-v2-ib0',
+                            'I_MPI_DYNAMIC_CONNECTION': '0',
+                            # create a manpath entry for potentially buggy
+                            # intel mpivars.sh
+                            'MANPATH': '/usr/share/man:/usr/local/man',
+                        }
+                        for key in ib_env:
+                            f.write('{}={}\n'.format(
+                                key, ib_env[key]).encode('utf8'))
                     if task.gpu:
-                        f.write(b'CUDA_CACHE_DISABLE=0\n')
-                        f.write(b'CUDA_CACHE_MAXSIZE=1073741824\n')
-                        # use absolute path due to non-expansion
-                        f.write(
-                            ('CUDA_CACHE_PATH={}/batch/tasks/'
-                             '.nv/ComputeCache\n').format(
-                                 settings.temp_disk_mountpoint(
-                                     config)).encode('utf8'))
+                        gpu_env = {
+                            'CUDA_CACHE_DISABLE': '0',
+                            'CUDA_CACHE_MAXSIZE': '1073741824',
+                            # use absolute path due to non-expansion
+                            'CUDA_CACHE_PATH': (
+                                '{}/batch/tasks/.nv/ComputeCache').format(
+                                    settings.temp_disk_mountpoint(config)),
+                        }
+                        for key in gpu_env:
+                            f.write('{}={}\n'.format(
+                                key, gpu_env[key]).encode('utf8'))
                     # close and upload env var file
                     f.close()
-                    sas_urls = storage.upload_resource_files(
-                        blob_client, config, [(envfileloc, fname)])
+                    if not native:
+                        sas_urls = storage.upload_resource_files(
+                            blob_client, config, [(envfileloc, fname)])
                 finally:
                     os.unlink(fname)
                     del f
                     del fname
-                if len(sas_urls) != 1:
+                if not native and len(sas_urls) != 1:
                     raise RuntimeError('unexpected number of sas urls')
             # check if this is a multi-instance task
             mis = None
@@ -3468,38 +3487,77 @@ def add_jobs(
                             )
                         )
                 # set application command
-                task_commands = [
-                    '{} {} {}'.format(
-                        task.docker_exec_cmd, task.name, task.command)
-                ]
+                if native:
+                    task_commands = [task.command]
+                else:
+                    task_commands = [
+                        '{} {} {}'.format(
+                            task.docker_exec_cmd, task.name, task.command)
+                    ]
             else:
-                task_commands = [
-                    'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
-                    '{} {} {}{}'.format(
-                        task.docker_run_cmd,
-                        ' '.join(task.docker_run_options),
-                        task.image,
-                        '{}'.format(
-                            ' ' + task.command) if task.command else '')
-                ]
+                if native:
+                    task_commands = [
+                        '{}'.format(' ' + task.command) if task.command else ''
+                    ]
+                else:
+                    task_commands = [
+                        'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
+                        '{} {} {}{}'.format(
+                            task.docker_run_cmd,
+                            ' '.join(task.docker_run_options),
+                            task.image,
+                            '{}'.format(
+                                ' ' + task.command) if task.command else '')
+                    ]
+            taskenv = None
             # get docker login if missing images
-            if len(missing_images) > 0 and allow_run_on_missing:
+            if not native and len(missing_images) > 0 and allow_run_on_missing:
                 taskenv, logincmd = generate_docker_login_settings(config)
                 logincmd.extend(task_commands)
                 task_commands = logincmd
-            else:
-                taskenv = None
             # digest any input_data
             addlcmds = data.process_input_data(
                 config, bxfile, _task, on_task=True)
             if addlcmds is not None:
+                if native:
+                    raise RuntimeError(
+                        'input_data at task-level is not supported on '
+                        'native container pools')
                 task_commands.insert(0, addlcmds)
             # digest any output data
             addlcmds = data.process_output_data(
                 config, bxfile, _task)
             if addlcmds is not None:
+                if native:
+                    raise RuntimeError(
+                        'output_data at task-level is not supported on '
+                        'native container pools')
                 task_commands.append(addlcmds)
             del addlcmds
+            # set environment variables for native
+            if native:
+                taskenv = []
+                if util.is_not_empty(env_vars):
+                    for key in env_vars:
+                        taskenv.append(
+                            batchmodels.EnvironmentSetting(
+                                key, env_vars[key])
+                        )
+                if task.infiniband:
+                    for key in ib_env:
+                        taskenv.append(
+                            batchmodels.EnvironmentSetting(
+                                key, ib_env[key])
+                        )
+                    del ib_env
+                if task.gpu:
+                    for key in gpu_env:
+                        taskenv.append(
+                            batchmodels.EnvironmentSetting(
+                                key, gpu_env[key])
+                        )
+                    del gpu_env
+            del env_vars
             # set task constraints
             task_constraints = batchmodels.TaskConstraints(
                 retention_time=task.retention_time,
@@ -3516,6 +3574,12 @@ def add_jobs(
                 constraints=task_constraints,
                 environment_settings=taskenv,
             )
+            if native:
+                batchtask.container_settings = \
+                    batchmodels.TaskContainerSettings(
+                        container_run_options=' '.join(
+                            task.docker_run_options),
+                        image_name=task.image)
             # add envfile
             if sas_urls is not None:
                 batchtask.resource_files.append(

@@ -67,10 +67,11 @@ as needed:
 deallocation but has a running task, what should be the action applied to
 the task: `requeue`, `terminate`, `taskcompletion`, and `retaineddata`.
 Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables)
-for more information about these options. This option applies to all scenarios.
-* `sample_lookback_interval` is the time interval to lookback for past history
-for certain scenarios such as autoscale based on active and pending tasks.
-This option applies only to `active_tasks` and `pending_tasks` scenarios.
+for more information about these options. This option applies to all
+scenarios.
+* `sample_lookback_interval` is the time interval to lookback for past
+history. This option applies only to `active_tasks` and `pending_tasks`
+scenarios.
 * `required_sample_percentage` is the required percentage of samples that
 must be present during the `sample_lookback_interval`. This option applies
 only to `active_tasks` and `pending_tasks` scenarios.

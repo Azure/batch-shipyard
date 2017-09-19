@@ -129,6 +129,10 @@ _NODEPREP_CUSTOMIMAGE_FILE = (
     'shipyard_nodeprep_customimage.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_customimage.sh')
 )
+_NODEPREP_NATIVEDOCKER_FILE = (
+    'shipyard_nodeprep_nativedocker.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_nativedocker.sh')
+)
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
@@ -390,16 +394,18 @@ def _setup_azurefile_volume_driver(blob_client, config):
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
+    upstart = False
     node_agent = settings.pool_custom_image_node_agent(config)
     if (util.is_not_empty(node_agent) and
             node_agent.lower() == 'batch.node.ubuntu 14.04'):
-        publisher = 'canoncial'
-        offer = 'ubuntuserver'
-        sku = '14.04'
-    else:
+        upstart = True
+    elif util.is_none_or_empty(node_agent):
         publisher = settings.pool_publisher(config, lower=True)
         offer = settings.pool_offer(config, lower=True)
         sku = settings.pool_sku(config, lower=True)
+        if (publisher == 'canonical' and offer == 'ubuntuserver' and
+                sku.startswith('14.04')):
+            upstart = True
     # check to see if binary is downloaded
     bin = pathlib.Path(_ROOT_PATH, _AZUREFILE_DVD_BIN['target'])
     if (not bin.exists() or
@@ -418,8 +424,7 @@ def _setup_azurefile_volume_driver(blob_client, config):
         if (util.compute_sha256_for_file(bin, False) !=
                 _AZUREFILE_DVD_BIN['sha256']):
             raise RuntimeError('sha256 mismatch for {}'.format(bin))
-    if (publisher == 'canonical' and offer == 'ubuntuserver' and
-            sku.startswith('14.04')):
+    if upstart:
         srv = pathlib.Path(
             _ROOT_PATH, 'resources/azurefile-dockervolumedriver.conf')
     else:
@@ -676,6 +681,58 @@ def _create_storage_cluster_mount_args(
     return (fstab_mount, sc_arg)
 
 
+def _pick_node_agent_for_vm(batch_client, pool_settings):
+    # type: (azure.batch.batch_service_client.BatchServiceClient,
+    #        settings.PoolSettings) -> (str, str)
+    """Pick a node agent id for the vm
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param settings.PoolSettings pool_settings: pool settings
+    :rtype: tuple
+    :return: image reference to use, node agent id to use
+    """
+    # pick latest sku
+    node_agent_skus = batch_client.account.list_node_agent_skus()
+    skus_to_use = [
+        (nas, image_ref) for nas in node_agent_skus
+        for image_ref in sorted(
+            nas.verified_image_references,
+            key=lambda item: item.sku
+        )
+        if image_ref.publisher.lower() ==
+        pool_settings.vm_configuration.publisher.lower() and
+        image_ref.offer.lower() ==
+        pool_settings.vm_configuration.offer.lower() and
+        image_ref.sku.lower() ==
+        pool_settings.vm_configuration.sku.lower()
+    ]
+    try:
+        sku_to_use, image_ref_to_use = skus_to_use[-1]
+    except IndexError:
+        raise RuntimeError(
+            ('Could not find an Azure Batch Node Agent Sku for this '
+             'offer={} publisher={} sku={}. You can list the valid and '
+             'available Marketplace images with the command: pool '
+             'listskus').format(
+                 pool_settings.vm_configuration.offer,
+                 pool_settings.vm_configuration.publisher,
+                 pool_settings.vm_configuration.sku))
+    # set image version to use
+    image_ref_to_use.version = pool_settings.vm_configuration.version
+    # TODO temporarily pin Ubuntu to version 16.04.201708151 due to
+    # Docker <-> kernel issues in the linux-azure kernel
+    if (image_ref_to_use.publisher.lower() == 'canonical' and
+            image_ref_to_use.offer.lower() == 'ubuntuserver' and
+            image_ref_to_use.sku.lower() == '16.04-lts' and
+            image_ref_to_use.version.lower() == 'latest'):
+        image_ref_to_use.version = '16.04.201708151'
+        logger.warning(
+            ('overriding Canonical UbuntuServer 16.04-LTS latest version '
+             'to {}').format(image_ref_to_use.version))
+    logger.info('deploying vm config: {}'.format(image_ref_to_use))
+    return (image_ref_to_use, sku_to_use.id)
+
+
 def _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config):
@@ -859,7 +916,9 @@ def _construct_pool_object(
         _rflist.append((afenv.name, afenv))
         _rflist.append((afvc.name, afvc))
     # gpu settings
-    if (settings.is_gpu_pool(pool_settings.vm_size) and
+    if (not settings.is_native_docker_pool(
+            config, vm_config=pool_settings.vm_configuration) and
+            settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
@@ -878,7 +937,49 @@ def _construct_pool_object(
     else:
         gpu_env = None
     # set vm configuration
-    if util.is_not_empty(custom_image_na):
+    if settings.is_native_docker_pool(
+            config, vm_config=pool_settings.vm_configuration):
+        _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
+        image_ref, na_ref = _pick_node_agent_for_vm(
+            batch_client, pool_settings)
+        registries = []
+        if preg.server:
+            registries.append(batchmodels.ContainerRegistry(
+                registry_server=preg.server,
+                username=preg.user,
+                password=preg.password))
+        else:
+            hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+            if util.is_not_empty(hubuser):
+                registries.append(batchmodels.ContainerRegistry(
+                    registry_server=None,
+                    username=hubuser,
+                    password=hubpw))
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            image_reference=image_ref,
+            node_agent_sku_id=na_ref,
+            container_configuration=batchmodels.ContainerConfiguration(
+                container_image_names=settings.global_resources_docker_images(
+                    config),
+                container_registries=registries,
+            ),
+        )
+        start_task = [
+            '{npf} {a}{b}{e}{f}{m}{n}{v}{x}'.format(
+                npf=_NODEPREP_NATIVEDOCKER_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                v=' -v {}'.format(__version__),
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            )
+        ]
+    elif util.is_not_empty(custom_image_na):
         _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
         vmconfig = batchmodels.VirtualMachineConfiguration(
             os_disk=batchmodels.OSDisk(
@@ -908,48 +1009,11 @@ def _construct_pool_object(
         ]
     else:
         _rflist.append(_NODEPREP_FILE)
-        # pick latest sku
-        node_agent_skus = batch_client.account.list_node_agent_skus()
-        skus_to_use = [
-            (nas, image_ref) for nas in node_agent_skus
-            for image_ref in sorted(
-                nas.verified_image_references,
-                key=lambda item: item.sku
-            )
-            if image_ref.publisher.lower() ==
-            pool_settings.vm_configuration.publisher.lower() and
-            image_ref.offer.lower() ==
-            pool_settings.vm_configuration.offer.lower() and
-            image_ref.sku.lower() ==
-            pool_settings.vm_configuration.sku.lower()
-        ]
-        try:
-            sku_to_use, image_ref_to_use = skus_to_use[-1]
-        except IndexError:
-            raise RuntimeError(
-                ('Could not find an Azure Batch Node Agent Sku for this '
-                 'offer={} publisher={} sku={}. You can list the valid and '
-                 'available Marketplace images with the command: pool '
-                 'listskus').format(
-                     pool_settings.vm_configuration.offer,
-                     pool_settings.vm_configuration.publisher,
-                     pool_settings.vm_configuration.sku))
-        # set image version to use
-        image_ref_to_use.version = pool_settings.vm_configuration.version
-        # TODO temporarily pin Ubuntu to version 16.04.201708151 due to
-        # Docker <-> kernel issues in the linux-azure kernel
-        if (image_ref_to_use.publisher.lower() == 'canonical' and
-                image_ref_to_use.offer.lower() == 'ubuntuserver' and
-                image_ref_to_use.sku.lower() == '16.04-lts' and
-                image_ref_to_use.version.lower() == 'latest'):
-            image_ref_to_use.version = '16.04.201708151'
-            logger.warning(
-                ('overriding Canonical UbuntuServer 16.04-LTS latest version '
-                 'to {}').format(image_ref_to_use.version))
-        logger.info('deploying vm config: {}'.format(image_ref_to_use))
+        image_ref, na_ref = _pick_node_agent_for_vm(
+            batch_client, pool_settings)
         vmconfig = batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use.id,
+            image_reference=image_ref,
+            node_agent_sku_id=na_ref,
         )
         # create start task commandline
         start_task = [
@@ -977,8 +1041,7 @@ def _construct_pool_object(
             ),
         ]
     # upload resource files
-    sas_urls = storage.upload_resource_files(
-        blob_client, config, _rflist)
+    sas_urls = storage.upload_resource_files(blob_client, config, _rflist)
     del _rflist
     # digest any input data
     addlcmds = data.process_input_data(
@@ -1011,15 +1074,6 @@ def _construct_pool_object(
             wait_for_success=True,
             environment_settings=[
                 batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
-                batchmodels.EnvironmentSetting(
-                    'SHIPYARD_STORAGE_ENV',
-                    crypto.encrypt_string(
-                        encrypt, '{}:{}:{}'.format(
-                            storage.get_storageaccount(),
-                            storage.get_storageaccount_endpoint(),
-                            storage.get_storageaccount_key()),
-                        config)
-                ),
             ],
             resource_files=[],
         ),
@@ -1034,13 +1088,6 @@ def _construct_pool_object(
         ],
         task_scheduling_policy=task_scheduling_policy,
     )
-    if util.is_not_empty(block_for_gr):
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'SHIPYARD_DOCKER_IMAGES_PRELOAD',
-                block_for_gr,
-            )
-        )
     if encrypt:
         pool.certificate_references = [
             batchmodels.CertificateReference(
@@ -1054,13 +1101,33 @@ def _construct_pool_object(
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
-        pool.start_task.resource_files.append(
-            batchmodels.ResourceFile(
-                file_path=gpu_driver.name,
-                blob_source=pool_settings.gpu_driver,
-                file_mode='0755')
+    if not settings.is_native_docker_pool(
+            config, vm_config=pool_settings.vm_configuration):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SHIPYARD_STORAGE_ENV',
+                crypto.encrypt_string(
+                    encrypt, '{}:{}:{}'.format(
+                        storage.get_storageaccount(),
+                        storage.get_storageaccount_endpoint(),
+                        storage.get_storageaccount_key()),
+                    config)
+            )
         )
+        if util.is_not_empty(block_for_gr):
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    'SHIPYARD_DOCKER_IMAGES_PRELOAD',
+                    block_for_gr,
+                )
+            )
+        if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
+            pool.start_task.resource_files.append(
+                batchmodels.ResourceFile(
+                    file_path=gpu_driver.name,
+                    blob_source=pool_settings.gpu_driver,
+                    file_mode='0755')
+            )
     # add any additional specified resource files
     if util.is_not_empty(pool_settings.resource_files):
         for rf in pool_settings.resource_files:
