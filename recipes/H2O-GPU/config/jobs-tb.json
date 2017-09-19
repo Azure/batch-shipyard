@@ -1,0 +1,20 @@
+{
+    "job_specifications": [
+        {
+            "id": "tensorflowjob",
+            "tasks": [
+                {
+                    "image": "gcr.io/tensorflow/tensorflow:latest-gpu",
+                    "resource_files": [
+                        {
+                            "file_path": "mnist_with_summaries.py",
+                            "blob_source": "https://raw.githubusercontent.com/tensorflow/tensorflow/master/tensorflow/examples/tutorials/mnist/mnist_with_summaries.py"
+                        }
+                    ],
+                    "command": "python -u mnist_with_summaries.py --log_dir=logs --max_steps=5000",
+                    "gpu": true
+                }
+            ]
+        }
+    ]
+}
