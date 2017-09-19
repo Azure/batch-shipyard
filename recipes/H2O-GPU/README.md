@@ -1,0 +1,78 @@
+# H2O-GPU
+This recipe is a first TEST. When we are done it's goal is to shows how to run H2O on GPUs in an Azure Batch compute pool. 
+The text below and the Files in the Config Folders aren't accurate, it is a copy of TensorFlow GPU Recipe
+
+## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
+
+### Pool Configuration
+The pool configuration should enable the following properties:
+* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
+`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
+K80 GPUs for GPU compute acceleration while `NV` VM instances feature
+M60 GPUs for visualization workloads. Because TensorFlow is a GPU-accelerated
+compute application, it is best to choose `NC` VM instances.
+* `vm_configuration` is the VM configuration
+  * `platform_image` specifies to use a platform image
+    * `publisher` should be `Canonical` or `OpenLogic`.
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
+
+### Global Configuration
+The global configuration should set the following properties:
+* `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
+Docker image. The official Google
+[TensorFlow GPU Docker images](https://www.tensorflow.org/install/install_linux#gpu_support)
+can be used for this recipe (e.g., gcr.io/tensorflow/tensorflow:latest-gpu)
+
+### Jobs Configuration
+The jobs configuration should set the following properties within the `tasks`
+array to run the
+[MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
+This array should have a task definition containing:
+* `image` should be the name of the Docker image for this container invocation
+that matches the global configuration Docker image,
+e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
+* `resource_files` array should be populated if you want Azure Batch to handle
+the download of the training file from the web endpoint:
+  * `file_path` is the local file path which should be set to
+    `train_mnist.py`
+  * `blob_source` is the remote URL of the file to retrieve:
+    `https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py`
+* `command` should contain the command to pass to the Docker run invocation.
+To run the MNIST convolutional example, the `command` would be:
+`python -u convolutional.py`
+* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
+wrapper.
+
+### Tensorboard
+If you would like to tunnel Tensorboard to your local machine, use the
+`jobs-tb.json` file instead. This requires that a pool SSH user was added,
+and `ssh` or `ssh.exe` is available. This configuration will output summary
+data to the directory specified in the `--log_dir` parameter. After the job
+is submitted, you can start the remote Tensorboard instance with the command:
+
+```shell
+shipyard misc tensorboard
+```
+
+Which will output some text similar to the following:
+
+```
+>> Please connect to Tensorboard at http://localhost:6006/
+
+>> Note that Tensorboard may take a while to start if the Docker image is
+>> not present. Please keep retrying the URL every few seconds.
+
+>> Terminate your session with CTRL+C
+
+>> If you cannot terminate your session cleanly, run:
+     shipyard pool ssh --nodeid tvm-1518333292_4-20170428t151941z sudo docker kill 9e7879b8
+```
+
+With a web browser, navigate to http://localhost:6006/ where Tensorboard
+will be displayed.
+
+Note that the task does not have to be completed for Tensorboard to be run,
+it can be running while Tensorboard is running.
