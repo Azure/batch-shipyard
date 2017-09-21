@@ -2467,7 +2467,6 @@ def action_pool_asu(batch_client, config):
     """
     _check_batch_client(batch_client)
     batch.add_ssh_user(batch_client, config)
-    action_pool_grls(batch_client, config)
 
 
 def action_pool_dsu(batch_client, config):

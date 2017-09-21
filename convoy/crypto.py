@@ -111,6 +111,8 @@ def check_ssh_private_key_filemode(ssh_private_key):
     """
     def _mode_check(fstat, flag):
         return bool(fstat & flag)
+    if util.on_windows():
+        return True
     fstat = ssh_private_key.stat().st_mode
     modes = frozenset((stat.S_IRWXG, stat.S_IRWXO))
     return not any([_mode_check(fstat, x) for x in modes])

@@ -512,22 +512,24 @@ def create_pool(batch_client, config, pool):
 
 
 def _add_admin_user_to_compute_node(
-        batch_client, config, node, username, ssh_public_key_data):
+        batch_client, pool, node, username, ssh_public_key_data,
+        expiry=None):
     # type: (batch.BatchServiceClient, dict, str, batchmodels.ComputeNode,
-    #        str) -> None
+    #        str, datetime.datetime) -> None
     """Adds an administrative user to the Batch Compute Node with a default
     expiry time of 7 days if not specified.
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param dict config: configuration dict
+    :param settings.PoolSpecification pool: pool settings
     :param node: The compute node.
     :type node: `azure.batch.batch_service_client.models.ComputeNode`
     :param str username: user name
     :param str ssh_public_key_data: ssh rsa public key data
+    :param datetime.datetime expiry: expiry
     """
-    pool = settings.pool_settings(config)
-    expiry = datetime.datetime.utcnow() + datetime.timedelta(
-        pool.ssh.expiry_days)
+    if expiry is None:
+        expiry = datetime.datetime.utcnow() + datetime.timedelta(
+            pool.ssh.expiry_days)
     logger.info('adding user {} to node {} in pool {}, expiry={}'.format(
         username, node.id, pool.id, expiry))
     try:
@@ -584,9 +586,12 @@ def add_ssh_user(batch_client, config, nodes=None):
     # get node list if not provided
     if nodes is None:
         nodes = batch_client.compute_node.list(pool.id)
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(
+        pool.ssh.expiry_days)
     for node in nodes:
         _add_admin_user_to_compute_node(
-            batch_client, config, node, pool.ssh.username, ssh_pub_key_data)
+            batch_client, pool, node, pool.ssh.username, ssh_pub_key_data,
+            expiry=expiry)
     # generate tunnel script if requested
     generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes)
 
@@ -602,6 +607,9 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
     :param list nodes: list of nodes
     """
     if pool.ssh.generate_docker_tunnel_script:
+        if util.on_windows():
+            logger.error('cannot generate tunnel script on Windows')
+            return
         if nodes is None or len(list(nodes)) != pool.vm_count:
             nodes = batch_client.compute_node.list(pool.id)
         if ssh_priv_key is None:
