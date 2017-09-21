@@ -3510,6 +3510,7 @@ def add_jobs(
                                 ' ' + task.command) if task.command else '')
                     ]
             taskenv = None
+            output_files = None
             # get docker login if missing images
             if not native and len(missing_images) > 0 and allow_run_on_missing:
                 taskenv, logincmd = generate_docker_login_settings(config)
@@ -3525,14 +3526,12 @@ def add_jobs(
                         'native container pools')
                 task_commands.insert(0, addlcmds)
             # digest any output data
-            addlcmds = data.process_output_data(
-                config, bxfile, _task)
+            addlcmds = data.process_output_data(config, bxfile, _task)
             if addlcmds is not None:
                 if native:
-                    raise RuntimeError(
-                        'output_data at task-level is not supported on '
-                        'native container pools')
-                task_commands.append(addlcmds)
+                    output_files = addlcmds
+                else:
+                    task_commands.append(addlcmds)
             del addlcmds
             # set environment variables for native
             if native:
@@ -3558,12 +3557,6 @@ def add_jobs(
                         )
                     del gpu_env
             del env_vars
-            # set task constraints
-            task_constraints = batchmodels.TaskConstraints(
-                retention_time=task.retention_time,
-                max_task_retry_count=task.max_task_retries,
-                max_wall_clock_time=task.max_wall_time,
-            )
             # create task
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
@@ -3571,8 +3564,13 @@ def add_jobs(
                 user_identity=_RUN_ELEVATED,
                 resource_files=[],
                 multi_instance_settings=mis,
-                constraints=task_constraints,
+                constraints=batchmodels.TaskConstraints(
+                    retention_time=task.retention_time,
+                    max_task_retry_count=task.max_task_retries,
+                    max_wall_clock_time=task.max_wall_time,
+                ),
                 environment_settings=taskenv,
+                output_files=output_files,
             )
             if native:
                 batchtask.container_settings = \

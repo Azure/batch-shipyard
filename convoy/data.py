@@ -220,18 +220,19 @@ def process_input_data(config, bxfile, spec, on_task=False):
         return None
 
 
-def _process_storage_output_data(config, output_data):
-    # type: (dict, dict, bool) -> str
+def _process_storage_output_data(config, native, output_data):
+    # type: (dict, bool, dict) -> str
     """Process output data to egress to Azure storage
     :param dict config: configuration dict
+    :param bool native: is native container pool
     :param dict output_data: config spec with output_data
     :rtype: list
-    :return: args to pass to blobxfer script
+    :return: OutputFiles or args to pass to blobxfer script
     """
-    # get gluster host/container paths
+    # get gluster host/container paths and encryption settings
     gluster_host, gluster_container = _get_gluster_paths(config)
-    # parse storage output data blocks
     encrypt = settings.batch_shipyard_encryption_enabled(config)
+    # parse storage output data blocks
     args = []
     for xfer in output_data:
         storage_settings = settings.credentials_storage(
@@ -245,8 +246,14 @@ def _process_storage_output_data(config, output_data):
                 'cannot specify both container and file_share at the '
                 'same time')
         eo = settings.data_blobxfer_extra_options(xfer)
+        if native and util.is_not_empty(eo):
+            raise ValueError(
+                'native Docker pool does not support blobxfer_extra_options')
         # configure for file share
         if fshare is not None:
+            if native:
+                raise ValueError(
+                    'native Docker pool does not support fileshares')
             if '--fileshare' not in eo:
                 eo = '--fileshare {}'.format(eo)
             # create saskey for file share with rwdl perm
@@ -265,16 +272,41 @@ def _process_storage_output_data(config, output_data):
         if (util.is_not_empty(gluster_container) and
                 src.startswith(gluster_container)):
             src = src.replace(gluster_container, gluster_host, 1)
-        # construct argument
-        # kind:encrypted:<sa:ep:saskey:container>:include:eo:src
-        creds = crypto.encrypt_string(
-            encrypt,
-            '{}:{}:{}:{}'.format(
-                storage_settings.account, storage_settings.endpoint,
-                saskey, container),
-            config)
-        args.append('"{}:e:{}:{}:{}:{}:{}"'.format(
-            _BLOBXFER_VERSION, encrypt, creds, include, eo, src))
+        if native:
+            if util.is_none_or_empty(include):
+                include = '**/*'
+            if not src.endswith('/'):
+                fp = '/'.join((src, include))
+            else:
+                fp = ''.join((src, include))
+            of = batchmodels.OutputFile(
+                file_pattern=fp,
+                destination=batchmodels.OutputFileDestination(
+                    container=batchmodels.OutputFileBlobContainerDestination(
+                        path='',
+                        container_url='{}?{}'.format(
+                            storage.generate_blob_container_uri(
+                                storage_settings, container),
+                            saskey)
+                    )
+                ),
+                upload_options=batchmodels.OutputFileUploadOptions(
+                    upload_condition=batchmodels.
+                    OutputFileUploadCondition.task_success
+                ),
+            )
+            args.append(of)
+        else:
+            # construct argument
+            # kind:encrypted:<sa:ep:saskey:container>:include:eo:src
+            creds = crypto.encrypt_string(
+                encrypt,
+                '{}:{}:{}:{}'.format(
+                    storage_settings.account, storage_settings.endpoint,
+                    saskey, container),
+                config)
+            args.append('"{}:e:{}:{}:{}:{}:{}"'.format(
+                _BLOBXFER_VERSION, encrypt, creds, include, eo, src))
     return args
 
 
@@ -284,24 +316,31 @@ def process_output_data(config, bxfile, spec):
     :param dict config: configuration dict
     :param tuple bxfile: blobxfer script
     :param dict spec: config spec with input_data
-    :rtype: str
-    :return: additonal command
+    :rtype: str or list
+    :return: additonal commands or list of OutputFiles
     """
+    native = settings.is_native_docker_pool(config)
     ret = []
     output_data = settings.output_data(spec)
     if util.is_not_empty(output_data):
         for key in output_data:
             if key == 'azure_storage':
                 args = _process_storage_output_data(
-                    config, output_data[key])
-                ret.append(
-                    ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
-                     'set +f').format(bxfile[0], ' '.join(args)))
+                    config, native, output_data[key])
+                if native:
+                    ret.extend(args)
+                else:
+                    ret.append(
+                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
+                         'set +f').format(bxfile[0], ' '.join(args)))
             else:
                 raise ValueError(
                     'unknown output_data method: {}'.format(key))
     if len(ret) > 0:
-        return ';'.join(ret)
+        if native:
+            return ret
+        else:
+            return ';'.join(ret)
     else:
         return None
 

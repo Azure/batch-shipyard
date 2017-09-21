@@ -152,6 +152,22 @@ def get_storageaccount_endpoint():
     return _STORAGEACCOUNTEP
 
 
+def generate_blob_container_uri(storage_settings, container):
+    # type: (StorageCredentialsSettings, str) -> str
+    """Create a uri to a blob container
+    :param StorageCredentialsSettings storage_settings: storage settings
+    :param str container: container
+    :rtype: str
+    :return: blob container uri
+    """
+    blob_client = azureblob.BlockBlobService(
+        account_name=storage_settings.account,
+        account_key=storage_settings.account_key,
+        endpoint_suffix=storage_settings.endpoint)
+    return '{}://{}/{}'.format(
+        blob_client.protocol, blob_client.primary_endpoint, container)
+
+
 def create_blob_container_saskey(
         storage_settings, container, kind, create_container=False):
     # type: (StorageCredentialsSettings, str, str, bool) -> str
