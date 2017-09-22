@@ -102,10 +102,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '384.59/NVIDIA-Linux-x86_64-384.59.run'
+            '384.66/NVIDIA-Linux-x86_64-384.66.run'
         ),
         'sha256': (
-            '7b53bdee6e396cb271b57f77455fe5c561e655ca3fbba015dae0de3d6c11542b'
+            'de5178743f2881c69358573d3702454450482d4dbe3757029a56cdc9b5ccc07a'
         ),
         'target': 'resources/nvidia-driver.run'
     },

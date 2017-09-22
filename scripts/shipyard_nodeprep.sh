@@ -157,6 +157,8 @@ check_for_nvidia_card() {
 install_nvidia_software() {
     offer=$1
     shift
+    sku=$1
+    shift
     # check for nvidia card
     check_for_nvidia_card
     # split arg into two
@@ -164,7 +166,9 @@ install_nvidia_software() {
     nvdriver=${GPUARGS[1]}
     nvdocker=${GPUARGS[2]}
     # remove nouveau
+    set +e
     rmmod nouveau
+    set -e
     # purge nouveau off system
     if [ $offer == "ubuntuserver" ]; then
         apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
@@ -186,7 +190,17 @@ EOF
     if [ $offer == "ubuntuserver" ]; then
         install_packages $offer build-essential
     elif [[ $offer == centos* ]]; then
-        install_packages $offer gcc binutils make "kernel-devel-$(uname -r)"
+        kernel_devel_package="kernel-devel-$(uname -r)"
+        if [[ $offer == "centos-hpc" ]] || [[ $sku == "7.4" ]]; then
+            install_packages $offer $kernel_devel_package
+        elif [ $sku == "7.3" ]; then
+            curl -fSsLO http://vault.centos.org/7.3.1611/updates/x86_64/Packages/$kernel_devel_package.rpm
+            rpm -Uvh $kernel_devel_package.rpm
+        else
+            echo "ERROR: CentOS $sku not supported for GPU"
+            exit 1
+        fi
+        install_packages $offer gcc binutils make
     fi
     # get additional dependency if NV-series VMs
     if [ ${GPUARGS[0]} == "True" ]; then
@@ -438,7 +452,7 @@ fi
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     # name will be appended to dockerversion
-    dockerversion=17.06.0~ce-0~
+    dockerversion=17.06.2~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
@@ -554,7 +568,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     $srvstatus
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
-        install_nvidia_software $offer
+        install_nvidia_software $offer $sku
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
@@ -603,7 +617,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
-        dockerversion=17.06.0.ce-1.el7.centos
+        dockerversion=17.06.2.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             srvstart="systemctl start docker.service"
@@ -650,7 +664,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     fi
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
-        install_nvidia_software $offer
+        install_nvidia_software $offer $sku
     fi
     # set up glusterfs
     if [ $gluster_on_compute -eq 1 ] && [ ! -f $nodeprepfinished ]; then
