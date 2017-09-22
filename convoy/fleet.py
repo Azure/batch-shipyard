@@ -1696,8 +1696,15 @@ def _adjust_settings_for_pool_creation(config):
             config, vm_size=pool.vm_size)
     if not allowed and util.is_none_or_empty(node_agent):
         raise ValueError(
-            ('Unsupported Docker Host VM Config, publisher={} offer={} '
+            ('unsupported Docker Host VM Config, publisher={} offer={} '
              'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
+    # ensure HPC offers are matched with RDMA sizes
+    if ((offer == 'centos-hpc' or offer == 'sles-hpc') and
+            not settings.is_rdma_pool(pool.vm_size)):
+        raise ValueError(
+            ('cannot allocate an HPC VM config of publisher={} offer={} '
+             'sku={} with a non-RDMA vm_size={}').format(
+                 publisher, offer, sku, pool.vm_size))
     # compute total vm count
     pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
     # ensure enough vhds for custom image pools
@@ -2250,9 +2257,9 @@ def action_pool_add(
         raise RuntimeError(
             'attempting to create a pool that already exists: {}'.format(
                 settings.pool_id(config)))
+    _adjust_settings_for_pool_creation(config)
     storage.create_storage_containers(blob_client, table_client, config)
     storage.clear_storage_containers(blob_client, table_client, config)
-    _adjust_settings_for_pool_creation(config)
     storage.populate_global_resource_blobs(blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
@@ -2681,10 +2688,10 @@ def action_jobs_add(
         else:
             raise RuntimeError(
                 'pool with id of {} already exists'.format(pool_id))
+        _adjust_settings_for_pool_creation(config)
         # create storage containers and clear
         storage.create_storage_containers(blob_client, table_client, config)
         storage.clear_storage_containers(blob_client, table_client, config)
-        _adjust_settings_for_pool_creation(config)
         storage.populate_global_resource_blobs(
             blob_client, table_client, config)
         # create autopool specification object

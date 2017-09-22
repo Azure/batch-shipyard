@@ -69,13 +69,13 @@ _PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
 _PREMIUM_STORAGE_INSTANCE_SUFFIXES = frozenset((
     's', 's_v3',
 ))
-_VM_TCP_NO_TUNE = (
+_VM_TCP_NO_TUNE = frozenset((
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
     'standard_a1', 'standard_a2', 'standard_a3', 'standard_a5', 'standard_a6',
     'standard_a1_v2', 'standard_a2_v2', 'standard_a3_v2', 'standard_a4_v2',
     'standard_a2m_v2', 'standard_a4m_v2', 'standard_d1', 'standard_d2',
-    'standard_d1_v2', 'standard_f1'
-)
+    'standard_d1_v2', 'standard_f1', 'standard_d2_v3', 'standard_e2_v3',
+))
 # named tuples
 PoolVmCountSettings = collections.namedtuple(
     'PoolVmCountSettings', [

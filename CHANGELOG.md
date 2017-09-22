@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+- Prevent invalid configuration of HPC offers with non-RDMA VM sizes
+- Expanded network tuning exemptions for new Dv3 and Ev3 sizes
+
+### Fixed
+- NV driver updates
+- Various OS updates and Docker issues
+- CentOS 7.3 to 7.4 Nvidia driver breakage
+- Regression in `pool ssh` on Windows
+- Exception in unusable nodes with pool stats on allocation
+
 ## [2.9.4] - 2017-09-12
 ### Changed
 - Update dependencies to latest available

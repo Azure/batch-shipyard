@@ -288,7 +288,9 @@ def _block_for_nodes_ready(
                 errors.append('{}: {}'.format(err.code, err.message))
                 if (err.code == 'AccountCoreQuotaReached' or
                         (err.code == 'AccountLowPriorityCoreQuotaReached' and
-                         pool.target_dedicated_nodes == 0)):
+                         pool.target_dedicated_nodes == 0) or
+                        (err.code == 'AllocationTimedout' and
+                         pool.target_dedicated_nodes > 0)):
                     fatal_resize_error = True
             if fatal_resize_error:
                 pool_stats(batch_client, config, pool_id=pool_id)
@@ -908,8 +910,10 @@ def pool_stats(batch_client, config, pool_id=None):
                 (node.start_task_info.end_time -
                  node.last_boot_time).total_seconds()
             )
-        tasks_run.append(node.total_tasks_run)
-        tasks_running.append(node.running_tasks_count)
+        if node.total_tasks_run is not None:
+            tasks_run.append(node.total_tasks_run)
+        if node.running_tasks_count is not None:
+            tasks_running.append(node.running_tasks_count)
     total_running_tasks = sum(tasks_running)
     runnable_task_slots = runnable_nodes * pool.max_tasks_per_node
     total_task_slots = (
