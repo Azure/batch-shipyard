@@ -3183,7 +3183,7 @@ def add_jobs(
         del jpcmd
         # construct job release for multi-instance auto-complete
         jrtask = None
-        if multi_instance and auto_complete:
+        if multi_instance and auto_complete and not native:
             jrtask = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
@@ -3468,6 +3468,7 @@ def add_jobs(
                         for key in gpu_env:
                             f.write('{}={}\n'.format(
                                 key, gpu_env[key]).encode('utf8'))
+                        del gpu_env
                     # close and upload env var file
                     f.close()
                     if not native:
@@ -3482,12 +3483,17 @@ def add_jobs(
             # check if this is a multi-instance task
             mis = None
             if settings.is_multi_instance_task(_task):
+                if util.is_not_empty(task.multi_instance.coordination_command):
+                    cc = util.wrap_commands_in_shell(
+                        task.multi_instance.coordination_command, wait=False)
+                else:
+                    cc = ''
                 mis = batchmodels.MultiInstanceSettings(
                     number_of_instances=task.multi_instance.num_instances,
-                    coordination_command_line=util.wrap_commands_in_shell(
-                        task.multi_instance.coordination_command, wait=False),
+                    coordination_command_line=cc,
                     common_resource_files=[],
                 )
+                del cc
                 # add common resource files for multi-instance
                 if util.is_not_empty(task.multi_instance.resource_files):
                     for rf in task.multi_instance.resource_files:
@@ -3561,18 +3567,15 @@ def add_jobs(
                                 key, ib_env[key])
                         )
                     del ib_env
-                if task.gpu:
-                    for key in gpu_env:
-                        taskenv.append(
-                            batchmodels.EnvironmentSetting(
-                                key, gpu_env[key])
-                        )
-                    del gpu_env
             del env_vars
             # create task
+            if util.is_not_empty(task_commands):
+                tc = util.wrap_commands_in_shell(task_commands)
+            else:
+                tc = ''
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
-                command_line=util.wrap_commands_in_shell(task_commands),
+                command_line=tc,
                 user_identity=_RUN_ELEVATED,
                 resource_files=[],
                 multi_instance_settings=mis,
@@ -3584,6 +3587,7 @@ def add_jobs(
                 environment_settings=taskenv,
                 output_files=output_files,
             )
+            del tc
             if native:
                 batchtask.container_settings = \
                     batchmodels.TaskContainerSettings(

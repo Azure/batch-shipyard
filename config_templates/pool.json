@@ -6,7 +6,8 @@
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
                 "sku": "16.04-LTS",
-                "version": "latest"
+                "version": "latest",
+                "native": false
             },
             "custom_image": {
                 "image_uris": [

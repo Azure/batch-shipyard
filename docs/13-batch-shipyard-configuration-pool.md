@@ -14,7 +14,8 @@ The pool schema is as follows:
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
                 "sku": "16.04-LTS",
-                "version": "latest"
+                "version": "latest",
+                "native": false
             },
             "custom_image": {
                 "image_uris": [
@@ -126,6 +127,13 @@ specify both. If using a custom image, please see the
       VM image.
     * (optional) `version` is the image version to use. The default is
       `latest`.
+    * (optional) `native` will convert the platform image to use native
+      Docker container support for Azure Batch, if possible. This can
+      potentially lead to faster compute node provisioning and better
+      task management (such as job and task termination while tasks are
+      running), in exchange for some other features that are not available
+      in this mode such as task-level data ingress or task-level data egress
+      that is not bound for Azure Storage Blobs. The default is `false`.
   * (required for custom image) `custom_image` defines the custom image to
     use:
     * (required for custom image) `image_uris` defines a list of page blob
