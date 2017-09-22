@@ -3279,6 +3279,25 @@ def add_jobs(
                             config, 'continue adding job schedule {}'.format(
                                 job_id)):
                         continue
+            if native:
+                jscs = batchmodels.TaskContainerSettings(
+                    container_run_options='--rm',
+                    image_name='alfpark/batch-shipyard:rjm-{}'.format(
+                        __version__)
+                )
+                jscmdline = '--monitor' if kill_job_on_completion else ''
+            else:
+                jscs = None
+                jscmdline = util.wrap_commands_in_shell([
+                    'env | grep AZ_BATCH_ > .shipyard-jmtask.envlist',
+                    ('docker run --rm --env-file '
+                     '.shipyard-jmtask.envlist '
+                     '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
+                     '-w $AZ_BATCH_TASK_WORKING_DIR '
+                     'alfpark/batch-shipyard:rjm-{}{}').format(
+                         __version__,
+                         ' --monitor' if kill_job_on_completion else '')
+                ])
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
                 schedule=batchmodels.Schedule(
@@ -3296,17 +3315,8 @@ def add_jobs(
                     constraints=job_constraints,
                     job_manager_task=batchmodels.JobManagerTask(
                         id='shipyard-jmtask',
-                        command_line=util.wrap_commands_in_shell([
-                            'env | grep AZ_BATCH_ > .shipyard-jmtask.envlist',
-                            ('docker run --rm --env-file '
-                             '.shipyard-jmtask.envlist '
-                             '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
-                             '-w $AZ_BATCH_TASK_WORKING_DIR '
-                             'alfpark/batch-shipyard:rjm-{}{}').format(
-                                 __version__,
-                                 ' --monitor' if kill_job_on_completion
-                                 else '')
-                        ]),
+                        command_line=jscmdline,
+                        container_settings=jscs,
                         kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
                         run_exclusive=recurrence.job_manager.run_exclusive,
@@ -3327,6 +3337,8 @@ def add_jobs(
                     ],
                 )
             )
+            del jscs
+            del jscmdline
         else:
             jobschedule = None
         del recurrence
