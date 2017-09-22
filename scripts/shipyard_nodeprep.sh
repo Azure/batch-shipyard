@@ -218,11 +218,7 @@ EOF
         echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf
     fi
     # install nvidia-docker
-    if [ $offer == "ubuntuserver" ]; then
-        dpkg -i $nvdocker
-    elif [[ $offer == centos* ]]; then
-        rpm -Uvh $nvdocker
-    fi
+    install_local_packages $offer $nvdocker
     # enable and start nvidia docker service
     systemctl enable nvidia-docker.service
     systemctl start nvidia-docker.service
@@ -287,7 +283,7 @@ install_azurefile_docker_volume_driver() {
 refresh_package_index() {
     offer=$1
     set +e
-    retries=30
+    retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             apt-get update
@@ -313,7 +309,7 @@ install_packages() {
     offer=$1
     shift
     set +e
-    retries=30
+    retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
@@ -328,6 +324,30 @@ install_packages() {
         let retries=retries-1
         if [ $retries -eq 0 ]; then
             echo "ERROR: Could not install packages: $*"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+install_local_packages() {
+    offer=$1
+    shift
+    set +e
+    retries=120
+    while [ $retries -gt 0 ]; do
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
+            dpkg -i $*
+        else
+            rpm -Uvh --nodeps $*
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not install local packages: $*"
             exit 1
         fi
         sleep 1
@@ -793,7 +813,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 exit 1
             fi
             install_packages $offer lsb
-            rpm -Uvh --nodeps /opt/intelMPI/intel_mpi_packages/*.rpm
+            install_local_packages $offer /opt/intelMPI/intel_mpi_packages/*.rpm
             mkdir -p /opt/intel/compilers_and_libraries/linux
             ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
         fi

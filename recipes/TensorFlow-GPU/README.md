@@ -37,7 +37,7 @@ e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:
   * `file_path` is the local file path which should be set to
-    `train_mnist.py`
+    `convolutional.py`
   * `blob_source` is the remote URL of the file to retrieve:
     `https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py`
 * `command` should contain the command to pass to the Docker run invocation.

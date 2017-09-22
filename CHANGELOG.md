@@ -12,6 +12,7 @@
 - CentOS 7.3 to 7.4 Nvidia driver breakage
 - Regression in `pool ssh` on Windows
 - Exception in unusable nodes with pool stats on allocation
+- Handle package manager db locks during conflicts for local package installs
 
 ## [2.9.4] - 2017-09-12
 ### Changed
