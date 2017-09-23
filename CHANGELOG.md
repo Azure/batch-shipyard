@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- Optional `version` support for `platform_image`. This property can be
+used to set a host OS version to prevent possible issues that occur with
+`latest` image versions.
+
 ### Changed
 - Prevent invalid configuration of HPC offers with non-RDMA VM sizes
 - Expanded network tuning exemptions for new Dv3 and Ev3 sizes
+- Temporarily override Canonical UbuntuServer 16.04-LTS latest version to
+a prior version due to recent linux-azure kernel issues.
 
 ### Fixed
 - NV driver updates

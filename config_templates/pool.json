@@ -5,7 +5,8 @@
             "platform_image": {
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
-                "sku": "16.04-LTS"
+                "sku": "16.04-LTS",
+                "version": "latest"
             },
             "custom_image": {
                 "image_uris": [

@@ -13,7 +13,8 @@ The pool schema is as follows:
             "platform_image": {
                 "publisher": "Canonical",
                 "offer": "UbuntuServer",
-                "sku": "16.04-LTS"
+                "sku": "16.04-LTS",
+                "version": "latest"
             },
             "custom_image": {
                 "image_uris": [
@@ -123,6 +124,8 @@ specify both. If using a custom image, please see the
       Marketplace VM image.
     * (required for platform image) `sku` is the sku name of the Marketplace
       VM image.
+    * (optional) `version` is the image version to use. The default is
+      `latest`.
   * (required for custom image) `custom_image` defines the custom image to
     use:
     * (required for custom image) `image_uris` defines a list of page blob

@@ -369,9 +369,9 @@ docker_pull_image() {
         # non-zero exit code: check if pull output has toomanyrequests or
         # connection resets
         if [ contains "$pull_out" "toomanyrequests" ] || [ contains "$pull_out" "connection reset by peer" ]; then
-            echo "WARNING: will retry:\n$pull_out"
+            echo "WARNING: will retry: $pull_out"
         else
-            echo "ERROR:\n$pull_out"
+            echo "ERROR: $pull_out"
             exit $rc
         fi
         let retries=retries-1

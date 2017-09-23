@@ -934,6 +934,19 @@ def _construct_pool_object(
                      pool_settings.vm_configuration.offer,
                      pool_settings.vm_configuration.publisher,
                      pool_settings.vm_configuration.sku))
+        # set image version to use
+        image_ref_to_use.version = pool_settings.vm_configuration.version
+        # TODO temporarily pin Ubuntu to version 16.04.201708151 due to
+        # Docker <-> kernel issues in the linux-azure kernel
+        if (image_ref_to_use.publisher.lower() == 'canonical' and
+                image_ref_to_use.offer.lower() == 'ubuntuserver' and
+                image_ref_to_use.sku.lower() == '16.04-lts' and
+                image_ref_to_use.version.lower() == 'latest'):
+            image_ref_to_use.version = '16.04.201708151'
+            logger.warning(
+                ('overriding Canonical UbuntuServer 16.04-LTS latest version '
+                 'to {}').format(image_ref_to_use.version))
+        logger.info('deploying vm config: {}'.format(image_ref_to_use))
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref_to_use,
             node_agent_sku_id=sku_to_use.id,

@@ -88,6 +88,7 @@ PoolVmPlatformImageSettings = collections.namedtuple(
         'publisher',
         'offer',
         'sku',
+        'version',
     ]
 )
 PoolVmCustomImageSettings = collections.namedtuple(
@@ -616,6 +617,7 @@ def _populate_pool_vm_configuration(config):
             publisher=conf['publisher'],
             offer=conf['offer'],
             sku=conf['sku'],
+            version=_kv_read_checked(conf, 'version', default='latest'),
         )
     else:
         conf = pool_vm_configuration(config, 'custom_image')
