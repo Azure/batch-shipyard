@@ -1166,23 +1166,27 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
 
 
 def del_node(
-        batch_client, config, all_start_task_failed, all_unusable, node_id):
-    # type: (batch.BatchServiceClient, dict, bool, bool, str) -> None
+        batch_client, config, all_start_task_failed, all_starting,
+        all_unusable, node_id):
+    # type: (batch.BatchServiceClient, dict, bool, bool, bool, str) -> None
     """Delete a node in a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param bool all_start_task_failed: delete all start task failed nodes
+    :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
     :param str node_id: node id to delete
     """
     node_ids = []
     pool_id = settings.pool_id(config)
-    if all_start_task_failed or all_unusable:
+    if all_start_task_failed or all_starting or all_unusable:
         filters = []
         if all_start_task_failed:
             filters.append('(state eq \'starttaskfailed\')')
-        if all_unusable:
+        elif all_starting:
+            filters.append('(state eq \'starting\')')
+        elif all_unusable:
             filters.append('(state eq \'unusable\')')
         nodes = list(
             batch_client.compute_node.list(

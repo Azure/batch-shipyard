@@ -2534,23 +2534,27 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
 
 
 def action_pool_delnode(
-        batch_client, config, all_start_task_failed, all_unusable, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, bool, bool, str) -> None
+        batch_client, config, all_start_task_failed, all_starting,
+        all_unusable, nodeid):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool, bool, str) -> None
     """Action: Pool Delnode
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param bool all_start_task_failed: delete all start task failed nodes
+    :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
     :param str nodeid: nodeid to delete
     """
     _check_batch_client(batch_client)
-    if (all_start_task_failed or all_unusable) and nodeid is not None:
+    if ((all_start_task_failed or all_starting or all_unusable) and
+            nodeid is not None):
         raise ValueError(
             'cannot specify all start task failed nodes or unusable with '
             'a specific node id')
     batch.del_node(
-        batch_client, config, all_start_task_failed, all_unusable, nodeid)
+        batch_client, config, all_start_task_failed, all_starting,
+        all_unusable, nodeid)
 
 
 def action_pool_rebootnode(

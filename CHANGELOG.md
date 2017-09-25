@@ -2,16 +2,19 @@
 
 ## [Unreleased]
 
+## [2.9.5] - 2017-09-24
 ### Added
 - Optional `version` support for `platform_image`. This property can be
 used to set a host OS version to prevent possible issues that occur with
 `latest` image versions.
+- `--all-starting` option for `pool delnode` which will delete all nodes
+in starting state
 
 ### Changed
 - Prevent invalid configuration of HPC offers with non-RDMA VM sizes
 - Expanded network tuning exemptions for new Dv3 and Ev3 sizes
 - Temporarily override Canonical UbuntuServer 16.04-LTS latest version to
-a prior version due to recent linux-azure kernel issues.
+a prior version due to recent linux-azure kernel issues
 
 ### Fixed
 - NV driver updates
@@ -854,7 +857,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.4...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.5...HEAD
+[2.9.5]: https://github.com/Azure/batch-shipyard/compare/2.9.4...2.9.5
 [2.9.4]: https://github.com/Azure/batch-shipyard/compare/2.9.3...2.9.4
 [2.9.3]: https://github.com/Azure/batch-shipyard/compare/2.9.2...2.9.3
 [2.9.2]: https://github.com/Azure/batch-shipyard/compare/2.9.0rc1...2.9.2
