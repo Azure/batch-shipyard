@@ -491,7 +491,7 @@ def _create_virtual_machine(
             computemodels.DataDisk(
                 lun=lun,
                 name=diskname,
-                create_option=computemodels.DiskCreateOption.attach,
+                create_option=computemodels.DiskCreateOptionTypes.attach,
                 managed_disk=computemodels.ManagedDiskParameters(
                     id=disks[diskname][0],
                 ),
@@ -1347,7 +1347,7 @@ def expand_storage_cluster(
                 computemodels.DataDisk(
                     lun=lun,
                     name=diskname,
-                    create_option=computemodels.DiskCreateOption.attach,
+                    create_option=computemodels.DiskCreateOptionTypes.attach,
                     managed_disk=computemodels.ManagedDiskParameters(
                         id=disk_map[diskname][0],
                     ),
