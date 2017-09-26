@@ -236,8 +236,11 @@ EOF
         echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
         docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
         if [ $? -eq 0 ]; then
-            docker volume list
-            break
+            docker volume inspect nvidia_driver_$nvdriverver
+            if [ $? -eq 0 ]; then
+                docker volume list
+                break
+            fi
         else
             NV_NOW=$(date -u +"%s")
             NV_DIFF=$((($NV_NOW-$NV_START)/60))

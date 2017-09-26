@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- RemoteFS disk attach fixes
+- Nvidia docker volume mount check
+
 ## [2.9.5] - 2017-09-24
 ### Added
 - Optional `version` support for `platform_image`. This property can be
