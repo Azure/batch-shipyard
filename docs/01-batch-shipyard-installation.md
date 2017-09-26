@@ -62,7 +62,9 @@ environment so that other system-wide or user python dependencies are left
 unmodified. To perform this style of installation, which is recommended,
 specify the virtual environment to create with the `-e` parameter. This option
 also does not require modifying your shell rc file for advanced data movement
-capability provided by Batch Shipyard.
+capability provided by Batch Shipyard. Note that the default installation
+targets `python3`; you can use the `-2` argument to install for `python`
+(Python 2.7).
 
 The recommended installation method with a virtual environment:
 ```shell
@@ -71,12 +73,12 @@ The recommended installation method with a virtual environment:
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
 # Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
-./install.sh -3 -e shipyard.venv
-# Or install for Python 2.7 in the virtual environment "shipyard.venv"
 ./install.sh -e shipyard.venv
+# Or install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -2 -e shipyard.venv
 # Or to install for Anaconda Python3 in the environment "shipyard.venv". Note
 # that for Anaconda installations, the -e parameter is required
-./install.sh -3 -e shipyard.venv
+./install.sh -e shipyard.venv
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -101,9 +103,9 @@ Alternatively, install directly into your "user" environment:
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
 # Install for Python 3.5+ (recommended) in the virtual environment "shipyard"
-./install.sh -3
-# Or install for Python 2.7
 ./install.sh
+# Or install for Python 2.7
+./install.sh -2
 # Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
@@ -127,7 +129,7 @@ these packages are installed, then invoke the installer in the following
 manner:
 
 ```shell
-DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh -3
+DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh
 ```
 
 #### Unsupported Linux Distributions
@@ -165,9 +167,9 @@ The recommended installation method with a virtual environment:
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
 # Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
-./install.sh -3 -e shipyard.venv
-# Or to install for Python 2.7 in the virtual environment "shipyard.venv"
 ./install.sh -e shipyard.venv
+# Or to install for Python 2.7 in the virtual environment "shipyard.venv"
+./install.sh -2 -e shipyard.venv
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -194,7 +196,9 @@ Batch Shipyard includes a installation command file that simplifies
 installing Batch Shipyard on [python.org (CPython)](https://www.python.org)
 and Anaconda. It is highly recommended to use Python 3.5 or later (or an
 Anaconda equivalent). The use of the `install.cmd` script installs Batch
-Shipyard into a virtual environment. For example:
+Shipyard into a virtual environment. Please ensure that `python.exe` can be
+found in your `%PATH%`. For example:
+
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
@@ -226,6 +230,7 @@ do not need a compiler to install the dependencies.
 
 Alternatively you can install Batch Shipyard using the `requirements.txt`
 file:
+
 ```shell
 # Install for Windows on Python 3.5+
 pip3.exe install --upgrade -r requirements.txt
@@ -241,10 +246,11 @@ Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
 ### <a name="wsl-install"></a>Step 2 [Windows Subsytem for Linux]: Run the `install.sh` Script
-Windows Subsystem for Linux now comes with Python3 installed out of the box.
-This is the recommended Python interpreter to use with Batch Shipyard.
-First, you must enable and install Windows Subsystem for Linux. Please
-follow the [installation guide from Microsoft](https://msdn.microsoft.com/en-us/commandline/wsl/install_guide),
+Windows Subsystem for Linux (using Ubuntu) now comes with Python3 installed
+out of the box. This is the recommended Python interpreter to use with Batch
+Shipyard. First, you must enable and install Windows Subsystem for Linux.
+Please follow the
+[installation guide from Microsoft](https://msdn.microsoft.com/en-us/commandline/wsl/install_guide),
 if you have not enabled and installed it.
 
 The `install.sh` script supports isolated installation through a virtual
@@ -257,12 +263,13 @@ capability provided by Batch Shipyard.
 Once you have installed and activated the Windows Subsystem for Linux and
 Bash, the recommended installation method with a virtual environment is as
 follows:
+
 ```shell
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
 # Install for Python3 in the virtual environment "shipyard.venv"
-./install.sh -3 -e shipyard.venv
+./install.sh -e shipyard.venv
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -303,8 +310,9 @@ respective platform below.
 
 #### Linux, Mac, and Windows Subsystem for Linux
 Rerun the `install.sh` script with the appropriate parameters for all
-upgrades. If you specified the `-3` and/or `-e <env name>` parameter, then
-these parameters must be used again for upgrades.
+upgrades. Please ensure that if you specified `-2`, `-3` and/or the
+`-e <env name>` parameter, then these parameters are issued again for
+upgrades.
 
 #### Windows
 Rerun the `install.cmd` script with the same virtual environment parameter.

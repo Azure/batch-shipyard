@@ -4,8 +4,8 @@ set -e
 set -o pipefail
 
 # vars
-PYTHON=python
-PIP=pip
+PYTHON=python3
+PIP=pip3
 SUDO=sudo
 VENV_NAME=
 
@@ -16,8 +16,8 @@ while getopts "h?23ce:" opt; do
             echo "install.sh parameters"
             echo ""
             echo "-2 install for Python 2.7"
-            echo "-3 install for Python 3.3+"
-            echo "-c install for Cloud Shell"
+            echo "-3 install for Python 3.4+ [default]"
+            echo "-c install for Cloud Shell (via Dockerfile)"
             echo "-e [environment name] install to a virtual environment"
             echo ""
             exit 1
