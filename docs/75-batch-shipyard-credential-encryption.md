@@ -58,19 +58,17 @@ create the necessary certificates and keys. The end result should be two files
 use with the Azure Batch service and (2) an RSA public key PEM file for
 use locally to encrypt.
 
-For step 2, there is one json object that must be configured under
+For step 2, there is one property that must be configured under
 `batch_shipyard` in the global configuration file prior to taking any action:
 
-```json
-        "encryption" : {
-            "enabled": true,
-            "pfx": {
-                "filename": "encrypt.pfx",
-                "passphrase": "mysupersecretpassword",
-                "sha1_thumbprint": "123456789..."
-            },
-            "public_key_pem": "encrypt.pem"
-        }
+```yaml
+  encryption:
+    enabled: true
+    pfx:
+      filename: encrypt.pfx
+      passphrase: mysupersecretpassword
+      sha1_thumbprint: 123456789...
+    public_key_pem: encrypt.pem
 ```
 
 Ensure that the `enabled` property is set to `true` and that the `pfx`
@@ -81,7 +79,7 @@ time encryption is required.
 
 Step 3 is optional to perform explicitly, but one may invoke `cert add` with
 `shipyard.py` to add the certificate to the Batch account specified in the
-credentials json file. If `encryption` is enabled, then this `cert add`
+credentials config file. If `encryption` is enabled, then this `cert add`
 action is automatically invoked for every subsequent `pool add`.
 
 **Note that encryption is not applied retroactively to existing pools.**

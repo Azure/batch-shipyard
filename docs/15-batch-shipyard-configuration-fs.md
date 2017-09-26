@@ -1,109 +1,100 @@
 # Batch Shipyard Remote Filesystem Configuration
 This page contains in-depth details on how to configure the remote filesystem
-json file for Batch Shipyard.
+configuration file for Batch Shipyard.
 
 ## Schema
 The remote filesystem schema is as follows:
 
-```json
-{
-    "remote_fs": {
-        "resource_group": "my-resource-group",
-        "location": "<Azure region, e.g., eastus>",
-        "managed_disks": {
-            "resource_group": "my-disk-resource-group",
-            "premium": true,
-            "disk_size_gb": 128,
-            "disk_names": [
-                "p10-disk0a", "p10-disk1a",
-                "p10-disk0b", "p10-disk1b"
-            ]
-        },
-        "storage_cluster": {
-            "mystoragecluster": {
-                "resource_group": "my-server-resource-group",
-                "hostname_prefix": "mystoragecluster",
-                "ssh": {
-                    "username": "shipyard",
-                    "ssh_public_key": "/path/to/rsa/publickey.pub",
-                    "ssh_public_key_data": "ssh-rsa ...",
-                    "ssh_private_key": "/path/to/rsa/privatekey",
-                    "generated_file_export_path": null
-                },
-                "public_ip": {
-                    "enabled": true,
-                    "static": false
-                },
-                "virtual_network": {
-                    "name": "myvnet",
-                    "resource_group": "my-vnet-resource-group",
-                    "existing_ok": false,
-                    "address_space": "10.0.0.0/16",
-                    "subnet": {
-                        "name": "my-server-subnet",
-                        "address_prefix": "10.0.0.0/24"
-                    }
-                },
-                "network_security": {
-                    "ssh": ["*"],
-                    "nfs": ["1.2.3.0/24", "2.3.4.5"],
-                    "glusterfs": ["1.2.3.0/24", "2.3.4.5"],
-                    "smb": ["6.7.8.9"],
-                    "custom_inbound_rules": {
-                        "myrule": {
-                            "destination_port_range": "5000-5001",
-                            "source_address_prefix": ["1.2.3.4", "5.6.7.0/24"],
-                            "protocol": "*"
-                        }
-                    }
-                },
-                "file_server": {
-                    "type": "glusterfs",
-                    "mountpoint": "/data",
-                    "mount_options": [
-                        "noatime",
-                        "nodiratime"
-                    ],
-                    "server_options": {
-                        "glusterfs": {
-                            "volume_name": "gv0",
-                            "volume_type": "distributed",
-                            "transport": "tcp",
-                            "performance.cache-size": "1 GB"
-                        }
-                    },
-                    "samba": {
-                        "share_name": "data",
-                        "account":  {
-                            "username": "myuser",
-                            "password": "",
-                            "uid": 1002,
-                            "gid": 1002
-                        },
-                        "read_only": false,
-                        "create_mask": "0700",
-                        "directory_mask": "0700"
-                    }
-                },
-                "vm_count": 2,
-                "vm_size": "STANDARD_F8S",
-                "fault_domains": 2,
-                "vm_disk_map": {
-                    "0": {
-                        "disk_array": ["p10-disk0a", "p10-disk1a"],
-                        "filesystem": "btrfs",
-                        "raid_level": 0
-                    },
-                    "1": {
-                        "disk_array": ["p10-disk0b", "p10-disk1b"],
-                        "filesystem": "btrfs",
-                        "raid_level": 0
-                    }
-                }
-            }
-        }
-    }
-}
+```yaml
+remote_fs:
+  resource_group: my-resource-group
+  location: <Azure region, e.g., eastus>
+  managed_disks:
+    resource_group: my-disk-resource-group
+    premium: true
+    disk_size_gb: 128
+    disk_names:
+    - p10-disk0a
+    - p10-disk1a
+    - p10-disk0b
+    - p10-disk1b
+  storage_clusters:
+    mystoragecluster:
+      resource_group: my-server-resource-group
+      hostname_prefix: mystoragecluster
+      ssh:
+        username: shipyard
+        ssh_public_key: /path/to/rsa/publickey.pub
+        ssh_public_key_data: ssh-rsa ...
+        ssh_private_key: /path/to/rsa/privatekey
+        generated_file_export_path: null
+      public_ip:
+        enabled: true
+        static: false
+      virtual_network:
+        name: myvnet
+        resource_group: my-vnet-resource-group
+        existing_ok: false
+        address_space: 10.0.0.0/16
+        subnet:
+          name: my-server-subnet
+          address_prefix: 10.0.0.0/24
+      network_security:
+        ssh:
+        - '*'
+        nfs:
+        - 1.2.3.0/24
+        - 2.3.4.5
+        glusterfs:
+        - 1.2.3.0/24
+        - 2.3.4.5
+        smb:
+        - 6.7.8.9
+        custom_inbound_rules:
+          myrule:
+            destination_port_range: 5000-5001
+            protocol: '*'
+            source_address_prefix:
+            - 1.2.3.4
+            - 5.6.7.0/24
+      file_server:
+        type: glusterfs
+        mountpoint: /data
+        mount_options:
+        - noatime
+        - nodiratime
+        server_options:
+          glusterfs:
+            performance.cache-size: 1 GB
+            transport: tcp
+            volume_name: gv0
+            volume_type: distributed
+        samba:
+          share_name: data
+          account:
+            username: myuser
+            password: userpassword
+            uid: 1002
+            gid: 1002
+          read_only: false
+          create_mask: '0700'
+          directory_mask: '0700'
+      vm_count: 2
+      vm_size: STANDARD_F16S
+      fault_domains: 2
+      vm_disk_map:
+        '0':
+          disk_array:
+          - p10-disk0a
+          - p10-disk1a
+          filesystem: btrfs
+          raid_level: 0
+        '1':
+          disk_array:
+          - p10-disk0b
+          - p10-disk1b
+          filesystem: btrfs
+          raid_level: 0
 ```
 
 ## Details
@@ -162,7 +153,7 @@ used as the `STORAGE_CLUSTER_ID` argument for all `fs cluster`
 actions in the CLI along with any configuration specified for linking against
 Azure Batch pools, if specified, for `pool add`. `data ingress` will also
 take this storage cluster id as a parameter if transfering to the file
-system. Each storage cluster id (key) is paired with a json property
+system. Each storage cluster id (key) is paired with a property
 specifying the following properties:
 * (optional) `resource_group` this is the resource group to use for the
 storage cluster. If this is not specified, then the `resource_group`
@@ -354,7 +345,7 @@ on how this feature works in Batch Shipyard.
 
 ## Full template
 A full template of a credentials file can be found
-[here](../config\_templates/fs.json). Note that this template cannot
+[here](../config\_templates/fs.yaml). Note that this template cannot
 be used as-is and must be modified to fit your scenario.
 
 ## Sample Recipes

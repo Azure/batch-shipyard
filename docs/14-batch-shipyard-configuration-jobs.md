@@ -1,254 +1,200 @@
 # Batch Shipyard Jobs Configuration
 This page contains in-depth details on how to configure the jobs
-json file for Batch Shipyard.
+configuration file for Batch Shipyard.
 
 ## Schema
 The jobs schema is as follows:
 
-```json
-{
-    "job_specifications": [
-        {
-            "id": "dockerjob",
-            "auto_complete": false,
-            "environment_variables": {
-                "abc": "xyz"
-            },
-            "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myjobenv",
-            "max_task_retries": 3,
-            "max_wall_time": "02:00:00",
-            "retention_time": "1.12:00:00",
-            "priority": 0,
-            "user_identity": {
-                "default_pool_admin": true,
-                "specific_user": {
-                    "uid": 1000,
-                    "gid": 1000
-                }
-            },
-            "auto_pool": {
-                "pool_lifetime": "job",
-                "keep_alive": false
-            },
-            "recurrence": {
-                "schedule": {
-                    "do_not_run_until": null,
-                    "do_not_run_after": null,
-                    "start_window": null,
-                    "recurrence_interval": "00:05:00"
-                },
-                "job_manager": {
-                    "allow_low_priority_node": true,
-                    "run_exclusive": false,
-                    "monitor_task_completion": false
-                }
-            },
-            "allow_run_on_missing_image": false,
-            "remove_container_after_exit": true,
-            "shm_size": "256m",
-            "infiniband": false,
-            "gpu": false,
-            "data_volumes": [
-                "joblevelvol"
-            ],
-            "shared_data_volumes": [
-                "joblevelsharedvol"
-            ],
-            "input_data": {
-                "azure_batch": [
-                    {
-                        "job_id": "someotherjob",
-                        "task_id": "task-a",
-                        "include": ["wd/*.dat"],
-                        "exclude": ["*.txt"],
-                        "destination": null
-                    }
-                ],
-                "azure_storage": [
-                    {
-                        "storage_account_settings": "mystorageaccount",
-                        "container": "jobcontainer",
-                        "include": ["jobdata*.bin"],
-                        "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobdata",
-                        "blobxfer_extra_options": null
-                    }
-                ]
-            },
-            "tasks": [
-                {
-                    "task_factory": {
-                        "parametric_sweep": {
-                            "product": [
-                                {
-                                    "start": 0,
-                                    "stop": 10,
-                                    "step": 1
-                                }
-                            ],
-                            "combinations": {
-                                "iterable": ["ABC", "012"],
-                                "length": 2,
-                                "replacement": false
-                            },
-                            "permutations": {
-                                "iterable": "ABCDEF",
-                                "length": 3
-                            },
-                            "zip": ["ab", "01"]
-                        },
-                        "random": {
-                            "generate": 3,
-                            "seed": null,
-                            "integer": {
-                                "start": 0,
-                                "stop": 10,
-                                "step": 1
-                            },
-                            "distribution": {
-                                "uniform": {
-                                    "a": 0,
-                                    "b": 1
-                                },
-                                "triangular": {
-                                    "low": 0,
-                                    "high": 1,
-                                    "mode": null
-                                },
-                                "beta": {
-                                    "alpha": 1,
-                                    "beta": 1
-                                },
-                                "exponential": {
-                                    "lambda": 2
-                                },
-                                "gamma": {
-                                    "alpha": 1,
-                                    "beta": 1
-                                },
-                                "gauss": {
-                                    "mu": 1,
-                                    "sigma": 0.1
-                                },
-                                "lognormal": {
-                                    "mu": 1,
-                                    "sigma": 0.1
-                                },
-                                "pareto": {
-                                    "alpha": 1
-                                },
-                                "weibull": {
-                                    "alpha": 1,
-                                    "beta": 1
-                                }
-                            }
-                        },
-                        "file": {
-                            "azure_storage": {
-                                "storage_account_settings": "mystorageaccount",
-                                "container": "somecontainer",
-                                "include": [],
-                                "exclude": []
-                            },
-                            "task_filepath": "file_name"
-                        },
-                        "custom": {
-                            "module": "mypkg.mymodule",
-                            "package": null,
-                            "input_args": ["a", "b", "c"],
-                            "input_kwargs": {
-                                "abc": "012",
-                                "def": "345"
-                            }
-                        },
-                        "repeat": 3
-                    },
-                    "id": null,
-                    "depends_on": [
-                        "taskid-a", "taskid-b", "taskid-c"
-                    ],
-                    "depends_on_range": [
-                        1, 10
-                    ],
-                    "image": "busybox",
-                    "name": null,
-                    "labels": [],
-                    "environment_variables": {
-                        "def": "123"
-                    },
-                    "environment_variables_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/mytaskenv",
-                    "ports": [],
-                    "data_volumes": [
-                        "contdatavol",
-                        "hosttempvol"
-                    ],
-                    "shared_data_volumes": [
-                        "azurefilevol"
-                    ],
-                    "resource_files": [
-                        {
-                            "file_path": "",
-                            "blob_source": "",
-                            "file_mode": ""
-                        }
-                    ],
-                    "input_data": {
-                        "azure_batch": [
-                            {
-                                "job_id": "previousjob",
-                                "task_id": "mytask1",
-                                "include": ["wd/output/*.bin"],
-                                "exclude": ["*.txt"],
-                                "destination": null
-                            }
-                        ],
-                        "azure_storage": [
-                            {
-                                "storage_account_settings": "mystorageaccount",
-                                "container": "taskcontainer",
-                                "include": ["taskdata*.bin"],
-                                "destination": "$AZ_BATCH_NODE_SHARED_DIR/taskdata",
-                                "blobxfer_extra_options": null
-                            }
-                        ]
-                    },
-                    "output_data": {
-                        "azure_storage": [
-                            {
-                                "storage_account_settings": "mystorageaccount",
-                                "container": "output",
-                                "source": null,
-                                "include": ["**/out*.dat"],
-                                "blobxfer_extra_options": null
-                            }
-                        ]
-                    },
-                    "remove_container_after_exit": true,
-                    "shm_size": "256m",
-                    "additional_docker_run_options": [
-                    ],
-                    "infiniband": false,
-                    "gpu": false,
-                    "max_task_retries": 3,
-                    "max_wall_time": "03:00:00",
-                    "retention_time": "1.12:00:00",
-                    "multi_instance": {
-                        "num_instances": "pool_current_dedicated",
-                        "coordination_command": null,
-                        "resource_files": [
-                            {
-                                "file_path": "",
-                                "blob_source": "",
-                                "file_mode": ""
-                            }
-                        ]
-                    },
-                    "entrypoint": null,
-                    "command": ""
-                }
-            ]
-        }
-    ]
-}
+```yaml
+job_specifications:
+- id: containerjob
+  auto_complete: true
+  environment_variables:
+    abc: xyz
+  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/myjobenv
+  max_task_retries: 1
+  max_wall_time: 02:00:00
+  retention_time: 1.12:00:00
+  priority: 0
+  user_identity:
+    default_pool_admin: true
+    specific_user:
+      gid: 1001
+      uid: 1001
+  auto_pool:
+    keep_alive: false
+    pool_lifetime: job
+  recurrence:
+    schedule:
+      do_not_run_after: null
+      do_not_run_until: null
+      recurrence_interval: 00:05:00
+      start_window: null
+    job_manager:
+      allow_low_priority_node: true
+      monitor_task_completion: false
+      run_exclusive: false
+  allow_run_on_missing_image: false
+  remove_container_after_exit: true
+  shm_size: 256m
+  infiniband: false
+  gpu: false
+  data_volumes:
+  - joblevelvol
+  shared_data_volumes:
+  - joblevelsharedvol
+  input_data:
+    azure_batch:
+    - job_id: someotherjob
+      task_id: task-a
+      exclude:
+      - '*.txt'
+      include:
+      - wd/*.dat
+      destination: null
+    azure_storage:
+    - storage_account_settings: mystorageaccount
+      container: jobcontainer
+      include:
+      - jobdata*.bin
+      destination: $AZ_BATCH_NODE_SHARED_DIR/jobdata
+      blobxfer_extra_options: null
+  tasks:
+  - task_factory:
+      parametric_sweep:
+        combinations:
+          iterable:
+          - ABC
+          - '012'
+          length: 2
+          replacement: false
+        permutations:
+          iterable: ABCDEF
+          length: 3
+        product:
+        - start: 0
+          step: 1
+          stop: 10
+        zip:
+        - ab
+        - '01'
+      random:
+        distribution:
+          beta:
+            alpha: 1
+            beta: 1
+          exponential:
+            lambda: 2
+          gamma:
+            alpha: 1
+            beta: 1
+          gauss:
+            mu: 1
+            sigma: 0.1
+          lognormal:
+            mu: 1
+            sigma: 0.1
+          pareto:
+            alpha: 1
+          triangular:
+            high: 1
+            low: 0
+            mode:
+          uniform:
+            a: 0
+            b: 1
+          weibull:
+            alpha: 1
+            beta: 1
+        generate: 3
+        integer:
+          start: 0
+          step: 1
+          stop: 10
+        seed:
+      file:
+        azure_storage:
+          container: somecontainer
+          exclude: []
+          include: []
+          storage_account_settings: mystorageaccount
+        task_filepath: file_name
+      custom:
+        input_args:
+        - a
+        - b
+        - c
+        input_kwargs:
+          abc: '012'
+          def: '345'
+        module: mypkg.mymodule
+        package: null
+      repeat: 3
+    id: null
+    image: busybox
+    name:
+    labels: []
+    environment_variables:
+      def: '123'
+    environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mytaskenv
+    ports: []
+    data_volumes:
+    - contdatavol
+    - hosttempvol
+    shared_data_volumes:
+    - azurefilevol
+    resource_files:
+    - blob_source: https://some.url
+      file_mode: '0750'
+      file_path: some/path/in/wd/file
+    input_data:
+      azure_batch:
+      - job_id: previousjob
+        task_id: mytask1
+        exclude:
+        - '*.txt'
+        include:
+        - wd/output/*.bin
+        destination: null
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        container: taskcontainer
+        include:
+        - taskdata*.bin
+        destination: $AZ_BATCH_NODE_SHARED_DIR/taskdata
+        blobxfer_extra_options: null
+    output_data:
+      azure_storage:
+      - blobxfer_extra_options:
+        container: output
+        include:
+        - '**/out*.dat'
+        source: null
+        storage_account_settings: mystorageaccount
+    remove_container_after_exit: true
+    shm_size: 256m
+    additional_docker_run_options: []
+    infiniband: false
+    gpu: false
+    depends_on:
+    - taskid-a
+    - taskid-b
+    - taskid-c
+    depends_on_range:
+    - 1
+    - 10
+    max_task_retries: 1
+    max_wall_time: 03:00:00
+    retention_time: 1.12:00:00
+    multi_instance:
+      coordination_command:
+      num_instances: pool_current_dedicated
+      resource_files:
+      - blob_source: https://some.url
+        file_mode: '0750'
+        file_path: some/path/in/sharedtask/file
+    entrypoint: null
+    command: mycommand
 ```
 
 `job_specifications` array consists of jobs to create.
@@ -268,8 +214,8 @@ in a shell within the docker `command` or `entrypoint` if you want any
 environment variables to be expanded.
 * (optional) `environment_variables_keyvault_secret_id` under the job are
 environment variables stored in KeyVault that should be applied to all tasks
-operating under the job. The secret stored in KeyVault must be a valid json
-string, e.g., `{ "env_var_name": "env_var_value" }`.
+operating under the job. The secret stored in KeyVault must be a valid
+YAML/JSON string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
 does not retry tasks that fail (i.e. `max_task_retries` is 0).
@@ -430,7 +376,7 @@ transferred again. This object currently supports `azure_batch` and
     * (required) `destination` is the destination path to place the files
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
-      as defined in the credentials json.
+      as defined in the credentials config.
     * (required) `container` or `file_share` is required when downloading
       from Azure Blob Storage or Azure File Storage, respectively.
       `container` specifies which container to download from for Azure Blob
@@ -579,7 +525,7 @@ transferred again. This object currently supports `azure_batch` and
   * (optional) `environment_variables_keyvault_secret_id` are any additional
     task-specific environment variables that should be applied to the
     container but are stored in KeyVault. The secret stored in KeyVault must
-    be a valid json string, e.g., `{ "env_var_name": "env_var_value" }`.
+    be a valid YAML/JSON string, e.g., `{ "env_var_name": "env_var_value" }`.
   * (optional) `ports` is an array of port specifications that should be
     exposed to the host.
   * (optional) `data_volumes` is an array of `data_volume` aliases as defined
@@ -614,7 +560,7 @@ transferred again. This object currently supports `azure_batch` and
         defaulted to download into `$AZ_BATCH_TASK_WORKING_DIR`.
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
-        as defined in the credentials json.
+        as defined in the credentials config.
       * (required) `container` or `file_share` is required when downloading
         from Azure Blob Storage or Azure File Storage, respectively.
         `container` specifies which container to download from for Azure Blob
@@ -642,7 +588,7 @@ transferred again. This object currently supports `azure_batch` and
     applied to the task running the application command.
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
-        as defined in the credentials json.
+        as defined in the credentials config.
       * (required) `container` or `file_share` is required when uploading to
         Azure Blob Storage or Azure File Storage, respectively. `container`
         specifies which container to upload to for Azure Blob Storage while
@@ -757,5 +703,5 @@ transferred again. This object currently supports `azure_batch` and
 
 ## Full template
 A full template of a credentials file can be found
-[here](../config\_templates/jobs.json). Note that this template cannot
+[here](../config\_templates/jobs.yaml). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

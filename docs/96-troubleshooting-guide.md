@@ -68,7 +68,7 @@ Batch Shipyard installs the Docker Host Engine and other requisite software
 when the compute node starts. There is a possibility for the start task to
 fail due to transient network faults when issuing system software updates.
 You can turn on automatic rebooting where Batch Shipyard can attempt to
-mitigate the issue on your behalf in the `pool.json` config file.
+mitigate the issue on your behalf in the `pool.yaml` config file.
 Alternatively, you can issue the command
 `pool rebootnode --all-start-task-failed` which will attempt to reboot the
 nodes that have entered this state.
@@ -125,9 +125,9 @@ There are various reasons why this would happen:
 1. There are insufficient compute nodes to service the job
 2. The task is multi-instance and there are not enough compute nodes to
 run the job as specified
-3. `jobs.json` file was submitted with the wrong `pool.json` file causing
+3. `jobs.yaml` file was submitted with the wrong `pool.yaml` file causing
 a mismatch in the target pool for the jobs
-4. `jobs.json` file was submitted with the wrong `config.json` file causing
+4. `jobs.yaml` file was submitted with the wrong `config.yaml` file causing
 an infinite wait on a Docker image to be present that may not exist
 
 #### Task runs and completes but fails with a non-zero exit code or scheduling error
@@ -144,7 +144,7 @@ The pool update Docker images command runs as a normal job if your pool is
 comprised entirely of dedicated compute nodes. Thus, your compute
 nodes must be able to accommodate this update job and task. If your pool only
 has one node in it, it will run as a single task under a job. If the node in
-this pool is busy and the `max_tasks_per_node` in your `pool.json` is either
+this pool is busy and the `max_tasks_per_node` in your `pool.yaml` is either
 unspecified or set to 1, then it will be blocked behind the running task.
 
 For pools with more than 1 node, the update Docker images command will run
@@ -155,7 +155,7 @@ the `pool udi` command is issued. If before the task can be scheduled, the
 pool is resized down and the number of nodes decreases, then the update
 Docker images job will not be able to execute and will stay active until
 the number of compute nodes reaches the prior number. Additionally, if
-`max_tasks_per_node` is set to 1 or unspecified in `pool.json` and any
+`max_tasks_per_node` is set to 1 or unspecified in `pool.yaml` and any
 task is running on any node, the update Docker images job will be blocked
 until that task completes.
 

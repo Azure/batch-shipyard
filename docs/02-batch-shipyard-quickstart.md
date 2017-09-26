@@ -35,7 +35,7 @@ of your choice to the `config` directory:
    * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
    * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
    * [Torch-CPU](../recipes/Torch-CPU/config/)
-4. Edit the `config/credentials.json` file and populate it with your Azure
+4. Edit the `config/credentials.yaml` file and populate it with your Azure
 Batch and Azure Storage credentials. If you do not have an Azure Batch account,
 you can create one via the
 [Azure Portal](https://azure.microsoft.com/en-us/documentation/articles/batch-account-create-portal/),
@@ -45,7 +45,7 @@ You can create a standard general purpose
 [Azure Storage account](https://docs.microsoft.com/en-us/azure/storage/storage-create-storage-account#create-a-storage-account)
 using any of the aforementioned methods similar to creating an Azure Batch
 account.
-5. Edit the `config/config.json` file and edit the following settings:
+5. Edit the `config/config.yaml` file and edit the following settings:
    * `storage_account_settings` to link to the storage account named in step 4.
 6. In the main `batch-shipyard` directory (which should contain the
 `shipyard` or `shipyard.cmd` helper scripts if on Linux or Windows,

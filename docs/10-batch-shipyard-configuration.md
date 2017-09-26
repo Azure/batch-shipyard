@@ -1,8 +1,10 @@
 # Batch Shipyard Configuration
-This page contains in-depth details on how to configure Batch Shipyard.
+This page contains details on how to configure Batch Shipyard. Note that
+configuration files can be either in YAML or JSON format, although YAML
+format is utilized in the examples and recipes.
 
 ## Configuration Files
-Batch Shipyard is driven by the following json configuration files:
+Batch Shipyard is driven by the following configuration files:
 
 1. [Credentials](11-batch-shipyard-configuration-credentials.md) -
 credentials for Azure Batch, Storage, KeyVault, Management and Docker private

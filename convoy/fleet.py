@@ -283,21 +283,21 @@ def populate_global_settings(config, fs_storage, pool_id=None):
         bs.generated_sas_expiry_days)
 
 
-def fetch_credentials_json_from_keyvault(
+def fetch_credentials_conf_from_keyvault(
         keyvault_client, keyvault_uri, keyvault_credentials_secret_id):
     # type: (azure.keyvault.KeyVaultClient, str, str) -> dict
-    """Fetch a credentials json from keyvault
+    """Fetch a credentials conf from keyvault
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param str keyvault_uri: keyvault uri
     :param str keyvault_credentials_secret_id: keyvault cred secret id
     :rtype: dict
-    :return: credentials json
+    :return: credentials conf
     """
     if keyvault_uri is None:
-        raise ValueError('credentials json was not specified or is invalid')
+        raise ValueError('credentials conf was not specified or is invalid')
     if keyvault_client is None:
         raise ValueError('no Azure KeyVault or AAD credentials specified')
-    return keyvault.fetch_credentials_json(
+    return keyvault.fetch_credentials_conf(
         keyvault_client, keyvault_uri, keyvault_credentials_secret_id)
 
 
@@ -2234,7 +2234,7 @@ def action_keyvault_add(keyvault_client, config, keyvault_uri, name):
     :param str name: secret name
     """
     _check_keyvault_client(keyvault_client)
-    keyvault.store_credentials_json(
+    keyvault.store_credentials_conf(
         keyvault_client, config, keyvault_uri, name)
 
 

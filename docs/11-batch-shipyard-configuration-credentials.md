@@ -1,90 +1,73 @@
 # Batch Shipyard Credentials Configuration
 This page contains in-depth details on how to configure the credentials
-json file for Batch Shipyard.
+configuration file for Batch Shipyard.
 
 ## Schema
 The credentials schema is as follows:
 
-```json
-{
-    "credentials": {
-        "keyvault": {
-            "uri": "https://myvault.vault.azure.net/",
-            "credentials_secret_id": "https://myvault.vault.azure.net/secrets/credentialsjson",
-            "aad": {
-                "endpoint": "https://vault.azure.net",
-                "directory_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "application_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "auth_key": "01234...",
-                "rsa_private_key_pem": "/path/to/privkey.pem",
-                "x509_cert_sha1_thumbprint": "01AB02CD...",
-                "user": "me@domain.com",
-                "password": "password",
-                "token_cache": {
-                    "enabled": true,
-                    "filename": ""
-                }
-            }
-        },
-        "management": {
-            "subscription_id": "",
-            "aad": {
-                "endpoint": "https://management.core.windows.net/",
-                "directory_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "application_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "auth_key": "01234...",
-                "rsa_private_key_pem": "/path/to/privkey.pem",
-                "x509_cert_sha1_thumbprint": "01AB02CD...",
-                "user": "me@domain.com",
-                "password": "password",
-                "token_cache": {
-                    "enabled": true,
-                    "filename": ""
-                }
-            }
-        },
-        "batch": {
-            "account_service_url": "https://awesomebatchaccountname.<region>.batch.azure.com/",
-            "aad": {
-                "endpoint": "https://batch.core.windows.net/",
-                "directory_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "application_id": "01234567-89ab-cdef-0123-456789abcdef",
-                "auth_key": "01234...",
-                "rsa_private_key_pem": "/path/to/privkey.pem",
-                "x509_cert_sha1_thumbprint": "01AB02CD...",
-                "user": "me@domain.com",
-                "password": "password",
-                "token_cache": {
-                    "enabled": true,
-                    "filename": ""
-                }
-            },
-            "resource_group": "",
-            "account_key": "batchaccountkey",
-            "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey"
-        },
-        "storage": {
-            "mystorageaccount": {
-                "account": "awesomestorageaccountname",
-                "account_key": "storageaccountkey",
-                "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/storagekey",
-                "endpoint": "core.windows.net"
-            }
-        },
-        "docker_registry": {
-            "hub": {
-                "username": "myhublogin",
-                "password": "myhubpassword",
-                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/docker-hub-password"
-            },
-            "myserver-myorg.azurecr.io": {
-                "username": "azurecruser",
-                "password": "mypassword",
-                "password_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/myserver-myorg-azurecr-io-password"
-            }
-        }
-    }
-}
+```yaml
+credentials:
+  batch:
+    aad:
+      endpoint: https://batch.core.windows.net/
+      directory_id: 01234567-89ab-cdef-0123-456789abcdef
+      application_id: 01234567-89ab-cdef-0123-456789abcdef
+      auth_key: 01234...
+      rsa_private_key_pem: some/path/privatekey.pem
+      x509_cert_sha1_thumbprint: 01234...
+      user: aad_username
+      password: aad_user_password
+      token_cache:
+        enabled: true
+        filename: some/path/token.cache
+    account_key: 01234...
+    account_key_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+    account_service_url: https://<batch_account_name>.<region>.batch.azure.com/
+    resource_group: resource-group-for-vnet-and-remotefs
+  storage:
+    mystorageaccount:
+      account: storage_account_name
+      account_key: 01234...
+      account_key_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+      endpoint: core.windows.net
+  docker_registry:
+    hub:
+      username: hub_username
+      password: hub_user_password
+      password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+    myserver.azurecr.io:
+      username: acr_username
+      password: acr_user_password
+      password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+  management:
+    aad:
+      endpoint: https://batch.core.windows.net/
+      directory_id: 01234567-89ab-cdef-0123-456789abcdef
+      application_id: 01234567-89ab-cdef-0123-456789abcdef
+      auth_key: 01234...
+      rsa_private_key_pem: some/path/privatekey.pem
+      x509_cert_sha1_thumbprint: 01234...
+      user: aad_username
+      password: aad_user_password
+      token_cache:
+        enabled: true
+        filename: some/path/token.cache
+    subscription_id: 01234567-89ab-cdef-0123-456789abcdef
+  keyvault:
+    aad:
+      endpoint: https://batch.core.windows.net/
+      directory_id: 01234567-89ab-cdef-0123-456789abcdef
+      application_id: 01234567-89ab-cdef-0123-456789abcdef
+      auth_key: 01234...
+      rsa_private_key_pem: some/path/privatekey.pem
+      x509_cert_sha1_thumbprint: 01234...
+      user: aad_username
+      password: aad_user_password
+      token_cache:
+        enabled: true
+        filename: some/path/token.cache
+    credentials_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+    uri: https://<vault_name>.vault.azure.net/
 ```
 
 ## Details
@@ -97,7 +80,8 @@ UserSubscription Batch accounts.
 ### Azure Active Directory: `aad`
 The following is a description of `aad` properties that can be used within
 each credential section. The `aad` property contains members for Azure Active
-Directory credentials. Note that some options are mutually exclusive of each
+Directory credentials. This section may not be needed or applicable for every
+credential section. Note that some options are mutually exclusive of each
 other depending upon authentication type. The available authentication types
 for Batch Shipyard with the required parameters for each are:
 * Service principal authentication key: `application_id` and `auth_key`
@@ -129,34 +113,6 @@ want to resort to interactive multi-factor authentication.
   device code auth only. Tokens are not cached for other auth mechanisms.
   * (optional) `enabled` enables the token cache for device code auth
   * (optional) `filename` specifies the file path to cache the signed token
-
-### KeyVault: `keyvault`
-Please see the
-[Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
-for more information.
-* (optional) The `keyvault` property defines the required members for
-accessing Azure KeyVault with Azure Active Directory credentials. Note that
-this property is *mutually exclusive* of all other properties in this file.
-If you need to define other members in this config file while using Azure
-KeyVault, then you will need to use environment variables or cli parameters
-instead for AAD and KeyVault credentials.
-  * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
-  * (optional) `credentials_secret_id` property defines the KeyVault secret
-    id containing an entire credentials.json file.
-  * (required) `aad` AAD authentication parameters for KeyVault.
-
-Please refer to the
-[Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
-for more information regarding `*_keyvault_secret_id` properties and how
-they are used for credential management with Azure KeyVault.
-
-### Management: `management`
-* (optional) The `management` property defines the required members for
-accessing Azure Resources (ARM) with Azure Active Directory credentials. This
-is required with `fs` filesystem actions and pools that need to be created
-with a virtual network specification (thus UserSubscription Batch accounts).
-  * (required) `subscription_id` is the subscription id to interact with.
-  * (required) `aad` AAD authentication parameters for ARM.
 
 ### Batch: `batch`
 * (required) The `batch` property defines the Azure Batch account. Members
@@ -205,7 +161,7 @@ or private repositories on Docker Hub.
     defines a private container registry to connect to. This is an example to
     connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
     The private registry defined here should be defined as the `server`
-    property in the `docker_registry`:`private` json object in the global
+    property in the `docker_registry`:`private` property in the global
     configuration.
     * (optional) `username` username to log in to this registry
     * (optional) `password` password associated with this username
@@ -214,7 +170,36 @@ or private repositories on Docker Hub.
       specified KeyVault and replace the `password` value as returned by
       Azure KeyVault.
 
+### Management: `management`
+* (optional) The `management` property defines the required members for
+accessing Azure Resources (ARM) with Azure Active Directory credentials. This
+is required with `fs` filesystem actions and pools that need to be created
+with a virtual network specification (thus UserSubscription Batch accounts).
+  * (required) `subscription_id` is the subscription id to interact with.
+  * (required) `aad` AAD authentication parameters for ARM.
+
+### KeyVault: `keyvault`
+Please see the
+[Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
+for more information. This section is not strictly required for using
+Batch Shipyard.
+* (optional) The `keyvault` property defines the required members for
+accessing Azure KeyVault with Azure Active Directory credentials. Note that
+this property is *mutually exclusive* of all other properties in this file.
+If you need to define other members in this config file while using Azure
+KeyVault, then you will need to use environment variables or cli parameters
+instead for AAD and KeyVault credentials.
+  * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
+  * (optional) `credentials_secret_id` property defines the KeyVault secret
+    id containing an entire credentials.yaml file.
+  * (required) `aad` AAD authentication parameters for KeyVault.
+
+Please refer to the
+[Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
+for more information regarding `*_keyvault_secret_id` properties and how
+they are used for credential management with Azure KeyVault.
+
 ## Full template
 A full template of a credentials file can be found
-[here](../config\_templates/credentials.json). Note that this template cannot
+[here](../config\_templates/credentials.yaml). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

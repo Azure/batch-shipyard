@@ -1,114 +1,90 @@
 # Batch Shipyard Pool Configuration
 This page contains in-depth details on how to configure the pool
-json file for Batch Shipyard.
+configuration file for Batch Shipyard.
 
 ## Schema
 The pool schema is as follows:
 
-```json
-{
-    "pool_specification": {
-        "id": "dockerpool",
-        "vm_configuration": {
-            "platform_image": {
-                "publisher": "Canonical",
-                "offer": "UbuntuServer",
-                "sku": "16.04-LTS",
-                "version": "latest",
-                "native": false
-            },
-            "custom_image": {
-                "image_uris": [
-                    "https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd"
-                ],
-                "node_agent": "batch.node.ubuntu 16.04"
-            }
-        },
-        "vm_size": "STANDARD_H16R",
-        "vm_count": {
-            "dedicated": 8,
-            "low_priority": 0
-        },
-        "resize_timeout": "00:20:00",
-        "max_tasks_per_node": 1,
-        "node_fill_type": "pack",
-        "autoscale": {
-            "evaluation_interval": "00:05:00",
-            "scenario": {
-                "name": "active_tasks",
-                "maximum_vm_count": {
-                    "dedicated": 16,
-                    "low_priority": 8
-                },
-                "node_deallocation_option": "taskcompletion",
-                "sample_lookback_interval": "00:10:00",
-                "required_sample_percentage": 70,
-                "bias_last_sample": true,
-                "bias_node_type": "low_priority",
-                "rebalance_preemption_percentage": 50
-            },
-            "formula": ""
-        },
-        "inter_node_communication_enabled": true,
-        "reboot_on_start_task_failed": true,
-        "block_until_all_global_resources_loaded": true,
-        "transfer_files_on_pool_creation": false,
-        "input_data": {
-            "azure_batch": [
-                {
-                    "job_id": "jobonanotherpool",
-                    "task_id": "mytask",
-                    "include": ["wd/*.dat"],
-                    "exclude": ["*.txt"],
-                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/jobonanotherpool"
-                }
-            ],
-            "azure_storage": [
-                {
-                    "storage_account_settings": "mystorageaccount",
-                    "container": "poolcontainer",
-                    "include": ["pooldata*.bin"],
-                    "destination": "$AZ_BATCH_NODE_SHARED_DIR/pooldata",
-                    "blobxfer_extra_options": null
-                }
-            ]
-        },
-        "resource_files": [
-            {
-                "file_path": "",
-                "blob_source": "",
-                "file_mode": ""
-            }
-        ],
-        "virtual_network": {
-            "name": "myvnet",
-            "resource_group": "vnet-in-another-rg",
-            "create_nonexistant": false,
-            "address_space": "10.0.0.0/16",
-            "subnet": {
-                "name": "subnet-for-batch-vms",
-                "address_prefix": "10.0.0.0/20"
-            }
-        },
-        "ssh": {
-            "username": "docker",
-            "expiry_days": 30,
-            "ssh_public_key": "/path/to/rsa/publickey.pub",
-            "ssh_public_key_data": "ssh-rsa ...",
-            "ssh_private_key": "/path/to/rsa/privatekey",
-            "generate_docker_tunnel_script": true,
-            "generated_file_export_path": null,
-            "hpn_server_swap": false
-        },
-        "gpu": {
-            "nvidia_driver": {
-                "source": "https://some.url"
-            }
-        },
-        "additional_node_prep_commands": [
-        ]
-    }
-}
+```yaml
+pool_specification:
+  id: dockerpool
+  vm_configuration:
+    platform_image:
+      publisher: Canonical
+      offer: UbuntuServer
+      sku: 16.04-LTS
+      version: latest
+      native: false
+    custom_image:
+      image_uris:
+      - https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd
+      node_agent: batch.node.ubuntu 16.04
+  vm_size: STANDARD_D2_V2
+  vm_count:
+    dedicated: 4
+    low_priority: 8
+  max_tasks_per_node: 1
+  resize_timeout: 00:20:00
+  node_fill_type: pack
+  autoscale:
+    evaluation_interval: 00:05:00
+    scenario:
+      name: active_tasks
+      maximum_vm_count:
+        dedicated: 16
+        low_priority: 8
+      node_deallocation_option: taskcompletion
+      sample_lookback_interval: 00:10:00
+      required_sample_percentage: 70
+      bias_last_sample: true
+      bias_node_type: low_priority
+      rebalance_preemption_percentage: 50
+    formula: ''
+  inter_node_communication_enabled: true
+  reboot_on_start_task_failed: true
+  block_until_all_global_resources_loaded: true
+  transfer_files_on_pool_creation: false
+  input_data:
+    azure_batch:
+    - destination: $AZ_BATCH_NODE_SHARED_DIR/jobonanotherpool
+      exclude:
+      - '*.txt'
+      include:
+      - wd/*.dat
+      job_id: jobonanotherpool
+      task_id: mytask
+    azure_storage:
+    - blobxfer_extra_options:
+      container: poolcontainer
+      destination: $AZ_BATCH_NODE_SHARED_DIR/pooldata
+      include:
+      - pooldata*.bin
+      storage_account_settings: mystorageaccount
+  resource_files:
+  - blob_source: https://some.url
+    file_mode: '0750'
+    file_path: path/in/wd/file.bin
+  ssh:
+    username: docker
+    expiry_days: 30
+    ssh_public_key: /path/to/rsa/publickey.pub
+    ssh_public_key_data: ssh-rsa ...
+    ssh_private_key: /path/to/rsa/privatekey
+    generate_docker_tunnel_script: true
+    generated_file_export_path:
+    hpn_server_swap: false
+  virtual_network:
+    name: myvnet
+    resource_group: vnet-in-another-rg
+    create_nonexistant: false
+    address_space: 10.0.0.0/16
+    subnet:
+      name: subnet-for-batch-vms
+      address_prefix: 10.0.0.0/20
+  gpu:
+    nvidia_driver:
+      source: https://some.url
+  additional_node_prep_commands: []
 ```
 
 The `pool_specification` property has the following members:
@@ -239,8 +215,8 @@ network timeout, resolution failure or download problem). This defaults to
 from entering ready state until all Docker images are loaded. This defaults
 to `true`.
 * (optional) `transfer_files_on_pool_creation` will ingress all `files`
-specified in the `global_resources` section of the configuration json when
-the pool is created. If files are to be ingressed to Azure Blob or File
+specified in the `global_resources` section of the global configuration file
+when the pool is created. If files are to be ingressed to Azure Blob or File
 Storage, then data movement operations are overlapped with the creation of the
 pool. If files are to be ingressed to a shared file system on the compute
 nodes, then the files are ingressed after the pool is created and the shared
@@ -268,7 +244,7 @@ data defined in `files` prior to pool creation and disable the option above
     * (required) `destination` is the destination path to place the files
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
-      as defined in the credentials json.
+      as defined in the credentials config.
     * (required) `container` or `file_share` is required when downloading
       from Azure Blob Storage or Azure File Storage, respectively.
       `container` specifies which container to download from for Azure Blob
@@ -355,5 +331,5 @@ be empty or omitted.
 
 ## Full template
 A full template of a credentials file can be found
-[here](../config\_templates/pool.json). Note that this template cannot
+[here](../config\_templates/pool.yaml). Note that this template cannot
 be used as-is and must be modified to fit your scenario.

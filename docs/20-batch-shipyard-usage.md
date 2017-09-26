@@ -76,17 +76,17 @@ These options must be specified after the command and sub-command. These are:
   --show-config                   Show configuration
   -v, --verbose                   Verbose output
   --configdir TEXT                Configuration directory where all
-                                  configuration files can be found. Each json
+                                  configuration files can be found. Each
                                   config file must be named exactly the same
                                   as the regular switch option, e.g.,
-                                  pool.json for --pool. Individually specified
+                                  pool.yaml for --pool. Individually specified
                                   config options take precedence over this
                                   option.
-  --credentials TEXT              Credentials json config file
-  --config TEXT                   Global json config file
-  --fs TEXT                       Filesystem json config file
-  --pool TEXT                     Pool json config file
-  --jobs TEXT                     Jobs json config file
+  --credentials TEXT              Credentials config file
+  --config TEXT                   Global config file
+  --fs TEXT                       RemoteFS config file
+  --pool TEXT                     Pool config file
+  --jobs TEXT                     Jobs config file
   --subscription-id TEXT          Azure Subscription ID
   --keyvault-uri TEXT             Azure KeyVault URI
   --keyvault-credentials-secret-id TEXT
@@ -107,24 +107,24 @@ These options must be specified after the command and sub-command. These are:
 * `--show-config` will output the merged configuration prior to execution
 * `-v` or `--verbose` is for verbose output
 * `--configdir path` can be used instead of the individual config switches
-below if all configuration json files are in one directory and named after
+below if all configuration files are in one directory and named after
 their switch. For example, if you have a directory named `config` and under
-that directory you have the files `credentials.json`, `config.json`,
-`pool.json` and `jobs.json`, then you can use this argument instead of the
+that directory you have the files `credentials.yaml`, `config.yaml`,
+`pool.yaml` and `jobs.yaml`, then you can use this argument instead of the
 following:
-  * `--credentials path/to/credentials.json` is required for all actions
+  * `--credentials path/to/credentials.yaml` is required for all actions
     except for a select few `keyvault` commands.
-  * `--config path/to/config.json` is required for all actions.
-  * `--pool path/to/pool.json` is required for most actions.
-  * `--jobs path/to/jobs.json` is required for job-related actions.
-  * `--fs path/to/fs.json` is required for fs-related actions and some pool
+  * `--config path/to/config.yaml` is required for all actions.
+  * `--pool path/to/pool.yaml` is required for most actions.
+  * `--jobs path/to/jobs.yaml` is required for job-related actions.
+  * `--fs path/to/fs.yaml` is required for fs-related actions and some pool
     actions.
 * `--subscription-id` is the Azure Subscription Id associated with the
 Batch account or Remote file system resources. This is only required for
 creating pools with a virtual network specification or with `fs` commands.
 * `--keyvault-uri` is required for all `keyvault` commands.
 * `--keyvault-credentials-secret-id` is required if utilizing a credentials
-json stored in Azure KeyVault
+config stored in Azure KeyVault
 * `--aad-endpoint` is the Active Directory endpoint for the resource. Note
 that this can cause conflicts for actions that require multiple endpoints
 for different resources. It is better to specify endpoints explicitly in
@@ -147,11 +147,11 @@ be specified at once, i.e., `--aad-auth-key`, `--aad-password`, and
 Note that the following options can be specified as environment variables
 instead:
 * `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
-* `SHIPYARD_CREDENTIALS_JSON` in lieu of `--credentials`
-* `SHIPYARD_CONFIG_JSON` in lieu of `--config`
-* `SHIPYARD_POOL_JSON` in lieu of `--pool`
-* `SHIPYARD_JOBS_JSON` in lieu of `--jobs`
-* `SHIPYARD_FS_JSON` in lieu of `--fs`
+* `SHIPYARD_CREDENTIALS_CONF` in lieu of `--credentials`
+* `SHIPYARD_CONFIG_CONF` in lieu of `--config`
+* `SHIPYARD_POOL_CONF` in lieu of `--pool`
+* `SHIPYARD_JOBS_CONF` in lieu of `--jobs`
+* `SHIPYARD_FS_CONF` in lieu of `--fs`
 * `SHIPYARD_SUBSCRIPTION_ID` in lieu of `--subscription-id`
 * `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
 * `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
@@ -200,7 +200,7 @@ The `cert` command has the following sub-commands:
 ```
 * `add` will add a certificate to the Batch account
 * `create` will create a certificate locally for use with the Batch account.
-You must edit your `config.json` to incorporate the generated certificate and
+You must edit your `config.yaml` to incorporate the generated certificate and
 then invoked the `cert add` command. Please see the
 [credential encryption](75-batch-shipyard-credential-encryption.md) guide for more information.
 * `del` will delete a certificate from the Batch account
@@ -263,7 +263,7 @@ parts of a remote filesystem:
   status   Query status of a filesystem storage cluster...
   suspend  Suspend a filesystem storage cluster in Azure
 ```
-As the `fs.json` configuration file can contain multiple storage cluster
+As the `fs.yaml` configuration file can contain multiple storage cluster
 definitions, all `fs cluster` commands require the argument
 `STORAGE_CLUSTER_ID` after any option below is specified targeting the
 storage cluster to perform actions against.
@@ -423,20 +423,20 @@ user.
 ## `keyvault` Command
 The `keyvault` command has the following sub-commands:
 ```
-  add   Add a credentials json as a secret to Azure...
+  add   Add a credentials config file as a secret to...
   del   Delete a secret from Azure KeyVault
   list  List secret ids and metadata in an Azure...
 ```
 The following subcommands require `--keyvault-*` and `--aad-*` options in
-order to work. Alternatively, you can specify these in the `credentials.json`
+order to work. Alternatively, you can specify these in the `credentials.yaml`
 file, but these options are mutually exclusive of other properties.
 Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
 for more information.
-* `add` will add the specified credentials json as a secret to an Azure
-KeyVault. A valid credentials json must be specified as an option.
+* `add` will add the specified credentials config file as a secret to an Azure
+KeyVault. A valid credentials config file must be specified as an option.
   * `NAME` argument is required which is the name of the secret associated
-    with the credentials json to store in the KeyVault
+    with the credentials config to store in the KeyVault
 * `del` will delete a secret from the Azure KeyVault
   * `NAME` argument is required which is the name of the secret to delete
     from the KeyVault
@@ -450,7 +450,7 @@ The `misc` command has the following sub-commands:
 * `tensorboard` will create a tunnel to the compute node that is running
 or has run the specified task
   * `--jobid` specifies the job id to use. If this is not specified, the first
-    and only jobspec is used from jobs.json.
+    and only jobspec is used from jobs.yaml.
   * `--taskid` specifies the task id to use. If this is not specified, the
     last run or running task for the job is used.
   * `--logdir` specifies the TensorFlow logs directory generated by summary
@@ -557,7 +557,7 @@ for metadata purposes
 
 ## Example Invocations
 ```shell
-shipyard pool add --credentials credentials.json --config config.json --pool pool.json
+shipyard pool add --credentials credentials.yaml --config config.yaml --pool pool.yaml
 
 # ... or if all config files are in the current working directory named as above ...
 
@@ -578,7 +578,7 @@ shipyard jobs add --configdir .
 
 SHIPYARD_CONFIGDIR=. shipyard jobs add
 ```
-The above invocation will add the jobs specified in the jobs.json file to
+The above invocation will add the jobs specified in the jobs.yaml file to
 the designated pool.
 
 ```shell

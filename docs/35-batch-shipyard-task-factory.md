@@ -11,7 +11,7 @@ Sometimes it is necessary to create a set of tasks where the base task
 specification is the same (e.g., the run options, input, etc.) but the
 arguments and options for the `command` must vary between tasks. This can
 become tedious and error-prone to perform by hand or requires auxillary
-code to generate the jobs JSON configuration.
+code to generate the jobs configuration.
 
 A task factory is simply a task generator for a job. With this functionality,
 you can direct Batch Shipyard to generate a set of tasks given a
@@ -46,19 +46,14 @@ generation. For example, if you need to generate a range of integers from
 0 to 9 with a step size of 1 (thus 10 integers total), you would specify this
 as:
 
-```json
-    "task_factory": {
-        "parametric_sweep": {
-            "product": [
-                {
-                    "start": 0,
-                    "stop": 10,
-                    "step": 1
-                }
-            ]
-        }
-    },
-    "command": "/bin/bash -c \"sleep {0}\""
+```yaml
+task_factory:
+  parametric_sweep:
+    product:
+    - start: 0
+      step: 1
+      stop: 10
+command: /bin/bash -c "sleep {0}"
 ```
 
 As shown above, the associated `command` requires either `{}` or `{0}`
@@ -87,24 +82,17 @@ As mentioned above, `product` can generate nested parameter sets. To do this
 one would create two or more `start`, `stop`, `step` objects in the
 `product` array. For example:
 
-```json
-    "task_factory": {
-        "parametric_sweep": {
-            "product": [
-                {
-                    "start": 0,
-                    "stop": 3,
-                    "step": 1
-                },
-                {
-                    "start": 100,
-                    "stop": 97,
-                    "step": -1
-                }
-            ]
-        }
-    },
-    "command": "/bin/bash -c \"sleep {0}; sleep {1}\""
+```yaml
+task_factory:
+  parametric_sweep:
+    product:
+    - start: 0
+      step: 1
+      stop: 3
+    - start: 100
+      step: -1
+      stop: 97
+command: /bin/bash -c "sleep {0}; sleep {1}"
 ```
 
 would generate 9 tasks (i.e., `3 * 3` sets of parameters):
@@ -147,17 +135,17 @@ parameters from the `iterable`. Combinations are emitted in lexicographic
 sort order. Combinations with replacement can be specified by setting the
 `replacement` option to `true`. For example:
 
-```json
-    "task_factory": {
-        "parametric_sweep": {
-            "combinations": {
-               "iterable": ["abc", "012", "def"],
-               "length": 2,
-               "replacement": false
-            }
-        }
-    },
-    "command": "/bin/bash -c \"echo {0}; echo {1}\""
+```yaml
+task_factory:
+  parametric_sweep:
+    combinations:
+      iterable:
+      - abc
+      - '012'
+      - def
+      length: 2
+      replacement: false
+command: /bin/bash -c "echo {0}; echo {1}"
 ```
 
 would generate 3 tasks:
@@ -178,16 +166,16 @@ The `permutations` `parametric_sweep` generates `length` permutations of
 parameters from the `iterable`. Permutations are emitted in lexicographic
 sort order. For example:
 
-```json
-    "task_factory": {
-        "parametric_sweep": {
-            "permutations": {
-               "iterable": ["abc", "012", "def"],
-               "length": 2
-            }
-        }
-    },
-    "command": "/bin/bash -c \"echo {0}; echo {1}\""
+```yaml
+task_factory:
+  parametric_sweep:
+    permutations:
+      iterable:
+      - abc
+      - '012'
+      - def
+      length: 2
+command: /bin/bash -c "echo {0}; echo {1}"
 ```
 
 would generate 6 tasks:
@@ -216,13 +204,14 @@ would generate 6 tasks:
 The `zip` `parametric_sweep` generates parameters where the i-th parameter
 contains the i-th element from each iterable. For example:
 
-```json
-    "task_factory": {
-        "parametric_sweep": {
-            "zip": ["abc", "012", "def"]
-        }
-    },
-    "command": "/bin/bash -c \"echo {0}; echo {1}; echo {2}\""
+```yaml
+task_factory:
+  parametric_sweep:
+    zip:
+    - abc
+    - '012'
+    - def
+command: /bin/bash -c "echo {0}; echo {1}; echo {2}"
 ```
 
 would generate 3 tasks:
@@ -245,18 +234,15 @@ can generate both integral and floating point (real) values.
 
 For example:
 
-```json
-    "task_factory": {
-        "random": {
-            "generate": 3,
-            "integer": {
-                "start": 0,
-                "stop": 10,
-                "step": 1
-            }
-        }
-    },
-    "command": "/bin/bash -c \"sleep {}\""
+```yaml
+task_factory:
+  random:
+    generate: 3
+    integer:
+      start: 0
+      step: 1
+      stop: 10
+command: /bin/bash -c "sleep {}"
 ```
 
 will generate 3 tasks with random integral sleep times ranging from 0 to 9.
@@ -264,19 +250,15 @@ will generate 3 tasks with random integral sleep times ranging from 0 to 9.
 To generate floating point values, you can use the `distribution`
 functionality as required by your scenario. For example:
 
-```json
-    "task_factory": {
-        "random": {
-            "generate": 3,
-            "distribution": {
-                "uniform": {
-                    "a": 0.0,
-                    "b": 1.0
-                },
-            }
-        }
-    },
-    "command": "/bin/bash -c \"sleep {}\""
+```yaml
+task_factory:
+  random:
+    distribution:
+      uniform:
+        a: 0.0
+        b: 1.0
+    generate: 3
+command: /bin/bash -c "sleep {}"
 ```
 
 will generate 3 tasks with random floating point values pulled from a
@@ -301,11 +283,10 @@ property explanations.
 A `repeat` task factory simply replicates the `command` N number of times.
 For example:
 
-```json
-    "task_factory": {
-        "repeat": 3
-    },
-    "command": "/bin/bash -c \"sleep 1\""
+```yaml
+task_factory:
+  repeat: 3
+command: /bin/bash -c "sleep 1"
 ```
 
 would create three tasks with identical commands of `/bin/bash -c "sleep 1"`.
@@ -319,17 +300,14 @@ For example, let's assume that we want to generate a task for every blob
 found in the container `mycontainer` in the storage account link named
 `mystorageaccount`. The task factory for this could be:
 
-```json
-    "task_factory": {
-        "file": {
-            "azure_storage": {
-                "storage_account_settings": "mystorageaccount",
-                "container": "mycontainer"
-            },
-            "task_filepath": "file_path"
-        }
-    },
-    "command": "/bin/bash -c \"echo url={url} full_path={file_path_with_container} file_path={file_path} file_name={file_name} file_name_no_extension={file_name_no_extension}\""
+```yaml
+task_factory:
+  file:
+    azure_storage:
+      storage_account_settings: mystorageaccount
+      container: mycontainer
+    task_filepath: file_path
+command: /bin/bash -c "echo url={url} full_path={file_path_with_container} file_path={file_path} file_name={file_name} file_name_no_extension={file_name_no_extension}"
 ```
 
 As you can see from the `command` above, there are keyword formatters
@@ -435,7 +413,7 @@ def generate(*args, **kwargs):
 
 The `generate` function acceps two variadic parameters: `*args` and `**kwargs`
 which correspond to the configuration `input_args` and `input_kwargs`,
-respectively. If using `input_kwargs`, then the json dictionary specified
+respectively. If using `input_kwargs`, then the dictionary specified
 must have only string-based keys. You can use any combination of `input_args`
 and `input_kwargs` or no input if not required. In this example, for each
 positional argument (i.e., `*args`), we are creating a range from `0` to that
@@ -445,14 +423,15 @@ applied to the `command`. This allows for multiple parameters to be generated
 and applied for each generated task. An example corresponding configuration
 may be similar to the following:
 
-```json
-"task_factory": {
-    "custom": {
-        "module": "foo.generator",
-        "input_args": [1, 2, 3],
-    }
-},
-"command": "/bin/bash -c \"sleep {}\""
+```yaml
+task_factory:
+  custom:
+    input_args:
+    - 1
+    - 2
+    - 3
+    module: foo.generator
+command: /bin/bash -c "sleep {}"
 ```
 
 which would result in 6 tasks:

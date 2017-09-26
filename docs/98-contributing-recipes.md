@@ -13,10 +13,10 @@ structure:
     SOFTWARE-NAME/
       README.md
       config/
-        config.json
-        credentials.json
-        jobs.json
-        pool.json
+        config.yaml
+        credentials.yaml
+        jobs.yaml
+        pool.yaml
       docker/
         README.md
         Dockerfile
@@ -49,14 +49,17 @@ a job.
 
 ### Create Generic Configuration Files
 Create a set of generic configuration files without specific links to
-credential names, aliases or other sensitive info. The credentials json
+credential names, aliases or other sensitive info. The credentials config
 file should not contain any pre-filled information except for a storage
 account endpoint. Please take a look at the pre-existing recipe sample
 config files to see an example.
 
+### Use YAML Syntax for Configuration Files
+Configuration files should use YAML syntax rather than JSON.
+
 ### Docker Image References
 If you are providing your own Docker image reference in the global
-configuration and jobs json files, then the Dockerfile must be publically
+configuration and jobs config files, then the Dockerfile must be publically
 accessible. The docker image can be hosted as an automated build on
 public Docker Hub which will automatically upload the Dockerfile to your
 repository, or you will need to explicitly provide a link in Docker Hub

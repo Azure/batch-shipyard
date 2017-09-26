@@ -1,17 +1,17 @@
 # Using Azure KeyVault for Credentials with Batch Shipyard
 The focus of this article is to explain how to use Azure KeyVault for
-managing credentials json files and/or individual keys and passwords for use
+managing credentials config files and/or individual keys and passwords for use
 with Batch Shipyard.
 
 ## Introduction and Concepts
-The [credentials.json](10-batch-shipyard-configuration.md#cred) file
+The [credentials.yaml](10-batch-shipyard-configuration.md#cred) file
 contains access keys and passwords for various resources, including
 Azure Batch, Azure Storage and Docker Private Registries. This file should
 be secured using proper file mode permissions or ACLs. However, it may be
-more appropriate to host these credentials or even the entire json file itself
-in a repository with secure, controlled access. There are benefits to this
-approach such as securing keys without a physical file, centralized repository
-of secrets, etc.
+more appropriate to host these credentials or even the entire config file
+itself in a repository with secure, controlled access. There are benefits to
+this approach such as securing keys without a physical file, centralized
+repository of secrets, etc.
 
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/) is
 a managed service that handles storing sensitive information such as keys
@@ -139,7 +139,7 @@ azure account show
 az account show
 ```
 
-You will see a line starting with `Tenant ID` (Azure CLI) or a json with
+You will see a line starting with `Tenant ID` (Azure CLI) or a JSON with
 a property of `tenantId` (Azure CLI 2.0). This is the Directory ID. This is
 the argument to pass to the option `--aad-directory-id` or set as the
 environment variable `SHIPYARD_AAD_DIRECTORY_ID`.
@@ -225,14 +225,14 @@ variable `SHIPYARD_AAD_APPLICATION_ID`.
 If using Azure CLI 2.0, we will need to create a Service Principal
 for the Application since it is not created together in the prior command.
 For the `--id` parameter, you can use either the `appId` or the `objectId`
-found in the prior json output:
+found in the prior JSON output:
 
 ```shell
 # Azure CLI 2.0 only
 az ad sp create --id abcdef01-2345-6789-abcd-ef0123456789
 ```
 
-You will see some json output where under `servicePrincipalNames`, you
+You will see some JSON output where under `servicePrincipalNames`, you
 should see the `appId` in addition to the uri similar to the following:
 
 ```json
@@ -271,7 +271,7 @@ az role assignment create --assignee abcdef01-2345-6789-abcd-ef0123456789 --role
 ```
 
 You should receive a message output that the role assignment has been
-completed successfully in Azure CLI or a json blob for Azure CLI 2.0.
+completed successfully in Azure CLI or a JSON blob for Azure CLI 2.0.
 
 You can now assign this Service Principal with Certificate-based
 authentication to an Azure KeyVault as per instructions below.
@@ -362,12 +362,12 @@ are mutually exclusive. In addition to one of these authentication options,
 you must provide the KeyVault URI as a parameter.
 
 You can either provide the required parameters through CLI options,
-environment variables, or the `credentials.json` file.
+environment variables, or the `credentials.yaml` file.
 
 Please see the [configuration guide](10-batch-shipyard-configuration.md) for
-the appropriate json properties to populate that correlate with the following
+the appropriate properties to populate that correlate with the following
 options below. Note that the `keyvault add` command must use a
-`credentials.json` file that does not have KeyVault and AAD credentials.
+`credentials.yaml` file that does not have KeyVault and AAD credentials.
 For this command, you will need to use CLI options or environment variables.
 
 For an AAD Service Principal with Key-based authentication, you will need
@@ -434,31 +434,31 @@ SHIPYARD_KEYVAULT_URI=<DNS-NAME>
 ### Storing Credentials in KeyVault
 You can manually create a secret in your KeyVault using Azure Portal, but
 it is recommended to use the Batch Shipyard CLI to store your
-`credentials.json` file. This ensures that the file is stored properly
+`credentials.yaml` file. This ensures that the file is stored properly
 and can allow for potentially very large credential files as compression
 is applied to the file prior to placing the secret in KeyVault. To create
 a credentials secret, pass all of the required AAD and KeyVault URI options
 to `keyvault add`. Note that you cannot use AAD/KeyVault credential options
-in a `credentials.json` file to authenticate with KeyVault to store the
-same json file. You must use CLI options or environment variables to pass
+in a `credentials.yaml` file to authenticate with KeyVault to store the
+same config file. You must use CLI options or environment variables to pass
 the appropriate Azure Keyvault and AAD credentials to `shipyard` for this
 command. For example:
 
 ```shell
 # add the appropriate AAD and KeyVault URI options or environment variables
 # to the below invocation. These AAD/KeyVault authentication options cannot
-# be present in credentials.json.
-shipyard keyvault add mycreds --credentials credentials.json
+# be present in credentials.yaml.
+shipyard keyvault add mycreds --credentials credentials.yaml
 ```
 
 Would create a secret named `mycreds` in the Azure KeyVault as specified
 by the `--keyvault-uri` option. The value of the secret would be the
-contents of the `credentials.json` file. You should see console output
+contents of the `credentials.yaml` file. You should see console output
 similar to the following:
 
 ```
-2017-01-06 07:44:13,885Z DEBUG convoy.keyvault:store_credentials_json:154 storing secret in keyvault https://myvault.vault.azure.net/ with name mycreds
-2017-01-06 07:44:14,201Z INFO convoy.keyvault:store_credentials_json:161 keyvault secret id for name mycreds: https://myvault.vault.azure.net/secrets/mycreds
+2017-01-06 07:44:13.885 DEBUG - storing secret in keyvault https://myvault.vault.azure.net/ with name mycreds
+2017-01-06 07:44:14.201 INFO - keyvault secret id for name mycreds: https://myvault.vault.azure.net/secrets/mycreds
 ```
 
 It is important to note the secret id output in the final line:
@@ -467,22 +467,21 @@ It is important to note the secret id output in the final line:
 https://myvault.vault.azure.net/secrets/mycreds
 ```
 
-This secret id is required for retrieving your `credentials.json` contents
+This secret id is required for retrieving your `credentials.yaml` contents
 for later invocations that require these particular credentials to interact
 with Batch Shipyard. How to pass this secret id will be explained in the next
 section.
 
 You can also store individual keys as secrets in your KeyVault and reference
-them within your `credentials.json` file. For example:
+them within your `credentials.yaml` file. For example:
 
-```json
-        "batch": {
-            "account_key_keyvault_secret_id": "https://myvault.vault.azure.net/secrets/batchkey",
-            "account_service_url": "myserviceurl"
-        },
+```yaml
+batch:
+  account_key_keyvault_secret_id: https://myvault.vault.azure.net/secrets/batchkey
+  account_service_url: https://myaccount.region.batch.azure.com/
 ```
 
-This excerpt of the credentials.json file does not have a valid `account_key`
+This excerpt of the `credentials.yaml` file does not have a valid `account_key`
 property. However, instead there is a property `account_key_keyvault_secret_id`
 which points to a KeyVault secret id. Batch Shipyard will attempt to fetch
 this secret from KeyVault using the provided AAD credentials passed as
@@ -492,20 +491,20 @@ the value of the secret.
 These `*_keyvault_secret_id` properties can be used in lieu of batch account
 keys, storage account keys, and private Docker Registry passwords. You will
 need to populate the associated KeyVault with these secrets manually and
-set the json properties in the `credentials.json` file with the corresponding
+set the properties in the `credentials.yaml` file with the corresponding
 secret ids. Please see the
 [configuration guide](10-batch-shipyard-configuration.md) for more
 information.
 
 Finally, Batch Shipyard does support nested KeyVault secrets. In other words,
-the `credentials.json` file can be a secret in KeyVault and there can be
-`*_keyvault_secret_id` properties within the json file stored in KeyVault
+the `credentials.yaml` file can be a secret in KeyVault and there can be
+`*_keyvault_secret_id` properties within the config file stored in KeyVault
 which subsequently will be fetched automatically.
 
 ### Fetching Credentials from KeyVault
-To specify a `credentials.json` as a secret in KeyVault, you can omit the
+To specify a `credentials.yaml` as a secret in KeyVault, you can omit the
 `--credentials` option (or specify a `--configdir` option without a
-`credentials.json` file on disk in the path pointed to by `--configdir`) and
+`credentials.yaml` file on disk in the path pointed to by `--configdir`) and
 instead specify the option:
 
 ```
@@ -517,7 +516,7 @@ or as an environment variable:
 SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID=<SECRET-ID>
 ```
 
-If you have a physical `credentials.json` file on disk, but with
+If you have a physical `credentials.yaml` file on disk, but with
 `*_keyvault_secret_id` properties then you must not specify the above
 option as Batch Shipyard will parse the credentials file and perform
 the lookup and secret retrieval automatically.

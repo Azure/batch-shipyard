@@ -38,6 +38,7 @@ except ImportError:
     import pathlib
 # non-stdlib imports
 import click
+import ruamel.yaml
 # local imports
 import convoy.clients
 import convoy.fleet
@@ -58,7 +59,7 @@ class CliContext(object):
         self.verbose = False
         self.yes = False
         self.config = None
-        self.json_fs = None
+        self.conf_fs = None
         # clients
         self.batch_mgmt_client = None
         self.batch_client = None
@@ -167,14 +168,14 @@ class CliContext(object):
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
         """
-        # free json objects
-        del self.json_credentials
-        del self.json_fs
+        # free conf objects
+        del self.conf_credentials
+        del self.conf_fs
         if not skip_global_config:
-            del self.json_config
+            del self.conf_config
         if not skip_pool_config:
-            del self.json_pool
-            del self.json_jobs
+            del self.conf_pool
+            del self.conf_jobs
         # free cli options
         del self.verbose
         del self.yes
@@ -189,40 +190,53 @@ class CliContext(object):
         del self.keyvault_credentials_secret_id
         del self.subscription_id
 
-    def _read_json_file(self, json_file):
+    def _read_config_file(self, config_file):
         # type: (CliContext, pathlib.Path) -> None
-        """Read a json file into self.config, while checking for invalid
-        JSON and returning an error that makes sense if ValueError
+        """Read a yaml/json file into self.config
         :param CliContext self: this
-        :param pathlib.Path json_file: json file to load
+        :param pathlib.Path config_file: config file to load
         """
-        try:
-            with json_file.open('r') as f:
-                if self.config is None:
-                    self.config = json.load(f)
-                else:
-                    self.config = convoy.util.merge_dict(
-                        self.config, json.load(f))
-        except ValueError:
-            raise ValueError(
-                ('Detected invalid JSON in file: {}. Please ensure the JSON '
-                 'is valid and is encoded UTF-8 without BOM.'.format(
-                     json_file)))
+        with config_file.open('r') as f:
+            if self.config is None:
+                self.config = ruamel.yaml.load(
+                    f, Loader=ruamel.yaml.RoundTripLoader)
+            else:
+                self.config = convoy.util.merge_dict(
+                    self.config,
+                    ruamel.yaml.load(f, Loader=ruamel.yaml.RoundTripLoader))
+
+    def _form_conf_path(self, conf_var, prefix):
+        """Form configuration file path with configdir if applicable
+        :param CliContext self: this
+        :param any conf_var: conf var
+        :param str prefix: configuration file prefix
+        :rtype: pathlib.Path
+        :return: new configuration file path
+        """
+        # use configdir if available
+        if self.configdir is not None and conf_var is None:
+            path = pathlib.Path(self.configdir, '{}.yaml'.format(prefix))
+            if path.exists():
+                return path
+            path = pathlib.Path(self.configdir, '{}.yml'.format(prefix))
+            if path.exists():
+                return path
+            return pathlib.Path(self.configdir, '{}.json'.format(prefix))
+        else:
+            return conf_var
 
     def _read_credentials_config(self):
         # type: (CliContext) -> None
         """Read credentials config file only
         :param CliContext self: this
         """
-        # use configdir if available
-        if self.configdir is not None and self.json_credentials is None:
-            self.json_credentials = pathlib.Path(
-                self.configdir, 'credentials.json')
-        if self.json_credentials is not None:
-            if not isinstance(self.json_credentials, pathlib.Path):
-                self.json_credentials = pathlib.Path(self.json_credentials)
-            if self.json_credentials.exists():
-                self._read_json_file(self.json_credentials)
+        self.conf_credentials = self._form_conf_path(
+            self.conf_credentials, 'credentials')
+        if self.conf_credentials is not None:
+            if not isinstance(self.conf_credentials, pathlib.Path):
+                self.conf_credentials = pathlib.Path(self.conf_credentials)
+            if self.conf_credentials.exists():
+                self._read_config_file(self.conf_credentials)
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
@@ -237,48 +251,42 @@ class CliContext(object):
         # reset config
         self.config = None
         self._set_global_cli_options()
-        # use configdir if available
-        if self.configdir is not None:
-            if self.json_credentials is None:
-                self.json_credentials = pathlib.Path(
-                    self.configdir, 'credentials.json')
-            if not skip_global_config and self.json_config is None:
-                self.json_config = pathlib.Path(
-                    self.configdir, 'config.json')
-            if not skip_pool_config:
-                if self.json_pool is None:
-                    self.json_pool = pathlib.Path(self.configdir, 'pool.json')
-                if self.json_jobs is None:
-                    self.json_jobs = pathlib.Path(self.configdir, 'jobs.json')
-            if self.json_fs is None:
-                self.json_fs = pathlib.Path(self.configdir, 'fs.json')
-        # check for required json files
-        if (self.json_credentials is not None and
-                not isinstance(self.json_credentials, pathlib.Path)):
-            self.json_credentials = pathlib.Path(self.json_credentials)
+        # set config files
+        self.conf_credentials = self._form_conf_path(
+            self.conf_credentials, 'credentials')
         if not skip_global_config:
-            if self.json_config is None:
-                raise ValueError('config json was not specified')
-            elif not isinstance(self.json_config, pathlib.Path):
-                self.json_config = pathlib.Path(self.json_config)
+            self.conf_config = self._form_conf_path(self.conf_config, 'config')
         if not skip_pool_config:
-            if self.json_pool is None:
-                raise ValueError('pool json was not specified')
-            elif not isinstance(self.json_pool, pathlib.Path):
-                self.json_pool = pathlib.Path(self.json_pool)
-        if (self.json_fs is not None and not isinstance(
-                self.json_fs, pathlib.Path)):
-            self.json_fs = pathlib.Path(self.json_fs)
-        # fetch credentials from keyvault, if json file is missing
+            self.conf_pool = self._form_conf_path(self.conf_pool, 'pool')
+            self.conf_jobs = self._form_conf_path(self.conf_jobs, 'jobs')
+        self.conf_fs = self._form_conf_path(self.conf_fs, 'fs')
+        # check for required conf files
+        if (self.conf_credentials is not None and
+                not isinstance(self.conf_credentials, pathlib.Path)):
+            self.conf_credentials = pathlib.Path(self.conf_credentials)
+        if not skip_global_config:
+            if self.conf_config is None:
+                raise ValueError('config conf file was not specified')
+            elif not isinstance(self.conf_config, pathlib.Path):
+                self.conf_config = pathlib.Path(self.conf_config)
+        if not skip_pool_config:
+            if self.conf_pool is None:
+                raise ValueError('pool conf file was not specified')
+            elif not isinstance(self.conf_pool, pathlib.Path):
+                self.conf_pool = pathlib.Path(self.conf_pool)
+        if (self.conf_fs is not None and not isinstance(
+                self.conf_fs, pathlib.Path)):
+            self.conf_fs = pathlib.Path(self.conf_fs)
+        # fetch credentials from keyvault, if conf file is missing
         kvcreds = None
-        if self.json_credentials is None or not self.json_credentials.exists():
-            kvcreds = convoy.fleet.fetch_credentials_json_from_keyvault(
+        if self.conf_credentials is None or not self.conf_credentials.exists():
+            kvcreds = convoy.fleet.fetch_credentials_conf_from_keyvault(
                 self.keyvault_client, self.keyvault_uri,
                 self.keyvault_credentials_secret_id)
-        # read credentials json, perform special keyvault processing if
+        # read credentials conf, perform special keyvault processing if
         # required sections are missing
         if kvcreds is None:
-            self._read_json_file(self.json_credentials)
+            self._read_config_file(self.conf_credentials)
             kv = convoy.settings.credentials_keyvault(self.config)
             self.keyvault_uri = self.keyvault_uri or kv.keyvault_uri
             self.keyvault_credentials_secret_id = (
@@ -294,7 +302,7 @@ class CliContext(object):
                 except KeyError:
                     # fetch credentials from keyvault
                     self.config = \
-                        convoy.fleet.fetch_credentials_json_from_keyvault(
+                        convoy.fleet.fetch_credentials_conf_from_keyvault(
                             self.keyvault_client, self.keyvault_uri,
                             self.keyvault_credentials_secret_id)
         else:
@@ -307,17 +315,17 @@ class CliContext(object):
             self.keyvault_client, self.config)
         # read rest of config files
         if not skip_global_config:
-            self._read_json_file(self.json_config)
+            self._read_config_file(self.conf_config)
         # read fs config regardless of skip setting
-        if self.json_fs is not None and self.json_fs.exists():
-            self._read_json_file(self.json_fs)
+        if self.conf_fs is not None and self.conf_fs.exists():
+            self._read_config_file(self.conf_fs)
         if not skip_pool_config:
-            self._read_json_file(self.json_pool)
-            if self.json_jobs is not None:
-                if not isinstance(self.json_jobs, pathlib.Path):
-                    self.json_jobs = pathlib.Path(self.json_jobs)
-                if self.json_jobs.exists():
-                    self._read_json_file(self.json_jobs)
+            self._read_config_file(self.conf_pool)
+            if self.conf_jobs is not None:
+                if not isinstance(self.conf_jobs, pathlib.Path):
+                    self.conf_jobs = pathlib.Path(self.conf_jobs)
+                if self.conf_jobs.exists():
+                    self._read_config_file(self.conf_jobs)
         # adjust settings
         if not skip_global_config:
             convoy.fleet.check_for_invalid_config(self.config)
@@ -546,8 +554,8 @@ def _configdir_option(f):
         expose_value=False,
         envvar='SHIPYARD_CONFIGDIR',
         help='Configuration directory where all configuration files can be '
-        'found. Each json config file must be named exactly the same as the '
-        'regular switch option, e.g., pool.json for --pool. Individually '
+        'found. Each config file must be named exactly the same as the '
+        'regular switch option, e.g., pool.yaml for --pool. Individually '
         'specified config options take precedence over this option.',
         callback=callback)(f)
 
@@ -555,65 +563,65 @@ def _configdir_option(f):
 def _credentials_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_credentials = value
+        clictx.conf_credentials = value
         return value
     return click.option(
         '--credentials',
         expose_value=False,
-        envvar='SHIPYARD_CREDENTIALS_JSON',
-        help='Credentials json config file',
+        envvar='SHIPYARD_CREDENTIALS_CONF',
+        help='Credentials config file',
         callback=callback)(f)
 
 
 def _config_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_config = value
+        clictx.conf_config = value
         return value
     return click.option(
         '--config',
         expose_value=False,
-        envvar='SHIPYARD_CONFIG_JSON',
-        help='Global json config file',
+        envvar='SHIPYARD_CONFIG_CONF',
+        help='Global config file',
         callback=callback)(f)
 
 
 def _pool_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_pool = value
+        clictx.conf_pool = value
         return value
     return click.option(
         '--pool',
         expose_value=False,
-        envvar='SHIPYARD_POOL_JSON',
-        help='Pool json config file',
+        envvar='SHIPYARD_POOL_CONF',
+        help='Pool config file',
         callback=callback)(f)
 
 
 def _jobs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_jobs = value
+        clictx.conf_jobs = value
         return value
     return click.option(
         '--jobs',
         expose_value=False,
-        envvar='SHIPYARD_JOBS_JSON',
-        help='Jobs json config file',
+        envvar='SHIPYARD_JOBS_CONF',
+        help='Jobs config file',
         callback=callback)(f)
 
 
 def fs_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
-        clictx.json_fs = value
+        clictx.conf_fs = value
         return value
     return click.option(
         '--fs',
         expose_value=False,
-        envvar='SHIPYARD_FS_JSON',
-        help='Filesystem json config file',
+        envvar='SHIPYARD_FS_CONF',
+        help='RemoteFS config file',
         callback=callback)(f)
 
 
@@ -949,7 +957,7 @@ def keyvault(ctx):
 @aad_options
 @pass_cli_context
 def keyvault_add(ctx, name):
-    """Add a credentials json as a secret to Azure KeyVault"""
+    """Add a credentials config file as a secret to Azure KeyVault"""
     ctx.initialize_for_keyvault()
     convoy.fleet.action_keyvault_add(
         ctx.keyvault_client, ctx.config, ctx.keyvault_uri, name)

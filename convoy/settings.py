@@ -2805,7 +2805,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         docker_run_cmd = 'docker run'
         docker_exec_cmd = 'docker exec'
     # adjust for infiniband
-    if infiniband and not native:
+    if infiniband:
         if not inter_node_comm:
             raise RuntimeError(
                 ('cannot initialize an infiniband task on a '
@@ -2816,27 +2816,30 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA, pool: {} vm_size: {}').format(
                      pool_id, vm_size))
-        # common run opts
-        run_opts.append('--net=host')
-        run_opts.append('--ulimit memlock=9223372036854775807')
-        run_opts.append('--device=/dev/infiniband/rdma_cm')
-        run_opts.append('--device=/dev/infiniband/uverbs0')
+        # mount /opt/intel for both native and non-native pool types
         run_opts.append('-v /opt/intel:/opt/intel:ro')
-        # only centos-hpc and sles-hpc:12-sp1 are supported
-        # for infiniband
-        if (publisher == 'openlogic' and offer == 'centos-hpc' or
-                node_agent.startswith('batch.node.centos')):
-            run_opts.append('-v /etc/rdma:/etc/rdma:ro')
-            run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
-        elif (publisher == 'suse' and offer == 'sles-hpc' and
-              sku == '12-sp1' or node_agent.startswith('batch.node.opensuse')):
-            run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
-            run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
-            run_opts.append('--device=/dev/hvnd_rdma')
-        else:
-            raise ValueError(
-                ('Unsupported infiniband VM config, publisher={} '
-                 'offer={}').format(publisher, offer))
+        if not native:
+            # common run opts
+            run_opts.append('--net=host')
+            run_opts.append('--ulimit memlock=9223372036854775807')
+            run_opts.append('--device=/dev/infiniband/rdma_cm')
+            run_opts.append('--device=/dev/infiniband/uverbs0')
+            # only centos-hpc and sles-hpc:12-sp1 are supported
+            # for infiniband
+            if (publisher == 'openlogic' and offer == 'centos-hpc' or
+                    node_agent.startswith('batch.node.centos')):
+                run_opts.append('-v /etc/rdma:/etc/rdma:ro')
+                run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
+            elif (publisher == 'suse' and offer == 'sles-hpc' and
+                  sku == '12-sp1' or
+                  node_agent.startswith('batch.node.opensuse')):
+                run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
+                run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
+                run_opts.append('--device=/dev/hvnd_rdma')
+            else:
+                raise ValueError(
+                    ('Unsupported infiniband VM config, publisher={} '
+                     'offer={}').format(publisher, offer))
     if not native:
         # mount batch root dir
         run_opts.append(

@@ -89,17 +89,14 @@ threshold percentage of the total current dedicated and low priority nodes.
 This applies only to `active_tasks` and `pending_tasks` scenarios.
 
 An example autoscale specification in the pool configuration may be:
-```json
-        "autoscale": {
-            "evaluation_interval": "00:05:00",
-            "scenario": {
-                "name": "active_tasks",
-                "maximum_vm_count": {
-                    "dedicated": 16,
-                    "low_priority": 8
-                }
-            }
-        }
+```yaml
+  autoscale:
+    evaluation_interval: 00:05:00
+    scenario:
+      name: active_tasks
+      maximum_vm_count:
+        dedicated: 16
+        low_priority: 8
 ```
 
 This example would apply the `active_tasks` scenario to the associated

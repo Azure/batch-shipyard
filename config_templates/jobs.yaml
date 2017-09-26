@@ -1,0 +1,189 @@
+job_specifications:
+- id: dockerjob
+  auto_complete: true
+  environment_variables:
+    abc: xyz
+  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/myjobenv
+  max_task_retries: 1
+  max_wall_time: 02:00:00
+  retention_time: 1.12:00:00
+  priority: 0
+  user_identity:
+    default_pool_admin: true
+    specific_user:
+      gid: 1001
+      uid: 1001
+  auto_pool:
+    keep_alive: false
+    pool_lifetime: job
+  recurrence:
+    schedule:
+      do_not_run_after: null
+      do_not_run_until: null
+      recurrence_interval: 00:05:00
+      start_window: null
+    job_manager:
+      allow_low_priority_node: true
+      monitor_task_completion: false
+      run_exclusive: false
+  allow_run_on_missing_image: false
+  remove_container_after_exit: true
+  shm_size: 256m
+  infiniband: false
+  gpu: false
+  data_volumes:
+  - joblevelvol
+  shared_data_volumes:
+  - joblevelsharedvol
+  input_data:
+    azure_batch:
+    - job_id: someotherjob
+      task_id: task-a
+      exclude:
+      - '*.txt'
+      include:
+      - wd/*.dat
+      destination: null
+    azure_storage:
+    - storage_account_settings: mystorageaccount
+      container: jobcontainer
+      include:
+      - jobdata*.bin
+      destination: $AZ_BATCH_NODE_SHARED_DIR/jobdata
+      blobxfer_extra_options: null
+  tasks:
+  - task_factory:
+      parametric_sweep:
+        combinations:
+          iterable:
+          - ABC
+          - '012'
+          length: 2
+          replacement: false
+        permutations:
+          iterable: ABCDEF
+          length: 3
+        product:
+        - start: 0
+          step: 1
+          stop: 10
+        zip:
+        - ab
+        - '01'
+      random:
+        distribution:
+          beta:
+            alpha: 1
+            beta: 1
+          exponential:
+            lambda: 2
+          gamma:
+            alpha: 1
+            beta: 1
+          gauss:
+            mu: 1
+            sigma: 0.1
+          lognormal:
+            mu: 1
+            sigma: 0.1
+          pareto:
+            alpha: 1
+          triangular:
+            high: 1
+            low: 0
+            mode:
+          uniform:
+            a: 0
+            b: 1
+          weibull:
+            alpha: 1
+            beta: 1
+        generate: 3
+        integer:
+          start: 0
+          step: 1
+          stop: 10
+        seed:
+      file:
+        azure_storage:
+          container: somecontainer
+          exclude: []
+          include: []
+          storage_account_settings: mystorageaccount
+        task_filepath: file_name
+      custom:
+        input_args:
+        - a
+        - b
+        - c
+        input_kwargs:
+          abc: '012'
+          def: '345'
+        module: mypkg.mymodule
+        package: null
+      repeat: 3
+    id: null
+    image: busybox
+    name:
+    labels: []
+    environment_variables:
+      def: '123'
+    environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mytaskenv
+    ports: []
+    data_volumes:
+    - contdatavol
+    - hosttempvol
+    shared_data_volumes:
+    - azurefilevol
+    resource_files:
+    - blob_source: https://some.url
+      file_mode: '0750'
+      file_path: some/path/in/wd/file
+    input_data:
+      azure_batch:
+      - job_id: previousjob
+        task_id: mytask1
+        exclude:
+        - '*.txt'
+        include:
+        - wd/output/*.bin
+        destination: null
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        container: taskcontainer
+        include:
+        - taskdata*.bin
+        destination: $AZ_BATCH_NODE_SHARED_DIR/taskdata
+        blobxfer_extra_options: null
+    output_data:
+      azure_storage:
+      - blobxfer_extra_options:
+        container: output
+        include:
+        - '**/out*.dat'
+        source: null
+        storage_account_settings: mystorageaccount
+    remove_container_after_exit: true
+    shm_size: 256m
+    additional_docker_run_options: []
+    infiniband: false
+    gpu: false
+    depends_on:
+    - taskid-a
+    - taskid-b
+    - taskid-c
+    depends_on_range:
+    - 1
+    - 10
+    max_task_retries: 1
+    max_wall_time: 03:00:00
+    retention_time: 1.12:00:00
+    multi_instance:
+      coordination_command:
+      num_instances: pool_current_dedicated
+      resource_files:
+      - blob_source: https://some.url
+        file_mode: '0750'
+        file_path: some/path/in/sharedtask/file
+    entrypoint: null
+    command: mycommand

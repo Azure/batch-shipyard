@@ -36,6 +36,7 @@ import zlib
 # non-stdlib imports
 import azure.common.credentials
 import azure.keyvault
+import ruamel.yaml
 # local imports
 from . import settings
 from . import util
@@ -67,13 +68,13 @@ def _explode_secret_id(uri):
             'cannot handle keyvault secret id uri: {}'.format(uri))
 
 
-def fetch_credentials_json(
+def fetch_credentials_conf(
         client, keyvault_uri, keyvault_credentials_secret_id):
     # type: (azure.keyvault.KeyVaultClient, str, str) -> dict
-    """Fetch credentials json from KeyVault
+    """Fetch credentials conf from KeyVault
     :param azure.keyvault.KeyVaultClient client: keyvault client
     :param str keyvault_uri: keyvault uri
-    :param str keyvault_credentials_secret_id: secret id for creds json
+    :param str keyvault_credentials_secret_id: secret id for creds conf
     :rtype: dict
     :return: credentials dict
     """
@@ -81,16 +82,16 @@ def fetch_credentials_json(
         raise RuntimeError(
             'KeyVault client not initialized, please ensure proper AAD '
             'credentials and KeyVault parameters have been provided')
-    logger.debug('fetching credentials json from keyvault')
+    logger.debug('fetching credentials conf from keyvault')
     if util.is_none_or_empty(keyvault_credentials_secret_id):
         raise RuntimeError(
-            'cannot fetch credentials json from keyvault without a valid '
+            'cannot fetch credentials conf from keyvault without a valid '
             'keyvault credentials secret id')
     cred = client.get_secret(
         *_explode_secret_id(keyvault_credentials_secret_id))
     if util.is_none_or_empty(cred.value):
         raise ValueError(
-            'credential json from secret id {} is invalid'.format(
+            'credential conf from secret id {} is invalid'.format(
                 keyvault_credentials_secret_id))
     # check for encoding and decode/decompress if necessary
     if cred.tags is not None:
@@ -105,16 +106,16 @@ def fetch_credentials_json(
                         cred.tags[_SECRET_ENCODED_FORMAT_KEY]))
         except KeyError:
             pass
-    return json.loads(cred.value)
+    return ruamel.yaml.load(cred.value, Loader=ruamel.yaml.RoundTripLoader)
 
 
-def store_credentials_json(client, config, keyvault_uri, secret_name):
+def store_credentials_conf(client, config, keyvault_uri, secret_name):
     # type: (azure.keyvault.KeyVaultClient, dict, str, str) -> None
-    """Store credentials json in KeyVault
+    """Store credentials conf in KeyVault
     :param azure.keyvault.KeyVaultClient client: keyvault client
     :param dict config: configuration dict
     :param str keyvault_uri: keyvault uri
-    :param str secret_name: secret name for creds json
+    :param str secret_name: secret name for creds conf
     """
     if client is None:
         raise RuntimeError(
@@ -135,7 +136,7 @@ def store_credentials_json(client, config, keyvault_uri, secret_name):
     )
     logger.info('keyvault secret id for name {}: {}'.format(
         secret_name,
-        azure.keyvault.key_vault_id.parse_secret_id(bundle.id).base_id))
+        azure.keyvault.KeyVaultId.parse_secret_id(bundle.id).base_id))
 
 
 def delete_secret(client, keyvault_uri, secret_name):
@@ -143,7 +144,7 @@ def delete_secret(client, keyvault_uri, secret_name):
     """Delete secret from KeyVault
     :param azure.keyvault.KeyVaultClient client: keyvault client
     :param str keyvault_uri: keyvault uri
-    :param str secret_name: secret name for creds json
+    :param str secret_name: secret name for creds conf
     """
     if client is None:
         raise RuntimeError(
@@ -177,7 +178,7 @@ def get_secret(client, secret_id, value_is_json=False):
     """Get secret from KeyVault
     :param azure.keyvault.KeyVaultClient client: keyvault client
     :param str secret_id: secret id to retrieve
-    :param bool value_is_json: expected value is json
+    :param bool value_is_json: expected value is json or yaml
     :rtype: str
     :return: secret value
     """
@@ -187,7 +188,7 @@ def get_secret(client, secret_id, value_is_json=False):
                 secret_id))
     value = client.get_secret(*_explode_secret_id(secret_id)).value
     if value_is_json and util.is_not_empty(value):
-        return json.loads(value)
+        return ruamel.yaml.load(value, Loader=ruamel.yaml.RoundTripLoader)
     else:
         return value
 
