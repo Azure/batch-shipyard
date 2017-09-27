@@ -8,16 +8,14 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
-`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
-K80 GPUs for GPU compute acceleration while `NV` VM instances feature
-M60 GPUs for visualization workloads. Because CNTK is a GPU-accelerated
-compute application, it is best to choose `NC` VM instances.
+* `vm_size` must be a GPU enabled VM size. Because MXNet is a GPU-accelerated
+compute application, you should choose an `ND`, `NC` or `NCv2` VM instance
+size.
 * `vm_configuration` is the VM configuration
   * `platform_image` specifies to use a platform image
-    * `publisher` should be `Canonical` or `OpenLogic`.
-    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
-    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
+    * `publisher` should be `Canonical` or `OpenLogic`
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 
@@ -79,13 +77,15 @@ The source for `run_mxnet.sh` can be found [here](./docker/run_mxnet.sh).
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the global configuration section above
 for details.
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` array can be empty
 
 ## Dockerfile and supplementary files

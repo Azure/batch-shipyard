@@ -23,10 +23,9 @@ $CAFFE_EXAMPLES/mnist/convert_mnist_data.bin $DATA/t10k-images-idx3-ubyte \
     --backend=${BACKEND}
 echo "Done."
 
-# prep train spec and switch solver mode to default to cpu
+# prep train spec
 cp $CAFFE_ROOT/examples/mnist/lenet_solver.prototxt $MNIST_DIR
 cp $CAFFE_ROOT/examples/mnist/lenet_train_test.prototxt $MNIST_DIR
-sed -i 's#solver_mode: GPU#solver_mode: CPU##' $MNIST_DIR/lenet_solver.prototxt
 
 # train
 $CAFFE_BIN/caffe train --solver=$MNIST_DIR/lenet_solver.prototxt $*

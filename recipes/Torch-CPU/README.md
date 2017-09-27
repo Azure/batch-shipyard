@@ -26,8 +26,8 @@ array which should have a task definition containing:
 e.g., `alfpark/torch:cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/torch:cpu` Docker image and to run the MNIST convolutional
-example, the `command` would simply be:
-`"/root/torch/run_mnist.sh"`
+example, the [`run_mnist.sh` helper script](docker/run_mnist.sh) is used.
+The `command` should be: `"/root/torch/run_mnist.sh"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

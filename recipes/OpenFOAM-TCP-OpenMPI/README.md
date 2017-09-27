@@ -41,7 +41,9 @@ global configuration file. Please see the previous section for details.
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` array can be empty
 
 ## Dockerfile and supplementary files

@@ -16,8 +16,11 @@ Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid Caffe CPU-enabled
-Docker image. [alfpark/caffe:cpu](https://hub.docker.com/r/alfpark/caffe/) can
-be used for this recipe.
+Docker image. Although you can use the official
+[BVLC/caffe](https://hub.docker.com/r/bvlc/caffe/) Docker images, for this
+recipe the [alfpark/caffe:cpu](https://hub.docker.com/r/alfpark/caffe/)
+contains all of the required files and scripts to run the MNIST convolutional
+example.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
@@ -26,7 +29,8 @@ array which should have a task definition containing:
 e.g., `alfpark/caffe:cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/caffe:cpu` Docker image and to run the MNIST convolutional
-example, the `command` would simply be: `"/caffe/run_mnist.sh"`
+example, we are using a [`run_mnist.sh` helper script](docker/run_mnist.sh).
+Thus, the `command` would simply be: `"/caffe/run_mnist.sh"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

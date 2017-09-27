@@ -1,0 +1,10 @@
+job_specifications:
+- id: openfoamjob
+  auto_complete: true
+  tasks:
+  - image: alfpark/openfoam:4.0-icc-intelmpi
+    shared_data_volumes:
+    - glustervol
+    multi_instance:
+      num_instances: pool_current_dedicated
+    command: /opt/OpenFOAM/run_sample.sh

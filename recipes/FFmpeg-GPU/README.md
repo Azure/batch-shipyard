@@ -9,11 +9,8 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
-`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
-K80 GPUs for GPU compute acceleration while `NV` VM instances feature
-M60 GPUs for visualization workloads. Because FFmpeg is for transforming
-audio/video, it is best to choose `NV` VM instances.
+* `vm_size` must be a GPU enabled VM size. Because FFmpeg is for
+transcoding audio/video, you should choose an `NV` VM instance size.
 * `vm_configuration` is the VM configuration
   * `platform_image` specifies to use a platform image
     * `publisher` should be `Canonical` or `OpenLogic`.
@@ -42,8 +39,8 @@ using NVENC transcode offload on to the GPU:
     any number of files to be available to the task for processing.
   * `hevc_nvenc` informs FFmpeg to use the H.256/HEVC NVENC encoder. To
     encode with H.264 using NVENC specify `h264_nvenc` instead.
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image referenced above can be found

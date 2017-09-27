@@ -10,13 +10,13 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be either `STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`,
-`STANDARD_H16MR`
+* `vm_size` should be a CPU-only RDMA-enabled instance:
+`STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`, `STANDARD_H16MR`
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic` or `SUSE`.
-* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`.
-* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`.
+* `publisher` should be `OpenLogic` or `SUSE`
+* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`
+* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`
 
 ### Global Configuration
 The global configuration should set the following properties:
@@ -40,14 +40,17 @@ For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `command` should contain the `mpirun` command. If using the sample
 `run_sample.sh` script then the command should be simply:
 `/opt/OpenFOAM/run_sample.sh`
-* `infiniband` must be set to `true`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` array can be empty
 
 ## Dockerfile and supplementary files

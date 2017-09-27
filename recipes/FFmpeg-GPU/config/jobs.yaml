@@ -1,0 +1,8 @@
+job_specifications:
+- id: ffmpegjob
+  tasks:
+  - image: alfpark/ffmpeg:3.2.1-nvenc
+    resource_files:
+    - blob_source: <url of video to transcode>
+      file_path: samplevideo.mp4
+    command: -i samplevideo.mp4 -c:v hevc_nvenc -preset default output.mp4

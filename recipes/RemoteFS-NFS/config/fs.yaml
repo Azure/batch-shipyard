@@ -1,0 +1,42 @@
+remote_fs:
+  resource_group: my-resource-group
+  location: <Azure region, e.g., eastus>
+  managed_disks:
+    premium: true
+    disk_size_gb: 1023
+    disk_names:
+    - p30-disk0a
+    - p30-disk1a
+  storage_clusters:
+    mystoragecluster:
+      hostname_prefix: mystoragecluster
+      ssh:
+        username: shipyard
+      file_server:
+        mount_options:
+        - noatime
+        - nodiratime
+        mountpoint: /data
+        type: nfs
+      network_security:
+        nfs:
+        - <ip address prefix in cidr notation for allowable external clients>
+        ssh:
+        - '*'
+      virtual_network:
+        address_space: 10.0.0.0/16
+        existing_ok: true
+        name: myvnet
+        subnet:
+          address_prefix: 10.0.0.0/24
+          name: my-server-subnet
+      static_public_ip: false
+      vm_count: 1
+      vm_size: STANDARD_F16S
+      vm_disk_map:
+        '0':
+          disk_array:
+          - p30-disk0a
+          - p30-disk1a
+          filesystem: btrfs
+          raid_level: 0

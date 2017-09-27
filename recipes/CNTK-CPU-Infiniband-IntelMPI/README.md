@@ -8,13 +8,13 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be either `STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`,
-`STANDARD_H16MR`
+* `vm_size` should be a CPU-only RDMA-enabled instance:
+`STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`, `STANDARD_H16MR`
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic` or `SUSE`.
-* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`.
-* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`.
+* `publisher` should be `OpenLogic` or `SUSE`
+* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`
+* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`
 
 ### Global Configuration
 The global configuration should set the following properties:
@@ -46,12 +46,15 @@ application `command` to run would be:
     * `-w` for the working directory (not required for this example to run)
     * `--` parameters specified after this are given verbatim to the
       Python script
-* `infiniband` must be set to `true`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files

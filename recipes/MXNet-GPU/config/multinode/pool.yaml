@@ -1,0 +1,14 @@
+pool_specification:
+  id: mxnet-multinode
+  vm_configuration:
+    platform_image:
+      offer: UbuntuServer
+      publisher: Canonical
+      sku: 16.04-LTS
+  vm_count:
+    dedicated: 2
+    low_priority: 0
+  vm_size: STANDARD_NC24
+  inter_node_communication_enabled: true
+  ssh:
+    username: docker

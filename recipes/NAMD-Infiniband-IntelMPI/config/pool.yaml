@@ -1,0 +1,14 @@
+pool_specification:
+  id: docker-namd-rdma
+  vm_configuration:
+    platform_image:
+      offer: CentOS-HPC
+      publisher: OpenLogic
+      sku: '7.3'
+  vm_count:
+    dedicated: 4
+    low_priority: 0
+  vm_size: STANDARD_H16R
+  inter_node_communication_enabled: true
+  ssh:
+    username: docker

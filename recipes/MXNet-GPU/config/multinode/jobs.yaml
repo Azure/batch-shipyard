@@ -1,0 +1,10 @@
+job_specifications:
+- id: mxnetjob
+  auto_complete: true
+  tasks:
+  - image: alfpark/mxnet:gpu
+    shared_data_volumes:
+    - glustervol
+    multi_instance:
+      num_instances: pool_current_dedicated
+    command: /mxnet/run_mxnet.sh cifar-10-py $AZ_BATCH_NODE_SHARED_DIR/gfs --model-prefix $AZ_BATCH_TASK_WORKING_DIR/cifar-10-model

@@ -1,0 +1,5 @@
+job_specifications:
+- id: mxnetjob
+  tasks:
+  - image: alfpark/mxnet:cpu
+    command: /mxnet/run_mxnet.sh mnist-py . --model-prefix $AZ_BATCH_TASK_WORKING_DIR/mnist-model

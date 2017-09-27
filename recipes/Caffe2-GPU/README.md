@@ -8,16 +8,14 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
-`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
-K80 GPUs for GPU compute acceleration while `NV` VM instances feature
-M60 GPUs for visualization workloads. Because Caffe2 is a GPU-accelerated
-compute application, it is best to choose `NC` VM instances.
+* `vm_size` must be a GPU enabled VM size. Because Caffe2 is a GPU-accelerated
+compute application, you should choose an `ND`, `NC` or `NCv2` VM instance
+size.
 * `vm_configuration` is the VM configuration
   * `platform_image` specifies to use a platform image
-    * `publisher` should be `Canonical` or `OpenLogic`.
-    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
-    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
+    * `publisher` should be `Canonical` or `OpenLogic`
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS
 
 Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
 `vm_count` should be set to your desired values.
@@ -42,5 +40,5 @@ the download of the training file from the web endpoint:
 * `command` should contain the command to pass to the Docker run invocation.
 For the `caffe2ai/caffe2` Docker image and the sample script above, the
 `command` would be: `python -u mnist.py --gpu`
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.

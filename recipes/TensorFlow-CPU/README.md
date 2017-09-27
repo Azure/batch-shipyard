@@ -39,7 +39,7 @@ To run the MNIST convolutional example, the `command` would be:
 
 ### Tensorboard
 If you would like to tunnel Tensorboard to your local machine, use the
-`jobs-tb.json` file instead. This requires that a pool SSH user was added,
+`jobs-tb.yaml` file instead. This requires that a pool SSH user was added,
 and `ssh` or `ssh.exe` is available. This configuration will output summary
 data to the directory specified in the `--log_dir` parameter. After the job
 is submitted, you can start the remote Tensorboard instance with the command:

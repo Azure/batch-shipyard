@@ -6,7 +6,7 @@ Please see refer to this [set of sample configuration files](./config) for
 this recipe.
 
 ### Pool Configuration
-The pool configuration should enable the following properties:
+The pool configuration should enable or set the following properties:
 * `max_tasks_per_node` must be set to 1 or omitted
 
 Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and

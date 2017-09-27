@@ -1,0 +1,5 @@
+job_specifications:
+- id: namdjob
+  tasks:
+  - image: alfpark/namd:2.11-cuda
+    command: /sw/run_namd.sh apoa1 1000

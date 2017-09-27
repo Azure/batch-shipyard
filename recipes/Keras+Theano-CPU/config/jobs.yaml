@@ -1,0 +1,5 @@
+job_specifications:
+- id: kerasjob
+  tasks:
+  - image: alfpark/keras:cpu
+    command: python -u /keras/examples/mnist_cnn.py

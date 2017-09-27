@@ -1,0 +1,5 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  docker_images:
+  - alfpark/tensorflow:1.2.1-cpu

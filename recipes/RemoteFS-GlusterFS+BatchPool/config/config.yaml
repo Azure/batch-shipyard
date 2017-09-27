@@ -1,0 +1,11 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  docker_images:
+  - busybox
+  docker_volumes:
+    shared_data_volumes:
+      mystoragecluster:
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/mystoragecluster
+        mount_options: []
+        volume_driver: storage_cluster

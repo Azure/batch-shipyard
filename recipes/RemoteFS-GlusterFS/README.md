@@ -91,5 +91,5 @@ virtual machine resources can no longer be enumerated, you can issue:
 SHIPYARD_CONFIGDIR=. ./shipyard fs cluster del mystoragecluster --generate-from-prefix
 ```
 
-Which would attempt to delete resources based off the `fs.json` hostname
+Which would attempt to delete resources based off the `fs.yaml` hostname
 prefix (resources) specification.

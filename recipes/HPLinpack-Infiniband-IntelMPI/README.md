@@ -11,13 +11,13 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be either `STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`,
-`STANDARD_H16MR`
+* `vm_size` should be a CPU-only RDMA-enabled instance:
+`STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`, `STANDARD_H16MR`
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic` or `SUSE`.
-* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`.
-* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`.
+* `publisher` should be `OpenLogic` or `SUSE`
+* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`
+* `sku` should be `7.3` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`
 
 ### Global Configuration
 The global configuration should set the following properties:
@@ -48,13 +48,17 @@ many configuration parameters:
   * `-q <grid column dim>`: grid column dimension, this must be greater than
     or equal to `-p`. If not specified, will be automatically determined from
     the number of nodes.
-* `additional_docker_run_options` json array should contain `"--privileged"`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `additional_docker_run_options` property should contain `"--privileged"`
 such that HPL can pin and interleave memory
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` array can be empty
 
 ## Dockerfile and supplementary files

@@ -10,12 +10,10 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties if on multiple
 GPUs:
-* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
-`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24` if using GPUs.
-`NC` VM instances feature K80 GPUs for GPU compute acceleration while `NV` VM
-instances feature M60 GPUs for visualization workloads. Because TensorFlow is
-a GPU-accelerated compute application, it is best to choose `NC` VM instances.
-If not using GPUs, another appropriate SKU can be selected.
+* `vm_size` must be a GPU enabled VM size if using GPUs. Because TensorFlow
+is a GPU-accelerated compute application, you should choose an `ND`, `NC` or
+`NCv2` VM instance size if utilizing GPUs. If not using GPUs, any other
+appropriate CPU based VM size can be selected.
 * `vm_configuration` is the VM configuration
   * `platform_image` specifies to use a platform image
     * `publisher` should be `Canonical` or `OpenLogic` if using GPUs. Other
@@ -57,7 +55,9 @@ if run on CPUs.
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files

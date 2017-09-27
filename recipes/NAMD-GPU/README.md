@@ -10,16 +10,15 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be one of `STANDARD_NC6`, `STANDARD_NC12`, `STANDARD_NC24`,
-`STANDARD_NV6`, `STANDARD_NV12`, `STANDARD_NV24`. `NC` VM instances feature
-K80 GPUs for GPU compute acceleration while `NV` VM instances feature
-M60 GPUs for visualization workloads. Because NAMD is a GPU-accelerated
-compute application, it is best to choose `NC` VM instances.
+* `vm_size` must be a GPU enabled VM size. Because NAMD is a GPU-accelerated
+compute application, you should choose an `ND`, `NC` or `NCv2` VM instance
+size. As a non-AI application, NAMD may benefit more from `NC` and `NCv2`
+VM instance sizes.
 * `vm_configuration` is the VM configuration
   * `platform_image` specifies to use a platform image
-    * `publisher` should be `Canonical` or `OpenLogic`.
-    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic.
-    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS.
+    * `publisher` should be `Canonical` or `OpenLogic`
+    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
+    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS
 
 ### Global Configuration
 The global configuration should set the following properties:
@@ -39,8 +38,8 @@ to run the included benchmarks:
   * `<steps>` is the number of steps to execute
   * `<ppn>` is the number of cores on each compute node. This is optional
     and, if omitted, will be determined dynamically.
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please

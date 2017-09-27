@@ -29,7 +29,7 @@ e.g., `alfpark/keras:cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/keras:cpu` Docker image and to run the MNIST convolutional
 example, the `command` would simply be:
-`"python /keras/examples/mnist_cnn.py"`
+`"python -u /keras/examples/mnist_cnn.py"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

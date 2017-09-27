@@ -8,7 +8,7 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be `STANDARD_NC24R`
+* `vm_size` must be an RDMA-enabled GPU vm size, e.g., `STANDARD_NC24R`
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 * `publisher` should be `OpenLogic`
@@ -46,14 +46,17 @@ Docker image. The application `command` to run would be:
     * `-w` for the working directory (not required for this example to run)
     * `--` parameters specified after this are given verbatim to the
       Python script
-* `infiniband` must be set to `true`
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`
+  * `coordination_command` should be unset or `null`. For pools with
+    `native` container support, this command should be supplied if
+    a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files
