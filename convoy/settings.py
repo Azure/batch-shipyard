@@ -2779,24 +2779,20 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         retention_time = util.convert_string_to_timedelta(retention_time)
     else:
         retention_time = None
-    # infiniband
-    infiniband = False
-    try:
-        infiniband = conf['infiniband']
-    except KeyError:
-        infiniband = _kv_read(jobspec, 'infiniband', False)
     # gpu
-    gpu = False
-    try:
-        gpu = conf['gpu']
-    except KeyError:
-        gpu = _kv_read(jobspec, 'gpu', False)
+    gpu = _kv_read(conf, 'gpu') or _kv_read(jobspec, 'gpu')
+    # if not specified check for gpu pool and implicitly enable
+    if gpu is None:
+        if is_gpu_pool(vm_size):
+            gpu = True
+        else:
+            gpu = False
     # adjust for gpu settings
     if gpu:
         if not is_gpu_pool(vm_size):
             raise RuntimeError(
                 ('cannot initialize a gpu task on nodes without '
-                 'gpus, pool: {} vm_size: {}').format(pool_id, vm_size))
+                 'gpus: pool={} vm_size={}').format(pool_id, vm_size))
         # set docker commands with nvidia docker wrapper
         docker_run_cmd = 'nvidia-docker run'
         docker_exec_cmd = 'nvidia-docker exec'
@@ -2804,6 +2800,16 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         # set normal run and exec commands
         docker_run_cmd = 'docker run'
         docker_exec_cmd = 'docker exec'
+    # infiniband
+    infiniband = (
+        _kv_read(conf, 'infiniband') or _kv_read(jobspec, 'infiniband')
+    )
+    # if not specified, check for rdma pool and implicitly enable
+    if infiniband is None:
+        if is_rdma_pool(vm_size) and inter_node_comm:
+            infiniband = True
+        else:
+            infiniband = False
     # adjust for infiniband
     if infiniband:
         if not inter_node_comm:
@@ -2814,7 +2820,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         if not is_rdma_pool(vm_size):
             raise RuntimeError(
                 ('cannot initialize an infiniband task on nodes '
-                 'without RDMA, pool: {} vm_size: {}').format(
+                 'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
         # mount /opt/intel for both native and non-native pool types
         run_opts.append('-v /opt/intel:/opt/intel:ro')

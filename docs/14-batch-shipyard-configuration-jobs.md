@@ -346,11 +346,18 @@ MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
 access to the Infiniband/RDMA devices on the host. Note that this will
 automatically force containers to use the host network stack. If this
 property is set to `true`, ensure that the `pool_specification` property
-`inter_node_communication_enabled` is set to `true`.
+`inter_node_communication_enabled` is set to `true`. If this property is
+not set, it will default to `true` if the task is destined for an RDMA-enabled
+compute pool and `inter_node_communication_enabled` is set to `true`. This
+option has no effect on `native` container support pools as it is
+automtically enabled by the system.
 * (optional) `gpu` designates if all containers under the job require access
 to the GPU devices on the host. If this property is set to `true`, Docker
 containers are instantiated via `nvidia-docker`. This requires N-series VM
-instances.
+instances. If this property is not set, it will default to `true` if the task
+is destined for a compute pool with GPUs. This option has no effect on
+`native` container support pools as it is automatically enabled by the
+system.
 * (optional) `data_volumes` is an array of `data_volume` aliases as defined
 in the global configuration file. These volumes will be mounted in
 all containers under the job.
@@ -621,11 +628,13 @@ transferred again. This object currently supports `azure_batch` and
     force the container to use the host network stack. If this property is
     set to `true`, ensure that the `pool_specification` property
     `inter_node_communication_enabled` is set to `true`. This overrides the
-    job-level property, if set.
+    job-level property, if set. It follows the same default behavior as the
+    job-level property if not set.
   * (optional) `gpu` designates if this container requires access to the GPU
     devices on the host. If this property is set to `true`, Docker containers
     are instantiated via `nvidia-docker`. This requires N-series VM instances.
-    This overrides the job-level property, if set.
+    This overrides the job-level property, if set. It follows the same default
+    behavior as the job-level property if not set.
   * (optional) `max_task_retries` sets the maximum number of times that
     Azure Batch should retry this task for. This overrides the job-level task
     retry count. By default, Azure Batch does not retry tasks that fail
