@@ -2876,16 +2876,17 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         if util.is_none_or_empty(command):
             raise ValueError(
                 'multi-instance task must have an application command')
-        # set docker run as coordination command
-        try:
-            run_opts.remove('--rm')
-        except ValueError:
-            pass
-        # run in detached mode
-        run_opts.append('-d')
-        # ensure host networking stack is used
-        if '--net=host' not in run_opts:
-            run_opts.append('--net=host')
+        # set docker run options for coordination command
+        if not native:
+            try:
+                run_opts.remove('--rm')
+            except ValueError:
+                pass
+            # run in detached mode
+            run_opts.append('-d')
+            # ensure host networking stack is used
+            if '--net=host' not in run_opts:
+                run_opts.append('--net=host')
         # get coordination command
         try:
             coordination_command = conf[
@@ -2894,9 +2895,17 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 raise KeyError()
             coordination_command = '{}'.format(' ' + coordination_command)
         except KeyError:
-            coordination_command = ''
+            # manually set coordination command to ssh for native
+            # containers in daemon mode if not specified
+            if native:
+                coordination_command = '/usr/sbin/sshd -p 23'
+            else:
+                coordination_command = None
         if native:
-            cc_args = [coordination_command]
+            if util.is_not_empty(coordination_command):
+                cc_args = [coordination_command]
+            else:
+                cc_args = None
         else:
             cc_args = [
                 'env | grep AZ_BATCH_ >> {}'.format(envfile),

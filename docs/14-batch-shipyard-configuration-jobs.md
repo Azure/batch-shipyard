@@ -201,11 +201,14 @@ job_specifications:
 * (required) `id` is the job id to create. If the job already exists, the
 specified `tasks` under the job will be added to the existing job.
 * (optional) `auto_complete` enables auto-completion of the job for which
-the specified tasks are run under. When run with multi-instance tasks, this
-performs automatic cleanup of the Docker container which is run in detached
-mode. The default is `false`. If creating a job `recurrence`, utilizing
-`auto_complete` is one way to have recurrent job instances created from a
-schedule to complete such that the next job recurrence can be created.
+the specified tasks are run under. In non-`native` mode and when run with
+multi-instance tasks, this performs automatic cleanup of the Docker container
+which is run in detached mode. It is not necessary to set `auto_complete` to
+`true` with `native` container supported pools to clean up Docker containers
+with multi-instance tasks. The default is `false`. If creating a job
+`recurrence`, utilizing `auto_complete` is one way to have recurrent job
+instances created from a schedule to complete such that the next job
+recurrence can be created.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job. Note that
 environment variables are not expanded and are passed as-is. You will need
