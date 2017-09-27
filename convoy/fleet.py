@@ -937,7 +937,56 @@ def _construct_pool_object(
     else:
         gpu_env = None
     # set vm configuration
-    if settings.is_native_docker_pool(
+    if util.is_not_empty(custom_image_na):
+        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            os_disk=batchmodels.OSDisk(
+                image_uris=pool_settings.vm_configuration.image_uris,
+                caching=batchmodels.CachingType.read_write,
+            ),
+            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+        )
+        if settings.is_native_docker_pool(
+                config, vm_config=pool_settings.vm_configuration):
+            registries = []
+            if preg.server:
+                registries.append(batchmodels.ContainerRegistry(
+                    registry_server=preg.server,
+                    username=preg.user,
+                    password=preg.password))
+            else:
+                hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+                if util.is_not_empty(hubuser):
+                    registries.append(batchmodels.ContainerRegistry(
+                        registry_server=None,
+                        username=hubuser,
+                        password=hubpw))
+            vmconfig.container_configuration = \
+                batchmodels.ContainerConfiguration(
+                    container_image_names=settings.
+                    global_resources_docker_images(config),
+                    container_registries=registries,
+                )
+        start_task = [
+            '{npf} {a}{b}{e}{f}{m}{n}{p}{r}{t}{v}{x}'.format(
+                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                r=' -r {}'.format(preg.container) if preg.container else '',
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            )
+        ]
+    elif settings.is_native_docker_pool(
             config, vm_config=pool_settings.vm_configuration):
         _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
@@ -975,34 +1024,6 @@ def _construct_pool_object(
                     sc_args) else '',
                 n=' -n' if settings.can_tune_tcp(
                     pool_settings.vm_size) else '',
-                v=' -v {}'.format(__version__),
-                x=' -x {}'.format(data._BLOBXFER_VERSION),
-            )
-        ]
-    elif util.is_not_empty(custom_image_na):
-        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
-        vmconfig = batchmodels.VirtualMachineConfiguration(
-            os_disk=batchmodels.OSDisk(
-                image_uris=pool_settings.vm_configuration.image_uris,
-                caching=batchmodels.CachingType.read_write,
-            ),
-            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
-        )
-        start_task = [
-            '{npf} {a}{b}{e}{f}{m}{n}{p}{r}{t}{v}{x}'.format(
-                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
-                a=' -a' if azurefile_vd else '',
-                b=' -b' if util.is_not_empty(block_for_gr) else '',
-                e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                f=' -f' if gluster_on_compute else '',
-                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                    sc_args) else '',
-                n=' -n' if settings.can_tune_tcp(
-                    pool_settings.vm_size) else '',
-                p=' -p {}'.format(bs.storage_entity_prefix)
-                if bs.storage_entity_prefix else '',
-                r=' -r {}'.format(preg.container) if preg.container else '',
-                t=' -t {}'.format(torrentflags),
                 v=' -v {}'.format(__version__),
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
             )

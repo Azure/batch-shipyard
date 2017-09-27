@@ -19,6 +19,7 @@ pool_specification:
       image_uris:
       - https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd
       node_agent: batch.node.ubuntu 16.04
+      native: false
   vm_size: STANDARD_D2_V2
   vm_count:
     dedicated: 4
@@ -109,7 +110,9 @@ specify both. If using a custom image, please see the
       task management (such as job and task termination while tasks are
       running), in exchange for some other features that are not available
       in this mode such as task-level data ingress or task-level data egress
-      that is not bound for Azure Storage Blobs. The default is `false`.
+      that is not bound for Azure Storage Blobs. If there is no `native`
+      conversion equivalent for the specified `publisher`, `offer`, `sku`
+      then no conversion is performed. The default is `false`.
   * (required for custom image) `custom_image` defines the custom image to
     use:
     * (required for custom image) `image_uris` defines a list of page blob
@@ -117,6 +120,12 @@ specify both. If using a custom image, please see the
     * (required for custom image) `node_agent` is the node agent sku id to
       use with this custom image. You can view supported base images and
       their node agent sku ids with the `pool listskus` command.
+    * (optional) `native` will opt to use native Docker container support
+      if possible. This provides better task management (such as job and task
+      termination while tasks are running), in exchange for some other
+      features that are not available in this mode such as task-level data
+      ingress or task-level data egress that is not bound for Azure Storage
+      Blobs. The default is `false`.
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.

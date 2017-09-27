@@ -11,6 +11,7 @@ pool_specification:
       image_uris:
       - https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd
       node_agent: batch.node.ubuntu 16.04
+      native: false
   vm_size: STANDARD_D2_V2
   vm_count:
     dedicated: 4

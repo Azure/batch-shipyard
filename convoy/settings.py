@@ -89,12 +89,14 @@ PoolVmPlatformImageSettings = collections.namedtuple(
         'offer',
         'sku',
         'version',
+        'native',
     ]
 )
 PoolVmCustomImageSettings = collections.namedtuple(
     'PoolVmCustomImageSettings', [
         'image_uris',
         'node_agent',
+        'native',
     ]
 )
 PoolAutoscaleScenarioSettings = collections.namedtuple(
@@ -496,12 +498,7 @@ def is_native_docker_pool(config, vm_config=None):
     """
     if vm_config is None:
         vm_config = _populate_pool_vm_configuration(config)
-    if isinstance(vm_config, PoolVmCustomImageSettings):
-        return False
-    if (vm_config.publisher == 'microsoft-azure-batch' and
-            'container' in vm_config.offer):
-        return True
-    return False
+    return vm_config.native
 
 
 def is_rdma_pool(vm_size):
@@ -638,6 +635,7 @@ def _populate_pool_vm_configuration(config):
             offer=conf['offer'].lower(),
             sku=conf['sku'].lower(),
             version=_kv_read_checked(conf, 'version', default='latest'),
+            native=False,
         )
         # auto convert vm config to native if specified
         if _kv_read(conf, 'native', default=False):
@@ -649,6 +647,7 @@ def _populate_pool_vm_configuration(config):
                     offer='ubuntu-server-container-preview',
                     sku='16-04-lts',
                     version='latest',
+                    native=True,
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos' and
@@ -658,6 +657,7 @@ def _populate_pool_vm_configuration(config):
                     offer='centos-container-preview',
                     sku='7-3',
                     version='latest',
+                    native=True,
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos-hpc' and
@@ -667,6 +667,7 @@ def _populate_pool_vm_configuration(config):
                     offer='centos-container-rdma-preview',
                     sku='7-3',
                     version='latest',
+                    native=True,
                 )
         return vm_config
     else:
@@ -674,6 +675,7 @@ def _populate_pool_vm_configuration(config):
         return PoolVmCustomImageSettings(
             image_uris=conf['image_uris'],
             node_agent=conf['node_agent'].lower(),
+            native=_kv_read(conf, 'native', default=False),
         )
 
 

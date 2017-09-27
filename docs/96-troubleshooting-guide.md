@@ -63,21 +63,53 @@ range in the configuration. You can attempt to change the address range
 of the subnet indpendently (if pre-created) and issue the resize command
 again if you encounter this issue.
 
-#### Compute Node start task failure
-Batch Shipyard installs the Docker Host Engine and other requisite software
-when the compute node starts. There is a possibility for the start task to
-fail due to transient network faults when issuing system software updates.
-You can turn on automatic rebooting where Batch Shipyard can attempt to
-mitigate the issue on your behalf in the `pool.yaml` config file.
+#### Compute Node appears to be stuck in `starting` state
+If you are using pools with `native` container support, compute nodes that
+appear to be "stuck" in `starting` state may not be stack at all. During this
+phase, all Docker images specified in the `global_resources` are preloaded
+on to compute nodes. Thus, it may take a while for your compute nodes to
+transition to `idle` from this state.
+
+If you are not using pools with `native` container support, then there may
+be an issue allocating the node from the Azure Cloud. Azure Batch
+automatically tries to recover from this state, but may not be able to
+on occasion. In these circumstances, you can delete the affected nodes
+with `pool delnode --all-starting` and then `pool resize` to scale the
+pool back to your desired amount.
+
+#### Compute Node appears to be stuck in `waiting_for_start_task` state
+Compute nodes that appear to be "stuck" in waiting for start task may not be
+stuck at all. If you are not using pools with `native` container support
+and are specifying that nodes should block for all Docker images to
+be present on the node before allowing scheduling and your Docker images are
+large, it may take a while for your compute nodes to transition from waiting
+for start task to idle.
+
+If you are certain the above is not the cause for this behavior, then it
+may indicate a regression in the Batch Shipyard code, a new Docker release
+that is causing interaction issues (e.g., with nvidia-docker) or some other
+problem that was not caught during testing. You can retrieve the compute
+node start task stdout and stderr files to diagnose further and report an
+issue on GitHub if it appears to be a defect.
+
+#### Compute Node enters `start_task_failed` state
+For pools thare are allocated without `native` container support, Batch
+Shipyard installs the Docker Host Engine and other requisite software
+when the compute node starts. Even with pools with `native` container support,
+some additional software is installed along with integrity checks of the
+compute node. There is a possibility for the start task to fail due to
+transient network faults when issuing system software updates or other
+issues. You can turn on automatic rebooting where Batch Shipyard can
+attempt to mitigate the issue on your behalf in the `pool.yaml` config file.
 Alternatively, you can issue the command
 `pool rebootnode --all-start-task-failed` which will attempt to reboot the
 nodes that have entered this state.
 
 If the compute node fails to start properly, Batch Shipyard will automatically
-download the compute node's stdout and stderr files for the start task into
-the directory where you ran `shipyard`. The files will be placed in
-`<pool name>/<node id>/startup/std{err,out}.txt`. You can examine these files
-to see what the possible culprit for the issue is. If it appears to be
+download the compute node's stdout.txt, stderr.txt and cascade.log files
+for the start task into the directory where you ran `shipyard`. The files
+will be placed in `<pool name>/<node id>/startup/`. You can examine these
+files to see what the possible culprit for the issue is. If it appears to be
 transient, you can try to create the pool again. If it appears to be a Batch
 Shipyard issue, please report the issue on GitHub.
 
@@ -92,31 +124,17 @@ with the Azure Storage service to download the files. These SAS tokens are
 bound to the storage account key for which they were generated with. If you
 change/regenerate your storage account key that these SAS tokens were
 originally generated with, then the compute nodes will fail to start as
-these files will no longer be able to be downloaded. You will need to
-recreate your pool in these situations.
+these files as the SAS tokens bound to these files will no longer be valid.
+You will need to recreate your pool in these situations.
 
-#### Compute Node does not start or is unusable
-If the compute node is "stuck" in starting state or enters unusable state,
-this indicates that there was an issue allocating the node from the Azure
-Cloud. Azure Batch automatically tries to recover from such situations, but
-may not be able to on occasion. In these circumstances, it is best
-to delete the specific node with `pool delnode` (with `--all-unusable` if
-nodes are stuck in unsuable state) and then resize back up with `pool resize`
+#### Compute Node enters `unusable` state
+If compute nodes enter `unusable` state then this indicates that there was
+an issue allocating the node from the Azure Cloud or that the Azure Batch
+service can no longer communicate with the compute node. Azure Batch
+automatically tries to recover from such situations, but may not be able to
+on occasion. In these circumstances, you can delete the affected nodes
+with `pool delnode --all-unusable` and then resize back up with `pool resize`
 or recreate the pool.
-
-#### Compute Node is stuck in waiting for start task
-Compute nodes that appear to be "stuck" in waiting for start task may not be
-stuck at all. If you specify that nodes should block for all Docker images to
-be present on the node before allowing scheduling and your Docker images are
-large, it may take a while for your compute nodes to transition from waiting
-for start task to idle.
-
-If you are certain the above is not the cause for this behavior, then it
-may indicate a regression in the Batch Shipyard code, a new Docker release
-that is causing interaction issues (e.g., with nvidia-docker) or some other
-problem that was not caught during testing. You can retrieve the compute
-node start task stdout and stderr files to diagnose further and report an
-issue on GitHub if it appears to be a defect.
 
 ## <a name="task"></a>Job/Task Execution Issues
 #### Task is submitted but doesn't run
