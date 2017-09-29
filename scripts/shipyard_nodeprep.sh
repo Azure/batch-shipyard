@@ -17,13 +17,12 @@ offer=
 p2p=
 p2penabled=0
 prefix=
-privatereg=
 sku=
 sc_args=
 version=
 
 # process command line options
-while getopts "h?abde:fg:m:no:p:r:s:t:v:wx:" opt; do
+while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -38,9 +37,8 @@ while getopts "h?abde:fg:m:no:p:r:s:t:v:wx:" opt; do
             echo "-n optimize network TCP settings"
             echo "-o [offer] VM offer"
             echo "-p [prefix] storage container prefix"
-            echo "-r [container:archive:image id] private registry"
             echo "-s [sku] VM sku"
-            echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
+            echo "-t [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
             echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
             echo "-x [blobxfer version] blobxfer version"
@@ -76,9 +74,6 @@ while getopts "h?abde:fg:m:no:p:r:s:t:v:wx:" opt; do
             ;;
         p)
             prefix="--prefix $OPTARG"
-            ;;
-        r)
-            privatereg=$OPTARG
             ;;
         s)
             sku=${OPTARG,,}
@@ -437,9 +432,6 @@ if [ ! -z $encrypted ]; then
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
         DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
-    if [ ! -z $privatereg ]; then
-        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    fi
 fi
 
 # set iptables rules
@@ -491,7 +483,7 @@ fi
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     # name will be appended to dockerversion
-    dockerversion=17.06.2~ce-0~
+    dockerversion=17.09.0~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
@@ -656,7 +648,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
-        dockerversion=17.06.2.ce-1.el7.centos
+        dockerversion=17.09.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             srvstart="systemctl start docker.service"
@@ -847,10 +839,8 @@ docker_pull_image alfpark/blobxfer:$blobxferversion
 docker_pull_image alfpark/batch-shipyard:tfm-$version
 docker_pull_image alfpark/batch-shipyard:rjm-$version
 
-# login to registry server
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
-fi
+# login to registry servers (do not specify -e as creds have been decrypted)
+./registry_login.sh
 
 # mount any storage clusters
 if [ ! -z $sc_args ]; then
@@ -925,7 +915,6 @@ offer=$offer
 sku=$sku
 npstart=$npstart
 drpstart=$drpstart
-privatereg=$privatereg
 p2p=$p2p
 `env | grep SHIPYARD_`
 `env | grep AZ_BATCH_`
@@ -943,28 +932,13 @@ EOF
         alfpark/batch-shipyard:cascade-$version &
     cascadepid=$!
 else
-    # backfill node prep start
+    # add timings
     if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+        # backfill node prep start
         ./perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
-    fi
-    # install private registry if required
-    if [ ! -z $privatereg ]; then
-        # mark private registry start
-        if [ ! -z ${SHIPYARD_TIMING+x} ]; then
-            ./perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
-        fi
-        ./setup_private_registry.py $privatereg $ipaddress $prefix
-        # mark private registry end
-        if [ ! -z ${SHIPYARD_TIMING+x} ]; then
-            ./perf.py privateregistry end $prefix
-        fi
-    fi
-    # mark node prep finished
-    if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+        # mark node prep finished
         ./perf.py nodeprep end $prefix
-    fi
-    # start cascade
-    if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+        # mark start cascade
         ./perf.py cascade start $prefix
     fi
     ./cascade.py $p2p --ipaddress $ipaddress $prefix &

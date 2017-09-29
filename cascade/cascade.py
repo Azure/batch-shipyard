@@ -56,7 +56,6 @@ logger = logging.getLogger('cascade')
 _ON_WINDOWS = sys.platform == 'win32'
 _DEFAULT_PORT_BEGIN = 6881
 _DEFAULT_PORT_END = 6891
-_DOCKER_HUB_REGISTRY = 'docker.io'
 _DOCKER_TAG = 'docker:'
 _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
@@ -74,9 +73,7 @@ _ENABLE_P2P = True
 _CONCURRENT_DOWNLOADS_ALLOWED = 10
 _COMPRESSION = True
 _SEED_BIAS = 3
-_ALLOW_PUBLIC_PULL_WITH_PRIVATE = False
 _SAVELOAD_FILE_EXTENSION = 'tar.gz'
-_REGISTRY = None
 _RECORD_PERF = int(os.getenv('SHIPYARD_TIMING', default='0'))
 # mutable global state
 _CBHANDLES = {}
@@ -87,7 +84,6 @@ _STORAGE_CONTAINERS = {
     'blob_globalresources': None,
     'blob_torrents': None,
     'table_dht': None,
-    'table_registry': None,
     'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
@@ -160,7 +156,6 @@ def _setup_storage_names(sep: str) -> None:
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', batchaccount, poolid))
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
-    _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
@@ -414,57 +409,28 @@ class DockerSaveThread(threading.Thread):
         return False
 
     def _pull(self, image: str) -> tuple:
-        """Docker image pull with registry normalization
+        """Docker image pull
         :param str image: image to pull
         :rtype: tuple
         :return: tuple or return code, stdout, stderr
         """
-        if _REGISTRY == _DOCKER_HUB_REGISTRY:
-            src = image
-            _pub = True
-        else:
-            src = '{}/{}'.format(_REGISTRY, image)
-            _pub = False
         proc = subprocess.Popen(
-            'docker pull {}'.format(src),
+            'docker pull {}'.format(image),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
             universal_newlines=True)
         stdout, stderr = proc.communicate()
-        if (proc.returncode != 0 and _ALLOW_PUBLIC_PULL_WITH_PRIVATE and
-                not _pub and
-                not self._check_pull_output_overload(stdout, stderr)):
-            logger.warning(
-                'could not pull from private registry, attempting '
-                'Docker Public Hub instead')
-            _pub = True
-            proc = subprocess.Popen(
-                'docker pull {}'.format(image),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                universal_newlines=True)
-            stdout, stderr = proc.communicate()
-        if proc.returncode == 0 and not _pub:
-            # tag image to remove registry ip
-            subprocess.check_call(
-                'docker tag {} {}'.format(src, image),
-                shell=True)
         return proc.returncode, stdout, stderr
 
     def _pull_and_save(self) -> None:
         """Thread main logic for pulling and saving docker image"""
-        if _REGISTRY is None:
-            raise RuntimeError(
-                ('{} image specified for global resource, but there are '
-                 'no registries available').format(self.resource))
         file = None
         resource_hash = compute_resource_hash(self.resource)
         image = get_docker_image_name_from_resource(self.resource)
         _record_perf('pull-start', 'img={}'.format(image))
         start = datetime.datetime.now()
-        logger.info('pulling image {} from {}'.format(image, _REGISTRY))
+        logger.info('pulling image {}'.format(image))
         backoff = random.randint(2, 5)
         while True:
             rc, stdout, stderr = self._pull(image)
@@ -489,8 +455,7 @@ class DockerSaveThread(threading.Thread):
                     'docker pull failed: stdout={} stderr={}'.format(
                         stdout, stderr))
         diff = (datetime.datetime.now() - start).total_seconds()
-        logger.debug('took {} sec to pull docker image {} from {}'.format(
-            diff, image, _REGISTRY))
+        logger.debug('took {} sec to pull docker image {}'.format(diff, image))
         # register service
         _merge_service(
             self.table_client, self.resource, self.nglobalresources)
@@ -1155,33 +1120,6 @@ def distribute_global_resources(
         loop, blob_client, table_client, ipaddress, nentities))
 
 
-def _set_registry(table_client: azure.storage.table.TableService) -> None:
-    """Set registry to use
-    :param azure.storage.table.TableService table_client: table client
-    """
-    global _REGISTRY
-    if pathlib.Path(
-            os.environ['AZ_BATCH_TASK_WORKING_DIR'],
-            '.cascade_private_registry.txt').exists():
-        _REGISTRY = 'localhost:5000'
-    else:
-        # get registry from table
-        entities = table_client.query_entities(
-            _STORAGE_CONTAINERS['table_registry'],
-            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
-        i = 0
-        for ent in entities:
-            _port = ent['Port']
-            _REGISTRY = '{}{}'.format(
-                ent['RowKey'], ':{}'.format(_port) if _port != 80 else '')
-            i += 1
-        if i != 1:
-            raise RuntimeError(
-                ('registry table contains an invalid number of entities ({}) '
-                 'for pk={}').format(i, _PARTITION_KEY))
-    logger.info('docker registry: {}'.format(_REGISTRY))
-
-
 async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
     """Get IP address
     :param asyncio.BaseEventLoop loop: event loop
@@ -1200,18 +1138,14 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
 
 def main():
     """Main function"""
-    global _ENABLE_P2P, _CONCURRENT_DOWNLOADS_ALLOWED, \
-        _ALLOW_PUBLIC_PULL_WITH_PRIVATE, _POOL_ID
+    global _ENABLE_P2P, _CONCURRENT_DOWNLOADS_ALLOWED, _POOL_ID
     # get command-line args
     args = parseargs()
     p2popts = args.p2popts.split(':')
     _ENABLE_P2P = p2popts[0] == 'true'
     _CONCURRENT_DOWNLOADS_ALLOWED = int(p2popts[1])
-    _ALLOW_PUBLIC_PULL_WITH_PRIVATE = p2popts[4] == 'true'
     logger.info('max concurrent downloads: {}'.format(
         _CONCURRENT_DOWNLOADS_ALLOWED))
-    logger.info('allow public pull with private: {}'.format(
-        _ALLOW_PUBLIC_PULL_WITH_PRIVATE))
     # set p2p options
     if _ENABLE_P2P:
         if not _LIBTORRENT_IMPORTED:
@@ -1245,14 +1179,10 @@ def main():
 
     # set up storage names
     _setup_storage_names(args.prefix)
+    del args
 
     # create storage credentials
     blob_client, table_client = _create_credentials()
-
-    # set registry
-    _set_registry(table_client)
-
-    del args
 
     # distribute global resources
     distribute_global_resources(loop, blob_client, table_client, ipaddress)
@@ -1264,12 +1194,12 @@ def parseargs():
     :return: parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description='Cascade: Azure Batch P2P File/Image Replicator')
+        description='Cascade: Batch Shipyard P2P File/Image Replicator')
     parser.set_defaults(ipaddress=None)
     parser.add_argument(
         'p2popts',
         help='peer to peer options [enabled:non-p2p concurrent '
-        'downloading:seed bias:compression:public pull passthrough]')
+        'downloading:seed bias:compression]')
     parser.add_argument(
         '--ipaddress', help='ip address')
     parser.add_argument(

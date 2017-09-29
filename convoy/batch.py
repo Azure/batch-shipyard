@@ -2332,7 +2332,7 @@ def stream_file_and_wait_for_task(
                     continue
                 elif 'The specified file does not exist.' in ex.message:
                     notfound += 1
-                    if notfound > 10:
+                    if notfound > 20:
                         raise
                     time.sleep(1)
                     continue
@@ -2802,90 +2802,59 @@ def generate_docker_login_settings(config, for_ssh=False):
     :rtype: tuple
     :return: (env vars, login cmds)
     """
-    # get private registry settings
-    preg = settings.docker_registry_private_settings(config)
+    # get docker registries
+    docker_registries = settings.docker_registries(config)
     # get encryption settings
     encrypt = settings.batch_shipyard_encryption_enabled(config)
+    # create joinable arrays for env vars
+    servers = []
+    users = []
+    passwords = []
+    for registry in docker_registries:
+        if registry.registry_server is None:
+            servers.append('')
+        else:
+            servers.append(registry.registry_server)
+        users.append(registry.user_name)
+        passwords.append(registry.password)
     # populate command and env vars
     cmd = []
     env = []
-    if preg.server:
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_SERVER', preg.server)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_USERNAME', preg.user)
-        )
-        env.append(
-            batchmodels.EnvironmentSetting(
-                'DOCKER_LOGIN_PASSWORD',
-                crypto.encrypt_string(encrypt, preg.password, config))
-        )
-        if encrypt:
-            cmd.append(
-                'DOCKER_LOGIN_PASSWORD='
-                '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                'openssl rsautl -decrypt -inkey '
-                '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-        cmd.append(
-            'docker login -u $DOCKER_LOGIN_USERNAME '
-            '-p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER')
-    else:
-        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-        if hubuser:
+    if len(servers) > 0:
+        # create either cmd or env for each
+        value = ','.join(servers)
+        if for_ssh:
+            cmd.append('export DOCKER_LOGIN_SERVER={}'.format(value))
+        else:
             env.append(
-                batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_USERNAME', hubuser)
+                batchmodels.EnvironmentSetting('DOCKER_LOGIN_SERVER', value)
             )
+        value = ','.join(users)
+        if for_ssh:
+            cmd.append('export DOCKER_LOGIN_USERNAME={}'.format(value))
+        else:
+            env.append(
+                batchmodels.EnvironmentSetting('DOCKER_LOGIN_USERNAME', value)
+            )
+        value = ','.join(passwords)
+        if for_ssh:
+            cmd.append('export DOCKER_LOGIN_PASSWORD={}'.format(value))
+        else:
             env.append(
                 batchmodels.EnvironmentSetting(
                     'DOCKER_LOGIN_PASSWORD',
-                    crypto.encrypt_string(encrypt, hubpw, config))
+                    crypto.encrypt_string(encrypt, value, config))
             )
-            if encrypt:
-                cmd.append(
-                    'DOCKER_LOGIN_PASSWORD='
-                    '`echo $DOCKER_LOGIN_PASSWORD | base64 -d | '
-                    'openssl rsautl -decrypt -inkey '
-                    '$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem`')
-            cmd.append(
-                'docker login -u $DOCKER_LOGIN_USERNAME '
-                '-p $DOCKER_LOGIN_PASSWORD')
-    # transform env and cmd into single command for ssh
-    if for_ssh and len(cmd) > 0:
-        srv = None
-        for ev in env:
-            if ev.name == 'DOCKER_LOGIN_PASSWORD':
-                pw = ev.value
-            elif ev.name == 'DOCKER_LOGIN_USERNAME':
-                user = ev.value
-            elif ev.name == 'DOCKER_LOGIN_SERVER':
-                srv = ev.value
-        key = '${}'.format('DOCKER_LOGIN_PASSWORD')
-        if encrypt:
-            pw = cmd[0][22:].replace(key, pw)
-            cmd = cmd[1].replace(key, pw)
-        else:
-            cmd = cmd[0].replace(key, pw)
-        key = '${}'.format('DOCKER_LOGIN_USERNAME')
-        cmd = cmd.replace(key, user)
-        if util.is_not_empty(srv):
-            key = '${}'.format('DOCKER_LOGIN_SERVER')
-            cmd = cmd.replace(key, srv)
-        if encrypt:
-            key = 'openssl'
-            if key in cmd:
-                cmd = cmd.replace(key, 'sudo {}'.format(key))
-            key = '$AZ_BATCH_NODE_STARTUP_DIR'
-            if key in cmd:
-                start_mnt = '/'.join((
-                    settings.temp_disk_mountpoint(config), 'batch', 'tasks',
-                    'startup',
-                ))
-                cmd = cmd.replace(key, start_mnt)
-        return None, [cmd]
+        # if ssh append script execution
+        if for_ssh:
+            env = None
+            start_mnt = '/'.join((
+                settings.temp_disk_mountpoint(config),
+                'batch', 'tasks', 'startup',
+            ))
+            cmd.append('cd {}/wd'.format(start_mnt))
+            cmd.append('./registry_login.sh{}'.format(
+                ' -e' if encrypt else ''))
     return env, cmd
 
 
@@ -3081,7 +3050,6 @@ def add_jobs(
                     return
         else:
             raise
-    preg = settings.docker_registry_private_settings(config)
     global_resources = settings.global_resources_docker_images(config)
     lastjob = None
     lasttaskid = None
@@ -3102,13 +3070,6 @@ def add_jobs(
         missing_images = []
         allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
         existing_tasklist = None
-        # check for public pull on missing setting
-        if (allow_run_on_missing and
-                preg.allow_public_docker_hub_pull_on_missing):
-            logger.warning(
-                'allow run on missing image and allow public docker hub '
-                'pull on missing are both enabled. Note that allow public '
-                'pull on missing will not work in this situation.')
         for task in settings.job_tasks(config, jobspec):
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
@@ -3121,7 +3082,9 @@ def add_jobs(
                 else:
                     raise RuntimeError(
                         ('not submitting job {} with missing docker image {} '
-                         'pre-load on pool {}').format(job_id, di, pool.id))
+                         'pre-load on pool {} without job-level '
+                         'allow_run_on_missing_image option').format(
+                             job_id, di, pool.id))
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
             if settings.has_depends_on_task(task):

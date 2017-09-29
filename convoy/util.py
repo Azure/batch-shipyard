@@ -446,10 +446,11 @@ def subprocess_attach_stdin(cmd, shell=False):
     return subprocess.Popen(cmd, shell=shell, stdin=subprocess.PIPE)
 
 
-def subprocess_wait_all(procs):
-    # type: (list) -> list
+def subprocess_wait_all(procs, poll=True):
+    # type: (list, bool) -> list
     """Wait for all processes in given list
     :param list procs: list of processes to wait on
+    :param bool poll: use poll(), otherwise communicate() if using PIPEs
     :rtype: list
     :return: list of return codes
     """
@@ -458,8 +459,12 @@ def subprocess_wait_all(procs):
     rcodes = [None] * len(procs)
     while True:
         for i in range(0, len(procs)):
-            if rcodes[i] is None and procs[i].poll() == 0:
-                rcodes[i] = procs[i].returncode
+            if rcodes[i] is None:
+                if poll and procs[i].poll() == 0:
+                    rcodes[i] = procs[i].returncode
+                else:
+                    procs[i].communicate()
+                    rcodes[i] = procs[i].returncode
         if all(x is not None for x in rcodes):
             break
         time.sleep(0.03)

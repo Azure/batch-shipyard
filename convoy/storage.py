@@ -46,7 +46,6 @@ from . import util
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_DOCKER_HUB_REGISTRY = 'docker.io'
 _DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
@@ -57,12 +56,13 @@ _STORAGE_CONTAINERS = {
     'blob_torrents': None,
     'blob_remotefs': None,
     'table_dht': None,
-    'table_registry': None,
     'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
-    'queue_globalresources': None,  # TODO remove in 3.0
+    # TODO remove following in future release
+    'table_registry': None,
+    'queue_globalresources': None,
 }
 
 
@@ -88,12 +88,12 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
-    _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
-    # TODO remove in 3.0
+    # TODO remove following containers in future release
+    _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
         (sep + 'gr', postfix))
     # ensure all storage containers are between 3 and 63 chars in length
@@ -295,29 +295,7 @@ def populate_global_resource_blobs(blob_client, table_client, config):
     :param dict config: configuration dict
     """
     pk = _construct_partition_key_from_config(config)
-    preg = settings.docker_registry_private_settings(config)
-    # populate registry table now if not an azure storage backed registry
-    if util.is_none_or_empty(preg.storage_account):
-        if util.is_not_empty(preg.server):
-            # populate registry table with private registry server
-            rk = preg.server
-            port = preg.port
-        else:
-            # populate registry table with public docker hub
-            rk = _DOCKER_HUB_REGISTRY
-            port = 80
-        # add entity to table
-        table_client.insert_or_replace_entity(
-            _STORAGE_CONTAINERS['table_registry'],
-            {
-                'PartitionKey': pk,
-                'RowKey': rk,
-                'Port': port,
-            }
-        )
-    # get p2pcsd setting
     dr = settings.data_replication_settings(config)
-    # add global resources
     _add_global_resource(
         blob_client, table_client, config, pk, dr, 'docker_images')
 
@@ -405,7 +383,15 @@ def delete_storage_containers(
     :param bool skip_tables: skip deleting tables
     """
     for key in _STORAGE_CONTAINERS:
-        if key.startswith('blob_'):
+        if key.startswith('queue_'):
+            # TODO remove in future release: unused queues
+            logger.debug('deleting queue: {}'.format(_STORAGE_CONTAINERS[key]))
+            queue_client.delete_queue(_STORAGE_CONTAINERS[key])
+        elif key == 'table_registry':
+            # TODO remove in future release: unused table
+            logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
+            table_client.delete_table(_STORAGE_CONTAINERS[key])
+        elif key.startswith('blob_'):
             if key != 'blob_remotefs':
                 logger.debug('deleting container: {}'.format(
                     _STORAGE_CONTAINERS[key]))
@@ -413,10 +399,6 @@ def delete_storage_containers(
         elif not skip_tables and key.startswith('table_'):
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
-        elif key.startswith('queue_'):
-            # TODO remove in 3.0
-            logger.debug('deleting queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.delete_queue(_STORAGE_CONTAINERS[key])
 
 
 def _clear_blobs(blob_client, container):
@@ -497,6 +479,9 @@ def clear_storage_containers(
             if key != 'blob_remotefs':
                 _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
+            # TODO remove in a future release: unused registry table
+            if key == 'table_registry':
+                continue
             try:
                 _clear_table(
                     table_client, _STORAGE_CONTAINERS[key], config,
@@ -520,6 +505,9 @@ def create_storage_containers(blob_client, table_client, config):
                 _STORAGE_CONTAINERS[key]))
             blob_client.create_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
+            # TODO remove in a future release: unused registry table
+            if key == 'table_registry':
+                continue
             if key == 'table_perf' and not bs.store_timing_metrics:
                 continue
             logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))

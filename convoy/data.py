@@ -795,6 +795,8 @@ def wait_for_storage_threads(storage_threads):
     """Wait for storage processes to complete
     :param list storage_threads: list of storage threads
     """
+    if storage_threads is None:
+        return
     i = 0
     nthreads = len(storage_threads)
     while nthreads > 0:
@@ -837,12 +839,12 @@ def ingress_data(
     :rtype: list
     :return: list of storage threads
     """
+    storage_threads = []
     files = settings.global_resources_files(config)
     if util.is_none_or_empty(files):
         logger.info('no files to ingress detected')
-        return
+        return storage_threads
     pool = settings.pool_settings(config)
-    storage_threads = []
     for fdict in files:
         source = settings.files_source_settings(fdict)
         dest = settings.files_destination_settings(fdict)

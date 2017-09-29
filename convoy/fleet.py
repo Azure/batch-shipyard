@@ -119,6 +119,14 @@ _NVIDIA_DRIVER = {
         '/licence.php?lang=us'
     ),
 }
+_CASCADE_FILE = (
+    'cascade.py',
+    pathlib.Path(_ROOT_PATH, 'cascade/cascade.py')
+)
+_PERF_FILE = (
+    'perf.py',
+    pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
+)
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
@@ -148,21 +156,13 @@ _JOBPREP_FILE = (
     'docker_jp_block.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh')
 )
+_REGISTRY_LOGIN_FILE = (
+    'registry_login.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/registry_login.sh')
+)
 _BLOBXFER_FILE = (
     'shipyard_blobxfer.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh')
-)
-_CASCADE_FILE = (
-    'cascade.py',
-    pathlib.Path(_ROOT_PATH, 'cascade/cascade.py')
-)
-_SETUP_PR_FILE = (
-    'setup_private_registry.py',
-    pathlib.Path(_ROOT_PATH, 'cascade/setup_private_registry.py')
-)
-_PERF_FILE = (
-    'perf.py',
-    pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
 )
 _REMOTEFSPREP_FILE = (
     'shipyard_remotefs_bootstrap.sh',
@@ -863,6 +863,8 @@ def _construct_pool_object(
         pass
     # retrieve settings
     pool_settings = settings.pool_settings(config)
+    native = settings.is_native_docker_pool(
+        config, vm_config=pool_settings.vm_configuration)
     # get autoscale settings
     if settings.is_pool_autoscale_enabled(config, pas=pool_settings.autoscale):
         asenable = True
@@ -920,21 +922,19 @@ def _construct_pool_object(
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
     dr = settings.data_replication_settings(config)
-    # private registry settings
-    preg = settings.docker_registry_private_settings(config)
     # create torrent flags
-    torrentflags = '{}:{}:{}:{}:{}'.format(
+    torrentflags = '{}:{}:{}:{}'.format(
         dr.peer_to_peer.enabled, dr.concurrent_source_downloads,
         dr.peer_to_peer.direct_download_seed_bias,
-        dr.peer_to_peer.compression,
-        preg.allow_public_docker_hub_pull_on_missing)
+        dr.peer_to_peer.compression)
     # create resource files list
-    _rflist = [_JOBPREP_FILE, _BLOBXFER_FILE]
-    if not bs.use_shipyard_docker_image:
-        _rflist.append(_CASCADE_FILE)
-        _rflist.append(_SETUP_PR_FILE)
-        if bs.store_timing_metrics:
-            _rflist.append(_PERF_FILE)
+    _rflist = [_REGISTRY_LOGIN_FILE, _BLOBXFER_FILE]
+    if not native:
+        _rflist.append(_JOBPREP_FILE)
+        if not bs.use_shipyard_docker_image:
+            _rflist.append(_CASCADE_FILE)
+            if bs.store_timing_metrics:
+                _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
     # handle azurefile docker volume driver
@@ -946,9 +946,7 @@ def _construct_pool_object(
         _rflist.append((afenv.name, afenv))
         _rflist.append((afvc.name, afvc))
     # gpu settings
-    if (not settings.is_native_docker_pool(
-            config, vm_config=pool_settings.vm_configuration) and
-            settings.is_gpu_pool(pool_settings.vm_size) and
+    if (not native and settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
@@ -966,6 +964,8 @@ def _construct_pool_object(
             gpupkg.name)
     else:
         gpu_env = None
+    # get container registries
+    docker_registries = settings.docker_registries(config)
     # set vm configuration
     if util.is_not_empty(custom_image_na):
         # check if AAD is enabled
@@ -983,28 +983,15 @@ def _construct_pool_object(
         )
         logger.debug('deploying custom image: {}'.format(
             vmconfig.image_reference.virtual_machine_image_id))
-        if settings.is_native_docker_pool(
-                config, vm_config=pool_settings.vm_configuration):
-            registries = []
-            hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-            if util.is_not_empty(hubuser):
-                registries.append(batchmodels.ContainerRegistry(
-                    registry_server=None,
-                    user_name=hubuser,
-                    password=hubpw))
-            if preg.server:
-                registries.append(batchmodels.ContainerRegistry(
-                    registry_server=preg.server,
-                    user_name=preg.user,
-                    password=preg.password))
+        if native:
             vmconfig.container_configuration = \
                 batchmodels.ContainerConfiguration(
                     container_image_names=settings.
                     global_resources_docker_images(config),
-                    container_registries=registries,
+                    container_registries=docker_registries,
                 )
         start_task = [
-            '{npf} {a}{b}{e}{f}{m}{n}{p}{r}{t}{v}{x}'.format(
+            '{npf} {a}{b}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
                 npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1016,36 +1003,22 @@ def _construct_pool_object(
                     pool_settings.vm_size) else '',
                 p=' -p {}'.format(bs.storage_entity_prefix)
                 if bs.storage_entity_prefix else '',
-                r=' -r {}'.format(preg.container) if preg.container else '',
                 t=' -t {}'.format(torrentflags),
                 v=' -v {}'.format(__version__),
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
             )
         ]
-    elif settings.is_native_docker_pool(
-            config, vm_config=pool_settings.vm_configuration):
+    elif native:
         _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
             batch_client, pool_settings)
-        registries = []
-        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-        if util.is_not_empty(hubuser):
-            registries.append(batchmodels.ContainerRegistry(
-                registry_server=None,
-                user_name=hubuser,
-                password=hubpw))
-        if preg.server:
-            registries.append(batchmodels.ContainerRegistry(
-                registry_server=preg.server,
-                user_name=preg.user,
-                password=preg.password))
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref,
             node_agent_sku_id=na_ref,
             container_configuration=batchmodels.ContainerConfiguration(
                 container_image_names=settings.global_resources_docker_images(
                     config),
-                container_registries=registries,
+                container_registries=docker_registries,
             ),
         )
         start_task = [
@@ -1073,7 +1046,7 @@ def _construct_pool_object(
         )
         # create start task commandline
         start_task = [
-            '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{r}{s}{t}{v}{w}{x}'.format(
+            '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1088,7 +1061,6 @@ def _construct_pool_object(
                 o=' -o {}'.format(pool_settings.vm_configuration.offer),
                 p=' -p {}'.format(bs.storage_entity_prefix)
                 if bs.storage_entity_prefix else '',
-                r=' -r {}'.format(preg.container) if preg.container else '',
                 s=' -s {}'.format(pool_settings.vm_configuration.sku),
                 t=' -t {}'.format(torrentflags),
                 v=' -v {}'.format(__version__),
@@ -1157,8 +1129,7 @@ def _construct_pool_object(
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if not settings.is_native_docker_pool(
-            config, vm_config=pool_settings.vm_configuration):
+    if not native:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_STORAGE_ENV',
@@ -1194,20 +1165,6 @@ def _construct_pool_object(
                     file_mode=rf.file_mode,
                 )
             )
-    # private registry settings
-    if preg.storage_account:
-        psa = settings.credentials_storage(config, preg.storage_account)
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                'SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV',
-                crypto.encrypt_string(
-                    encrypt, '{}:{}:{}'.format(
-                        psa.account, psa.endpoint, psa.account_key),
-                    config
-                )
-            )
-        )
-        del psa
     # virtual network settings
     if subnet_id is not None:
         pool.network_configuration = batchmodels.NetworkConfiguration(
@@ -1224,10 +1181,11 @@ def _construct_pool_object(
         del sc_args
         del fstab_mounts
     # add optional environment variables
-    if bs.store_timing_metrics:
+    if not native and bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
         )
+    # add docker login settings
     pool.start_task.environment_settings.extend(
         batch.generate_docker_login_settings(config)[0])
     return (pool_settings, gluster_on_compute, pool)
@@ -1489,6 +1447,9 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
     if not ssh_private_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_private_key))
+    command = ['sudo', '/bin/bash -c "{}"'.format(' && '.join(cmd))]
+    if settings.verbose(config):
+        logger.debug('executing command: {}'.format(command))
     # iterate through all nodes
     nodes = batch_client.compute_node.list(pool.id)
     procs = []
@@ -1498,12 +1459,11 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
             pool.id, node.id)
         procs.append(crypto.connect_or_exec_ssh_command(
             rls.remote_login_ip_address, rls.remote_login_port,
-            ssh_private_key, username, sync=False,
-            command=['sudo', '/bin/bash -c "{}"'.format(' && '.join(cmd))]))
+            ssh_private_key, username, sync=False, command=command))
         if len(procs) >= 40:
             logger.debug('waiting for {} update processes to complete'.format(
                 len(procs)))
-            rcs = util.subprocess_wait_all(procs)
+            rcs = util.subprocess_wait_all(procs, poll=False)
             if any([x != 0 for x in rcs]):
                 failures = True
             procs = []
@@ -1511,7 +1471,7 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
     if len(procs) > 0:
         logger.debug('waiting for {} update processes to complete'.format(
             len(procs)))
-        rcs = util.subprocess_wait_all(procs)
+        rcs = util.subprocess_wait_all(procs, poll=False)
         if any([x != 0 for x in rcs]):
             failures = True
         procs = []
@@ -1545,14 +1505,6 @@ def _update_docker_images(
                 'image distribution')
     except KeyError:
         pass
-    # get private registry settings
-    preg = settings.docker_registry_private_settings(config)
-    if util.is_not_empty(preg.storage_account):
-        registry = 'localhost:5000/'
-    elif util.is_not_empty(preg.server):
-        registry = '{}/'.format(preg.server)
-    else:
-        registry = ''
     # if image is not specified use images from global config
     if util.is_none_or_empty(image):
         images = settings.global_resources_docker_images(config)
@@ -1601,10 +1553,7 @@ def _update_docker_images(
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
     taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
-    coordcmd.extend(['docker pull {}{}'.format(registry, x) for x in images])
-    if registry != '':
-        coordcmd.extend(
-            ['docker tag {}{} {}'.format(registry, x, x) for x in images])
+    coordcmd.extend(['docker pull {}'.format(x) for x in images])
     coordcmd.append(
         'docker images --filter dangling=true -q --no-trunc | '
         'xargs --no-run-if-empty docker rmi')
@@ -2386,7 +2335,9 @@ def action_pool_add(
     _adjust_settings_for_pool_creation(config)
     storage.create_storage_containers(blob_client, table_client, config)
     storage.clear_storage_containers(blob_client, table_client, config)
-    storage.populate_global_resource_blobs(blob_client, table_client, config)
+    if not settings.is_native_docker_pool(config):
+        storage.populate_global_resource_blobs(
+            blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config
@@ -2436,7 +2387,7 @@ def action_pool_delete(
             populate_global_settings(config, False, pool_id=pool_id)
         else:
             pool_id = settings.pool_id(config)
-        # TODO remove queue_client in 3.0
+        # TODO remove queue_client in future release
         storage.cleanup_with_del_pool(
             blob_client, queue_client, table_client, config, pool_id=pool_id)
         if wait:
@@ -2822,8 +2773,9 @@ def action_jobs_add(
         # create storage containers and clear
         storage.create_storage_containers(blob_client, table_client, config)
         storage.clear_storage_containers(blob_client, table_client, config)
-        storage.populate_global_resource_blobs(
-            blob_client, table_client, config)
+        if not settings.is_native_docker_pool(config):
+            storage.populate_global_resource_blobs(
+                blob_client, table_client, config)
         # create autopool specification object
         autopool = _construct_auto_pool_specification(
             resource_client, compute_client, network_client, batch_mgmt_client,

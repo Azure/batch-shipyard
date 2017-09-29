@@ -12,13 +12,6 @@ batch_shipyard:
       passphrase: mysupersecretpassword
       sha1_thumbprint: 123456789...
     public_key_pem: encrypt.pem
-docker_registry:
-  private:
-    allow_public_docker_hub_pull_on_missing: true
-    server: myserver-myorg.azurecr.io
-    azure_storage:
-      container: mydockerregistry
-      storage_account_settings: mystorageaccount
 data_replication:
   concurrent_source_downloads: null
   peer_to_peer:
@@ -26,8 +19,12 @@ data_replication:
     compression: true
     direct_download_seed_bias: null
 global_resources:
+  additional_registries:
+    docker:
+    - myruntimeserver.azurecr.io
   docker_images:
   - busybox
+  - myserver.azurecr.io/repo/myimage
   docker_volumes:
     data_volumes:
       contdatavol:

@@ -6,6 +6,7 @@
 - Support for deploying compute nodes to an ARM Virtual Network with Batch
 Service Batch accounts
 - Support for deploying a compute node from an ARM Image resource
+- Support for multiple public and private container registries
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
@@ -13,6 +14,16 @@ commandline.
 - Virtual Network guide
 
 ### Changed
+- **Breaking Change:** Fully qualified Docker image names are now required
+under both the global config `global_resources`.`docker_images` and jobs
+`task` array `docker_image` (or `image`).
+- **Breaking Change:** Docker private registries backed to Azure Storage blobs
+are not supported. This is not to be confused with the `Classic` Azure
+Container Registries which are still supported.
+- **Breaking Change:** `docker_registry` property in the global config is
+no longer required. An `additional_registries` option is available for any
+additional registries that are not present from the `docker_images`
+array in `global_resources`.
 - **Breaking Change:** environment variables `SHIPYARD_CREDENTIALS_JSON`,
 `SHIPYARD_CONFIG_JSON`, `SHIPYARD_POOL_JSON`, `SHIPYARD_JOBS_JSON`, and
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
@@ -27,6 +38,7 @@ file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.
 - `docker_image` is now preferred over the deprecated `image` property in
 the `task` array in the jobs configuration file
+- Update Docker to 17.09.0
 
 ## [2.9.6] - 2017-10-03
 ### Added

@@ -33,11 +33,9 @@ among the compute nodes
 * Comprehensive data movement support: move data easily between locally
 accessible storage systems, remote filesystems, Azure Blob or File Storage,
 and compute nodes
-* Docker Private Registry support
-  * [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
-  * Any internet accessible Docker container registry
-  * Self-hosted [private registry backed to Azure Storage](https://docs.microsoft.com/en-us/azure/virtual-machines/virtual-machines-linux-docker-registry-in-blob-storage) with automated private registry
-    instance creation on compute nodes
+* Support for Docker Registries including
+[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
+and other Internet-accessible public and private registries
 * [Standalone Remote Filesystem Provisioning](https://github.com/Azure/batch-shipyard/blob/master/docs/65-batch-shipyard-remote-fs.md)
 with integration to auto-link these filesystems to compute nodes with support for
   * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
@@ -58,8 +56,8 @@ to dynamically scale and control computing resources on-demand
 with the ability to generate tasks based on parametric (parameter) sweeps,
 randomized input, file enumeration, replication, and custom Python code-based
 generators
-* Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
-allowing complex processing pipelines and DAGs with Docker containers
+* Support for deploying Batch compute nodes into a specified
+[Virtual Network](https://github.com/Azure/batch-shipyard/blob/master/docs/64-batch-shipyard-byovnet.md)
 * Transparent support for
 [GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
 on [Azure N-Series VM instances](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu)
@@ -71,6 +69,8 @@ for MPI on HPC low-latency Azure VM instances:
   * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_A8, STANDARD\_A9
   * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_H16R, STANDARD\_H16MR
   * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R
+* Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
+allowing complex processing pipelines and DAGs with Docker containers
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools

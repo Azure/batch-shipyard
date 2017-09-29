@@ -13,12 +13,11 @@ networkopt=0
 p2p=
 p2penabled=0
 prefix=
-privatereg=
 sc_args=
 version=
 
 # process command line options
-while getopts "h?abef:m:np:r:t:v:x:" opt; do
+while getopts "h?abef:m:np:t:v:x:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep_customimage.sh parameters"
@@ -30,8 +29,7 @@ while getopts "h?abef:m:np:r:t:v:x:" opt; do
             echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
             echo "-p [prefix] storage container prefix"
-            echo "-r [container:archive:image id] private registry"
-            echo "-t [enabled:non-p2p concurrent download:seed bias:compression:pub pull passthrough] p2p sharing"
+            echo "-t [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
             echo "-v [version] batch-shipyard version"
             echo "-x [blobxfer version] blobxfer version"
             echo ""
@@ -57,9 +55,6 @@ while getopts "h?abef:m:np:r:t:v:x:" opt; do
             ;;
         p)
             prefix="--prefix $OPTARG"
-            ;;
-        r)
-            privatereg=$OPTARG
             ;;
         t)
             p2p=${OPTARG,,}
@@ -355,9 +350,6 @@ if [ ! -z $encrypted ]; then
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
         DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
-    if [ ! -z $privatereg ]; then
-        SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV=`echo $SHIPYARD_PRIVATE_REGISTRY_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-    fi
 fi
 
 # set iptables rules
@@ -451,10 +443,8 @@ docker_pull_image alfpark/blobxfer:$blobxferversion
 docker_pull_image alfpark/batch-shipyard:tfm-$version
 docker_pull_image alfpark/batch-shipyard:rjm-$version
 
-# login to registry server
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
-fi
+# login to registry servers (do not specify -e as creds have been decrypted)
+./registry_login.sh
 
 # touch node prep finished file to preserve idempotency
 touch $nodeprepfinished
@@ -486,7 +476,6 @@ offer=$offer
 sku=$sku
 npstart=$npstart
 drpstart=$drpstart
-privatereg=$privatereg
 p2p=$p2p
 `env | grep SHIPYARD_`
 `env | grep AZ_BATCH_`

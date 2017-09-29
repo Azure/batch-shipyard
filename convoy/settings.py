@@ -37,6 +37,7 @@ try:
 except ImportError:
     import pathlib
 # non-stdlib imports
+import azure.batch.models as batchmodels
 import dateutil.parser
 # local imports
 from . import task_factory
@@ -175,13 +176,6 @@ BatchShipyardSettings = collections.namedtuple(
         'storage_account_settings', 'storage_entity_prefix',
         'generated_sas_expiry_days', 'use_shipyard_docker_image',
         'store_timing_metrics',
-    ]
-)
-DockerRegistrySettings = collections.namedtuple(
-    'DockerRegistrySettings', [
-        'allow_public_docker_hub_pull_on_missing',
-        'storage_account', 'container', 'server', 'port',
-        'user', 'password',
     ]
 )
 DataReplicationSettings = collections.namedtuple(
@@ -1482,66 +1476,53 @@ def batch_shipyard_encryption_public_key_pem(config):
     return pem
 
 
-def docker_registry_private_settings(config):
-    # type: (dict) -> DockerRegistrySettings
-    """Get docker private registry backed to azure storage settings
+def docker_registries(config):
+    # type: (dict) -> list
+    """Get Docker registries specified
     :param dict config: configuration object
-    :rtype: DockerRegistrySettings
-    :return: docker registry settings
+    :rtype: list
+    :return: list of batchmodels.ContainerRegistry objects
     """
+    servers = []
     try:
-        pregpubpull = config['docker_registry']['private'][
-            'allow_public_docker_hub_pull_on_missing']
+        servers.extend(
+            config['global_resources']['additional_registries']['docker'])
     except KeyError:
-        pregpubpull = False
-    try:
-        server = config['docker_registry']['private']['server']
-        if util.is_none_or_empty(server):
-            raise KeyError()
-        server = server.split(':')
-        if len(server) == 1:
-            port = 80
-        elif len(server) == 2:
-            port = int(server[1])
-        else:
-            raise ValueError('invalid docker registry server specification')
-        server = server[0]
-        # get login
+        pass
+    # parse images for servers
+    images = global_resources_docker_images(config)
+    for image in images:
+        tmp = image.split('/')
+        if len(tmp) > 1:
+            if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
+                servers.append(tmp[0])
+    # get login info for each registry
+    registries = []
+    # add docker hub if found
+    hubuser, hubpw = docker_registry_login(config, 'hub')
+    if util.is_not_empty(hubuser) or util.is_not_empty(hubpw):
+        registries.append(
+            batchmodels.ContainerRegistry(
+                registry_server=None,
+                user_name=hubuser,
+                password=hubpw,
+            )
+        )
+    del hubuser
+    del hubpw
+    for server in servers:
         user, pw = docker_registry_login(config, server)
         if util.is_none_or_empty(user) or util.is_none_or_empty(pw):
-            raise ValueError(
-                'Docker registry login settings not specified for: {}'.format(
-                    server))
-    except KeyError:
-        server = None
-        port = None
-        user = None
-        pw = None
-    try:
-        sa = config['docker_registry']['private']['azure_storage'][
-            'storage_account_settings']
-        if util.is_none_or_empty(sa):
-            raise KeyError()
-        cont = config['docker_registry']['private']['azure_storage'][
-            'container']
-        if util.is_none_or_empty(cont):
-            raise KeyError()
-    except KeyError:
-        sa = None
-        cont = None
-    if server is not None and sa is not None:
-        raise ValueError(
-            'cannot specify both a private registry server host and a '
-            'private registry backed by Azure Storage')
-    return DockerRegistrySettings(
-        allow_public_docker_hub_pull_on_missing=pregpubpull,
-        storage_account=sa,
-        container=cont,
-        server=server,
-        port=port,
-        user=user,
-        password=pw,
-    )
+            # registries can be public with a specified server
+            continue
+        registries.append(
+            batchmodels.ContainerRegistry(
+                registry_server=server,
+                user_name=user,
+                password=pw,
+            )
+        )
+    return registries
 
 
 def data_replication_settings(config):
@@ -2509,20 +2490,6 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     )
     if util.is_none_or_empty(image):
         raise ValueError('Docker image is unspecified or invalid')
-    # check if image is in missing image list
-    if image in missing_images:
-        # get private registry settings
-        preg = docker_registry_private_settings(config)
-        if util.is_not_empty(preg.storage_account):
-            registry = 'localhost:5000/'
-        elif util.is_not_empty(preg.server):
-            registry = '{}/'.format(preg.server)
-        else:
-            registry = ''
-        del preg
-        if native:
-            registry = ''
-        image = '{}{}'.format(registry, image)
     # get some pool props
     if cloud_pool is None:
         pool_id = poolconf.id

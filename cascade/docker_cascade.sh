@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+# login to registry servers (do not specify -e as creds have been decrypted)
+./registry_login.sh
+
 # ensure we're in the proper directory
 cd /opt/batch-shipyard
 
@@ -10,32 +13,10 @@ cd /opt/batch-shipyard
 if [ ! -z ${SHIPYARD_TIMING+x} ]; then
     # backfill node prep start
     python3 perf.py nodeprep start $prefix --ts $npstart --message "offer=$offer,sku=$sku"
-    # backfull docker run pull start
+    # backfill docker run pull start
     python3 perf.py shipyard pull-start $prefix --ts $drpstart
     # mark docker run pull end
     python3 perf.py shipyard pull-end $prefix
-    # mark private registry start
-    if [ ! -z $privatereg ]; then
-        python3 perf.py privateregistry start $prefix --message "ipaddress=$ipaddress"
-    fi
-fi
-
-# set up private registry
-if [ ! -z $privatereg ]; then
-    python3 setup_private_registry.py $privatereg $ipaddress $prefix
-fi
-
-# login to registry server
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
-fi
-
-# add timing markers
-if [ ! -z ${SHIPYARD_TIMING+x} ]; then
-    # mark private registry end
-    if [ ! -z $privatereg ]; then
-        python3 perf.py privateregistry end $prefix
-    fi
     # mark node prep finished
     python3 perf.py nodeprep end $prefix
     # mark cascade start time

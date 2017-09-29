@@ -439,10 +439,8 @@ docker_pull_image alfpark/blobxfer:$blobxferversion
 docker_pull_image alfpark/batch-shipyard:tfm-$version
 docker_pull_image alfpark/batch-shipyard:rjm-$version
 
-# login to registry server
-if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-    docker login -u $DOCKER_LOGIN_USERNAME -p $DOCKER_LOGIN_PASSWORD $DOCKER_LOGIN_SERVER
-fi
+# login to registry servers (do not specify -e as creds have been decrypted)
+./registry_login.sh
 
 # touch node prep finished file to preserve idempotency
 touch $nodeprepfinished
