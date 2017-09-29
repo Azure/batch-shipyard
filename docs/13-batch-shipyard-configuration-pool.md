@@ -75,6 +75,7 @@ pool_specification:
     generated_file_export_path:
     hpn_server_swap: false
   virtual_network:
+    arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet
     resource_group: vnet-in-another-rg
     create_nonexistant: false
@@ -282,9 +283,19 @@ contains the following information:
   * `file_mode` if the file mode to set for the file on the compute node.
     This is optional.
 * (optional) `virtual_network` is the property for specifying an ARM-based
-virtual network resource for the pool. This is only available for
-UserSubscription Batch accounts.
-  * (required) `name` is the name of the virtual network
+virtual network resource for the pool. AAD `batch` credentials are required
+for both Batch service and User Subscription modes. Please see the
+[Virtual Network guide](64-batch-shipyard-byovnet.md) for more information.
+  * (required/optional) `arm_subnet_id` is the full ARM resource id to the
+    subnet on the virtual network. This virtual network must already exist
+    and must exist within the same region and subscription as the Batch
+    account. If this value is specified, the other properties of
+    `virtual_network` are ignored. AAD `management` credentials are not
+    strictly required for this case but is recommended to be filled to
+    allow address space validation checks.
+  * (required/optional) `name` is the name of the virtual network. If
+    `arm_subnet_id` is not specified, this value is required. Note that this
+    requires AAD `management` credentials.
   * (optional) `resource_group` containing the virtual network. If
     the resource group name is not specified here, the `resource_group`
     specified in the `batch` credentials will be used instead.
@@ -293,11 +304,13 @@ UserSubscription Batch accounts.
     to `false`.
   * (required if creating, optional otherwise) `address_space` is the
     allowed address space for the virtual network.
-  * (required) `subnet` specifies the subnet properties.
+  * (required/optional) `subnet` specifies the subnet properties. This is
+    required if `arm_subnet_id` is not specified, i.e., the virtual network
+    `name` is specified instead.
     * (required) `name` is the subnet name.
-    * (required) `address_prefix` is the subnet address prefix to use for
-      allocation Batch compute nodes to. The maximum number of compute nodes
-      a subnet can support is 4096 which maps roughly to a CIDR mask of
+    * (required) `address_prefix` is the subnet address prefix to
+      use for allocation Batch compute nodes to. The maximum number of compute
+      nodes a subnet can support is 4096 which maps roughly to a CIDR mask of
       20-bits.
 * (optional) `ssh` is the property for creating a user to accomodate SSH
 sessions to compute nodes. If this property is absent, then an SSH user is not
@@ -333,7 +346,8 @@ on how to generate an SSH keypair for use with Batch Shipyard.
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.
   * `nvidia_driver` property contains the following required members:
-    * `source` is the source url to download the driver.
+    * `source` is the source url to download the driver. This should be
+      the silent-installable driver package.
 * (optional) `additional_node_prep_commands` is an array of additional commands
 to execute on the compute node host as part of node preparation. This can
 be empty or omitted.

@@ -267,8 +267,9 @@ ManagedDisksSettings = collections.namedtuple(
 )
 VirtualNetworkSettings = collections.namedtuple(
     'VirtualNetworkSettings', [
-        'name', 'resource_group', 'address_space', 'subnet_name',
-        'subnet_address_prefix', 'existing_ok', 'create_nonexistant',
+        'arm_subnet_id', 'name', 'resource_group', 'address_space',
+        'subnet_name', 'subnet_address_prefix', 'existing_ok',
+        'create_nonexistant',
     ]
 )
 SambaAccountSettings = collections.namedtuple(
@@ -1016,35 +1017,56 @@ def raw_credentials(config, omit_keyvault):
 
 
 def _aad_credentials(
-        conf, default_endpoint=None, default_token_cache_file=None):
+        conf, service, default_endpoint=None, default_token_cache_file=None):
     # type: (dict, str) -> AADSettings
     """Retrieve AAD Settings
-    :param dict config: configuration object
+    :param dict conf: credentials configuration object
+    :param str service: credentials section service name
     :param str default_endpoint: default endpoint
     :param str default_token_cache_file: default token cache file
     :rtype: AADSettings
     :return: AAD settings
     """
-    if 'aad' in conf:
-        aad_directory_id = _kv_read_checked(conf['aad'], 'directory_id')
-        aad_application_id = _kv_read_checked(conf['aad'], 'application_id')
-        aad_auth_key = _kv_read_checked(conf['aad'], 'auth_key')
-        aad_user = _kv_read_checked(conf['aad'], 'user')
-        aad_password = _kv_read_checked(conf['aad'], 'password')
-        aad_cert_private_key = _kv_read_checked(
-            conf['aad'], 'rsa_private_key_pem')
-        aad_cert_thumbprint = _kv_read_checked(
-            conf['aad'], 'x509_cert_sha1_thumbprint')
+    super_aad = _kv_read_checked(conf, 'aad', default={})
+    if service in conf:
+        service_aad = _kv_read_checked(conf[service], 'aad', default={})
+    else:
+        service_aad = {}
+    if util.is_not_empty(super_aad) or util.is_not_empty(service_aad):
+        aad_directory_id = (
+            _kv_read_checked(service_aad, 'directory_id') or
+            _kv_read_checked(super_aad, 'directory_id')
+        )
+        aad_application_id = (
+            _kv_read_checked(service_aad, 'application_id') or
+            _kv_read_checked(super_aad, 'application_id')
+        )
+        aad_auth_key = (
+            _kv_read_checked(service_aad, 'auth_key') or
+            _kv_read_checked(super_aad, 'auth_key')
+        )
+        aad_user = (
+            _kv_read_checked(service_aad, 'user') or
+            _kv_read_checked(super_aad, 'user')
+        )
+        aad_password = (
+            _kv_read_checked(service_aad, 'password') or
+            _kv_read_checked(super_aad, 'password')
+        )
+        aad_cert_private_key = (
+            _kv_read_checked(service_aad, 'rsa_private_key_pem') or
+            _kv_read_checked(super_aad, 'rsa_private_key_pem')
+        )
+        aad_cert_thumbprint = (
+            _kv_read_checked(service_aad, 'x509_cert_sha1_thumbprint') or
+            _kv_read_checked(super_aad, 'x509_cert_sha1_thumbprint')
+        )
         aad_endpoint = _kv_read_checked(
-            conf['aad'], 'endpoint', default_endpoint)
-        if 'token_cache' not in conf['aad']:
-            conf['aad']['token_cache'] = {}
-        token_cache_enabled = _kv_read(
-            conf['aad']['token_cache'], 'enabled', True)
-        if token_cache_enabled:
+            service_aad, 'endpoint', default=default_endpoint)
+        token_cache = _kv_read_checked(service_aad, 'token_cache', default={})
+        if _kv_read(token_cache, 'eanbled', default=True):
             token_cache_file = _kv_read_checked(
-                conf['aad']['token_cache'], 'filename',
-                default_token_cache_file)
+                token_cache, 'filename', default=default_token_cache_file)
         else:
             token_cache_file = None
         return AADSettings(
@@ -1083,19 +1105,18 @@ def credentials_keyvault(config):
         conf = config['credentials']['keyvault']
     except (KeyError, TypeError):
         conf = {}
-    keyvault_uri = _kv_read_checked(conf, 'uri')
-    keyvault_credentials_secret_id = _kv_read_checked(
-        conf, 'credentials_secret_id')
     return KeyVaultCredentialsSettings(
         aad=_aad_credentials(
-            conf,
+            config['credentials'],
+            'keyvault',
             default_endpoint='https://vault.azure.net',
             default_token_cache_file=(
                 '.batch_shipyard_aad_keyvault_token.json'
             ),
         ),
-        keyvault_uri=keyvault_uri,
-        keyvault_credentials_secret_id=keyvault_credentials_secret_id,
+        keyvault_uri=_kv_read_checked(conf, 'uri'),
+        keyvault_credentials_secret_id=_kv_read_checked(
+            conf, 'credentials_secret_id'),
     )
 
 
@@ -1110,16 +1131,16 @@ def credentials_management(config):
         conf = config['credentials']['management']
     except (KeyError, TypeError):
         conf = {}
-    subscription_id = _kv_read_checked(conf, 'subscription_id')
     return ManagementCredentialsSettings(
         aad=_aad_credentials(
-            conf,
+            config['credentials'],
+            'management',
             default_endpoint='https://management.core.windows.net/',
             default_token_cache_file=(
                 '.batch_shipyard_aad_management_token.json'
             ),
         ),
-        subscription_id=subscription_id,
+        subscription_id=_kv_read_checked(conf, 'subscription_id'),
     )
 
 
@@ -1159,7 +1180,8 @@ def credentials_batch(config):
                  'url {}').format(account, account_service_url))
     return BatchCredentialsSettings(
         aad=_aad_credentials(
-            conf,
+            config['credentials'],
+            'batch',
             default_endpoint='https://batch.core.windows.net/',
             default_token_cache_file=(
                 '.batch_shipyard_aad_batch_token.json'
@@ -3007,7 +3029,11 @@ def virtual_network_settings(
     :return: virtual network settings
     """
     conf = _kv_read_checked(config, 'virtual_network', {})
+    arm_subnet_id = _kv_read_checked(conf, 'arm_subnet_id')
     name = _kv_read_checked(conf, 'name')
+    if util.is_not_empty(arm_subnet_id) and util.is_not_empty(name):
+        raise ValueError(
+            'cannot specify both arm_subnet_id and virtual_network.name')
     resource_group = _kv_read_checked(
         conf, 'resource_group', default_resource_group)
     address_space = _kv_read_checked(conf, 'address_space')
@@ -3016,8 +3042,12 @@ def virtual_network_settings(
         conf, 'create_nonexistant', default_create_nonexistant)
     sub_conf = _kv_read_checked(conf, 'subnet', {})
     subnet_name = _kv_read_checked(sub_conf, 'name')
+    if util.is_not_empty(name) and util.is_none_or_empty(subnet_name):
+        raise ValueError(
+            'subnet name not specified on virtual_network: {}'.format(name))
     subnet_address_prefix = _kv_read_checked(sub_conf, 'address_prefix')
     return VirtualNetworkSettings(
+        arm_subnet_id=arm_subnet_id,
         name=name,
         resource_group=resource_group,
         address_space=address_space,

@@ -3,10 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Support for deploying to an ARM Virtual Network in Batch Service mode
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
 commandline.
+- Virtual Network guide
 
 ### Changed
 - **Breaking Change:** environment variables `SHIPYARD_CREDENTIALS_JSON`,
@@ -14,6 +16,9 @@ commandline.
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
 `SHIPYARD_CONFIG_CONF`, `SHIPYARD_POOL_CONF`, `SHIPYARD_JOBS_CONF`, and
 `SHIPYARD_FS_CONF` respectively.
+- `aad` can be specified at a "global" level in the credentials configuration
+file, which is then applied to `batch`, `keyvault` and/or `management`
+section. Please see the credentials configuration guide for more information.
 
 ## [2.9.6] - 2017-10-03
 ### Added

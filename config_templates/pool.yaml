@@ -67,6 +67,7 @@ pool_specification:
     generated_file_export_path:
     hpn_server_swap: false
   virtual_network:
+    arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet
     resource_group: vnet-in-another-rg
     create_nonexistant: false

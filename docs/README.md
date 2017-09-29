@@ -6,4 +6,4 @@ You can substitute `latest` at the end of the Read the Docs URL to display
 documentation for a specific version of Batch Shipyard. If that version does
 not exist on Read the Docs, you can select a tagged verison on the GitHub
 repo page (select the `Branch` pulldown and switch to the `Tags` tab) to
-dispaly older version documentation.
+display older version documentation.

@@ -477,12 +477,11 @@ def _setup_azurefile_volume_driver(blob_client, config):
 
 def _create_storage_cluster_mount_args(
         compute_client, network_client, batch_mgmt_client, config, sc_id,
-        bc, vnet, subnet):
+        bc, subnet_id):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient, dict, str,
-    #        settings.BatchCredentials, networkmodels.VirtualNetwork,
-    #        networkmodels.Subnet) -> Tuple[str, str]
+    #        settings.BatchCredentials, str) -> Tuple[str, str]
     """Create storage cluster mount arguments
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -491,9 +490,8 @@ def _create_storage_cluster_mount_args(
     :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
     :param dict config: configuration dict
     :param str sc_id: storage cluster id
-    :param settings.BatchCredentials: batch creds
-    :param networkmodels.VirtualNetwork: vnet
-    :param networkmodels.Subnet: subnet
+    :param settings.BatchCredentials bc: batch creds
+    :param str subnet_id: subnet id
     :rtype: tuple
     :return: (fstab mount, storage cluster arg)
     """
@@ -507,7 +505,7 @@ def _create_storage_cluster_mount_args(
             '{} account is not a UserSubscription account'.format(
                 bc.account))
     # check for vnet/subnet presence
-    if vnet is None or subnet is None:
+    if util.is_none_or_empty(subnet_id):
         raise RuntimeError(
             'cannot mount a storage cluster without a valid virtual '
             'network or subnet')
@@ -521,28 +519,27 @@ def _create_storage_cluster_mount_args(
                 sdv, sc_id)):
         raise RuntimeError(
             'No storage cluster {} found in configuration'.format(sc_id))
+    vnet_subid, vnet_rg, _, vnet_name, subnet_name = _explode_arm_subnet_id(
+        subnet_id)
     # check for same vnet name
-    if vnet.name.lower() != sc.virtual_network.name.lower():
+    if vnet_name.lower() != sc.virtual_network.name.lower():
         raise RuntimeError(
             'cannot link storage cluster {} on virtual '
             'network {} with pool virtual network {}'.format(
-                sc_id, sc.virtual_network.name, vnet.name))
+                sc_id, sc.virtual_network.name, vnet_name))
     # cross check vnet resource group
-    _vnet_tmp = vnet.id.lower().split('/')
-    if _vnet_tmp[4] != sc.virtual_network.resource_group.lower():
+    if vnet_rg.lower() != sc.virtual_network.resource_group.lower():
         raise RuntimeError(
             'cannot link storage cluster {} virtual network in resource group '
             '{} with pool virtual network in resource group {}'.format(
-                sc_id, sc.virtual_network.resource_group,
-                _vnet_tmp[4]))
+                sc_id, sc.virtual_network.resource_group, vnet_rg))
     # cross check vnet subscription id
     _ba_tmp = ba.id.lower().split('/')
-    if _vnet_tmp[2] != _ba_tmp[2]:
+    if vnet_subid.lower() != _ba_tmp[2]:
         raise RuntimeError(
             'cannot link storage cluster {} virtual network in subscription '
             '{} with pool virtual network in subscription {}'.format(
-                sc_id, _vnet_tmp[2], _ba_tmp[2]))
-    del _vnet_tmp
+                sc_id, vnet_subid, _ba_tmp[2]))
     del _ba_tmp
     # get vm count
     if sc.vm_count < 1:
@@ -733,6 +730,116 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
     return (image_ref_to_use, sku_to_use.id)
 
 
+def _explode_arm_subnet_id(arm_subnet_id):
+    # type: (str) -> Tuple[str, str, str, str, str]
+    """Parses components from ARM subnet id
+    :param str arm_subnet_id: ARM subnet id
+    :rtype: tuple
+    :return: subid, rg, provider, vnet, subnet
+    """
+    tmp = arm_subnet_id.split('/')
+    subid = tmp[2]
+    rg = tmp[4]
+    provider = tmp[6]
+    vnet = tmp[8]
+    subnet = tmp[10]
+    return subid, rg, provider, vnet, subnet
+
+
+def _pool_virtual_network_subnet_address_space_check(
+        resource_client, network_client, config, pool_settings, bc):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict,
+    #        settings.PoolSettings, settings.BatchCredentialsSettings) -> str
+    """Pool Virtual Network and subnet address space check and create if
+    specified
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param settings.PoolSettings pool_settings: pool settings
+    :param settings.BatchCredentialsSettings bc: batch cred settings
+    :rtype: str
+    :return: subnet id
+    """
+    if (util.is_none_or_empty(pool_settings.virtual_network.arm_subnet_id) and
+            util.is_none_or_empty(pool_settings.virtual_network.name)):
+        logger.debug('no virtual network settings specified')
+        return None
+    # check if AAD is enabled
+    if util.is_none_or_empty(bc.aad.directory_id):
+        raise RuntimeError(
+            'cannot allocate a pool with a virtual network without AAD '
+            'credentials')
+    # get subnet object
+    subnet_id = None
+    if util.is_not_empty(pool_settings.virtual_network.arm_subnet_id):
+        subnet_components = _explode_arm_subnet_id(
+            pool_settings.virtual_network.arm_subnet_id)
+        logger.debug(
+            ('arm subnet id breakdown: subid={} rg={} provider={} vnet={} '
+             'subnet={}').format(
+                 subnet_components[0], subnet_components[1],
+                 subnet_components[2], subnet_components[3],
+                 subnet_components[4]))
+        subnet_id = pool_settings.virtual_network.arm_subnet_id
+        if network_client is None:
+            logger.info('using virtual network subnet id: {}'.format(
+                subnet_id))
+            logger.warning(
+                'cannot perform IP space validation without a valid '
+                'network_client, please specify management AAD credentials '
+                'to allow pre-validation')
+            return subnet_id
+        # retrieve address prefix for subnet
+        _subnet = network_client.subnets.get(
+            subnet_components[1], subnet_components[3], subnet_components[4])
+    else:
+        if util.is_not_empty(pool_settings.virtual_network.resource_group):
+            _vnet_rg = pool_settings.virtual_network.resource_group
+        else:
+            _vnet_rg = bc.resource_group
+        # create virtual network and subnet if specified
+        _, _subnet = resource.create_virtual_network_and_subnet(
+            resource_client, network_client, _vnet_rg, bc.location,
+            pool_settings.virtual_network)
+        del _vnet_rg
+        subnet_id = _subnet.id
+    # ensure address prefix for subnet is valid
+    tmp = _subnet.address_prefix.split('/')
+    if len(tmp) <= 1:
+        raise RuntimeError(
+            'subnet address_prefix is invalid for Batch pools: {}'.format(
+                _subnet.address_prefix))
+    mask = int(tmp[-1])
+    # subtract 5 for guideline and Azure numbering start
+    allowable_addresses = (1 << (32 - mask)) - 5
+    logger.debug('subnet {} mask is {} and allows {} addresses'.format(
+        _subnet.name, mask, allowable_addresses))
+    pool_total_vm_count = (
+        pool_settings.vm_count.dedicated +
+        pool_settings.vm_count.low_priority
+    )
+    if allowable_addresses < pool_total_vm_count:
+        raise RuntimeError(
+            ('subnet {} mask is {} and allows {} addresses but desired '
+             'pool vm_count is {}').format(
+                 _subnet.name, mask, allowable_addresses, pool_total_vm_count))
+    elif int(allowable_addresses * 0.9) <= pool_total_vm_count:
+        # if within 90% tolerance, warn user due to potential
+        # address shortage if other compute resources are in this subnet
+        if not util.confirm_action(
+                config,
+                msg=('subnet {} mask is {} and allows {} addresses '
+                     'but desired pool vm_count is {}, proceed?').format(
+                         _subnet.name, mask, allowable_addresses,
+                         pool_total_vm_count)):
+            raise RuntimeError('Pool deployment rejected by user')
+    logger.info('using virtual network subnet id: {}'.format(subnet_id))
+    return subnet_id
+
+
 def _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, config):
@@ -809,57 +916,8 @@ def _construct_pool_object(
     custom_image_na = settings.pool_custom_image_node_agent(config)
     # check for virtual network settings
     bc = settings.credentials_batch(config)
-    vnet = None
-    subnet = None
-    if (pool_settings.virtual_network is not None and
-            util.is_not_empty(pool_settings.virtual_network.name)):
-        if util.is_none_or_empty(pool_settings.virtual_network.subnet_name):
-            raise ValueError(
-                'Invalid subnet name on virtual network {}'.format(
-                    pool_settings.virtual_network.name))
-        if util.is_not_empty(pool_settings.virtual_network.resource_group):
-            _vnet_rg = pool_settings.virtual_network.resource_group
-        else:
-            _vnet_rg = bc.resource_group
-        # create virtual network and subnet if specified
-        vnet, subnet = resource.create_virtual_network_and_subnet(
-            resource_client, network_client, _vnet_rg, bc.location,
-            pool_settings.virtual_network)
-        del _vnet_rg
-        # ensure address prefix for subnet is valid
-        tmp = subnet.address_prefix.split('/')
-        if len(tmp) <= 1:
-            raise RuntimeError(
-                'subnet address_prefix is invalid for Batch pools: {}'.format(
-                    subnet.address_prefix))
-        mask = int(tmp[-1])
-        # subtract 4 for guideline and Azure numbering start
-        allowable_addresses = (1 << (32 - mask)) - 4
-        logger.debug('subnet {} mask is {} and allows {} addresses'.format(
-            subnet.name, mask, allowable_addresses))
-        pool_total_vm_count = (
-            pool_settings.vm_count.dedicated +
-            pool_settings.vm_count.low_priority
-        )
-        if allowable_addresses < pool_total_vm_count:
-            raise RuntimeError(
-                ('subnet {} mask is {} and allows {} addresses but desired '
-                 'pool vm_count is {}').format(
-                     subnet.name, mask, allowable_addresses,
-                     pool_total_vm_count))
-        elif int(allowable_addresses * 0.9) <= pool_total_vm_count:
-            # if within 90% tolerance, warn user due to potential
-            # address shortage if other compute resources are in this subnet
-            if not util.confirm_action(
-                    config,
-                    msg=('subnet {} mask is {} and allows {} addresses '
-                         'but desired pool vm_count is {}, proceed?').format(
-                             subnet.name, mask, allowable_addresses,
-                             pool_total_vm_count)):
-                raise RuntimeError('Pool deployment rejected by user')
-        logger.info('using virtual network subnet id: {}'.format(subnet.id))
-    else:
-        logger.debug('no virtual network settings specified')
+    subnet_id = _pool_virtual_network_subnet_address_space_check(
+        resource_client, network_client, config, pool_settings, bc)
     # construct fstab mounts for storage clusters
     fstab_mounts = []
     sc_args = []
@@ -867,7 +925,7 @@ def _construct_pool_object(
         for sc_id in storage_cluster_mounts:
             fm, sca = _create_storage_cluster_mount_args(
                 compute_client, network_client, batch_mgmt_client, config,
-                sc_id, bc, vnet, subnet)
+                sc_id, bc, subnet_id)
             fstab_mounts.append(fm)
             sc_args.append(sca)
         if settings.verbose(config):
@@ -949,18 +1007,17 @@ def _construct_pool_object(
         if settings.is_native_docker_pool(
                 config, vm_config=pool_settings.vm_configuration):
             registries = []
+            hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+            if util.is_not_empty(hubuser):
+                registries.append(batchmodels.ContainerRegistry(
+                    registry_server=None,
+                    user_name=hubuser,
+                    password=hubpw))
             if preg.server:
                 registries.append(batchmodels.ContainerRegistry(
                     registry_server=preg.server,
-                    username=preg.user,
+                    user_name=preg.user,
                     password=preg.password))
-            else:
-                hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-                if util.is_not_empty(hubuser):
-                    registries.append(batchmodels.ContainerRegistry(
-                        registry_server=None,
-                        username=hubuser,
-                        password=hubpw))
             vmconfig.container_configuration = \
                 batchmodels.ContainerConfiguration(
                     container_image_names=settings.
@@ -992,18 +1049,17 @@ def _construct_pool_object(
         image_ref, na_ref = _pick_node_agent_for_vm(
             batch_client, pool_settings)
         registries = []
+        hubuser, hubpw = settings.docker_registry_login(config, 'hub')
+        if util.is_not_empty(hubuser):
+            registries.append(batchmodels.ContainerRegistry(
+                registry_server=None,
+                user_name=hubuser,
+                password=hubpw))
         if preg.server:
             registries.append(batchmodels.ContainerRegistry(
                 registry_server=preg.server,
-                username=preg.user,
+                user_name=preg.user,
                 password=preg.password))
-        else:
-            hubuser, hubpw = settings.docker_registry_login(config, 'hub')
-            if util.is_not_empty(hubuser):
-                registries.append(batchmodels.ContainerRegistry(
-                    registry_server=None,
-                    username=hubuser,
-                    password=hubpw))
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref,
             node_agent_sku_id=na_ref,
@@ -1174,9 +1230,9 @@ def _construct_pool_object(
         )
         del psa
     # virtual network settings
-    if subnet is not None:
+    if subnet_id is not None:
         pool.network_configuration = batchmodels.NetworkConfiguration(
-            subnet_id=subnet.id,
+            subnet_id=subnet_id,
         )
     # storage cluster settings
     if util.is_not_empty(fstab_mounts):
