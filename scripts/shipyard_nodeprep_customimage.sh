@@ -308,6 +308,19 @@ fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 
+echo "Configuration [Custom Image]:"
+echo "-----------------------------"
+echo "Batch Shipyard version: $version"
+echo "Blobxfer version: $blobxferversion"
+echo "Distrib ID/Release: $DISTRIB_ID $DISTRIB_RELEASE"
+echo "Network optimization: $networkopt"
+echo "Encrypted: $encrypted"
+echo "Storage cluster mount: ${sc_args[*]}"
+echo "P2P: $p2penabled"
+echo "Azure File: $azurefile"
+echo "GlusterFS on compute: $gluster_on_compute"
+echo "Block on images: $block"
+
 # check sdb1 mount
 check_for_buggy_ntfs_mount
 

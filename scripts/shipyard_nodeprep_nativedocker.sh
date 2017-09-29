@@ -264,6 +264,17 @@ fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 
+echo "Configuration [Native Docker]:"
+echo "------------------------------"
+echo "Batch Shipyard version: $version"
+echo "Blobxfer version: $blobxferversion"
+echo "Distrib ID/Release: $DISTRIB_ID $DISTRIB_RELEASE"
+echo "Network optimization: $networkopt"
+echo "Encrypted: $encrypted"
+echo "Storage cluster mount: ${sc_args[*]}"
+echo "Azure File: $azurefile"
+echo "GlusterFS on compute: $gluster_on_compute"
+
 # check sdb1 mount
 check_for_buggy_ntfs_mount
 
@@ -297,13 +308,6 @@ if [ ! -z $encrypted ]; then
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
         DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
     fi
-fi
-
-# set iptables rules
-if [ $p2penabled -eq 1 ]; then
-    # disable DHT connection tracking
-    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
-    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
 
 # check if we're coming up from a reboot

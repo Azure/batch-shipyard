@@ -387,6 +387,22 @@ docker_pull_image() {
     set -e
 }
 
+echo "Configuration:"
+echo "--------------"
+echo "Batch Shipyard version: $version"
+echo "Blobxfer version: $blobxferversion"
+echo "Offer/Sku: $offer $sku"
+echo "Network optimization: $networkopt"
+echo "Encrypted: $encrypted"
+echo "Cascade on container: $cascadecontainer"
+echo "Storage cluster mount: ${sc_args[*]}"
+echo "GPU: $gpu"
+echo "P2P: $p2penabled"
+echo "Azure File: $azurefile"
+echo "GlusterFS on compute: $gluster_on_compute"
+echo "HPN-SSH: $hpnssh"
+echo "Block on images: $block"
+
 # check sdb1 mount
 check_for_buggy_ntfs_mount
 

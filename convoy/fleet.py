@@ -41,7 +41,6 @@ import time
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
-import azure.mgmt.batch.models as batchmgmtmodels
 import azure.mgmt.compute.models as computemodels
 # local imports
 from . import autoscale
@@ -476,13 +475,7 @@ def _create_storage_cluster_mount_args(
     """
     fstab_mount = None
     sc_arg = None
-    # ensure usersubscription account
     ba = batch.get_batch_account(batch_mgmt_client, config)
-    if (not ba.pool_allocation_mode ==
-            batchmgmtmodels.PoolAllocationMode.user_subscription):
-        raise RuntimeError(
-            '{} account is not a UserSubscription account'.format(
-                bc.account))
     # check for vnet/subnet presence
     if util.is_none_or_empty(subnet_id):
         raise RuntimeError(
@@ -975,6 +968,11 @@ def _construct_pool_object(
         gpu_env = None
     # set vm configuration
     if util.is_not_empty(custom_image_na):
+        # check if AAD is enabled
+        if util.is_none_or_empty(bc.aad.directory_id):
+            raise RuntimeError(
+                'cannot allocate a pool with a custom image without AAD '
+                'credentials')
         _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=batchmodels.ImageReference(
@@ -1857,6 +1855,9 @@ def _adjust_settings_for_pool_creation(config):
     dr = settings.data_replication_settings(config)
     # ensure settings p2p/as/internode settings are compatible
     if dr.peer_to_peer.enabled:
+        if pool.vm_configuration.native:
+            raise ValueError(
+                'cannot enable peer-to-peer and native container pools')
         if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
             raise ValueError('cannot enable peer-to-peer and autoscale')
         if pool.inter_node_communication_enabled:
