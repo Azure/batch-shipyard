@@ -3,7 +3,8 @@
 ## [Unreleased]
 
 ### Added
-- Support for deploying to an ARM Virtual Network in Batch Service mode
+- Support for deploying compute nodes to an ARM Virtual Network with Batch
+Service Batch accounts
 - Support for deploying a compute node from an ARM Image resource
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
@@ -24,6 +25,8 @@ guide for more information.
 - `aad` can be specified at a "global" level in the credentials configuration
 file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.
+- `docker_image` is now preferred over the deprecated `image` property in
+the `task` array in the jobs configuration file
 
 ## [2.9.6] - 2017-10-03
 ### Added

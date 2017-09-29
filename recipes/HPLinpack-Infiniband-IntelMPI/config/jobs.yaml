@@ -2,7 +2,7 @@ job_specifications:
 - id: linpack
   auto_complete: true
   tasks:
-  - image: alfpark/linpack:cpu-intel-mkl
+  - docker_image: alfpark/linpack:cpu-intel-mkl
     additional_docker_run_options:
     - --privileged
     multi_instance:

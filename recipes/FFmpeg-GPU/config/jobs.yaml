@@ -1,7 +1,7 @@
 job_specifications:
 - id: ffmpegjob
   tasks:
-  - image: alfpark/ffmpeg:3.2.1-nvenc
+  - docker_image: alfpark/ffmpeg:3.2.1-nvenc
     resource_files:
     - blob_source: <url of video to transcode>
       file_path: samplevideo.mp4

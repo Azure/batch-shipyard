@@ -131,7 +131,7 @@ job_specifications:
         package: null
       repeat: 3
     id: null
-    image: busybox
+    docker_image: busybox
     name:
     labels: []
     environment_variables:
@@ -521,7 +521,7 @@ transferred again. This object currently supports `azure_batch` and
     to `[1, 10]` (note the integral members), then there should be task
     `id`s of `"1"`, `"2"`, ... `"10"` within the job. Once these dependent
     tasks complete successfully, then this specified task will execute.
-  * (required) `image` is the Docker image to use for this task
+  * (required) `docker_image` is the Docker image to use for this task
   * (optional) `name` is the name to assign to the container. If not
     specified, the value of the `id` property will be used for `name`.
   * (optional) `labels` is an array of labels to apply to the container.

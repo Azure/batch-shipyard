@@ -1,7 +1,7 @@
 job_specifications:
 - id: tensorflowjob
   tasks:
-  - image: gcr.io/tensorflow/tensorflow:latest-gpu
+  - docker_image: gcr.io/tensorflow/tensorflow:latest-gpu
     resource_files:
     - blob_source: https://raw.githubusercontent.com/tensorflow/tensorflow/master/tensorflow/examples/tutorials/mnist/mnist_with_summaries.py
       file_path: mnist_with_summaries.py

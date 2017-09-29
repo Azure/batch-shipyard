@@ -2,7 +2,7 @@ job_specifications:
 - id: openfoamjob
   auto_complete: true
   tasks:
-  - image: alfpark/openfoam:4.0-gcc-openmpi
+  - docker_image: alfpark/openfoam:4.0-gcc-openmpi
     shared_data_volumes:
     - glustervol
     multi_instance:

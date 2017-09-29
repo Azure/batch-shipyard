@@ -2442,13 +2442,10 @@ def task_docker_image(conf):
     :rtype: str
     :return: docker image used by task
     """
-    try:
-        di = conf['image']
-        if util.is_none_or_empty(di):
-            raise KeyError()
-    except KeyError:
-        di = None
-    return di
+    return (
+        _kv_read_checked(conf, 'docker_image') or
+        _kv_read_checked(conf, 'image')
+    )
 
 
 def set_task_name(conf, name):
@@ -2506,9 +2503,12 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # check task id length
     if len(task_id) > 64:
         raise ValueError('task id exceeds 64 characters')
-    image = conf['image']
+    image = (
+        _kv_read_checked(conf, 'docker_image') or
+        _kv_read_checked(conf, 'image')
+    )
     if util.is_none_or_empty(image):
-        raise ValueError('image is invalid')
+        raise ValueError('Docker image is unspecified or invalid')
     # check if image is in missing image list
     if image in missing_images:
         # get private registry settings

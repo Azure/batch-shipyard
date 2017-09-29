@@ -1,5 +1,5 @@
 job_specifications:
 - id: torchjob
   tasks:
-  - image: alfpark/torch:cpu
+  - docker_image: alfpark/torch:cpu
     command: /root/torch/run_mnist.sh

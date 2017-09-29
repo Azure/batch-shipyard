@@ -1,7 +1,7 @@
 job_specifications:
 - id: caffe2job
   tasks:
-  - image: caffe2ai/caffe2
+  - docker_image: caffe2ai/caffe2
     resource_files:
     - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/Caffe2-CPU/scripts/mnist.py
       file_path: mnist.py

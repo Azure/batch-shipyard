@@ -2,7 +2,7 @@ job_specifications:
 - id: mxnetjob
   auto_complete: true
   tasks:
-  - image: alfpark/mxnet:gpu
+  - docker_image: alfpark/mxnet:gpu
     shared_data_volumes:
     - glustervol
     multi_instance:

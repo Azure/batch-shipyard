@@ -123,7 +123,7 @@ job_specifications:
         package: null
       repeat: 3
     id: null
-    image: busybox
+    docker_image: busybox
     name:
     labels: []
     environment_variables:

@@ -2,7 +2,7 @@ job_specifications:
 - id: cntkjob
   auto_complete: true
   tasks:
-  - image: alfpark/cntk:2.1-cpu-1bitsgd-py36-intelmpi-refdata
+  - docker_image: alfpark/cntk:2.1-cpu-1bitsgd-py36-intelmpi-refdata
     multi_instance:
       num_instances: pool_current_dedicated
   command: /cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -- -q 1 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output
