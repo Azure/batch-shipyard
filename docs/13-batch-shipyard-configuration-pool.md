@@ -16,9 +16,8 @@ pool_specification:
       version: latest
       native: false
     custom_image:
-      image_uris:
-      - https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd
-      node_agent: batch.node.ubuntu 16.04
+      arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/images/<image_name>
+      node_agent: <node agent sku id>
       native: false
   vm_size: STANDARD_D2_V2
   vm_count:
@@ -115,9 +114,11 @@ specify both. If using a custom image, please see the
       conversion equivalent for the specified `publisher`, `offer`, `sku`
       then no conversion is performed. The default is `false`.
   * (required for custom image) `custom_image` defines the custom image to
-    use:
-    * (required for custom image) `image_uris` defines a list of page blob
-      VHDs to use for the pool. These should be bare URLs without SAS keys.
+    use. AAD `batch` credentials are required to use custom iamges for both
+    Batch service and User Subscription modes.
+    * (required for custom image) `arm_image_id` defines the ARM image id
+      to use as the OS image for the pool. The ARM image must be in the
+      same subscription and region as the Batch account.
     * (required for custom image) `node_agent` is the node agent sku id to
       use with this custom image. You can view supported base images and
       their node agent sku ids with the `pool listskus` command.
@@ -223,7 +224,9 @@ network timeout, resolution failure or download problem). This defaults to
 `false`.
 * (optional) `block_until_all_global_resources_loaded` will block the node
 from entering ready state until all Docker images are loaded. This defaults
-to `true`.
+to `true`. This option has no effect on `native` container support pools (the
+behavior will effectively reflect `true` for this property on `native`
+container support pools).
 * (optional) `transfer_files_on_pool_creation` will ingress all `files`
 specified in the `global_resources` section of the global configuration file
 when the pool is created. If files are to be ingressed to Azure Blob or File

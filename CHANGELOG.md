@@ -4,6 +4,7 @@
 
 ### Added
 - Support for deploying to an ARM Virtual Network in Batch Service mode
+- Support for deploying a compute node from an ARM Image resource
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
@@ -16,6 +17,10 @@ commandline.
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
 `SHIPYARD_CONFIG_CONF`, `SHIPYARD_POOL_CONF`, `SHIPYARD_JOBS_CONF`, and
 `SHIPYARD_FS_CONF` respectively.
+- **Breaking Change:** `image_uris` in the `vm_configuration`:`custom_image`
+property of the pool configuration has been replaced with `arm_image_id`
+which is a reference to an ARM Image resource. Please see the custom image
+guide for more information.
 - `aad` can be specified at a "global" level in the credentials configuration
 file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.

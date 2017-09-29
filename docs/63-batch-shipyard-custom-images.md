@@ -1,30 +1,33 @@
 # Custom Images with Batch Shipyard
-The focus of this article is to explain how to provision a custom image (VHD)
-and then deploy it with Batch Shipyard as the VM image to use for your
-compute node hosts.
+The focus of this article is to explain how to provision an ARM Image
+resource and then deploy it with Batch Shipyard as the VM image to use for
+your compute node hosts.
 
-## Background: Azure Batch, Azure Storage and Custom Images
-Azure Batch allows provisioning compute nodes with custom images (VHDs) with
-User Subscription Batch accounts. This allows users to customize the
-compute node with software, settings, etc. that fit their use case. With
-containerization, this requirement is weakened but some users may still
-want to customize the host compute node environment with particular
-versions of software such as the Docker Host engine or even embed the GPU
-driver for potential faster provisioning times.
+## Background: Azure Resources and Azure Batch Custom Images
+Azure Batch allows provisioning compute nodes with custom images with both
+Batch Service and User Subscription Batch accounts. This allows users to
+customize the compute node with software, settings, etc. that fit their use
+case. With containerization, this requirement is weakened but some users may
+still want to customize the host compute node environment with particular
+versions of software such as the Docker Host engine or pre-install and embed
+certain software.
 
-Azure Storage is used to host these custom image VHDs. Currently, there are
-two sources for creating virtual machines in Azure which are, page blob
-VHDs and managed disks. Currently, Azure Batch does not support managed
-disks, so you will need to create page blobs with your VHD image.
+Azure Batch only supports creating compute nodes through ARM Image resources.
+You can create these images using existing page blob VHDs or exporting
+managed disks. You must create the Image in the same subscription and
+region as your Batch account.
 
-Due to Storage account throttling limits, you must limit the number of
-compute nodes served from a single storage account (and thus VHD). For
-maximum performance, you should limit one VHD for every 40 VMs for Linux
-(or 20 VMs for Windows) and these VHDs should be on separate storage accounts
-within the same subscription in the same region as your Batch account.
 You can use [blobxfer](https://github.com/Azure/blobxfer) or
 [AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/)
-to copy and/or replicate your VHD images.
+to copy your page blob VHDs if they are in a different region than your
+Batch account.
+
+### Azure Active Directory Authentication Required
+Azure Active Directory authentication is required for the `batch` account
+regardless of the account mode. This means that the
+[credentials configuration file](11-batch-shipyard-configuration-credentials.md)
+must include an `aad` section with the appropriate options, including the
+authentication method of your choosing.
 
 ## Provisioning a Custom Image
 You will need to ensure that your custom image is sufficiently prepared
@@ -132,19 +135,12 @@ scripts to create a custom image from an existing Marketplace platform image.
 When allocating a compute pool with a custom image, you must ensure the
 following:
 
-0. You will be deploying the pool with a *User Subscription* Batch account
-1. Custom image VHD is in your storage account as a page blob object
-2. The storage account is in the same subscription and region as your
-   User Subscription Batch account
-3. You have sufficiently replicated the custom image VHD across enough
-   storage accounts if your compute pool exceeds the single VHD limit. These
-   storage accounts are in the same subscription and region as your
-   User Subscription Batch account
-4. Your pool specification has the proper `vm_configuration` settings
-   for `custom_image`
-   * You have `image_uris` for all of these custom image VHDs. These URIs
-     should not include SAS information of any kind. They should be "bare"
-     URLs.
+1. The ARM Image is in the same subscription and region as your Batch account.
+2. You are specifying the proper `aad` settings in your credentials
+   configuration file for `batch` (or "globally" in the credentials file).
+3. Your pool specification has the proper `vm_configuration` settings
+   for `custom_image`.
+   * The `arm_image_id` points to a valid ARM Image resource
    * `node_agent` is populated with the correct node agent sku id which
      corresponds to the distribution used in the custom image. For instance,
      if your custom image is based on Ubuntu 16.04, you would use

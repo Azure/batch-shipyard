@@ -94,7 +94,7 @@ PoolVmPlatformImageSettings = collections.namedtuple(
 )
 PoolVmCustomImageSettings = collections.namedtuple(
     'PoolVmCustomImageSettings', [
-        'image_uris',
+        'arm_image_id',
         'node_agent',
         'native',
     ]
@@ -674,7 +674,7 @@ def _populate_pool_vm_configuration(config):
     else:
         conf = pool_vm_configuration(config, 'custom_image')
         return PoolVmCustomImageSettings(
-            image_uris=conf['image_uris'],
+            arm_image_id=_kv_read_checked(conf, 'arm_image_id'),
             node_agent=conf['node_agent'].lower(),
             native=_kv_read(conf, 'native', default=False),
         )

@@ -8,9 +8,8 @@ pool_specification:
       version: latest
       native: false
     custom_image:
-      image_uris:
-      - https://mystorageaccount.blob.core.windows.net/myvhds/mycustomimg.vhd
-      node_agent: batch.node.ubuntu 16.04
+      arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/images/<image_name>
+      node_agent: <node agent sku id>
       native: false
   vm_size: STANDARD_D2_V2
   vm_count:

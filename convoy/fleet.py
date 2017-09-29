@@ -31,7 +31,6 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
-import math
 import os
 try:
     import pathlib2 as pathlib
@@ -188,49 +187,29 @@ def check_for_invalid_config(config):
     """Check for invalid configuration settings
     :param dict config: configuration dict
     """
-    # check for invalid properties, remove checks on next major release
-    try:
-        config['pool_specification']['ssh_docker_tunnel']
-    except KeyError:
-        pass
-    else:
-        raise ValueError(
-            'Invalid ssh_docker_tunnel property found in pool_specification. '
-            'Please update your pool configuration file. See the '
-            'configuration doc for more information.')
-    try:
-        config['docker_registry']['login']
-    except KeyError:
-        pass
-    else:
-        raise ValueError(
-            'Invalid docker_registry:login property found in global '
-            'configuration. Please update your global configuration and '
-            'credentials file. See the configuration doc for more '
-            'information.')
-    try:
-        config['docker_registry']['storage_account_settings']
-    except KeyError:
-        pass
-    else:
-        raise ValueError(
-            'Invalid docker_registry:storage_account_settings property '
-            'found in global configuration. Please update your global '
-            'configuration file. See the configuration doc for more '
-            'information.')
-    # check for deprecated properties
+    # check for invalid properties, remove checks in a future release
     try:
         config['docker_registry']['azure_storage']
     except KeyError:
         pass
     else:
-        logger.warning(
-            'DEPRECATION WARNING: docker_registry:azure_storage is '
-            'specified. Docker private registries backed by Azure Storage '
-            'blobs will not be supported in future releases. Please '
-            'migrate your Docker images to Azure Container Registry, '
-            'Docker Hub (public or private), or any other Internet '
-            'accessible Docker registry solution.')
+        raise ValueError(
+            'docker_registry:azure_storage is specified. Docker private '
+            'registries backed by Azure Storage blobs is no longer '
+            'supported. Please migrate your Docker images to Azure '
+            'Container Registry, Docker Hub (public or private), or any '
+            'other Internet accessible Docker registry solution.')
+    try:
+        config['pool_specification']['vm_configuration']['custom_image'][
+            'image_uris']
+    except KeyError:
+        pass
+    else:
+        raise ValueError(
+            'Invalid image_uris specified for custom_image. Please update '
+            'your pool configuration file. Please see the pool configuration '
+            'doc for more information.')
+    # check for deprecated properties, migrate to invalid in a future release
     try:
         if isinstance(config['pool_specification']['vm_count'], int):
             logger.warning(
@@ -998,12 +977,14 @@ def _construct_pool_object(
     if util.is_not_empty(custom_image_na):
         _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
         vmconfig = batchmodels.VirtualMachineConfiguration(
-            os_disk=batchmodels.OSDisk(
-                image_uris=pool_settings.vm_configuration.image_uris,
-                caching=batchmodels.CachingType.read_write,
+            image_reference=batchmodels.ImageReference(
+                virtual_machine_image_id=pool_settings.
+                vm_configuration.arm_image_id,
             ),
             node_agent_sku_id=pool_settings.vm_configuration.node_agent,
         )
+        logger.debug('deploying custom image: {}'.format(
+            vmconfig.image_reference.virtual_machine_image_id))
         if settings.is_native_docker_pool(
                 config, vm_config=pool_settings.vm_configuration):
             registries = []
@@ -1864,19 +1845,6 @@ def _adjust_settings_for_pool_creation(config):
                  publisher, offer, sku, pool.vm_size))
     # compute total vm count
     pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
-    # ensure enough vhds for custom image pools
-    if util.is_not_empty(node_agent):
-        vhds = len(pool.vm_configuration.image_uris)
-        if node_agent == 'batch.node.windows amd64':
-            vhds_req = int(math.ceil(pool_total_vm_count / 20))
-        else:
-            vhds_req = int(math.ceil(pool_total_vm_count / 40))
-        if vhds_req > vhds:
-            raise ValueError(
-                ('insufficient number of VHDs ({}) supplied for the number '
-                 'of compute nodes to allocate ({}). At least {} VHDs are '
-                 'required.').format(
-                     vhds, pool.vm_count, vhds_req))
     # adjust for shipyard container requirement
     if shipyard_container_required or util.is_not_empty(node_agent):
         settings.set_use_shipyard_docker_image(config, True)
