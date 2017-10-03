@@ -837,8 +837,7 @@ fi
 
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
-docker_pull_image alfpark/batch-shipyard:${version}-tfm
-docker_pull_image alfpark/batch-shipyard:${version}-rjm
+docker_pull_image alfpark/batch-shipyard:${version}-cargo
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh

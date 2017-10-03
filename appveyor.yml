@@ -27,7 +27,7 @@ build: off
 test_script:
     - flake8 --statistics shipyard.py convoy\\*.py
     - IF "%PYTHON_VERSION%"=="3.6" (
-      flake8 --statistics cascade\\*.py tfm\\*.py rjm\\*.py
+      flake8 --statistics cascade\\*.py cargo\\*.py
       )
 
 after_test:

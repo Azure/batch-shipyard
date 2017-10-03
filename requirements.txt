@@ -9,7 +9,7 @@ azure-storage==0.36.0
 blobxfer==1.0.0b2
 click==6.7
 future==0.16.0
-msrest==0.4.14
+msrest==0.4.15
 msrestazure==0.4.14
 pathlib2==2.3.0; python_version < '3.5'
 python-dateutil==2.6.1

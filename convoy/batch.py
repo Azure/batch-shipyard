@@ -3245,10 +3245,12 @@ def add_jobs(
             if native:
                 jscs = batchmodels.TaskContainerSettings(
                     container_run_options='--rm',
-                    image_name='alfpark/batch-shipyard:rjm-{}'.format(
+                    image_name='alfpark/batch-shipyard:{}-cargo'.format(
                         __version__)
                 )
-                jscmdline = '--monitor' if kill_job_on_completion else ''
+                jscmdline = (
+                    '/opt/batch-shipyard/recurrent_job_manager.sh{}'
+                ).format(' --monitor' if kill_job_on_completion else '')
             else:
                 jscs = None
                 jscmdline = util.wrap_commands_in_shell([
@@ -3257,7 +3259,8 @@ def add_jobs(
                      '.shipyard-jmtask.envlist '
                      '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
                      '-w $AZ_BATCH_TASK_WORKING_DIR '
-                     'alfpark/batch-shipyard:rjm-{}{}').format(
+                     'alfpark/batch-shipyard:{}-cargo '
+                     '/opt/batch-shipyard/recurrent_job_manager.sh{}').format(
                          __version__,
                          ' --monitor' if kill_job_on_completion else '')
                 ])

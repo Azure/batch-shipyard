@@ -178,7 +178,7 @@ def _process_batch_input_data(config, input_data, on_task):
     :param dict input_data: config spec with input_data
     :param bool on_task: if this is originating from a task spec
     :rtype: list
-    :return: args to pass to tfm
+    :return: args to pass to task file mover
     """
     # get batch creds
     bc = settings.credentials_batch(config)
@@ -236,7 +236,8 @@ def process_input_data(config, bxfile, spec, on_task=False):
                      '-w $AZ_BATCH_TASK_WORKING_DIR '
                      '-e "AZ_BATCH_NODE_STARTUP_DIR='
                      '$AZ_BATCH_NODE_STARTUP_DIR" '
-                     'alfpark/batch-shipyard:tfm-{} {}; '
+                     'alfpark/batch-shipyard:{}-cargo '
+                     '/opt/batch-shipyard/task_file_mover.sh {}; '
                      'set +f'.format(__version__, ' '.join(args))))
             else:
                 raise ValueError(

@@ -4,9 +4,6 @@ set -e
 set -o pipefail
 set -f
 
-# ensure we're in the proper directory
-cd /opt/batch-shipyard
-
 privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
 
 for spec in "$@"; do
@@ -41,5 +38,5 @@ for spec in "$@"; do
     fi
     # ingress data from batch task
     export SHIPYARD_BATCH_ENV=$SHIPYARD_BATCH_ENV
-    python3 task_file_mover.py $jobid $taskid $include $exclude $dest
+    python3 /opt/batch-shipyard/task_file_mover.py $jobid $taskid $include $exclude $dest
 done

@@ -10,5 +10,4 @@ install:
   - travis_retry pip install flake8
 script:
   - flake8 --statistics shipyard.py convoy/*.py
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8 --statistics cascade/*.py tfm/*.py rjm/*.py; fi
-
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8 --statistics cascade/*.py cargo/*.py; fi
