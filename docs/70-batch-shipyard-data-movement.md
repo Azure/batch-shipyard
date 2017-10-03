@@ -148,9 +148,10 @@ For pool-level ingress, the `input_data` property is specified in the pool
 property under `pool_specification`. To transfer from Azure Storage,
 you would specify the `azure_storage` property under `input_data` and within
 `azure_storage` multiple Azure storage sources can be specified. At the
-pool-level, `container` or `file_share` data is ingressed to all compute nodes
-to the specified destination location as part of pool creation if the
-`transfer_files_on_pool_creation` property is `true`. Note that the pool must
+pool-level, `remote_path` data is ingressed to all compute nodes
+to the specified `local_path` location as part of pool creation if the
+`transfer_files_on_pool_creation` property is `true`. To ingress from an
+Azure File Share, specify `is_file_share` as `true`. Note that the pool must
 be ready in order for the `data ingress` command to work. Additionally,
 although you can combine on premises ingress to Azure Storage and then ingress
 to compute node, if there is a possiblity of overlap, it is recommended to
@@ -174,7 +175,7 @@ the `input_data` is not transferred again.
 
 `input_data` for each task in the task array for each job will ingress data
 to the compute node running the specified task. Note that for task-level
-`input_data`, the `destination` property is optional. If not specified,
+`input_data`, the `local_path` property is optional. If not specified,
 data will be ingressed to the `$AZ_BATCH_TASK_WORKING_DIR` by default.
 For multi-instance tasks, the download only applies to the compute node
 running the application command. Data is not ingressed with the coordination
@@ -236,15 +237,16 @@ progress monitoring via a file or tailing an output.
 ### To Azure Storage
 If you need to egress data from a compute node and persist it to Azure
 Storage, Batch Shipyard provides the `output_data` property on tasks of a
-job in `job_specifications`. `source` defines which directory within the
+job in `job_specifications`. `local_path` defines which directory within the
 task directory to egress data from; if nothing is specified for `source` then
 the default is `$AZ_BATCH_TASK_DIR` (which contains files like `stdout.txt`
 and `stderr.txt`). Note that you can specify a source originating from the
 shared directory here as well, e.g., `$AZ_BATCH_NODE_SHARED_DIR`, there is
 no restriction that limits you to just the task directory. `include` defines
 an optional include filter to be applied across the `source` files. Finally,
-define the `container` or `file_share` property to egress to Azure Blob
-or File Storage, respectively.
+define the `remote_path` property to egress to the path specified, and
+optionally `is_file_share` set to `true` if you wish to egress to
+Azure File Storage instead of Azure Blob.
 
 ## Configuration and Usage Documentation
 Please see [this page](10-batch-shipyard-configuration.md) for a full

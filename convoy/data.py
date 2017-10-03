@@ -59,7 +59,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_BLOBXFER_VERSION = '0.12.1'
+_BLOBXFER_VERSION = 'develop'
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
@@ -85,6 +85,32 @@ def _get_gluster_paths(config):
     return (gluster_host, gluster_container)
 
 
+def _convert_filter_to_blobxfer_option(includes, excludes):
+    # type: (list, list) -> str
+    """Converts filters to blobxfer options
+    :param list includes: includes
+    :param list excludes: excludes
+    :rtype: str
+    :return: blobxfer options
+    """
+    if util.is_not_empty(includes):
+        src_incl = []
+        for include in includes:
+            src_incl.append('--include \'{}\''.format(include))
+    else:
+        src_incl = None
+    if util.is_not_empty(excludes):
+        src_excl = []
+        for exclude in excludes:
+            src_excl.append('--exclude \'{}\''.format(exclude))
+    else:
+        src_excl = None
+    return '{} {}'.format(
+        ' '.join(src_incl) if src_incl is not None else '',
+        ' '.join(src_excl) if src_excl is not None else '',
+    ).rstrip()
+
+
 def _process_storage_input_data(config, input_data, on_task):
     # type: (dict, dict, bool) -> str
     """Process Azure storage input data to ingress
@@ -102,45 +128,46 @@ def _process_storage_input_data(config, input_data, on_task):
     for xfer in input_data:
         storage_settings = settings.credentials_storage(
             config, settings.data_storage_account_settings(xfer))
-        container = settings.data_container(xfer)
-        fshare = settings.data_file_share(xfer)
-        if container is None and fshare is None:
-            raise ValueError('container or file_share not specified')
-        elif container is not None and fshare is not None:
-            raise ValueError(
-                'cannot specify both container and file_share at the '
-                'same time')
+        remote_path = settings.data_remote_path(xfer)
+        # derive container from remote_path
+        container = settings.data_container_from_remote_path(
+            xfer, rp=remote_path)
         eo = settings.data_blobxfer_extra_options(xfer)
-        # configure for file share
-        if fshare is not None:
-            if '--fileshare' not in eo:
-                eo = '--fileshare {}'.format(eo)
+        # append appropriate option for fshare
+        if settings.data_is_file_share(xfer) and '--mode file' not in eo:
+            eo = '--mode file {}'.format(eo)
+        if '--mode file' in eo:
             # create saskey for file share with rl perm
             saskey = storage.create_file_share_saskey(
-                storage_settings, fshare, 'ingress')
-            # set container as fshare
-            container = fshare
-            del fshare
+                storage_settings, container, 'ingress')
         else:
             # create saskey for container with rl perm
             saskey = storage.create_blob_container_saskey(
                 storage_settings, container, 'ingress')
-        include = settings.data_include(xfer, True)
-        dst = settings.input_data_destination(xfer, on_task)
+        includes = settings.data_include(xfer)
+        excludes = settings.data_exclude(xfer)
+        # convert include/excludes into extra options
+        filters = _convert_filter_to_blobxfer_option(includes, excludes)
+        local_path = settings.data_local_path(xfer, on_task)
         # auto replace container path for gluster with host path
         if (util.is_not_empty(gluster_container) and
-                dst.startswith(gluster_container)):
-            dst = dst.replace(gluster_container, gluster_host, 1)
+                local_path.startswith(gluster_container)):
+            local_path = local_path.replace(gluster_container, gluster_host, 1)
         # construct argument
-        # kind:encrypted:<sa:ep:saskey:container>:include:eo:dst
+        # kind:encrypted:<sa:ep:saskey:remote_path>:local_path:eo
         creds = crypto.encrypt_string(
             encrypt,
             '{}:{}:{}:{}'.format(
                 storage_settings.account, storage_settings.endpoint,
-                saskey, container),
+                saskey, remote_path),
             config)
-        args.append('"{}:i:{}:{}:{}:{}:{}"'.format(
-            _BLOBXFER_VERSION, encrypt, creds, include, eo, dst))
+        args.append('"{bxver}:i:{enc}:{creds}:{lp}:{eo}"'.format(
+            bxver=_BLOBXFER_VERSION,
+            enc=encrypt,
+            creds=creds,
+            lp=local_path,
+            eo=' '.join((filters, eo)).lstrip(),
+        ))
     return args
 
 
@@ -167,16 +194,16 @@ def _process_batch_input_data(config, input_data, on_task):
         taskid = settings.input_data_task_id(xfer)
         include = settings.data_include(xfer, False)
         exclude = settings.data_exclude(xfer)
-        dst = settings.input_data_destination(xfer, on_task)
+        local_path = settings.data_local_path(xfer, on_task)
         creds = crypto.encrypt_string(
             encrypt,
             '{};{};{}'.format(
                 bc.account, bc.account_service_url, bc.account_key),
             config)
         # construct argument
-        # encrypt,creds,jobid,taskid,incl,excl,dst
+        # encrypt,creds,jobid,taskid,incl,excl,lp
         args.append('"{},{},{},{},{},{},{}"'.format(
-            encrypt, creds, jobid, taskid, include, exclude, dst))
+            encrypt, creds, jobid, taskid, include, exclude, local_path))
     return args
 
 
@@ -237,48 +264,48 @@ def _process_storage_output_data(config, native, output_data):
     for xfer in output_data:
         storage_settings = settings.credentials_storage(
             config, settings.data_storage_account_settings(xfer))
-        container = settings.data_container(xfer)
-        fshare = settings.data_file_share(xfer)
-        if container is None and fshare is None:
-            raise ValueError('container or file_share not specified')
-        elif container is not None and fshare is not None:
-            raise ValueError(
-                'cannot specify both container and file_share at the '
-                'same time')
+        remote_path = settings.data_remote_path(xfer)
+        # derive container from remote_path
+        container = settings.data_container_from_remote_path(
+            xfer, rp=remote_path)
         eo = settings.data_blobxfer_extra_options(xfer)
         if native and util.is_not_empty(eo):
             raise ValueError(
-                'native Docker pool does not support blobxfer_extra_options')
-        # configure for file share
-        if fshare is not None:
+                'native container pool does not support '
+                'blobxfer_extra_options')
+        # append appropriate option for fshare
+        if settings.data_is_file_share(xfer) and '--mode file' not in eo:
+            eo = '--mode file {}'.format(eo)
+        if '--mode file' in eo:
             if native:
                 raise ValueError(
-                    'native Docker pool does not support fileshares')
-            if '--fileshare' not in eo:
-                eo = '--fileshare {}'.format(eo)
+                    'native container pool does not support fileshares')
             # create saskey for file share with rwdl perm
             saskey = storage.create_file_share_saskey(
-                storage_settings, fshare, 'egress', create_share=True)
-            # set container as fshare
-            container = fshare
-            del fshare
+                storage_settings, container, 'egress', create_share=True)
         else:
             # create saskey for container with rwdl perm
             saskey = storage.create_blob_container_saskey(
                 storage_settings, container, 'egress', create_container=True)
-        include = settings.data_include(xfer, True)
-        src = settings.output_data_source(xfer)
+        includes = settings.data_include(xfer)
+        excludes = settings.data_exclude(xfer)
+        # convert include/excludes into extra options
+        filters = _convert_filter_to_blobxfer_option(includes, excludes)
+        local_path = settings.data_local_path(xfer, True, task_wd=False)
         # auto replace container path for gluster with host path
         if (util.is_not_empty(gluster_container) and
-                src.startswith(gluster_container)):
-            src = src.replace(gluster_container, gluster_host, 1)
+                local_path.startswith(gluster_container)):
+            local_path = local_path.replace(gluster_container, gluster_host, 1)
         if native:
-            if util.is_none_or_empty(include):
+            if util.is_not_empty(excludes):
+                raise ValueError(
+                    'native container pool does not support excludes')
+            if util.is_none_or_empty(includes):
                 include = '**/*'
-            if not src.endswith('/'):
-                fp = '/'.join((src, include))
+            if not local_path.endswith('/'):
+                fp = '/'.join((local_path, include))
             else:
-                fp = ''.join((src, include))
+                fp = ''.join((local_path, include))
             of = batchmodels.OutputFile(
                 file_pattern=fp,
                 destination=batchmodels.OutputFileDestination(
@@ -298,15 +325,20 @@ def _process_storage_output_data(config, native, output_data):
             args.append(of)
         else:
             # construct argument
-            # kind:encrypted:<sa:ep:saskey:container>:include:eo:src
+            # kind:encrypted:<sa:ep:saskey:remote_path>:local_path:eo
             creds = crypto.encrypt_string(
                 encrypt,
                 '{}:{}:{}:{}'.format(
                     storage_settings.account, storage_settings.endpoint,
-                    saskey, container),
+                    saskey, remote_path),
                 config)
-            args.append('"{}:e:{}:{}:{}:{}:{}"'.format(
-                _BLOBXFER_VERSION, encrypt, creds, include, eo, src))
+            args.append('"{bxver}:e:{enc}:{creds}:{lp}:{eo}"'.format(
+                bxver=_BLOBXFER_VERSION,
+                enc=encrypt,
+                creds=creds,
+                lp=local_path,
+                eo=' '.join((filters, eo)).lstrip(),
+            ))
     return args
 
 
@@ -732,62 +764,78 @@ def _multinode_thread_worker(
     rcodes[node_id] = 0
 
 
-def _azure_blob_storage_transfer(storage_settings, container, source, eo):
-    # type: (StorageCredentialsSettings, str, SourceSettings, str) -> None
+def _azure_blob_storage_transfer(storage_settings, data_transfer, source):
+    # type: (settings.StorageCredentialsSettings,
+    #        settings.DataTransferSettings,
+    #        settings.SourceSettings) -> None
     """Initiate an azure blob storage transfer
-    :param StorageCredentialsSettings storage_settings: storage settings
-    :param str container: container to transfer to
-    :param SourceSettings source: source settings
-    :param str eo: blobxfer extra options
+    :param settings.StorageCredentialsSettings storage_settings:
+        storage settings
+    :param settings.DataTransferSettings data_transfer: data transfer settings
+    :param settings.SourceSettings source: source settings
     """
+    eo = data_transfer.blobxfer_extra_options
+    # append appropriate option for fshare
+    if data_transfer.is_file_share and '--mode file' not in eo:
+        eo = '--mode file {}'.format(eo)
     thr = threading.Thread(
         target=_wrap_blobxfer_subprocess,
-        args=(storage_settings, container, source, eo)
+        args=(
+            storage_settings,
+            data_transfer.remote_path,
+            source,
+            eo,
+        )
     )
     thr.start()
     return thr
 
 
-def _wrap_blobxfer_subprocess(storage_settings, container, source, eo):
+def _wrap_blobxfer_subprocess(storage_settings, remote_path, source, eo):
     # type: (StorageCredentialsSettings, str, SourceSettings, str) -> None
     """Wrapper function for blobxfer
     :param StorageCredentialsSettings storage_settings: storage settings
-    :param str container: container to transfer to
+    :param str remote_path: remote path to transfer to
     :param SourceSettings source: source settings
     :param str eo: blobxfer extra options
     """
-    # peel off first source include into var
-    if util.is_not_empty(source.include):
-        src_incl = source.include[0]
-        if util.is_none_or_empty(src_incl):
-            src_incl = None
-    else:
-        src_incl = None
+    # generate include/exclude options
+    filters = _convert_filter_to_blobxfer_option(
+        source.include, source.exclude)
+    # get correct path
     psrc = pathlib.Path(source.path)
     cwd = str(psrc.parent)
     rsrc = psrc.relative_to(psrc.parent)
+    # generate env
     env = os.environ.copy()
-    env['BLOBXFER_STORAGEACCOUNTKEY'] = storage_settings.account_key
+    env['BLOBXFER_STORAGE_ACCOUNT_KEY'] = storage_settings.account_key
+    # set cmd
     cmd = [
-        ('blobxfer {} {} {} --endpoint {} --upload --no-progressbar '
-         '{} {}').format(
-             storage_settings.account, container, rsrc,
-             storage_settings.endpoint,
-             '--include \'{}\''.format(src_incl)
-             if src_incl is not None else '',
-             eo)
+        ('blobxfer upload --storage-account {sa} --remote-path {rp} '
+         '--local-path {lp} --endpoint {ep} --no-progress-bar '
+         '{filters} {eo}').format(
+             sa=storage_settings.account,
+             rp=remote_path,
+             lp=rsrc,
+             ep=storage_settings.endpoint,
+             filters=filters,
+             eo=eo)
     ]
-    logger.info('begin ingressing data from {} to container {}'.format(
-        source.path, container))
+    logger.info('begin ingressing data from {} to remote path {}'.format(
+        source.path, remote_path))
     proc = util.subprocess_nowait_pipe_stdout(
         util.wrap_local_commands_in_shell(cmd), shell=True, cwd=cwd, env=env)
-    stdout = proc.communicate()[0]
+    stdout, stderr = proc.communicate()
     if proc.returncode != 0:
-        logger.error(stdout.decode('utf8'))
-        logger.error('data ingress failed from {} to container {}'.format(
-            source.path, container))
+        if stderr is not None:
+            logger.error(stderr.decode('utf8'))
+        if stdout is not None:
+            logger.error(stdout.decode('utf8'))
+        logger.error('data ingress failed from {} to remote path {}'.format(
+            source.path, remote_path))
     else:
-        logger.info(stdout.decode('utf8'))
+        if stdout is not None:
+            logger.debug(stdout.decode('utf8'))
 
 
 def wait_for_storage_threads(storage_threads):
@@ -999,36 +1047,10 @@ def ingress_data(
                     'to Azure Blob/File Storage not specified'.format(
                         source.path))
                 continue
-            if (dest.data_transfer.container is None and
-                    dest.data_transfer.file_share is None):
-                raise ValueError('container or file_share not specified')
-            elif (dest.data_transfer.container is not None and
-                  dest.data_transfer.file_share is not None):
-                raise ValueError(
-                    'cannot specify both container and file_share at the '
-                    'same time for source {}'.format(source.path))
-            # set destination
-            eo = dest.data_transfer.blobxfer_extra_options
-            if dest.data_transfer.file_share is not None:
-                # append appropriate option for fshare
-                if '--fileshare' not in eo:
-                    eo = '--fileshare {}'.format(eo)
-                dst = dest.data_transfer.file_share
-            else:
-                dst = dest.data_transfer.container
-            if util.is_not_empty(source.include):
-                if len(source.include) > 1:
-                    raise ValueError(
-                        'include can only be a maximum of one filter for '
-                        'ingress to Azure Blob/File Storage')
-            if source.exclude is not None:
-                raise ValueError(
-                    'exclude cannot be specified for ingress to Azure '
-                    'Blob/File Storage')
             thr = _azure_blob_storage_transfer(
                 settings.credentials_storage(
                     config, dest.storage_account_settings),
-                dst, source, eo)
+                dest.data_transfer, source)
             storage_threads.append(thr)
         else:
             raise RuntimeError(

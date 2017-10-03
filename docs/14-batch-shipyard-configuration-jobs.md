@@ -54,10 +54,13 @@ job_specifications:
       destination: null
     azure_storage:
     - storage_account_settings: mystorageaccount
-      container: jobcontainer
+      remote_path: jobcontainer/dir
+      local_path: $AZ_BATCH_NODE_SHARED_DIR/jobdata
+      is_file_share: false
+      exclude:
+      - '*.tmp'
       include:
       - jobdata*.bin
-      destination: $AZ_BATCH_NODE_SHARED_DIR/jobdata
       blobxfer_extra_options: null
   tasks:
   - task_factory:
@@ -114,10 +117,13 @@ job_specifications:
         seed:
       file:
         azure_storage:
-          container: somecontainer
-          exclude: []
-          include: []
           storage_account_settings: mystorageaccount
+          remote_path: container/dir
+          is_file_share: false
+          exclude:
+          - '*.tmp'
+          include:
+          - '*.png'
         task_filepath: file_name
       custom:
         input_args:
@@ -158,19 +164,25 @@ job_specifications:
         destination: null
       azure_storage:
       - storage_account_settings: mystorageaccount
-        container: taskcontainer
+        remote_path: taskcontainer/output
+        local_path: $AZ_BATCH_TASK_WORKING_DIR/taskdata
+        is_file_share: false
+        exclude:
+        - '*.tmp'
         include:
         - taskdata*.bin
-        destination: $AZ_BATCH_NODE_SHARED_DIR/taskdata
         blobxfer_extra_options: null
     output_data:
       azure_storage:
-      - blobxfer_extra_options:
-        container: output
+      - storage_account_settings: mystorageaccount
+        remote_path: output/dir
+        local_path: null
+        is_file_share: false
+        exclude:
+        - '*.tmp'
         include:
-        - '**/out*.dat'
-        source: null
-        storage_account_settings: mystorageaccount
+        - 'out*.dat'
+        blobxfer_extra_options: null
     remove_container_after_exit: true
     shm_size: 256m
     additional_docker_run_options: []
@@ -387,21 +399,18 @@ transferred again. This object currently supports `azure_batch` and
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials config.
-    * (required) `container` or `file_share` is required when downloading
-      from Azure Blob Storage or Azure File Storage, respectively.
-      `container` specifies which container to download from for Azure Blob
-      Storage while `file_share` specifies which file share to download from
-      for Azure File Storage. Only one of these properties can be specified
-      per `data_transfer` object.
-    * (optional) `include` property defines an optional include filter.
-      Although this property is an array, it is only allowed to have 1
-      maximum filter.
-    * (required) `destination` property defines where to place the
-      downloaded files on the host file system. Please note that you should
-      not specify a destination that is on a shared file system. If you
-      require ingressing to a shared file system location like a GlusterFS
-      volume, then use the global configuration `files` property and the
-      `data ingress` command.
+    * (required) `remote_path` is required when downloading from Azure
+      Storage. This path on Azure includes either the container or file
+      share path along with all virtual directories.
+    * (required) `local_path` is required when downloading from Azure
+      Storage. This specifies where the files should be downloaded to on
+      the compute node. If you require ingressing to a shared file system
+      location like a GlusterFS volume, then use the global configuration
+      `files` property and the `data ingress` command.
+    * (optional) `is_file_share` denotes if the `remote_path` is on a
+      file share. This defaults to `false`.
+    * (optional) `include` property defines optional include filters.
+    * (optional) `exclude` property defines optional exclude filters.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
 * (required) `tasks` is an array of tasks to add to the job.
@@ -465,13 +474,14 @@ transferred again. This object currently supports `azure_batch` and
       Please see the
       [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
       information.
-      * (required) `azure_storage` specifies the azure storage settings to
+      * (required) `azure_storage` specifies the Azure Storage settings to
         use for the file task factory.
         * (required) `storage_account_settings` is the storage account link to
           enumerate files from
-        * (required) `container` or `file_share` specifies either a container
-          or a file share to enumerate files from. These are mutually
-          exclusive.
+        * (required) `remote_path` is the remote Azure Storage path to
+          enumerate files from.
+        * (optional) `is_file_share` denotes if the `remote_path` is on a
+          file share. This defaults to `false`.
         * (optional) `include` are include filters
         * (optional) `exclude` are exclude filters
       * (required) `task_filepath` specifies how to place the file relative
@@ -571,24 +581,23 @@ transferred again. This object currently supports `azure_batch` and
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
         as defined in the credentials config.
-      * (required) `container` or `file_share` is required when downloading
-        from Azure Blob Storage or Azure File Storage, respectively.
-        `container` specifies which container to download from for Azure Blob
-        Storage while `file_share` specifies which file share to download from
-        for Azure File Storage. Only one of these properties can be specified
-        per `data_transfer` object.
-      * (optional) `include` property defines an optional include filter.
-        Although this property is an array, it is only allowed to have 1
-        maximum filter.
-      * (optional) `destination` property defines where to place the
-        downloaded files on the host file system. Unlike the job-level
-        version of `input_data`, this `destination` property can be ommitted.
-        If `destination` is not specified at this level, then files are
-        defaulted to download into `$AZ_BATCH_TASK_WORKING_DIR`. Please note
-        that you should not specify a destination that is on a shared file
-        system. If you require ingressing to a shared file system location
-        like a GlusterFS volume, then use the global configuration `files`
+      * (required) `remote_path` is required when downloading from Azure
+        Storage. This path on Azure includes either the container or file
+        share path along with all virtual directories.
+      * (required) `local_path` is required when downloading from Azure
+        Storage. This specifies where the files should be downloaded to on
+        the compute node. Unlike the job-level version of `input_data`,
+        this property can be ommitted. If `local_path` is not specified
+        at this level, then files are defaulted to download into
+        `$AZ_BATCH_TASK_WORKING_DIR`. Please note that you should not
+        specify a location that is on a shared file system. If you
+        require ingressing to a shared file system location like a
+        GlusterFS volume, then use the global configuration `files`
         property and the `data ingress` command.
+      * (optional) `is_file_share` denotes if the `remote_path` is on a
+        file share. This defaults to `false`.
+      * (optional) `include` property defines optional include filters.
+      * (optional) `exclude` property defines optional exclude filters.
       * (optional) `blobxfer_extra_options` are any extra options to pass to
         `blobxfer`.
   * (optional) `output_data` is an object containing data that should be
@@ -599,18 +608,17 @@ transferred again. This object currently supports `azure_batch` and
     * `azure_storage` contains the following members:
       * (required) `storage_account_settings` contains a storage account link
         as defined in the credentials config.
-      * (required) `container` or `file_share` is required when uploading to
-        Azure Blob Storage or Azure File Storage, respectively. `container`
-        specifies which container to upload to for Azure Blob Storage while
-        `file_share` specifies which file share to upload to for Azure File
-        Storage. Only one of these properties can be specified per
-        `data_transfer` object.
-      * (optional) `source` property defines which directory to upload to
-        Azure storage. If `source` is not specified, then `source` is
-        defaulted to `$AZ_BATCH_TASK_DIR`.
-      * (optional) `include` property defines an optional include filter.
-        Although this property is an array, it is only allowed to have 1
-        maximum filter.
+      * (required) `remote_path` is required when uploading to Azure
+        Storage. This path on Azure includes either the container or file
+        share path along with all virtual directories.
+      * (required) `local_path` is required when uploading from Azure
+        Storage. This specifies where the files should be uploaded from
+        the compute node to Azure Storage. If this property is not
+        specified, then `source` is defaulted to `$AZ_BATCH_TASK_DIR`.
+      * (optional) `is_file_share` denotes if the `remote_path` is on a
+        file share. This defaults to `false`.
+      * (optional) `include` property defines optional include filters.
+      * (optional) `exclude` property defines optional exclude filters.
       * (optional) `blobxfer_extra_options` are any extra options to pass to
         `blobxfer`.
   * (optional) `remove_container_after_exit` property specifies if the

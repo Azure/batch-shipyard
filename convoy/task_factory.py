@@ -46,6 +46,7 @@ except ImportError:  # pramga: no cover
 import azure.storage.blob as azureblob
 import azure.storage.file as azurefile
 # local imports
+from . import settings
 
 # global defines
 _DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
@@ -196,33 +197,22 @@ def _get_storage_entities(task_factory, storage_settings):
     :rtype: FileInfo
     :return: file info
     """
-    if (storage_settings.container is None and
-            storage_settings.file_share is None):
-        raise ValueError(
-            'container or file_share not specified for file:azure_storage '
-            'task_factory')
-    elif (storage_settings.container is not None and
-          storage_settings.file_share is not None):
-        raise ValueError(
-            'cannot specify both container and file_share at the same time '
-            'for file:azure_storage task_factory')
-    if storage_settings.container is not None:
-        # get task filepath
+    if not storage_settings.is_file_share:
         # create blob client
         blob_client = azureblob.BlockBlobService(
             account_name=storage_settings.storage_settings.account,
             account_key=storage_settings.storage_settings.account_key,
             endpoint_suffix=storage_settings.storage_settings.endpoint)
+        container = settings.data_container_from_remote_path(
+            None, rp=storage_settings.remote_path)
         # list blobs in container with include/exclude
-        blobs = blob_client.list_blobs(
-            container_name=storage_settings.container)
+        blobs = blob_client.list_blobs(container_name=container)
         for blob in blobs:
             if not _inclusion_check(
                     blob.name, storage_settings.include,
                     storage_settings.exclude):
                 continue
-            file_path_with_container = '{}/{}'.format(
-                storage_settings.container, blob.name)
+            file_path_with_container = '{}/{}'.format(container, blob.name)
             file_name = blob.name.split('/')[-1]
             file_name_no_extension = file_name.split('.')[0]
             if task_factory['file']['task_filepath'] == 'file_path':
@@ -243,11 +233,11 @@ def _get_storage_entities(task_factory, storage_settings):
             url = 'https://{}.blob.{}/{}/{}'.format(
                 storage_settings.storage_settings.account,
                 storage_settings.storage_settings.endpoint,
-                storage_settings.container,
+                container,
                 urlquote(blob.name))
             # create blob sas
             sas = blob_client.generate_blob_shared_access_signature(
-                storage_settings.container, blob.name,
+                container, blob.name,
                 permission=azureblob.BlobPermissions.READ,
                 expiry=datetime.datetime.utcnow() +
                 datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS))
@@ -261,21 +251,21 @@ def _get_storage_entities(task_factory, storage_settings):
                 file_name_no_extension=file_name_no_extension,
                 task_filepath=task_filepath,
             )
-    elif storage_settings.file_share is not None:
+    else:
         # create file share client
         file_client = azurefile.FileService(
             account_name=storage_settings.storage_settings.account,
             account_key=storage_settings.storage_settings.account_key,
             endpoint_suffix=storage_settings.storage_settings.endpoint)
+        file_share = settings.data_container_from_remote_path(
+            None, rp=storage_settings.remote_path)
         # list files in share with include/exclude
-        for file in _list_all_files_in_fileshare(
-                file_client, storage_settings.file_share):
+        for file in _list_all_files_in_fileshare(file_client, file_share):
             if not _inclusion_check(
                     file, storage_settings.include,
                     storage_settings.exclude):
                 continue
-            file_path_with_container = '{}/{}'.format(
-                storage_settings.file_share, file)
+            file_path_with_container = '{}/{}'.format(file_share, file)
             file_name = file.split('/')[-1]
             file_name_no_extension = file_name.split('.')[0]
             if task_factory['file']['task_filepath'] == 'file_path':
@@ -369,11 +359,11 @@ def generate_task(task, storage_settings):
                     {
                         'storage_account_settings':
                         storage_settings.storage_link_name,
-                        'file_share': storage_settings.file_share,
-                        'include': [file.file_path],
-                        'destination': '$AZ_BATCH_TASK_WORKING_DIR/{}'.format(
+                        'remote_path': file.file_path_with_container,
+                        'local_path': '$AZ_BATCH_TASK_WORKING_DIR/{}'.format(
                             file.task_filepath),
-                        'blobxfer_extra_options': '--no-computefilemd5',
+                        'is_file_share': True,
+                        'blobxfer_extra_options': '--rename',
                     }
                 )
             # transform command

@@ -4,9 +4,10 @@
 
 ### Added
 - Support for deploying compute nodes to an ARM Virtual Network with Batch
-Service Batch accounts
-- Support for deploying a compute node from an ARM Image resource
-- Support for multiple public and private container registries
+Service Batch accounts (#126)
+- Support for deploying custom image compute nodes from an ARM Image resource
+(#126)
+- Support for multiple public and private container registries (#127)
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
@@ -18,27 +19,33 @@ commandline.
 under both the global config `global_resources`.`docker_images` and jobs
 `task` array `docker_image` (or `image`).
 - **Breaking Change:** Docker private registries backed to Azure Storage blobs
-are not supported. This is not to be confused with the `Classic` Azure
-Container Registries which are still supported.
+are no longer supported. This is not to be confused with the `Classic` Azure
+Container Registries which are still supported. (#44)
 - **Breaking Change:** `docker_registry` property in the global config is
 no longer required. An `additional_registries` option is available for any
 additional registries that are not present from the `docker_images`
 array in `global_resources`.
+- **Breaking Change:** Data ingress/egress from/to Azure Storage along with
+`task_factory`:`file` has changed to accommodate `blobxfer 1.0.0` commandline
+and options. There are new expanded options available, including multiple
+`include` and `exclude` along with `remote_path` explicit specifications
+(instead of general `container` or `file_share`). Please see the appropriate
+global config, pool or job configuration docs for more information. (#47)
+- **Breaking Change:** `image_uris` in the `vm_configuration`:`custom_image`
+property of the pool configuration has been replaced with `arm_image_id`
+which is a reference to an ARM Image resource. Please see the custom image
+guide for more information.
 - **Breaking Change:** environment variables `SHIPYARD_CREDENTIALS_JSON`,
 `SHIPYARD_CONFIG_JSON`, `SHIPYARD_POOL_JSON`, `SHIPYARD_JOBS_JSON`, and
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
 `SHIPYARD_CONFIG_CONF`, `SHIPYARD_POOL_CONF`, `SHIPYARD_JOBS_CONF`, and
 `SHIPYARD_FS_CONF` respectively.
-- **Breaking Change:** `image_uris` in the `vm_configuration`:`custom_image`
-property of the pool configuration has been replaced with `arm_image_id`
-which is a reference to an ARM Image resource. Please see the custom image
-guide for more information.
 - `aad` can be specified at a "global" level in the credentials configuration
 file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.
 - `docker_image` is now preferred over the deprecated `image` property in
 the `task` array in the jobs configuration file
-- Update Docker to 17.09.0
+- Update Docker CE to 17.09.0
 
 ## [2.9.6] - 2017-10-03
 ### Added

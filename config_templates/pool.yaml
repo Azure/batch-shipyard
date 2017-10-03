@@ -46,12 +46,15 @@ pool_specification:
       job_id: jobonanotherpool
       task_id: mytask
     azure_storage:
-    - blobxfer_extra_options:
-      container: poolcontainer
-      destination: $AZ_BATCH_NODE_SHARED_DIR/pooldata
+    - storage_account_settings: mystorageaccount
+      remote_path: poolcontainer/dir
+      local_path: $AZ_BATCH_NODE_SHARED_DIR/pooldata
+      is_file_share: false
+      exclude:
+      - '*.tmp'
       include:
       - pooldata*.bin
-      storage_account_settings: mystorageaccount
+      blobxfer_extra_options: null
   resource_files:
   - blob_source: https://some.url
     file_mode: '0750'

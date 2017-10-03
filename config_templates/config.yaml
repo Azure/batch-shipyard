@@ -73,14 +73,17 @@ global_resources:
       - '*.dat'
       path: /some/local/path/dir
   - destination:
-      data_transfer:
-        container: mycontainer
-        blobxfer_extra_options: --no-computefilemd5
       storage_account_settings: mystorageaccount
+      data_transfer:
+        remote_path: container/dir
+        is_file_share: false
+        blobxfer_extra_options: null
     source:
+      exclude:
+      - '*.tmp'
       include:
       - '*.bin'
-      path: /some/local/path/bound/for/blob
+      path: /some/local/path/bound/for/storage
   - destination:
       data_transfer:
         method: rsync+ssh
@@ -89,6 +92,8 @@ global_resources:
         rsync_extra_options: -v
       relative_destination_path: relpath/on/host/test2
     source:
-      exclude: []
-      include: []
+      exclude:
+      - '*.tmp'
+      include:
+      - '*.bin'
       path: /another/local/path/dir

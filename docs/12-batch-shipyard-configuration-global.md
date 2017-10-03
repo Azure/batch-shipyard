@@ -80,14 +80,17 @@ global_resources:
       - '*.dat'
       path: /some/local/path/dir
   - destination:
-      data_transfer:
-        container: mycontainer
-        blobxfer_extra_options: --no-computefilemd5
       storage_account_settings: mystorageaccount
+      data_transfer:
+        remote_path: container/dir
+        is_file_share: false
+        blobxfer_extra_options: null
     source:
+      exclude:
+      - '*.tmp'
       include:
       - '*.bin'
-      path: /some/local/path/bound/for/blob
+      path: /some/local/path/bound/for/storage
   - destination:
       data_transfer:
         method: rsync+ssh
@@ -96,8 +99,10 @@ global_resources:
         rsync_extra_options: -v
       relative_destination_path: relpath/on/host/test2
     source:
-      exclude: []
-      include: []
+      exclude:
+      - '*.tmp'
+      include:
+      - '*.bin'
       path: /another/local/path/dir
 ```
 
@@ -197,15 +202,12 @@ This property is required.
       [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
       where only files matching a filter are included in the data transfer.
       Filters specified in `include` have precedence over `exclude` described
-      next. `include` can only have a maximum of 1 filter for ingress to Azure
-      Blob Storage. In this example, all files ending in `.dat` are ingressed.
+      next.
     * (optional) `exclude` is an array of
       [Unix shell-style wildcard filters](https://docs.python.org/3.5/library/fnmatch.html)
       where files matching a filter are excluded from the data transfer.
-      Filters specified in `include` have precedence over filters specified in
-      `exclude`. `exclude` cannot be specified for ingress into Azure Blob
-      Storage. In this example, all files ending in `.bak` are skipped for
-      ingress.
+      Filters specified in `exclude` have precedence over filters specified in
+      `include`.
   * (required) `destination` property contains the following members:
     * (required or optional) `shared_data_volume` or `storage_account_settings`
       for data ingress to a GlusterFS volume or Azure Blob or File Storage. If
@@ -282,16 +284,16 @@ This property is required.
       ingress, [blobxfer](https://github.com/Azure/blobxfer) is invoked. The
       following list contains members for Azure Blob or File Storage ingress
       when a storage account link is provided for `storage_account_settings`:
-      * (required) `container` or `file_share` is required when uploading to
-        Azure Blob Storage or Azure File Storage, respectively. `container`
-        specifies which container to upload to for Azure Blob Storage while
-        `file_share` specifies which file share to upload to for Azure File
-        Storage. Only one of these properties can be specified per
-        `data_transfer` object. The container or file share need not be
-        created beforehand.
+      * (required) `remote_path` is required when uploading to Azure Storage.
+        This property is the full path to the storage resource, including
+        the container or file share name and all virtual directories.
+        The container or file share need not be created beforehand.
+      * (optional) `is_file_share` specifies if the destination is a Azure
+        File Share rather than an Azure Blob Container. The default is
+        `false`.
       * (optional) `blobxfer_extra_options` are any extra options to pass to
-        `blobxfer`. In the example above, `--no-computefilemd5` will force
-        `blobxfer` to skip MD5 calculation on files ingressed.
+        `blobxfer`. Please run `blobxfer -h` to see available extra options
+        that may be pertinent to your scenario.
   * (optional) `docker_volumes` property can consist of two
     different types of volumes: `data_volumes` and `shared_data_volumes`.
     `data_volumes` can be of two flavors depending upon if `host_path` is

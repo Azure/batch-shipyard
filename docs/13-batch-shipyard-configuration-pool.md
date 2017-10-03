@@ -54,12 +54,15 @@ pool_specification:
       job_id: jobonanotherpool
       task_id: mytask
     azure_storage:
-    - blobxfer_extra_options:
-      container: poolcontainer
-      destination: $AZ_BATCH_NODE_SHARED_DIR/pooldata
+    - storage_account_settings: mystorageaccount
+      remote_path: poolcontainer/dir
+      local_path: $AZ_BATCH_NODE_SHARED_DIR/pooldata
+      is_file_share: false
+      exclude:
+      - '*.tmp'
       include:
       - pooldata*.bin
-      storage_account_settings: mystorageaccount
+      blobxfer_extra_options: null
   resource_files:
   - blob_source: https://some.url
     file_mode: '0750'
@@ -258,21 +261,20 @@ data defined in `files` prior to pool creation and disable the option above
   * `azure_storage` contains the following members:
     * (required) `storage_account_settings` contains a storage account link
       as defined in the credentials config.
-    * (required) `container` or `file_share` is required when downloading
-      from Azure Blob Storage or Azure File Storage, respectively.
-      `container` specifies which container to download from for Azure Blob
-      Storage while `file_share` specifies which file share to download from
-      for Azure File Storage. Only one of these properties can be specified
-      per `data_transfer` object.
-    * (optional) `include` property defines an optional include filter.
-      Although this property is an array, it is only allowed to have 1
-      maximum filter.
-    * (required) `destination` property defines where to place the
-      downloaded files on the host file system. Please note that you should
-      not specify a destination that is on a shared file system. If you
+    * (required) `remote_path` is required when downloading from Azure
+      Storage. This path on Azure includes either the container or file
+      share path along with all virtual directories.
+    * (required) `local_path` is required when downloading from Azure
+      Storage. This specifies where the files should be downloaded to on
+      the compute node. Please note that you should not specify a
+      destination that is on a shared file system. If you
       require ingressing to a shared file system location like a GlusterFS
       volume, then use the global configuration `files` property and the
       `data ingress` command.
+    * (optional) `is_file_share` denotes if the `remote_path` is on a
+      file share. This defaults to `false`.
+    * (optional) `include` property defines optional include filters.
+    * (optional) `exclude` property defines optional exclude filters.
     * (optional) `blobxfer_extra_options` are any extra options to pass to
       `blobxfer`.
 * (optional) `resource_files` is an array of resource files that should be

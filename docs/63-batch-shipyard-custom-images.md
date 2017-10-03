@@ -12,10 +12,10 @@ still want to customize the host compute node environment with particular
 versions of software such as the Docker Host engine or pre-install and embed
 certain software.
 
-Azure Batch only supports creating compute nodes through ARM Image resources.
-You can create these images using existing page blob VHDs or exporting
-managed disks. You must create the Image in the same subscription and
-region as your Batch account.
+Azure Batch only supports creating compute nodes from custom images through
+ARM Image resources. You can create ARM Images using existing page blob VHDs
+or exporting managed disks. You must create the Image in the same subscription
+and region as your Batch account.
 
 You can use [blobxfer](https://github.com/Azure/blobxfer) or
 [AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/)

@@ -203,8 +203,8 @@ DataTransferSettings = collections.namedtuple(
     'DataTransferSettings', [
         'method', 'ssh_private_key', 'scp_ssh_extra_options',
         'rsync_extra_options', 'split_files_megabytes',
-        'max_parallel_transfers_per_node',
-        'container', 'file_share', 'blobxfer_extra_options',
+        'max_parallel_transfers_per_node', 'is_file_share',
+        'remote_path', 'blobxfer_extra_options',
     ]
 )
 JobScheduleSettings = collections.namedtuple(
@@ -230,8 +230,8 @@ UserIdentitySettings = collections.namedtuple(
 )
 TaskFactoryStorageSettings = collections.namedtuple(
     'TaskFactoryStorageSettings', [
-        'storage_settings', 'storage_link_name', 'container', 'file_share',
-        'include', 'exclude',
+        'storage_settings', 'storage_link_name', 'remote_path',
+        'is_file_share', 'include', 'exclude',
     ]
 )
 TaskSettings = collections.namedtuple(
@@ -1636,22 +1636,15 @@ def files_source_settings(conf):
     :rtype: SourceSettings
     :return: source settings
     """
-    path = conf['source']['path']
+    source = _kv_read_checked(conf, 'source', default={})
+    path = _kv_read_checked(source, 'path')
     if util.is_none_or_empty(path):
         raise ValueError('global resource files path is invalid')
-    try:
-        include = conf['source']['include']
-        if util.is_none_or_empty(include):
-            raise KeyError()
-    except KeyError:
-        include = None
-    try:
-        exclude = conf['source']['exclude']
-        if util.is_none_or_empty(exclude):
-            raise KeyError()
-    except KeyError:
-        exclude = None
-    return SourceSettings(path=path, include=include, exclude=exclude)
+    return SourceSettings(
+        path=path,
+        include=_kv_read_checked(source, 'include'),
+        exclude=_kv_read_checked(source, 'exclude'),
+    )
 
 
 def files_destination_settings(fdict):
@@ -1678,9 +1671,9 @@ def files_destination_settings(fdict):
                 rdp = None
     except KeyError:
         rdp = None
-    try:
-        method = conf['data_transfer']['method'].lower()
-    except KeyError:
+    data_transfer = _kv_read_checked(conf, 'data_transfer', default={})
+    method = _kv_read_checked(data_transfer, 'method')
+    if util.is_none_or_empty(method):
         if storage is None:
             raise RuntimeError(
                 'no transfer method specified for data transfer of '
@@ -1688,20 +1681,14 @@ def files_destination_settings(fdict):
                     files_source_settings(fdict).path, shared, rdp))
         else:
             method = None
+    else:
+        method = method.lower()
+    ssh_eo = _kv_read_checked(
+        data_transfer, 'scp_ssh_extra_options', default='')
+    rsync_eo = _kv_read_checked(
+        data_transfer, 'rsync_extra_options', default='')
     try:
-        ssh_eo = conf['data_transfer']['scp_ssh_extra_options']
-        if ssh_eo is None:
-            raise KeyError()
-    except KeyError:
-        ssh_eo = ''
-    try:
-        rsync_eo = conf['data_transfer']['rsync_extra_options']
-        if rsync_eo is None:
-            raise KeyError()
-    except KeyError:
-        rsync_eo = ''
-    try:
-        mpt = conf['data_transfer']['max_parallel_transfers_per_node']
+        mpt = data_transfer['max_parallel_transfers_per_node']
         if mpt is not None and mpt <= 0:
             raise KeyError()
     except KeyError:
@@ -1710,7 +1697,7 @@ def files_destination_settings(fdict):
     if mpt is None:
         mpt = 1
     try:
-        split = conf['data_transfer']['split_files_megabytes']
+        split = data_transfer['split_files_megabytes']
         if split is not None and split <= 0:
             raise KeyError()
         # convert to bytes
@@ -1718,36 +1705,17 @@ def files_destination_settings(fdict):
             split <<= 20
     except KeyError:
         split = None
-    ssh_private_key = _kv_read_checked(
-        conf['data_transfer'], 'ssh_private_key')
+    ssh_private_key = _kv_read_checked(data_transfer, 'ssh_private_key')
     if util.is_not_empty(ssh_private_key):
         ssh_private_key = pathlib.Path(ssh_private_key)
-    try:
-        container = conf['data_transfer']['container']
-        if util.is_none_or_empty(container):
-            raise KeyError()
-    except KeyError:
-        container = None
-    try:
-        fshare = conf['data_transfer']['file_share']
-        if util.is_none_or_empty(fshare):
-            raise KeyError()
-    except KeyError:
-        fshare = None
-    try:
-        bx_eo = conf['data_transfer']['blobxfer_extra_options']
-        if bx_eo is None:
-            bx_eo = ''
-    except KeyError:
-        bx_eo = ''
     return DestinationSettings(
         storage_account_settings=storage,
         shared_data_volume=shared,
         relative_destination_path=rdp,
         data_transfer=DataTransferSettings(
-            container=container,
-            file_share=fshare,
-            blobxfer_extra_options=bx_eo,
+            is_file_share=data_is_file_share(data_transfer),
+            remote_path=data_remote_path(data_transfer),
+            blobxfer_extra_options=data_blobxfer_extra_options(data_transfer),
             method=method,
             ssh_private_key=ssh_private_key,
             scp_ssh_extra_options=ssh_eo,
@@ -1961,36 +1929,65 @@ def data_storage_account_settings(conf):
     return conf['storage_account_settings']
 
 
-def data_container(conf):
+def data_remote_path(conf):
     # type: (dict) -> str
-    """Retrieve input data blob container name
+    """Retrieve remote path on Azure Storage for data transfer
     :param dict conf: configuration object
     :rtype: str
-    :return: container name
+    :return: remote path
     """
-    try:
-        container = conf['container']
-        if util.is_none_or_empty(container):
-            raise KeyError()
-    except KeyError:
-        container = None
-    return container
+    return _kv_read_checked(conf, 'remote_path')
 
 
-def data_file_share(conf):
-    # type: (dict) -> str
-    """Retrieve input data file share name
+def data_container_from_remote_path(conf, rp=None):
+    # type: (dict, str) -> str
+    """Get Container or File share name from remote path
     :param dict conf: configuration object
+    :param str rp: remote path
     :rtype: str
-    :return: file share name
+    :return: container/fshare name
+    """
+    if rp is None:
+        rp = data_remote_path(conf)
+    if util.is_none_or_empty(rp):
+        raise ValueError(
+            'cannot derive container name from invalid remote path')
+    return rp.split('/')[0]
+
+
+def data_local_path(conf, on_task, task_wd=True):
+    # type: (dict, bool) -> str
+    """Retrieve local path for data transfer
+    :param dict conf: configuration object
+    :param bool on_task: if input data is on the task spec
+    :param bool task_wd: if path is not specified use task working dir, else
+        use task dir
+    :rtype: str
+    :return: local path
     """
     try:
-        fshare = conf['file_share']
-        if util.is_none_or_empty(fshare):
+        dst = conf['local_path']
+        if util.is_none_or_empty(dst):
             raise KeyError()
     except KeyError:
-        fshare = None
-    return fshare
+        if on_task:
+            if task_wd:
+                dst = '$AZ_BATCH_TASK_WORKING_DIR'
+            else:
+                dst = '$AZ_BATCH_TASK_DIR'
+        else:
+            raise
+    return dst
+
+
+def data_is_file_share(conf):
+    # type: (dict) -> bool
+    """Retrieve if data transfer originates/destined for file share
+    :param dict conf: configuration object
+    :rtype: bool
+    :return: is Azure file share
+    """
+    return _kv_read(conf, 'is_file_share', default=False)
 
 
 def data_blobxfer_extra_options(conf):
@@ -2000,51 +1997,33 @@ def data_blobxfer_extra_options(conf):
     :rtype: str
     :return: blobxfer extra options
     """
-    try:
-        eo = conf['blobxfer_extra_options']
-        if eo is None:
-            eo = ''
-    except KeyError:
-        eo = ''
-    return eo
+    return _kv_read_checked(conf, 'blobxfer_extra_options', default='')
 
 
-def data_include(conf, one_allowable):
-    # type: (dict, bool) -> str
-    """Retrieve input data include fileters
+def _data_filters(conf, name):
+    # type: (dict) -> str
+    """Retrieve data filters
     :param dict conf: configuration object
-    :param bool one_allowable: if only one include filter is allowed
+    :param str name: include or exclude
+    :rtype: str
+    :return: filters joined by ;
+    """
+    filters = _kv_read_checked(conf, name)
+    if filters is None:
+        filters = ''
+    else:
+        filters = ';'.join(filters)
+    return filters
+
+
+def data_include(conf):
+    # type: (dict) -> str
+    """Retrieve input data include filters
+    :param dict conf: configuration object
     :rtype: str
     :return: include filters
     """
-    if one_allowable:
-        try:
-            include = conf['include']
-            if include is not None:
-                if len(include) == 0:
-                    include = ''
-                elif len(include) == 1:
-                    include = include[0]
-                else:
-                    raise ValueError(
-                        'include for input_data from {} cannot exceed '
-                        '1 filter'.format(data_storage_account_settings(conf)))
-            else:
-                include = ''
-        except KeyError:
-            include = ''
-    else:
-        try:
-            include = conf['include']
-            if include is not None and len(include) == 0:
-                include = ''
-            else:
-                include = ';'.join(include)
-        except KeyError:
-            include = ''
-        if include is None:
-            include = ''
-    return include
+    return _data_filters(conf, 'include')
 
 
 def data_exclude(conf):
@@ -2054,37 +2033,7 @@ def data_exclude(conf):
     :rtype: str
     :return: exclude filters
     """
-    try:
-        exclude = conf['exclude']
-        if exclude is not None and len(exclude) == 0:
-            exclude = ''
-        else:
-            exclude = ';'.join(exclude)
-    except KeyError:
-        exclude = ''
-    if exclude is None:
-        exclude = ''
-    return exclude
-
-
-def input_data_destination(conf, on_task):
-    # type: (dict, bool) -> str
-    """Retrieve input data destination
-    :param dict conf: configuration object
-    :param bool on_task: if input data is on the task spec
-    :rtype: str
-    :return: destination
-    """
-    try:
-        dst = conf['destination']
-        if util.is_none_or_empty(dst):
-            raise KeyError()
-    except KeyError:
-        if on_task:
-            dst = '$AZ_BATCH_TASK_WORKING_DIR'
-        else:
-            raise
-    return dst
+    return _data_filters(conf, 'exclude')
 
 
 def input_data_job_id(conf):
@@ -2105,22 +2054,6 @@ def input_data_task_id(conf):
     :return: task id
     """
     return conf['task_id']
-
-
-def output_data_source(conf):
-    # type: (dict) -> str
-    """Retrieve output data source
-    :param dict conf: configuration object
-    :rtype: str
-    :return: source
-    """
-    try:
-        src = conf['source']
-        if util.is_none_or_empty(src):
-            raise KeyError()
-    except KeyError:
-        src = '$AZ_BATCH_TASK_DIR'
-    return src
 
 
 # JOBS SETTINGS
@@ -2184,8 +2117,8 @@ def job_tasks(config, conf):
                     storage_settings=credentials_storage(
                         config, data_storage_account_settings(az)),
                     storage_link_name=az['storage_account_settings'],
-                    container=data_container(az),
-                    file_share=data_file_share(az),
+                    remote_path=data_remote_path(az),
+                    is_file_share=data_is_file_share(az),
                     include=_kv_read_checked(az, 'include'),
                     exclude=_kv_read_checked(az, 'exclude'),
                 )

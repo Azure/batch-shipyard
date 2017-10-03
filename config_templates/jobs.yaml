@@ -46,10 +46,13 @@ job_specifications:
       destination: null
     azure_storage:
     - storage_account_settings: mystorageaccount
-      container: jobcontainer
+      remote_path: jobcontainer/dir
+      local_path: $AZ_BATCH_NODE_SHARED_DIR/jobdata
+      is_file_share: false
+      exclude:
+      - '*.tmp'
       include:
       - jobdata*.bin
-      destination: $AZ_BATCH_NODE_SHARED_DIR/jobdata
       blobxfer_extra_options: null
   tasks:
   - task_factory:
@@ -106,10 +109,13 @@ job_specifications:
         seed:
       file:
         azure_storage:
-          container: somecontainer
-          exclude: []
-          include: []
           storage_account_settings: mystorageaccount
+          remote_path: container/dir
+          is_file_share: false
+          exclude:
+          - '*.tmp'
+          include:
+          - '*.png'
         task_filepath: file_name
       custom:
         input_args:
@@ -150,19 +156,25 @@ job_specifications:
         destination: null
       azure_storage:
       - storage_account_settings: mystorageaccount
-        container: taskcontainer
+        remote_path: taskcontainer/output
+        local_path: $AZ_BATCH_TASK_WORKING_DIR/taskdata
+        is_file_share: false
+        exclude:
+        - '*.tmp'
         include:
         - taskdata*.bin
-        destination: $AZ_BATCH_NODE_SHARED_DIR/taskdata
         blobxfer_extra_options: null
     output_data:
       azure_storage:
-      - blobxfer_extra_options:
-        container: output
+      - storage_account_settings: mystorageaccount
+        remote_path: output/dir
+        local_path: null
+        is_file_share: false
+        exclude:
+        - '*.tmp'
         include:
-        - '**/out*.dat'
-        source: null
-        storage_account_settings: mystorageaccount
+        - 'out*.dat'
+        blobxfer_extra_options: null
     remove_container_after_exit: true
     shm_size: 256m
     additional_docker_run_options: []
