@@ -15,6 +15,8 @@ commandline.
 - Virtual Network guide
 
 ### Changed
+- **Breaking Change:** Docker image tag for the CLI has been renamed to
+`alfpark/batch-shipyard:latest-cli`.
 - **Breaking Change:** Fully qualified Docker image names are now required
 under both the global config `global_resources`.`docker_images` and jobs
 `task` array `docker_image` (or `image`).

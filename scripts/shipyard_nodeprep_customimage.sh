@@ -315,6 +315,7 @@ echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "Block on images: $block"
+echo ""
 
 # check sdb1 mount
 check_for_buggy_ntfs_mount
@@ -440,8 +441,8 @@ fi
 
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
-docker_pull_image alfpark/batch-shipyard:tfm-$version
-docker_pull_image alfpark/batch-shipyard:rjm-$version
+docker_pull_image alfpark/batch-shipyard:${version}-tfm
+docker_pull_image alfpark/batch-shipyard:${version}-rjm
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
@@ -483,14 +484,14 @@ p2p=$p2p
 EOF
 chmod 600 $envfile
 # pull image
-docker_pull_image alfpark/batch-shipyard:cascade-$version
+docker_pull_image alfpark/batch-shipyard:${version}-cascade
 # launch container
 docker run $detached --net=host --env-file $envfile \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
     -w $AZ_BATCH_TASK_WORKING_DIR \
     -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-    alfpark/batch-shipyard:cascade-$version &
+    alfpark/batch-shipyard:${version}-cascade &
 cascadepid=$!
 
 # if not in p2p mode, then wait for cascade exit

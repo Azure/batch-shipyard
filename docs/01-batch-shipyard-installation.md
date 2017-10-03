@@ -290,7 +290,7 @@ Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
 ## <a name="docker-install"></a>Batch Shipyard CLI Installation via Docker
-If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
+If using the [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then all of the required software is bundled in the image
 itself, however, you will need an installation of the Docker engine on
 your machine. More information on installing Docker to your local machine
@@ -298,7 +298,7 @@ can be found [here](https://www.docker.com/products/overview).
 
 To install:
 ```shell
-docker pull alfpark/batch-shipyard:cli-latest
+docker pull alfpark/batch-shipyard:latest-cli
 ```
 This will pull the cli Docker image of batch-shipyard to your local machine.
 You are now ready to execute it with `docker run`. Please see the

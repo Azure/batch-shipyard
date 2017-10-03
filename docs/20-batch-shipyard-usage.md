@@ -1,7 +1,7 @@
 # Batch Shipyard Usage
 This page contains in-depth details on how to use the Batch Shipyard tool.
 Please see the [Batch Shipyard Docker Image CLI](#docker-cli) section for
-information regarding how to use the `alfpark/batch-shipyard:cli-latest`
+information regarding how to use the `alfpark/batch-shipyard:latest-cli`
 Docker image if not invoking the Python script directly.
 
 ## Batch Shipyard Invocation
@@ -608,11 +608,11 @@ task `task1` from a live compute node. Because all portions of the
 `--filespec` option are specified, the tool will not prompt for any input.
 
 ## <a name="docker-cli"></a>Batch Shipyard Docker Image CLI Invocation
-If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpark/batch-shipyard)
+If using the [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
 Docker image, then you would invoke the tool as:
 
 ```shell
-docker run --rm -it alfpark/batch-shipyard:cli-latest \
+docker run --rm -it alfpark/batch-shipyard:latest-cli \
     <command> <subcommand> <options...>
 ```
 
@@ -631,7 +631,7 @@ as:
 docker run --rm -it \
     -v /home/user/batch-shipyard-configs:/configs \
     -e SHIPYARD_CONFIGDIR=/configs \
-    alfpark/batch-shipyard:cli-latest \
+    alfpark/batch-shipyard:latest-cli \
     <command> <subcommand> <options...>
 ```
 

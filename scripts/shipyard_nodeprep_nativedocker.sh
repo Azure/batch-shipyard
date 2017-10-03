@@ -274,6 +274,7 @@ echo "Encrypted: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
+echo ""
 
 # check sdb1 mount
 check_for_buggy_ntfs_mount
@@ -436,8 +437,8 @@ fi
 
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
-docker_pull_image alfpark/batch-shipyard:tfm-$version
-docker_pull_image alfpark/batch-shipyard:rjm-$version
+docker_pull_image alfpark/batch-shipyard:${version}-tfm
+docker_pull_image alfpark/batch-shipyard:${version}-rjm
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
