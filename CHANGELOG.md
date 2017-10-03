@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [2.9.6] - 2017-10-03
+### Added
+- Migrate to Read the Docs for [documentation](http://batch-shipyard.readthedocs.io/en/latest/)
+
 ### Fixed
 - RemoteFS disk attach fixes
 - Nvidia docker volume mount check
@@ -861,7 +865,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.5...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.6...HEAD
+[2.9.6]: https://github.com/Azure/batch-shipyard/compare/2.9.5...2.9.6
 [2.9.5]: https://github.com/Azure/batch-shipyard/compare/2.9.4...2.9.5
 [2.9.4]: https://github.com/Azure/batch-shipyard/compare/2.9.3...2.9.4
 [2.9.3]: https://github.com/Azure/batch-shipyard/compare/2.9.2...2.9.3

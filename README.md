@@ -95,16 +95,14 @@ as a Docker image:
 Please see [the installation guide](https://github.com/Azure/batch-shipyard/blob/master/docs/01-batch-shipyard-installation.md)
 for more information regarding installation and requirements.
 
-## Documentation
+## Documentation and Recipes
 Please refer to the
-[Batch Shipyard Guide](https://github.com/Azure/batch-shipyard/blob/master/docs)
-for a complete primer on concepts, usage and a quickstart guide.
+[Batch Shipyard Documentation on Read the Docs](http://batch-shipyard.readthedocs.io/en/latest/).
 
-Please visit the
+Visit the
 [Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
-for various sample Docker workloads using Azure Batch and Batch Shipyard
-after you have completed the introductory sections of the Batch Shipyard
-Guide.
+section for various sample Docker workloads using Azure Batch and Batch
+Shipyard.
 
 ## Batch Shipyard Compute Node OS Support
 Batch Shipyard is currently compatible with supported Marketplace Linux VMs

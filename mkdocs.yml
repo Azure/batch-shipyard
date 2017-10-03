@@ -1,0 +1,45 @@
+site_name: Batch Shipyard
+site_description: Azure Batch Shipyard
+site_url: https://github.com/Azure/batch-shipyard
+repo_url: https://github.com/Azure/batch-shipyard
+theme: readthedocs
+
+pages:
+- Home: index.md
+- Introduction: 00-introduction.md
+- Installation and Quickstart:
+  - Installation: 01-batch-shipyard-installation.md
+  - Quickstart: 02-batch-shipyard-quickstart.md
+  - From Scratch: 05-batch-shipyard-from-scratch-step-by-step.md
+- Configuration:
+  - Overview: 10-batch-shipyard-configuration.md
+  - Credentials: 11-batch-shipyard-configuration-credentials.md
+  - Global: 12-batch-shipyard-configuration-global.md
+  - Pool: 13-batch-shipyard-configuration-pool.md
+  - Jobs: 14-batch-shipyard-configuration-jobs.md
+  - RemoteFS: 15-batch-shipyard-configuration-fs.md
+- CLI Commands and Usage: 20-batch-shipyard-usage.md
+- In-Depth Feature Guides:
+  - Autoscale: 30-batch-shipyard-autoscale.md
+  - Task Factory: 35-batch-shipyard-task-factory.md
+  - Azure Functions and Batch Shipyard: 60-batch-shipyard-site-extension.md
+  - Custom Images for Host Compute Nodes: 63-batch-shipyard-custom-images.md
+  - Remote Filesystems: 65-batch-shipyard-remote-fs.md
+  - Data Movement: 70-batch-shipyard-data-movement.md
+  - Azure KeyVault for Credential Management: 74-batch-shipyard-azure-keyvault.md
+  - Credential Encryption: 75-batch-shipyard-credential-encryption.md
+  - Multi-instance (MPI) Tasks: 80-batch-shipyard-multi-instance-tasks.md
+  - Interactive SSH and Tunneling: 85-batch-shipyard-ssh-docker-tunnel.md
+- Other Guides:
+  - Low Priority Compute Node Considerations: 95-low-priority-considerations.md
+  - Troubleshooting Guide: 96-troubleshooting-guide.md
+  - FAQ: 97-faq.md
+  - Current Limitations: 99-current-limitations.md
+- Contributing Recipes: 98-contributing-recipes.md
+- Change Log: CHANGELOG.md
+
+markdown_extensions:
+- admonition
+- codehilite
+- fenced_code
+- sane_lists
