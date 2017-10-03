@@ -128,8 +128,9 @@ Batch Shipyard will install and configure the Azure File Docker Volume
 Driver for any Azure File shared data volumes that are specified.
 
 ### Packer Samples
-The [contrib](../contrib) area of the repository contain example `packer`
-scripts to create a custom image from an existing Marketplace platform image.
+The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
+area of the repository contain example `packer` scripts to create a custom
+image from an existing Marketplace platform image.
 
 ## Allocating a Pool with a Custom Image
 When allocating a compute pool with a custom image, you must ensure the

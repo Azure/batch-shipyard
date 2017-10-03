@@ -15,7 +15,7 @@ Batch Shipyard and Docker-specific configuration settings
 Batch Shipyard pool configuration
 4. [Jobs](14-batch-shipyard-configuration-jobs.md) -
 Batch Shipyard jobs and tasks configuration
-5. [FS](15-batch-shipyard-configuration-fs.md) -
+5. [RemoteFS](15-batch-shipyard-configuration-fs.md) -
 Batch Shipyard remote filesystem configuration. This configuration is
 entirely optional unless using the remote filesystem capabilities of
 Batch Shipyard.
@@ -31,11 +31,12 @@ are hierarchical in nature. If the parent is an optional property but a child
 is marked required, then the child property need only be specified if the
 parent is specified.
 
-Example config templates can be found in [this directory](../config\_templates)
+Example config templates can be found in
+[this directory](https://github.com/Azure/batch-shipyard/tree/master/config_templates)
 of the repository. Note that templates contain every possible property and
 may be invalid if specified as such. They must be modified for your execution
-scenario. All [sample recipe](../recipes) also have a set of configuration
-files that can be modified to fit your needs.
+scenario. All [sample recipe](https://github.com/Azure/batch-shipyard/tree/master/recipes)
+also have a set of configuration files that can be modified to fit your needs.
 
 ## Batch Shipyard Usage
 Continue on to [Batch Shipyard Usage](20-batch-shipyard-usage.md).

@@ -210,5 +210,6 @@ config files.
 all of the actions available with commandline interface.
 
 #### Recipes
-Please visit the [recipes directory](../recipes) for more sample configuration
-files for different types of jobs.
+Please visit the
+[recipes directory](https://github.com/Azure/batch-shipyard/tree/master/recipes)
+for more sample configuration files for different types of jobs.

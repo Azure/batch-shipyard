@@ -100,4 +100,6 @@ There are sample recipes which showcase MPI on Batch Shipyard, please
 reference those as examples.
 
 ## Existing Recipes
-Please see [this directory](../recipes) for existing recipes.
+Please see
+[this directory](https://github.com/Azure/batch-shipyard/tree/master/recipes)
+for existing recipes.

@@ -135,7 +135,7 @@ significant difference in performance between the two, please visit
 for more information. The second step is outlined in the next section.
 
 Note that `files` is an array, therefore, Batch Shipyard accepts any number
-of source/destination pairings and even mixed GlusterFS and Azure Storage
+of `source`/`destination` pairings and even mixed GlusterFS and Azure Storage
 ingress objects.
 
 ### From Azure Storage (Blob and File)
@@ -238,15 +238,16 @@ progress monitoring via a file or tailing an output.
 If you need to egress data from a compute node and persist it to Azure
 Storage, Batch Shipyard provides the `output_data` property on tasks of a
 job in `job_specifications`. `local_path` defines which directory within the
-task directory to egress data from; if nothing is specified for `source` then
-the default is `$AZ_BATCH_TASK_DIR` (which contains files like `stdout.txt`
-and `stderr.txt`). Note that you can specify a source originating from the
-shared directory here as well, e.g., `$AZ_BATCH_NODE_SHARED_DIR`, there is
-no restriction that limits you to just the task directory. `include` defines
-an optional include filter to be applied across the `source` files. Finally,
-define the `remote_path` property to egress to the path specified, and
-optionally `is_file_share` set to `true` if you wish to egress to
-Azure File Storage instead of Azure Blob.
+task directory to egress data from; if nothing is specified for `local_path`
+then the default is `$AZ_BATCH_TASK_DIR` (which contains files like
+`stdout.txt` and `stderr.txt`). Note that you can specify a source
+originating from the shared directory here as well, e.g.,
+`$AZ_BATCH_NODE_SHARED_DIR`, there is no restriction that limits you to
+just the task directory. `include` defines an optional include filter to
+be applied across the `source` files. Finally, define the `remote_path`
+property to egress to the path specified, and optionally `is_file_share`
+set to `true` if you wish to egress to Azure File Storage instead of
+Azure Blob.
 
 ## Configuration and Usage Documentation
 Please see [this page](10-batch-shipyard-configuration.md) for a full

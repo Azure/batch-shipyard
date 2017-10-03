@@ -103,6 +103,7 @@ These options must be specified after the command and sub-command. These are:
   --aad-cert-thumbprint TEXT      Azure Active Directory certificate SHA1
                                   thumbprint
 ```
+
 * `-y` or `--yes` is to assume yes for all confirmation prompts
 * `--show-config` will output the merged configuration prior to execution
 * `-v` or `--verbose` is for verbose output
@@ -112,13 +113,13 @@ their switch. For example, if you have a directory named `config` and under
 that directory you have the files `credentials.yaml`, `config.yaml`,
 `pool.yaml` and `jobs.yaml`, then you can use this argument instead of the
 following:
-  * `--credentials path/to/credentials.yaml` is required for all actions
-    except for a select few `keyvault` commands.
-  * `--config path/to/config.yaml` is required for all actions.
-  * `--pool path/to/pool.yaml` is required for most actions.
-  * `--jobs path/to/jobs.yaml` is required for job-related actions.
-  * `--fs path/to/fs.yaml` is required for fs-related actions and some pool
-    actions.
+    * `--credentials path/to/credentials.yaml` is required for all actions
+      except for a select few `keyvault` commands.
+    * `--config path/to/config.yaml` is required for all actions.
+    * `--pool path/to/pool.yaml` is required for most actions.
+    * `--jobs path/to/jobs.yaml` is required for job-related actions.
+    * `--fs path/to/fs.yaml` is required for fs-related actions and some pool
+      actions.
 * `--subscription-id` is the Azure Subscription Id associated with the
 Batch account or Remote file system resources. This is only required for
 creating pools with a virtual network specification or with `fs` commands.
@@ -146,6 +147,7 @@ be specified at once, i.e., `--aad-auth-key`, `--aad-password`, and
 
 Note that the following options can be specified as environment variables
 instead:
+
 * `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
 * `SHIPYARD_CREDENTIALS_CONF` in lieu of `--credentials`
 * `SHIPYARD_CONFIG_CONF` in lieu of `--config`
@@ -178,6 +180,7 @@ commands:
   pool      Pool actions
   storage   Storage actions
 ```
+
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
 * `fs` commands deal with Batch Shipyard provisioned remote filesystems in
@@ -198,6 +201,7 @@ The `cert` command has the following sub-commands:
   del     Deletes a certificate from the Batch account
   list    List all certificates in a Batch account
 ```
+
 * `add` will add a certificate to the Batch account
 * `create` will create a certificate locally for use with the Batch account.
 You must edit your `config.yaml` to incorporate the generated certificate and
@@ -215,33 +219,34 @@ The `data` command has the following sub-commands:
   listfiles    List files for tasks in jobs
   stream       Stream a text file to the local console
 ```
+
 * `getfile` will retrieve a file with job, task, filename semantics
-  * `--all --filespec <jobid>,<taskid>,<include pattern>` can be given to
-    download all files for the job and task with an optional include pattern
-  * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
-    specific file from the job and task. If `<taskid>` is set to
-    `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
-    will be used to locate the `<filename>`.
+    * `--all --filespec <jobid>,<taskid>,<include pattern>` can be given to
+      download all files for the job and task with an optional include pattern
+    * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
+      specific file from the job and task. If `<taskid>` is set to
+      `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
+      will be used to locate the `<filename>`.
 * `getfilenode` will retrieve a file with node id and filename semantics
-  * `--all --filespec <nodeid>,<include pattern>` can be given to download
-    all files from the compute node with the optional include pattern
-  * `--filespec <nodeid>,<filename>` can be given to download one
-    specific file from compute node
+    * `--all --filespec <nodeid>,<include pattern>` can be given to download
+      all files from the compute node with the optional include pattern
+    * `--filespec <nodeid>,<filename>` can be given to download one
+      specific file from compute node
 * `ingress` will ingress data as specified in configuration files
-  * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
-    configuration files to the specified remote file system storage cluster
-    instead of Azure Storage
+    * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
+      configuration files to the specified remote file system storage cluster
+      instead of Azure Storage
 * `listfiles` will list files for all tasks in jobs
-  * `--jobid` force scope to just this job id
-  * `--taskid` force scope to just this task id
+    * `--jobid` force scope to just this job id
+    * `--taskid` force scope to just this task id
 * `stream` will stream a file as text (UTF-8 decoded) to the local console
 or binary if streamed to disk
-  * `--disk` will write the streamed data as binary to disk instead of output
-    to local console
-  * `--filespec <jobid>,<taskid>,<filename>` can be given to stream a
-    specific file. If `<taskid>` is set to `@FIRSTRUNNING`, then the first
-    running task within the job of `<jobid>` will be used to locate the
-    `<filename>`.
+    * `--disk` will write the streamed data as binary to disk instead of output
+      to local console
+    * `--filespec <jobid>,<taskid>,<filename>` can be given to stream a
+      specific file. If `<taskid>` is set to `@FIRSTRUNNING`, then the first
+      running task within the job of `<jobid>` will be used to locate the
+      `<filename>`.
 
 ## `fs` Command
 The `fs` command has the following sub-commands which work on two different
@@ -270,50 +275,50 @@ storage cluster to perform actions against.
 
 * `add` will create a remote fs cluster as defined in the fs config file
 * `del` will delete a remote fs cluster as defined in the fs config file
-  * `--delete-resource-group` will delete the entire resource group that
-    contains the server. Please take care when using this option as any
-    resource in the resoure group is deleted which may be other resources
-    that are not Batch Shipyard related.
-  * `--delete-data-disks` will delete attached data disks
-  * `--delete-virtual-network` will delete the virtual network and all of
-    its subnets
-  * `--generate-from-prefix` will attempt to generate all resource names
-    using conventions used. This is helpful when there was an issue with
-    cluster deletion and the original virtual machine(s) resources can no
-    longer by enumerated. Note that OS disks and data disks cannot be
-    deleted with this option. Please use `fs disks del` to delete disks
-    that may have been used in the storage cluster.
-  * `--no-wait` does not wait for deletion completion. It is not recommended
-    to use this parameter.
+    * `--delete-resource-group` will delete the entire resource group that
+      contains the server. Please take care when using this option as any
+      resource in the resoure group is deleted which may be other resources
+      that are not Batch Shipyard related.
+    * `--delete-data-disks` will delete attached data disks
+    * `--delete-virtual-network` will delete the virtual network and all of
+      its subnets
+    * `--generate-from-prefix` will attempt to generate all resource names
+      using conventions used. This is helpful when there was an issue with
+      cluster deletion and the original virtual machine(s) resources can no
+      longer by enumerated. Note that OS disks and data disks cannot be
+      deleted with this option. Please use `fs disks del` to delete disks
+      that may have been used in the storage cluster.
+    * `--no-wait` does not wait for deletion completion. It is not recommended
+      to use this parameter.
 * `expand` expands the number of disks used by the underlying filesystems on
 the file server.
-  * `--no-rebalance` rebalances the data and metadata among the disks for
-    better data spread and performance after the disk is added to the array.
+    * `--no-rebalance` rebalances the data and metadata among the disks for
+      better data spread and performance after the disk is added to the array.
 * `resize` resizes the storage cluster with additional virtual machines as
 specified in the configuration. This is an experimental feature.
 * `ssh` will interactively log into a virtual machine in the storage cluster.
 If neither `--cardinal` or `--hostname` are specified, `--cardinal 0` is
 assumed.
-  * `COMMAND` is an optional argument to specify the command to run. If your
-    command has switches, preface `COMMAND` with double dash as per POSIX
-    convention, e.g., `fs cluster ssh mycluster -- df -h`.
-  * `--cardinal` is the zero-based cardinal number of the virtual machine in
-    the storage cluster to connect to.
-  * `--hostname` is the hostname of the virtual machine in the storage cluster
-    to connect to
-  * `--tty` allocates a pseudo-terminal
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `fs cluster ssh mycluster -- df -h`.
+    * `--cardinal` is the zero-based cardinal number of the virtual machine in
+      the storage cluster to connect to.
+    * `--hostname` is the hostname of the virtual machine in the storage
+      cluster to connect to
+    * `--tty` allocates a pseudo-terminal
 * `start` will start a previously suspended storage cluster
-  * `--no-wait` does not wait for the restart to complete. It is not
-    recommended to use this parameter.
+    * `--no-wait` does not wait for the restart to complete. It is not
+      recommended to use this parameter.
 * `status` displays the status of the storage cluster
-  * `--detail` reports in-depth details about each virtual machine in the
-    storage cluster
-  * `--hosts` will output the public IP to hosts mapping for mounting a
-    `glusterfs` based remote filesystem locally. `glusterfs` must be
-    allowed in the network security rules for this to work properly.
+    * `--detail` reports in-depth details about each virtual machine in the
+      storage cluster
+    * `--hosts` will output the public IP to hosts mapping for mounting a
+      `glusterfs` based remote filesystem locally. `glusterfs` must be
+      allowed in the network security rules for this to work properly.
 * `suspend` suspends a storage cluster
-  * `--no-wait` does not wait for the suspension to complete. It is not
-    recommended to use this parameter.
+    * `--no-wait` does not wait for the suspension to complete. It is not
+      recommended to use this parameter.
 
 ### `fs disks` Command
 `fs disks` command has the following sub-commands:
@@ -322,16 +327,17 @@ assumed.
   del   Delete managed disks in Azure
   list  List managed disks in resource group
 ```
+
 * `add` creates managed disks as specified in the fs config file
 * `del` deletes managed disks as specified in the fs config file
-  * `--all` deletes all managed disks found in a specified resource group
-  * `--name` deletes a specific named disk in a resource group
-  * `--no-wait` does not wait for disk deletion to complete. It is not
-    recommended to use this parameter.
-  * `--resource-group` deletes one or more managed disks in this resource group
+    * `--all` deletes all managed disks found in a specified resource group
+    * `--name` deletes a specific named disk in a resource group
+    * `--no-wait` does not wait for disk deletion to complete. It is not
+      recommended to use this parameter.
+    * `--resource-group` deletes one or more managed disks in this resource group
 * `list` lists managed disks found in a resource group
-  * `--resource-group` lists disks in this resource group only
-  * `--restrict-scope` lists disks only if found in the fs config file
+    * `--resource-group` lists disks in this resource group only
+    * `--restrict-scope` lists disks only if found in the fs config file
 
 ## `jobs` Command
 The `jobs` command has the following sub-commands:
@@ -349,76 +355,80 @@ The `jobs` command has the following sub-commands:
   term       Terminate jobs and job schedules
   termtasks  Terminate specified tasks in jobs
 ```
+
 * `add` will add all jobs and tasks defined in the jobs configuration file
 to the Batch pool
-  * `--recreate` will recreate any completed jobs with the same id
-  * `--tail` will tail the specified file of the last job and task added
-    with this command invocation
+    * `--recreate` will recreate any completed jobs with the same id
+    * `--tail` will tail the specified file of the last job and task added
+      with this command invocation
 * `cmi` will cleanup any stale multi-instance tasks and jobs. Note that this
 sub-command is typically not required if `multi_instance_auto_complete` is
 set to `true` in the job specification for the job.
-  * `--delete` will delete any stale cleanup jobs
+    * `--delete` will delete any stale cleanup jobs
 * `del` will delete jobs and job scheudles specified in the jobs
 configuration file. If an autopool is specified for all jobs and a jobid
 option is not specified, the storage associated with the autopool will be
 cleaned up.
-  * `--all-jobs` will delete all jobs found in the Batch account
-  * `--all-jobschedules` will delete all job schedules found in the Batch
-    account
-  * `--jobid` force deletion scope to just this job id
-  * `--jobscheduleid` force deletion scope to just this job schedule id
-  * `--termtasks` will manually terminate tasks prior to deletion. Termination
-    of running tasks requires a valid SSH user.
-  * `--wait` will wait for deletion to complete
+    * `--all-jobs` will delete all jobs found in the Batch account
+    * `--all-jobschedules` will delete all job schedules found in the Batch
+      account
+    * `--jobid` force deletion scope to just this job id
+    * `--jobscheduleid` force deletion scope to just this job schedule id
+    * `--termtasks` will manually terminate tasks prior to deletion.
+      Termination of running tasks requires a valid SSH user if the tasks
+      are running on a non-`native` container support pool.
+    * `--wait` will wait for deletion to complete
 * `deltasks` will delete tasks within jobs specified in the jobs
-configuration file. Active or running tasks will be terminated first.
-  * `--jobid` force deletion scope to just this job id
-  * `--taskid` force deletion scope to just this task id
-  * `--wait` will wait for deletion to complete
+configuration file. Active or running tasks will be terminated first on
+non-`native` container support pools.
+    * `--jobid` force deletion scope to just this job id
+    * `--taskid` force deletion scope to just this task id
+    * `--wait` will wait for deletion to complete
 * `disable` will disable jobs or job schedules
-  * `--jobid` force disable scope to just this job id
-  * `--jobscheduleid` force disable scope to just this job schedule id
-  * `--requeue` requeue running tasks
-  * `--terminate` terminate running tasks
-  * `--wait` wait for running tasks to complete
+    * `--jobid` force disable scope to just this job id
+    * `--jobscheduleid` force disable scope to just this job schedule id
+    * `--requeue` requeue running tasks
+    * `--terminate` terminate running tasks
+    * `--wait` wait for running tasks to complete
 * `enable` will enable jobs or job schedules
-  * `--jobid` force enable scope to just this job id
-  * `--jobscheduleid` force enable scope to just this job schedule id
+    * `--jobid` force enable scope to just this job id
+    * `--jobscheduleid` force enable scope to just this job schedule id
 * `list` will list all jobs in the Batch account
 * `listtasks` will list tasks from jobs specified in the jobs configuration
 file
-  * `--all` list all tasks in all jobs in the account
-  * `--jobid` force scope to just this job id
-  * `--poll-until-tasks-complete` will poll until all tasks have completed
+    * `--all` list all tasks in all jobs in the account
+    * `--jobid` force scope to just this job id
+    * `--poll-until-tasks-complete` will poll until all tasks have completed
 * `migrate` will migrate jobs or job schedules to another pool. Ensure that
 the new target pool has the Docker images required to run the job.
-  * `--jobid` force migration scope to just this job id
-  * `--jobscheduleid` force migration scope to just this job schedule id
-  * `--poolid` force migration to this specified pool id
-  * `--requeue` requeue running tasks
-  * `--terminate` terminate running tasks
-  * `--wait` wait for running tasks to complete
+    * `--jobid` force migration scope to just this job id
+    * `--jobscheduleid` force migration scope to just this job schedule id
+    * `--poolid` force migration to this specified pool id
+    * `--requeue` requeue running tasks
+    * `--terminate` terminate running tasks
+    * `--wait` wait for running tasks to complete
 * `stats` will generate a statistics summary of a job or jobs
-  * `--jobid` will query the specified job instead of all jobs
+    * `--jobid` will query the specified job instead of all jobs
 * `term` will terminate jobs and job schedules found in the jobs
 configuration file. If an autopool is specified for all jobs and a jobid
 option is not specified, the storage associated with the autopool will be
 cleaned up.
-  * `--all-jobs` will terminate all jobs found in the Batch account
-  * `--all-jobschedules` will terminate all job schedules found in the Batch
-    account
-  * `--jobid` force termination scope to just this job id
-  * `--jobscheduleid` force termination scope to just this job schedule id
-  * `--termtasks` will manually terminate tasks prior to termination.
-    Termination of running tasks requires a valid SSH user.
-  * `--wait` will wait for termination to complete
+    * `--all-jobs` will terminate all jobs found in the Batch account
+    * `--all-jobschedules` will terminate all job schedules found in the Batch
+      account
+    * `--jobid` force termination scope to just this job id
+    * `--jobscheduleid` force termination scope to just this job schedule id
+    * `--termtasks` will manually terminate tasks prior to termination.
+      Termination of running tasks requires a valid SSH user if tasks are
+      running on a non-`native` container support pool.
+    * `--wait` will wait for termination to complete
 * `termtasks` will terminate tasks within jobs specified in the jobs
 configuration file. Termination of running tasks requires a valid SSH
-user.
-  * `--force` force send docker kill signal regardless of task state
-  * `--jobid` force termination scope to just this job id
-  * `--taskid` force termination scope to just this task id
-  * `--wait` will wait for termination to complete
+user if tasks are running on a non-`native` container support pool.
+    * `--force` force send docker kill signal regardless of task state
+    * `--jobid` force termination scope to just this job id
+    * `--taskid` force termination scope to just this task id
+    * `--wait` will wait for termination to complete
 
 ## `keyvault` Command
 The `keyvault` command has the following sub-commands:
@@ -427,19 +437,21 @@ The `keyvault` command has the following sub-commands:
   del   Delete a secret from Azure KeyVault
   list  List secret ids and metadata in an Azure...
 ```
+
 The following subcommands require `--keyvault-*` and `--aad-*` options in
 order to work. Alternatively, you can specify these in the `credentials.yaml`
 file, but these options are mutually exclusive of other properties.
 Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
 for more information.
+
 * `add` will add the specified credentials config file as a secret to an Azure
 KeyVault. A valid credentials config file must be specified as an option.
-  * `NAME` argument is required which is the name of the secret associated
-    with the credentials config to store in the KeyVault
+    * `NAME` argument is required which is the name of the secret associated
+      with the credentials config to store in the KeyVault
 * `del` will delete a secret from the Azure KeyVault
-  * `NAME` argument is required which is the name of the secret to delete
-    from the KeyVault
+    * `NAME` argument is required which is the name of the secret to delete
+      from the KeyVault
 * `list` will list all secret ids and metadata in an Azure KeyVault
 
 ## `misc` Command
@@ -447,19 +459,20 @@ The `misc` command has the following sub-commands:
 ```
   tensorboard  Create a tunnel to a Tensorboard instance for...
 ```
+
 * `tensorboard` will create a tunnel to the compute node that is running
 or has run the specified task
-  * `--jobid` specifies the job id to use. If this is not specified, the first
-    and only jobspec is used from jobs.yaml.
-  * `--taskid` specifies the task id to use. If this is not specified, the
-    last run or running task for the job is used.
-  * `--logdir` specifies the TensorFlow logs directory generated by summary
-    operations
-  * `--image` specifies an alternate TensorFlow image to use for Tensorboard.
-    The `tensorboard.py` file must be in the expected location in the Docker
-    image as stock TensorFlow images. If not specified, Batch Shipyard will
-    attempt to find a suitable TensorFlow image from Docker images in the
-    global resource list or will acquire one on demand for this command.
+    * `--jobid` specifies the job id to use. If this is not specified, the first
+      and only jobspec is used from jobs.yaml.
+    * `--taskid` specifies the task id to use. If this is not specified, the
+      last run or running task for the job is used.
+    * `--logdir` specifies the TensorFlow logs directory generated by summary
+      operations
+    * `--image` specifies an alternate TensorFlow image to use for Tensorboard.
+      The `tensorboard.py` file must be in the expected location in the Docker
+      image as stock TensorFlow images. If not specified, Batch Shipyard will
+      attempt to find a suitable TensorFlow image from Docker images in the
+      global resource list or will acquire one on demand for this command.
 
 ## `pool` Command
 The `pool` command has the following sub-commands:
@@ -481,32 +494,33 @@ The `pool` command has the following sub-commands:
   stats       Get statistics about a pool
   udi         Update Docker images in a pool
 ```
+
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
 * `asu` will add the SSH user defined in the pool configuration file to
 all nodes in the specified pool
 * `autoscale` will invoke the autoscale subcommand. The autoscale
 subcommand has 4 subcommands:
-  * `disable` will disable autoscale on the pool
-  * `enable` will enable autoscale on the pool
-  * `evaluate` will evaluate the autoscale formula in the pool configuration
-    file
-  * `lastexec` will query the last execution information for autoscale
+    * `disable` will disable autoscale on the pool
+    * `enable` will enable autoscale on the pool
+    * `evaluate` will evaluate the autoscale formula in the pool configuration
+      file
+    * `lastexec` will query the last execution information for autoscale
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard. It is recommended to use this command instead of deleting
 a pool directly from the Azure Portal, Batch Labs, or other tools as
 this action can conveniently remove all associated Batch Shipyard metadata on
 Azure Storage.
-  * `--poolid` will delete the specified pool instead of the pool from the
-    pool configuration file
-  * `--wait` will wait for deletion to complete
+    * `--poolid` will delete the specified pool instead of the pool from the
+      pool configuration file
+    * `--wait` will wait for deletion to complete
 * `delnode` will delete the specified node from the pool
-  * `--all-start-task-failed` will delete all nodes in the start task
-    failed state
-  * `--all-starting` will delete all nodes in the starting state
-  * `--all-unusable` will delete all nodes in the unusable state
-  * `--nodeid` is the node id to delete
+    * `--all-start-task-failed` will delete all nodes in the start task
+      failed state
+    * `--all-starting` will delete all nodes in the starting state
+    * `--all-unusable` will delete all nodes in the unusable state
+    * `--nodeid` is the node id to delete
 * `dsu` will delete the SSH user defined in the pool configuration file
 from all nodes in the specified pool
 * `grls` will retrieve all of the remote login settings for every node
@@ -517,29 +531,29 @@ and mismatched images will be listed. Requires a provisioned SSH user and
 private key.
 * `listnodes` will list all nodes in the specified pool
 * `rebootnode` will reboot a specified node in the pool
-  * `--all-start-task-failed` will reboot all nodes in the start task
-    failed state
-  * `--nodeid` is the node id to reboot
+    * `--all-start-task-failed` will reboot all nodes in the start task
+      failed state
+    * `--nodeid` is the node id to reboot
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
-  * `--wait` will wait for resize to complete
+    * `--wait` will wait for resize to complete
 * `ssh` will interactively log into a compute node via SSH. If neither
 `--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed.
-  * `COMMAND` is an optional argument to specify the command to run. If your
-    command has switches, preface `COMMAND` with double dash as per POSIX
-    convention, e.g., `pool ssh -- sudo docker ps -a`.
-  * `--cardinal` is the zero-based cardinal number of the compute node in
-    the pool to connect to as listed by `grls`
-  * `--nodeid` is the node id to connect to in the pool
-  * `--tty` allocates a pseudo-terminal
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--cardinal` is the zero-based cardinal number of the compute node in
+      the pool to connect to as listed by `grls`
+    * `--nodeid` is the node id to connect to in the pool
+    * `--tty` allocates a pseudo-terminal
 * `stats` will generate a statistics summary of the pool
-  * `--poolid` will query the specified pool instead of the pool from the
-    pool configuration file
+    * `--poolid` will query the specified pool instead of the pool from the
+      pool configuration file
 * `udi` will update Docker images on all compute nodes of the pool. This
 command requires a valid SSH user.
-  * `--image` will restrict the update to just the image or image:tag
-  * `--digest` will restrict the update to just the image or image:tag and
-    a specific digest
+    * `--image` will restrict the update to just the image or image:tag
+    * `--digest` will restrict the update to just the image or image:tag and
+      a specific digest
 
 ## `storage` Command
 The `storage` command has the following sub-commands:
@@ -547,13 +561,14 @@ The `storage` command has the following sub-commands:
   clear  Clear Azure Storage containers used by Batch...
   del    Delete Azure Storage containers used by Batch...
 ```
+
 * `clear` will clear the Azure Storage containers used by Batch Shipyard
 for metadata purposes
-  * `--poolid` will target a specific pool id rather than from configuration
+    * `--poolid` will target a specific pool id rather than from configuration
 * `del` will delete the Azure Storage containers used by Batch Shipyard
 for metadata purposes
-  * `--clear-tables` will clear tables instead of deleting them
-  * `--poolid` will target a specific pool id
+    * `--clear-tables` will clear tables instead of deleting them
+    * `--poolid` will target a specific pool id
 
 ## Example Invocations
 ```shell
@@ -597,7 +612,8 @@ If using the [alfpark/batch-shipyard:cli-latest](https://hub.docker.com/r/alfpar
 Docker image, then you would invoke the tool as:
 
 ```shell
-docker run --rm -it alfpark/batch-shipyard:cli-latest <command> <subcommand> <options...>
+docker run --rm -it alfpark/batch-shipyard:cli-latest \
+    <command> <subcommand> <options...>
 ```
 
 where `<command> <subcommand>` is the command and subcommand as described
@@ -612,7 +628,11 @@ For example, if your Batch Shipyard configs are stored in the host path
 as:
 
 ```shell
-docker run --rm -it -v /home/user/batch-shipyard-configs:/configs -e SHIPYARD_CONFIGDIR=/configs alfpark/batch-shipyard:cli-latest <command> <subcommand> <options...>
+docker run --rm -it \
+    -v /home/user/batch-shipyard-configs:/configs \
+    -e SHIPYARD_CONFIGDIR=/configs \
+    alfpark/batch-shipyard:cli-latest \
+    <command> <subcommand> <options...>
 ```
 
 Notice that we specified a Docker environment variable via
@@ -648,8 +668,8 @@ Batch Shipyard, please see [this page](80-batch-shipyard-multi-instance-tasks.md
 Please see [this page](99-current-limitations.md) for current limitations.
 
 ## Explore Recipes and Samples
-Visit the [recipes directory](../recipes) for different sample Docker
-workloads using Azure Batch and Batch Shipyard.
+Visit the [recipes directory](https://github.com/Azure/batch-shipyard/tree/master/recipes)
+for different sample Docker workloads using Azure Batch and Batch Shipyard.
 
 ## Need Help?
 [Open an issue](https://github.com/Azure/batch-shipyard/issues) on the GitHub

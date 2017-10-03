@@ -137,6 +137,8 @@ job execution with Batch Shipyard. This is typically a call to `mpirun`
 or `mpiexec` or a wrapper script that launches either `mpirun` or `mpiexec`.
 
 ### Cleanup
+**Note:** The following only applies to non-`native` container support pools.
+
 As the Docker image is run in detached mode with `docker run`, the container
 will still be running after the application command completes. Currently,
 there is no "clean" way to perform cleanup from the Azure Batch API.
@@ -168,5 +170,6 @@ For more general information about MPI and Azure Batch, please visit
 [this page](https://azure.microsoft.com/en-us/documentation/articles/batch-mpi/).
 
 ## Example recipes and samples
-Please visit the [recipes directory](../recipes) for multi-instance task
-samples.
+Please visit the
+[recipes directory](https://github.com/Azure/batch-shipyard/tree/master/recipes)
+for multi-instance task samples.

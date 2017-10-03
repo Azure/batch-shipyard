@@ -46,6 +46,7 @@ you can try to issue `pool resize` to begin the pool grow or shrink process
 again, or alternatively you can opt to recreate the pool.
 
 There are typically three common reasons for Resize Errors:
+
 1. Insufficient core quota: Non-UserSubscription Batch accounts by default
 have 20 cores associated with them. These core quota are managed independently
 of any core quota on the associated subscription. UserSubscription Batch

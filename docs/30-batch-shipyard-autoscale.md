@@ -38,6 +38,7 @@ to specify their own custom autoscale formula.
 Scenario-based autoscaling allows you to pick from a set of common autoscale
 scenarios and then Batch Shipyard automatically applies the appropriate
 transformations to the formula to apply to your pool. These scenarios are:
+
 * `active_tasks` will autoscale the pool using metrics for the number of
 active (i.e., queued) tasks for the pool.
 * `pending_tasks` will autoscale the pool using metrics for the number of
@@ -63,6 +64,7 @@ pool to resize down to zero nodes.
 
 Additionally, there are options that can modify and fine-tune these scenarios
 as needed:
+
 * `node_deallocation_option` which specify when a node is targeted for
 deallocation but has a running task, what should be the action applied to
 the task: `requeue`, `terminate`, `taskcompletion`, and `retaineddata`.

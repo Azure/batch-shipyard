@@ -178,4 +178,5 @@ to create them at this
 
 ## Sample Recipes
 Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can
-be found in the [recipes](../recipes) area.
+be found in the
+[recipes](https://github.com/Azure/batch-shipyard/tree/master/recipes) area.

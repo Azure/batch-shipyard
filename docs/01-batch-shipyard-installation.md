@@ -36,6 +36,7 @@ and unpack the archive.
 
 For the next step (if not using the Batch Shipyard CLI Docker image), refer
 to your operating system specific installation instructions:
+
 * [Linux](#linux-install)
 * [Mac OS X](#mac-install)
 * [Windows](#windows-install)
@@ -134,6 +135,7 @@ DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh
 
 #### Unsupported Linux Distributions
 The following distributions will not work with the `install.sh` script:
+
 * CentOS < 6.0
 * Debian < 8
 * Fedora < 13

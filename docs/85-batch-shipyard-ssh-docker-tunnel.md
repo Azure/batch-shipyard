@@ -36,19 +36,19 @@ actions:
 2. Click on the `Generate` button on the bottom right
 3. Move the mouse around as directed to generate randomness for the keys
 4. Save the RSA private key portion as a file
-   * Click on `Conversions` file menu at the top
-   * Click `Export OpenSSH key`
-   * A prompt will ask if it is ok to save the key without a passphrase. Click
-     `Yes`.
-   * Save the file to a path accessible by Batch Shipyard
+    * Click on `Conversions` file menu at the top
+    * Click `Export OpenSSH key`
+    * A prompt will ask if it is ok to save the key without a passphrase.
+      Click `Yes`.
+    * Save the file to a path accessible by Batch Shipyard
 5. Save the RSA public key portion either as text data or as a file. This is
 done by selecting all of the text under the box labeled
 `Public key for pasting into OpenSSH authorized_keys file:` and pressing
 CTRL+C or right-click and Copy.
-   * If using the raw data, populate your `ssh` config property named
-     `ssh_public_key_data` with the key data from the box
-   * If you are saving the key data to a file, then populate your `ssh` config
-     property named `ssh_public_key` and point it to the file
+    * If using the raw data, populate your `ssh` config property named
+      `ssh_public_key_data` with the key data from the box
+    * If you are saving the key data to a file, then populate your `ssh`
+      config property named `ssh_public_key` and point it to the file
 
 ## Interactive SSH
 By adding an SSH user to the pool (which can be automatically done for you

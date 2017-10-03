@@ -77,12 +77,12 @@ deployments. More information about Docker can be found
 
 ### Concepts
 * A Docker image contains all of the necessary software to run an application
-  and exists only in read-only form. Can be thought of as a template for a
-  container.
+and exists only in read-only form. Can be thought of as a template for a
+container.
 * Docker containers are instances of an image, with everything needed for
-  the containerized application to run.
+the containerized application to run.
 * Registries contain repositories of Docker images which can be later
-  retrieved or updated.
+retrieved or updated.
 
 Further in-depth treatment of Docker can be found
 [here](https://docs.docker.com/engine/understanding-docker/).

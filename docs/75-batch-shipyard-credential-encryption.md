@@ -54,9 +54,10 @@ actions that need to be taken in order to enable credential encryption are:
 
 For step 1, invoke the `cert create` command with `shipyard.py` which will
 create the necessary certificates and keys. The end result should be two files
-(the names of which you will be prompted for) created: (1) a PFX file for
-use with the Azure Batch service and (2) an RSA public key PEM file for
-use locally to encrypt.
+(the names of which you will be prompted for) created:
+
+1. A PFX file for use with the Azure Batch service
+2. An RSA public key PEM file for use locally to encrypt
 
 For step 2, there is one property that must be configured under
 `batch_shipyard` in the global configuration file prior to taking any action:

@@ -24,6 +24,7 @@ pages:
   - Task Factory: 35-batch-shipyard-task-factory.md
   - Azure Functions and Batch Shipyard: 60-batch-shipyard-site-extension.md
   - Custom Images for Host Compute Nodes: 63-batch-shipyard-custom-images.md
+  - Virtual Networks: 64-batch-shipyard-byovnet.md
   - Remote Filesystems: 65-batch-shipyard-remote-fs.md
   - Data Movement: 70-batch-shipyard-data-movement.md
   - Azure KeyVault for Credential Management: 74-batch-shipyard-azure-keyvault.md

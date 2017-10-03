@@ -265,6 +265,7 @@ will generate 3 tasks with random floating point values pulled from a
 uniform distribution between 0.0 and 1.0.
 
 The following distributions are available:
+
 * `uniform`
 * `triangular`
 * `beta`
@@ -312,6 +313,7 @@ command: /bin/bash -c "echo url={url} full_path={file_path_with_container} file_
 
 As you can see from the `command` above, there are keyword formatters
 available:
+
 * `url` is the full URL of the blob resource including the SAS. This is not
 available for files on file shares.
 * `file_path_with_container` is the path of the blob or file (with all
@@ -348,6 +350,7 @@ Each task would automatically download each blob "assigned" to it
 automatically in the task's working directory as specified by the
 `task_filepath` property. This property has the following valid values,
 similar to the keyword arguments above:
+
 * `file_path_with_container` is the path of the blob or file (with all
 virtual directories) prepended with the container or file share name
 * `file_path` is the path of the blob or file (with all virtual directories)

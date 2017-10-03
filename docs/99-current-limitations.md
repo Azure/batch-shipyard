@@ -9,13 +9,14 @@ document.
 The following Azure Batch actions should only be performed through Batch
 Shipyard when deploying your workload through this toolkit as Batch
 Shipyard needs to take special actions or ensure the intended outcome:
-* Non-`native` container pools:
-  * Task termination (if task is running): use `jobs termtasks`
-  * Task deletion (if task is running): use `jobs deltasks`
-  * Job termination (if any tasks are running in the job): use the
-    `--termtasks` option with `jobs term`
-  * Job deletion (if any tasks are running in the job): use the
-    `--termtasks` option with `jobs del`
+
+* Non-`native` container pools only:
+    * Task termination (if task is running): use `jobs termtasks`
+    * Task deletion (if task is running): use `jobs deltasks`
+    * Job termination (if any tasks are running in the job): use the
+      `--termtasks` option with `jobs term`
+    * Job deletion (if any tasks are running in the job): use the
+      `--termtasks` option with `jobs del`
 * Pool resize: use `pool resize`
 * Pool deletion: use `pool del`
 
@@ -51,8 +52,9 @@ is restricted to Batch accounts with keys (non-AAD).
 Batch Shipyard at this time.
 * Task dependencies are incompatible with multi-instance tasks. This is a
 current limitation of the underlying Azure Batch service.
-* Only Intel MPI can be used in conjunction Infiniband/RDMA on Azure Linux VMs.
-This is a current limitation of the underlying VM and host drivers.
+* Only Intel MPI (or polling-based IB uverbs) can be used in conjunction
+Infiniband/RDMA on Azure Linux VMs. This is a current limitation of the
+underlying VM and host drivers.
 * Adding tasks to the same job across multiple, concurrent Batch Shipyard
 invocations may result in failure if task ids for these jobs are
 auto-generated.

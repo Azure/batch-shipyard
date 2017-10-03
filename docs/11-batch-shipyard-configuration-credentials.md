@@ -101,6 +101,7 @@ This section may not be needed or applicable for every credential section.
 Note that some options are mutually exclusive of each other depending upon
 authentication type. The available authentication types for Batch Shipyard
 with the required parameters for each are:
+
 * Service principal authentication key: `application_id` and `auth_key`
 * Certificate-based asymmetric key auth: `application_id`,
 `rsa_private_key_pem` and `x509_cert_sha1_thumbprint`
@@ -116,6 +117,7 @@ environment variable instead. For example, if you do not want to store the
 `auth_key` in the file, it can be specified at runtime.
 
 Authentication independent settings:
+
 * (optional) `endpoint` is the AAD endpoint for the associated resource. If
 not specified, these default to the Azure Public cloud endpoints for the
 respective resource.
@@ -123,42 +125,46 @@ respective resource.
 * (optional) `application_id` AAD application (client) id
 
 Service principal authentication key settings:
+
 * (optional) `auth_key` Service Principal authentication key
 
 Certificate-based asymmetric key authentication settings:
+
 * (optional) `rsa_private_key_pem` path to RSA private key PEM file if using
 Certificate-based authentication
 * (optional) `x509_cert_sha1_thumbprint` thumbprint of the X.509
 certificate for use with Certificate-based authentication
 
 Username authentication settings:
+
 * (optional) `user` AAD username
 * (optional) `password` AAD password associated with the user if using
 username and password authentication. You can omit this property if you
 want to resort to interactive multi-factor authentication.
 * (optional) `token_cache` defines token cache properties for multi-factor
-  device code auth only. Tokens are not cached for other auth mechanisms.
-  * (optional) `enabled` enables the token cache for device code auth
-  * (optional) `filename` specifies the file path to cache the signed token
+device code auth only. Tokens are not cached for other auth mechanisms.
+    * (optional) `enabled` enables the token cache for device code auth
+    * (optional) `filename` specifies the file path to cache the signed token
 
 ### Batch: `batch`
 * (required) The `batch` property defines the Azure Batch account. Members
 under the `batch` property can be found in the
-[Azure Portal](https://portal.azure.com) under your Batch account.
-  * (required) `account_service_url` is the Batch account service URL.
-  * (required for auth via AAD) `aad` defines the AAD authentication
-    parameters for Azure Batch.
-  * (required for `virtual_network` in pool settings if `arm_subnet_id` is
-    not specified) `resource_group` is the resource group containing the
-    Batch account.
-  * (required unless `aad` is specified) `account_key` is the shared
-    key. This is required for non-AAD logins. This option takes precendence
-    over the `aad` property if specified.
-  * (optional) `account_key_keyvault_secret_id` property can be used to
-    reference an Azure KeyVault secret id. Batch Shipyard will contact the
-    specified KeyVault and replace the `account_key` value as returned by
-    Azure KeyVault. This cannot be used with Batch accounts authenticated
-    with `aad`.
+[Azure Portal](https://portal.azure.com) under your Batch account or via
+the Azure CLI.
+    * (required) `account_service_url` is the Batch account service URL.
+    * (required for auth via AAD) `aad` defines the AAD authentication
+      parameters for Azure Batch.
+    * (required for `virtual_network` in pool settings if `arm_subnet_id` is
+      not specified) `resource_group` is the resource group containing the
+      Batch account.
+    * (required unless `aad` is specified) `account_key` is the shared
+      key. This is required for non-AAD logins. This option takes precendence
+      over the `aad` property if specified.
+    * (optional) `account_key_keyvault_secret_id` property can be used to
+      reference an Azure KeyVault secret id. Batch Shipyard will contact the
+      specified KeyVault and replace the `account_key` value as returned by
+      Azure KeyVault. This cannot be used with Batch accounts authenticated
+      with `aad`.
 
 ### Storage: `storage`
 * (required) Multiple storage properties can be defined which references
@@ -167,10 +173,10 @@ may be needed for more flexible configuration in other configuration files. In
 the example above, we only have one storage account defined which is aliased
 by the property name `mystorageaccount`. The alias (or storage account link
 name) can be the same as the storage account name itself.
-  * (optional) `account_key_keyvault_secret_id` property can be used to
-    reference an Azure KeyVault secret id. Batch Shipyard will contact the
-    specified KeyVault and replace the `account_key` value as returned by
-    Azure KeyVault.
+    * (optional) `account_key_keyvault_secret_id` property can be used to
+      reference an Azure KeyVault secret id. Batch Shipyard will contact the
+      specified KeyVault and replace the `account_key` value as returned by
+      Azure KeyVault.
 
 ### Docker Registries: `docker_registry`
 * (optional) `docker_registry` property defines logins for Docker registry
@@ -178,7 +184,7 @@ servers. This property does not need to be defined if you are using only
 public repositories on Docker Hub. However, this is required if pulling from
 authenticated private registries such as a secured Azure Container Registry
 or private repositories on Docker Hub.
-  * (optional) `hub` defines the login property to Docker Hub. This is only
+    * (optional) `hub` defines the login property to Docker Hub. This is only
     required for private repos on Docker Hub.
     * (optional) `username` username to log in to Docker Hub
     * (optional) `password` password associated with the username
@@ -186,42 +192,43 @@ or private repositories on Docker Hub.
       reference an Azure KeyVault secret id. Batch Shipyard will contact the
       specified KeyVault and replace the `password` value as returned by
       Azure KeyVault.
-  * (optional) `myserver-myorg.azurecr.io` is an example property that
-    defines a private container registry to connect to. This is an example to
-    connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
-    The private registry defined here should be defined as the `server`
-    property in the `docker_registry`:`private` property in the global
-    configuration.
-    * (optional) `username` username to log in to this registry
-    * (optional) `password` password associated with this username
-    * (optional) `password_keyvault_secret_id` property can be used to
-      reference an Azure KeyVault secret id. Batch Shipyard will contact the
-      specified KeyVault and replace the `password` value as returned by
-      Azure KeyVault.
+    * (optional) `myserver-myorg.azurecr.io` is an example property that
+      defines a private container registry to connect to. This is an example to
+      connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
+      The private registry defined here should be defined as the `server`
+      property in the `docker_registry`:`private` property in the global
+      configuration.
+      * (optional) `username` username to log in to this registry
+      * (optional) `password` password associated with this username
+      * (optional) `password_keyvault_secret_id` property can be used to
+        reference an Azure KeyVault secret id. Batch Shipyard will contact the
+        specified KeyVault and replace the `password` value as returned by
+        Azure KeyVault.
 
 ### Management: `management`
 * (optional) The `management` property defines the required members for
 accessing Azure Resources (ARM) with Azure Active Directory credentials. This
 is required with `fs` filesystem actions and pools that need to be created
 with a virtual network specification (thus UserSubscription Batch accounts).
-  * (required) `subscription_id` is the subscription id to interact with.
-  * (required) `aad` AAD authentication parameters for ARM.
+    * (required) `subscription_id` is the subscription id to interact with.
+    * (required) `aad` AAD authentication parameters for ARM.
 
 ### KeyVault: `keyvault`
 Please see the
 [Azure KeyVault and Batch Shipyard Guide](74-batch-shipyard-azure-keyvault.md)
 for more information. This section is not strictly required for using
 Batch Shipyard.
+
 * (optional) The `keyvault` property defines the required members for
 accessing Azure KeyVault with Azure Active Directory credentials. Note that
 this property is *mutually exclusive* of all other properties in this file.
 If you need to define other members in this config file while using Azure
 KeyVault, then you will need to use environment variables or cli parameters
 instead for AAD and KeyVault credentials.
-  * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
-  * (optional) `credentials_secret_id` property defines the KeyVault secret
-    id containing an entire credentials.yaml file.
-  * (required) `aad` AAD authentication parameters for KeyVault.
+    * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
+    * (optional) `credentials_secret_id` property defines the KeyVault secret
+      id containing an entire credentials.yaml file.
+    * (required) `aad` AAD authentication parameters for KeyVault.
 
 Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
@@ -230,5 +237,6 @@ they are used for credential management with Azure KeyVault.
 
 ## Full template
 A full template of a credentials file can be found
-[here](../config\_templates/credentials.yaml). Note that this template cannot
-be used as-is and must be modified to fit your scenario.
+[here](https://github.com/Azure/batch-shipyard/tree/master/config_templates).
+Note that these templates cannot be used as-is and must be modified to fit
+your scenario.
