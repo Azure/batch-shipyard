@@ -214,14 +214,15 @@ class CliContext(object):
         :return: new configuration file path
         """
         # use configdir if available
-        if self.configdir is not None and conf_var is None:
-            path = pathlib.Path(self.configdir, '{}.yaml'.format(prefix))
+        if conf_var is None:
+            cd = self.configdir or '.'
+            path = pathlib.Path(cd, '{}.yaml'.format(prefix))
             if path.exists():
                 return path
-            path = pathlib.Path(self.configdir, '{}.yml'.format(prefix))
+            path = pathlib.Path(cd, '{}.yml'.format(prefix))
             if path.exists():
                 return path
-            return pathlib.Path(self.configdir, '{}.json'.format(prefix))
+            return pathlib.Path(cd, '{}.json'.format(prefix))
         else:
             return conf_var
 
@@ -556,7 +557,8 @@ def _configdir_option(f):
         help='Configuration directory where all configuration files can be '
         'found. Each config file must be named exactly the same as the '
         'regular switch option, e.g., pool.yaml for --pool. Individually '
-        'specified config options take precedence over this option.',
+        'specified config options take precedence over this option. This '
+        'defaults to "." if no other configuration option is specified.',
         callback=callback)(f)
 
 

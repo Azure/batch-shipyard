@@ -81,7 +81,8 @@ These options must be specified after the command and sub-command. These are:
                                   as the regular switch option, e.g.,
                                   pool.yaml for --pool. Individually specified
                                   config options take precedence over this
-                                  option.
+                                  option. This defaults to "." if no other
+                                  configuration option is specified.
   --credentials TEXT              Credentials config file
   --config TEXT                   Global config file
   --fs TEXT                       RemoteFS config file
@@ -112,7 +113,9 @@ below if all configuration files are in one directory and named after
 their switch. For example, if you have a directory named `config` and under
 that directory you have the files `credentials.yaml`, `config.yaml`,
 `pool.yaml` and `jobs.yaml`, then you can use this argument instead of the
-following:
+following individual conf options. If this parameter is not specified or
+any of the individual conf options, then this paramter defaults to the
+current working directory (i.e., `.`).
     * `--credentials path/to/credentials.yaml` is required for all actions
       except for a select few `keyvault` commands.
     * `--config path/to/config.yaml` is required for all actions.

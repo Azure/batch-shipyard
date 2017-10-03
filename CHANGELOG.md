@@ -42,6 +42,8 @@ guide for more information.
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
 `SHIPYARD_CONFIG_CONF`, `SHIPYARD_POOL_CONF`, `SHIPYARD_JOBS_CONF`, and
 `SHIPYARD_FS_CONF` respectively.
+- `--configdir` or `SHIPYARD_CONFIGDIR` now defaults to the current working
+directory (i.e., `.`) if no other conf file options are specified.
 - `aad` can be specified at a "global" level in the credentials configuration
 file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.
