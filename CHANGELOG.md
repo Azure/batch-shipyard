@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [3.0.0a1] - 2017-10-04
 ### Added
 - Support for deploying compute nodes to an ARM Virtual Network with Batch
 Service Batch accounts (#126)
@@ -11,25 +12,25 @@ Service Batch accounts (#126)
 - YAML configuration support. JSON formatted configuration files will continue
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
-commandline.
+commandline. (#122)
 - Option to automatically attempt recovery of unusable nodes during
-pool allocation. See the `attempt_recovery_on_unusable` option in the pool
-configuration doc.
+pool allocation or resize. See the `attempt_recovery_on_unusable` option in
+the pool configuration doc.
 - Virtual Network guide
 
 ### Changed
 - **Breaking Change:** Docker image tag for the CLI has been renamed to
-`alfpark/batch-shipyard:latest-cli`.
+`alfpark/batch-shipyard:latest-cli`. (#130)
 - **Breaking Change:** Fully qualified Docker image names are now required
 under both the global config `global_resources`.`docker_images` and jobs
-`task` array `docker_image` (or `image`).
+`task` array `docker_image` (or `image`). (#106)
 - **Breaking Change:** Docker private registries backed to Azure Storage blobs
-are no longer supported. This is not to be confused with the `Classic` Azure
+are no longer supported. This is not to be confused with the Classic Azure
 Container Registries which are still supported. (#44)
 - **Breaking Change:** `docker_registry` property in the global config is
 no longer required. An `additional_registries` option is available for any
 additional registries that are not present from the `docker_images`
-array in `global_resources`.
+array in `global_resources`. (#106)
 - **Breaking Change:** Data ingress/egress from/to Azure Storage along with
 `task_factory`:`file` has changed to accommodate `blobxfer 1.0.0` commandline
 and options. There are new expanded options available, including multiple
@@ -39,12 +40,12 @@ global config, pool or job configuration docs for more information. (#47)
 - **Breaking Change:** `image_uris` in the `vm_configuration`:`custom_image`
 property of the pool configuration has been replaced with `arm_image_id`
 which is a reference to an ARM Image resource. Please see the custom image
-guide for more information.
+guide for more information. (#126)
 - **Breaking Change:** environment variables `SHIPYARD_CREDENTIALS_JSON`,
 `SHIPYARD_CONFIG_JSON`, `SHIPYARD_POOL_JSON`, `SHIPYARD_JOBS_JSON`, and
 `SHIPYARD_FS_JSON` have been renamed to `SHIPYARD_CREDENTIALS_CONF`,
 `SHIPYARD_CONFIG_CONF`, `SHIPYARD_POOL_CONF`, `SHIPYARD_JOBS_CONF`, and
-`SHIPYARD_FS_CONF` respectively.
+`SHIPYARD_FS_CONF` respectively. (#122)
 - `--configdir` or `SHIPYARD_CONFIGDIR` now defaults to the current working
 directory (i.e., `.`) if no other conf file options are specified.
 - `aad` can be specified at a "global" level in the credentials configuration
@@ -52,7 +53,13 @@ file, which is then applied to `batch`, `keyvault` and/or `management`
 section. Please see the credentials configuration guide for more information.
 - `docker_image` is now preferred over the deprecated `image` property in
 the `task` array in the jobs configuration file
+- `gpu` and `infiniband` under the jobs configuration are now optional. GPU
+and/or RDMA capable compute nodes will be autodetected and the proper
+devices and other settings will be automatically be applied to tasks running
+on these compute nodes. You can force disable GPU and/or RDMA by setting
+`gpu` and `infiniband` properties to `false`. (#124)
 - Update Docker CE to 17.09.0
+- Update NC driver to 384.81 (CUDA 9.0 support)
 
 ## [2.9.6] - 2017-10-03
 ### Added
@@ -917,7 +924,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/2.9.6...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...HEAD
+[3.0.0a1]: https://github.com/Azure/batch-shipyard/compare/2.9.6...3.0.0a1
 [2.9.6]: https://github.com/Azure/batch-shipyard/compare/2.9.5...2.9.6
 [2.9.5]: https://github.com/Azure/batch-shipyard/compare/2.9.4...2.9.5
 [2.9.4]: https://github.com/Azure/batch-shipyard/compare/2.9.3...2.9.4

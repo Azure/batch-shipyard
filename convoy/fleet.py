@@ -99,11 +99,11 @@ _NVIDIA_DOCKER = {
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
-            'http://us.download.nvidia.com/XFree86/Linux-x86_64/'
-            '384.66/NVIDIA-Linux-x86_64-384.66.run'
+            'http://us.download.nvidia.com/tesla/'
+            '384.81/NVIDIA-Linux-x86_64-384.81.run'
         ),
         'sha256': (
-            'de5178743f2881c69358573d3702454450482d4dbe3757029a56cdc9b5ccc07a'
+            '13defb76b7baa919c700c604953fa5ba939053bcde3028931a13c42201e1594b'
         ),
         'target': 'resources/nvidia-driver.run'
     },

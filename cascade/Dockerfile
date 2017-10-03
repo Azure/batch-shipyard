@@ -26,7 +26,7 @@ RUN apk update \
     && mkdir -p /opt/batch-shipyard
 
 # copy in files
-COPY cascade.py setup_private_registry.py perf.py docker_cascade.sh /opt/batch-shipyard/
+COPY cascade.py perf.py docker_cascade.sh /opt/batch-shipyard/
 
 # pre-compile files
 RUN python3 -m compileall -f /opt/batch-shipyard
