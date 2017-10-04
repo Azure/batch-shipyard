@@ -198,6 +198,12 @@ def check_for_invalid_config(config):
             'supported. Please migrate your Docker images to Azure '
             'Container Registry, Docker Hub (public or private), or any '
             'other Internet accessible Docker registry solution.')
+    if 'docker_registry' in config:
+        raise ValueError(
+            'docker_registry in the global configuration file is no '
+            'longer required. You must use fully-qualified Docker '
+            'image names in the global_resources:docker_images property '
+            'instead and remove this property.')
     try:
         config['pool_specification']['vm_configuration']['custom_image'][
             'image_uris']

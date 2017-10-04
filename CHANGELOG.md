@@ -20,10 +20,12 @@ the pool configuration doc.
 
 ### Changed
 - **Breaking Change:** Docker image tag for the CLI has been renamed to
-`alfpark/batch-shipyard:latest-cli`. (#130)
+`alfpark/batch-shipyard:<version>-cli` where `<version>` is the release
+version or `latest` for whatever is in `master`. (#130)
 - **Breaking Change:** Fully qualified Docker image names are now required
 under both the global config `global_resources`.`docker_images` and jobs
-`task` array `docker_image` (or `image`). (#106)
+`task` array `docker_image` (or `image`). The `docker_registry` property
+in the global config file is no longer valid. (#106)
 - **Breaking Change:** Docker private registries backed to Azure Storage blobs
 are no longer supported. This is not to be confused with the Classic Azure
 Container Registries which are still supported. (#44)

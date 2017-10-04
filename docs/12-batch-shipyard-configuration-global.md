@@ -178,9 +178,12 @@ This property is required.
       installed on every compute node when this configuration file is supplied
       while creating a compute pool. Image tags are supported. Image names
       should be fully qualified including any registry server name prefix
-      (unless it exists in Docker Hub and can be omitted). If this property
-      is empty or is not specified, no Docker images are pre-loaded on to
-      compute nodes which will lead to increased task startup latency. It is
+      (unless it exists in Docker Hub and can be omitted). If you are
+      referencing a private registry that requires a login, then you must
+      add the credential for the registry in the `docker_registry` property
+      in the credentials file. If this property is empty or is not
+      specified, no Docker images are pre-loaded on to compute nodes
+      which will lead to increased task startup latency. It is
       highly recommended not to leave this property empty if possible. Note
       that if you do not specify Docker images to preload, you must specify
       `allow_run_on_missing_image` as `true` in your job specification for

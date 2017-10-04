@@ -97,7 +97,7 @@ for more information regarding installation and requirements.
 
 ## Documentation and Recipes
 Please refer to the
-[Batch Shipyard Documentation on Read the Docs](http://batch-shipyard.readthedocs.io/en/latest/).
+[Batch Shipyard Documentation on Read the Docs](http://batch-shipyard.readthedocs.io/).
 
 Visit the
 [Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
