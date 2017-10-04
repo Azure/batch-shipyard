@@ -129,7 +129,7 @@ PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
         'inter_node_communication_enabled', 'vm_configuration',
-        'reboot_on_start_task_failed',
+        'reboot_on_start_task_failed', 'attempt_recovery_on_unusable',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
         'gpu_driver', 'ssh', 'additional_node_prep_commands',
@@ -524,6 +524,19 @@ def is_premium_storage_vm_size(vm_size):
     return False
 
 
+def is_platform_image(config, vm_config=None):
+    # type (dict, PoolVmConfiguration) -> bool
+    """If pool is on a platform image
+    :param dict config: configuration object
+    :param bool vm_config: vm configuration
+    :rtype: bool
+    :return: if on platform image
+    """
+    if vm_config is None:
+        vm_config = _populate_pool_vm_configuration(config)
+    return isinstance(vm_config, PoolVmPlatformImageSettings)
+
+
 def temp_disk_mountpoint(config, offer=None):
     # type: (dict) -> str
     """Get temporary disk mountpoint
@@ -534,7 +547,7 @@ def temp_disk_mountpoint(config, offer=None):
     """
     if offer is None:
         vmconfig = _populate_pool_vm_configuration(config)
-        if isinstance(vmconfig, PoolVmPlatformImageSettings):
+        if is_platform_image(config, vm_config=vmconfig):
             offer = pool_offer(config, lower=True)
         else:
             if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
@@ -749,33 +762,22 @@ def pool_settings(config):
     :return: pool settings from specification
     """
     conf = pool_specification(config)
-    try:
-        max_tasks_per_node = conf['max_tasks_per_node']
-    except KeyError:
-        max_tasks_per_node = 1
+    max_tasks_per_node = _kv_read(conf, 'max_tasks_per_node', default=1)
     resize_timeout = _kv_read_checked(conf, 'resize_timeout')
     if util.is_not_empty(resize_timeout):
         resize_timeout = util.convert_string_to_timedelta(resize_timeout)
     else:
         resize_timeout = None
-    try:
-        inter_node_communication_enabled = conf[
-            'inter_node_communication_enabled']
-    except KeyError:
-        inter_node_communication_enabled = False
-    try:
-        reboot_on_start_task_failed = conf['reboot_on_start_task_failed']
-    except KeyError:
-        reboot_on_start_task_failed = False
-    try:
-        block_until_all_gr = conf['block_until_all_global_resources_loaded']
-    except KeyError:
-        block_until_all_gr = True
-    try:
-        transfer_files_on_pool_creation = conf[
-            'transfer_files_on_pool_creation']
-    except KeyError:
-        transfer_files_on_pool_creation = False
+    inter_node_communication_enabled = _kv_read(
+        conf, 'inter_node_communication_enabled', default=False)
+    reboot_on_start_task_failed = _kv_read(
+        conf, 'reboot_on_start_task_failed', default=False)
+    attempt_recovery_on_unusable = _kv_read(
+        conf, 'attempt_recovery_on_unusable', default=False)
+    block_until_all_gr = _kv_read(
+        conf, 'block_until_all_global_resources_loaded', default=True)
+    transfer_files_on_pool_creation = _kv_read(
+        conf, 'transfer_files_on_pool_creation', default=False)
     try:
         input_data = conf['input_data']
         if util.is_none_or_empty(input_data):
@@ -866,6 +868,7 @@ def pool_settings(config):
         inter_node_communication_enabled=inter_node_communication_enabled,
         vm_configuration=_populate_pool_vm_configuration(config),
         reboot_on_start_task_failed=reboot_on_start_task_failed,
+        attempt_recovery_on_unusable=attempt_recovery_on_unusable,
         block_until_all_global_resources_loaded=block_until_all_gr,
         transfer_files_on_pool_creation=transfer_files_on_pool_creation,
         input_data=input_data,
@@ -890,6 +893,15 @@ def pool_settings(config):
         autoscale=pool_autoscale_settings(config),
         node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
     )
+
+
+def set_attempt_recovery_on_unusable(config, flag):
+    # type: (dict, bool) -> None
+    """Set attempt recovery on unusable setting
+    :param dict config: configuration object
+    :param bool flag: flag to set
+    """
+    config['pool_specification']['attempt_recovery_on_unusable'] = flag
 
 
 def set_block_until_all_global_resources_loaded(config, flag):
@@ -1951,7 +1963,7 @@ def data_container_from_remote_path(conf, rp=None):
         rp = data_remote_path(conf)
     if util.is_none_or_empty(rp):
         raise ValueError(
-            'cannot derive container name from invalid remote path')
+            'cannot derive container name from invalid remote_path')
     return rp.split('/')[0]
 
 
@@ -2428,8 +2440,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         pool_id = poolconf.id
         vm_size = poolconf.vm_size
         inter_node_comm = poolconf.inter_node_communication_enabled
-        is_custom_image = isinstance(
-            poolconf.vm_configuration, PoolVmCustomImageSettings)
+        is_custom_image = not is_platform_image(
+            config, vm_config=poolconf.vm_configuration)
         if is_custom_image:
             publisher = None
             offer = None

@@ -278,9 +278,13 @@ def _block_for_nodes_ready(
             pool_id, stopping_states))
     i = 0
     reboot_map = {}
+    unusable_delete = False
     while True:
         # refresh pool to ensure that there is no dedicated resize error
         pool = batch_client.pool.get(pool_id)
+        total_nodes = (
+            pool.target_dedicated_nodes + pool.target_low_priority_nodes
+        )
         if util.is_not_empty(pool.resize_errors):
             fatal_resize_error = False
             errors = []
@@ -361,9 +365,24 @@ def _block_for_nodes_ready(
                      'directory if available. If this error appears '
                      'non-transient, please submit an issue on '
                      'GitHub.').format(pool.id))
-        if (len(nodes) ==
-                (pool.target_dedicated_nodes +
-                 pool.target_low_priority_nodes) and
+        # check if any nodes are in unusable state
+        elif (any(node.state == batchmodels.ComputeNodeState.unusable
+                  for node in nodes)):
+            pool_stats(batch_client, config, pool_id=pool_id)
+            if pool.attempt_recovery_on_unusable:
+                logger.warning('Unusable nodes detected, deleting')
+                del_node(
+                    batch_client, config, False, False, True, None,
+                    confirm=False)
+                unusable_delete = True
+            else:
+                raise RuntimeError(
+                    ('Unusable nodes detected in pool {}. You can delete '
+                     'unusable nodes with "pool delnode --all-unusable" '
+                     'first prior to retrying the resize operation.').format(
+                         pool.id))
+        # check for full allocation
+        if (len(nodes) == total_nodes and
                 all(node.state in stopping_states for node in nodes)):
             if any(node.state not in end_states for node in nodes):
                 pool_stats(batch_client, config, pool_id=pool_id)
@@ -379,6 +398,10 @@ def _block_for_nodes_ready(
                 return nodes
         i += 1
         if i % 3 == 0:
+            # issue resize if unusable deletion has occurred
+            if unusable_delete and len(nodes) < total_nodes:
+                resize_pool(batch_client, config, wait=False)
+                unusable_delete = False
             i = 0
             logger.debug(
                 ('waiting for {} dedicated nodes and {} low priority nodes '
@@ -397,7 +420,14 @@ def _block_for_nodes_ready(
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
                 logger.debug(_node_state_counts(nodes))
-        time.sleep(10)
+        if len(nodes) < 10:
+            time.sleep(3)
+        elif len(nodes) < 50:
+            time.sleep(6)
+        elif len(nodes) < 100:
+            time.sleep(10)
+        else:
+            time.sleep(15)
 
 
 def _node_state_counts(nodes):
@@ -1167,8 +1197,9 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
 
 def del_node(
         batch_client, config, all_start_task_failed, all_starting,
-        all_unusable, node_id):
-    # type: (batch.BatchServiceClient, dict, bool, bool, bool, str) -> None
+        all_unusable, node_id, confirm=True):
+    # type: (batch.BatchServiceClient, dict, bool, bool, bool, str,
+    #        bool) -> None
     """Delete a node in a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -1177,6 +1208,7 @@ def del_node(
     :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
     :param str node_id: node id to delete
+    :param bool confirm: confirm action
     """
     node_ids = []
     pool_id = settings.pool_id(config)
@@ -1196,14 +1228,14 @@ def del_node(
                 ),
             ))
         for node in nodes:
-            if util.confirm_action(
+            if confirm and util.confirm_action(
                     config, 'delete node {} from {} pool'.format(
                         node.id, pool_id)):
                 node_ids.append(node.id)
     else:
         if util.is_none_or_empty(node_id):
             raise ValueError('node id is invalid')
-        if util.confirm_action(
+        if confirm and util.confirm_action(
                 config, 'delete node {} from {} pool'.format(
                     node_id, pool_id)):
             node_ids.append(node_id)

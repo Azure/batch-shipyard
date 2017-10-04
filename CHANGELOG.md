@@ -12,6 +12,9 @@ Service Batch accounts (#126)
 to be supported, however, note the breaking change with the corresponding
 environment variable names for specifying individual config files from the
 commandline.
+- Option to automatically attempt recovery of unusable nodes during
+pool allocation. See the `attempt_recovery_on_unusable` option in the pool
+configuration doc.
 - Virtual Network guide
 
 ### Changed

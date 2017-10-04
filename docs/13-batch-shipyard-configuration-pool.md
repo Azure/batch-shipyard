@@ -41,7 +41,8 @@ pool_specification:
       rebalance_preemption_percentage: 50
     formula: ''
   inter_node_communication_enabled: true
-  reboot_on_start_task_failed: true
+  reboot_on_start_task_failed: false
+  attempt_recovery_on_unusable: false
   block_until_all_global_resources_loaded: true
   transfer_files_on_pool_creation: false
   input_data:
@@ -230,6 +231,11 @@ will be force enabled if peer-to-peer replication is enabled.
 compute node in case there is a transient failure in node preparation (e.g.,
 network timeout, resolution failure or download problem). This defaults to
 `false`.
+* (optional) `attempt_recovery_on_unusable` allows Batch Shipyard to attempt
+to recover nodes that enter `unusable` state automatically. Note that
+enabling this option can lead to infinite wait on `pool add` or `pool resize`
+with `--wait`. This defaults to `false` and is ignored for `custom_image`
+where the behavior is always `false`.
 * (optional) `block_until_all_global_resources_loaded` will block the node
 from entering ready state until all Docker images are loaded. This defaults
 to `true`. This option has no effect on `native` container support pools (the

@@ -1022,10 +1022,9 @@ def _construct_pool_object(
             ),
         )
         start_task = [
-            '{npf} {a}{b}{e}{f}{m}{n}{v}{x}'.format(
+            '{npf} {a}{e}{f}{m}{n}{v}{x}'.format(
                 npf=_NODEPREP_NATIVEDOCKER_FILE[0],
                 a=' -a' if azurefile_vd else '',
-                b=' -b' if util.is_not_empty(block_for_gr) else '',
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
@@ -1886,6 +1885,13 @@ def _adjust_settings_for_pool_creation(config):
     # check pool count of 0 and ssh
     if pool_total_vm_count == 0 and util.is_not_empty(pool.ssh.username):
         logger.warning('cannot add SSH user with zero target nodes')
+    # ensure unusable recovery is not enabled for custom image
+    if (pool.attempt_recovery_on_unusable and
+            not settings.is_platform_image(
+                config, vm_config=pool.vm_configuration)):
+        logger.warning(
+            'override attempt recovery on unusable due to custom image')
+        settings.set_attempt_recovery_on_unusable(config, False)
 
 
 def _check_settings_for_auto_pool(config):
