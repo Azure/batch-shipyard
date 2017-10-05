@@ -47,8 +47,8 @@ global_resources:
         azure_file_share_name: myfileshare
         container_path: $AZ_BATCH_NODE_SHARED_DIR/azfile
         mount_options:
-        - filemode=0777
-        - dirmode=0777
+        - file_mode=0777
+        - dir_mode=0777
       glustervol:
         volume_driver: glusterfs_on_compute
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
@@ -335,7 +335,7 @@ This property is required.
         * `mount_options` are the mount options to pass to the mount command.
           Supported options are documented
           [here](https://github.com/Azure/azurefile-dockervolumedriver). It is
-          recommended to use `0777` for both `filemode` and `dirmode` as the
+          recommended to use `0777` for both `file_mode` and `dir_mode` as the
           `uid` and `gid` cannot be reliably determined before the compute
           pool is allocated and this volume will be mounted as the root user.
 

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- Support for mounting multiple Azure File shares as `shared_data_volumes`
+to a pool (#123)
+
+### Changed
+- Azure Files (with `volume_driver` of `azurefile`) specified under
+`shared_data_volumes` are now mounted directly to the host (#123)
+- The internal root mount point for all `shared_data_volumes` is now under
+`$AZ_BATCH_NODE_ROOT_DIR/mounts` to reduce clutter/confusion under the
+old root mount point of `$AZ_BATCH_NODE_SHARED_DIR`. The container mount
+points (i.e., `container_path`) are unaffected.
+
 ## [3.0.0a1] - 2017-10-04
 ### Added
 - Support for deploying compute nodes to an ARM Virtual Network with Batch

@@ -22,6 +22,12 @@ regardless of the account mode. This means that the
 must include an `aad` section with the appropriate options, including the
 authentication method of your choosing.
 
+Your service principal requires at least the `Virtual Machine Contributor`
+role permission or a
+[custom role with the action](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
+
+* `Microsoft.Network/virtualNetworks/subnets/join/action`
+
 ## `virtual_network` Pool configuration
 To deploy Batch compute nodes into a subnet within a Virtual Network that
 you specify, you will need to define the `virtual_network` property in the

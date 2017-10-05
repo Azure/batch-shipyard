@@ -37,6 +37,7 @@ try:
 except ImportError:
     import pathlib
 import requests
+import tempfile
 import time
 import uuid
 # non-stdlib imports
@@ -62,16 +63,7 @@ util.setup_logger(logger)
 # global defines
 _REQUEST_CHUNK_SIZE = 4194304
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
-_AZUREFILE_DVD_BIN = {
-    'url': (
-        'https://github.com/Azure/azurefile-dockervolumedriver/releases/'
-        'download/v0.5.1/azurefile-dockervolumedriver'
-    ),
-    'sha256': (
-        '288f809a1290ea8daf89d222507bda9b3709a9665cec8b70354a50252395e127'
-    ),
-    'target': 'resources/azurefile-dockervolumedriver'
-}
+_RESOURCES_PATH = None
 __NVIDIA_DOCKER_RPM = {
     'url': (
         'https://github.com/NVIDIA/nvidia-docker/releases/download/'
@@ -80,7 +72,7 @@ __NVIDIA_DOCKER_RPM = {
     'sha256': (
         'f05dfe7fe655ed39c399db0d6362e351b059f2708c3e6da17f590a000237ec3a'
     ),
-    'target': 'resources/nvidia-docker.rpm'
+    'target': 'nvidia-docker.rpm'
 }
 _NVIDIA_DOCKER = {
     'ubuntuserver': {
@@ -91,7 +83,7 @@ _NVIDIA_DOCKER = {
         'sha256': (
             '9fbfd98f87ef2fd2e2137e3ba59431890dde6caf96f113ea0a1bd15bb3e51afa'
         ),
-        'target': 'resources/nvidia-docker.deb'
+        'target': 'nvidia-docker.deb'
     },
     'centos': __NVIDIA_DOCKER_RPM,
     'centos-hpc': __NVIDIA_DOCKER_RPM,
@@ -105,14 +97,14 @@ _NVIDIA_DRIVER = {
         'sha256': (
             '13defb76b7baa919c700c604953fa5ba939053bcde3028931a13c42201e1594b'
         ),
-        'target': 'resources/nvidia-driver.run'
+        'target': 'nvidia-driver.run'
     },
     'visualization': {
         'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
         'sha256': (
             'dec622880879d2ead3601865d38656d77b44e5f47e2855375bf49d4eb8cdbad4'
         ),
-        'target': 'resources/nvidia-driver-grid.run'
+        'target': 'nvidia-driver-grid.run'
     },
     'license': (
         'http://www.nvidia.com/content/DriverDownload-March2009'
@@ -179,6 +171,24 @@ _REMOTEFSSTAT_FILE = (
 _ALL_REMOTEFS_FILES = [
     _REMOTEFSPREP_FILE, _REMOTEFSADDBRICK_FILE, _REMOTEFSSTAT_FILE,
 ]
+
+
+def initialize_globals(verbose):
+    # type: (bool) -> None
+    """Initialize any runtime globals
+    :param bool verbose: verbose
+    """
+    global _RESOURCES_PATH
+    if _RESOURCES_PATH is None:
+        _RESOURCES_PATH = _ROOT_PATH / 'resources'
+        if not _RESOURCES_PATH.exists():
+            _RESOURCES_PATH = pathlib.Path(
+                tempfile.gettempdir()) / 'batch-shipyard-{}-resources'.format(
+                    __version__)
+            _RESOURCES_PATH.mkdir(parents=True, exist_ok=True)
+        if verbose:
+            logger.debug('initialized resources path to: {}'.format(
+                _RESOURCES_PATH))
 
 
 def check_for_invalid_config(config):
@@ -305,7 +315,7 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
     :return: package path
     """
     gpu_type = settings.get_gpu_type_from_vm_size(vm_size)
-    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DRIVER[gpu_type]['target'])
+    pkg = _RESOURCES_PATH / _NVIDIA_DRIVER[gpu_type]['target']
     # check to see if package is downloaded
     if (not pkg.exists() or
             util.compute_sha256_for_file(pkg, False) !=
@@ -329,8 +339,7 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
             for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
                 if chunk:
                     f.write(chunk)
-        logger.debug('wrote {} bytes to {}'.format(
-            pkg.stat().st_size, _NVIDIA_DRIVER[gpu_type]['target']))
+        logger.debug('wrote {} bytes to {}'.format(pkg.stat().st_size, pkg))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DRIVER[gpu_type]['sha256']):
@@ -347,7 +356,7 @@ def _setup_nvidia_docker_package(blob_client, config):
     :return: package path
     """
     offer = settings.pool_offer(config, lower=True)
-    pkg = pathlib.Path(_ROOT_PATH, _NVIDIA_DOCKER[offer]['target'])
+    pkg = _RESOURCES_PATH / _NVIDIA_DOCKER[offer]['target']
     # check to see if package is downloaded
     if (not pkg.exists() or
             util.compute_sha256_for_file(pkg, False) !=
@@ -360,8 +369,7 @@ def _setup_nvidia_docker_package(blob_client, config):
             for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
                 if chunk:
                     f.write(chunk)
-        logger.debug('wrote {} bytes to {}'.format(
-            pkg.stat().st_size, _NVIDIA_DOCKER[offer]['target']))
+        logger.debug('wrote {} bytes to {}'.format(pkg.stat().st_size, pkg))
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DOCKER[offer]['sha256']):
@@ -369,94 +377,75 @@ def _setup_nvidia_docker_package(blob_client, config):
     return pkg
 
 
-def _setup_azurefile_volume_driver(blob_client, config):
-    # type: (azure.storage.blob.BlockBlobService, dict) -> tuple
-    """Set up the Azure File docker volume driver
+def _generate_azfile_mount_script_name(batch_account_name, pool_id):
+    # type: (str, str) -> pathlib.Path
+    """Generate an azure file mount script name
+    :param str batch_account_name: batch account name
+    :param str pool_id: pool id
+    :rtype: pathlib.Path
+    :return: path to azfile mount script
+    """
+    return _RESOURCES_PATH / 'azurefile-mount-{}-{}.sh'.format(
+        batch_account_name.lower(), pool_id.lower())
+
+
+def _setup_azurefile_mounts(blob_client, config, bc):
+    # type: (azure.storage.blob.BlockBlobService, dict,
+    #        settings.BatchCredentials) -> tuple
+    """Set up the Azure File shares
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
+    :param settings.BatchCredentials bc: batch creds
     :rtype: tuple
     :return: (bin path, service file path, service env file path,
         volume creation script path)
     """
-    upstart = False
-    node_agent = settings.pool_custom_image_node_agent(config)
-    if (util.is_not_empty(node_agent) and
-            node_agent.lower() == 'batch.node.ubuntu 14.04'):
-        upstart = True
-    elif util.is_none_or_empty(node_agent):
-        publisher = settings.pool_publisher(config, lower=True)
-        offer = settings.pool_offer(config, lower=True)
-        sku = settings.pool_sku(config, lower=True)
-        if (publisher == 'canonical' and offer == 'ubuntuserver' and
-                sku.startswith('14.04')):
-            upstart = True
-    # check to see if binary is downloaded
-    bin = pathlib.Path(_ROOT_PATH, _AZUREFILE_DVD_BIN['target'])
-    if (not bin.exists() or
-            util.compute_sha256_for_file(bin, False) !=
-            _AZUREFILE_DVD_BIN['sha256']):
-        # download package
-        logger.debug('downloading Azure File Docker Volume Driver')
-        response = requests.get(_AZUREFILE_DVD_BIN['url'], stream=True)
-        with bin.open('wb') as f:
-            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-        logger.debug('wrote {} bytes to {}'.format(
-            bin.stat().st_size, _AZUREFILE_DVD_BIN['target']))
-        # check sha256
-        if (util.compute_sha256_for_file(bin, False) !=
-                _AZUREFILE_DVD_BIN['sha256']):
-            raise RuntimeError('sha256 mismatch for {}'.format(bin))
-    if upstart:
-        srv = pathlib.Path(
-            _ROOT_PATH, 'resources/azurefile-dockervolumedriver.conf')
-    else:
-        srv = pathlib.Path(
-            _ROOT_PATH, 'resources/azurefile-dockervolumedriver.service')
-    # construct systemd env file
-    sa = None
+    # construct mount commands
+    cmds = []
     sdv = settings.global_resources_shared_data_volumes(config)
     for svkey in sdv:
         if settings.is_shared_data_volume_azure_file(sdv, svkey):
-            # check every entry to ensure the same storage account
-            _sa = settings.credentials_storage(
+            sa = settings.credentials_storage(
                 config,
                 settings.azure_file_storage_account_settings(sdv, svkey))
-            if sa is not None and sa.account != _sa.account:
-                raise ValueError(
-                    'multiple storage accounts are not supported for '
-                    'azurefile docker volume driver')
-            sa = _sa
-    if sa is None:
-        raise RuntimeError(
-            'storage account not specified for azurefile docker volume driver')
-    srvenv = pathlib.Path(
-        _ROOT_PATH, 'resources/azurefile-dockervolumedriver.env')
-    with srvenv.open('wb') as f:
-        f.write('AZURE_STORAGE_ACCOUNT={}\n'.format(sa.account).encode('utf8'))
-        f.write('AZURE_STORAGE_ACCOUNT_KEY={}\n'.format(
-            sa.account_key).encode('utf8'))
-        f.write('AZURE_STORAGE_BASE={}\n'.format(sa.endpoint).encode('utf8'))
-    # create docker volume mount command script
-    volcreate = pathlib.Path(
-        _ROOT_PATH, 'resources/azurefile-dockervolume-create.sh')
+            share = settings.azure_file_share_name(sdv, svkey)
+            hmp = settings.azure_file_host_mount_path(sa.account, share)
+            cmd = (
+                'mount -t cifs //{sa}.file.{ep}/{share} {hmp} -o '
+                'vers=3.0,username={sa},password={sakey},serverino').format(
+                    sa=sa.account,
+                    ep=sa.endpoint,
+                    share=share,
+                    hmp=hmp,
+                    sakey=sa.account_key)
+            # add any additional mount options
+            mo = settings.shared_data_volume_mount_options(sdv, svkey)
+            if util.is_not_empty(mo):
+                opts = []
+                # retain backward compatibility with filemode/dirmode options
+                # from the old Azure File Docker volume driver
+                for opt in mo:
+                    tmp = opt.split('=')
+                    if tmp[0] == 'filemode':
+                        opts.append('file_mode={}'.format(tmp[1]))
+                    elif tmp[0] == 'dirmode':
+                        opts.append('dir_mode={}'.format(tmp[1]))
+                    else:
+                        opts.append(opt)
+                cmd = '{},{}'.format(cmd, ','.join(opts))
+            cmds.append('mkdir -p {}'.format(hmp))
+            cmds.append(cmd)
+    # create file share mount command script
+    if util.is_none_or_empty(cmds):
+        raise RuntimeError('Generated Azure file mount commands are invalid')
+    volcreate = _generate_azfile_mount_script_name(
+        bc.account, settings.pool_id(config))
     with volcreate.open('wb') as f:
         f.write(b'#!/usr/bin/env bash\n\n')
-        for svkey in sdv:
-            if not settings.is_shared_data_volume_azure_file(sdv, svkey):
-                continue
-            opts = [
-                '-o share={}'.format(settings.azure_file_share_name(
-                    sdv, svkey))
-            ]
-            mo = settings.shared_data_volume_mount_options(sdv, svkey)
-            if mo is not None:
-                for opt in mo:
-                    opts.append('-o {}'.format(opt))
-            f.write('docker volume create -d azurefile --name {} {}\n'.format(
-                svkey, ' '.join(opts)).encode('utf8'))
-    return bin, srv, srvenv, volcreate
+        f.write(b'set -e\n')
+        f.write(b'set -o pipefail\n\n')
+        f.write('\n'.join(cmds).encode('utf8'))
+    return volcreate
 
 
 def _create_storage_cluster_mount_args(
@@ -555,10 +544,11 @@ def _create_storage_cluster_mount_args(
             mo = ','.join((mo, ','.join(amo)))
         # construct mount string for fstab
         fstab_mount = (
-            '{remoteip}:{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
+            '{remoteip}:{srcpath} {hmp}/{scid} '
             '{fstype} {mo} 0 2').format(
                 remoteip=remote_ip,
                 srcpath=sc.file_server.mountpoint,
+                hmp=settings.get_host_mounts_path(),
                 scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo)
@@ -632,10 +622,11 @@ def _create_storage_cluster_mount_args(
             mo = ','.join((mo, ','.join(amo)))
         # construct mount string for fstab, srcpath is the gluster volume
         fstab_mount = (
-            '{remoteip}:/{srcpath} $AZ_BATCH_NODE_SHARED_DIR/{scid} '
+            '{remoteip}:/{srcpath} {hmp}/{scid} '
             '{fstype} {mo} 0 2').format(
                 remoteip=primary_ip,
                 srcpath=settings.get_file_server_glusterfs_volume_name(sc),
+                hmp=settings.get_host_mounts_path(),
                 scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo)
@@ -849,9 +840,6 @@ def _construct_pool_object(
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
             if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
-                if azurefile_vd:
-                    raise ValueError(
-                        'only one Azure File share can be mounted')
                 azurefile_vd = True
             elif settings.is_shared_data_volume_gluster_on_compute(
                     sdv, sdvkey):
@@ -943,14 +931,10 @@ def _construct_pool_object(
                 _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
-    # handle azurefile docker volume driver
+    # handle azurefile mounts
     if azurefile_vd:
-        afbin, afsrv, afenv, afvc = _setup_azurefile_volume_driver(
-            blob_client, config)
-        _rflist.append((afbin.name, afbin))
-        _rflist.append((afsrv.name, afsrv))
-        _rflist.append((afenv.name, afenv))
-        _rflist.append((afvc.name, afvc))
+        afms = _setup_azurefile_mounts(blob_client, config, bc)
+        _rflist.append(('azurefile-mount.sh', afms))
     # gpu settings
     if (not native and settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):
@@ -1076,6 +1060,12 @@ def _construct_pool_object(
     # upload resource files
     sas_urls = storage.upload_resource_files(blob_client, config, _rflist)
     del _rflist
+    # remove temporary az file mount file created
+    if azurefile_vd:
+        try:
+            afms.unlink()
+        except OSError:
+            pass
     # digest any input data
     addlcmds = data.process_input_data(
         config, _BLOBXFER_FILE, settings.pool_specification(config))

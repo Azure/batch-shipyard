@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+# consts
+MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
+
 # globals
 azurefile=0
 blobxferversion=latest
@@ -27,7 +30,7 @@ while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
             echo ""
-            echo "-a install azurefile docker volume driver"
+            echo "-a mount azurefile shares"
             echo "-b block until resources loaded"
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
@@ -250,32 +253,11 @@ EOF
     set -e
 }
 
-install_azurefile_docker_volume_driver() {
-    chown root:root azurefile-dockervolumedriver*
-    chmod 755 azurefile-dockervolumedriver
-    chmod 640 azurefile-dockervolumedriver.env
-    mv azurefile-dockervolumedriver /usr/bin
-    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
-    if [[ $1 == "ubuntuserver" ]] && [[ $2 == 14.04.* ]]; then
-        mv azurefile-dockervolumedriver.conf /etc/init
-        initctl reload-configuration
-        initctl start azurefile-dockervolumedriver
-    else
-        if [[ $1 == opensuse* ]] || [[ $1 == sles* ]]; then
-            systemdloc=/usr/lib/systemd/system
-        else
-            systemdloc=/lib/systemd/system
-        fi
-        mv azurefile-dockervolumedriver.service $systemdloc
-        systemctl daemon-reload
-        systemctl enable azurefile-dockervolumedriver
-        systemctl start azurefile-dockervolumedriver
-    fi
-    # create docker volumes
-    chmod +x azurefile-dockervolume-create.sh
-    ./azurefile-dockervolume-create.sh
-    # list volumes
-    docker volume list
+mount_azurefile_share() {
+    chmod +x azurefile-mount.sh
+    ./azurefile-mount.sh
+    chmod 700 azurefile-mount.sh
+    chown root:root azurefile-mount.sh
 }
 
 refresh_package_index() {
@@ -411,6 +393,14 @@ if command -v python3 > /dev/null 2>&1; then
     npstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
 else
     npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
+fi
+
+# create shared mount points
+mkdir -p $MOUNTS_PATH
+
+# mount azure file shares (this must be done every boot)
+if [ $azurefile -eq 1 ]; then
+    mount_azurefile_share $offer $sku
 fi
 
 # set node prep status files
@@ -589,10 +579,6 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         fi
         set -e
         $srvstart
-        # setup and start azure file docker volume driver
-        if [ $azurefile -eq 1 ]; then
-            install_azurefile_docker_volume_driver $offer $sku
-        fi
         set +e
     fi
     set -e
@@ -690,10 +676,6 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     $srvenable
     $srvstart
     $srvstatus
-    # setup and start azure file docker volume driver
-    if [ $azurefile -eq 1 ]; then
-        install_azurefile_docker_volume_driver $offer $sku
-    fi
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         install_nvidia_software $offer $sku
@@ -783,10 +765,6 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         systemctl enable docker
         systemctl start docker
         systemctl status docker
-        # setup and start azure file docker volume driver
-        if [ $azurefile -eq 1 ]; then
-            install_azurefile_docker_volume_driver $offer $sku
-        fi
         # set up glusterfs
         if [ $gluster_on_compute -eq 1 ]; then
             zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
@@ -850,7 +828,7 @@ if [ ! -z $sc_args ]; then
     i=0
     for sc_arg in ${sc_args[@]}; do
         IFS=':' read -ra sc <<< "$sc_arg"
-        mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
+        mountpoint=$MOUNTS_PATH/${sc[1]}
         echo "INFO: Creating host directory for storage cluster $sc_arg at $mountpoint"
         mkdir -p $mountpoint
         chmod 777 $mountpoint

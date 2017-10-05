@@ -42,8 +42,7 @@ with integration to auto-link these filesystems to compute nodes with support fo
     * [GlusterFS](https://www.gluster.org/) distributed network file system
 * Automatic shared data volume support
     * Remote Filesystems as provisioned by Batch Shipyard
-    * [Azure File Docker Volume Driver](https://github.com/Azure/azurefile-dockervolumedriver)
-      installation and share setup for SMB/CIFS backed to Azure Storage
+    * [Azure File](https://azure.microsoft.com/en-us/services/storage/files/) via SMB
     * [GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the

@@ -47,6 +47,7 @@ from . import util
 _METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
+_HOST_MOUNTS_DIR = '$AZ_BATCH_NODE_ROOT_DIR/mounts'
 _TENSORBOARD_DOCKER_IMAGE = (
     'gcr.io/tensorflow/tensorflow',
     '/usr/local/lib/python2.7/dist-packages/tensorflow'
@@ -385,6 +386,15 @@ def get_gluster_on_compute_volume():
     :return: gluster on compute volume mount
     """
     return _GLUSTER_ON_COMPUTE_VOLUME
+
+
+def get_host_mounts_path():
+    # type: (None) -> str
+    """Get host mounts path
+    :rtype: str
+    :return: host mounts dir
+    """
+    return _HOST_MOUNTS_DIR
 
 
 def can_tune_tcp(vm_size):
@@ -1830,6 +1840,20 @@ def azure_file_share_name(sdv, sdvkey):
     return sdv[sdvkey]['azure_file_share_name']
 
 
+def azure_file_host_mount_path(storage_account_name, share_name):
+    # type: (str, str) -> str
+    """Get azure file share host mount path
+    :param str storage_account_name: storage account name
+    :param str share_name: file share name
+    :rtype: str
+    :return: host mount path for azure file share
+    """
+    return '{root}/azfile-{sa}-{share}'.format(
+        root=_HOST_MOUNTS_DIR,
+        sa=storage_account_name,
+        share=share_name)
+
+
 def gluster_volume_type(sdv, sdvkey):
     # type: (dict, str) -> str
     """Get gluster volume type
@@ -2645,17 +2669,22 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         for sdvkey in shared_data_volumes:
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 run_opts.append('-v {}/{}:{}'.format(
-                    '$AZ_BATCH_NODE_SHARED_DIR',
+                    _HOST_MOUNTS_DIR,
                     get_gluster_on_compute_volume(),
                     shared_data_volume_container_path(sdv, sdvkey)))
             elif is_shared_data_volume_storage_cluster(sdv, sdvkey):
                 run_opts.append('-v {}/{}:{}'.format(
-                    '$AZ_BATCH_NODE_SHARED_DIR',
+                    _HOST_MOUNTS_DIR,
                     sdvkey,
                     shared_data_volume_container_path(sdv, sdvkey)))
             else:
+                sa = credentials_storage(
+                    config,
+                    azure_file_storage_account_settings(sdv, sdvkey))
+                share_name = azure_file_share_name(sdv, sdvkey)
+                hmp = azure_file_host_mount_path(sa.account, share_name)
                 run_opts.append('-v {}:{}'.format(
-                    sdvkey, shared_data_volume_container_path(sdv, sdvkey)))
+                    hmp, shared_data_volume_container_path(sdv, sdvkey)))
     del shared_data_volumes
     # append user identity options
     attach_ui = False

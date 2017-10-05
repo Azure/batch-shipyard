@@ -29,6 +29,13 @@ regardless of the account mode. This means that the
 must include an `aad` section with the appropriate options, including the
 authentication method of your choosing.
 
+Your service principal requires at least `Contributor`
+role permission or a
+[custom role with the actions](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
+
+* `Microsoft.Compute/disks/beginGetAccess/action`
+* `Microsoft.Compute/images/read`
+
 ## Provisioning a Custom Image
 You will need to ensure that your custom image is sufficiently prepared
 before using it as a source VHD for Batch Shipyard. The following

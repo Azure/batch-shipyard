@@ -3,6 +3,9 @@
 set -e
 set -o pipefail
 
+# consts
+MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
+
 # globals
 azurefile=0
 blobxferversion=latest
@@ -22,7 +25,7 @@ while getopts "h?abef:m:np:t:v:x:" opt; do
         h|\?)
             echo "shipyard_nodeprep_customimage.sh parameters"
             echo ""
-            echo "-a install azurefile docker volume driver"
+            echo "-a mount azurefile shares"
             echo "-b block until resources loaded"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
@@ -228,30 +231,11 @@ check_for_storage_cluster_software() {
     fi
 }
 
-install_azurefile_docker_volume_driver() {
-    chown root:root azurefile-dockervolumedriver*
-    chmod 755 azurefile-dockervolumedriver
-    chmod 640 azurefile-dockervolumedriver.env
-    mv azurefile-dockervolumedriver /usr/bin
-    mv azurefile-dockervolumedriver.env /etc/default/azurefile-dockervolumedriver
-    if [[ "$1" == "ubuntu" ]] && [[ "$2" == 14.04* ]]; then
-        mv azurefile-dockervolumedriver.conf /etc/init
-        initctl reload-configuration
-        initctl start azurefile-dockervolumedriver
-    else
-        if [[ "$1" == "opensuse" ]] || [[ "$1" == "sles" ]]; then
-            systemdloc=/usr/lib/systemd/system
-        else
-            systemdloc=/lib/systemd/system
-        fi
-        mv azurefile-dockervolumedriver.service $systemdloc
-        systemctl daemon-reload
-        systemctl enable azurefile-dockervolumedriver
-        systemctl start azurefile-dockervolumedriver
-    fi
-    # create docker volumes
-    chmod +x azurefile-dockervolume-create.sh
-    ./azurefile-dockervolume-create.sh
+mount_azurefile_share() {
+    chmod +x azurefile-mount.sh
+    ./azurefile-mount.sh
+    chmod 700 azurefile-mount.sh
+    chown root:root azurefile-mount.sh
 }
 
 docker_pull_image() {
@@ -360,6 +344,14 @@ if [ $p2penabled -eq 1 ]; then
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
 
+# create shared mount points
+mkdir -p $AZ_BATCH_NODE_ROOT_DIR/mounts
+
+# mount azure file shares (this must be done every boot)
+if [ $azurefile -eq 1 ]; then
+    mount_azurefile_share $DISTRIB_ID $DISTRIB_RELEASE
+fi
+
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
     echo "$cascadefailed file exists, assuming cascade failure during node prep"
@@ -384,11 +376,6 @@ check_docker_root_dir $DISTRIB_ID
 # check for nvidia card/driver/docker
 check_for_nvidia
 
-# install azurefile docker volume driver
-if [ $azurefile -eq 1 ]; then
-    install_azurefile_docker_volume_driver $DISTRIB_ID $DISTRIB_RELEASE
-fi
-
 # check for gluster
 if [ $gluster_on_compute -eq 1 ]; then
     check_for_glusterfs_on_compute
@@ -405,7 +392,7 @@ if [ ! -z $sc_args ]; then
     i=0
     for sc_arg in ${sc_args[@]}; do
         IFS=':' read -ra sc <<< "$sc_arg"
-        mountpoint=$AZ_BATCH_NODE_SHARED_DIR/${sc[1]}
+        mountpoint=$MOUNTS_PATH/${sc[1]}
         echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
         mkdir -p $mountpoint
         chmod 777 $mountpoint

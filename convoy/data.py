@@ -77,7 +77,8 @@ def _get_gluster_paths(config):
     sdv = settings.global_resources_shared_data_volumes(config)
     for sdvkey in sdv:
         if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
-            gluster_host = '$AZ_BATCH_NODE_SHARED_DIR/{}'.format(
+            gluster_host = '{}/{}'.format(
+                settings.get_host_mounts_path(),
                 settings.get_gluster_on_compute_volume())
             gluster_container = settings.shared_data_volume_container_path(
                 sdv, sdvkey).rstrip('/')

@@ -40,8 +40,8 @@ global_resources:
         azure_file_share_name: myfileshare
         container_path: $AZ_BATCH_NODE_SHARED_DIR/azfile
         mount_options:
-        - filemode=0777
-        - dirmode=0777
+        - file_mode=0777
+        - dir_mode=0777
       glustervol:
         volume_driver: glusterfs_on_compute
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute

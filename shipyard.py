@@ -328,6 +328,7 @@ class CliContext(object):
                 if self.conf_jobs.exists():
                     self._read_config_file(self.conf_jobs)
         # adjust settings
+        convoy.fleet.initialize_globals(convoy.settings.verbose(self.config))
         if not skip_global_config:
             convoy.fleet.check_for_invalid_config(self.config)
             convoy.fleet.populate_global_settings(self.config, fs_storage)
