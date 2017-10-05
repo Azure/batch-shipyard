@@ -104,8 +104,9 @@ section for various sample Docker workloads using Azure Batch and Batch
 Shipyard.
 
 ## Batch Shipyard Compute Node OS Support
-Batch Shipyard is currently compatible with supported Marketplace Linux VMs
-and Linux custom images supported by Azure Batch.
+Batch Shipyard is currently compatible with Azure Batch supported Marketplace
+Linux VMs and
+[compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/).
 
 ## Change Log
 Please see the

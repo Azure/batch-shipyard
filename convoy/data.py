@@ -59,7 +59,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_BLOBXFER_VERSION = 'develop'
+_BLOBXFER_VERSION = '1.0.0rc1'
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
@@ -938,7 +938,7 @@ def ingress_data(
             rfs = None
             dst_rfs = False
             # set base dst path
-            dst = '{}/batch/tasks/'.format(
+            dst = '{}/batch/tasks/mounts'.format(
                 settings.temp_disk_mountpoint(config))
             # convert shared to actual path
             if not direct_single_node:
@@ -949,7 +949,7 @@ def ingress_data(
                                 sdv, sdvkey):
                             if kind == 'remotefs':
                                 continue
-                            dst = '{}shared/{}/'.format(
+                            dst = '{}/{}/'.format(
                                 dst, settings.get_gluster_on_compute_volume())
                         elif settings.is_shared_data_volume_storage_cluster(
                                 sdv, sdvkey):

@@ -46,7 +46,8 @@ from . import util
 # global defines
 _METADATA_VERSION_NAME = 'batch_shipyard_version'
 _GLUSTER_DEFAULT_VOLNAME = 'gv0'
-_GLUSTER_ON_COMPUTE_VOLUME = '.gluster/{}'.format(_GLUSTER_DEFAULT_VOLNAME)
+_GLUSTER_ON_COMPUTE_VOLUME = 'gluster_on_compute/{}'.format(
+    _GLUSTER_DEFAULT_VOLNAME)
 _HOST_MOUNTS_DIR = '$AZ_BATCH_NODE_ROOT_DIR/mounts'
 _TENSORBOARD_DOCKER_IMAGE = (
     'gcr.io/tensorflow/tensorflow',
