@@ -617,7 +617,9 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     if [ $cascadecontainer -eq 0 ]; then
         # install azure storage python dependency
         install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-        pip3 install --no-cache-dir azure-storage==0.36.0
+        pip3 install --no-cache-dir --upgrade pip
+        pip3 install --no-cache-dir --upgrade wheel setuptools
+        pip3 install --no-cache-dir azure-cosmosdb-table==0.37.1 azure-storage-blob==0.37.0
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             install_packages $offer python3-libtorrent pigz

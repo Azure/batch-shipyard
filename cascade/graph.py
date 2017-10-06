@@ -33,7 +33,7 @@ import pathlib
 import subprocess
 import sys
 # non-stdlib imports
-import azure.storage.table as azuretable
+import azure.cosmosdb.table as azuretable
 
 # global defines
 _PARTITION_KEY = None
@@ -43,7 +43,7 @@ _TABLE_NAME = None
 def _create_credentials(config: dict) -> azuretable.TableService:
     """Create authenticated clients
     :param dict config: configuration dict
-    :rtype: azure.storage.table.TableService
+    :rtype: azure.cosmosdb.table.TableService
     :return: table client
     """
     global _PARTITION_KEY, _TABLE_NAME
@@ -168,7 +168,7 @@ def _diff_events(
 
 def coalesce_data(table_client: azuretable.TableService) -> tuple:
     """Coalesce perf data from table
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :rtype: tuple
     :return: (timing, sizes, offer, sku)
     """

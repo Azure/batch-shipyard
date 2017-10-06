@@ -64,7 +64,6 @@ class CliContext(object):
         self.batch_mgmt_client = None
         self.batch_client = None
         self.blob_client = None
-        self.queue_client = None
         self.table_client = None
         self.keyvault_client = None
         self.resource_client = None
@@ -96,7 +95,7 @@ class CliContext(object):
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
             _, _ = convoy.clients.create_arm_clients(self)
-        self.blob_client, _, _ = convoy.clients.create_storage_clients()
+        self.blob_client, _ = convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=True)
 
@@ -126,7 +125,7 @@ class CliContext(object):
         self.resource_client, self.compute_client, self.network_client, \
             self.batch_mgmt_client, self.batch_client = \
             convoy.clients.create_arm_clients(self, batch_clients=True)
-        self.blob_client, self.queue_client, self.table_client = \
+        self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=False)
@@ -141,7 +140,7 @@ class CliContext(object):
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
-        self.blob_client, self.queue_client, self.table_client = \
+        self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=False)
@@ -335,16 +334,12 @@ class CliContext(object):
         # show config if specified
         if self.show_config:
             logger.debug('config:\n' + json.dumps(self.config, indent=4))
-
-    def _set_clients(
-            self, batch_mgmt_client, batch_client, blob_client, queue_client,
-            table_client):
-        """Sets clients for the context"""
-        self.batch_mgmt_client = batch_mgmt_client
-        self.batch_client = batch_client
-        self.blob_client = blob_client
-        self.queue_client = queue_client
-        self.table_client = table_client
+        # disable azure storage/cosmosdb logging: setting logger level
+        # to CRITICAL effectively disables logging from azure storage/cosmosdb
+        az_logger = logging.getLogger('azure.storage')
+        az_logger.setLevel(logging.CRITICAL)
+        az_logger = logging.getLogger('azure.cosmosdb')
+        az_logger.setLevel(logging.CRITICAL)
 
 
 # create a pass decorator for shared context between commands
@@ -928,8 +923,7 @@ def storage_del(ctx, clear_tables, poolid):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
-        ctx.blob_client, ctx.queue_client, ctx.table_client, ctx.config,
-        clear_tables, poolid)
+        ctx.blob_client, ctx.table_client, ctx.config, clear_tables, poolid)
 
 
 @storage.command('clear')
@@ -1106,8 +1100,8 @@ def pool_del(ctx, poolid, wait):
     """Delete a pool from the Batch account"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_delete(
-        ctx.batch_client, ctx.blob_client, ctx.queue_client,
-        ctx.table_client, ctx.config, pool_id=poolid, wait=wait)
+        ctx.batch_client, ctx.blob_client, ctx.table_client, ctx.config,
+        pool_id=poolid, wait=wait)
 
 
 @pool.command('resize')
@@ -1451,9 +1445,9 @@ def jobs_term(
     """Terminate jobs and job schedules"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_del_or_term(
-        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
-        ctx.config, False, all_jobs, all_jobschedules, jobid, jobscheduleid,
-        termtasks, wait)
+        ctx.batch_client, ctx.blob_client, ctx.table_client, ctx.config,
+        False, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait)
 
 
 @jobs.command('del')
@@ -1481,9 +1475,9 @@ def jobs_del(
     """Delete jobs and job schedules"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_del_or_term(
-        ctx.batch_client, ctx.blob_client, ctx.queue_client, ctx.table_client,
-        ctx.config, True, all_jobs, all_jobschedules, jobid, jobscheduleid,
-        termtasks, wait)
+        ctx.batch_client, ctx.blob_client, ctx.table_client, ctx.config,
+        True, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
+        wait)
 
 
 @jobs.command('deltasks')

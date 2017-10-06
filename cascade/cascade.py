@@ -42,8 +42,8 @@ import threading
 import time
 # non-stdlib imports
 import azure.common
+import azure.cosmosdb.table as azuretable
 import azure.storage.blob as azureblob
-import azure.storage.table as azuretable
 try:
     import libtorrent
     _LIBTORRENT_IMPORTED = True
@@ -286,11 +286,11 @@ def add_dht_node(ip: str, port: int):
 
 def _renew_blob_lease(
         loop: asyncio.BaseEventLoop,
-        blob_client: azure.storage.blob.BlockBlobService,
+        blob_client: azureblob.BlockBlobService,
         container_key: str, resource: str, blob_name: str):
     """Renew a storage blob lease
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azureblob.BlockBlobService blob_client: blob client
     :param str container_key: blob container index into _STORAGE_CONTAINERS
     :param str resource: resource
     :param str blob_name: blob name
@@ -346,12 +346,12 @@ def compute_resource_hash(resource: str) -> str:
 class DockerSaveThread(threading.Thread):
     """Docker Save Thread"""
     def __init__(
-            self, blob_client: azure.storage.blob.BlockBlobService,
-            table_client: azure.storage.table.TableService,
+            self, blob_client: azureblob.BlockBlobService,
+            table_client: azuretable.TableService,
             resource: str, blob_name: str, nglobalresources: int):
         """DockerSaveThread ctor
-        :param azure.storage.blob.BlockBlobService blob_client: blob client
-        :param azure.storage.table.TableService table_client: table client
+        :param azureblob.BlockBlobService blob_client: blob client
+        :param azuretable.TableService table_client: table client
         :param str resource: resource
         :param str blob_name: resource blob name
         :param int nglobalresources: number of global resources
@@ -573,13 +573,13 @@ class DockerSaveThread(threading.Thread):
 
 async def _direct_download_resources_async(
         loop: asyncio.BaseEventLoop,
-        blob_client: azure.storage.blob.BlockBlobService,
-        table_client: azure.storage.table.TableService,
+        blob_client: azureblob.BlockBlobService,
+        table_client: azuretable.TableService,
         ipaddress: str, nglobalresources: int) -> None:
     """Direct download resource logic
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azureblob.BlockBlobService blob_client: blob client
+    :param azuretable.TableService table_client: table client
     :param str ipaddress: ip address
     :param int nglobalresources: number of global resources
     """
@@ -663,10 +663,10 @@ async def _direct_download_resources_async(
 
 
 def _merge_service(
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         resource: str, nglobalresources: int) -> None:
     """Merge entity to services table
-    :param azure.storage.table.TableService table_client: table client
+    :param azuretable.TableService table_client: table client
     :param str resource: resource to add to services table
     :param int nglobalresources: number of global resources
     """
@@ -761,12 +761,12 @@ def _log_torrent_info(resource: str, th) -> None:
 
 def bootstrap_dht_nodes(
         loop: asyncio.BaseEventLoop,
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         ipaddress: str,
         num_attempts: int) -> None:
     """Bootstrap DHT router nodes
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.table.TableService table_client: table client
+    :param azuretable.TableService table_client: table client
     :param str ipaddress: ip address
     :param int num_attempts: number of attempts
     """
@@ -859,11 +859,11 @@ class DockerLoadThread(threading.Thread):
 
 async def _load_and_register_async(
         loop: asyncio.BaseEventLoop,
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         nglobalresources: int) -> None:
     """Load and register image
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.table.TableService table_client: table client
+    :param azuretable.TableService table_client: table client
     :param int nglobalresource: number of global resources
     """
     global _LR_LOCK_ASYNC
@@ -892,11 +892,11 @@ async def _load_and_register_async(
 
 async def manage_torrents_async(
         loop: asyncio.BaseEventLoop,
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         ipaddress: str, nglobalresources: int) -> None:
     """Manage torrents
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.table.TableService table_client: table client
+    :param azuretable.TableService table_client: table client
     :param str ipaddress: ip address
     :param int nglobalresource: number of global resources
     """
@@ -943,13 +943,13 @@ async def manage_torrents_async(
 
 async def download_monitor_async(
         loop: asyncio.BaseEventLoop,
-        blob_client: azure.storage.blob.BlockBlobService,
-        table_client: azure.storage.table.TableService,
+        blob_client: azureblob.BlockBlobService,
+        table_client: azuretable.TableService,
         ipaddress: str, nglobalresources: int) -> None:
     """Download monitor
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azureblob.BlockBlobService blob_client: blob client
+    :param azuretable.TableService table_client: table client
     :param str ipaddress: ip address
     :param int nglobalresource: number of global resources
     """
@@ -977,10 +977,10 @@ async def download_monitor_async(
 
 
 def _get_torrent_num_seeds(
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         resource: str) -> int:
     """Get number of torrent seeders via table
-    :param azure.storage.table.TableService table_client: table client
+    :param azuretable.TableService table_client: table client
     :param int nglobalresource: number of global resources
     :rtype: int
     :return: number of seeds
@@ -996,12 +996,12 @@ def _get_torrent_num_seeds(
 
 
 def _start_torrent_via_storage(
-        blob_client: azure.storage.blob.BlockBlobService,
-        table_client: azure.storage.table.TableService,
+        blob_client: azureblob.BlockBlobService,
+        table_client: azuretable.TableService,
         resource: str, entity: dict=None) -> None:
     """Start a torrent via storage entity
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azureblob.BlockBlobService blob_client: blob client
+    :param azuretable.TableService table_client: table client
     :param str resource: resource
     :param dict entity: entity
     """
@@ -1037,12 +1037,12 @@ def _start_torrent_via_storage(
 
 
 def _check_resource_has_torrent(
-        blob_client: azure.storage.blob.BlockBlobService,
-        table_client: azure.storage.table.TableService,
+        blob_client: azureblob.BlockBlobService,
+        table_client: azuretable.TableService,
         resource: str) -> bool:
     """Check if a resource has an associated torrent
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azureblob.BlockBlobService blob_client: blob client
+    :param azuretable.TableService table_client: table client
     :param str resource: resource
     :rtype: bool
     :return: if resource has torrent
@@ -1072,13 +1072,13 @@ def _check_resource_has_torrent(
 
 def distribute_global_resources(
         loop: asyncio.BaseEventLoop,
-        blob_client: azure.storage.blob.BlockBlobService,
-        table_client: azure.storage.table.TableService,
+        blob_client: azureblob.BlockBlobService,
+        table_client: azuretable.TableService,
         ipaddress: str) -> None:
     """Distribute global services/resources
     :param asyncio.BaseEventLoop loop: event loop
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azureblob.BlockBlobService blob_client: blob client
+    :param azuretable.TableService table_client: table client
     :param str ipaddress: ip address
     """
     # set torrent session port listen

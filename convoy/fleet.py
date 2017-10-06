@@ -2325,7 +2325,7 @@ def action_pool_add(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
@@ -2357,17 +2357,15 @@ def action_pool_list(batch_client):
 
 
 def action_pool_delete(
-        batch_client, blob_client, queue_client, table_client, config,
-        pool_id=None, wait=False):
+        batch_client, blob_client, table_client, config, pool_id=None,
+        wait=False):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azurequeue.QueueService, azuretable.TableService, dict,
-    #        str, bool) -> None
+    #        azuretable.TableService, dict, str, bool) -> None
     """Action: Pool Delete
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str pool_id: poolid to delete
     :param bool wait: wait for pool to delete
@@ -2389,9 +2387,8 @@ def action_pool_delete(
             populate_global_settings(config, False, pool_id=pool_id)
         else:
             pool_id = settings.pool_id(config)
-        # TODO remove queue_client in future release
         storage.cleanup_with_del_pool(
-            blob_client, queue_client, table_client, config, pool_id=pool_id)
+            blob_client, table_client, config, pool_id=pool_id)
         if wait:
             logger.debug('waiting for pool {} to delete'.format(pool_id))
             while batch_client.pool.exists(pool_id):
@@ -2747,7 +2744,7 @@ def action_jobs_add(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param bool recreate: recreate jobs if completed
@@ -2869,18 +2866,16 @@ def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
 
 
 def action_jobs_del_or_term(
-        batch_client, blob_client, queue_client, table_client, config,
-        delete, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
-        wait):
+        batch_client, blob_client, table_client, config, delete, all_jobs,
+        all_jobschedules, jobid, jobscheduleid, termtasks, wait):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azurequeue.QueueService, azuretable.TableService, dict, bool,
-    #        bool, str, str, bool, bool) -> None
+    #        azuretable.TableService, dict, bool, bool, str, str,
+    #        bool, bool) -> None
     """Action: Jobs Del or Term
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool all_jobs: all jobs
     :param bool all_jobschedules: all job schedules
@@ -2928,9 +2923,7 @@ def action_jobs_del_or_term(
             jobscheduleid=jobscheduleid, termtasks=termtasks, wait=wait)
         # if autopool, delete the storage
         if autopool:
-            # TODO remove queue_client in 3.0
-            storage.cleanup_with_del_pool(
-                blob_client, queue_client, table_client, config)
+            storage.cleanup_with_del_pool(blob_client, table_client, config)
 
 
 def action_jobs_cmi(batch_client, config, delete):
@@ -3066,13 +3059,12 @@ def action_jobs_stats(batch_client, config, job_id):
 
 
 def action_storage_del(
-        blob_client, queue_client, table_client, config, clear_tables, poolid):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict, bool, str) -> None
+        blob_client, table_client, config, clear_tables, poolid):
+    # type: (azureblob.BlockBlobService, azuretable.TableService,
+    #        dict, bool, str) -> None
     """Action: Storage Del
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool clear_tables: clear tables instead of deleting
     :param str poolid: pool id to target
@@ -3085,8 +3077,7 @@ def action_storage_del(
             blob_client, table_client, config, tables_only=True,
             pool_id=poolid)
     storage.delete_storage_containers(
-        blob_client, queue_client, table_client, config,
-        skip_tables=clear_tables)
+        blob_client, table_client, config, skip_tables=clear_tables)
 
 
 def action_storage_clear(blob_client, table_client, config, poolid):
@@ -3094,7 +3085,7 @@ def action_storage_clear(blob_client, table_client, config, poolid):
     #        str) -> None
     """Action: Storage Clear
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str poolid: pool id to target
     """

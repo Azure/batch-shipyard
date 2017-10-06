@@ -35,9 +35,9 @@ import hashlib
 import logging
 # non-stdlib imports
 import azure.common
+import azure.cosmosdb.table as azuretable
 import azure.storage.blob as azureblob
 import azure.storage.file as azurefile
-import azure.storage.table as azuretable
 # local imports
 from . import settings
 from . import util
@@ -62,7 +62,6 @@ _STORAGE_CONTAINERS = {
     'table_perf': None,
     # TODO remove following in future release
     'table_registry': None,
-    'queue_globalresources': None,
 }
 
 
@@ -94,8 +93,6 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
-    _STORAGE_CONTAINERS['queue_globalresources'] = '-'.join(
-        (sep + 'gr', postfix))
     # ensure all storage containers are between 3 and 63 chars in length
     for key in _STORAGE_CONTAINERS:
         length = len(_STORAGE_CONTAINERS[key])
@@ -246,11 +243,11 @@ def _construct_partition_key_from_config(config, pool_id=None):
 
 def _add_global_resource(
         blob_client, table_client, config, pk, dr, grtype):
-    # type: (azurequeue.QueueService, azuretable.TableService, dict, str,
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict, str,
     #        settings.DataReplicationSettings, str) -> None
     """Add global resources
     :param azure.storage.blob.BlockService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str pk: partition key
     :param settings.DataReplicationSettings dr: data replication settings
@@ -288,10 +285,10 @@ def _add_global_resource(
 
 
 def populate_global_resource_blobs(blob_client, table_client, config):
-    # type: (azureblob.BlockService, azuretable.TableService, dict) -> None
+    # type: (azureblob.BlockBlobService, azuretable.TableService, dict) -> None
     """Populate global resource blobs
     :param azure.storage.blob.BlockService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     """
     pk = _construct_partition_key_from_config(config)
@@ -372,22 +369,17 @@ def upload_for_remotefs(blob_client, files):
 
 
 def delete_storage_containers(
-        blob_client, queue_client, table_client, config, skip_tables=False):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict, bool) -> None
+        blob_client, table_client, config, skip_tables=False):
+    # type: (azureblob.BlockBlobService, azuretable.TableService,
+    #        dict, bool) -> None
     """Delete storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool skip_tables: skip deleting tables
     """
     for key in _STORAGE_CONTAINERS:
-        if key.startswith('queue_'):
-            # TODO remove in future release: unused queues
-            logger.debug('deleting queue: {}'.format(_STORAGE_CONTAINERS[key]))
-            queue_client.delete_queue(_STORAGE_CONTAINERS[key])
-        elif key == 'table_registry':
+        if key == 'table_registry':
             # TODO remove in future release: unused table
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
@@ -439,7 +431,7 @@ def _clear_blob_task_resourcefiles(blob_client, container, config):
 def _clear_table(table_client, table_name, config, pool_id=None):
     # type: (azuretable.TableService, str, dict, str) -> None
     """Clear table entities
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param str table_name: table name
     :param dict config: configuration dict
     :param str pool_id: use specified pool id instead
@@ -468,7 +460,7 @@ def clear_storage_containers(
     #        bool, str) -> None
     """Clear storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool tables_only: clear only tables
     :param str pool_id: use specified pool id instead
@@ -495,7 +487,7 @@ def create_storage_containers(blob_client, table_client, config):
     # type: (azureblob.BlockBlobService, azuretable.TableService, dict) -> None
     """Create storage containers
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     """
     bs = settings.batch_shipyard_settings(config)
@@ -534,14 +526,12 @@ def delete_storage_containers_remotefs(blob_client):
     blob_client.delete_container(contname)
 
 
-def cleanup_with_del_pool(
-        blob_client, queue_client, table_client, config, pool_id=None):
-    # type: (azureblob.BlockBlobService, azurequeue.QueueService,
-    #        azuretable.TableService, dict, str) -> None
+def cleanup_with_del_pool(blob_client, table_client, config, pool_id=None):
+    # type: (azureblob.BlockBlobService, azuretable.TableService,
+    #        dict, str) -> None
     """Special cleanup routine in combination with delete pool
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param azure.storage.queue.QueueService queue_client: queue client
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str pool_id: pool id
     """
@@ -554,4 +544,4 @@ def cleanup_with_del_pool(
     clear_storage_containers(
         blob_client, table_client, config, tables_only=True, pool_id=pool_id)
     delete_storage_containers(
-        blob_client, queue_client, table_client, config, skip_tables=True)
+        blob_client, table_client, config, skip_tables=True)

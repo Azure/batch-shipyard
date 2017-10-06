@@ -34,14 +34,13 @@ import logging
 # non-stdlib imports
 import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batchsc
+import azure.cosmosdb.table as azuretable
 import azure.keyvault
 import azure.mgmt.batch
 import azure.mgmt.compute
 import azure.mgmt.network
 import azure.mgmt.resource
 import azure.storage.blob as azureblob
-import azure.storage.queue as azurequeue
-import azure.storage.table as azuretable
 # local imports
 from . import aad
 from . import settings
@@ -242,7 +241,7 @@ def create_storage_clients():
     # type: (None) -> tuple
     """Create storage clients
     :rtype: tuple
-    :return: blob_client, queue_client, table_client
+    :return: blob_client, table_client
     """
     account_name = storage.get_storageaccount()
     account_key = storage.get_storageaccount_key()
@@ -252,14 +251,9 @@ def create_storage_clients():
         account_key=account_key,
         endpoint_suffix=endpoint_suffix,
     )
-    queue_client = azurequeue.QueueService(
-        account_name=account_name,
-        account_key=account_key,
-        endpoint_suffix=endpoint_suffix,
-    )
     table_client = azuretable.TableService(
         account_name=account_name,
         account_key=account_key,
         endpoint_suffix=endpoint_suffix,
     )
-    return blob_client, queue_client, table_client
+    return blob_client, table_client

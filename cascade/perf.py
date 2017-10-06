@@ -30,7 +30,7 @@ import datetime
 import os
 # non-stdlib imports
 import azure.common
-import azure.storage.table as azuretable
+import azure.cosmosdb.table as azuretable
 
 # global defines
 _BATCHACCOUNT = os.environ['AZ_BATCH_ACCOUNT_NAME']
@@ -41,7 +41,7 @@ _PARTITION_KEY = '{}${}'.format(_BATCHACCOUNT, _POOLID)
 
 def _create_credentials() -> azuretable.TableService:
     """Create storage credentials
-    :rtype: azure.storage.table.TableService
+    :rtype: azure.cosmosdb.table.TableService
     :return: azure storage table client
     """
     sa, ep, sakey = os.environ['SHIPYARD_STORAGE_ENV'].split(':')
@@ -53,11 +53,11 @@ def _create_credentials() -> azuretable.TableService:
 
 
 def process_event(
-        table_client: azure.storage.table.TableService,
+        table_client: azuretable.TableService,
         table_name: str, source: str, event: str, ts: float,
         message: str) -> None:
     """Process event
-    :param azure.storage.table.TableService table_client: table client
+    :param azure.cosmosdb.table.TableService table_client: table client
     :param str table_name: table name
     :param str source: source
     :param str event: event
