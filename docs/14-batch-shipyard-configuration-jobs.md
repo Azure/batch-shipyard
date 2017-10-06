@@ -483,19 +483,19 @@ The required `tasks` property is an array of tasks to add to the job:
       information.
         * (required) `azure_storage` specifies the Azure Storage settings
           to use for the file task factory.
-        * (required) `storage_account_settings` is the storage account
-          link to enumerate files from
-        * (required) `remote_path` is the remote Azure Storage path to
-          enumerate files from.
-        * (optional) `is_file_share` denotes if the `remote_path` is on a
-          file share. This defaults to `false`.
-        * (optional) `include` are include filters
-        * (optional) `exclude` are exclude filters
-        * (required) `task_filepath` specifies how to place the file
-          relative to the task working directory (i.e.,
-          `$AZ_BATCH_TASK_WORKING_DIR`). This can be one of: `file_path`,
-          `file_path_with_container`, `file_name`, or
-          `file_name_no_extension`.
+            * (required) `storage_account_settings` is the storage account
+              link to enumerate files from
+            * (required) `remote_path` is the remote Azure Storage path to
+              enumerate files from.
+            * (optional) `is_file_share` denotes if the `remote_path` is on a
+              file share. This defaults to `false`.
+            * (optional) `include` are include filters
+            * (optional) `exclude` are exclude filters
+            * (required) `task_filepath` specifies how to place the file
+              relative to the task working directory (i.e.,
+              `$AZ_BATCH_TASK_WORKING_DIR`). This can be one of:
+              `file_path`, `file_path_with_container`, `file_name`, or
+              `file_name_no_extension`.
     * (optional) `custom` is a custom task factory where the logic for
       parameter generation exists in a custom Python module that can be
       imported at runtime. Please see the

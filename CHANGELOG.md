@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Major version migration guide (#134)
 - Support for mounting multiple Azure File shares as `shared_data_volumes`
 to a pool (#123)
 
@@ -44,7 +45,7 @@ Container Registries which are still supported. (#44)
 - **Breaking Change:** `docker_registry` property in the global config is
 no longer required. An `additional_registries` option is available for any
 additional registries that are not present from the `docker_images`
-array in `global_resources`. (#106)
+array in `global_resources` but require a valid login. (#106)
 - **Breaking Change:** Data ingress/egress from/to Azure Storage along with
 `task_factory`:`file` has changed to accommodate `blobxfer 1.0.0` commandline
 and options. There are new expanded options available, including multiple

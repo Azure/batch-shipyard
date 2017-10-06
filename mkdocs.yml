@@ -32,6 +32,7 @@ pages:
   - Multi-instance (MPI) Tasks: 80-batch-shipyard-multi-instance-tasks.md
   - Interactive SSH and Tunneling: 85-batch-shipyard-ssh-docker-tunnel.md
 - Other Guides:
+  - Major Version Migration Guide: 94-batch-shipyard-major-version-migration.md
   - Low Priority Compute Node Considerations: 95-low-priority-considerations.md
   - Troubleshooting Guide: 96-troubleshooting-guide.md
   - FAQ: 97-faq.md
