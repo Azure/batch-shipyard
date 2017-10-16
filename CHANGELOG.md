@@ -14,6 +14,9 @@ to a pool (#123)
 `$AZ_BATCH_NODE_ROOT_DIR/mounts` to reduce clutter/confusion under the
 old root mount point of `$AZ_BATCH_NODE_SHARED_DIR`. The container mount
 points (i.e., `container_path`) are unaffected.
+- Canonical UbuntuServer 16.04-LTS is no longer pinned to a specific
+release. Please avoid using the version `16.04.201709190`.
+- Update to blobxfer 1.0.0rc2
 
 ## [3.0.0a1] - 2017-10-04
 ### Added
