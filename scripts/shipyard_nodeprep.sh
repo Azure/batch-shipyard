@@ -117,6 +117,26 @@ if [ -z $version ]; then
     exit 1
 fi
 
+# try to get /etc/lsb-release
+if [ -e /etc/lsb-release ]; then
+    . /etc/lsb-release
+else
+    if [ -e /etc/os-release ]; then
+        . /etc/os-release
+        DISTRIB_ID=$ID
+        DISTRIB_RELEASE=$VERSION_ID
+    fi
+fi
+
+if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
+    echo "Unknown DISTRIB_ID or DISTRIB_RELEASE."
+    exit 1
+fi
+
+# lowercase vars
+DISTRIB_ID=${DISTRIB_ID,,}
+DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+
 contains() {
     string="$1"
     substring="$2"
@@ -362,6 +382,56 @@ docker_pull_image() {
         sleep $[($RANDOM % 5) + 1]s
     done
     set -e
+}
+
+singularity_setup() {
+    offer=$1
+    shift
+    sku=$1
+    shift
+    if [ $offer == "ubuntu" ]; then
+        if [[ $sku != 16.04* ]]; then
+            echo "Singularity not supported on $offer $sku"
+        fi
+        basedir=/mnt
+    elif [[ $offer == "centos" ]] || [[ $offer == "rhel" ]]; then
+        if [[ $sku != 7* ]]; then
+            echo "Singularity not supported on $offer $sku"
+            return
+        fi
+        basedir=/mnt/resource
+        offer=centos
+        sku=7
+    else
+        echo "Singularity not supported on $offer $sku"
+        return
+    fi
+    # fetch docker image for singularity bits
+    di=alfpark/batch-shipyard:2.4-singularity-${offer}-${sku}
+    docker_pull_image $di
+    mkdir -p /opt/singularity
+    docker run --rm -v /opt/singularity:/opt/singularity $di \
+        /bin/sh -c 'cp -r /singularity/* /opt/singularity'
+    # symlink for global exec
+    ln -s /opt/singularity/bin/singularity /usr/local/bin/singularity
+    # fix perms
+    chown root.root /opt/singularity/libexec/singularity/bin/*
+    chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
+    # prep singularity root/container dir
+    mkdir -p $basedir/singularity/mnt/container
+    mkdir -p $basedir/singularity/mnt/final
+    mkdir -p $basedir/singularity/mnt/overlay
+    mkdir -p $basedir/singularity/mnt/session
+    chmod 755 $basedir/singularity
+    chmod 755 $basedir/singularity/mnt
+    chmod 755 $basedir/singularity/mnt/container
+    chmod 755 $basedir/singularity/mnt/final
+    chmod 755 $basedir/singularity/mnt/overlay
+    chmod 755 $basedir/singularity/mnt/session
+    # selftest
+    singularity selftest
+    # remove docker image
+    docker rmi $di
 }
 
 echo "Configuration [Non-Native Docker]:"
@@ -814,6 +884,9 @@ else
     echo "ERROR: unsupported offer: $offer (sku: $sku)"
     exit 1
 fi
+
+# set up singularity
+singularity_setup $DISTRIB_ID $DISTRIB_RELEASE
 
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
