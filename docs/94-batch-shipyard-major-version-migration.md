@@ -9,6 +9,17 @@ There are significant changes between 2.x and 3.x in terms of configuration
 format, options/properties and implied behavior. Please read through each
 section carefully.
 
+### Important Notes
+* If you have existing 2.x pools, do not issue `pool del` with the 3.x
+CLI until you have migrated all of your jobs to 3.x pools. Failure to do
+so will render your existing pools unable to resize up (either manually
+or via autoscale).
+* Do not mix 2.x and 3.x pools with the same storage account used for
+backing metadata used by Batch Shipyard.
+* If you must used a mixed-mode environment, please specify a different
+storage account for metadata between the two versions in the global
+configuration file.
+
 ### YAML Configuration Support
 Although you can still use your configuration files in JSON format, it
 is recommended to migrate to YAML as all documentation and recipes are now

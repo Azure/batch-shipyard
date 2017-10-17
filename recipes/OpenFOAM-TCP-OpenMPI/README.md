@@ -20,7 +20,7 @@ that can be run with MPI in a Docker container context. This can be
 `alfpark/openfoam:4.0-gcc-openmpi` or `alfpark/openfoam:v1606plus-gcc-openmpi`
 which are published on
 [Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
-* `docker_volumes` must be populated with the following:
+* `volumes` must be populated with the following:
   * `shared_data_volumes` should contain an Azure File Docker volume driver,
     a GlusterFS share or a manually configured NFS share. Batch
     Shipyard has automatic support for setting up Azure File Docker Volumes

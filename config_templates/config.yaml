@@ -25,7 +25,7 @@ global_resources:
   docker_images:
   - busybox
   - myserver.azurecr.io/repo/myimage
-  docker_volumes:
+  volumes:
     data_volumes:
       contdatavol:
         container_path: /abc

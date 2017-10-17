@@ -32,7 +32,7 @@ global_resources:
     - myruntimeserver.azurecr.io
   docker_images:
   - busybox
-  docker_volumes:
+  volumes:
     data_volumes:
       contdatavol:
         container_path: /abc
@@ -308,7 +308,7 @@ This property is required.
             * (optional) `blobxfer_extra_options` are any extra options to
               pass to `blobxfer`. Please run `blobxfer -h` to see available
               extra options that may be pertinent to your scenario.
-    * (optional) `docker_volumes` property can consist of two
+    * (optional) `volumes` property can consist of two
       different types of volumes: `data_volumes` and `shared_data_volumes`.
       `data_volumes` can be of two flavors depending upon if `host_path` is
       set to null or not. In the former, this is typically used with the
@@ -393,7 +393,7 @@ Shipyard. These volumes have the following properties:
 * (optional) `mount_options` property defines additional mount options
 to pass when mounting this file system to the compute node.
 
-Finally, note that all `docker_volumes` can be omitted completely along with
+Finally, note that all `volumes` can be omitted completely along with
 one or all of `data_volumes` and `shared_data_volumes` if you do not require
 this functionality.
 

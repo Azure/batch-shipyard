@@ -1749,6 +1749,28 @@ def files_destination_settings(fdict):
     )
 
 
+def _global_resources_volumes(config):
+    # type: (dict) -> dict
+    """Get global resources volumes dictionary
+    :param dict config: configuration object
+    :rtype: dict
+    :return: volumes
+    """
+    try:
+        vols = config['global_resources']['volumes']
+        if util.is_none_or_empty(vols):
+            raise KeyError()
+    except KeyError:
+        try:
+            # backward compatibility with docker_volumes
+            vols = config['global_resources']['docker_volumes']
+            if util.is_none_or_empty(vols):
+                raise KeyError()
+        except KeyError:
+            vols = {}
+    return vols
+
+
 def global_resources_data_volumes(config):
     # type: (dict) -> dict
     """Get data volumes dictionary
@@ -1757,7 +1779,7 @@ def global_resources_data_volumes(config):
     :return: data volumes
     """
     try:
-        dv = config['global_resources']['docker_volumes']['data_volumes']
+        dv = _global_resources_volumes(config)['data_volumes']
         if util.is_none_or_empty(dv):
             raise KeyError()
     except KeyError:
@@ -1773,8 +1795,7 @@ def global_resources_shared_data_volumes(config):
     :return: shared data volumes
     """
     try:
-        sdv = config['global_resources']['docker_volumes'][
-            'shared_data_volumes']
+        sdv = _global_resources_volumes(config)['shared_data_volumes']
         if util.is_none_or_empty(sdv):
             raise KeyError()
     except KeyError:

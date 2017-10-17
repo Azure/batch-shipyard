@@ -37,7 +37,7 @@ same virtual network hosting the RemoteFS file servers. The
 
 ### Global Configuration
 The global configuration is where the RemoteFS storage cluster is linked
-to the Batch pool through `shared_data_volumes` in `docker_volumes` under
+to the Batch pool through `shared_data_volumes` in `volumes` under
 `global_resources`. `shared_data_volumes` dictionary would have a key
 that is the storage cluster id key in FS configuration. For this example,
 this would be `mystoragecluster`. This property contains the following

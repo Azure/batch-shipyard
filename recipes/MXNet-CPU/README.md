@@ -17,7 +17,7 @@ The global configuration should set the following properties:
 Docker image.
 [alfpark/mxnet:cpu](https://hub.docker.com/r/alfpark/mxnet/)
 can be used for this recipe.
-* `docker_volumes` must be populated with the following if running a MXNet
+* `volumes` must be populated with the following if running a MXNet
 multi-node job:
   * `shared_data_volumes` should contain an Azure File Docker volume driver,
     a GlusterFS share or a manually configured NFS share. Batch

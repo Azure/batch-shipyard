@@ -25,7 +25,7 @@ that can be run with Intel MPI and Infiniband in a Docker container context
 on Azure VM instances. This can be `alfpark/openfoam:4.0-icc-intelmpi` or
 `alfpark/openfoam:v1606plus-icc-intelmpi`
 which are published on [Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
-* `docker_volumes` must be populated with the following:
+* `volumes` must be populated with the following:
   * `shared_data_volumes` should contain an Azure File Docker volume driver,
     a GlusterFS share or a manually configured NFS share. Batch
     Shipyard has automatic support for setting up Azure File Docker Volumes

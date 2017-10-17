@@ -3,7 +3,7 @@ batch_shipyard:
 global_resources:
   docker_images:
   - alfpark/openfoam:4.0-gcc-openmpi
-  docker_volumes:
+  volumes:
     shared_data_volumes:
       glustervol:
         container_path: $AZ_BATCH_NODE_SHARED_DIR/gfs

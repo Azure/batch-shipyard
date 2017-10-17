@@ -8,6 +8,10 @@
 to a pool (#123)
 
 ### Changed
+- **Breaking Change:** `global_resources`:`docker_volumes` is now named
+`global_resources`:`volumes`. Although backward compatibility is maintained
+for this property, it is recommended to migrate as volumes are now shared
+between Docker and Singularity containers.
 - Azure Files (with `volume_driver` of `azurefile`) specified under
 `shared_data_volumes` are now mounted directly to the host (#123)
 - The internal root mount point for all `shared_data_volumes` is now under
