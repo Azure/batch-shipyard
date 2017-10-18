@@ -117,7 +117,8 @@ specify both. If using a custom image, please see the
           in this mode such as task-level data ingress or task-level data
           egress that is not bound for Azure Storage Blobs. If there is
           no `native` conversion equivalent for the specified `publisher`,
-          `offer`, `sku` then no conversion is performed. The default is
+          `offer`, `sku` then no conversion is performed. Note that `native`
+          mode is not compatible with Singularity conatiners. The default is
           `false`.
     * (required for custom image) `custom_image` defines the custom image to
       use. AAD `batch` credentials are required to use custom iamges for both

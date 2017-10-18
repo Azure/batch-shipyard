@@ -71,6 +71,7 @@ multi-instance tasks per job.
 * Potentially faster provisioning times, particularly pools with GPU devices.
 
 Disadvantages of `native` mode are:
+* Singularity containers are not supported.
 * `input_data` of any kind at the task-level is not possible.
 * `output_data` to `azure_storage` Azure Files (i.e., file shares) is not
 possible.

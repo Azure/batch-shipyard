@@ -257,6 +257,9 @@ def _add_global_resource(
         if grtype == 'docker_images':
             prefix = 'docker'
             resources = settings.global_resources_docker_images(config)
+        elif grtype == 'singularity_images':
+            prefix = 'singularity'
+            resources = settings.global_resources_singularity_images(config)
         else:
             raise NotImplementedError(
                 'global resource type: {}'.format(grtype))
@@ -295,6 +298,8 @@ def populate_global_resource_blobs(blob_client, table_client, config):
     dr = settings.data_replication_settings(config)
     _add_global_resource(
         blob_client, table_client, config, pk, dr, 'docker_images')
+    _add_global_resource(
+        blob_client, table_client, config, pk, dr, 'singularity_images')
 
 
 def _check_file_and_upload(blob_client, file, container):

@@ -2834,47 +2834,85 @@ def generate_docker_login_settings(config, for_ssh=False):
     :rtype: tuple
     :return: (env vars, login cmds)
     """
-    # get docker registries
+    # get registries
     docker_registries = settings.docker_registries(config)
+    singularity_registries = settings.singularity_registries(config)
     # get encryption settings
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     # create joinable arrays for env vars
-    servers = []
-    users = []
-    passwords = []
+    docker_servers = []
+    docker_users = []
+    docker_passwords = []
+    singularity_servers = []
+    singularity_users = []
+    singularity_passwords = []
     for registry in docker_registries:
         if registry.registry_server is None:
-            servers.append('')
+            docker_servers.append('')
         else:
-            servers.append(registry.registry_server)
-        users.append(registry.user_name)
-        passwords.append(registry.password)
+            docker_servers.append(registry.registry_server)
+        docker_users.append(registry.user_name)
+        docker_passwords.append(registry.password)
+    for registry in singularity_registries:
+        if registry.registry_server is None:
+            singularity_servers.append('')
+        else:
+            singularity_servers.append(registry.registry_server)
+        singularity_users.append(registry.user_name)
+        singularity_passwords.append(registry.password)
     # populate command and env vars
     cmd = []
     env = []
-    if len(servers) > 0:
+    if len(docker_servers) > 0:
         # create either cmd or env for each
-        value = ','.join(servers)
+        value = ','.join(docker_servers)
         if for_ssh:
             cmd.append('export DOCKER_LOGIN_SERVER={}'.format(value))
         else:
             env.append(
                 batchmodels.EnvironmentSetting('DOCKER_LOGIN_SERVER', value)
             )
-        value = ','.join(users)
+        value = ','.join(docker_users)
         if for_ssh:
             cmd.append('export DOCKER_LOGIN_USERNAME={}'.format(value))
         else:
             env.append(
                 batchmodels.EnvironmentSetting('DOCKER_LOGIN_USERNAME', value)
             )
-        value = ','.join(passwords)
+        value = ','.join(docker_passwords)
         if for_ssh:
             cmd.append('export DOCKER_LOGIN_PASSWORD={}'.format(value))
         else:
             env.append(
                 batchmodels.EnvironmentSetting(
                     'DOCKER_LOGIN_PASSWORD',
+                    crypto.encrypt_string(encrypt, value, config))
+            )
+    if len(singularity_servers) > 0:
+        # create either cmd or env for each
+        value = ','.join(singularity_servers)
+        if for_ssh:
+            cmd.append('export SINGULARITY_LOGIN_SERVER={}'.format(value))
+        else:
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'SINGULARITY_LOGIN_SERVER', value)
+            )
+        value = ','.join(singularity_users)
+        if for_ssh:
+            cmd.append('export SINGULARITY_LOGIN_USERNAME={}'.format(value))
+        else:
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'SINGULARITY_LOGIN_USERNAME', value)
+            )
+        value = ','.join(singularity_passwords)
+        if for_ssh:
+            cmd.append('export SINGULARITY_LOGIN_PASSWORD={}'.format(value))
+        else:
+            env.append(
+                batchmodels.EnvironmentSetting(
+                    'SINGULARITY_LOGIN_PASSWORD',
                     crypto.encrypt_string(encrypt, value, config))
             )
         # if ssh append script execution

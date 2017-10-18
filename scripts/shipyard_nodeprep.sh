@@ -9,7 +9,8 @@ MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 # globals
 azurefile=0
 blobxferversion=latest
-block=
+block_docker=
+block_singularity=
 cascadecontainer=0
 encrypted=
 hpnssh=0
@@ -52,7 +53,9 @@ while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
             azurefile=1
             ;;
         b)
-            block=$SHIPYARD_DOCKER_IMAGES_PRELOAD
+            IFS=';' read -ra cip <<< "${SHIPYARD_CONTAINER_IMAGES_PRELOAD}"
+            block_docker=${cip[0]}
+            block_singularity=${cip[1]}
             ;;
         d)
             cascadecontainer=1
@@ -413,7 +416,7 @@ singularity_setup() {
     docker run --rm -v /opt/singularity:/opt/singularity $di \
         /bin/sh -c 'cp -r /singularity/* /opt/singularity'
     # symlink for global exec
-    ln -s /opt/singularity/bin/singularity /usr/local/bin/singularity
+    ln -s /opt/singularity/bin/singularity /usr/bin/singularity
     # fix perms
     chown root.root /opt/singularity/libexec/singularity/bin/*
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
@@ -428,6 +431,11 @@ singularity_setup() {
     chmod 755 $basedir/singularity/mnt/final
     chmod 755 $basedir/singularity/mnt/overlay
     chmod 755 $basedir/singularity/mnt/session
+    # create singularity tmp/cache paths
+    mkdir -p $basedir/singularity/cache
+    mkdir -p $basedir/singularity/tmp
+    chmod 777 $basedir/singularity/cache
+    chmod 777 $basedir/singularity/tmp
     # selftest
     singularity selftest
     # remove docker image
@@ -448,7 +456,8 @@ echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
-echo "Block on images: $block"
+echo "Block on Docker images: $block_docker"
+echo "Block on Singularity images: $block_singularity"
 echo ""
 
 # check sdb1 mount
@@ -894,6 +903,9 @@ docker_pull_image alfpark/batch-shipyard:${version}-cargo
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
+if [ -f singularity-registry-login ]; then
+    . singularity-registry-login
+fi
 
 # mount any storage clusters
 if [ ! -z $sc_args ]; then
@@ -1014,9 +1026,9 @@ set -e
 rm -f $cascadefailed
 
 # block until images ready if specified
-if [ ! -z $block ]; then
-    echo "INFO: blocking until images ready: $block"
-    IFS=',' read -ra RES <<< "$block"
+if [ ! -z $block_docker ]; then
+    echo "INFO: blocking until Docker images ready: $block_docker"
+    IFS=',' read -ra RES <<< "$block_docker"
     declare -a missing
     while :
         do
@@ -1026,13 +1038,44 @@ if [ ! -z $block ]; then
             fi
         done
         if [ ${#missing[@]} -eq 0 ]; then
-            echo "INFO: all docker images present"
+            echo "INFO: all Docker images present"
             break
         else
             unset missing
         fi
         sleep 2
     done
+fi
+if [ ! -z $block_singularity ]; then
+    echo "INFO: blocking until Singularity images ready: $block_singularity"
+    if [ $offer == "ubuntu" ]; then
+        sdir=/mnt/singularity/cache
+    else
+        sdir=/mnt/resource/singularity/cache
+    fi
+    IFS=',' read -ra RES <<< "$block_singularity"
+    declare -a missing
+    while :
+        do
+        for image in "${RES[@]}";  do
+            if [ ! -f "${sdir}/$image" ]; then
+                missing=("${missing[@]}" "$image")
+            fi
+        done
+        if [ ${#missing[@]} -eq 0 ]; then
+            echo "INFO: all Singularity images present"
+            break
+        else
+            unset missing
+        fi
+        sleep 2
+    done
+    # chown of all images in cache
+    chown _azbatch._azbatchgrp $sdir/*
+fi
+
+# clean up cascade env file if block
+if [ ! -z $block_docker ] || [ ! -z $block_singularity ]; then
     if [ $cascadecontainer -eq 1 ]; then
         rm -f $envfile
     fi

@@ -22,9 +22,14 @@ global_resources:
   additional_registries:
     docker:
     - myruntimeserver.azurecr.io
+    singularity:
+    - myregistry.azurecr.io
   docker_images:
   - busybox
   - myserver.azurecr.io/repo/myimage
+  singularity_images:
+  - shub://singularityhub/busybox
+  - shub://singularityhub/scientific-linux
   volumes:
     data_volumes:
       contdatavol:

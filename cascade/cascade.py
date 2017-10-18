@@ -33,6 +33,10 @@ import logging
 import logging.handlers
 import os
 import pathlib
+try:
+    import pwd
+except ImportError:
+    pass
 import queue
 import random
 import shutil
@@ -40,6 +44,7 @@ import subprocess
 import sys
 import threading
 import time
+from typing import Tuple
 # non-stdlib imports
 import azure.common
 import azure.cosmosdb.table as azuretable
@@ -57,14 +62,21 @@ _ON_WINDOWS = sys.platform == 'win32'
 _DEFAULT_PORT_BEGIN = 6881
 _DEFAULT_PORT_END = 6891
 _DOCKER_TAG = 'docker:'
+_SINGULARITY_TAG = 'singularity:'
 _TORRENT_STATE = [
     'queued', 'checking', 'downloading metadata', 'downloading', 'finished',
     'seeding', 'allocating', 'checking fastresume'
 ]
 _TORRENT_SESSION = None
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
-_SHARED_DIR = os.environ['AZ_BATCH_NODE_SHARED_DIR']
-_TORRENT_DIR = pathlib.Path(_SHARED_DIR, '.torrents')
+_NODE_ROOT_DIR = os.environ['AZ_BATCH_NODE_ROOT_DIR']
+_TEMP_MOUNT_DIR = pathlib.Path(_NODE_ROOT_DIR, '..', '..').resolve()
+_SINGULARITY_CACHE_DIR = _TEMP_MOUNT_DIR / 'singularity' / 'cache'
+_TORRENT_DIR = pathlib.Path(_NODE_ROOT_DIR, 'torrents')
+try:
+    _AZBATCH_USER = pwd.getpwnam('_azbatch')
+except NameError:
+    _AZBATCH_USER = None
 _PARTITION_KEY = None
 _LR_LOCK_ASYNC = asyncio.Lock()
 _PT_LOCK = threading.Lock()
@@ -325,13 +337,36 @@ def scantree(path):
             yield entry
 
 
-def get_docker_image_name_from_resource(resource: str) -> str:
-    """Get docker image from resource id
+def get_container_image_name_from_resource(resource: str) -> Tuple[str, str]:
+    """Get container image from resource id
     :param str resource: resource
-    :rtype: str
-    :return: docker image name
+    :rtype: tuple
+    :return: (type, image name)
     """
-    return resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+    if _DOCKER_TAG in resource:
+        return (
+            'docker',
+            resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+        )
+    elif _SINGULARITY_TAG in resource:
+        return (
+            'singularity',
+            resource[resource.find(_SINGULARITY_TAG) + len(_SINGULARITY_TAG):]
+        )
+    else:
+        raise ValueError('invalid resource: {}'.format(resource))
+
+
+def is_container_resource(resource: str) -> bool:
+    """Check if resource is a container resource
+    :param str resource: resource
+    :rtype: bool
+    :return: is a supported resource
+    """
+    if (resource.startswith(_DOCKER_TAG) or
+            resource.startswith(_SINGULARITY_TAG)):
+        return True
+    return False
 
 
 def compute_resource_hash(resource: str) -> str:
@@ -343,13 +378,45 @@ def compute_resource_hash(resource: str) -> str:
     return hashlib.sha1(resource.encode('utf8')).hexdigest()
 
 
-class DockerSaveThread(threading.Thread):
-    """Docker Save Thread"""
+def _singularity_image_name_on_disk(name: str) -> str:
+    """Convert a singularity URI to an on disk simg name
+    :param str name: Singularity image name
+    :rtype: str
+    :return: singularity image name on disk
+    """
+    docker = False
+    if name.startswith('shub://'):
+        name = name[7:]
+    elif name.startswith('docker://'):
+        docker = True
+        name = name[9:]
+    name = name.replace('/', '-')
+    idx = name.find(':')
+    if idx != -1:
+        name = name.replace(':', '-')
+    else:
+        if not docker:
+            name = '{}-master'.format(name)
+    name = '{}.simg'.format(name)
+    return name
+
+
+def singularity_image_path_on_disk(name: str) -> pathlib.Path:
+    """Get a singularity image path on disk
+    :param str name: Singularity image name
+    :rtype: pathlib.Path
+    :return: singularity image path on disk
+    """
+    return _SINGULARITY_CACHE_DIR / _singularity_image_name_on_disk(name)
+
+
+class ContainerImageSaveThread(threading.Thread):
+    """Container Image Save Thread"""
     def __init__(
             self, blob_client: azureblob.BlockBlobService,
             table_client: azuretable.TableService,
             resource: str, blob_name: str, nglobalresources: int):
-        """DockerSaveThread ctor
+        """ContainerImageSaveThread ctor
         :param azureblob.BlockBlobService blob_client: blob client
         :param azuretable.TableService table_client: table client
         :param str resource: resource
@@ -408,33 +475,50 @@ class DockerSaveThread(threading.Thread):
             return True
         return False
 
-    def _pull(self, image: str) -> tuple:
-        """Docker image pull
+    def _pull(self, grtype: str, image: str) -> tuple:
+        """Container image pull
+        :param str grtype: global resource type
         :param str image: image to pull
         :rtype: tuple
         :return: tuple or return code, stdout, stderr
         """
-        proc = subprocess.Popen(
-            'docker pull {}'.format(image),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=True,
-            universal_newlines=True)
+        if grtype == 'docker':
+            proc = subprocess.Popen(
+                'docker pull {}'.format(image),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+                universal_newlines=True)
+        elif grtype == 'singularity':
+            proc = subprocess.Popen(
+                'singularity pull {}'.format(image),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+                universal_newlines=True)
         stdout, stderr = proc.communicate()
         return proc.returncode, stdout, stderr
 
     def _pull_and_save(self) -> None:
-        """Thread main logic for pulling and saving docker image"""
+        """Thread main logic for pulling and saving a container image"""
         file = None
         resource_hash = compute_resource_hash(self.resource)
-        image = get_docker_image_name_from_resource(self.resource)
-        _record_perf('pull-start', 'img={}'.format(image))
+        grtype, image = get_container_image_name_from_resource(self.resource)
+        _record_perf('pull-start', 'grtype={},img={}'.format(grtype, image))
         start = datetime.datetime.now()
-        logger.info('pulling image {}'.format(image))
+        logger.info('pulling {} image {}'.format(grtype, image))
         backoff = random.randint(2, 5)
         while True:
-            rc, stdout, stderr = self._pull(image)
+            rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
+                if grtype == 'singularity':
+                    imgpath = singularity_image_path_on_disk(image)
+                    if _AZBATCH_USER is not None:
+                        os.chown(
+                            str(imgpath), _AZBATCH_USER[2], _AZBATCH_USER[3])
+                        os.chmod(str(imgpath), 0o775)
+                    else:
+                        os.chmod(str(imgpath), 0o777)
                 break
             elif self._check_pull_output_overload(stdout, stderr):
                 logger.error(
@@ -452,22 +536,24 @@ class DockerSaveThread(threading.Thread):
                     backoff = random.randint(2, 5)
             else:
                 raise RuntimeError(
-                    'docker pull failed: stdout={} stderr={}'.format(
-                        stdout, stderr))
+                    '{} pull failed: stdout={} stderr={}'.format(
+                        grtype, stdout, stderr))
         diff = (datetime.datetime.now() - start).total_seconds()
-        logger.debug('took {} sec to pull docker image {}'.format(diff, image))
+        logger.debug('took {} sec to pull {} image {}'.format(
+            diff, grtype, image))
         # register service
         _merge_service(
             self.table_client, self.resource, self.nglobalresources)
-        # save docker image to seed to torrent
+        # save image to seed to torrent
         if _ENABLE_P2P:
-            _record_perf('pull-end', 'img={},diff={}'.format(
-                image, diff))
-            _record_perf('save-start', 'img={}'.format(image))
+            _record_perf('pull-end', 'grtype={},img={},diff={}'.format(
+                grtype, image, diff))
+            _record_perf('save-start', 'grtype={},img={}'.format(
+                grtype, image))
             start = datetime.datetime.now()
             if _COMPRESSION:
                 # need to create reproducible compressed tarballs
-                # 1. untar docker save file
+                # 1. untar image save file
                 # 2. re-tar files sorted by name and set mtime/user/group
                 #    to known values
                 # 3. fast compress with parallel gzip ignoring certain file
@@ -477,36 +563,50 @@ class DockerSaveThread(threading.Thread):
                 tmpdir.mkdir(parents=True, exist_ok=True)
                 file = _TORRENT_DIR / '{}.{}'.format(
                     resource_hash, _SAVELOAD_FILE_EXTENSION)
-                logger.info('saving docker image {} to {} for seeding'.format(
-                    image, file))
-                subprocess.check_call(
-                    ('(docker save {} | tar -xf -) '
-                     '&& (tar --sort=name --mtime=\'1970-01-01\' '
-                     '--owner=0 --group=0 -cf - . '
-                     '| pigz --fast -n -T -c > {})').format(image, file),
-                    cwd=str(tmpdir), shell=True)
+                logger.info('saving {} image {} to {} for seeding'.format(
+                    grtype, image, file))
+                if grtype == 'docker':
+                    subprocess.check_call(
+                        ('(docker save {} | tar -xf -) '
+                         '&& (tar --sort=name --mtime=\'1970-01-01\' '
+                         '--owner=0 --group=0 -cf - . '
+                         '| pigz --fast -n -T -c > {})').format(image, file),
+                        cwd=str(tmpdir), shell=True)
+                elif grtype == 'singularity':
+                    subprocess.check_call(
+                        ('(singularity image.export {} | tar -xf -) '
+                         '&& (tar --sort=name --mtime=\'1970-01-01\' '
+                         '--owner=0 --group=0 -cf - . '
+                         '| pigz --fast -n -T -c > {})').format(image, file),
+                        cwd=str(tmpdir), shell=True)
                 shutil.rmtree(str(tmpdir), ignore_errors=True)
                 del tmpdir
                 fsize = file.stat().st_size
             else:
-                # tarball generated by docker save is not reproducible
+                # tarball generated by image save is not reproducible
                 # we need to untar it and torrent the contents instead
                 file = _TORRENT_DIR / '{}'.format(resource_hash)
                 file.mkdir(parents=True, exist_ok=True)
-                logger.info('saving docker image {} to {} for seeding'.format(
-                    image, file))
-                subprocess.check_call(
-                    'docker save {} | tar -xf -'.format(image),
-                    cwd=str(file), shell=True)
+                logger.info('saving {} image {} to {} for seeding'.format(
+                    grtype, image, file))
+                if grtype == 'docker':
+                    subprocess.check_call(
+                        'docker save {} | tar -xf -'.format(image),
+                        cwd=str(file), shell=True)
+                elif grtype == 'singularity':
+                    subprocess.check_call(
+                        'singularity image.export {} | tar -xf -'.format(
+                            image),
+                        cwd=str(file), shell=True)
                 fsize = 0
                 for entry in scantree(str(file)):
                     if entry.is_file(follow_symlinks=False):
                         fsize += entry.stat().st_size
             diff = (datetime.datetime.now() - start).total_seconds()
-            logger.debug('took {} sec to save docker image {} to {}'.format(
-                diff, image, file))
-            _record_perf('save-end', 'img={},size={},diff={}'.format(
-                image, fsize, diff))
+            logger.debug('took {} sec to save {} image {} to {}'.format(
+                diff, grtype, image, file))
+            _record_perf('save-end', 'grtype={},img={},size={},diff={}'.format(
+                grtype, image, fsize, diff))
             # generate torrent file
             start = datetime.datetime.now()
             torrent_file, torrent_sha1 = generate_torrent(file, resource_hash)
@@ -559,16 +659,22 @@ class DockerSaveThread(threading.Thread):
             logger.debug('took {} sec for {} torrent to start'.format(
                 diff, self.resource))
         else:
-            # get docker image size
+            # get image size
             try:
-                output = subprocess.check_output(
-                    'docker images {}'.format(image), shell=True)
-                size = ' '.join(output.decode('utf-8').split()[-2:])
-                _record_perf('pull-end', 'img={},diff={},size={}'.format(
-                    image, diff, size))
+                if grtype == 'docker':
+                    output = subprocess.check_output(
+                        'docker images {}'.format(image), shell=True)
+                    size = ' '.join(output.decode('utf-8').split()[-2:])
+                elif grtype == 'singularity':
+                    imgpath = singularity_image_path_on_disk(image)
+                    size = imgpath.stat().st_size
+                _record_perf(
+                    'pull-end', 'grtype={},img={},diff={},size={}'.format(
+                        grtype, image, diff, size))
             except subprocess.CalledProcessError as ex:
                 logger.exception(ex)
-                _record_perf('pull-end', 'img={},diff={}'.format(image, diff))
+                _record_perf('pull-end', 'grtype={},img={},diff={}'.format(
+                    grtype, image, diff))
 
 
 async def _direct_download_resources_async(
@@ -651,9 +757,9 @@ async def _direct_download_resources_async(
     del _start_torrent_list
     if resource is None:
         return
-    # pull and save docker image in thread
-    if resource.startswith(_DOCKER_TAG):
-        thr = DockerSaveThread(
+    # pull and save container image in thread
+    if is_container_resource(resource):
+        thr = ContainerImageSaveThread(
             blob_client, table_client, resource, blob_name, nglobalresources)
         thr.start()
     else:
@@ -810,10 +916,10 @@ def bootstrap_dht_nodes(
             num_attempts)
 
 
-class DockerLoadThread(threading.Thread):
-    """Docker Load Thread"""
+class ContainerImageLoadThread(threading.Thread):
+    """Container Image Load Thread"""
     def __init__(self, resource):
-        """DockerLoadThread ctor
+        """ContainerImageLoadThread ctor
         :param str resource: resource
         """
         threading.Thread.__init__(self)
@@ -830,29 +936,45 @@ class DockerLoadThread(threading.Thread):
             _THREAD_EXCEPTIONS.append(ex)
 
     def _load_image(self) -> None:
-        """Load docker image"""
+        """Load container image"""
         logger.debug('loading resource: {}'.format(self.resource))
         resource_hash = compute_resource_hash(self.resource)
-        image = get_docker_image_name_from_resource(self.resource)
+        grtype, image = get_container_image_name_from_resource(self.resource)
         start = datetime.datetime.now()
         if _COMPRESSION:
             file = _TORRENT_DIR / '{}.{}'.format(
                 resource_hash, _SAVELOAD_FILE_EXTENSION)
-            logger.info('loading docker image {} from {}'.format(image, file))
-            _record_perf('load-start', 'img={},size={}'.format(
-                image, file.stat().st_size))
-            subprocess.check_call(
-                'pigz -cd {} | docker load'.format(file), shell=True)
+            logger.info('loading {} image {} from {}'.format(
+                grtype, image, file))
+            _record_perf('load-start', 'grtype={},img={},size={}'.format(
+                grtype, image, file.stat().st_size))
+            if grtype == 'docker':
+                subprocess.check_call(
+                    'pigz -cd {} | docker load'.format(file), shell=True)
+            elif grtype == 'singularity':
+                imgpath = singularity_image_path_on_disk(image)
+                subprocess.check_call(
+                    'pigz -cd {} | singularity image.import {}'.format(
+                        file, imgpath), shell=True)
         else:
             file = _TORRENT_DIR / '{}'.format(resource_hash)
-            logger.info('loading docker image {} from {}'.format(image, file))
-            _record_perf('load-start', 'img={}'.format(image))
-            subprocess.check_call(
-                'tar -cO . | docker load', cwd=str(file), shell=True)
+            logger.info('loading {} image {} from {}'.format(
+                grtype, image, file))
+            _record_perf('load-start', 'grtype={},img={}'.format(
+                grtype, image))
+            if grtype == 'docker':
+                subprocess.check_call(
+                    'tar -cO . | docker load', cwd=str(file), shell=True)
+            elif grtype == 'singularity':
+                imgpath = singularity_image_path_on_disk(image)
+                subprocess.check_call(
+                    'tar -cO . | singularity image.import {}', cwd=str(
+                        file, imgpath), shell=True)
         diff = (datetime.datetime.now() - start).total_seconds()
         logger.debug(
-            'took {} sec to load docker image from {}'.format(diff, file))
-        _record_perf('load-end', 'img={},diff={}'.format(image, diff))
+            'took {} sec to load {} image from {}'.format(diff, grtype, file))
+        _record_perf('load-end', 'grtype={},img={},diff={}'.format(
+            grtype, image, diff))
         _TORRENTS[self.resource]['loading'] = False
         _TORRENTS[self.resource]['loaded'] = True
 
@@ -874,9 +996,9 @@ async def _load_and_register_async(
                     _TORRENTS[resource]['handle'].is_seed()):
                 if (not _TORRENTS[resource]['loaded'] and
                         not _TORRENTS[resource]['loading']):
-                    # docker load image
-                    if resource.startswith(_DOCKER_TAG):
-                        thr = DockerLoadThread(resource)
+                    # container load image
+                    if is_container_resource(resource):
+                        thr = ContainerImageLoadThread(resource)
                         thr.start()
                     else:
                         # TODO "load blob" - move to appropriate path
@@ -921,11 +1043,12 @@ async def manage_torrents_async(
             logger.info(
                 ('creating torrent session for {} ipaddress={} '
                  'seed={}').format(resource, ipaddress, seed))
-            image = get_docker_image_name_from_resource(resource)
+            grtype, image = get_container_image_name_from_resource(resource)
             _TORRENTS[resource]['handle'] = create_torrent_session(
                 resource, _TORRENT_DIR, seed)
-            await _record_perf_async(loop, 'torrent-start', 'img={}'.format(
-                image))
+            await _record_perf_async(
+                loop, 'torrent-start', 'grtype={},img={}'.format(
+                    grtype, image))
             del image
             # insert torrent into torrentinfo table
             try:

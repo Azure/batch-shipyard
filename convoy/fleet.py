@@ -897,11 +897,27 @@ def _construct_pool_object(
     # construct block list
     block_for_gr = None
     if pool_settings.block_until_all_global_resources_loaded:
-        images = settings.global_resources_docker_images(config)
-        if len(images) > 0:
-            block_for_gr = ','.join([x for x in images])
-        else:
-            logger.warning('no docker images specified in global resources')
+        block_for_gr_docker = ''
+        block_for_gr_singularity = ''
+        docker_images = settings.global_resources_docker_images(config)
+        if len(docker_images) > 0:
+            block_for_gr_docker = ','.join([x for x in docker_images])
+        singularity_images = settings.global_resources_singularity_images(
+            config)
+        if len(singularity_images) > 0:
+            block_for_gr_singularity = ','.join(
+                [util.singularity_image_name_on_disk(x)
+                 for x in singularity_images])
+        if (util.is_none_or_empty(block_for_gr_docker) and
+                util.is_none_or_empty(block_for_gr_singularity)):
+            logger.warning(
+                'no Docker and Singularity images specified in global '
+                'resources')
+        if native:
+            # native pools will auto preload
+            block_for_gr_docker = ''
+        block_for_gr = '{};{}'.format(
+            block_for_gr_docker, block_for_gr_singularity)
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
@@ -1126,13 +1142,6 @@ def _construct_pool_object(
                     config)
             )
         )
-        if util.is_not_empty(block_for_gr):
-            pool.start_task.environment_settings.append(
-                batchmodels.EnvironmentSetting(
-                    'SHIPYARD_DOCKER_IMAGES_PRELOAD',
-                    block_for_gr,
-                )
-            )
         if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
             pool.start_task.resource_files.append(
                 batchmodels.ResourceFile(
@@ -1173,6 +1182,31 @@ def _construct_pool_object(
     # add docker login settings
     pool.start_task.environment_settings.extend(
         batch.generate_docker_login_settings(config)[0])
+    # image preload setting
+    if util.is_not_empty(block_for_gr):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SHIPYARD_CONTAINER_IMAGES_PRELOAD',
+                block_for_gr,
+            )
+        )
+    # singularity env vars
+    pool.start_task.environment_settings.append(
+        batchmodels.EnvironmentSetting(
+            'SINGULARITY_TMPDIR',
+            '{}/singularity/tmp'.format(
+                settings.temp_disk_mountpoint(
+                    config, offer=pool_settings.vm_configuration.offer))
+        )
+    )
+    pool.start_task.environment_settings.append(
+        batchmodels.EnvironmentSetting(
+            'SINGULARITY_CACHEDIR',
+            '{}/singularity/cache'.format(
+                settings.temp_disk_mountpoint(
+                    config, offer=pool_settings.vm_configuration.offer))
+        )
+    )
     return (pool_settings, gluster_on_compute, pool)
 
 

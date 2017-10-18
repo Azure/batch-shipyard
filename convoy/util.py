@@ -235,6 +235,30 @@ def scantree(path):
             yield entry
 
 
+def singularity_image_name_on_disk(name):
+    # type: (str) -> str
+    """Convert a singularity URI to an on disk simg name
+    :param str name: Singularity image name
+    :rtype: str
+    :return: singularity image name on disk
+    """
+    docker = False
+    if name.startswith('shub://'):
+        name = name[7:]
+    elif name.startswith('docker://'):
+        docker = True
+        name = name[9:]
+    name = name.replace('/', '-')
+    idx = name.find(':')
+    if idx != -1:
+        name = name.replace(':', '-')
+    else:
+        if not docker:
+            name = '{}-master'.format(name)
+    name = '{}.simg'.format(name)
+    return name
+
+
 def wrap_commands_in_shell(commands, wait=True):
     # type: (List[str], bool) -> str
     """Wrap commands in a shell

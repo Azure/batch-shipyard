@@ -47,6 +47,11 @@ credentials:
       username: acr_username
       password: acr_user_password
       password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
+  singularity_registry:
+    myserver.azurecr.io:
+      username: acr_username
+      password: acr_user_password
+      password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
   management:
     aad:
       endpoint: https://management.core.windows.net/
@@ -178,12 +183,14 @@ name) can be the same as the storage account name itself.
       specified KeyVault and replace the `account_key` value as returned by
       Azure KeyVault.
 
-### Docker Registries: `docker_registry`
-* (optional) `docker_registry` property defines logins for Docker registry
-servers. This property does not need to be defined if you are using only
-public repositories on Docker Hub. However, this is required if pulling from
-authenticated private registries such as a secured Azure Container Registry
-or private repositories on Docker Hub.
+### Docker and Singularity Registries: `docker_registry` and `singularity_registry`
+* (optional) `docker_registry` or `singularity_registry` property defines
+logins for Docker and Singularity registry servers. Currently, a Singularity
+registry server is a Docker registry server to support `docker://` private
+URIs. This property does not need to be defined if you are using only
+public repositories on Docker Hub or Singularity Hub. However, this is
+required if pulling from authenticated private registries such as a secured
+Azure Container Registry or private repositories on Docker Hub.
     * (optional) `hub` defines the login property to Docker Hub. This is only
     required for private repos on Docker Hub.
     * (optional) `username` username to log in to Docker Hub

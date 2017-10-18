@@ -32,6 +32,8 @@ global_resources:
     - myruntimeserver.azurecr.io
   docker_images:
   - busybox
+  singularity_images:
+  - shub://singularityhub/busybox
   volumes:
     data_volumes:
       contdatavol:
@@ -174,20 +176,37 @@ This property is required.
       * (optional) `docker` specifies a list of Docker registries to load.
         If these require login credentials, they must be specified in the
         credentials configuration file.
-    * (required) `docker_images` is an array of docker images that should be
-      installed on every compute node when this configuration file is supplied
-      while creating a compute pool. Image tags are supported. Image names
-      should be fully qualified including any registry server name prefix
-      (unless it exists in Docker Hub and can be omitted). If you are
-      referencing a private registry that requires a login, then you must
-      add the credential for the registry in the `docker_registry` property
-      in the credentials file. If this property is empty or is not
-      specified, no Docker images are pre-loaded on to compute nodes
+      * (optional) `singularity` specifies a list of Singularity registries
+        to load. Currently this list is limited to 1 entry including any
+        Docker Hub logins.
+    * (required if using Docker) `docker_images` is an array of Docker images
+      that should be installed on every compute node when this configuration
+      file is supplied while creating a compute pool. Image tags are
+      supported. Image names should be fully qualified including any registry
+      server name prefix (unless it exists in Docker Hub and can be omitted).
+      If you are referencing a private registry that requires a login, then
+      you must add the credential for the registry in the `docker_registry`
+      property in the credentials file. If this property is empty or is not
+      specified, no Docker images will be pre-loaded on to compute nodes
       which will lead to increased task startup latency. It is
       highly recommended not to leave this property empty if possible. Note
       that if you do not specify Docker images to preload, you must specify
       `allow_run_on_missing_image` as `true` in your job specification for
       any tasks that reference images that aren't specified in this property.
+    * (required if using Singularity) `singularity_images` is an array of
+      Singularity images that should be installed on every compute node
+      when this configuration file is supplied while creating a compute pool.
+      Image tags are supported. Image names should be fully qualified
+      including any registry server name prefix. Both `shub://` and
+      `docker://` URI prefixes are supported. If you are
+      referencing a private registry that requires a login, then you must
+      add the credential for the registry in the `singularity_registry`
+      property in the credentials file. If this property is empty or is not
+      specified, no Singularity images will be pre-loaded on to compute nodes
+      which will lead to increased task startup latency. It is
+      highly recommended not to leave this property empty if possible.
+      Note that `singularity_images` is incompatible with `native` container
+      support enabled pools.
     * (optional) `files` property specifies data that should be ingressed
       from a location accessible by the local machine (i.e., machine invoking
       `shipyard.py` to a shared file system location accessible by compute

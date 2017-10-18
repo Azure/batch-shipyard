@@ -1319,6 +1319,27 @@ def docker_registry_login(config, server):
     return user, pw
 
 
+def singularity_registry_login(config, server):
+    # type: (dict, str) -> tuple
+    """Get singularity registry login settings
+    :param dict config: configuration object
+    :param str server: credentials for login server to retrieve
+    :rtype: tuple
+    :return: (user, pw)
+    """
+    try:
+        user = config['credentials']['singularity_registry'][
+            server]['username']
+        pw = config['credentials']['singularity_registry'][
+            server]['password']
+        if util.is_none_or_empty(user) or util.is_none_or_empty(pw):
+            raise KeyError()
+    except KeyError:
+        user = None
+        pw = None
+    return user, pw
+
+
 def iterate_docker_registry_servers(config):
     # type: (dict) -> str
     """Iterate docker registry servers
@@ -1548,6 +1569,60 @@ def docker_registries(config):
     return registries
 
 
+def singularity_registries(config):
+    # type: (dict) -> list
+    """Get Singularity registries specified
+    :param dict config: configuration object
+    :rtype: list
+    :return: list of batchmodels.ContainerRegistry objects
+    """
+    servers = []
+    try:
+        servers.extend(
+            config['global_resources']['additional_registries']['singularity'])
+    except KeyError:
+        pass
+    # parse images for servers
+    images = global_resources_singularity_images(config)
+    for image in images:
+        tmp = image.split('/')
+        if len(tmp) > 1:
+            if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
+                servers.append(tmp[0])
+    # get login info for each registry
+    registries = []
+    # add docker hub if found and no servers are specified
+    if len(servers) == 0:
+        hubuser, hubpw = docker_registry_login(config, 'hub')
+        if util.is_not_empty(hubuser) or util.is_not_empty(hubpw):
+            registries.append(
+                batchmodels.ContainerRegistry(
+                    registry_server=None,
+                    user_name=hubuser,
+                    password=hubpw,
+                )
+            )
+        del hubuser
+        del hubpw
+    for server in servers:
+        user, pw = singularity_registry_login(config, server)
+        if util.is_none_or_empty(user) or util.is_none_or_empty(pw):
+            # registries can be public with a specified server
+            continue
+        registries.append(
+            batchmodels.ContainerRegistry(
+                registry_server=server,
+                user_name=user,
+                password=pw,
+            )
+        )
+    # TODO currently limit to a single server due to env var limit
+    if len(registries) > 1:
+        raise ValueError(
+            'cannot currently specify more than 1 Singularity registry server')
+    return registries
+
+
 def data_replication_settings(config):
     # type: (dict) -> DataReplicationSettings
     """Get data replication settings
@@ -1618,6 +1693,22 @@ def global_resources_docker_images(config):
     """
     try:
         images = config['global_resources']['docker_images']
+        if util.is_none_or_empty(images):
+            raise KeyError()
+    except KeyError:
+        images = []
+    return images
+
+
+def global_resources_singularity_images(config):
+    # type: (dict) -> list
+    """Get list of singularity images
+    :param dict config: configuration object
+    :rtype: list
+    :return: singularity images
+    """
+    try:
+        images = config['global_resources']['singularity_images']
         if util.is_none_or_empty(images):
             raise KeyError()
     except KeyError:
