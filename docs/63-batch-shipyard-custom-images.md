@@ -17,10 +17,43 @@ ARM Image resources. You can create ARM Images using existing page blob VHDs
 or exporting managed disks. You must create the Image in the same subscription
 and region as your Batch account.
 
+### Creating an ARM Image via Azure Portal
+The following will step you through creating an ARM Image from an existing
+page blob VHD source through the [Azure Portal](https://portal.azure.com/).
+
+#### Step 1: Navigate to the ARM Image Blade
+On the left, you should see an `Images` option. If you do not, hit
+`More services >` on the bottom left and type `Images` in the search box.
+
+![63-custom-images-arm-image-1.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-1.png)
+
+#### Step 2: Create an Image
+Select `+ Add` to bring up the create image blade:
+
+![63-custom-images-arm-image-2.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-2.png)
+
+In the Create image blade, assign a `Name` to your image. Ensure that
+the `Subscription` and `Location` associated with this image is in the same
+subscription and location as your Batch account. Select the proper `OS type`
+and then click `Browse` to select the source Storage blob. If you do not
+see the Storage Account with your source VHD, you must copy it into an ARM
+Storage Account within the same `Location` that you have selected.
 You can use [blobxfer](https://github.com/Azure/blobxfer) or
 [AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/)
 to copy your page blob VHDs if they are in a different region than your
-Batch account.
+Batch account. Select the proper `Account type` if you are using HDD or
+SSD backed VMs and then hit `Create` to finish the process.
+
+![63-custom-images-arm-image-3.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-3.png)
+
+#### Step 3: Retrieve the ARM Image Resource Id
+After the Image has been created, navigate to the `Images` blade, select
+your image and then click on `Overview`. In the Overview blade, at the
+bottom, you should see a `RESOURCE ID`. Click on the copy button to copy
+the ARM Image Resource Id into your clipboard. This is the value you should
+use for the `arm_image_id` in the pool configuration file.
+
+![63-custom-images-arm-image-4.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-4.png)
 
 ### Azure Active Directory Authentication Required
 Azure Active Directory authentication is required for the `batch` account
