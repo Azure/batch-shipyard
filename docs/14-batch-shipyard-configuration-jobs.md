@@ -138,6 +138,9 @@ job_specifications:
       repeat: 3
     id: null
     docker_image: busybox
+    singularity_image: shub://singularityhub/busybox
+    singularity_cmd: exec
+    additional_singularity_options: []
     name:
     labels: []
     environment_variables:
@@ -218,16 +221,18 @@ the specified tasks are run under. In non-`native` mode and when run with
 multi-instance tasks, this performs automatic cleanup of the Docker container
 which is run in detached mode. It is not necessary to set `auto_complete` to
 `true` with `native` container supported pools to clean up Docker containers
-with multi-instance tasks. The default is `false`. If creating a job
-`recurrence`, utilizing `auto_complete` is one way to have recurrent job
-instances created from a schedule to complete such that the next job
-recurrence can be created.
+with multi-instance tasks. However, it is not necessary to set `auto_complete`
+to `true` for Singularity-based multi-instance tasks. The default is `false`.
+If creating a job `recurrence`, utilizing `auto_complete` is one way to have
+recurrent job instances created from a schedule to complete such that the
+next job recurrence can be created.
 * (optional) `environment_variables` under the job are environment variables
 which will be applied to all tasks operating under the job. Note that
 environment variables are not expanded and are passed as-is. You will need
 to source the environment file `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist`
-in a shell within the docker `command` or `entrypoint` if you want any
-environment variables to be expanded.
+in a shell within the Docker `command` or `entrypoint` if you want any
+environment variables to be expanded. This behavior does not apply to
+`native` container pools and Singularity images.
 * (optional) `environment_variables_keyvault_secret_id` under the job are
 environment variables stored in KeyVault that should be applied to all tasks
 operating under the job. The secret stored in KeyVault must be a valid
@@ -352,13 +357,15 @@ configuration to minimize scheduling to task execution latency.
 * (optional) `remove_container_after_exit` property specifies if all
 containers under the job should be automatically removed/cleaned up after
 the task exits. Note that this only cleans up the Docker container and not
-the associated Batch task. This defaults to `true`.
+the associated Batch task. This defaults to `true`. This option only applies
+to Docker containers.
 * (optional) `shm_size` property specifies the size of `/dev/shm` in all
 containers under the job. The default is `64m`. The postfix unit can be
 designated as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
 (gigabytes). This value may need to be increased from the default of `64m`
 for certain Docker applications, including multi-instance tasks using Intel
-MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)).
+MPI (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)). This
+option only applies to Docker containers.
 * (optional) `infiniband` designates if all tasks under the job require
 access to the Infiniband/RDMA devices on the host. Note that this will
 automatically force containers to use the host network stack. If this
@@ -370,8 +377,9 @@ option has no effect on `native` container support pools as it is
 automtically enabled by the system.
 * (optional) `gpu` designates if all containers under the job require access
 to the GPU devices on the host. If this property is set to `true`, Docker
-containers are instantiated via `nvidia-docker`. This requires N-series VM
-instances. If this property is not set, it will default to `true` if the task
+containers are instantiated via `nvidia-docker` and the appropriate options
+are passed for Singularity containers. This requires N-series VM instances.
+If this property is not set, it will default to `true` if the task
 is destined for a compute pool with GPUs. This option has no effect on
 `native` container support pools as it is automatically enabled by the
 system.
@@ -539,23 +547,35 @@ on must be integral in nature. For example, if `depends_on_range` is set
 to `[1, 10]` (note the integral members), then there should be task
 `id`s of `"1"`, `"2"`, ... `"10"` within the job. Once these dependent
 tasks complete successfully, then this specified task will execute.
-* (required) `docker_image` is the Docker image to use for this task
-* (optional) `name` is the name to assign to the container. If not
-specified, the value of the `id` property will be used for `name`.
+* (required if using a Docker image) `docker_image` is the Docker image to
+use for this task
+* (required if using a Singularity image) `singularity_image` is the
+Singularity image to use for this task
+* (optional) `singularity_cmd` is the singularity command to use. This
+can be either `exec` or `run`. The default is `exec`. This option only
+applies to Singularity containers.
+* (optional) `additional_singularity_options` are any additional options
+to pass to the `singularity_cmd`. This option only applies to Singularity
+containers.
+* (optional) `name` is the name to assign to the Docker container. If not
+specified, the value of the `id` property will be used for `name`. This
+option only applies to Docker containers.
 * (optional) `labels` is an array of labels to apply to the container.
+This option only applies to Docker containers.
 * (optional) `environment_variables` are any additional task-specific
-environment variables that should be applied to the container. Note that
-environment variables are not expanded and are passed as-is. You will
-need to source the environment file
+environment variables that should be applied to the container. For
+Docker non-`native` pools, note that environment variables are not expanded
+and are passed as-is. You will need to source the environment file
 `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist` in a shell within the
-docker `command` or `entrypoint` if you want any environment variables
-to be expanded.
+Docker `command` or `entrypoint` if you want any environment variables
+to be expanded. This behavior does not apply to `native` container pools and
+Singularity images.
 * (optional) `environment_variables_keyvault_secret_id` are any additional
 task-specific environment variables that should be applied to the
 container but are stored in KeyVault. The secret stored in KeyVault must
 be a valid YAML/JSON string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `ports` is an array of port specifications that should be
-exposed to the host.
+exposed to the host. This option only applies to Docker containers.
 * (optional) `data_volumes` is an array of `data_volume` aliases as defined
 in the global configuration file. These volumes will be mounted in the
 container. Volumes specified here will be merged with any job-level
@@ -631,17 +651,19 @@ applied to the task running the application command.
           `blobxfer`.
 * (optional) `remove_container_after_exit` property specifies if the
 container should be automatically removed/cleaned up after it exits. This
-defaults to `false`. This overrides the job-level property, if set.
+defaults to `false`. This overrides the job-level property, if set. This
+option only applies to Docker containers.
 * (optional) `shm_size` property specifies the size of `/dev/shm` in
 the container. The default is `64m`. The postfix unit can be designated
 as `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g` (gigabytes). This
 value may need to be increased from the default of `64m` for certain
 Docker applications, including multi-instance tasks using Intel MPI
 (see [issue #8](https://github.com/Azure/batch-shipyard/issues/8)). This
-overrides the job-level property, if set.
+overrides the job-level property, if set. This option only applies to
+Docker containers.
 * (optional) `additional_docker_run_options` is an array of addition Docker
 run options that should be passed to the Docker daemon when starting this
-container.
+container. The option only applies to Docker containers.
 * (optional) `infiniband` designates if this container requires access to the
 Infiniband/RDMA devices on the host. Note that this will automatically
 force the container to use the host network stack. If this property is
@@ -651,7 +673,8 @@ job-level property, if set. It follows the same default behavior as the
 job-level property if not set.
 * (optional) `gpu` designates if this container requires access to the GPU
 devices on the host. If this property is set to `true`, Docker containers
-are instantiated via `nvidia-docker`. This requires N-series VM instances.
+are instantiated via `nvidia-docker` and the appropriate options are passed
+for Singularity containers. This requires N-series VM instances.
 This overrides the job-level property, if set. It follows the same default
 behavior as the job-level property if not set.
 * (optional) `max_task_retries` sets the maximum number of times that
@@ -673,7 +696,7 @@ default, if unspecified, is effectively infinite - i.e., task data is
 retained forever on the compute node that ran the task. This overrides the
 job-level property.
 * (optional) `multi_instance` is a property indicating that this task is a
-multi-instance task. This is required if the Docker image is an MPI
+multi-instance task. This is required if the task to run is an MPI
 program. Additional information about multi-instance tasks and Batch
 Shipyard can be found
 [here](80-batch-shipyard-multi-instance-tasks.md). Do not define this
@@ -713,13 +736,18 @@ property are:
         * `file_mode` if the file mode to set for the file on the compute node.
           This is optional.
 * (optional) `entrypoint` is the property that can override the Docker image
-defined `ENTRYPOINT`.
-* (optional) `command` is the command to execute in the Docker container
+defined `ENTRYPOINT`. This option only applies to Docker containers.
+* (optional) `command` is the command to execute in the container
 context. If this task is a regular non-multi-instance task, then this is
-the command passed to the container context during `docker run`. If this
-task is a multi-instance task, then this `command` is the application
-command and is executed with `docker exec` in the running Docker container
-context from the `coordination_command` in the `multi_instance` property.
+the command passed to the container context during `docker run` for
+a Docker container or to the `singularity_cmd` for a Singularity container.
+If this task is a multi-instance task under a Docker container, then this
+`command` is the application command and is executed with `docker exec` in
+the running Docker container context from the `coordination_command` in the
+`multi_instance` property. If this task is a multi-isntance task under a
+Singularity container, then this `command` acts similar to a regular
+non-multi-instance task as no special run+exec behavior is needed with
+Singularity containers to achieve multi-instance execution.
 This property may be null. Note that if you are using a `task_factory`
 for the specification, then task factory arguments are applied to the
 `command`. Therefore, Python-style string formatting options (excluding

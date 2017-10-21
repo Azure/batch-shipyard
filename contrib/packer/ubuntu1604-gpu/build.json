@@ -6,8 +6,8 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "nvdriver": "NVIDIA-Linux-x86_64-375.66.run",
-    "packerscript": "packer.sh"
+    "nvdriver": "NVIDIA-Linux-x86_64-384.81.run",
+    "bootstrap": "bootstrap.sh"
   },
   "builders": [
       {
@@ -35,18 +35,18 @@
   "provisioners": [
       {
           "type": "file",
-          "source": "{{user `packerscript`}}",
-          "destination": "/tmp/{{user `packerscript`}}"
+          "source": "{{user `bootstrap`}}",
+          "destination": "/tmp/{{user `bootstrap`}}"
       },
       {
           "type": "file",
           "source": "{{user `nvdriver`}}",
-          "destination": "/tmp/{{ user `nvdriver`}}"
+          "destination": "/tmp/{{user `nvdriver`}}"
       },
       {
           "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
           "inline": [
-              "/tmp/{{user `packerscript`}} /tmp/{{user `nvdriver`}}",
+              "/tmp/{{user `bootstrap`}} {{user `nvdriver`}}",
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/sh -x",

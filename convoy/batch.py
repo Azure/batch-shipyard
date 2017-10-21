@@ -70,6 +70,12 @@ _RUN_ELEVATED = batchmodels.UserIdentity(
         elevation_level=batchmodels.ElevationLevel.admin,
     )
 )
+_RUN_UNELEVATED = batchmodels.UserIdentity(
+    auto_user=batchmodels.AutoUserSpecification(
+        scope=batchmodels.AutoUserScope.pool,
+        elevation_level=batchmodels.ElevationLevel.non_admin,
+    )
+)
 NodeStateCountCollection = collections.namedtuple(
     'NodeStateCountCollection', [
         'creating',
@@ -276,9 +282,10 @@ def _block_for_nodes_ready(
     logger.info(
         'waiting for all nodes in pool {} to reach one of: {!r}'.format(
             pool_id, stopping_states))
-    i = 0
+    pool_settings = settings.pool_settings(config)
     reboot_map = {}
     unusable_delete = False
+    last = time.time()
     while True:
         # refresh pool to ensure that there is no dedicated resize error
         pool = batch_client.pool.get(pool_id)
@@ -369,8 +376,9 @@ def _block_for_nodes_ready(
         elif (any(node.state == batchmodels.ComputeNodeState.unusable
                   for node in nodes)):
             pool_stats(batch_client, config, pool_id=pool_id)
-            if pool.attempt_recovery_on_unusable:
-                logger.warning('Unusable nodes detected, deleting')
+            if pool_settings.attempt_recovery_on_unusable:
+                logger.warning(
+                    'Unusable nodes detected, deleting unusable nodes')
                 del_node(
                     batch_client, config, False, False, True, None,
                     confirm=False)
@@ -396,16 +404,16 @@ def _block_for_nodes_ready(
                          pool.id, end_states))
             else:
                 return nodes
-        i += 1
-        if i % 3 == 0:
-            # issue resize if unusable deletion has occurred
-            if unusable_delete and len(nodes) < total_nodes:
-                resize_pool(batch_client, config, wait=False)
-                unusable_delete = False
-            i = 0
+        # issue resize if unusable deletion has occurred
+        if unusable_delete and len(nodes) < total_nodes:
+            resize_pool(batch_client, config, wait=False)
+            unusable_delete = False
+        now = time.time()
+        if (now - last) > 20:
+            last = now
             logger.debug(
-                ('waiting for {} dedicated nodes and {} low priority nodes '
-                 'of size {} to reach desired state in pool {} '
+                ('waiting for {} dedicated nodes and {} low priority '
+                 'nodes of size {} to reach desired state in pool {} '
                  '[resize_timeout={} allocation_state={} '
                  'allocation_state_transition_time={}]').format(
                      pool.target_dedicated_nodes,
@@ -415,7 +423,7 @@ def _block_for_nodes_ready(
                      pool.resize_timeout,
                      pool.allocation_state,
                      pool.allocation_state_transition_time))
-            if len(nodes) <= 5:
+            if len(nodes) <= 3:
                 for node in nodes:
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
@@ -425,9 +433,9 @@ def _block_for_nodes_ready(
         elif len(nodes) < 50:
             time.sleep(6)
         elif len(nodes) < 100:
-            time.sleep(10)
+            time.sleep(12)
         else:
-            time.sleep(15)
+            time.sleep(24)
 
 
 def _node_state_counts(nodes):
@@ -3120,7 +3128,9 @@ def add_jobs(
                     return
         else:
             raise
-    global_resources = settings.global_resources_docker_images(config)
+    tempdisk = settings.temp_disk_mountpoint(config)
+    docker_images = settings.global_resources_docker_images(config)
+    singularity_images = settings.global_resources_singularity_images(config)
     lastjob = None
     lasttaskid = None
     jobschedule = None
@@ -3137,24 +3147,40 @@ def add_jobs(
         mi_docker_container_name = None
         reserved_task_id = None
         uses_task_dependencies = False
-        missing_images = []
+        docker_missing_images = []
+        singularity_missing_images = []
         allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
         existing_tasklist = None
         for task in settings.job_tasks(config, jobspec):
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
-            if di not in global_resources:
+            if util.is_not_empty(di) and di not in docker_images:
                 if allow_run_on_missing:
                     logger.warning(
                         ('docker image {} not pre-loaded on pool for a '
                          'task specified in job {}').format(di, job_id))
-                    missing_images.append(di)
+                    docker_missing_images.append(di)
                 else:
                     raise RuntimeError(
                         ('not submitting job {} with missing docker image {} '
                          'pre-load on pool {} without job-level '
                          'allow_run_on_missing_image option').format(
                              job_id, di, pool.id))
+            si = settings.task_singularity_image(task)
+            if util.is_not_empty(si) and si not in singularity_images:
+                if allow_run_on_missing:
+                    logger.warning(
+                        ('singularity image {} not pre-loaded on pool for a '
+                         'task specified in job {}').format(si, job_id))
+                    singularity_missing_images.append(si)
+                else:
+                    raise RuntimeError(
+                        ('not submitting job {} with missing singularity '
+                         'image {} pre-load on pool {} without job-level '
+                         'allow_run_on_missing_image option').format(
+                             job_id, si, pool.id))
+            del di
+            del si
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
             if settings.has_depends_on_task(task):
@@ -3190,15 +3216,30 @@ def add_jobs(
         # construct job prep
         jpcmd = []
         if not native:
-            if len(missing_images) > 0 and allow_run_on_missing:
+            if len(docker_missing_images) > 0 and allow_run_on_missing:
                 # we don't want symmetric difference as we just want to
                 # block on pre-loaded images only
-                gr = list(set(global_resources) - set(missing_images))
+                dgr = list(set(docker_images) - set(docker_missing_images))
             else:
-                gr = global_resources
-            if len(gr) > 0:
-                jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}'.format(
-                    jpfile[0], ' '.join(gr)))
+                dgr = docker_images
+            if len(singularity_missing_images) > 0 and allow_run_on_missing:
+                sgr = list(
+                    set(singularity_images) - set(singularity_missing_images)
+                )
+            else:
+                sgr = singularity_images
+            gr = ''
+            if len(dgr) > 0:
+                gr = ','.join(dgr)
+            gr = '{}#'.format(gr)
+            if len(sgr) > 0:
+                sgr = [util.singularity_image_name_on_disk(x) for x in sgr]
+                gr = '{}{}'.format(gr, ','.join(sgr))
+            if util.is_not_empty(gr):
+                jpcmd.append('$AZ_BATCH_NODE_STARTUP_DIR/wd/{} "{}"'.format(
+                    jpfile[0], gr))
+            del dgr
+            del sgr
             del gr
         # job prep: digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
@@ -3212,6 +3253,12 @@ def add_jobs(
                 wait_for_success=True,
                 user_identity=_RUN_ELEVATED,
                 rerun_on_node_reboot_after_success=False,
+                environment_settings=[
+                    batchmodels.EnvironmentSetting(
+                        'SINGULARITY_CACHEDIR',
+                        '{}/singularity/cache'.format(tempdisk)
+                    ),
+                ],
             )
         del jpcmd
         # construct job release for multi-instance auto-complete
@@ -3453,7 +3500,8 @@ def add_jobs(
                 settings.set_task_name(_task, '{}-{}'.format(job_id, _task_id))
             del _task_id
             task = settings.task_settings(
-                cloud_pool, config, pool, jobspec, _task, missing_images)
+                cloud_pool, config, pool, jobspec, _task)
+            is_singularity = util.is_not_empty(task.singularity_image)
             # retrieve keyvault task env vars
             if util.is_not_empty(
                     task.environment_variables_keyvault_secret_id):
@@ -3499,22 +3547,21 @@ def add_jobs(
                             # use absolute path due to non-expansion
                             'CUDA_CACHE_PATH': (
                                 '{}/batch/tasks/.nv/ComputeCache').format(
-                                    settings.temp_disk_mountpoint(config)),
+                                    tempdisk),
                         }
                         for key in gpu_env:
                             f.write('{}={}\n'.format(
                                 key, gpu_env[key]).encode('utf8'))
-                        del gpu_env
                     # close and upload env var file
                     f.close()
-                    if not native:
+                    if not native and not is_singularity:
                         sas_urls = storage.upload_resource_files(
                             blob_client, config, [(envfileloc, fname)])
                 finally:
                     os.unlink(fname)
                     del f
                     del fname
-                if not native and len(sas_urls) != 1:
+                if not native and not is_singularity and len(sas_urls) != 1:
                     raise RuntimeError('unexpected number of sas urls')
             # check if this is a multi-instance task
             mis = None
@@ -3543,6 +3590,16 @@ def add_jobs(
                 # set application command
                 if native:
                     task_commands = [task.command]
+                elif is_singularity:
+                    task_commands = [
+                        'singularity {} {} {}{}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                            '{}'.format(' ' + task.command)
+                            if task.command else '',
+                        )
+                    ]
                 else:
                     task_commands = [
                         '{} {} {}'.format(
@@ -3553,20 +3610,32 @@ def add_jobs(
                     task_commands = [
                         '{}'.format(' ' + task.command) if task.command else ''
                     ]
+                elif is_singularity:
+                    task_commands = [
+                        'singularity {} {} {}{}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                            '{}'.format(' ' + task.command)
+                            if task.command else '',
+                        )
+                    ]
                 else:
                     task_commands = [
                         'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
                         '{} {} {}{}'.format(
                             task.docker_run_cmd,
-                            ' '.join(task.docker_run_options),
-                            task.image,
+                            ' '.join(task.run_options),
+                            task.docker_image,
                             '{}'.format(
                                 ' ' + task.command) if task.command else '')
                     ]
             taskenv = None
             output_files = None
-            # get docker login if missing images
-            if not native and len(missing_images) > 0 and allow_run_on_missing:
+            # get registry login if missing images
+            if (not native and allow_run_on_missing and
+                    (len(docker_missing_images) > 0 or
+                     len(singularity_missing_images) > 0)):
                 taskenv, logincmd = generate_docker_login_settings(config)
                 logincmd.extend(task_commands)
                 task_commands = logincmd
@@ -3588,7 +3657,7 @@ def add_jobs(
                     task_commands.append(addlcmds)
             del addlcmds
             # set environment variables for native
-            if native:
+            if native or is_singularity:
                 taskenv = []
                 if util.is_not_empty(env_vars):
                     for key in env_vars:
@@ -3603,6 +3672,21 @@ def add_jobs(
                                 key, ib_env[key])
                         )
                     del ib_env
+                # add singularity only vars
+                if is_singularity:
+                    taskenv.append(
+                        batchmodels.EnvironmentSetting(
+                            'SINGULARITY_CACHEDIR',
+                            '{}/singularity/cache'.format(tempdisk)
+                        )
+                    )
+                    if task.gpu:
+                        for key in gpu_env:
+                            taskenv.append(
+                                batchmodels.EnvironmentSetting(
+                                    key, gpu_env[key])
+                            )
+                        del gpu_env
             del env_vars
             # create task
             if util.is_not_empty(task_commands):
@@ -3612,7 +3696,9 @@ def add_jobs(
             batchtask = batchmodels.TaskAddParameter(
                 id=task.id,
                 command_line=tc,
-                user_identity=_RUN_ELEVATED,
+                user_identity=(
+                    _RUN_UNELEVATED if is_singularity else _RUN_ELEVATED
+                ),
                 resource_files=[],
                 multi_instance_settings=mis,
                 constraints=batchmodels.TaskConstraints(
@@ -3627,9 +3713,8 @@ def add_jobs(
             if native:
                 batchtask.container_settings = \
                     batchmodels.TaskContainerSettings(
-                        container_run_options=' '.join(
-                            task.docker_run_options),
-                        image_name=task.image)
+                        container_run_options=' '.join(task.run_options),
+                        image_name=task.docker_image)
             # add envfile
             if sas_urls is not None:
                 batchtask.resource_files.append(

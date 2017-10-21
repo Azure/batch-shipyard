@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 
 set -e
+set -o pipefail
 
-dockerversion=17.03.1~ce-0~ubuntu-xenial
-nvdriver=$1
+dockerversion=17.09.0~ce-0~ubuntu
+nvdriver=/tmp/$1
 
+# install docker
 apt-get update
-
 apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
-    apt-transport-https ca-certificates curl software-properties-common
-
-curl -fSsL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+    apt-transport-https ca-certificates curl software-properties-common cgroup-lite
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-
 apt-get update
-
 apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
     docker-ce=$dockerversion
 
+# prep docker
 systemctl stop docker.service
 mkdir -p /mnt/docker-tmp
 sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/docker-tmp\" >> /etc/default/docker
@@ -25,20 +24,23 @@ sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:
 sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
 sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
 systemctl daemon-reload
-systemctl enable docker.service
+# do not auto-enable docker to start due to temp disk issues
+systemctl disable docker.service
 systemctl start docker.service
 systemctl status docker.service
 
+# install nvidia driver/nvidia-docker
 set +e
 out=$(lspci)
 echo "$out" | grep -i nvidia > /dev/null
 if [ $? -ne 0 ]; then
-    echo "$out"
+    echo $out
     echo "ERROR: No Nvidia card(s) detected!"
 else
-    set -e
+    set +e
     apt-get --purge remove xserver-xorg-video-nouveau
     rmmod nouveau
+    set -e
 cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
 blacklist nouveau
 blacklist lbm-nouveau
@@ -46,7 +48,6 @@ options nouveau modeset=0
 alias nouveau off
 alias lbm-nouveau off
 EOF
-    set -e
     apt-get install -y -q --no-install-recommends \
             build-essential
     # install driver
@@ -55,9 +56,9 @@ EOF
     # install nvidia-docker
     curl -OfSsL https://github.com/NVIDIA/nvidia-docker/releases/download/v1.0.1/nvidia-docker_1.0.1-1_amd64.deb
     dpkg -i nvidia-docker_1.0.1-1_amd64.deb
-    rm -f nvidia-docker_1.0.1-1_amd64.deb
-    # enable and start nvidia docker service
-    systemctl enable nvidia-docker.service
+    rm nvidia-docker_1.0.1-1_amd64.deb
+    # do not auto-enable nvidia docker service
+    systemctl disable nvidia-docker.service
     systemctl start nvidia-docker.service
     systemctl status nvidia-docker.service
     # get driver version

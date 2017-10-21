@@ -9,8 +9,7 @@ MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 # globals
 azurefile=0
 blobxferversion=latest
-block_docker=
-block_singularity=
+block=
 cascadecontainer=0
 encrypted=
 hpnssh=0
@@ -53,9 +52,7 @@ while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
             azurefile=1
             ;;
         b)
-            IFS=';' read -ra cip <<< "${SHIPYARD_CONTAINER_IMAGES_PRELOAD}"
-            block_docker=${cip[0]}
-            block_singularity=${cip[1]}
+            block=${SHIPYARD_CONTAINER_IMAGES_PRELOAD}
             ;;
         d)
             cascadecontainer=1
@@ -432,10 +429,16 @@ singularity_setup() {
     chmod 755 $basedir/singularity/mnt/overlay
     chmod 755 $basedir/singularity/mnt/session
     # create singularity tmp/cache paths
-    mkdir -p $basedir/singularity/cache
     mkdir -p $basedir/singularity/tmp
-    chmod 777 $basedir/singularity/cache
-    chmod 777 $basedir/singularity/tmp
+    mkdir -p $basedir/singularity/cache/docker
+    mkdir -p $basedir/singularity/cache/metadata
+    chmod 775 $basedir/singularity/tmp
+    chmod 775 $basedir/singularity/cache
+    chmod 775 $basedir/singularity/cache/docker
+    chmod 775 $basedir/singularity/cache/metadata
+    # set proper ownership
+    chown -R _azbatch:_azbatchgrp $basedir/singularity/tmp
+    chown -R _azbatch:_azbatchgrp $basedir/singularity/cache
     # selftest
     singularity selftest
     # remove docker image
@@ -456,8 +459,7 @@ echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
-echo "Block on Docker images: $block_docker"
-echo "Block on Singularity images: $block_singularity"
+echo "Block on images: $block"
 echo ""
 
 # check sdb1 mount
@@ -1025,57 +1027,11 @@ set -e
 # remove cascade failed file
 rm -f $cascadefailed
 
-# block until images ready if specified
-if [ ! -z $block_docker ]; then
-    echo "INFO: blocking until Docker images ready: $block_docker"
-    IFS=',' read -ra RES <<< "$block_docker"
-    declare -a missing
-    while :
-        do
-        for image in "${RES[@]}";  do
-            if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
-                missing=("${missing[@]}" "$image")
-            fi
-        done
-        if [ ${#missing[@]} -eq 0 ]; then
-            echo "INFO: all Docker images present"
-            break
-        else
-            unset missing
-        fi
-        sleep 2
-    done
-fi
-if [ ! -z $block_singularity ]; then
-    echo "INFO: blocking until Singularity images ready: $block_singularity"
-    if [ $offer == "ubuntu" ]; then
-        sdir=/mnt/singularity/cache
-    else
-        sdir=/mnt/resource/singularity/cache
-    fi
-    IFS=',' read -ra RES <<< "$block_singularity"
-    declare -a missing
-    while :
-        do
-        for image in "${RES[@]}";  do
-            if [ ! -f "${sdir}/$image" ]; then
-                missing=("${missing[@]}" "$image")
-            fi
-        done
-        if [ ${#missing[@]} -eq 0 ]; then
-            echo "INFO: all Singularity images present"
-            break
-        else
-            unset missing
-        fi
-        sleep 2
-    done
-    # chown of all images in cache
-    chown _azbatch._azbatchgrp $sdir/*
-fi
+# block for images if necessary
+$AZ_BATCH_TASK_WORKING_DIR/wait_for_images.sh $block
 
 # clean up cascade env file if block
-if [ ! -z $block_docker ] || [ ! -z $block_singularity ]; then
+if [ ! -z $block ]; then
     if [ $cascadecontainer -eq 1 ]; then
         rm -f $envfile
     fi

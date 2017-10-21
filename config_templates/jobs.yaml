@@ -130,6 +130,9 @@ job_specifications:
       repeat: 3
     id: null
     docker_image: busybox
+    singularity_image: shub://singularityhub/busybox
+    singularity_cmd: exec
+    additional_singularity_options: []
     name:
     labels: []
     environment_variables:

@@ -79,6 +79,7 @@ _VM_TCP_NO_TUNE = frozenset((
     'standard_a2m_v2', 'standard_a4m_v2', 'standard_d1', 'standard_d2',
     'standard_d1_v2', 'standard_f1', 'standard_d2_v3', 'standard_e2_v3',
 ))
+_SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 # named tuples
 PoolVmCountSettings = collections.namedtuple(
     'PoolVmCountSettings', [
@@ -238,7 +239,8 @@ TaskFactoryStorageSettings = collections.namedtuple(
 )
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
-        'id', 'image', 'name', 'docker_run_options', 'environment_variables',
+        'id', 'docker_image', 'singularity_image', 'name',
+        'run_options', 'singularity_cmd', 'environment_variables',
         'environment_variables_keyvault_secret_id', 'envfile',
         'resource_files', 'command', 'infiniband', 'gpu', 'depends_on',
         'depends_on_range', 'max_task_retries', 'max_wall_time',
@@ -2511,6 +2513,16 @@ def task_docker_image(conf):
     )
 
 
+def task_singularity_image(conf):
+    # type: (dict) -> str
+    """Get singularity image used by task
+    :param dict conf: task configuration object
+    :rtype: str
+    :return: singularity image used by task
+    """
+    return _kv_read_checked(conf, 'singularity_image')
+
+
 def set_task_name(conf, name):
     # type: (dict, str) -> None
     """Set task name
@@ -2545,16 +2557,15 @@ def set_task_id(conf, id):
     conf['id'] = id
 
 
-def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
+def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     # type: (azure.batch.models.CloudPool, dict, PoolSettings, dict,
-    #        dict, list) -> TaskSettings
+    #        dict) -> TaskSettings
     """Get task settings
     :param azure.batch.models.CloudPool cloud_pool: cloud pool object
     :param dict config: configuration dict
     :param PoolSettings poolconf: pool settings
     :param dict jobspec: job specification
     :param dict conf: task configuration object
-    :param list missing_images: list of missing docker images on pool
     :rtype: TaskSettings
     :return: task settings
     """
@@ -2566,12 +2577,19 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     # check task id length
     if len(task_id) > 64:
         raise ValueError('task id exceeds 64 characters')
-    image = (
-        _kv_read_checked(conf, 'docker_image') or
-        _kv_read_checked(conf, 'image')
-    )
-    if util.is_none_or_empty(image):
-        raise ValueError('Docker image is unspecified or invalid')
+    docker_image = task_docker_image(conf)
+    singularity_image = _kv_read_checked(conf, 'singularity_image')
+    if (util.is_none_or_empty(docker_image) and
+            util.is_none_or_empty(singularity_image)):
+        raise ValueError('Container image is unspecified or invalid')
+    if (util.is_not_empty(docker_image) and
+            util.is_not_empty(singularity_image)):
+        raise ValueError(
+            'Cannot specify both a Docker and Singularity image for a task')
+    if util.is_not_empty(singularity_image) and native:
+        raise ValueError(
+            'Cannot run Singularity containers on native container '
+            'support pools')
     # get some pool props
     if cloud_pool is None:
         pool_id = poolconf.id
@@ -2608,23 +2626,6 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 image_reference.offer.lower()
             sku = cloud_pool.virtual_machine_configuration.\
                 image_reference.sku.lower()
-    # get user identity settings
-    ui = _kv_read_checked(jobspec, 'user_identity', {})
-    ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
-    ui_specific = _kv_read(ui, 'specific_user', {})
-    ui_specific_uid = _kv_read(ui_specific, 'uid')
-    ui_specific_gid = _kv_read(ui_specific, 'gid')
-    del ui
-    del ui_specific
-    if ui_default_pool_admin and ui_specific_uid is not None:
-        raise ValueError(
-            'cannot specify both default_pool_admin and '
-            'specific_user:uid/gid at the same time')
-    ui = UserIdentitySettings(
-        default_pool_admin=ui_default_pool_admin,
-        specific_user_uid=ui_specific_uid,
-        specific_user_gid=ui_specific_gid,
-    )
     # get depends on
     try:
         depends_on = conf['depends_on']
@@ -2666,197 +2667,215 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
     except KeyError:
         resource_files = None
     # get generic run opts
-    try:
-        run_opts = conf['additional_docker_run_options']
-    except KeyError:
-        run_opts = []
-    # parse remove container option
-    rm_container = False
-    try:
-        rm_container = conf['remove_container_after_exit']
-    except KeyError:
-        rm_container = _kv_read(jobspec, 'remove_container_after_exit', True)
-    if rm_container and '--rm' not in run_opts:
-        run_opts.append('--rm')
-    del rm_container
-    # parse /dev/shm option
-    shm_size = None
-    try:
-        shm_size = conf['shm_size']
-    except KeyError:
-        shm_size = _kv_read_checked(jobspec, 'shm_size')
-    if (util.is_not_empty(shm_size) and
-            not any(x.startswith('--shm-size=') for x in run_opts)):
-        run_opts.append('--shm-size={}'.format(shm_size))
-    del shm_size
-    # parse name option, if not specified use task id
-    try:
-        name = conf['name']
+    singularity_cmd = None
+    if util.is_not_empty(docker_image):
+        run_opts = _kv_read_checked(
+            conf, 'additional_docker_run_options', default=[])
+    else:
+        run_opts = _kv_read_checked(
+            conf, 'additional_singularity_options', default=[])
+        singularity_cmd = _kv_read_checked(
+            conf, 'singularity_cmd', default='exec')
+        if singularity_cmd not in _SINGULARITY_COMMANDS:
+            raise ValueError('singularity_cmd is invalid: {}'.format(
+                singularity_cmd))
+    # docker specific options
+    name = None
+    if util.is_not_empty(docker_image):
+        # parse remove container option
+        rm_container = (
+            _kv_read(conf, 'remove_container_after_exit') or
+            _kv_read(jobspec, 'remove_container_after_exit', default=True)
+        )
+        if rm_container and '--rm' not in run_opts:
+            run_opts.append('--rm')
+        del rm_container
+        # parse /dev/shm option
+        shm_size = (
+            _kv_read(conf, 'shm_size') or
+            _kv_read_checked(jobspec, 'shm_size')
+        )
+        if (util.is_not_empty(shm_size) and
+                not any(x.startswith('--shm-size=') for x in run_opts)):
+            run_opts.append('--shm-size={}'.format(shm_size))
+        del shm_size
+        # parse name option, if not specified use task id
+        name = _kv_read_checked(conf, 'name')
         if util.is_none_or_empty(name):
-            raise KeyError()
-    except KeyError:
-        name = task_id
-        set_task_name(conf, name)
-    run_opts.append('--name {}'.format(name))
-    # parse labels option
-    try:
-        labels = conf['labels']
+            name = task_id
+            set_task_name(conf, name)
+        run_opts.append('--name {}'.format(name))
+        # parse labels option
+        labels = _kv_read_checked(conf, 'labels')
         if util.is_not_empty(labels):
             for label in labels:
                 run_opts.append('-l {}'.format(label))
         del labels
-    except KeyError:
-        pass
-    # parse ports option
-    try:
-        ports = conf['ports']
+        # parse ports option
+        ports = _kv_read_checked(conf, 'ports')
         if util.is_not_empty(ports):
             for port in ports:
                 run_opts.append('-p {}'.format(port))
         del ports
-    except KeyError:
-        pass
-    # parse entrypoint
-    try:
-        entrypoint = conf['entrypoint']
+        # parse entrypoint
+        entrypoint = _kv_read_checked(conf, 'entrypoint')
         if util.is_not_empty(entrypoint):
             run_opts.append('--entrypoint {}'.format(entrypoint))
         del entrypoint
-    except KeyError:
-        pass
+        # get user identity settings
+        ui = _kv_read_checked(jobspec, 'user_identity', {})
+        ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
+        ui_specific = _kv_read(ui, 'specific_user', {})
+        ui_specific_uid = _kv_read(ui_specific, 'uid')
+        ui_specific_gid = _kv_read(ui_specific, 'gid')
+        del ui
+        del ui_specific
+        if ui_default_pool_admin and ui_specific_uid is not None:
+            raise ValueError(
+                'cannot specify both default_pool_admin and '
+                'specific_user:uid/gid at the same time')
+        ui = UserIdentitySettings(
+            default_pool_admin=ui_default_pool_admin,
+            specific_user_uid=ui_specific_uid,
+            specific_user_gid=ui_specific_gid,
+        )
+        # append user identity options
+        attach_ui = False
+        if ui.default_pool_admin:
+            # run as the default pool admin user. note that this is
+            # *undocumented* behavior and may break at anytime
+            run_opts.append('-u `id -u _azbatch`:`id -g _azbatch`')
+            attach_ui = True
+        elif ui.specific_user_uid is not None:
+            if ui.specific_user_gid is None:
+                raise ValueError(
+                    'cannot specify a user identity uid without a gid')
+            run_opts.append(
+                '-u {}:{}'.format(ui.specific_user_uid, ui.specific_user_gid))
+            attach_ui = True
+        if attach_ui:
+            run_opts.append('-v /etc/passwd:/etc/passwd:ro')
+            run_opts.append('-v /etc/group:/etc/group:ro')
+            run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
+        del attach_ui
+        del ui
     # get command
-    try:
-        command = conf['command']
-        if util.is_none_or_empty(command):
-            raise KeyError()
-    except KeyError:
-        command = None
+    command = _kv_read_checked(conf, 'command')
     # parse data volumes
     data_volumes = _kv_read_checked(jobspec, 'data_volumes')
-    try:
-        tdv = conf['data_volumes']
-        if util.is_not_empty(tdv):
-            if util.is_not_empty(data_volumes):
-                # check for intersection
-                if len(set(data_volumes).intersection(set(tdv))) > 0:
-                    raise ValueError('data volumes must be unique')
-                data_volumes.extend(tdv)
-            else:
-                data_volumes = tdv
-        del tdv
-    except KeyError:
-        pass
+    tdv = _kv_read_checked(conf, 'data_volumes')
+    if util.is_not_empty(tdv):
+        if util.is_not_empty(data_volumes):
+            # check for intersection
+            if len(set(data_volumes).intersection(set(tdv))) > 0:
+                raise ValueError('data volumes must be unique')
+            data_volumes.extend(tdv)
+        else:
+            data_volumes = tdv
+    del tdv
+    # binding order matters for Singularity
+    bindparm = '-v' if util.is_not_empty(docker_image) else '-B'
+    # bind root dir and set working dir
+    if not native:
+        # mount batch root dir
+        run_opts.append(
+            '{} $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR'.format(
+                bindparm))
+        # set working directory if not already set
+        if util.is_not_empty(docker_image):
+            if not any((x.startswith('-w ') or x.startswith('--workdir '))
+                       for x in run_opts):
+                run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+        else:
+            if not any(x.startswith('--pwd ') for x in run_opts):
+                run_opts.append('--pwd $AZ_BATCH_TASK_WORKING_DIR')
     if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:
             try:
-                hostpath = dv[dvkey]['host_path']
-                if util.is_none_or_empty(hostpath):
-                    raise KeyError()
+                hostpath = _kv_read_checked(dv[dvkey], 'host_path')
             except KeyError:
-                hostpath = None
+                raise ValueError(
+                    ('ensure that the {} data volume exists in the '
+                     'global configuration').format(dvkey))
+            bindopt = _kv_read_checked(dv[dvkey], 'bind_options', default='')
+            if util.is_not_empty(bindopt):
+                bindopt = ':{}'.format(bindopt)
             if util.is_not_empty(hostpath):
-                run_opts.append('-v {}:{}'.format(
-                    hostpath, dv[dvkey]['container_path']))
+                run_opts.append('{} {}:{}{}'.format(
+                    bindparm, hostpath, dv[dvkey]['container_path'], bindopt))
             else:
-                run_opts.append('-v {}'.format(
-                    dv[dvkey]['container_path']))
+                if util.is_not_empty(bindopt):
+                    run_opts.append('{bp} {cp}:{cp}{bo}'.format(
+                        bp=bindparm, cp=dv[dvkey]['container_path'],
+                        bo=bindopt))
+                else:
+                    run_opts.append('{} {}'.format(
+                        bindparm, dv[dvkey]['container_path']))
     del data_volumes
     # parse shared data volumes
     shared_data_volumes = _kv_read_checked(jobspec, 'shared_data_volumes')
-    try:
-        tsdv = conf['shared_data_volumes']
-        if util.is_not_empty(tsdv):
-            if util.is_not_empty(shared_data_volumes):
-                # check for intersection
-                if len(set(shared_data_volumes).intersection(set(tsdv))) > 0:
-                    raise ValueError('shared data volumes must be unique')
-                shared_data_volumes.extend(tsdv)
-            else:
-                shared_data_volumes = tsdv
-        del tsdv
-    except KeyError:
-        pass
+    tsdv = _kv_read_checked(conf, 'shared_data_volumes')
+    if util.is_not_empty(tsdv):
+        if util.is_not_empty(shared_data_volumes):
+            # check for intersection
+            if len(set(shared_data_volumes).intersection(set(tsdv))) > 0:
+                raise ValueError('shared data volumes must be unique')
+            shared_data_volumes.extend(tsdv)
+        else:
+            shared_data_volumes = tsdv
+    del tsdv
     if util.is_not_empty(shared_data_volumes):
         sdv = global_resources_shared_data_volumes(config)
         for sdvkey in shared_data_volumes:
+            try:
+                bindopt = _kv_read_checked(
+                    sdv[sdvkey], 'bind_options', default='')
+            except KeyError:
+                raise ValueError(
+                    ('ensure that the {} shared data volume exists in the '
+                     'global configuration').format(sdvkey))
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
-                run_opts.append('-v {}/{}:{}'.format(
+                run_opts.append('{} {}/{}:{}{}'.format(
+                    bindparm,
                     _HOST_MOUNTS_DIR,
                     get_gluster_on_compute_volume(),
-                    shared_data_volume_container_path(sdv, sdvkey)))
+                    shared_data_volume_container_path(sdv, sdvkey),
+                    bindopt))
             elif is_shared_data_volume_storage_cluster(sdv, sdvkey):
-                run_opts.append('-v {}/{}:{}'.format(
+                run_opts.append('{} {}/{}:{}{}'.format(
+                    bindparm,
                     _HOST_MOUNTS_DIR,
                     sdvkey,
-                    shared_data_volume_container_path(sdv, sdvkey)))
+                    shared_data_volume_container_path(sdv, sdvkey),
+                    bindopt))
             else:
                 sa = credentials_storage(
                     config,
                     azure_file_storage_account_settings(sdv, sdvkey))
                 share_name = azure_file_share_name(sdv, sdvkey)
                 hmp = azure_file_host_mount_path(sa.account, share_name)
-                run_opts.append('-v {}:{}'.format(
-                    hmp, shared_data_volume_container_path(sdv, sdvkey)))
+                run_opts.append('{} {}:{}{}'.format(
+                    bindparm,
+                    hmp,
+                    shared_data_volume_container_path(sdv, sdvkey),
+                    bindopt))
     del shared_data_volumes
-    # append user identity options
-    attach_ui = False
-    if ui.default_pool_admin:
-        # run as the default pool admin user. note that this is *undocumented*
-        # behavior and may break at anytime
-        run_opts.append('-u `id -u _azbatch`:`id -g _azbatch`')
-        attach_ui = True
-    elif ui.specific_user_uid is not None:
-        if ui.specific_user_gid is None:
-            raise ValueError(
-                'cannot specify a user identity uid without a gid')
-        run_opts.append(
-            '-u {}:{}'.format(ui.specific_user_uid, ui.specific_user_gid))
-        attach_ui = True
-    if attach_ui:
-        run_opts.append('-v /etc/passwd:/etc/passwd:ro')
-        run_opts.append('-v /etc/group:/etc/group:ro')
-        run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
-    del attach_ui
-    del ui
     # env vars
-    try:
-        env_vars = conf['environment_variables']
-        if util.is_none_or_empty(env_vars):
-            raise KeyError()
-    except KeyError:
-        env_vars = {}
-    try:
-        ev_secid = conf['environment_variables_keyvault_secret_id']
-        if util.is_none_or_empty(ev_secid):
-            raise KeyError()
-    except KeyError:
-        ev_secid = None
-    # max_task_retries
-    try:
-        max_task_retries = conf['max_task_retries']
-        if max_task_retries is None:
-            raise KeyError()
-    except KeyError:
-        max_task_retries = None
-    # max wall time
-    try:
-        max_wall_time = conf['max_wall_time']
-        if max_wall_time is None:
-            raise KeyError()
-        else:
-            max_wall_time = util.convert_string_to_timedelta(max_wall_time)
-    except KeyError:
-        max_wall_time = None
-    # retention time
-    try:
-        retention_time = conf['retention_time']
-    except KeyError:
-        retention_time = _kv_read_checked(jobspec, 'retention_time')
+    env_vars = _kv_read_checked(conf, 'environment_variables', default={})
+    ev_secid = _kv_read_checked(
+        conf, 'environment_variables_keyvault_secret_id')
+    # constraints
+    max_task_retries = _kv_read(conf, 'max_task_retries')
+    max_wall_time = _kv_read_checked(conf, 'max_wall_time')
+    if util.is_not_empty(max_wall_time):
+        max_wall_time = util.convert_string_to_timedelta(max_wall_time)
+    retention_time = (
+        _kv_read_checked(conf, 'retention_time') or
+        _kv_read_checked(jobspec, 'retention_time')
+    )
     if util.is_not_empty(retention_time):
         retention_time = util.convert_string_to_timedelta(retention_time)
-    else:
-        retention_time = None
     # gpu
     gpu = _kv_read(conf, 'gpu') or _kv_read(jobspec, 'gpu')
     # if not specified check for gpu pool and implicitly enable
@@ -2874,6 +2893,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         # set docker commands with nvidia docker wrapper
         docker_run_cmd = 'nvidia-docker run'
         docker_exec_cmd = 'nvidia-docker exec'
+        if util.is_not_empty(singularity_image):
+            run_opts.append('--nv')
     else:
         # set normal run and exec commands
         docker_run_cmd = 'docker run'
@@ -2901,41 +2922,67 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                  'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
         # mount /opt/intel for both native and non-native pool types
-        run_opts.append('-v /opt/intel:/opt/intel:ro')
+        run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
         if not native:
-            # common run opts
-            run_opts.append('--net=host')
-            run_opts.append('--ulimit memlock=9223372036854775807')
-            run_opts.append('--device=/dev/infiniband/rdma_cm')
-            run_opts.append('--device=/dev/infiniband/uverbs0')
+            if util.is_not_empty(docker_image):
+                # common run opts
+                run_opts.append('--net=host')
+                run_opts.append('--ulimit memlock=9223372036854775807')
+                run_opts.append('--device=/dev/infiniband/rdma_cm')
+                run_opts.append('--device=/dev/infiniband/uverbs0')
+            else:
+                # ensure singularity opts do not have network namespace
+                # or contain options
+                try:
+                    run_opts.remove('-c')
+                except ValueError:
+                    pass
+                try:
+                    run_opts.remove('--contain')
+                except ValueError:
+                    pass
+                try:
+                    run_opts.remove('-C')
+                except ValueError:
+                    pass
+                try:
+                    run_opts.remove('--containall')
+                except ValueError:
+                    pass
+                try:
+                    run_opts.remove('-n')
+                except ValueError:
+                    pass
+                try:
+                    run_opts.remove('--net')
+                except ValueError:
+                    pass
             # only centos-hpc and sles-hpc:12-sp1 are supported
             # for infiniband
             if (publisher == 'openlogic' and offer == 'centos-hpc' or
                     node_agent.startswith('batch.node.centos')):
-                run_opts.append('-v /etc/rdma:/etc/rdma:ro')
-                run_opts.append('-v /etc/rdma/dat.conf:/etc/dat.conf:ro')
+                run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(bindparm))
+                run_opts.append(
+                    '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(bindparm))
             elif (publisher == 'suse' and offer == 'sles-hpc' and
                   sku == '12-sp1' or
                   node_agent.startswith('batch.node.opensuse')):
-                run_opts.append('-v /etc/dat.conf:/etc/dat.conf:ro')
-                run_opts.append('-v /etc/dat.conf:/etc/rdma/dat.conf:ro')
-                run_opts.append('--device=/dev/hvnd_rdma')
+                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                    bindparm))
+                run_opts.append(
+                    '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(bindparm))
+                if util.is_not_empty(docker_image):
+                    run_opts.append('--device=/dev/hvnd_rdma')
             else:
                 raise ValueError(
                     ('Unsupported infiniband VM config, publisher={} '
                      'offer={}').format(publisher, offer))
-    if not native:
-        # mount batch root dir
-        run_opts.append(
-            '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR')
-        # set working directory if not already set
-        if not any((x.startswith('-w ') or x.startswith('--workdir '))
-                   for x in run_opts):
-            run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
     # always add option for envfile
-    envfile = '.shipyard.envlist'
-    if not native:
-        run_opts.append('--env-file {}'.format(envfile))
+    envfile = None
+    if util.is_not_empty(docker_image):
+        envfile = '.shipyard.envlist'
+        if not native:
+            run_opts.append('--env-file {}'.format(envfile))
     # populate mult-instance settings
     if is_multi_instance_task(conf):
         if not inter_node_comm:
@@ -2943,26 +2990,38 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 ('cannot run a multi-instance task on a '
                  'non-internode communication enabled '
                  'pool: {}').format(pool_id))
-        # container must be named
-        if util.is_none_or_empty(name):
-            raise ValueError(
-                'multi-instance task must be invoked with a named '
-                'container')
-        # docker exec command cannot be empty/None
+        # Docker container must be named
+        if util.is_not_empty(docker_image):
+            if util.is_none_or_empty(name):
+                raise ValueError(
+                    'multi-instance task with a Docker image must be invoked '
+                    'with a named container')
+        # application command cannot be empty/None
         if util.is_none_or_empty(command):
             raise ValueError(
                 'multi-instance task must have an application command')
         # set docker run options for coordination command
-        if not native:
+        if util.is_not_empty(docker_image):
+            if not native:
+                try:
+                    run_opts.remove('--rm')
+                except ValueError:
+                    pass
+                # run in detached mode
+                run_opts.append('-d')
+                # ensure host networking stack is used
+                if '--net=host' not in run_opts:
+                    run_opts.append('--net=host')
+        else:
+            # ensure network namespace is not enabled
             try:
-                run_opts.remove('--rm')
+                run_opts.remove('-n')
             except ValueError:
                 pass
-            # run in detached mode
-            run_opts.append('-d')
-            # ensure host networking stack is used
-            if '--net=host' not in run_opts:
-                run_opts.append('--net=host')
+            try:
+                run_opts.remove('--net')
+            except ValueError:
+                pass
         # get coordination command
         try:
             coordination_command = conf[
@@ -2977,7 +3036,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 coordination_command = '/usr/sbin/sshd -p 23'
             else:
                 coordination_command = None
-        if native:
+        if native or util.is_not_empty(singularity_image):
             if util.is_not_empty(coordination_command):
                 cc_args = [coordination_command]
             else:
@@ -2988,7 +3047,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
                 '{} {} {}{}'.format(
                     docker_run_cmd,
                     ' '.join(run_opts),
-                    image,
+                    docker_image,
                     coordination_command),
             ]
         # get num instances
@@ -3044,9 +3103,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         mi_resource_files = None
     return TaskSettings(
         id=task_id,
-        image=image,
+        docker_image=docker_image,
+        singularity_image=singularity_image,
         name=name,
-        docker_run_options=run_opts,
+        run_options=run_opts,
         environment_variables=env_vars,
         environment_variables_keyvault_secret_id=ev_secid,
         envfile=envfile,
@@ -3061,6 +3121,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf, missing_images):
         depends_on_range=depends_on_range,
         docker_run_cmd=docker_run_cmd,
         docker_exec_cmd=docker_exec_cmd,
+        singularity_cmd=singularity_cmd,
         multi_instance=MultiInstanceSettings(
             num_instances=num_instances,
             coordination_command=cc_args,

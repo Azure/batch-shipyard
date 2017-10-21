@@ -144,9 +144,9 @@ _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh')
 )
-_JOBPREP_FILE = (
-    'docker_jp_block.sh',
-    pathlib.Path(_ROOT_PATH, 'scripts/docker_jp_block.sh')
+_IMAGE_BLOCK_FILE = (
+    'wait_for_images.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/wait_for_images.sh')
 )
 _REGISTRY_LOGIN_FILE = (
     'registry_login.sh',
@@ -916,7 +916,7 @@ def _construct_pool_object(
         if native:
             # native pools will auto preload
             block_for_gr_docker = ''
-        block_for_gr = '{};{}'.format(
+        block_for_gr = '{}#{}'.format(
             block_for_gr_docker, block_for_gr_singularity)
     # shipyard settings
     bs = settings.batch_shipyard_settings(config)
@@ -930,7 +930,7 @@ def _construct_pool_object(
     # create resource files list
     _rflist = [_REGISTRY_LOGIN_FILE, _BLOBXFER_FILE]
     if not native:
-        _rflist.append(_JOBPREP_FILE)
+        _rflist.append(_IMAGE_BLOCK_FILE)
         if not bs.use_shipyard_docker_image:
             _rflist.append(_CASCADE_FILE)
             if bs.store_timing_metrics:
@@ -1191,20 +1191,17 @@ def _construct_pool_object(
             )
         )
     # singularity env vars
+    temp_disk = settings.temp_disk_mountpoint(config)
     pool.start_task.environment_settings.append(
         batchmodels.EnvironmentSetting(
             'SINGULARITY_TMPDIR',
-            '{}/singularity/tmp'.format(
-                settings.temp_disk_mountpoint(
-                    config, offer=pool_settings.vm_configuration.offer))
+            '{}/singularity/tmp'.format(temp_disk)
         )
     )
     pool.start_task.environment_settings.append(
         batchmodels.EnvironmentSetting(
             'SINGULARITY_CACHEDIR',
-            '{}/singularity/cache'.format(
-                settings.temp_disk_mountpoint(
-                    config, offer=pool_settings.vm_configuration.offer))
+            '{}/singularity/cache'.format(temp_disk)
         )
     )
     return (pool_settings, gluster_on_compute, pool)
@@ -1821,9 +1818,18 @@ def _adjust_settings_for_pool_creation(config):
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
     dr = settings.data_replication_settings(config)
+    native = settings.is_native_docker_pool(
+        config, vm_config=pool.vm_configuration)
+    # ensure singularity images are not specified for native pools
+    if native:
+        images = settings.global_resources_singularity_images(config)
+        if util.is_not_empty(images):
+            raise ValueError(
+                'cannot specify a native container pool with Singularity '
+                'images as global resources')
     # ensure settings p2p/as/internode settings are compatible
     if dr.peer_to_peer.enabled:
-        if pool.vm_configuration.native:
+        if native:
             raise ValueError(
                 'cannot enable peer-to-peer and native container pools')
         if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
@@ -2811,7 +2817,7 @@ def action_jobs_add(
     # add jobs
     batch.add_jobs(
         batch_client, blob_client, keyvault_client, config, autopool,
-        _JOBPREP_FILE, _BLOBXFER_FILE, recreate, tail)
+        _IMAGE_BLOCK_FILE, _BLOBXFER_FILE, recreate, tail)
 
 
 def action_jobs_list(batch_client, config):

@@ -71,7 +71,10 @@ _TORRENT_SESSION = None
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
 _NODE_ROOT_DIR = os.environ['AZ_BATCH_NODE_ROOT_DIR']
 _TEMP_MOUNT_DIR = pathlib.Path(_NODE_ROOT_DIR, '..', '..').resolve()
-_SINGULARITY_CACHE_DIR = _TEMP_MOUNT_DIR / 'singularity' / 'cache'
+try:
+    _SINGULARITY_CACHE_DIR = pathlib.Path(os.environ['SINGULARITY_CACHEDIR'])
+except KeyError:
+    _SINGULARITY_CACHE_DIR = None
 _TORRENT_DIR = pathlib.Path(_NODE_ROOT_DIR, 'torrents')
 try:
     _AZBATCH_USER = pwd.getpwnam('_azbatch')
@@ -343,15 +346,15 @@ def get_container_image_name_from_resource(resource: str) -> Tuple[str, str]:
     :rtype: tuple
     :return: (type, image name)
     """
-    if _DOCKER_TAG in resource:
+    if resource.startswith(_DOCKER_TAG):
         return (
             'docker',
-            resource[resource.find(_DOCKER_TAG) + len(_DOCKER_TAG):]
+            resource[len(_DOCKER_TAG):]
         )
-    elif _SINGULARITY_TAG in resource:
+    elif resource.startswith(_SINGULARITY_TAG):
         return (
             'singularity',
-            resource[resource.find(_SINGULARITY_TAG) + len(_SINGULARITY_TAG):]
+            resource[len(_SINGULARITY_TAG):]
         )
     else:
         raise ValueError('invalid resource: {}'.format(resource))
@@ -390,6 +393,8 @@ def _singularity_image_name_on_disk(name: str) -> str:
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
+        # singularity only uses the final portion
+        name = name.split('/')[-1]
     name = name.replace('/', '-')
     idx = name.find(':')
     if idx != -1:
@@ -397,7 +402,10 @@ def _singularity_image_name_on_disk(name: str) -> str:
     else:
         if not docker:
             name = '{}-master'.format(name)
-    name = '{}.simg'.format(name)
+    if docker:
+        name = '{}.img'.format(name)
+    else:
+        name = '{}.simg'.format(name)
     return name
 
 
@@ -511,14 +519,6 @@ class ContainerImageSaveThread(threading.Thread):
         while True:
             rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
-                if grtype == 'singularity':
-                    imgpath = singularity_image_path_on_disk(image)
-                    if _AZBATCH_USER is not None:
-                        os.chown(
-                            str(imgpath), _AZBATCH_USER[2], _AZBATCH_USER[3])
-                        os.chmod(str(imgpath), 0o775)
-                    else:
-                        os.chmod(str(imgpath), 0o777)
                 break
             elif self._check_pull_output_overload(stdout, stderr):
                 logger.error(
@@ -1087,6 +1087,12 @@ async def download_monitor_async(
         if _DIRECTDL_QUEUE.qsize() > 0:
             await _direct_download_resources_async(
                 loop, blob_client, table_client, ipaddress, nglobalresources)
+        # fixup filemodes/ownership for singularity images
+        if (_GR_DONE and _SINGULARITY_CACHE_DIR is not None and
+                _AZBATCH_USER is not None):
+            logger.info('chown all files in {}'.format(_SINGULARITY_CACHE_DIR))
+            for file in scantree(str(_SINGULARITY_CACHE_DIR)):
+                os.chown(str(file.path), _AZBATCH_USER[2], _AZBATCH_USER[3])
         # if not in peer-to-peer mode, allow exit
         if not _ENABLE_P2P and _GR_DONE:
             break

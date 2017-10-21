@@ -15,9 +15,12 @@ CLI until you have migrated all of your jobs to 3.x pools. Failure to do
 so will render your existing pools unable to resize up (either manually
 or via autoscale).
 * Do not mix 2.x and 3.x pools with the same storage account used for
-backing metadata used by Batch Shipyard.
+backing metadata used by Batch Shipyard (i.e., the
+`batch_shipyard`:`storage_account_settings` option in the global
+configuration file).
 * If you must used a mixed-mode environment, please specify a different
-storage account for metadata between the two versions in the global
+storage account (i.e., the `batch_shipyard`:`storage_account_settings`
+option) for metadata between the two versions in the global
 configuration file.
 
 ### YAML Configuration Support
@@ -29,7 +32,10 @@ then run for each config file.
 
 ```shell
 # recommended to install the following with --user or in a virtual env
+# if using Python 3.x
 pip3 install ruamel.yaml.cmd
+# if using Python 2.7
+pip install ruamel.yaml.cmd
 
 yaml json credentials.json > credentials.yaml
 yaml json config.json > config.yaml

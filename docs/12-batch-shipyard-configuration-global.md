@@ -39,9 +39,11 @@ global_resources:
       contdatavol:
         container_path: /abc
         host_path:
+        bind_options: ro
       hosttempvol:
         container_path: /hosttmp
         host_path: /tmp
+        bind_options: rw
     shared_data_volumes:
       azurefilevol:
         volume_driver: azurefile
@@ -51,19 +53,23 @@ global_resources:
         mount_options:
         - file_mode=0777
         - dir_mode=0777
+        bind_options: rw
       glustervol:
         volume_driver: glusterfs_on_compute
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
         volume_type: replica
         volume_options: []
+        bind_options: rw
       nfs_server:
         volume_driver: storage_cluster
         container_path: $AZ_BATCH_NODE_SHARED_DIR/nfs_server
         mount_options: []
+        bind_options: ro
       glusterfs_cluster:
         volume_driver: storage_cluster
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_cluster
         mount_options: []
+        bind_options: null
   files:
   - destination:
       data_transfer:
@@ -335,6 +341,12 @@ This property is required.
       existing data inside the image. If `host_path` is set, then the path
       on the host is mounted in the container at the path specified with
       `container_path`.
+        * (required) `host_path` host path to bind
+        * (optional) `container_path` container path to map to the host path.
+          If not specified, the same `host_path` is used in the container.
+        * (optional) `bind_options` are the bind options to use, typically
+          one of `ro` for read-only, `rw` for read-write. If unspecified or
+          `null`, this defaults to `rw`.
     * (optional) `shared_data_volumes` property defines persistent
       shared storage volumes. In the first shared volume, `shipyardvol` is
       the alias of this volume:
@@ -357,6 +369,9 @@ This property is required.
           recommended to use `0777` for both `file_mode` and `dir_mode` as the
           `uid` and `gid` cannot be reliably determined before the compute
           pool is allocated and this volume will be mounted as the root user.
+        * (optional) `bind_options` are the bind options to use, typically
+          one of `ro` for read-only, `rw` for read-write. If unspecified or
+          `null`, this defaults to `rw`.
 
 Note that when using `azurefile` for a shared data volume, the storage account
 that holds the file share must reside within the same Azure region as the

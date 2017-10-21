@@ -248,6 +248,8 @@ def singularity_image_name_on_disk(name):
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
+        # singularity only uses the final portion
+        name = name.split('/')[-1]
     name = name.replace('/', '-')
     idx = name.find(':')
     if idx != -1:
@@ -255,7 +257,10 @@ def singularity_image_name_on_disk(name):
     else:
         if not docker:
             name = '{}-master'.format(name)
-    name = '{}.simg'.format(name)
+    if docker:
+        name = '{}.img'.format(name)
+    else:
+        name = '{}.simg'.format(name)
     return name
 
 
