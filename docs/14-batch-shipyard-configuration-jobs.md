@@ -139,7 +139,9 @@ job_specifications:
     id: null
     docker_image: busybox
     singularity_image: shub://singularityhub/busybox
-    singularity_cmd: exec
+    singularity_execution:
+      cmd: exec
+      elevated: false
     additional_singularity_options: []
     name:
     labels: []
@@ -551,9 +553,12 @@ tasks complete successfully, then this specified task will execute.
 use for this task
 * (required if using a Singularity image) `singularity_image` is the
 Singularity image to use for this task
-* (optional) `singularity_cmd` is the singularity command to use. This
-can be either `exec` or `run`. The default is `exec`. This option only
-applies to Singularity containers.
+* (optional) `singularity_execution` defines the invocation pattern for
+the Singularity container. This option only applies to Singularity containers.
+    * (optional) `cmd` is the singularity command to use. This
+      can be either `exec` or `run`. The default is `exec`.
+    * (optional) `elevated` if set to `true` will run the command elevated
+      as root. The default is `false`.
 * (optional) `additional_singularity_options` are any additional options
 to pass to the `singularity_cmd`. This option only applies to Singularity
 containers.
@@ -722,10 +727,12 @@ property are:
     * `coordination_command` is the coordination command this is run by each
       instance (compute node) of this multi-instance task prior to the
       application command. This command must not block and must exit
-      successfully for the multi-instance task to proceed. This is the command
-      passed to the container in `docker run` for multi-instance tasks. This
-      docker container instance will automatically be daemonized. This is
-      optional and may be null.
+      successfully for the multi-instance task to proceed. For Docker
+      containers, this is the command passed to the container in `docker run`
+      for multi-instance tasks. This Docker container will automatically be
+      daemonized for multi-instance tasks running on non-`native` pools. This
+      is optional and may be null. For Singularity containers, usually
+      this property will be unspecified.
     * `resource_files` is an array of resource files that should be downloaded
       as part of the multi-instance task. Each array entry contains the
       following information:
@@ -744,10 +751,16 @@ a Docker container or to the `singularity_cmd` for a Singularity container.
 If this task is a multi-instance task under a Docker container, then this
 `command` is the application command and is executed with `docker exec` in
 the running Docker container context from the `coordination_command` in the
-`multi_instance` property. If this task is a multi-isntance task under a
+`multi_instance` property. If this task is a multi-instance task under a
 Singularity container, then this `command` acts similar to a regular
 non-multi-instance task as no special run+exec behavior is needed with
-Singularity containers to achieve multi-instance execution.
+Singularity containers to achieve multi-instance execution. Thus, for
+multi-instance tasks with Singularity containers, this command is the
+actual command executed on the host without any modifications such as
+with a regular task (i.e., prepending with `singularity exec`). When executing
+a Singularity container under a multi-instance task, an additional
+environment variable is populated, `SHIPYARD_SINGULARITY_COMMAND` which
+can be used in custom scripts to control execution.
 This property may be null. Note that if you are using a `task_factory`
 for the specification, then task factory arguments are applied to the
 `command`. Therefore, Python-style string formatting options (excluding

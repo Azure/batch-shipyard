@@ -5,6 +5,7 @@ set -o pipefail
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
+# singularity registries will be imported via env
 
 # ensure we're in the proper directory
 cd /opt/batch-shipyard

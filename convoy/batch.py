@@ -3563,6 +3563,7 @@ def add_jobs(
                     del fname
                 if not native and not is_singularity and len(sas_urls) != 1:
                     raise RuntimeError('unexpected number of sas urls')
+            taskenv = []
             # check if this is a multi-instance task
             mis = None
             if settings.is_multi_instance_task(_task):
@@ -3570,7 +3571,11 @@ def add_jobs(
                     cc = util.wrap_commands_in_shell(
                         task.multi_instance.coordination_command, wait=False)
                 else:
-                    cc = ''
+                    if is_singularity:
+                        # no-op for singularity
+                        cc = ':'
+                    else:
+                        cc = ''
                 mis = batchmodels.MultiInstanceSettings(
                     number_of_instances=task.multi_instance.num_instances,
                     coordination_command_line=cc,
@@ -3591,14 +3596,20 @@ def add_jobs(
                 if native:
                     task_commands = [task.command]
                 elif is_singularity:
-                    task_commands = [
-                        'singularity {} {} {}{}'.format(
-                            task.singularity_cmd,
-                            ' '.join(task.run_options),
-                            task.singularity_image,
-                            '{}'.format(' ' + task.command)
-                            if task.command else '',
+                    # add env vars
+                    taskenv.append(
+                        batchmodels.EnvironmentSetting(
+                            'SHIPYARD_SINGULARITY_COMMAND',
+                            'singularity {} {} {}'.format(
+                                task.singularity_cmd,
+                                ' '.join(task.run_options),
+                                task.singularity_image,
+                            )
                         )
+                    )
+                    # singularity command is passed as-is for multi-instance
+                    task_commands = [
+                        '{}'.format(' ' + task.command) if task.command else ''
                     ]
                 else:
                     task_commands = [
@@ -3630,7 +3641,6 @@ def add_jobs(
                             '{}'.format(
                                 ' ' + task.command) if task.command else '')
                     ]
-            taskenv = None
             output_files = None
             # get registry login if missing images
             if (not native and allow_run_on_missing and
@@ -3658,7 +3668,6 @@ def add_jobs(
             del addlcmds
             # set environment variables for native
             if native or is_singularity:
-                taskenv = []
                 if util.is_not_empty(env_vars):
                     for key in env_vars:
                         taskenv.append(
@@ -3697,7 +3706,7 @@ def add_jobs(
                 id=task.id,
                 command_line=tc,
                 user_identity=(
-                    _RUN_UNELEVATED if is_singularity else _RUN_ELEVATED
+                    _RUN_ELEVATED if task.run_elevated else _RUN_UNELEVATED
                 ),
                 resource_files=[],
                 multi_instance_settings=mis,

@@ -519,6 +519,10 @@ class ContainerImageSaveThread(threading.Thread):
         while True:
             rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
+                if grtype == 'singularity':
+                    # log stderr as return code can be misleading
+                    logger.debug('{} image {} pull stderr: {}'.format(
+                        grtype, image, stderr))
                 break
             elif self._check_pull_output_overload(stdout, stderr):
                 logger.error(
@@ -1087,6 +1091,11 @@ async def download_monitor_async(
         if _DIRECTDL_QUEUE.qsize() > 0:
             await _direct_download_resources_async(
                 loop, blob_client, table_client, ipaddress, nglobalresources)
+        # check for any thread exceptions
+        if len(_THREAD_EXCEPTIONS) > 0:
+            logger.critical('Thread exceptions encountered, terminating')
+            # raise first exception
+            raise _THREAD_EXCEPTIONS[0]
         # fixup filemodes/ownership for singularity images
         if (_GR_DONE and _SINGULARITY_CACHE_DIR is not None and
                 _AZBATCH_USER is not None):
@@ -1096,11 +1105,6 @@ async def download_monitor_async(
         # if not in peer-to-peer mode, allow exit
         if not _ENABLE_P2P and _GR_DONE:
             break
-        # check for any thread exceptions
-        if len(_THREAD_EXCEPTIONS) > 0:
-            logger.critical('Thread exceptions encountered, terminating')
-            # raise first exception
-            raise _THREAD_EXCEPTIONS[0]
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
 

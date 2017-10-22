@@ -240,10 +240,10 @@ TaskFactoryStorageSettings = collections.namedtuple(
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
         'id', 'docker_image', 'singularity_image', 'name',
-        'run_options', 'singularity_cmd', 'environment_variables',
-        'environment_variables_keyvault_secret_id', 'envfile',
-        'resource_files', 'command', 'infiniband', 'gpu', 'depends_on',
-        'depends_on_range', 'max_task_retries', 'max_wall_time',
+        'run_options', 'singularity_cmd', 'run_elevated',
+        'environment_variables', 'environment_variables_keyvault_secret_id',
+        'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
+        'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
         'retention_time', 'docker_run_cmd', 'docker_exec_cmd',
         'multi_instance',
     ]
@@ -654,7 +654,7 @@ def _populate_pool_vm_configuration(config):
         vm_config = PoolVmPlatformImageSettings(
             publisher=conf['publisher'].lower(),
             offer=conf['offer'].lower(),
-            sku=conf['sku'].lower(),
+            sku=str(conf['sku']).lower(),
             version=_kv_read_checked(conf, 'version', default='latest'),
             native=False,
         )
@@ -1005,7 +1005,12 @@ def pool_sku(config, lower=False):
     :return: pool sku
     """
     conf = pool_vm_configuration(config, 'platform_image')
-    sku = _kv_read_checked(conf, 'sku')
+    try:
+        sku = str(conf['sku'])
+        if util.is_none_or_empty(sku):
+            raise KeyError()
+    except (KeyError, TypeError):
+        sku = None
     return sku.lower() if lower and util.is_not_empty(sku) else sku
 
 
@@ -2668,14 +2673,19 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         resource_files = None
     # get generic run opts
     singularity_cmd = None
+    run_elevated = True
     if util.is_not_empty(docker_image):
         run_opts = _kv_read_checked(
             conf, 'additional_docker_run_options', default=[])
     else:
         run_opts = _kv_read_checked(
             conf, 'additional_singularity_options', default=[])
+        singularity_execution = _kv_read_checked(
+            conf, 'singularity_execution', default={})
         singularity_cmd = _kv_read_checked(
-            conf, 'singularity_cmd', default='exec')
+            singularity_execution, 'cmd', default='exec')
+        run_elevated = _kv_read(
+            singularity_execution, 'elevated', default=False)
         if singularity_cmd not in _SINGULARITY_COMMANDS:
             raise ValueError('singularity_cmd is invalid: {}'.format(
                 singularity_cmd))
@@ -2921,8 +2931,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
-        # mount /opt/intel for both native and non-native pool types
-        run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # mount /opt/intel for all non-singularity tasks
+        if util.is_not_empty(docker_image):
+            run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
         if not native:
             if util.is_not_empty(docker_image):
                 # common run opts
@@ -3122,6 +3133,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         docker_run_cmd=docker_run_cmd,
         docker_exec_cmd=docker_exec_cmd,
         singularity_cmd=singularity_cmd,
+        run_elevated=run_elevated,
         multi_instance=MultiInstanceSettings(
             num_instances=num_instances,
             coordination_command=cc_args,

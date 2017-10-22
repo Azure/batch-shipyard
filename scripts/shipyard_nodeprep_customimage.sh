@@ -275,6 +275,7 @@ docker_pull_image() {
     set -e
 }
 
+singularity_basedir=
 singularity_setup() {
     offer=$1
     shift
@@ -285,13 +286,13 @@ singularity_setup() {
             echo "Singularity not supported on $offer $sku"
             return
         fi
-        basedir=/mnt
+        singularity_basedir=/mnt/singularity
     elif [[ $offer == "centos" ]] || [[ $offer == "rhel" ]]; then
         if [[ $sku != 7* ]]; then
             echo "Singularity not supported on $offer $sku"
             return
         fi
-        basedir=/mnt/resource
+        singularity_basedir=/mnt/resource/singularity
         offer=centos
         sku=7
     else
@@ -299,7 +300,7 @@ singularity_setup() {
         return
     fi
     # fetch docker image for singularity bits
-    di=alfpark/batch-shipyard:2.4-singularity-${offer}-${sku}
+    di=alfpark/singularity:2.4-${offer}-${sku}
     docker_pull_image $di
     mkdir -p /opt/singularity
     docker run --rm -v /opt/singularity:/opt/singularity $di \
@@ -310,27 +311,27 @@ singularity_setup() {
     chown root.root /opt/singularity/libexec/singularity/bin/*
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
     # prep singularity root/container dir
-    mkdir -p $basedir/singularity/mnt/container
-    mkdir -p $basedir/singularity/mnt/final
-    mkdir -p $basedir/singularity/mnt/overlay
-    mkdir -p $basedir/singularity/mnt/session
-    chmod 755 $basedir/singularity
-    chmod 755 $basedir/singularity/mnt
-    chmod 755 $basedir/singularity/mnt/container
-    chmod 755 $basedir/singularity/mnt/final
-    chmod 755 $basedir/singularity/mnt/overlay
-    chmod 755 $basedir/singularity/mnt/session
+    mkdir -p $singularity_basedir/mnt/container
+    mkdir -p $singularity_basedir/mnt/final
+    mkdir -p $singularity_basedir/mnt/overlay
+    mkdir -p $singularity_basedir/mnt/session
+    chmod 755 $singularity_basedir
+    chmod 755 $singularity_basedir/mnt
+    chmod 755 $singularity_basedir/mnt/container
+    chmod 755 $singularity_basedir/mnt/final
+    chmod 755 $singularity_basedir/mnt/overlay
+    chmod 755 $singularity_basedir/mnt/session
     # create singularity tmp/cache paths
-    mkdir -p $basedir/singularity/tmp
-    mkdir -p $basedir/singularity/cache/docker
-    mkdir -p $basedir/singularity/cache/metadata
-    chmod 775 $basedir/singularity/tmp
-    chmod 775 $basedir/singularity/cache
-    chmod 775 $basedir/singularity/cache/docker
-    chmod 775 $basedir/singularity/cache/metadata
+    mkdir -p $singularity_basedir/tmp
+    mkdir -p $singularity_basedir/cache/docker
+    mkdir -p $singularity_basedir/cache/metadata
+    chmod 775 $singularity_basedir/tmp
+    chmod 775 $singularity_basedir/cache
+    chmod 775 $singularity_basedir/cache/docker
+    chmod 775 $singularity_basedir/cache/metadata
     # set proper ownership
-    chown -R _azbatch:_azbatchgrp $basedir/singularity/tmp
-    chown -R _azbatch:_azbatchgrp $basedir/singularity/cache
+    chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
+    chown -R _azbatch:_azbatchgrp $singularity_basedir/cache
     # selftest
     singularity selftest
     # remove docker image
@@ -531,7 +532,7 @@ else
     drpstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
 fi
 # create env file
-envfile=.docker_cascade_envfile
+envfile=.cascade_envfile
 cat > $envfile << EOF
 prefix=$prefix
 ipaddress=$ipaddress
@@ -543,13 +544,24 @@ p2p=$p2p
 `env | grep SHIPYARD_`
 `env | grep AZ_BATCH_`
 `env | grep DOCKER_LOGIN_`
+`env | grep SINGULARITY_`
 EOF
 chmod 600 $envfile
 # pull image
 docker_pull_image alfpark/batch-shipyard:${version}-cascade
+# set singularity options
+singularity_binds=
+if [ ! -z $singularity_basedir ]; then
+    singularity_binds="\
+        -v $singularity_basedir:$singularity_basedir \
+        -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
+fi
 # launch container
 docker run $detached --net=host --env-file $envfile \
     -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /etc/passwd:/etc/passwd:ro \
+    -v /etc/group:/etc/group:ro \
+    $singularity_binds \
     -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
     -w $AZ_BATCH_TASK_WORKING_DIR \
     -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
