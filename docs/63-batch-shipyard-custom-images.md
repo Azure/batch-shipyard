@@ -17,7 +17,45 @@ ARM Image resources. You can create ARM Images using existing page blob VHDs
 or exporting managed disks. You must create the Image in the same subscription
 and region as your Batch account.
 
-### Creating an ARM Image via Azure Portal
+## Azure Active Directory Authentication Required
+Azure Active Directory authentication is required for the `batch` account
+regardless of the account mode. This means that the
+[credentials configuration file](11-batch-shipyard-configuration-credentials.md)
+must include an `aad` section with the appropriate options, including the
+authentication method of your choosing.
+
+Your service principal requires at least `Contributor`
+role permission or a
+[custom role with the actions](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
+
+* `Microsoft.Compute/disks/beginGetAccess/action`
+* `Microsoft.Compute/images/read`
+
+## Creating Images for use with Azure Batch and Batch Shipyard
+### Creating an ARM Image with Packer
+It is recommended to use [Packer](https://packer.io/) to create a custom
+image that is an ARM Image resource compatible with Azure Batch and Batch
+Shipyard. You will need to create a preparation script and install all
+of the [required software](#provision) as outlined in the following sections
+of this guide.
+
+The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
+area of the repository contain example `packer` scripts to create a custom
+image from an existing Marketplace platform image.
+
+In the packer JSON file, ensure that you have defined the properties:
+
+* `managed_image_name` which is the name of the ARM Image
+* `managed_image_name_resource_group` which places the ARM Image in the
+specified resource group
+
+The resource group should be in the same region as your Batch account.
+
+After you have created your ARM image with Packer, skip to
+[Step 3](#imageid) below to retrieve the ARM Image Id that is required for
+populating the `arm_image_id` property in the pool configuration file.
+
+### Importing a VHD to an ARM Image via Azure Portal
 The following will step you through creating an ARM Image from an existing
 page blob VHD source through the [Azure Portal](https://portal.azure.com/).
 
@@ -46,7 +84,7 @@ SSD backed VMs and then hit `Create` to finish the process.
 
 ![63-custom-images-arm-image-3.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-3.png)
 
-#### Step 3: Retrieve the ARM Image Resource Id
+#### <a name="imageid"></a>Step 3: Retrieve the ARM Image Resource Id
 After the Image has been created, navigate to the `Images` blade, select
 your image and then click on `Overview`. In the Overview blade, at the
 bottom, you should see a `RESOURCE ID`. Click on the copy button to copy
@@ -55,21 +93,7 @@ use for the `arm_image_id` in the pool configuration file.
 
 ![63-custom-images-arm-image-4.png](https://azurebatchshipyard.blob.core.windows.net/github/63-custom-images-arm-image-4.png)
 
-### Azure Active Directory Authentication Required
-Azure Active Directory authentication is required for the `batch` account
-regardless of the account mode. This means that the
-[credentials configuration file](11-batch-shipyard-configuration-credentials.md)
-must include an `aad` section with the appropriate options, including the
-authentication method of your choosing.
-
-Your service principal requires at least `Contributor`
-role permission or a
-[custom role with the actions](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
-
-* `Microsoft.Compute/disks/beginGetAccess/action`
-* `Microsoft.Compute/images/read`
-
-## Provisioning a Custom Image
+## <a name="provision"></a>Provisioning a Custom Image
 You will need to ensure that your custom image is sufficiently prepared
 before using it as a source VHD for Batch Shipyard. The following
 sub-section will detail the reasons and requisites.
@@ -175,11 +199,6 @@ will be automatically installed.
 #### Singularity Container Runtime
 Batch Shipyard will install and configure the Singularity Continer Runtime
 on Ubuntu and CentOS/RHEL hosts.
-
-### Packer Samples
-The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
-area of the repository contain example `packer` scripts to create a custom
-image from an existing Marketplace platform image.
 
 ## Allocating a Pool with a Custom Image
 When allocating a compute pool with a custom image, you must ensure the

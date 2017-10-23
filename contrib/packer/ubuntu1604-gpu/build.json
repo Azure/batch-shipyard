@@ -1,7 +1,7 @@
 {
   "variables": {
+    "image_name": "",
     "resource_group": "",
-    "storage_account": "",
     "subscription_id": "",
     "directory_id": "",
     "application_id": "",
@@ -13,15 +13,13 @@
       {
           "type": "azure-arm",
 
-          "resource_group_name": "{{user `resource_group`}}",
-          "storage_account": "{{user `storage_account`}}",
           "subscription_id": "{{user `subscription_id`}}",
           "tenant_id": "{{user `directory_id`}}",
           "client_id": "{{user `application_id`}}",
           "client_secret": "{{user `auth_key`}}",
 
-          "capture_container_name": "images",
-          "capture_name_prefix": "packer",
+          "managed_image_name": "{{user `image_name`}}",
+          "managed_image_resource_group_name": "{{user `resource_group`}}",
 
           "os_type": "Linux",
           "image_publisher": "Canonical",
