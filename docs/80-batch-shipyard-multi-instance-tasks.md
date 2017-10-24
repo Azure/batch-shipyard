@@ -1,6 +1,8 @@
 # Multi-Instance Tasks and Batch Shipyard
 The focus of this article is to explain how multi-instance tasks work in
-the context of Azure Batch, Docker, and Batch Shipyard.
+the context of Azure Batch, Containers in both the
+[Docker](https://www.docker.com/) and [Singularity](http://singularity.lbl.gov/)
+contexts, and Batch Shipyard.
 
 ## Overview
 Multi-instance tasks are a special type of task in Azure Batch that are
@@ -10,11 +12,11 @@ MPI jobs are typically run on a cluster of nodes where each node participates
 in the execution by performing computation on a part of the problem and
 coordinates with other nodes to reach a solution.
 
-Batch Shipyard helps users execute Dockerized MPI workloads by performing
-the necessary steps to stage the Docker container for the MPI job.
+Batch Shipyard helps users execute containerized MPI workloads by performing
+the necessary steps to stage either a Docker or Singularity container for
+the multi-instance (MPI) job.
 
-## In-depth Concepts
-### MPI Runtime
+## MPI Runtime
 Most popular MPI runtimes can operate with or without an integrated
 distributed resource manager (launcher). In the case of Azure Batch on Linux,
 the launcher is via remote shell. As the use of `rsh` is generally deprecated,
@@ -27,17 +29,46 @@ list.
 Once all of the nodes have been contacted and initialization of the MPI runtime
 is complete across all of the nodes, then the MPI application can execute.
 
-### Dockerized MPI Applications
-Docker images for MPI applications are nearly the same as other non-MPI
-applications. Outside of installing the necessary software required for
-MPI to run, the difference is that images that use MPI must also install
-SSH client/server software and enable the SSH server as the `CMD` with a
-port exposed to the host. Remember, the container will be running isolated
-from the host, so if you attempt to connect to the SSH server running on the
-host, the launcher will attempt to initialize on the host with an MPI runtime
-that doesn't exist.
+## Singularity Containers and MPI
+[Singularity](http://singularity.lbl.gov/) containers are built for common
+HPC scenarios. Thus, executing an MPI application works seamlessly with
+the host - as if you are executing any other program.
 
-### Mental Model
+### Singularity and MPI Mental Model
+Since Singularity containers work as though you are executing any other
+distributed program via MPI, there are no extra concepts to grasp.
+
+```
++---------------+
+|  MPI Program  |  << Singularity Container
++---------------+
++---------------+------------+
+|  MPI Runtime  | SSH Server |
++---------------+------------+
++===============+============+
+|     Operating System       |
++============================+
+|  Host or Virtual Machine   |
++============================+
+```
+
+The MPI program in the Singularity container would be executed using
+the host's `mpirun` (or `mpiexec`) command. Thus, the launcher would
+take advantage of the host's SSH server and network stack allowing MPI
+jobs to run within Singularity containers as if they were running on
+the host OS.
+
+## Docker Containers and MPI
+Docker images for MPI applications are nearly the same as other non-MPI
+applications but with a caveat. Outside of installing the necessary software
+required for MPI to run, the difference is that images that use MPI must
+also install SSH client/server software and enable the SSH server as the
+`CMD` with a port exposed to the host. Remember, the container will be
+running isolated from the host, so if you attempt to connect to the SSH
+server running on the host, the launcher will attempt to initialize on the
+host with an MPI runtime that doesn't exist.
+
+### Docker and MPI Mental Model
 With the basics reviewed above, we can construct a mental model of the layout
 of how a Dockerized MPI program will execute.
 
@@ -80,7 +111,7 @@ default SSH server is running on port 22. (However, this port is not mapped
 through the load balancer as an instance endpoint on port 22). This can lead
 to conflicts as described in the next section.
 
-### Dockerized MPI Applications and Azure Batch Compute Nodes
+#### Dockerized MPI Applications and Azure Batch Compute Nodes
 Because the internally mapped Docker container IP address is dynamic and
 unknown to the Azure Batch service at job run time, the Docker image must
 be run using the host networking stack so the host IP address is visible
@@ -94,7 +125,7 @@ on the default SSH server port of 22. Thus, in the Dockerfile, the
 SSH server in the `CMD` command should be bound to an alternate port such
 as port 23, along with the corresponding `EXPOSE` directive.
 
-### SSH User and Options
+#### SSH User and Options
 Because Docker requires running containers as root, all Batch Shipyard
 jobs are invoked with elevated permissions. A side effect is that this
 makes setting up the SSH passwordless authentication a bit easier.
@@ -121,7 +152,23 @@ example port 23 is forced as the default for any ssh client connections to
 destination hosts of 10.\* which would match the `EXPOSE` port in the Docker
 image.
 
-### Multi-Instance Task Coordination Command
+## Containers and Azure Batch Multi-Instance Tasks
+Batch Shipyard supports Docker containers in `native` container supported
+pools, in non-`native` pools and Singularity containers in non-`native`
+pools for multi-instance tasks.
+
+For `native` container supported pools and Singularity containers, Batch
+Shipyard executes these tasks as normal multi-instance tasks would as either
+Azure Batch natively understands how to handle these executions or that
+they work the same as if the task is executing a multi-instance task on
+the host.
+
+For non-`native` container supported pools and Docker containers, Batch
+Shipyard performs transformations to ensure that such executions are
+possible. The following sub-sections explains the details for these
+types of executions.
+
+### Multi-Instance Task Coordination Command for non-`native` Docker containers
 In an Azure Batch multi-instance task, a coordination command is executed on
 all compute nodes of the task before the application command is run. As
 described in the mental model above, a combination of `docker run` and
@@ -131,14 +178,12 @@ a running instance of the Docker image. If the `CMD` directive in the Docker
 image is not set (i.e., SSH server to execute), then an actual coordination
 command should be supplied to Batch Shipyard.
 
-### Multi-Instance Task Application Command
+### Multi-Instance Task Application Command for non-`native` Docker containers
 The application command is the `docker exec` portion of the Docker MPI
 job execution with Batch Shipyard. This is typically a call to `mpirun`
 or `mpiexec` or a wrapper script that launches either `mpirun` or `mpiexec`.
 
-### Cleanup
-**Note:** The following only applies to non-`native` container support pools.
-
+### Cleanup for non-`native` Docker containers
 As the Docker image is run in detached mode with `docker run`, the container
 will still be running after the application command completes. Currently,
 there is no "clean" way to perform cleanup from the Azure Batch API.
@@ -158,12 +203,24 @@ involved in multi-instance tasks if they are needed to be reused for
 additional jobs. Please refer to `jobs cmi` and `jobs cmi --delete` actions
 in the [Batch Shipyard Usage](20-batch-shipyard-usage.md) doc.
 
-### Automation!
-Nearly all of the Docker runtime complexities are taken care of by the Batch
-Shipyard tooling. The user just needs to ensure that their MPI Docker images
-are either constructed with the aforementioned accommodations and/or are able
-to provide sufficient commands to the coordination/application commands to
-work with the Azure Batch compute node environment.
+## Automation!
+Nearly all of the Docker or Singularity runtime complexities are taken care of
+by Batch Shipyard. The user just needs to ensure that their MPI container
+images are either constructed with the aforementioned accommodations and/or
+are able to provide sufficient commands to the coordination/application
+commands to work with the Azure Batch compute node environment.
+
+## Which to choose for MPI? Docker or Singularity?
+In the context of Batch Shipyard, both approaches are somewhat similar as
+the tooling takes care of a lot of the complexity. However, if you are using
+a Docker image, then you need to ensure that your image contains the
+directives to install and start an SSH server.
+
+Since Singularity is inherently more easy to work with for MPI programs,
+it may be beneficial to use Singularity to containerize your MPI application
+instead of Docker. There is no need to package an SSH server with your image
+and is handled more elegantly in Batch Shipyard without the need to split
+the execution and deal with potential cleanup artifacts.
 
 ### More Information
 For more general information about MPI and Azure Batch, please visit

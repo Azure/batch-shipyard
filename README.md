@@ -5,11 +5,12 @@
 
 # Batch Shipyard
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute batch processing and HPC Docker workloads on
+provision and execute container-based batch processing and HPC workloads on
 [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) compute
-pools. No experience with the
+pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
+[Singularity](http://singularity.lbl.gov/) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
-your Dockerized tasks with easy-to-understand configuration files!
+your containers with easy-to-understand configuration files.
 
 Additionally, Batch Shipyard provides the ability to provision and manage
 entire [standalone remote file systems (storage clusters)](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
@@ -24,18 +25,24 @@ and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
 app.
 
 ## Major Features
-* Automated [Docker Host Engine](https://www.docker.com) installation tuned
-for Azure Batch compute nodes
-* Automated deployment of required Docker images to compute nodes
-* Accelerated Docker image deployment at scale to compute pools consisting of
-a large number of VMs via private peer-to-peer distribution of Docker images
-among the compute nodes
+* Automated [Docker Host Engine](https://www.docker.com) and
+[Singularity](http://singularity.lbl.gov/) installations tuned for
+Azure Batch compute nodes
+* Automated deployment of required Docker and/or Singularity images to
+compute nodes
+* Accelerated Docker and Singularity image deployment at scale to compute
+pools consisting of a large number of VMs via private peer-to-peer
+distribution of container images among the compute nodes
+* Mixed mode support for Docker and Singularity: run your Docker and
+Singularity containers within the same job, side-by-side or even concurrently
 * Comprehensive data movement support: move data easily between locally
 accessible storage systems, remote filesystems, Azure Blob or File Storage,
 and compute nodes
 * Support for Docker Registries including
 [Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/)
 and other Internet-accessible public and private registries
+* Support for the [Singularity Hub](https://singularity-hub.org/) Container
+Registry
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
 with integration to auto-link these filesystems to compute nodes with support for
     * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
@@ -57,19 +64,19 @@ randomized input, file enumeration, replication, and custom Python code-based
 generators
 * Support for deploying Batch compute nodes into a specified
 [Virtual Network](http://batch-shipyard.readthedocs.io/en/latest/64-batch-shipyard-byovnet/)
-* Transparent support for
-[GPU-accelerated Docker applications](https://github.com/NVIDIA/nvidia-docker)
+* Transparent support for GPU-accelerated container applications on both
+[Docker](https://github.com/NVIDIA/nvidia-docker) and Singularity
 on [Azure N-Series VM instances](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu)
-* Support for multi-instance tasks to accommodate Dockerized MPI and multi-node
-cluster applications on compute pools with automatic job completion and Docker
-task termination
-* Transparent assist for running Docker containers utilizing Infiniband/RDMA
-for MPI on HPC low-latency Azure VM instances:
+* Support for multi-instance tasks to accommodate MPI and multi-node cluster
+applications packaged in Docker or Singularity on compute pools with
+automatic job completion and task termination
+* Transparent assist for running Docker and Singularity containers utilizing
+Infiniband/RDMA for MPI on HPC low-latency Azure VM instances:
     * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_A8, STANDARD\_A9
     * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_H16R, STANDARD\_H16MR
     * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
-allowing complex processing pipelines and DAGs with Docker containers
+allowing complex processing pipelines and DAGs with containers
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools

@@ -20,6 +20,10 @@ we will select from the following Deep Learning recipes to quickly get started:
 
 The example MNIST training sample will be used on one Azure Batch compute node
 regardless of which Deep Learning framework you prefer for the following.
+Note that this quickstart guide focuses on Docker container execution but
+the commands are agnostic to which containers (Docker or Singularity) you
+are using - only the configuration changes with respect to which ecosystem
+you are using.
 
 1. [Installation of Batch Shipyard](01-batch-shipyard-installation.md)
 to your local machine has been completed or you are using Batch Shipyard

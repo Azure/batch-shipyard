@@ -14,8 +14,8 @@ certain software.
 
 Azure Batch only supports creating compute nodes from custom images through
 ARM Image resources. You can create ARM Images using existing page blob VHDs
-or exporting managed disks. You must create the Image in the same subscription
-and region as your Batch account.
+or exporting managed disks. **You must create the Image in the same
+subscription and region as your Batch account.**
 
 ## Azure Active Directory Authentication Required
 Azure Active Directory authentication is required for the `batch` account

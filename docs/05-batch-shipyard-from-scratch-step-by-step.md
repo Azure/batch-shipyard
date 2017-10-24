@@ -2,7 +2,9 @@
 The following document aims to create a set of configuration files to
 illustrate how to construct and submit a job executing on Batch Shipyard, from
 scratch. We will perform a trivial task of counting the number of user
-groups available in `/etc/group` with the `busybox` Docker image.
+groups available in `/etc/group` with the `busybox` Docker image. Note that
+this guide focuses on executing a Docker image, but would require very
+minimal changes for utilizing Singularity containers.
 
 Please ensure that you have followed the
 [Batch Shipyard installation guide](01-batch-shipyard-installation.md)
@@ -94,17 +96,17 @@ job_specifications:
 - id: myjob
   tasks:
   - command: wc -l /etc/group
-    image: busybox
+    docker_image: busybox
 ```
 
 Here, we assign a job ID `myjob` and this job has an associated task array.
 A job can have multiple tasks assigned to it, however, for this sample we
 only need to execute one command. First, we must reference the correct
 Docker image to use when executing the job, which is `busybox`. Notice that
-this name matches exactly to that of the image name specified under
-`docker_images` in the `config.yaml` file. Finally, the `command` is set
-to `wc -l /etc/group` which counts the number of lines found in the
-`/etc/group` file.
+this property, `docker_iamge` matches exactly to that of the image name
+specified under `docker_images` in the `config.yaml` file. Finally, the
+`command` is set to `wc -l /etc/group` which counts the number of lines
+found in the `/etc/group` file.
 
 ### Step 5: Create a `pool.yaml` file
 The `pool.yaml` is used to construct the computing resource needed for
@@ -195,6 +197,10 @@ This concludes the step-by-step guide in using the Batch Shipyard system.
 Of course, your use case will invariably be more complicated than the trivial
 sample shown here. Please refer to the following resources for more
 information.
+
+For Singularity containers, the workflow would be nearly identical except
+for specifying `singularity_images` in the `config.yaml` and
+`singularity_image` in `jobs.yaml`.
 
 #### Batch Shipyard Guide Contents
 Please see the [top-level README](README.md) for the table of contents for

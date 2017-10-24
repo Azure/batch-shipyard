@@ -1,6 +1,6 @@
 # Batch Shipyard Introduction
-This page is the starting point for those unfamiliar with either Azure Batch
-and/or Docker concepts.
+This page is the starting point for those unfamiliar with any of the
+Azure Batch service, Docker, or Singularity.
 
 ## Azure Batch
 [Azure Batch](https://azure.microsoft.com/en-us/services/batch/) is a scalable
@@ -45,7 +45,12 @@ apply to the Batch service.
 
 Compute jobs:
 ```
-Job --> Tasks --> Subtasks (or tasklets)
+Job --> Tasks
+```
+
+Multi-instance Tasks:
+```
+Task --> Subtasks (or tasklets)
 ```
 
 Jobs are run on compute pools for which tasks are scheduled on to compute
@@ -75,7 +80,6 @@ lightweight, leveraging a shared kernel for fast and consistent application
 deployments. More information about Docker can be found
 [here](https://www.docker.com/what-docker).
 
-### Concepts
 * A Docker image contains all of the necessary software to run an application
 and exists only in read-only form. Can be thought of as a template for a
 container.
@@ -87,14 +91,29 @@ retrieved or updated.
 Further in-depth treatment of Docker can be found
 [here](https://docs.docker.com/engine/understanding-docker/).
 
-## Docker+Azure Batch
-By leveraging the Docker ecosystem, tooling and packaging, users can spend
-less time hassling with the underlying infrastructure, VM application state
-consistency, potential dependency interaction side effects and spend more
+## Singularity
+[Singularity](http://singularity.lbl.gov/) is an implementation of operating
+system-level virtualization similar to Docker, but is tailored for execution
+on shared HPC infrastructure typically found on-premises and supercomputing
+installations. Singularity provides environment encapsulation and does not
+require root privileges to execute containers. However, Singularity allows
+containers to utilize available hardware in the host systems such as GPUs
+and specialized networking within the privilege scope of the executing
+user. The ability to execute Singularity containers in Azure exactly as
+if they were executing against a cluster system in an organization
+provides true mobility of compute across on-premises to the cloud without
+having to modify any container image settings.
+
+## Containers and Azure Batch
+By leveraging either the Docker and/or Singularity ecosystems including
+their respective packaging and tooling, users can spend less time hassling
+with the underlying infrastructure, VM application state consistency,
+potential dependency interaction side effects and spend more
 time on things that actually matter for their batch workloads: the job and
 task results themselves. And with Azure Batch, you can scale your workload up
-and only pay for the compute resources you use. The Batch Shipyard toolkit
-provides a way to combine both with ease!
+and only pay for the compute resources you use. The Batch Shipyard
+provides a way to combine your containers with the power of scale-out cloud
+computing with ease!
 
 ## Batch Shipyard Installation
 Continue on to

@@ -284,6 +284,7 @@ def _block_for_nodes_ready(
             pool_id, stopping_states))
     pool_settings = settings.pool_settings(config)
     reboot_map = {}
+    failed_node_list_count = 0
     unusable_delete = False
     last = time.time()
     while True:
@@ -356,8 +357,10 @@ def _block_for_nodes_ready(
                 # refresh node list to reflect rebooting states
                 try:
                     nodes = list(batch_client.compute_node.list(pool.id))
+                    failed_node_list_count = 0
                 except ssl.SSLError:
                     nodes = []
+                    failed_node_list_count += 1
             else:
                 # fast path check for start task failures in non-reboot mode
                 logger.error(
@@ -428,6 +431,10 @@ def _block_for_nodes_ready(
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
                 logger.debug(_node_state_counts(nodes))
+            if failed_node_list_count % 3 == 0:
+                logger.error(
+                    'could not get a valid node list for pool: {}'.format(
+                        pool.id))
         if len(nodes) < 10:
             time.sleep(3)
         elif len(nodes) < 50:
@@ -2024,6 +2031,15 @@ def _send_docker_kill_signal(
     :param str task_id: task id to kill
     :param bool task_is_mi: task is multi-instance
     """
+    if util.is_none_or_empty(username):
+        raise ValueError(
+            'cannot terminate non-native Docker container without an SSH '
+            'username')
+    if not ssh_private_key.exists():
+        raise RuntimeError(
+            ('cannot terminate non-native Docker container with a '
+             'non-existent SSH private key: {}').format(
+                 ssh_private_key))
     targets = [(pool_id, node_id)]
     task_name = None
     # if this task is multi-instance, get all subtasks
@@ -2077,21 +2093,14 @@ def terminate_tasks(
     :param bool force: force task docker kill signal regardless of state
     """
     native = settings.is_native_docker_pool(config)
-    # get ssh login settings
+    # get ssh login settings for non-native pools
     if not native:
         pool = settings.pool_settings(config)
-        if util.is_none_or_empty(pool.ssh.username):
-            raise ValueError(
-                'cannot terminate non-native container without an SSH '
-                'username')
         ssh_private_key = pool.ssh.ssh_private_key
         if ssh_private_key is None:
             ssh_private_key = pathlib.Path(
                 pool.ssh.generated_file_export_path,
                 crypto.get_ssh_key_prefix())
-        if not ssh_private_key.exists():
-            raise RuntimeError('SSH private key file not found at: {}'.format(
-                ssh_private_key))
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -2126,17 +2135,23 @@ def terminate_tasks(
                 continue
             logger.info('Terminating task: {}'.format(task))
             # directly send docker kill signal if running
-            if ((_task.state == batchmodels.TaskState.running or force) and
-                    not native):
-                if (_task.multi_instance_settings is not None and
-                        _task.multi_instance_settings.number_of_instances > 1):
-                    task_is_mi = True
+            if (not native and
+                    (_task.state == batchmodels.TaskState.running or force)):
+                # check if task is a docker task
+                if ('docker run' in _task.command_line or
+                        'docker exec' in _task.command_line):
+                    if (_task.multi_instance_settings is not None and
+                            _task.multi_instance_settings.
+                            number_of_instances > 1):
+                        task_is_mi = True
+                    else:
+                        task_is_mi = False
+                    _send_docker_kill_signal(
+                        batch_client, config, pool.ssh.username,
+                        ssh_private_key, _task.node_info.pool_id,
+                        _task.node_info.node_id, job_id, task, task_is_mi)
                 else:
-                    task_is_mi = False
-                _send_docker_kill_signal(
-                    batch_client, config, pool.ssh.username, ssh_private_key,
-                    _task.node_info.pool_id, _task.node_info.node_id,
-                    job_id, task, task_is_mi)
+                    batch_client.task.terminate(job_id, task)
             else:
                 batch_client.task.terminate(job_id, task)
     if wait:
