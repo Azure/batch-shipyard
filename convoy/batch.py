@@ -314,16 +314,15 @@ def _block_for_nodes_ready(
                     'Resize errors encountered for pool {}: {}'.format(
                         pool.id, os.linesep.join(errors)))
         # check pool allocation state
-        if pool.allocation_state == batchmodels.AllocationState.resizing:
+        try:
+            nodes = list(batch_client.compute_node.list(pool.id))
+            failed_node_list_count = 0
+        except ssl.SSLError:
+            # SSL error happens sometimes on paging... this is probably
+            # a bug in the underlying msrest/msrestazure library that
+            # is reusing the SSL connection improperly
             nodes = []
-        else:
-            try:
-                nodes = list(batch_client.compute_node.list(pool.id))
-            except ssl.SSLError:
-                # SSL error happens sometimes on paging... this is probably
-                # a bug in the underlying msrest/msrestazure library that
-                # is reusing the SSL connection improperly
-                nodes = []
+            failed_node_list_count += 1
         # check if any nodes are in start task failed state
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
                 for node in nodes)):
@@ -431,7 +430,7 @@ def _block_for_nodes_ready(
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
                 logger.debug(_node_state_counts(nodes))
-            if failed_node_list_count > 0 and failed_node_list_count % 2 == 0:
+            if failed_node_list_count > 0:
                 logger.error(
                     'could not get a valid node list for pool: {}'.format(
                         pool.id))

@@ -5,14 +5,14 @@ azure-keyvault==0.3.7
 azure-mgmt-batch==4.1.0
 azure-mgmt-compute==1.0.0
 azure-mgmt-network==1.5.0
-azure-mgmt-resource==1.1.0
+azure-mgmt-resource==1.2.2
 azure-storage-blob==0.37.0
 azure-storage-file==0.37.0
-blobxfer==1.0.0rc1
+blobxfer==1.0.0rc2
 click==6.7
 future==0.16.0
-msrest==0.4.16
-msrestazure==0.4.14
+msrest==0.4.17
+msrestazure==0.4.15
 pathlib2==2.3.0; python_version < '3.5'
 python-dateutil==2.6.1
 requests==2.18.4
