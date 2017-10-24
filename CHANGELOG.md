@@ -7,6 +7,7 @@
 - Support for mounting multiple Azure File shares as `shared_data_volumes`
 to a pool (#123)
 - `bind_options` support for `data_volumes` and `shared_data_volumes`
+- More packer samples for custom images
 
 ### Changed
 - **Breaking Change:** `global_resources`:`docker_volumes` is now named
@@ -23,7 +24,6 @@ points (i.e., `container_path`) are unaffected.
 release. Please avoid using the version `16.04.201709190`.
 - Update to blobxfer 1.0.0rc2
 - Updated custom image guide
-- Updated sample packer script
 
 ## [3.0.0a1] - 2017-10-04
 ### Added

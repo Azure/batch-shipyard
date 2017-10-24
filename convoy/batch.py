@@ -431,7 +431,7 @@ def _block_for_nodes_ready(
                     logger.debug('{}: {}'.format(node.id, node.state))
             else:
                 logger.debug(_node_state_counts(nodes))
-            if failed_node_list_count % 3 == 0:
+            if failed_node_list_count > 0 and failed_node_list_count % 2 == 0:
                 logger.error(
                     'could not get a valid node list for pool: {}'.format(
                         pool.id))

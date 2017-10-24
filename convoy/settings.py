@@ -832,7 +832,7 @@ def pool_settings(config):
         ssh_public_key_data = None
         ssh_private_key = None
         ssh_gen_docker_tunnel = None
-        ssh_gen_file_path = None
+        ssh_gen_file_path = '.'
         ssh_hpn = None
     else:
         ssh_expiry_days = _kv_read(sshconf, 'expiry_days', 30)

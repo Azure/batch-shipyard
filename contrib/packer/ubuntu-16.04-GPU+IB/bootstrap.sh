@@ -3,8 +3,12 @@
 set -e
 set -o pipefail
 
-dockerversion=17.09.0~ce-0~ubuntu
-nvdriver=/tmp/$1
+dockerversion=$1
+shift
+nvdriver=$1
+shift
+intel_mpi=$1
+shift
 
 # install docker
 apt-get update
@@ -37,6 +41,10 @@ if [ $? -ne 0 ]; then
     echo $out
     echo "ERROR: No Nvidia card(s) detected!"
 else
+    if [ ! -f $nvdriver ]; then
+        echo "ERROR: Nvidia driver not present: $nvdriver"
+        exit 1
+    fi
     set +e
     apt-get --purge remove xserver-xorg-video-nouveau
     rmmod nouveau
@@ -89,3 +97,30 @@ EOF
     set -e
 fi
 set -e
+
+# install userland IB requirements
+apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
+    libdapl2 libmlx4-1
+# enable RDMA in agent conf
+sed -i 's/^# OS.EnableRDMA=.*/OS.EnableRDMA=y/g' /etc/waagent.conf
+sed -i 's/^# OS.UpdateRdmaDriver=.*/OS.UpdateRdmaDriver=y/g' /etc/waagent.conf
+# allow unlimited memlock for intel mpi
+echo "" >> /etc/security/limits.conf
+echo "* hard memlock unlimited" >> /etc/security/limits.conf
+echo "* soft memlock unlimited" >> /etc/security/limits.conf
+# enable ptrace for non-root non-debugger processes for intel mpi
+echo 0 | tee /proc/sys/kernel/yama/ptrace_scope
+# install intel mpi runtime
+if [ ! -f $intel_mpi ]; then
+    echo "ERROR: Intel MPI Runtime installer not present: $intel_mpi"
+    exit 1
+fi
+mkdir -p /tmp/intel
+tar zxvpf $intel_mpi -C /tmp/intel
+cd /tmp/intel/l_mpi-rt*
+sed -i -e 's/^ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' silent.cfg
+sed -i -e 's,^PSET_INSTALL_DIR=.*,PSET_INSTALL_DIR=/opt/intel,g' silent.cfg
+./install.sh -s silent.cfg
+cd /opt/intel
+ls -alF
+rm -rf /tmp/intel

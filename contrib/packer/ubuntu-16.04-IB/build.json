@@ -6,7 +6,8 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "nvdriver": "NVIDIA-Linux-x86_64-384.81.run",
+    "docker_version": "17.09.0~ce-0~ubuntu",
+    "intel_mpi_rt": "l_mpi-rt_2017.3.196.tgz",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [
@@ -27,7 +28,7 @@
           "image_sku": "16.04-LTS",
 
           "location": "South Central US",
-          "vm_size": "STANDARD_NC6"
+          "vm_size": "STANDARD_NC24r"
       }
   ],
   "provisioners": [
@@ -38,13 +39,13 @@
       },
       {
           "type": "file",
-          "source": "{{user `nvdriver`}}",
-          "destination": "/tmp/{{user `nvdriver`}}"
+          "source": "{{user `intel_mpi_rt`}}",
+          "destination": "/tmp/{{user `intel_mpi_rt`}}"
       },
       {
           "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
           "inline": [
-              "/tmp/{{user `bootstrap`}} {{user `nvdriver`}}",
+              "/tmp/{{user `bootstrap`}} {{user `docker_version`}} /tmp/{{user `intel_mpi_rt`}}",
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/sh -x",
