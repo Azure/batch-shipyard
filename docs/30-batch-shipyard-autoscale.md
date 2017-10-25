@@ -40,9 +40,13 @@ scenarios and then Batch Shipyard automatically applies the appropriate
 transformations to the formula to apply to your pool. These scenarios are:
 
 * `active_tasks` will autoscale the pool using metrics for the number of
-active (i.e., queued) tasks for the pool.
+active tasks for the pool. Tasks categorized under this metric are
+tasks in active state with satisifed dependencies, in other
+words, "tasks with satisified dependencies awaiting node assignment".
 * `pending_tasks` will autoscale the pool using metrics for the number of
-pending (i.e., active + running) tasks for the pool.
+pending tasks for the pool. Tasks categorized under this metric are
+tasks in active state with satisifed dependencies and running
+tasks, in other words, "tasks pending completion".
 * `workday` will autoscale the pool according to Monday-Friday workdays.
 * `workday_with_offpeak_max_low_priority` will autoscale the pool according
 to Monday-Friday workdays and for off work time, use maximum number of

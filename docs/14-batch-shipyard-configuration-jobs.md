@@ -760,15 +760,16 @@ actual command executed on the host without any modifications such as
 with a regular task (i.e., prepending with `singularity exec`). When executing
 a Singularity container under a multi-instance task, an additional
 environment variable is populated, `SHIPYARD_SINGULARITY_COMMAND` which
-can be used in custom scripts to control execution.
-This property may be null. Note that if you are using a `task_factory`
-for the specification, then task factory arguments are applied to the
-`command`. Therefore, Python-style string formatting options (excluding
-keyword formatting) are required for certain task factories that generate
-parameters to modify the `command`: `{}` positional, `{0}` numbering
-style, or `{keyword}` keyword style formatters are required depending
-upon the `task_factory` used. Please see the
-[Task Factory Guide](35-batch-shipyard-task-factory.md) for more
+can be used in custom scripts to control execution (note that this command
+will need to be expanded prior to use as it may contain other environment
+variables). This property may be null. Note that if you are using a
+`task_factory` for the specification, then task factory arguments are
+applied to the `command`. Therefore, Python-style string formatting
+options (excluding keyword formatting) are required for certain task
+factories that generate parameters to modify the `command`:
+`{}` positional, `{0}` numbering style, or `{keyword}` keyword style
+formatters are required depending upon the `task_factory` used. Please
+see the [Task Factory Guide](35-batch-shipyard-task-factory.md) for more
 information.
 
 ## Full template

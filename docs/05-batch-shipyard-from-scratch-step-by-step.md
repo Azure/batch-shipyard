@@ -193,8 +193,7 @@ shipyard.cmd pool del --configdir config -y
 ```
 
 ### Closing Words and Next Steps
-This concludes the step-by-step guide in using the Batch Shipyard system.
-Of course, your use case will invariably be more complicated than the trivial
+Invariably, your use case will be more complicated than the trivial
 sample shown here. Please refer to the following resources for more
 information.
 
@@ -203,8 +202,8 @@ for specifying `singularity_images` in the `config.yaml` and
 `singularity_image` in `jobs.yaml`.
 
 #### Batch Shipyard Guide Contents
-Please see the [top-level README](README.md) for the table of contents for
-all guides and documentation.
+Please see the [complete documentation](http://batch-shipyard.readthedocs.io)
+for the table of contents for all guides and documentation.
 
 #### In-Depth Configuration Guide
 [Batch Shipyard Configuration](10-batch-shipyard-configuration.md) contains
