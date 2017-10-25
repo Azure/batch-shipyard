@@ -130,14 +130,25 @@ Because Docker requires running containers as root, all Batch Shipyard
 jobs are invoked with elevated permissions. A side effect is that this
 makes setting up the SSH passwordless authentication a bit easier.
 
-Docker images should contain the proper directives to generate an SSH
-RSA public/private key pair (or alternatively `COPY` a pair) and an
-`authorized_keys` file corresponding to the public key for the root user
-within the Docker container. Additionally, ssh clients need to be transparently
-directed to connect to the alternate port and ignore input prompts since these
+The Docker container context, at runtime, should have the proper SSH keys
+in the root or user context (if using user identities). These can be either
+mounted in from the host OS, copied into the Docker image during build time
+via `COPY`, or generated during build time. Note that if you copy or generate
+the keys into your Docker image, publishing your Docker image will expose
+your private RSA key. Although external users will not be able to SSH into
+these running instances by default as this SSH port is not exposed externally,
+it can still be a security risk if a compute node is compromised. If this is
+an unacceptable risk for your scenario, you should be mounting in a private
+key into the Docker image at runtime which is not published as part of the
+image build process.
+
+Additionally, an `authorized_keys` file corresponding to the public key for
+the user that will execute the task should be present within the Docker
+container. SSH clients will also need to be transparently directed to
+connect to the alternate port and ignore input prompts since these
 programs will be run in non-interactive mode. If you cannot override your MPI
-runtime remote shell options, you can use an SSH config file stored in the root
-user's `.ssh` directory alongside the keys:
+runtime remote shell options, you can use an SSH config file stored in the
+respective root or user's `.ssh` directory alongside the keys:
 
 ```
 Host 10.*

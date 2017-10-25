@@ -239,8 +239,8 @@ TaskFactoryStorageSettings = collections.namedtuple(
 )
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
-        'id', 'docker_image', 'singularity_image', 'name',
-        'run_options', 'singularity_cmd', 'run_elevated',
+        'id', 'docker_image', 'singularity_image', 'name', 'run_options',
+        'docker_exec_options', 'singularity_cmd', 'run_elevated',
         'environment_variables', 'environment_variables_keyvault_secret_id',
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
         'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
@@ -2672,11 +2672,14 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     except KeyError:
         resource_files = None
     # get generic run opts
+    docker_exec_options = []
     singularity_cmd = None
     run_elevated = True
     if util.is_not_empty(docker_image):
         run_opts = _kv_read_checked(
             conf, 'additional_docker_run_options', default=[])
+        if '--privileged' in run_opts:
+            docker_exec_options.append('--privileged')
     else:
         run_opts = _kv_read_checked(
             conf, 'additional_singularity_options', default=[])
@@ -2750,25 +2753,30 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             specific_user_gid=ui_specific_gid,
         )
         # append user identity options
+        uiopt = None
         attach_ui = False
         if ui.default_pool_admin:
             # run as the default pool admin user. note that this is
             # *undocumented* behavior and may break at anytime
-            run_opts.append('-u `id -u _azbatch`:`id -g _azbatch`')
+            uiopt = '-u `id -u _azbatch`:`id -g _azbatch`'
             attach_ui = True
         elif ui.specific_user_uid is not None:
             if ui.specific_user_gid is None:
                 raise ValueError(
                     'cannot specify a user identity uid without a gid')
-            run_opts.append(
-                '-u {}:{}'.format(ui.specific_user_uid, ui.specific_user_gid))
+            uiopt = '-u {}:{}'.format(
+                ui.specific_user_uid, ui.specific_user_gid)
             attach_ui = True
+        if util.is_not_empty(uiopt):
+            run_opts.append(uiopt)
+            docker_exec_options.append(uiopt)
         if attach_ui:
             run_opts.append('-v /etc/passwd:/etc/passwd:ro')
             run_opts.append('-v /etc/group:/etc/group:ro')
             run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
         del attach_ui
         del ui
+        del uiopt
     # get command
     command = _kv_read_checked(conf, 'command')
     # parse data volumes
@@ -3118,6 +3126,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         singularity_image=singularity_image,
         name=name,
         run_options=run_opts,
+        docker_exec_options=docker_exec_options,
         environment_variables=env_vars,
         environment_variables_keyvault_secret_id=ev_secid,
         envfile=envfile,

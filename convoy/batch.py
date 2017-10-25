@@ -3627,8 +3627,12 @@ def add_jobs(
                     ]
                 else:
                     task_commands = [
-                        '{} {} {}'.format(
-                            task.docker_exec_cmd, task.name, task.command)
+                        '{} {} {} {}'.format(
+                            task.docker_exec_cmd,
+                            ' '.join(task.docker_exec_options),
+                            task.name,
+                            task.command,
+                        )
                     ]
             else:
                 if native:
