@@ -70,7 +70,10 @@ def _formula_tasks(pool):
                 total_seconds()),
             'samplepercent = ${}Tasks.GetSamplePercent(sli)'.format(task_type),
             'lastsample = val(${}Tasks.GetSample(1), 0)'.format(task_type),
-            'samplevecavg = avg(${}Tasks.GetSample(sli))'.format(task_type),
+            ('samplevecavg = samplepercent < {} ? max(0, lastsample) : '
+             'avg(${}Tasks.GetSample(sli))').format(
+                 pool.autoscale.scenario.required_sample_percentage,
+                 task_type),
             ('{}TaskAvg = samplepercent < {} ? max(0, lastsample) : '
              '(lastsample < samplevecavg ? avg(lastsample, samplevecavg) : '
              'max(lastsample, samplevecavg))').format(
