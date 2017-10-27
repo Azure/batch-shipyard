@@ -1,0 +1,12 @@
+job_specifications:
+- id: linpack
+  tasks:
+  - singularity_image: shub://alfpark/linpack
+    resource_files:
+    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/findpq.py
+      file_path: findpq.py
+    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/run_hplinpack.sh
+      file_path: run_hp_linpack.sh
+    command: ./run_hplinpack.sh -2
+    multi_instance:
+      num_instances: pool_current_dedicated

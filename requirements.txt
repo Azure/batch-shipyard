@@ -8,7 +8,7 @@ azure-mgmt-network==1.5.0
 azure-mgmt-resource==1.2.2
 azure-storage-blob==0.37.0
 azure-storage-file==0.37.0
-blobxfer==1.0.0rc2
+blobxfer==1.0.0rc3
 click==6.7
 future==0.16.0
 msrest==0.4.17

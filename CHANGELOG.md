@@ -2,12 +2,14 @@
 
 ## [Unreleased]
 
+## [3.0.0a2] - 2017-10-27
 ### Added
 - Major version migration guide (#134)
 - Support for mounting multiple Azure File shares as `shared_data_volumes`
 to a pool (#123)
 - `bind_options` support for `data_volumes` and `shared_data_volumes`
 - More packer samples for custom images
+- Singularity HPLinpack recipe
 
 ### Changed
 - **Breaking Change:** `global_resources`:`docker_volumes` is now named
@@ -22,8 +24,14 @@ old root mount point of `$AZ_BATCH_NODE_SHARED_DIR`. The container mount
 points (i.e., `container_path`) are unaffected.
 - Canonical UbuntuServer 16.04-LTS is no longer pinned to a specific
 release. Please avoid using the version `16.04.201709190`.
-- Update to blobxfer 1.0.0rc2
+- Update to blobxfer 1.0.0rc3
 - Updated custom image guide
+
+### Fixed
+- Multi-instance Docker-based application command was not being launched
+under a user identity if specified
+- Allow min node allocation with `bias_last_sample` without required
+sample percentage (#138)
 
 ## [3.0.0a1] - 2017-10-04
 ### Added
@@ -949,7 +957,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...HEAD
+[3.0.0a2]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...3.0.0a2
 [3.0.0a1]: https://github.com/Azure/batch-shipyard/compare/2.9.6...3.0.0a1
 [2.9.6]: https://github.com/Azure/batch-shipyard/compare/2.9.5...2.9.6
 [2.9.5]: https://github.com/Azure/batch-shipyard/compare/2.9.4...2.9.5

@@ -7,4 +7,4 @@ job_specifications:
     - --privileged
     multi_instance:
       num_instances: pool_current_dedicated
-    command: /sw/run_hplinpack.sh -n 32000
+    command: /sw/run_hplinpack.sh -2
