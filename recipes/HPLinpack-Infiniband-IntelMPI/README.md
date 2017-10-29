@@ -72,12 +72,11 @@ such that HPL can pin and interleave memory
   * `coordination_command` should be unset or `null`. For pools with
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
-  * `resource_files` array can be empty
 
 #### Singularity-based
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `singularity_image` should be the name of the Docker image for this
+* `singularity_image` should be the name of the Singularity image for this
 container invocation. For this example, this should be
 `shub://alfpark/linpack`.
 * `command` should contain the `mpirun` command. If using the sample
@@ -97,6 +96,8 @@ many configuration parameters:
   * `-q <grid column dim>`: grid column dimension, this must be greater than
     or equal to `-p`. If not specified, will be automatically determined from
     the number of nodes.
+* `additional_singularity_options` property should have an option to set the
+working directory to the linpack binary directory.
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
 * `multi_instance` property must be defined

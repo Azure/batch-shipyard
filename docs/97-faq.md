@@ -63,6 +63,7 @@ that only a subset of `platform_image` combinations are compatible with
 `native` mode.
 
 Advantages of `native` mode are:
+
 * Batch Shipyard with a provisioned SSH user is no longer necessary to
 perform actions such as terminating tasks where tasks are still running or
 deleting jobs with running tasks.
@@ -71,6 +72,7 @@ multi-instance tasks per job.
 * Potentially faster provisioning times, particularly pools with GPU devices.
 
 Disadvantages of `native` mode are:
+
 * Singularity containers are not supported.
 * `input_data` of any kind at the task-level is not possible.
 * `output_data` to `azure_storage` Azure Files (i.e., file shares) is not
@@ -82,4 +84,4 @@ possible.
 
 #### Does Batch Shipyard support Windows Server Containers?
 * Not at this time, we are tracking the issue
-  [here](https://github.com/Azure/batch-shipyard/issues/7).
+[here](https://github.com/Azure/batch-shipyard/issues/7).

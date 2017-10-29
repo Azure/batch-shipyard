@@ -306,7 +306,7 @@ singularity_setup() {
     docker run --rm -v /opt/singularity:/opt/singularity $di \
         /bin/sh -c 'cp -r /singularity/* /opt/singularity'
     # symlink for global exec
-    ln -s /opt/singularity/bin/singularity /usr/bin/singularity
+    ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
     # fix perms
     chown root.root /opt/singularity/libexec/singularity/bin/*
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid

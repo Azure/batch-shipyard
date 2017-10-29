@@ -414,7 +414,7 @@ singularity_setup() {
     docker run --rm -v /opt/singularity:/opt/singularity $di \
         /bin/sh -c 'cp -r /singularity/* /opt/singularity'
     # symlink for global exec
-    ln -s /opt/singularity/bin/singularity /usr/bin/singularity
+    ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
     # fix perms
     chown root.root /opt/singularity/libexec/singularity/bin/*
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
@@ -889,7 +889,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             install_packages $offer lsb
             install_local_packages $offer /opt/intelMPI/intel_mpi_packages/*.rpm
             mkdir -p /opt/intel/compilers_and_libraries/linux
-            ln -s /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
+            ln -sf /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
         fi
     fi
 else

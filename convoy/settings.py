@@ -2939,9 +2939,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
-        # mount /opt/intel for all non-singularity tasks
-        if util.is_not_empty(docker_image):
-            run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # mount /opt/intel for all container types
+        run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
         if not native:
             if util.is_not_empty(docker_image):
                 # common run opts

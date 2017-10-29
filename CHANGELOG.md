@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Singularity HPCG recipe
+
+### Fixed
+- Mount `/opt/intel` into Singularity containers
+
 ## [3.0.0a2] - 2017-10-27
 ### Added
 - Major version migration guide (#134)

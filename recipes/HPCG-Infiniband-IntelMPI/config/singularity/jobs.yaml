@@ -1,0 +1,10 @@
+job_specifications:
+- id: hpcg
+  tasks:
+  - singularity_image: shub://alfpark/linpack
+    resource_files:
+    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/run_hpcg.sh
+      file_path: run_hpcg.sh
+    command: ./run_hpcg.sh -2 -n 256 -t 120
+    multi_instance:
+      num_instances: pool_current_dedicated
