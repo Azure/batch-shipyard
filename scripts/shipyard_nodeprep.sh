@@ -137,16 +137,6 @@ fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 
-contains() {
-    string="$1"
-    substring="$2"
-    if test "${string#*$substring}" != "$string"; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
@@ -366,9 +356,9 @@ docker_pull_image() {
             echo "$pull_out"
             break
         fi
-        # non-zero exit code: check if pull output has toomanyrequests or
-        # connection resets
-        if [ contains "$pull_out" "toomanyrequests" ] || [ contains "$pull_out" "connection reset by peer" ]; then
+        # non-zero exit code: check if pull output has toomanyrequests,
+        # connection resets, or image config error
+        if [[ ! -z "$(grep 'toomanyrequests' <<<$pull_out)" ]] || [[ ! -z "$(grep 'connection reset by peer' <<<$pull_out)" ]] || [[ ! -z "$(grep 'error pulling image configuration' <<<$pull_out)" ]]; then
             echo "WARNING: will retry: $pull_out"
         else
             echo "ERROR: $pull_out"

@@ -3,10 +3,11 @@
 ## [Unreleased]
 
 ### Added
-- Singularity HPCG recipe
+- Singularity HPCG and TensorFlow-GPU recipe
 
 ### Fixed
 - Mount `/opt/intel` into Singularity containers
+- Retry image configuration error pulls from Docker registries
 
 ## [3.0.0a2] - 2017-10-27
 ### Added

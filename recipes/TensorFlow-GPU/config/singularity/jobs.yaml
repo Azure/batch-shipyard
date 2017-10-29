@@ -1,0 +1,8 @@
+job_specifications:
+- id: tensorflowjob
+  tasks:
+  - singularity_image: docker://tensorflow/tensorflow:latest-gpu
+    resource_files:
+    - blob_source: https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py
+      file_path: convolutional.py
+    command: python -u convolutional.py

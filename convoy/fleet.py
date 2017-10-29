@@ -1322,18 +1322,26 @@ def _add_pool(
                 'is available in your PATH or cwd. Skipping data ingress if '
                 'specified.')
         else:
-            # log remote login settings
-            rls = batch.get_remote_login_settings(batch_client, config, nodes)
+            rls = None
             # ingress data to shared fs if specified
             if pool_settings.transfer_files_on_pool_creation:
-                total_vm_count = (
-                    _pool.current_dedicated_nodes +
-                    _pool.current_low_priority_nodes
-                )
+                if rls is None:
+                    rls = batch.get_remote_login_settings(
+                        batch_client, config, nodes)
                 data.ingress_data(
                     batch_client, compute_client, network_client, config,
-                    rls=rls, kind='shared', total_vm_count=total_vm_count)
-                del _pool
+                    rls=rls, kind='shared',
+                    total_vm_count=pool_current_vm_count)
+            # log remote login settings
+            if rls is None:
+                if pool_current_vm_count <= 16:
+                    batch.get_remote_login_settings(
+                        batch_client, config, nodes)
+                else:
+                    logger.info(
+                        'Not listing remote login settings due to VM count. '
+                        'If you need a list of remote login settings for all '
+                        'nodes in the pool, issue the "pool grls" command.')
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 

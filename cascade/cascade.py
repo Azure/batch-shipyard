@@ -479,7 +479,8 @@ class ContainerImageSaveThread(threading.Thread):
         :return: if error appears to be overload from registry
         """
         if ('toomanyrequests' in stdout or 'toomanyrequests' in stderr or
-                'connection reset by peer' in stderr):
+                'connection reset by peer' in stderr or
+                'error pulling image configuration' in stderr):
             return True
         return False
 

@@ -2,9 +2,13 @@
 This recipe shows how to run [TensorFlow](https://www.tensorflow.org/) on GPUs
 using N-series Azure VM instances in an Azure Batch compute pool.
 
+Execution under both Docker and Singularity are shown in this recipe.
+
 ## Configuration
-Please see refer to this [set of sample configuration files](./config) for
-this recipe.
+Please see refer to the [set of sample configuration files](./config) for
+this recipe. The directory `docker` will contain the Docker-based execution
+while the `singularity` directory will contain the Singularity-based
+execution configuration.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
@@ -18,6 +22,7 @@ VM instance size.
     * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS
 
 ### Global Configuration
+#### Docker-based
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
 Docker image. The official Google
@@ -33,13 +38,34 @@ on can be used for this recipe
 (e.g., docker://tensorflow/tensorflow:latest-gpu)
 
 ### Jobs Configuration
+#### Docker-based
 The jobs configuration should set the following properties within the `tasks`
 array to run the
 [MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
 This array should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation
-that matches the global configuration Docker image,
+* `docker_image` should be the name of the Docker image for this container
+invocation that matches the global configuration Docker image,
 e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
+* `resource_files` array should be populated if you want Azure Batch to handle
+the download of the training file from the web endpoint:
+  * `file_path` is the local file path which should be set to
+    `convolutional.py`
+  * `blob_source` is the remote URL of the file to retrieve:
+    `https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py`
+* `command` should contain the command to pass to the Docker run invocation.
+To run the MNIST convolutional example, the `command` would be:
+`python -u convolutional.py`
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
+
+#### Singularity-based
+The jobs configuration should set the following properties within the `tasks`
+array to run the
+[MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
+This array should have a task definition containing:
+* `singularity_image` should be the name of the Singularity image for this
+container invocation that matches the global configuration image,
+e.g., `docker://tensorflow/tensorflow:latest-gpu`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:
   * `file_path` is the local file path which should be set to
