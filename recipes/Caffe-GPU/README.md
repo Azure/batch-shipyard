@@ -29,7 +29,7 @@ example.
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/caffe:gpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/caffe:gpu` Docker image and to run the MNIST convolutional

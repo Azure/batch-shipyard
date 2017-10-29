@@ -24,6 +24,14 @@ Docker image. The official Google
 [TensorFlow GPU Docker images](https://www.tensorflow.org/install/install_linux#gpu_support)
 can be used for this recipe (e.g., gcr.io/tensorflow/tensorflow:latest-gpu)
 
+#### Singularity-based
+The global configuration should set the following properties:
+* `singularity_images` array must have a reference to a valid TensorFlow
+GPU-enabled Docker image. The Docker Hub Google
+[TensorFlow GPU Docker images](https://hub.docker.com/r/tensorflow/tensorflow/)
+on can be used for this recipe
+(e.g., docker://tensorflow/tensorflow:latest-gpu)
+
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array to run the

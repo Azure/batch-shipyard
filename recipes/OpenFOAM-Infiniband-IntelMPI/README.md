@@ -35,7 +35,7 @@ which are published on [Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation.
+* `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `command` should contain the `mpirun` command. If using the sample
 `run_sample.sh` script then the command should be simply:

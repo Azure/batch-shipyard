@@ -29,7 +29,7 @@ can be used for this recipe. The Docker image `caffe2ai/caffe2` may be used.
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container
+* `docker_image` should be the name of the Docker image for this container
 invocation, e.g., `caffe2ai/caffe2`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:

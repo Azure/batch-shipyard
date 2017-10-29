@@ -36,7 +36,7 @@ multi-node job:
 ### SingleNode Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/mxnet:gpu`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `alfpark/mxnet:gpu` Docker image and to run the MNIST python-backend
@@ -56,7 +56,7 @@ wrapper.
 ### MultiNode Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation.
+* `docker_image` should be the name of the Docker image for this container invocation.
 This can be `alfpark/mxnet:gpu`. Please note that the `docker_images` in
 the Global Configuration should match this image name.
 * `command` should contain the command to pass to the Docker run invocation.

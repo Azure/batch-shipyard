@@ -27,7 +27,7 @@ the images without the `refdata` suffix on the image tag.
 ### Non-MPI Jobs Configuration (SingleNode)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container
+* `docker_image` should be the name of the Docker image for this container
 invocation, e.g., `microsoft/cntk:2.1-cpu-python3.5`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `microsoft/cntk:2.1-cpu-python3.5` Docker image and to run
@@ -37,7 +37,7 @@ the MNIST convolutional example on a single CPU, the `command` would be:
 ### MPI Jobs Configuration (MultiNode)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation.
+* `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this should be `alfpark/cntk:2.1-cpu-py35-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.

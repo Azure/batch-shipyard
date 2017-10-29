@@ -31,7 +31,7 @@ the images without the `refdata` suffix on the image tag. For this example,
 ### MPI Jobs Configuration (MultiNode)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation.
+* `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this should be
 `alfpark/cntk:2.1-gpu-1bitsgd-py36-cuda8-cudnn6-intelmpi-refdata`.
 Please note that the `docker_images` in the Global Configuration should match

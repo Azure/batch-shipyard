@@ -25,7 +25,7 @@ The jobs configuration should set the following properties within the `tasks`
 array to run the
 [MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
 This array should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `gcr.io/tensorflow/tensorflow`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:

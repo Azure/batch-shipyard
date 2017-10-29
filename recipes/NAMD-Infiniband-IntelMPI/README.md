@@ -29,7 +29,7 @@ can be `alfpark/namd:2.11-icc-mkl-intelmpi` which is published on
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-icc-mkl-intelmpi`
 * `command` should contain the `mpirun` command. If using the sample
 `run_namd.sh` script then `"/sw/run_namd.sh <benchmark> <steps> <ppn>"`

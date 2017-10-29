@@ -28,7 +28,7 @@ The jobs configuration should set the following properties within the `tasks`
 array to run the
 [MNIST MLP example](https://github.com/pfnet/chainer/tree/master/examples/mnist).
 This array should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `chainer/chainer`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:

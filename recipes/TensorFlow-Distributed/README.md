@@ -40,7 +40,7 @@ and extending the image to work with Batch Shipyard.
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/tensorflow:1.2.1-gpu` or `alfpark/tensorflow:1.2.1-cpu`
 * `command` should contain the command to pass to the Docker run invocation.
 To run the example MNIST replica example, the `command` would look

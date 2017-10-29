@@ -29,7 +29,7 @@ can be `alfpark/namd:2.11-cuda` which is published on
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation,
+* `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-cuda`
 * `command` should contain the `mpirun` command. If using the sample NAMD-GPU
 image provided, `"/sw/run_namd.sh <benchmark> <steps> <ppn>"` can be used

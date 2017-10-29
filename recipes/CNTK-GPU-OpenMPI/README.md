@@ -38,7 +38,7 @@ the images without the `refdata` suffix on the image tag.
 ### Non-MPI Jobs Configuration (SingleNode+SingleGPU)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container
+* `docker_image` should be the name of the Docker image for this container
 invocation, e.g., `microsoft/cntk:2.1-gpu-python3.5-cuda8.0-cudnn6.0`
 * `command` should contain the command to pass to the Docker run invocation.
 For the `microsoft/cntk:2.1-gpu-python3.5-cuda8.0-cudnn6.0` Docker image, and
@@ -51,7 +51,7 @@ wrapper.
 ### MPI Jobs Configuration (SingleNode+MultiGPU, MultiNode+SingleGPU, MultiNode+MultiGPU)
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `image` should be the name of the Docker image for this container invocation.
+* `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this can be
 `alfpark/cntk:2.1-gpu-1bitsgd-py35-cuda8-cudnn6-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
