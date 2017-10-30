@@ -7,7 +7,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.09.0~ce-0~ubuntu",
+    "docker_version": "17.09.0.ce-1.el7.centos",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [
@@ -23,9 +23,9 @@
           "managed_image_resource_group_name": "{{user `resource_group`}}",
 
           "os_type": "Linux",
-          "image_publisher": "Canonical",
-          "image_offer": "UbuntuServer",
-          "image_sku": "16.04-LTS",
+          "image_publisher": "OpenLogic",
+          "image_offer": "CentOS",
+          "image_sku": "7.3",
 
           "location": "{{user `location`}}",
           "vm_size": "STANDARD_D2_V2"

@@ -302,7 +302,10 @@ def _block_for_nodes_ready(
                         (err.code == 'AccountLowPriorityCoreQuotaReached' and
                          pool.target_dedicated_nodes == 0) or
                         (err.code == 'AllocationTimedout' and
-                         pool.target_dedicated_nodes > 0)):
+                         pool.target_dedicated_nodes > 0) or
+                        (err.code == 'AllocationTimedout' and
+                         pool.allocation_state ==
+                         batchmodels.AllocationState.steady)):
                     fatal_resize_error = True
             if fatal_resize_error:
                 pool_stats(batch_client, config, pool_id=pool_id)
@@ -383,7 +386,7 @@ def _block_for_nodes_ready(
                     'Unusable nodes detected, deleting unusable nodes')
                 del_node(
                     batch_client, config, False, False, True, None,
-                    confirm=False)
+                    suppress_confirm=True)
                 unusable_delete = True
             else:
                 raise RuntimeError(
@@ -407,7 +410,8 @@ def _block_for_nodes_ready(
             else:
                 return nodes
         # issue resize if unusable deletion has occurred
-        if unusable_delete and len(nodes) < total_nodes:
+        if (unusable_delete and len(nodes) < total_nodes and
+                pool.allocation_state != batchmodels.AllocationState.resizing):
             resize_pool(batch_client, config, wait=False)
             unusable_delete = False
         now = time.time()
@@ -1211,7 +1215,7 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
 
 def del_node(
         batch_client, config, all_start_task_failed, all_starting,
-        all_unusable, node_id, confirm=True):
+        all_unusable, node_id, suppress_confirm=False):
     # type: (batch.BatchServiceClient, dict, bool, bool, bool, str,
     #        bool) -> None
     """Delete a node in a pool
@@ -1222,7 +1226,7 @@ def del_node(
     :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
     :param str node_id: node id to delete
-    :param bool confirm: confirm action
+    :param bool suppress_confirm: suppress confirm ask
     """
     node_ids = []
     pool_id = settings.pool_id(config)
@@ -1242,14 +1246,14 @@ def del_node(
                 ),
             ))
         for node in nodes:
-            if confirm and util.confirm_action(
+            if suppress_confirm or util.confirm_action(
                     config, 'delete node {} from {} pool'.format(
                         node.id, pool_id)):
                 node_ids.append(node.id)
     else:
         if util.is_none_or_empty(node_id):
             raise ValueError('node id is invalid')
-        if confirm and util.confirm_action(
+        if suppress_confirm or util.confirm_action(
                 config, 'delete node {} from {} pool'.format(
                     node_id, pool_id)):
             node_ids.append(node_id)

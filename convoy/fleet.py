@@ -977,8 +977,9 @@ def _construct_pool_object(
             ),
             node_agent_sku_id=pool_settings.vm_configuration.node_agent,
         )
-        logger.debug('deploying custom image: {}'.format(
-            vmconfig.image_reference.virtual_machine_image_id))
+        logger.debug('deploying custom image: {} node agent: {}'.format(
+            vmconfig.image_reference.virtual_machine_image_id,
+            vmconfig.node_agent_sku_id))
         if native:
             vmconfig.container_configuration = \
                 batchmodels.ContainerConfiguration(

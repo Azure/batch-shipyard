@@ -566,7 +566,7 @@ def temp_disk_mountpoint(config, offer=None):
             if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
                 offer = 'ubuntu'
             else:
-                offer = None
+                offer = '!ubuntu'
     else:
         offer = offer.lower()
     if offer.startswith('ubuntu'):

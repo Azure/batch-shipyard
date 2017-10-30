@@ -2,6 +2,7 @@
   "variables": {
     "image_name": "",
     "resource_group": "",
+    "location": "",
     "subscription_id": "",
     "directory_id": "",
     "application_id": "",
@@ -27,7 +28,7 @@
           "image_offer": "UbuntuServer",
           "image_sku": "16.04-LTS",
 
-          "location": "South Central US",
+          "location": "{{user `location`}}",
           "vm_size": "STANDARD_NC6"
       }
   ],
