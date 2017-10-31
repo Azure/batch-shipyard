@@ -2708,7 +2708,7 @@ def list_tasks(batch_client, config, all=False, jobid=None):
                         if task.execution_info is not None else 'n/a'),
                 ])
                 if fi is not None:
-                    log[-1].append(fi)
+                    log.append(fi)
                 if task.state != batchmodels.TaskState.completed:
                     all_complete = False
                 i += 1
