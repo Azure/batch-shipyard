@@ -266,10 +266,6 @@ fi
 
 # set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
-cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
-
-# get ip address of eth0
-ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
 # decrypt encrypted creds
 if [ ! -z $encrypted ]; then

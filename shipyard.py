@@ -1252,8 +1252,33 @@ def pool_rebootnode(ctx, all_start_task_failed, nodeid):
 def pool_udi(ctx, image, digest, ssh):
     """Update Docker images in a pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_udi(
-        ctx.batch_client, ctx.config, image, digest, ssh)
+    logger.warning(
+        'pool udi is deprecated, please use pool updateimages instead')
+    convoy.fleet.action_pool_updateimages(
+        ctx.batch_client, ctx.config, image, digest, None, ssh)
+
+
+@pool.command('updateimages')
+@click.option(
+    '--docker-image', help='Docker image[:tag] to update')
+@click.option(
+    '--docker-image-digest', help='Digest to update Docker image to')
+@click.option(
+    '--singularity-image', help='Singularity image[:tag] to update')
+@click.option(
+    '--ssh', help='Update over SSH instead of using a Batch job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_updateimages(
+        ctx, docker_image, docker_image_digest, singularity_image, ssh):
+    """Update container images in a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_updateimages(
+        ctx.batch_client, ctx.config, docker_image, docker_image_digest,
+        singularity_image, ssh)
 
 
 @pool.command('listimages')

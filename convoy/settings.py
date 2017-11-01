@@ -400,6 +400,26 @@ def get_host_mounts_path():
     return _HOST_MOUNTS_DIR
 
 
+def get_singularity_tmpdir(config):
+    # type: (dict) -> str
+    """Get Singularity tmpdir var
+    :param dict config: configuration dict
+    :rtype: str
+    :return: singularity tmpdir
+    """
+    return '{}/singularity/tmp'.format(temp_disk_mountpoint(config))
+
+
+def get_singularity_cachedir(config):
+    # type: (dict) -> str
+    """Get Singularity cachedir var
+    :param dict config: configuration dict
+    :rtype: str
+    :return: singularity cachedir
+    """
+    return '{}/singularity/cache'.format(temp_disk_mountpoint(config))
+
+
 def can_tune_tcp(vm_size):
     # type: (str) -> bool
     """Check if TCP tuning on compute node should be performed
@@ -509,6 +529,22 @@ def is_native_docker_pool(config, vm_config=None):
     return vm_config.native
 
 
+def is_windows_pool(config, vm_config=None):
+    # type: (dict, any) -> bool
+    """Check if pool is Windows
+    :param dict config: configuration dict
+    :param any vm_config: vm configuration
+    :rtype: bool
+    :return: pool is Windows
+    """
+    if vm_config is None:
+        vm_config = _populate_pool_vm_configuration(config)
+    if is_platform_image(config, vm_config=vm_config):
+        return vm_config.offer == 'windowsserver'
+    else:
+        return vm_config.node_agent.startswith('batch.node.windows')
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable
@@ -565,12 +601,16 @@ def temp_disk_mountpoint(config, offer=None):
         else:
             if vmconfig.node_agent.lower().startswith('batch.node.ubuntu'):
                 offer = 'ubuntu'
+            elif vmconfig.node_agent.lower().startswith('batch.node.windows'):
+                offer = 'windowsserver'
             else:
                 offer = '!ubuntu'
     else:
         offer = offer.lower()
     if offer.startswith('ubuntu'):
         return '/mnt'
+    elif offer.startswith('windows'):
+        return 'D:\\batch'
     else:
         return '/mnt/resource'
 
@@ -651,15 +691,31 @@ def _populate_pool_vm_configuration(config):
     """
     conf = pool_vm_configuration(config, 'platform_image')
     if 'publisher' in conf:
-        vm_config = PoolVmPlatformImageSettings(
-            publisher=conf['publisher'].lower(),
-            offer=conf['offer'].lower(),
-            sku=str(conf['sku']).lower(),
-            version=_kv_read_checked(conf, 'version', default='latest'),
-            native=False,
-        )
+        publisher = conf['publisher'].lower()
+        offer = conf['offer'].lower()
+        sku = str(conf['sku']).lower()
+        # auto convert windows native if detected
+        if (publisher == 'microsoftwindowsserver' and
+                offer == 'windowsserver' and
+                sku == '2016-datacenter-with-containers'):
+            vm_config = PoolVmPlatformImageSettings(
+                publisher=publisher,
+                offer=offer,
+                sku=sku,
+                version=_kv_read_checked(conf, 'version', default='latest'),
+                native=True,
+            )
+        else:
+            vm_config = PoolVmPlatformImageSettings(
+                publisher=publisher,
+                offer=offer,
+                sku=sku,
+                version=_kv_read_checked(conf, 'version', default='latest'),
+                native=False,
+            )
+        # TODO re-enable this when platform support is available
         # auto convert vm config to native if specified
-        if _kv_read(conf, 'native', default=False):
+        if False:  # _kv_read(conf, 'native', default=False):
             if (vm_config.publisher == 'canonical' and
                     vm_config.offer == 'ubuntuserver' and
                     vm_config.sku == '16.04-lts'):
@@ -693,10 +749,15 @@ def _populate_pool_vm_configuration(config):
         return vm_config
     else:
         conf = pool_vm_configuration(config, 'custom_image')
+        node_agent = conf['node_agent'].lower()
+        if node_agent == 'batch.node.windows amd64':
+            native = True
+        else:
+            native = _kv_read(conf, 'native', default=False)
         return PoolVmCustomImageSettings(
             arm_image_id=_kv_read_checked(conf, 'arm_image_id'),
-            node_agent=conf['node_agent'].lower(),
-            native=_kv_read(conf, 'native', default=False),
+            node_agent=node_agent,
+            native=native,
         )
 
 

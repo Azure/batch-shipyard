@@ -131,6 +131,13 @@ _NODEPREP_NATIVEDOCKER_FILE = (
     'shipyard_nodeprep_nativedocker.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_nativedocker.sh')
 )
+_NODEPREP_WINDOWS_FILE = (
+    'shipyard_nodeprep_nativedocker.ps1',
+    pathlib.Path(
+        _ROOT_PATH,
+        'scripts/windows/shipyard_nodeprep_nativedocker.ps1'
+    )
+)
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
@@ -152,9 +159,17 @@ _REGISTRY_LOGIN_FILE = (
     'registry_login.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/registry_login.sh')
 )
+_REGISTRY_LOGIN_WINDOWS_FILE = (
+    'registry_login.ps1',
+    pathlib.Path(_ROOT_PATH, 'scripts/windows/registry_login.ps1')
+)
 _BLOBXFER_FILE = (
     'shipyard_blobxfer.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_blobxfer.sh')
+)
+_BLOBXFER_WINDOWS_FILE = (
+    'shipyard_blobxfer.ps1',
+    pathlib.Path(_ROOT_PATH, 'scripts/windows/shipyard_blobxfer.ps1')
 )
 _REMOTEFSPREP_FILE = (
     'shipyard_remotefs_bootstrap.sh',
@@ -222,8 +237,8 @@ def check_for_invalid_config(config):
     else:
         raise ValueError(
             'Invalid image_uris specified for custom_image. Please update '
-            'your pool configuration file. Please see the pool configuration '
-            'doc for more information.')
+            'your pool configuration file to use arm_image_id instead. '
+            'Please see the custom image guide for more information.')
     # check for deprecated properties, migrate to invalid in a future release
     try:
         if isinstance(config['pool_specification']['vm_count'], int):
@@ -849,6 +864,8 @@ def _construct_pool_object(
     pool_settings = settings.pool_settings(config)
     native = settings.is_native_docker_pool(
         config, vm_config=pool_settings.vm_configuration)
+    is_windows = settings.is_windows_pool(
+        config, vm_config=pool_settings.vm_configuration)
     # get autoscale settings
     if settings.is_pool_autoscale_enabled(config, pas=pool_settings.autoscale):
         asenable = True
@@ -928,8 +945,11 @@ def _construct_pool_object(
         dr.peer_to_peer.direct_download_seed_bias,
         dr.peer_to_peer.compression)
     # create resource files list
-    _rflist = [_REGISTRY_LOGIN_FILE, _BLOBXFER_FILE]
-    if not native:
+    if is_windows:
+        _rflist = [_REGISTRY_LOGIN_WINDOWS_FILE, _BLOBXFER_WINDOWS_FILE]
+    else:
+        _rflist = [_REGISTRY_LOGIN_FILE, _BLOBXFER_FILE]
+    if not native and not is_windows:
         _rflist.append(_IMAGE_BLOCK_FILE)
         if not bs.use_shipyard_docker_image:
             _rflist.append(_CASCADE_FILE)
@@ -988,7 +1008,7 @@ def _construct_pool_object(
                     container_registries=docker_registries,
                 )
         start_task = [
-            '{npf} {a}{b}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
+            '{npf}{a}{b}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
                 npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1006,7 +1026,6 @@ def _construct_pool_object(
             )
         ]
     elif native:
-        _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
             batch_client, pool_settings)
         vmconfig = batchmodels.VirtualMachineConfiguration(
@@ -1018,20 +1037,33 @@ def _construct_pool_object(
                 container_registries=docker_registries,
             ),
         )
-        start_task = [
-            '{npf} {a}{e}{f}{m}{n}{v}{x}'.format(
-                npf=_NODEPREP_NATIVEDOCKER_FILE[0],
-                a=' -a' if azurefile_vd else '',
-                e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                f=' -f' if gluster_on_compute else '',
-                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                    sc_args) else '',
-                n=' -n' if settings.can_tune_tcp(
-                    pool_settings.vm_size) else '',
-                v=' -v {}'.format(__version__),
-                x=' -x {}'.format(data._BLOBXFER_VERSION),
-            )
-        ]
+        if is_windows:
+            _rflist.append(_NODEPREP_WINDOWS_FILE)
+            start_task = [
+                ('powershell -ExecutionPolicy Unrestricted -command '
+                 '{npf}{a}{e}{v}{x}').format(
+                     npf=_NODEPREP_WINDOWS_FILE[0],
+                     a=' -a' if azurefile_vd else '',
+                     e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                     v=' -v {}'.format(__version__),
+                     x=' -x {}'.format(data._BLOBXFER_VERSION))
+            ]
+        else:
+            _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
+            start_task = [
+                '{npf}{a}{e}{f}{m}{n}{v}{x}'.format(
+                    npf=_NODEPREP_NATIVEDOCKER_FILE[0],
+                    a=' -a' if azurefile_vd else '',
+                    e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                    f=' -f' if gluster_on_compute else '',
+                    m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                        sc_args) else '',
+                    n=' -n' if settings.can_tune_tcp(
+                        pool_settings.vm_size) else '',
+                    v=' -v {}'.format(__version__),
+                    x=' -x {}'.format(data._BLOBXFER_VERSION),
+                )
+            ]
     else:
         _rflist.append(_NODEPREP_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
@@ -1042,7 +1074,7 @@ def _construct_pool_object(
         )
         # create start task commandline
         start_task = [
-            '{npf} {a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
+            '{npf}{a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1075,7 +1107,8 @@ def _construct_pool_object(
             pass
     # digest any input data
     addlcmds = data.process_input_data(
-        config, _BLOBXFER_FILE, settings.pool_specification(config))
+        config, _BLOBXFER_WINDOWS_FILE if is_windows else _BLOBXFER_FILE,
+        settings.pool_specification(config))
     if addlcmds is not None:
         start_task.append(addlcmds)
     del addlcmds
@@ -1099,7 +1132,7 @@ def _construct_pool_object(
         inter_node_communication_enabled,
         start_task=batchmodels.StartTask(
             command_line=util.wrap_commands_in_shell(
-                start_task, wait=False),
+                start_task, windows=is_windows, wait=False),
             user_identity=batch._RUN_ELEVATED,
             wait_for_success=True,
             environment_settings=[
@@ -1119,12 +1152,23 @@ def _construct_pool_object(
         task_scheduling_policy=task_scheduling_policy,
     )
     if encrypt:
-        pool.certificate_references = [
-            batchmodels.CertificateReference(
-                pfx.sha1, 'sha1',
-                visibility=[batchmodels.CertificateVisibility.start_task]
-            )
-        ]
+        if is_windows:
+            pool.certificate_references = [
+                batchmodels.CertificateReference(
+                    pfx.sha1, 'sha1',
+                    visibility=[
+                        batchmodels.CertificateVisibility.start_task,
+                        batchmodels.CertificateVisibility.task,
+                    ]
+                )
+            ]
+        else:
+            pool.certificate_references = [
+                batchmodels.CertificateReference(
+                    pfx.sha1, 'sha1',
+                    visibility=[batchmodels.CertificateVisibility.start_task]
+                )
+            ]
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
@@ -1192,19 +1236,19 @@ def _construct_pool_object(
             )
         )
     # singularity env vars
-    temp_disk = settings.temp_disk_mountpoint(config)
-    pool.start_task.environment_settings.append(
-        batchmodels.EnvironmentSetting(
-            'SINGULARITY_TMPDIR',
-            '{}/singularity/tmp'.format(temp_disk)
+    if not is_windows:
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SINGULARITY_TMPDIR',
+                settings.get_singularity_tmpdir(config)
+            )
         )
-    )
-    pool.start_task.environment_settings.append(
-        batchmodels.EnvironmentSetting(
-            'SINGULARITY_CACHEDIR',
-            '{}/singularity/cache'.format(temp_disk)
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SINGULARITY_CACHEDIR',
+                settings.get_singularity_cachedir(config)
+            )
         )
-    )
     return (pool_settings, gluster_on_compute, pool)
 
 
@@ -1450,7 +1494,7 @@ def _setup_glusterfs(
             batchtask.id, job_id))
 
 
-def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
+def _update_container_images_over_ssh(batch_client, config, pool, cmd):
     # type: (batchsc.BatchServiceClient, dict, batchmodels.CloudPool,
     #        list) -> None
     """Update docker images in pool over ssh
@@ -1464,7 +1508,8 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
     # get ssh settings
     username = _pool.ssh.username
     if util.is_none_or_empty(username):
-        raise ValueError('cannot update docker images without an SSH username')
+        raise ValueError(
+            'cannot update container images without an SSH username')
     ssh_private_key = _pool.ssh.ssh_private_key
     if ssh_private_key is None:
         ssh_private_key = pathlib.Path(
@@ -1503,22 +1548,24 @@ def _update_docker_images_over_ssh(batch_client, config, pool, cmd):
         del rcs
     if failures:
         raise RuntimeError(
-            'failures detected updating docker image on pool: {}'.format(
+            'failures detected updating container image on pool: {}'.format(
                 pool.id))
     else:
-        logger.info('docker image update completed for pool: {}'.format(
+        logger.info('container image update completed for pool: {}'.format(
             pool.id))
 
 
-def _update_docker_images(
-        batch_client, config, image=None, digest=None, force_ssh=False):
-    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
-    """Update docker images in pool
+def _update_container_images(
+        batch_client, config, docker_image=None, docker_image_digest=None,
+        singularity_image=None, force_ssh=False):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, bool) -> None
+    """Update container images in pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param str image: docker image to update
-    :param str digest: digest to update to
+    :param str docker_image: docker image to update
+    :param str docker_image_digest: digest to update to
+    :param str singularity_image: singularity image to update
     :param bool force_ssh: force update over SSH
     """
     # first check that peer-to-peer is disabled for pool
@@ -1526,41 +1573,62 @@ def _update_docker_images(
     try:
         if settings.data_replication_settings(config).peer_to_peer.enabled:
             raise RuntimeError(
-                'cannot update docker images for a pool with peer-to-peer '
+                'cannot update container images for a pool with peer-to-peer '
                 'image distribution')
     except KeyError:
         pass
     # if image is not specified use images from global config
-    if util.is_none_or_empty(image):
-        images = settings.global_resources_docker_images(config)
+    singularity_images = None
+    if util.is_none_or_empty(docker_image):
+        docker_images = settings.global_resources_docker_images(config)
     else:
         # log warning if it doesn't exist in global resources
-        if image not in settings.global_resources_docker_images(config):
+        if docker_image not in settings.global_resources_docker_images(config):
             logger.warning(
                 ('docker image {} is not specified as a global resource '
-                 'for pool {}').format(image, pool_id))
-        if digest is None:
-            images = [image]
+                 'for pool {}').format(docker_image, pool_id))
+        if docker_image_digest is None:
+            docker_images = [docker_image]
         else:
-            images = ['{}@{}'.format(image, digest)]
-    if util.is_none_or_empty(images):
+            docker_images = ['{}@{}'.format(docker_image, docker_image_digest)]
+    if util.is_none_or_empty(singularity_image):
+        singularity_images = settings.global_resources_singularity_images(
+            config)
+    else:
+        # log warning if it doesn't exist in global resources
+        if (singularity_image not in
+                settings.global_resources_singularity_images(config)):
+            logger.warning(
+                ('singularity image {} is not specified as a global resource '
+                 'for pool {}').format(singularity_image, pool_id))
+        singularity_images = [singularity_image]
+    if (util.is_none_or_empty(docker_images) and
+            util.is_none_or_empty(singularity_images)):
         logger.error('no images detected or specified to update')
         return
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
-    # check pool current vms is > 0. There is no reason to run udi
+    # check pool current vms is > 0. There is no reason to run updateimages
     # if pool has no nodes in it. When the pool is resized up, the nodes
     # will always fetch either :latest if untagged or the latest :tag if
     # updated in the upstream registry
     if (pool.current_dedicated_nodes == 0 and
             pool.current_low_priority_nodes == 0):
         logger.warning(
-            ('not executing udi command as the current number of compute '
-             'nodes is zero for pool {}').format(pool_id))
+            ('not executing updateimages command as the current number of '
+             'compute nodes is zero for pool {}').format(pool_id))
         return
-    if not force_ssh and pool.current_low_priority_nodes > 0:
-        logger.debug('forcing update via SSH due to low priority nodes')
-        force_ssh = True
+    # force ssh on some paths
+    if not force_ssh:
+        if pool.current_low_priority_nodes > 0:
+            logger.debug('forcing update via SSH due to low priority nodes')
+            force_ssh = True
+        if (pool.current_dedicated_nodes > 1 and
+                not pool.enable_inter_node_communication):
+            logger.debug(
+                'forcing update via SSH due to non-internode communicaton '
+                'enabled pool')
+            force_ssh = True
     # check pool metadata version
     if util.is_none_or_empty(pool.metadata):
         logger.warning('pool version metadata not present')
@@ -1572,30 +1640,67 @@ def _update_docker_images(
                     'pool version metadata mismatch: pool={} cli={}'.format(
                         md.value, __version__))
                 break
+    # perform windows compat checks
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        if force_ssh:
+            raise RuntimeError('cannot update images via SSH on windows')
+        if util.is_not_empty(singularity_images):
+            raise RuntimeError(
+                'invalid configuration: windows pool with singularity images')
     # create coordination command line
     # 1. log in again in case of cred expiry
     # 2. pull images with respect to registry
     # 3. tag images that are in a private registry
     # 4. prune docker images with no tag
     taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
-    coordcmd.extend(['docker pull {}'.format(x) for x in images])
-    coordcmd.append(
-        'docker images --filter dangling=true -q --no-trunc | '
-        'xargs --no-run-if-empty docker rmi')
+    if util.is_not_empty(docker_images):
+        coordcmd.extend(['docker pull {}'.format(x) for x in docker_images])
+        coordcmd.append(
+            'docker images --filter dangling=true -q --no-trunc | '
+            'xargs --no-run-if-empty docker rmi')
+    if util.is_not_empty(singularity_images):
+        coordcmd.extend([
+            'export SINGULARITY_TMPDIR={}'.format(
+                settings.get_singularity_tmpdir(config)),
+            'export SINGULARITY_CACHEDIR={}'.format(
+                settings.get_singularity_cachedir(config)),
+        ])
+        coordcmd.extend(
+            ['singularity pull -F {}'.format(x) for x in singularity_images]
+        )
+        coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
+            settings.get_singularity_cachedir(config)))
     if force_ssh:
-        _update_docker_images_over_ssh(batch_client, config, pool, coordcmd)
+        _update_container_images_over_ssh(batch_client, config, pool, coordcmd)
         return
-    coordcmd.append('touch .udi_success')
-    coordcmd = util.wrap_commands_in_shell(coordcmd)
+    if is_windows:
+        coordcmd.append('copy /y nul .update_images_success')
+    else:
+        coordcmd.append('touch .update_images_success')
+        # update taskenv for Singularity
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                'SINGULARITY_TMPDIR',
+                settings.get_singularity_tmpdir(config)
+            )
+        )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                'SINGULARITY_CACHEDIR',
+                settings.get_singularity_cachedir(config)
+            )
+        )
+    coordcmd = util.wrap_commands_in_shell(coordcmd, windows=is_windows)
     # create job for update
-    job_id = 'shipyard-udi-{}'.format(uuid.uuid4())
+    job_id = 'shipyard-updateimages-{}'.format(uuid.uuid4())
     job = batchmodels.JobAddParameter(
         id=job_id,
         pool_info=batchmodels.PoolInformation(pool_id=pool_id),
     )
     # create task
     batchtask = batchmodels.TaskAddParameter(
-        id='update-docker-images',
+        id='update-container-images',
         command_line=coordcmd,
         environment_settings=taskenv,
         user_identity=batch._RUN_ELEVATED,
@@ -1607,14 +1712,22 @@ def _update_docker_images(
             coordination_command_line=coordcmd,
         )
         # create application command line
-        appcmd = util.wrap_commands_in_shell([
-            '[[ -f $AZ_BATCH_TASK_WORKING_DIR/.udi_success ]] || exit 1'])
+        if is_windows:
+            appcmd = util.wrap_commands_in_shell([
+                'if not exist %AZ_BATCH_TASK_WORKING_DIR%\\'
+                '.update_images_success exit 1'
+            ], windows=is_windows)
+        else:
+            appcmd = util.wrap_commands_in_shell([
+                '[[ -f $AZ_BATCH_TASK_WORKING_DIR/.update_images_success ]] '
+                '|| exit 1'
+            ], windows=is_windows)
         batchtask.command_line = appcmd
     # add job and task
     batch_client.job.add(job)
     batch_client.task.add(job_id=job_id, task=batchtask)
     logger.debug(
-        ('waiting for update docker images task {} in job {} '
+        ('waiting for update container images task {} in job {} '
          'to complete').format(batchtask.id, job_id))
     # wait for task to complete
     while True:
@@ -1625,16 +1738,23 @@ def _update_docker_images(
     # ensure all nodes have success file if multi-instance
     success = True
     if pool.current_dedicated_nodes > 1:
+        if is_windows:
+            sep = '\\'
+        else:
+            sep = '/'
+        uis_file = sep.join(
+            ('workitems', job_id, 'job-1', batchtask.id, 'wd',
+             '.update_images_success')
+        )
         nodes = batch_client.compute_node.list(pool_id)
         for node in nodes:
             try:
                 batch_client.file.get_properties_from_compute_node(
-                    pool_id, node.id,
-                    ('workitems/{}/job-1/update-docker-images/wd/'
-                     '.udi_success').format(job_id))
+                    pool_id, node.id, uis_file)
             except batchmodels.BatchErrorException:
-                logger.error('udi success file absent on node {}'.format(
-                    node.id))
+                logger.error(
+                    'update images success file absent on node {}'.format(
+                        node.id))
                 success = False
                 break
     else:
@@ -1644,13 +1764,13 @@ def _update_docker_images(
             # stream stderr to console
             batch.stream_file_and_wait_for_task(
                 batch_client, config,
-                '{},update-docker-images,stderr.txt'.format(job_id))
+                '{},{},stderr.txt'.format(batchtask.id, job_id))
     # delete job
     batch_client.job.delete(job_id)
     if not success:
-        raise RuntimeError('update docker images job failed')
+        raise RuntimeError('update container images job failed')
     logger.info(
-        'update docker images task {} in job {} completed'.format(
+        'update container images task {} in job {} completed'.format(
             batchtask.id, job_id))
 
 
@@ -1668,6 +1788,11 @@ def _list_docker_images(batch_client, config):
             pool.current_low_priority_nodes == 0):
         logger.warning('pool {} has no compute nodes'.format(pool.id))
         return
+    is_windows = settings.is_windows_pool(config)
+    # TODO temporarily disable listimages with windows pools
+    if is_windows:
+        raise RuntimeError(
+            'listing images is currently not supported for windows pools')
     # get ssh settings
     username = _pool.ssh.username
     if util.is_none_or_empty(username):
@@ -1770,6 +1895,7 @@ def _adjust_settings_for_pool_creation(config):
         raise ValueError(
             'cannot specify both a platform_image and a custom_image in the '
             'pool specification')
+    is_windows = settings.is_windows_pool(config)
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
@@ -1800,6 +1926,10 @@ def _adjust_settings_for_pool_creation(config):
         elif offer == 'opensuse-leap':
             if sku >= '42':
                 allowed = True
+    elif publisher == 'microsoftwindowsserver':
+        if offer == 'windowsserver':
+            if sku == '2016-datacenter-with-containers':
+                allowed = True
     # check if allowed for gpu (if gpu vm size)
     if allowed:
         allowed = settings.gpu_configuration_check(
@@ -1809,8 +1939,9 @@ def _adjust_settings_for_pool_creation(config):
             ('unsupported Docker Host VM Config, publisher={} offer={} '
              'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
     # ensure HPC offers are matched with RDMA sizes
-    if ((offer == 'centos-hpc' or offer == 'sles-hpc') and
-            not settings.is_rdma_pool(pool.vm_size)):
+    if (not is_windows and (
+            (offer == 'centos-hpc' or offer == 'sles-hpc') and
+            not settings.is_rdma_pool(pool.vm_size))):
         raise ValueError(
             ('cannot allocate an HPC VM config of publisher={} offer={} '
              'sku={} with a non-RDMA vm_size={}').format(
@@ -1879,6 +2010,9 @@ def _adjust_settings_for_pool_creation(config):
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
             if settings.is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
+                if is_windows:
+                    raise ValueError(
+                        'glusterfs on compute is not supported on windows')
                 if settings.is_pool_autoscale_enabled(
                         config, pas=pool.autoscale):
                     raise ValueError(
@@ -1911,15 +2045,32 @@ def _adjust_settings_for_pool_creation(config):
                             'currently supported')
                 except KeyError:
                     pass
+            elif settings.is_shared_data_volume_storage_cluster(sdv, sdvkey):
+                if is_windows:
+                    raise ValueError(
+                        'storage cluster mounting is not supported on windows')
         if num_gluster > 1:
             raise ValueError(
                 'cannot create more than one GlusterFS on compute volume '
                 'per pool')
     except KeyError:
         pass
-    # check pool count of 0 and ssh
-    if pool_total_vm_count == 0 and util.is_not_empty(pool.ssh.username):
-        logger.warning('cannot add SSH user with zero target nodes')
+    # check data ingress on pool creation on windows
+    if is_windows and pool.transfer_files_on_pool_creation:
+        raise ValueError(
+            'cannot transfer files on pool creation to windows compute nodes')
+    # check singularity images are not present for windows
+    if (is_windows and util.is_not_empty(
+            settings.global_resources_singularity_images(config))):
+        raise ValueError('cannot deploy Singularity images on windows pools')
+    # check pool count of 0 and remote login
+    if pool_total_vm_count == 0:
+        if is_windows:
+            # TODO RDP check
+            pass
+        else:
+            if util.is_not_empty(pool.ssh.username):
+                logger.warning('cannot add SSH user with zero target nodes')
     # ensure unusable recovery is not enabled for custom image
     if (pool.attempt_recovery_on_unusable and
             not settings.is_platform_image(
@@ -1927,6 +2078,10 @@ def _adjust_settings_for_pool_creation(config):
         logger.warning(
             'override attempt recovery on unusable due to custom image')
         settings.set_attempt_recovery_on_unusable(config, False)
+    # TODO temporarily disable credential encryption with windows
+    if is_windows and settings.batch_shipyard_encryption_enabled(config):
+        raise ValueError(
+            'cannot enable credential encryption with windows pools')
 
 
 def _check_settings_for_auto_pool(config):
@@ -2677,21 +2832,26 @@ def action_pool_rebootnode(
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 
 
-def action_pool_udi(batch_client, config, image, digest, ssh):
-    # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
-    """Action: Pool Udi
+def action_pool_updateimages(
+        batch_client, config, docker_image, docker_image_digest,
+        singularity_image, ssh):
+    # type: (batchsc.BatchServiceClient, dict, str, str, str, bool) -> None
+    """Action: Pool Updateimages
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
-    :param str image: image to update
-    :param str digest: digest to update to
+    :param str docker_image: docker image to update
+    :param str docker_image_digest: docker image digest to update to
+    :param str singularity_image: singularity image to update
     :param bool ssh: use direct SSH update mode
     """
     _check_batch_client(batch_client)
-    if digest is not None and image is None:
+    if docker_image_digest is not None and docker_image is None:
         raise ValueError(
             'cannot specify a digest to update to without the image')
-    _update_docker_images(batch_client, config, image, digest, force_ssh=ssh)
+    _update_container_images(
+        batch_client, config, docker_image, docker_image_digest,
+        singularity_image, force_ssh=ssh)
 
 
 def action_pool_listimages(batch_client, config):
@@ -2824,9 +2984,12 @@ def action_jobs_add(
     else:
         autopool = None
     # add jobs
+    is_windows = settings.is_windows_pool(config)
     batch.add_jobs(
         batch_client, blob_client, keyvault_client, config, autopool,
-        _IMAGE_BLOCK_FILE, _BLOBXFER_FILE, recreate, tail)
+        _IMAGE_BLOCK_FILE,
+        _BLOBXFER_WINDOWS_FILE if is_windows else _BLOBXFER_FILE,
+        recreate, tail)
 
 
 def action_jobs_list(batch_client, config):

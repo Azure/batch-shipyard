@@ -249,11 +249,12 @@ def process_input_data(config, bxfile, spec, on_task=False):
         return None
 
 
-def _process_storage_output_data(config, native, output_data):
-    # type: (dict, bool, dict) -> str
+def _process_storage_output_data(config, native, is_windows, output_data):
+    # type: (dict, bool, bool, dict) -> str
     """Process output data to egress to Azure storage
     :param dict config: configuration dict
     :param bool native: is native container pool
+    :param bool is_windows: is windows pool
     :param dict output_data: config spec with output_data
     :rtype: list
     :return: OutputFiles or args to pass to blobxfer script
@@ -302,10 +303,14 @@ def _process_storage_output_data(config, native, output_data):
             if util.is_not_empty(excludes):
                 raise ValueError(
                     'native container pool does not support excludes')
+            if is_windows:
+                sep = '\\'
+            else:
+                sep = '/'
             if util.is_none_or_empty(includes):
-                include = '**/*'
-            if not local_path.endswith('/'):
-                fp = '/'.join((local_path, include))
+                include = '**{}*'.format(sep)
+            if not local_path.endswith(sep):
+                fp = sep.join((local_path, include))
             else:
                 fp = ''.join((local_path, include))
             of = batchmodels.OutputFile(
@@ -354,19 +359,23 @@ def process_output_data(config, bxfile, spec):
     :return: additonal commands or list of OutputFiles
     """
     native = settings.is_native_docker_pool(config)
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        bxcmd = '%AZ_BATCH_NODE_STARTUP_DIR%\\wd\\{} {{}}'.format(bxfile[0])
+    else:
+        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}} set +f'.format(
+            bxfile[0])
     ret = []
     output_data = settings.output_data(spec)
     if util.is_not_empty(output_data):
         for key in output_data:
             if key == 'azure_storage':
                 args = _process_storage_output_data(
-                    config, native, output_data[key])
+                    config, native, is_windows, output_data[key])
                 if native:
                     ret.extend(args)
                 else:
-                    ret.append(
-                        ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
-                         'set +f').format(bxfile[0], ' '.join(args)))
+                    ret.append(bxcmd.format(' '.join(args)))
             else:
                 raise ValueError(
                     'unknown output_data method: {}'.format(key))
@@ -895,6 +904,7 @@ def ingress_data(
         logger.info('no files to ingress detected')
         return storage_threads
     pool = settings.pool_settings(config)
+    is_windows = settings.is_windows_pool(config)
     for fdict in files:
         source = settings.files_source_settings(fdict)
         dest = settings.files_destination_settings(fdict)
@@ -933,6 +943,11 @@ def ingress_data(
                     'skipping data ingress from {} to {} for pool as ingress '
                     'to shared file system not specified'.format(
                         source.path, dest.shared_data_volume))
+                continue
+            if is_windows:
+                logger.error(
+                    ('cannot data ingress from {} to pool {} with windows '
+                     'compute nodes').format(source.path, pool.id))
                 continue
             # get rfs settings
             rfs = None

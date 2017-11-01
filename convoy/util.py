@@ -264,31 +264,31 @@ def singularity_image_name_on_disk(name):
     return name
 
 
-def wrap_commands_in_shell(commands, wait=True):
-    # type: (List[str], bool) -> str
+def wrap_commands_in_shell(commands, windows=False, wait=True):
+    # type: (List[str], bool, bool) -> str
     """Wrap commands in a shell
     :param list commands: list of commands to wrap
+    :param bool windows: linux or windows commands to wrap
     :param bool wait: add wait for background processes
     :rtype: str
     :return: wrapped commands
     """
-    return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
-        '; '.join(commands), '; wait' if wait else '')
+    if windows:
+        return 'cmd.exe /c "{}"'.format(' && '.join(commands))
+    else:
+        return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
+            '; '.join(commands), '; wait' if wait else '')
 
 
 def wrap_local_commands_in_shell(commands, wait=True):
     # type: (List[str], bool) -> str
-    """Wrap local commands in a shell, i.e. commands
-    that will be executed on the client machine.
+    """Wrap commands in a shell that will be executed locally on the client
     :param list commands: list of commands to wrap
     :param bool wait: add wait for background processes
     :rtype: str
     :return: wrapped commands
     """
-    if _ON_WINDOWS:
-        return 'cmd.exe /c "{}"'.format(
-            '& '.join(commands))
-    return wrap_commands_in_shell(commands, wait)
+    return wrap_commands_in_shell(commands, windows=_ON_WINDOWS, wait=wait)
 
 
 def base64_encode_string(string):

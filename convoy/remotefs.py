@@ -24,7 +24,7 @@
 
 # compat imports
 from __future__ import (
-    absolute_import, division, print_function, unicode_literals
+    absolute_import, division, print_function
 )
 from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,

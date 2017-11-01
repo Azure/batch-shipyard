@@ -240,22 +240,29 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
+    is_windows = settings.is_windows_pool(config)
     pool_id = settings.pool_id(config)
     if nodeid is None:
         nodes = batch_client.compute_node.list(pool_id)
     else:
         nodes = [batch_client.compute_node.get(pool_id, nodeid)]
+    if is_windows:
+        sep = '\\'
+    else:
+        sep = '/'
+    stdfilter = sep.join(('startup', 'std*.txt'))
+    cascadelog = sep.join(('startup', 'wd', 'cascade.log'))
     # for any node in state start task failed, retrieve the stdout and stderr
     for node in nodes:
         if node.state == batchmodels.ComputeNodeState.start_task_failed:
             settings.set_auto_confirm(config, True)
             get_all_files_via_node(
                 batch_client, config,
-                filespec='{},{}'.format(node.id, 'startup/std*.txt'))
+                filespec='{},{}'.format(node.id, stdfilter))
             try:
                 get_all_files_via_node(
                     batch_client, config,
-                    filespec='{},{}'.format(node.id, 'startup/wd/cascade.log'))
+                    filespec='{},{}'.format(node.id, cascadelog))
             except batchmodels.BatchErrorException:
                 pass
 
@@ -1717,6 +1724,7 @@ def clean_mi_jobs(batch_client, config):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
+    is_windows = settings.is_windows_pool(config)
     for job in settings.job_specifications(config):
         job_id = settings.job_id(job)
         if not util.confirm_action(
@@ -1762,7 +1770,7 @@ def clean_mi_jobs(batch_client, config):
                             'docker stop {}'.format(name),
                             'docker rm -v {}'.format(name),
                             'exit 0',
-                        ], wait=False),
+                        ], windows=is_windows, wait=False),
                     ),
                     command_line='/bin/sh -c "exit 0"',
                     user_identity=_RUN_ELEVATED,
@@ -2860,6 +2868,11 @@ def generate_docker_login_settings(config, for_ssh=False):
     :rtype: tuple
     :return: (env vars, login cmds)
     """
+    cmd = []
+    env = []
+    is_windows = settings.is_windows_pool(config)
+    if is_windows and for_ssh:
+        return (cmd, env)
     # get registries
     docker_registries = settings.docker_registries(config)
     singularity_registries = settings.singularity_registries(config)
@@ -2887,8 +2900,6 @@ def generate_docker_login_settings(config, for_ssh=False):
         singularity_users.append(registry.user_name)
         singularity_passwords.append(registry.password)
     # populate command and env vars
-    cmd = []
-    env = []
     if len(docker_servers) > 0:
         # create either cmd or env for each
         value = ','.join(docker_servers)
@@ -3130,6 +3141,8 @@ def add_jobs(
     pool = settings.pool_settings(config)
     native = settings.is_native_docker_pool(
         config, vm_config=pool.vm_configuration)
+    is_windows = settings.is_windows_pool(
+        config, vm_config=pool.vm_configuration)
     try:
         cloud_pool = batch_client.pool.get(pool.id)
     except batchmodels.batch_error.BatchErrorException as ex:
@@ -3267,7 +3280,8 @@ def add_jobs(
         jptask = None
         if len(jpcmd) > 0:
             jptask = batchmodels.JobPreparationTask(
-                command_line=util.wrap_commands_in_shell(jpcmd),
+                command_line=util.wrap_commands_in_shell(
+                    jpcmd, windows=is_windows),
                 wait_for_success=True,
                 user_identity=_RUN_ELEVATED,
                 rerun_on_node_reboot_after_success=False,
@@ -3285,7 +3299,8 @@ def add_jobs(
             jrtask = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
                     ['docker kill {}'.format(mi_docker_container_name),
-                     'docker rm -v {}'.format(mi_docker_container_name)]),
+                     'docker rm -v {}'.format(mi_docker_container_name)],
+                    windows=is_windows),
                 user_identity=_RUN_ELEVATED,
             )
             # job prep task must exist
@@ -3398,7 +3413,7 @@ def add_jobs(
                      '/opt/batch-shipyard/recurrent_job_manager.sh{}').format(
                          __version__,
                          ' --monitor' if kill_job_on_completion else '')
-                ])
+                ], windows=is_windows)
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
                 schedule=batchmodels.Schedule(
@@ -3587,7 +3602,8 @@ def add_jobs(
             if settings.is_multi_instance_task(_task):
                 if util.is_not_empty(task.multi_instance.coordination_command):
                     cc = util.wrap_commands_in_shell(
-                        task.multi_instance.coordination_command, wait=False)
+                        task.multi_instance.coordination_command,
+                        windows=is_windows, wait=False)
                 else:
                     if is_singularity:
                         # no-op for singularity
@@ -3721,7 +3737,8 @@ def add_jobs(
             del env_vars
             # create task
             if util.is_not_empty(task_commands):
-                tc = util.wrap_commands_in_shell(task_commands)
+                tc = util.wrap_commands_in_shell(
+                    task_commands, windows=is_windows)
             else:
                 tc = ''
             batchtask = batchmodels.TaskAddParameter(

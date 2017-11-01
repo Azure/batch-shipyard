@@ -31,16 +31,18 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import datetime
-import dateutil.parser
+import io
 import json
 import logging
 try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
+import os
 # non-stdlib imports
 import adal
 import azure.common.credentials
+import dateutil.parser
 import msrest.authentication
 import msrestazure.azure_exceptions
 # local imports
@@ -147,8 +149,22 @@ class DeviceCodeAuthentication(msrest.authentication.Authentication):
             if cache_token and util.is_not_empty(self._token_cache_file):
                 logger.debug('storing token to local cache: {}'.format(
                     self._token_cache_file))
-                with open(self._token_cache_file, 'w') as fd:
-                    json.dump(self._token, fd, indent=4, sort_keys=False)
+                if util.on_python2():
+                    with io.open(
+                            self._token_cache_file,
+                            'w', encoding='utf8') as fd:
+                        fd.write(json.dumps(
+                            self._token, indent=4, sort_keys=True,
+                            ensure_ascii=False))
+                else:
+                    with open(
+                            self._token_cache_file,
+                            'w', encoding='utf8') as fd:
+                        json.dump(
+                            self._token, fd, indent=4, sort_keys=True,
+                            ensure_ascii=False)
+                if not util.on_windows():
+                    os.chmod(self._token_cache_file, 0o600)
         except adal.AdalError as err:
             if (hasattr(err, 'error_response') and
                     'error_description' in err.error_response and

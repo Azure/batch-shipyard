@@ -5,9 +5,15 @@
 ### Added
 - Singularity HPCG and TensorFlow-GPU recipe
 
+### Changed
+- **Breaking Change:** `pool updateimages` command replaces the `pool udi`
+command. `pool udi` command is now deprecated and will be removed in a
+future release.
+
 ### Fixed
 - Mount `/opt/intel` into Singularity containers
 - Retry image configuration error pulls from Docker registries
+- AAD MFA token cache on Python2
 
 ## [3.0.0a2] - 2017-10-27
 ### Added

@@ -98,6 +98,11 @@ The variable mapping is as follows:
 to the current working directory, i.e., `.`, if no other configuration file
 options are specified.
 
+#### `pool updateimages` Replaces `pool udi`
+The `pool updateimages` command will now update both Docker and Singularity
+images. `pool udi` command is deprecated and will be removed in a future
+release.
+
 ### General Configuration Changes
 #### `input_data` with `azure_storage`
 Due to the migration to `blobxfer 1.0.0`, any specification with data

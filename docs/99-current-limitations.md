@@ -38,6 +38,7 @@ may require direct SSH access.
 Rsync is not supported in Windows.
 * `pool ssh` support in Windows is only available if `ssh.exe` is found
 through `%PATH%` or is in the current working directory.
+* `pool listimages` currently only lists Docker images.
 * Credential encryption support in Windows is available only if `openssl.exe`
 is found through `%PATH%` or is in the current working directory.
 * Compute pool resize down (i.e., removing nodes from a pool) is not supported

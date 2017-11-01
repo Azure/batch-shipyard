@@ -77,7 +77,7 @@ Disadvantages of `native` mode are:
 * `input_data` of any kind at the task-level is not possible.
 * `output_data` to `azure_storage` Azure Files (i.e., file shares) is not
 possible.
-* Peer-to-peer distribution of Docker images is not possible.
+* Peer-to-peer distribution of Docker and Singularity images is not possible.
 
 #### Does Batch Shipyard support Linux custom images?
 * Yes, please see [the guide](63-batch-shipyard-custom-images.md).
