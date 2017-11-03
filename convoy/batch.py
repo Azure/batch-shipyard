@@ -569,10 +569,10 @@ def create_pool(batch_client, config, pool):
 
 
 def _add_admin_user_to_compute_node(
-        batch_client, pool, node, username, ssh_public_key_data,
+        batch_client, pool, node, username, ssh_public_key_data, rdp_password,
         expiry=None):
     # type: (batch.BatchServiceClient, dict, str, batchmodels.ComputeNode,
-    #        str, datetime.datetime) -> None
+    #        str, str, datetime.datetime) -> None
     """Adds an administrative user to the Batch Compute Node with a default
     expiry time of 7 days if not specified.
     :param batch_client: The batch client to use.
@@ -582,6 +582,7 @@ def _add_admin_user_to_compute_node(
     :type node: `azure.batch.batch_service_client.models.ComputeNode`
     :param str username: user name
     :param str ssh_public_key_data: ssh rsa public key data
+    :param str rdp_password: rdp password
     :param datetime.datetime expiry: expiry
     """
     if expiry is None:
@@ -597,7 +598,7 @@ def _add_admin_user_to_compute_node(
                 username,
                 is_admin=True,
                 expiry_time=expiry,
-                password=None,
+                password=rdp_password,
                 ssh_public_key=ssh_public_key_data,
             )
         )
@@ -609,6 +610,41 @@ def _add_admin_user_to_compute_node(
             # log as error instead of raising the exception in case
             # of low-priority removal
             logger.error(ex.message.value)
+
+
+def add_rdp_user(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNode]) -> None
+    """Add an RDP user to all nodes of a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
+    pool = settings.pool_settings(config)
+    is_windows = settings.is_windows_pool(config)
+    if not is_windows:
+        logger.debug('skipping rdp config for linux pool {}'.format(pool.id))
+        return
+    if util.is_none_or_empty(pool.rdp.username):
+        logger.info('not creating rdp user on pool {}'.format(pool.id))
+        return
+    password = pool.rdp.password
+    if util.is_none_or_empty(password):
+        password = crypto.generate_rdp_password().decode('ascii')
+        logger.info(
+            ('randomly generated password for RDP user {} on pool {} '
+             'is {}').format(
+                 pool.rdp.username, pool.id, password))
+    # get node list if not provided
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool.id)
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(
+        pool.rdp.expiry_days)
+    for node in nodes:
+        _add_admin_user_to_compute_node(
+            batch_client, pool, node, pool.rdp.username, None, password,
+            expiry=expiry)
 
 
 def add_ssh_user(batch_client, config, nodes=None):
@@ -652,7 +688,7 @@ def add_ssh_user(batch_client, config, nodes=None):
     for node in nodes:
         _add_admin_user_to_compute_node(
             batch_client, pool, node, pool.ssh.username, ssh_pub_key_data,
-            expiry=expiry)
+            None, expiry=expiry)
     # generate tunnel script if requested
     generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes)
 
@@ -667,68 +703,111 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
     :param str ssh_priv_key: path to ssh private key
     :param list nodes: list of nodes
     """
-    if pool.ssh.generate_docker_tunnel_script:
-        if util.on_windows():
-            logger.error('cannot generate tunnel script on Windows')
-            return
-        if nodes is None or len(list(nodes)) != pool.vm_count:
-            nodes = batch_client.compute_node.list(pool.id)
-        if ssh_priv_key is None:
-            ssh_priv_key = pathlib.Path(
-                pool.ssh.generated_file_export_path,
-                crypto.get_ssh_key_prefix())
-        if not ssh_priv_key.exists():
-            logger.warning(
-                ('cannot generate tunnel script with non-existant RSA '
-                 'private key: {}').format(ssh_priv_key))
-            return
-        if not crypto.check_ssh_private_key_filemode(ssh_priv_key):
-            logger.warning(
-                ('cannot generate tunnel script with private SSH key that '
-                 'is too permissive: {}').format(ssh_priv_key))
-            return
-        ssh_args = [
-            'ssh', '-o', 'StrictHostKeyChecking=no',
-            '-o', 'UserKnownHostsFile={}'.format(os.devnull),
-            '-i', str(ssh_priv_key), '-p', '$port', '-N',
-            '-L', '2375:localhost:2375', '-L', '3476:localhost:3476',
-            '{}@$ip'.format(pool.ssh.username)
-        ]
-        tunnelscript = pathlib.Path(
-            pool.ssh.generated_file_export_path, _SSH_TUNNEL_SCRIPT)
-        with tunnelscript.open('w') as fd:
-            fd.write('#!/usr/bin/env bash\n')
-            fd.write('set -e\n')
-            # populate node arrays
-            fd.write('declare -A nodes\n')
-            fd.write('declare -A ips\n')
-            fd.write('declare -A ports\n')
-            i = 0
-            for node in nodes:
-                rls = batch_client.compute_node.get_remote_login_settings(
-                    pool.id, node.id)
-                fd.write('nodes[{}]={}\n'.format(i, node.id))
-                fd.write('ips[{}]={}\n'.format(i, rls.remote_login_ip_address))
-                fd.write('ports[{}]={}\n'.format(i, rls.remote_login_port))
-                i += 1
-            fd.write(
-                'if [ -z $1 ]; then echo must specify node cardinal; exit 1; '
-                'fi\n')
-            fd.write('node=${nodes[$1]}\n')
-            fd.write('ip=${ips[$1]}\n')
-            fd.write('port=${ports[$1]}\n')
-            fd.write(
-                'echo tunneling to docker daemon on $node at '
-                '$ip:$port\n')
-            fd.write(' '.join(ssh_args))
-            fd.write(' >{} 2>&1 &\n'.format(os.devnull))
-            fd.write('pid=$!\n')
-            fd.write('echo ssh tunnel pid is $pid\n')
-            fd.write(
-                'echo execute docker commands with DOCKER_HOST=: or with '
-                'option: -H :\n')
-        os.chmod(str(tunnelscript), 0o755)
-        logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
+    if not pool.ssh.generate_docker_tunnel_script:
+        return
+    if util.on_windows():
+        logger.error('cannot generate tunnel script on Windows')
+        return
+    if settings.is_windows_pool(None, vm_config=pool.vm_configuration):
+        logger.debug(
+            'cannot generate tunnel script for windows pool {}'.format(
+                pool.id))
+        return
+    if nodes is None or len(list(nodes)) != pool.vm_count:
+        nodes = batch_client.compute_node.list(pool.id)
+    if ssh_priv_key is None:
+        ssh_priv_key = pathlib.Path(
+            pool.ssh.generated_file_export_path,
+            crypto.get_ssh_key_prefix())
+    if not ssh_priv_key.exists():
+        logger.warning(
+            ('cannot generate tunnel script with non-existant RSA '
+             'private key: {}').format(ssh_priv_key))
+        return
+    if not crypto.check_ssh_private_key_filemode(ssh_priv_key):
+        logger.warning(
+            ('cannot generate tunnel script with private SSH key that '
+             'is too permissive: {}').format(ssh_priv_key))
+        return
+    ssh_args = [
+        'ssh', '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile={}'.format(os.devnull),
+        '-i', str(ssh_priv_key), '-p', '$port', '-N',
+        '-L', '2375:localhost:2375', '-L', '3476:localhost:3476',
+        '{}@$ip'.format(pool.ssh.username)
+    ]
+    tunnelscript = pathlib.Path(
+        pool.ssh.generated_file_export_path, _SSH_TUNNEL_SCRIPT)
+    with tunnelscript.open('w') as fd:
+        fd.write('#!/usr/bin/env bash\n')
+        fd.write('set -e\n')
+        # populate node arrays
+        fd.write('declare -A nodes\n')
+        fd.write('declare -A ips\n')
+        fd.write('declare -A ports\n')
+        i = 0
+        for node in nodes:
+            rls = batch_client.compute_node.get_remote_login_settings(
+                pool.id, node.id)
+            fd.write('nodes[{}]={}\n'.format(i, node.id))
+            fd.write('ips[{}]={}\n'.format(i, rls.remote_login_ip_address))
+            fd.write('ports[{}]={}\n'.format(i, rls.remote_login_port))
+            i += 1
+        fd.write(
+            'if [ -z $1 ]; then echo must specify node cardinal; exit 1; '
+            'fi\n')
+        fd.write('node=${nodes[$1]}\n')
+        fd.write('ip=${ips[$1]}\n')
+        fd.write('port=${ports[$1]}\n')
+        fd.write(
+            'echo tunneling to docker daemon on $node at '
+            '$ip:$port\n')
+        fd.write(' '.join(ssh_args))
+        fd.write(' >{} 2>&1 &\n'.format(os.devnull))
+        fd.write('pid=$!\n')
+        fd.write('echo ssh tunnel pid is $pid\n')
+        fd.write(
+            'echo execute docker commands with DOCKER_HOST=: or with '
+            'option: -H :\n')
+    os.chmod(str(tunnelscript), 0o755)
+    logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
+
+
+def del_rdp_user(batch_client, config, nodes=None):
+    # type: (batch.BatchServiceClient, dict,
+    #        List[batchmodels.ComputeNode]) -> None
+    """Delete an RDP user on all nodes of a pool
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param list nodes: list of nodes
+    """
+    pool = settings.pool_settings(config)
+    is_windows = settings.is_windows_pool(config)
+    if not is_windows:
+        logger.debug('skipping rdp user delete for linux pool {}'.format(
+            pool.id))
+        return
+    if util.is_none_or_empty(pool.rdp.username):
+        logger.error('not deleting unspecified rdp user on pool {}'.format(
+            pool.id))
+        return
+    if not util.confirm_action(
+            config, 'delete user {} from pool {}'.format(
+                pool.rdp.username, pool.id)):
+        return
+    # get node list if not provided
+    if nodes is None:
+        nodes = batch_client.compute_node.list(pool.id)
+    for node in nodes:
+        try:
+            batch_client.compute_node.delete_user(
+                pool.id, node.id, pool.rdp.username)
+            logger.debug('deleted user {} from node {}'.format(
+                pool.rdp.username, node.id))
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The node user does not exist' not in ex.message.value:
+                raise
 
 
 def del_ssh_user(batch_client, config, nodes=None):
@@ -741,6 +820,11 @@ def del_ssh_user(batch_client, config, nodes=None):
     :param list nodes: list of nodes
     """
     pool = settings.pool_settings(config)
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        logger.debug('skipping ssh user delete for windows pool {}'.format(
+            pool.id))
+        return
     if util.is_none_or_empty(pool.ssh.username):
         logger.error('not deleting unspecified ssh user on pool {}'.format(
             pool.id))

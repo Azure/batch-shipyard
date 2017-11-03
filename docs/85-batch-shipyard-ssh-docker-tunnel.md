@@ -53,12 +53,12 @@ CTRL+C or right-click and Copy.
 ## Interactive SSH
 By adding an SSH user to the pool (which can be automatically done for you
 via the `ssh` block in the pool config upon pool creation or through the
-`pool asu` command), you can interactively log in to compute nodes in the
+`pool user add` command), you can interactively log in to compute nodes in the
 pool and execute any command on the remote machine, including Docker
 commands via `sudo`.
 
 You can utilize the `pool ssh` command to automatically connect to any
-compute node in the pool without having to manually resort to `pool grls`
+compute node in the pool without having to manually resort to `pool nodes grls`
 and issuing the `ssh` command with the appropriate parameters. If you have
 the SSH private key in the default location or as specified in the
 `generated_file_export_path`, then an interactive SSH session will be
@@ -66,7 +66,7 @@ created to the compute node specified.
 
 `pool ssh` can accept either option `--cardinal` or the option `--nodeid`.
 If using `--cardinal` it requires the natural counting number from zero
-associated with the list of nodes as enumerated by `pool grls`. If using
+associated with the list of nodes as enumerated by `pool nodes grls`. If using
 `--nodeid`, then the exact compute node id within the pool specified in
 the pool config must be used. If neither option is specified, the default
 is `--cardinal 0`. For example:
@@ -76,7 +76,7 @@ SHIPYARD_CONFIGDIR=. shipyard pool ssh
 ```
 
 would create an interactive SSH session with the first compute node in the
-pool as listed by `pool grls`.
+pool as listed by `pool nodes grls`.
 
 ## Securely Connecting to the Docker Socket Remotely via SSH Tunneling
 To take advantage of this feature, you must install Docker locally on your
@@ -96,8 +96,8 @@ the port remotely without an SSH tunnel.
 By specifying `generate_docker_tunnel_script` as `true` in the `ssh`
 configuration block in the pool config, a file named
 `ssh_docker_tunnel_shipyard.sh` will be generated on `pool add` if an
-SSH user is specified, on `pool asu` when a pool user is added, on
-`pool resize` when a pool is resized, or on `pool grls` when a pool's
+SSH user is specified, on `pool user add` when a pool user is added, on
+`pool resize` when a pool is resized, or on `pool nodes grls` when a pool's
 remote login settings are listed.
 
 This script simplifies creating an SSH tunnel to the Docker socket from

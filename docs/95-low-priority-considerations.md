@@ -15,15 +15,16 @@ nodes is reached. If the number of low priority nodes cannot be reached,
 a resize error will be logged, but the allocation will continue such as
 continuing with SSH user provisioning and data ingress.
 * An SSH user is recommended to be provisioned so commands that rely on
-SSH access for low-priority nodes such as `pool udi` are able to be run.
+SSH access for low-priority nodes such as `pool images update` are able to
+be run.
 
 ### Command Behavior
 * Certain commands may timeout and fail with low priority nodes. As nodes
 can be pre-empted at any time, commands that rely on interacting with the
 node such as direct SSH access, task termination, etc. may not complete
 successfully.
-* `pool udi` command will only run as a Batch job if a compute pool is
-completely comprised of dedicated nodes. For pools with any low-priority
+* `pool images update` command will only run as a Batch job if a compute pool
+is completely comprised of dedicated nodes. For pools with any low-priority
 nodes, images will be updated individually on each node via SSH, thus
 requiring an SSH user to be active and allocated on the nodes.
 

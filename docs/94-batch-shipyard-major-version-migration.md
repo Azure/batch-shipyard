@@ -80,7 +80,32 @@ now follow the `version-component` naming convetion for tags. Thus, the
 will also apply to versioned CLI images. For example, version `3.0.0` will
 be named as `alfpark/batch-shipyard:3.0.0-cli`.
 
-#### Environment Variable Naming
+#### Command Renaming
+Some commands have been placed under sub-commands for better hierarchy
+control in the CLI. The following is a table of remapped commands:
+
+| Old                | New                  |
+|--------------------|----------------------|
+| `data getfile`     | `data files task`    |
+| `data getfilenode` | `data files node`    |
+| `data listfiles`   | `data files list`    |
+| `data stream`      | `data files stream`  |
+| `jobs deltasks`    | `jobs tasks del`     |
+| `jobs listtasks`   | `jobs tasks list`    |
+| `jobs termtasks`   | `jobs tasks term`    |
+| `pool asu`         | `pool user add`      |
+| `pool delnode`     | `pool nodes del`     |
+| `pool dsu`         | `pool user del`      |
+| `pool grls`        | `pool nodes grls`    |
+| `pool listimages`  | `pool images list`   |
+| `pool listnodes`   | `pool nodes list`    |
+| `pool rebootnodes` | `pool nodes reboot`  |
+| `pool udi`         | `pool images update` |
+
+The old commands no longer work with the new CLI. Please migrate to using
+the new commands instead.
+
+#### Environment Variable Renaming
 Environment variable names have changed as configuration files are no longer
 exclusively JSON formatted. The `_JSON` suffix is now replaced with `_CONF`.
 The variable mapping is as follows:
@@ -97,11 +122,6 @@ The variable mapping is as follows:
 `--configdir` (or `SHIPYARD_CONFIGDIR` environment variable) now defaults
 to the current working directory, i.e., `.`, if no other configuration file
 options are specified.
-
-#### `pool updateimages` Replaces `pool udi`
-The `pool updateimages` command will now update both Docker and Singularity
-images. `pool udi` command is deprecated and will be removed in a future
-release.
 
 ### General Configuration Changes
 #### `input_data` with `azure_storage`

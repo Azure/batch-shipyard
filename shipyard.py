@@ -1119,54 +1119,6 @@ def pool_resize(ctx, wait):
         ctx.batch_client, ctx.blob_client, ctx.config, wait=wait)
 
 
-@pool.command('grls')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_grls(ctx):
-    """Get remote login settings for all nodes in pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_grls(ctx.batch_client, ctx.config)
-
-
-@pool.command('listnodes')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_listnodes(ctx):
-    """List nodes in pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_listnodes(ctx.batch_client, ctx.config)
-
-
-@pool.command('asu')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_asu(ctx):
-    """Add an SSH user to all nodes in pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_asu(ctx.batch_client, ctx.config)
-
-
-@pool.command('dsu')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_dsu(ctx):
-    """Delete an SSH user from all nodes in pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_dsu(ctx.batch_client, ctx.config)
-
-
 @pool.command('ssh')
 @click.option(
     '--cardinal',
@@ -1189,110 +1141,6 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
         ctx.batch_client, ctx.config, cardinal, nodeid, tty, command)
 
 
-@pool.command('delnode')
-@click.option(
-    '--all-start-task-failed',
-    is_flag=True,
-    help='Delete all nodes in start task failed state')
-@click.option(
-    '--all-starting',
-    is_flag=True,
-    help='Delete all nodes in starting state')
-@click.option(
-    '--all-unusable',
-    is_flag=True,
-    help='Delete all nodes in unusable state')
-@click.option(
-    '--nodeid', help='NodeId of compute node in pool to delete')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_delnode(
-        ctx, all_start_task_failed, all_starting, all_unusable, nodeid):
-    """Delete a node from a pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_delnode(
-        ctx.batch_client, ctx.config, all_start_task_failed, all_starting,
-        all_unusable, nodeid)
-
-
-@pool.command('rebootnode')
-@click.option(
-    '--all-start-task-failed',
-    is_flag=True,
-    help='Reboot all nodes in start task failed state')
-@click.option(
-    '--nodeid', help='NodeId of compute node in pool to reboot')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_rebootnode(ctx, all_start_task_failed, nodeid):
-    """Reboot a node or nodes in a pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_rebootnode(
-        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
-
-
-@pool.command('udi')
-@click.option(
-    '--image', help='Docker image[:tag] to update')
-@click.option(
-    '--digest', help='Digest to update image to')
-@click.option(
-    '--ssh', help='Update over SSH instead of using a Batch job')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_udi(ctx, image, digest, ssh):
-    """Update Docker images in a pool"""
-    ctx.initialize_for_batch()
-    logger.warning(
-        'pool udi is deprecated, please use pool updateimages instead')
-    convoy.fleet.action_pool_updateimages(
-        ctx.batch_client, ctx.config, image, digest, None, ssh)
-
-
-@pool.command('updateimages')
-@click.option(
-    '--docker-image', help='Docker image[:tag] to update')
-@click.option(
-    '--docker-image-digest', help='Digest to update Docker image to')
-@click.option(
-    '--singularity-image', help='Singularity image[:tag] to update')
-@click.option(
-    '--ssh', help='Update over SSH instead of using a Batch job')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_updateimages(
-        ctx, docker_image, docker_image_digest, singularity_image, ssh):
-    """Update container images in a pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_updateimages(
-        ctx.batch_client, ctx.config, docker_image, docker_image_digest,
-        singularity_image, ssh)
-
-
-@pool.command('listimages')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_listimages(ctx):
-    """List Docker images in a pool"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_listimages(ctx.batch_client, ctx.config)
-
-
 @pool.command('stats')
 @click.option('--poolid', help='Get stats on specified pool')
 @common_options
@@ -1310,7 +1158,7 @@ def pool_stats(ctx, poolid):
 @pool.group()
 @pass_cli_context
 def autoscale(ctx):
-    """Pool autoscale actions"""
+    """Autoscale actions"""
     pass
 
 
@@ -1362,6 +1210,158 @@ def autoscale_lastexec(ctx):
     convoy.fleet.action_pool_autoscale_lastexec(ctx.batch_client, ctx.config)
 
 
+@pool.group()
+@pass_cli_context
+def images(ctx):
+    """Container images actions"""
+    pass
+
+
+@images.command('update')
+@click.option(
+    '--docker-image', help='Docker image[:tag] to update')
+@click.option(
+    '--docker-image-digest', help='Digest to update Docker image to')
+@click.option(
+    '--singularity-image', help='Singularity image[:tag] to update')
+@click.option(
+    '--ssh', help='Update over SSH instead of using a Batch job')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def images_update(
+        ctx, docker_image, docker_image_digest, singularity_image, ssh):
+    """Update container images in a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_images_update(
+        ctx.batch_client, ctx.config, docker_image, docker_image_digest,
+        singularity_image, ssh)
+
+
+@images.command('list')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def images_list(ctx):
+    """List container images in a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_images_list(ctx.batch_client, ctx.config)
+
+
+@pool.group()
+@pass_cli_context
+def user(ctx):
+    """Remote user actions"""
+    pass
+
+
+@user.command('add')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def user_add(ctx):
+    """Add a remote user to all nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_user_add(ctx.batch_client, ctx.config)
+
+
+@user.command('del')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def user_del(ctx):
+    """Delete a remote user from all nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_user_del(ctx.batch_client, ctx.config)
+
+
+@pool.group()
+@pass_cli_context
+def nodes(ctx):
+    """Compute node actions"""
+    pass
+
+
+@nodes.command('grls')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_grls(ctx):
+    """Get remote login settings for all nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_grls(ctx.batch_client, ctx.config)
+
+
+@nodes.command('list')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_list(ctx):
+    """List nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_list(ctx.batch_client, ctx.config)
+
+
+@nodes.command('del')
+@click.option(
+    '--all-start-task-failed',
+    is_flag=True,
+    help='Delete all nodes in start task failed state')
+@click.option(
+    '--all-starting',
+    is_flag=True,
+    help='Delete all nodes in starting state')
+@click.option(
+    '--all-unusable',
+    is_flag=True,
+    help='Delete all nodes in unusable state')
+@click.option(
+    '--nodeid', help='NodeId of compute node in pool to delete')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_del(
+        ctx, all_start_task_failed, all_starting, all_unusable, nodeid):
+    """Delete a node from a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_del(
+        ctx.batch_client, ctx.config, all_start_task_failed, all_starting,
+        all_unusable, nodeid)
+
+
+@nodes.command('reboot')
+@click.option(
+    '--all-start-task-failed',
+    is_flag=True,
+    help='Reboot all nodes in start task failed state')
+@click.option(
+    '--nodeid', help='NodeId of compute node in pool to reboot')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_reboot(ctx, all_start_task_failed, nodeid):
+    """Reboot a node or nodes in a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_reboot(
+        ctx.batch_client, ctx.config, all_start_task_failed, nodeid)
+
+
 @cli.group()
 @pass_cli_context
 def jobs(ctx):
@@ -1400,49 +1400,6 @@ def jobs_list(ctx):
     """List jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_list(ctx.batch_client, ctx.config)
-
-
-@jobs.command('listtasks')
-@click.option(
-    '--all', is_flag=True, help='List tasks in all jobs in account')
-@click.option(
-    '--jobid', help='List tasks in the specified job id')
-@click.option(
-    '--poll-until-tasks-complete', is_flag=True,
-    help='Poll until all tasks are in completed state')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def jobs_list_tasks(ctx, all, jobid, poll_until_tasks_complete):
-    """List tasks within jobs"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_listtasks(
-        ctx.batch_client, ctx.config, all, jobid,
-        poll_until_tasks_complete)
-
-
-@jobs.command('termtasks')
-@click.option(
-    '--force', is_flag=True,
-    help='Force docker kill signal to task regardless of state')
-@click.option(
-    '--jobid', help='Terminate tasks in the specified job id')
-@click.option(
-    '--taskid', help='Terminate tasks in the specified task id')
-@click.option(
-    '--wait', is_flag=True, help='Wait for task termination to complete')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def jobs_termtasks(ctx, force, jobid, taskid, wait):
-    """Terminate specified tasks in jobs"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_termtasks(
-        ctx.batch_client, ctx.config, jobid, taskid, wait, force)
 
 
 @jobs.command('term')
@@ -1503,25 +1460,6 @@ def jobs_del(
         ctx.batch_client, ctx.blob_client, ctx.table_client, ctx.config,
         True, all_jobs, all_jobschedules, jobid, jobscheduleid, termtasks,
         wait)
-
-
-@jobs.command('deltasks')
-@click.option(
-    '--jobid', help='Delete tasks in the specified job id')
-@click.option(
-    '--taskid', help='Delete tasks in the specified task id')
-@click.option(
-    '--wait', is_flag=True, help='Wait for task deletion to complete')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def jobs_deltasks(ctx, jobid, taskid, wait):
-    """Delete specified tasks in jobs"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_deltasks(
-        ctx.batch_client, ctx.config, jobid, taskid, wait)
 
 
 @jobs.command('cmi')
@@ -1619,83 +1557,80 @@ def jobs_stats(ctx, jobid):
     convoy.fleet.action_jobs_stats(ctx.batch_client, ctx.config, job_id=jobid)
 
 
+@jobs.group()
+@pass_cli_context
+def tasks(ctx):
+    """Tasks actions"""
+    pass
+
+
+@tasks.command('list')
+@click.option(
+    '--all', is_flag=True, help='List tasks in all jobs in account')
+@click.option(
+    '--jobid', help='List tasks in the specified job id')
+@click.option(
+    '--poll-until-tasks-complete', is_flag=True,
+    help='Poll until all tasks are in completed state')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def tasks_list(ctx, all, jobid, poll_until_tasks_complete):
+    """List tasks within jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_tasks_list(
+        ctx.batch_client, ctx.config, all, jobid,
+        poll_until_tasks_complete)
+
+
+@tasks.command('term')
+@click.option(
+    '--force', is_flag=True,
+    help='Force docker kill signal to task regardless of state')
+@click.option(
+    '--jobid', help='Terminate tasks in the specified job id')
+@click.option(
+    '--taskid', help='Terminate tasks in the specified task id')
+@click.option(
+    '--wait', is_flag=True, help='Wait for task termination to complete')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def tasks_term(ctx, force, jobid, taskid, wait):
+    """Terminate specified tasks in jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_tasks_term(
+        ctx.batch_client, ctx.config, jobid, taskid, wait, force)
+
+
+@tasks.command('del')
+@click.option(
+    '--jobid', help='Delete tasks in the specified job id')
+@click.option(
+    '--taskid', help='Delete tasks in the specified task id')
+@click.option(
+    '--wait', is_flag=True, help='Wait for task deletion to complete')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def tasks_del(ctx, jobid, taskid, wait):
+    """Delete specified tasks in jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_tasks_del(
+        ctx.batch_client, ctx.config, jobid, taskid, wait)
+
+
 @cli.group()
 @pass_cli_context
 def data(ctx):
     """Data actions"""
     pass
-
-
-@data.command('listfiles')
-@click.option(
-    '--jobid', help='List files from the specified job id')
-@click.option(
-    '--taskid', help='List files from the specified task id')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def data_listfiles(ctx, jobid, taskid):
-    """List files for tasks in jobs"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_data_listfiles(
-        ctx.batch_client, ctx.config, jobid, taskid)
-
-
-@data.command('stream')
-@click.option(
-    '--disk', is_flag=True,
-    help='Write streamed data to disk and suppress console output')
-@click.option(
-    '--filespec', help='File specification as jobid,taskid,filename')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def data_stream(ctx, disk, filespec):
-    """Stream a file as text to the local console or as binary to disk"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_data_stream(
-        ctx.batch_client, ctx.config, filespec, disk)
-
-
-@data.command('getfile')
-@click.option(
-    '--all', is_flag=True, help='Retrieve all files for given job/task')
-@click.option(
-    '--filespec',
-    help='File specification as jobid,taskid,filename or '
-    'jobid,taskid,include_pattern if invoked with --all')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def data_getfile(ctx, all, filespec):
-    """Retrieve file(s) from a job/task"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_data_getfile(
-        ctx.batch_client, ctx.config, all, filespec)
-
-
-@data.command('getfilenode')
-@click.option(
-    '--all', is_flag=True, help='Retrieve all files for given compute node')
-@click.option(
-    '--filespec', help='File specification as nodeid,filename or '
-    'nodeid,include_pattern if invoked with --all')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def data_getfilenode(ctx, all, filespec):
-    """Retrieve file(s) from a compute node"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_data_getfilenode(
-        ctx.batch_client, ctx.config, all, filespec)
 
 
 @data.command('ingress')
@@ -1712,6 +1647,85 @@ def data_ingress(ctx, to_fs):
     convoy.fleet.action_data_ingress(
         ctx.batch_client, ctx.compute_client, ctx.network_client, ctx.config,
         to_fs)
+
+
+@data.group()
+@pass_cli_context
+def files(ctx):
+    """Compute node file actions"""
+    pass
+
+
+@files.command('list')
+@click.option(
+    '--jobid', help='List files from the specified job id')
+@click.option(
+    '--taskid', help='List files from the specified task id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def files_list(ctx, jobid, taskid):
+    """List files for tasks in jobs"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_data_files_list(
+        ctx.batch_client, ctx.config, jobid, taskid)
+
+
+@files.command('stream')
+@click.option(
+    '--disk', is_flag=True,
+    help='Write streamed data to disk and suppress console output')
+@click.option(
+    '--filespec', help='File specification as jobid,taskid,filename')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def files_stream(ctx, disk, filespec):
+    """Stream a file as text to the local console or as binary to disk"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_data_files_stream(
+        ctx.batch_client, ctx.config, filespec, disk)
+
+
+@files.command('task')
+@click.option(
+    '--all', is_flag=True, help='Retrieve all files for given job/task')
+@click.option(
+    '--filespec',
+    help='File specification as jobid,taskid,filename or '
+    'jobid,taskid,include_pattern if invoked with --all')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def files_task(ctx, all, filespec):
+    """Retrieve file(s) from a job/task"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_data_files_task(
+        ctx.batch_client, ctx.config, all, filespec)
+
+
+@files.command('node')
+@click.option(
+    '--all', is_flag=True, help='Retrieve all files for given compute node')
+@click.option(
+    '--filespec', help='File specification as nodeid,filename or '
+    'nodeid,include_pattern if invoked with --all')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def files_node(ctx, all, filespec):
+    """Retrieve file(s) from a compute node"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_data_files_node(
+        ctx.batch_client, ctx.config, all, filespec)
 
 
 @cli.group()

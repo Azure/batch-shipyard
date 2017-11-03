@@ -7,7 +7,7 @@ The pool schema is as follows:
 
 ```yaml
 pool_specification:
-  id: dockerpool
+  id: batch-shipyard-pool
   vm_configuration:
     platform_image:
       publisher: Canonical
@@ -69,7 +69,7 @@ pool_specification:
     file_mode: '0750'
     file_path: path/in/wd/file.bin
   ssh:
-    username: docker
+    username: shipyard
     expiry_days: 30
     ssh_public_key: /path/to/rsa/publickey.pub
     ssh_public_key_data: ssh-rsa ...
@@ -77,6 +77,10 @@ pool_specification:
     generate_docker_tunnel_script: true
     generated_file_export_path:
     hpn_server_swap: false
+  rdp:
+    username: shipyard
+    password: null
+    expiry_days: 30
   virtual_network:
     arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet
@@ -333,7 +337,8 @@ for both Batch service and User Subscription modes. Please see the
 sessions to compute nodes. If this property is absent, then an SSH user is not
 created with pool creation. If you are running Batch Shipyard on Windows,
 please refer to [these instructions](85-batch-shipyard-ssh-docker-tunnel.md#ssh-keygen)
-on how to generate an SSH keypair for use with Batch Shipyard.
+on how to generate an SSH keypair for use with Batch Shipyard. This property
+is ignored for Windows-based pools.
     * (required) `username` is the user to create on the compute nodes.
     * (optional) `expiry_days` is the number of days from now for the account
       on the compute nodes to expire. The default is 30 days from invocation
@@ -362,6 +367,18 @@ on how to generate an SSH keypair for use with Batch Shipyard.
       [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
       to be swapped with the standard distribution OpenSSH server. This is not
       supported on all Linux distributions and may be force disabled.
+* (optional) `rdp` is the property for creating a user to accomodate RDP login
+sessions to compute nodes. If this property is absent, then an RDP user is not
+created with pool creation. This property is ignored for Linux-based pools.
+    * (required) `username` is the user to create on the compute nodes.
+    * (optional) `expiry_days` is the number of days from now for the account
+      on the compute nodes to expire. The default is 30 days from invocation
+      time.
+    * (optional) `password` is the password to associate with the user.
+      Passwords must meet the minimum complexity requirements as required
+      by Azure Batch. If left omitted, unspecified or set to `null`, then
+      a random password is generated and logged during any `pool add` call
+      with this section defined, or `pool user add`.
 * (optional) `gpu` property defines additional information for NVIDIA
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.

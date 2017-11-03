@@ -6,9 +6,9 @@
 - Singularity HPCG and TensorFlow-GPU recipe
 
 ### Changed
-- **Breaking Change:** `pool updateimages` command replaces the `pool udi`
-command. `pool udi` command is now deprecated and will be removed in a
-future release.
+- **Breaking Change:** Many commands have been placed under more
+appropriate hierachies. Please see the major version migration guide for
+more information.
 
 ### Fixed
 - Mount `/opt/intel` into Singularity containers

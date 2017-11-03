@@ -135,7 +135,7 @@ PoolSettings = collections.namedtuple(
         'reboot_on_start_task_failed', 'attempt_recovery_on_unusable',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
-        'gpu_driver', 'ssh', 'additional_node_prep_commands',
+        'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands',
         'virtual_network', 'autoscale', 'node_fill_type',
     ]
 )
@@ -144,6 +144,11 @@ SSHSettings = collections.namedtuple(
         'username', 'expiry_days', 'ssh_public_key', 'ssh_public_key_data',
         'ssh_private_key', 'generate_docker_tunnel_script',
         'generated_file_export_path', 'hpn_server_swap',
+    ]
+)
+RDPSettings = collections.namedtuple(
+    'RDPSettings', [
+        'username', 'expiry_days', 'password',
     ]
 )
 AADSettings = collections.namedtuple(
@@ -929,6 +934,21 @@ def pool_settings(config):
         ssh_gen_file_path = _kv_read_checked(
             sshconf, 'generated_file_export_path', '.')
         ssh_hpn = _kv_read(sshconf, 'hpn_server_swap', False)
+    # rdp settings
+    try:
+        rdpconf = conf['rdp']
+        rdp_username = _kv_read_checked(rdpconf, 'username')
+        if util.is_none_or_empty(rdp_username):
+            raise KeyError()
+    except KeyError:
+        rdp_username = None
+        rdp_expiry_days = None
+        rdp_password = None
+    else:
+        rdp_expiry_days = _kv_read(rdpconf, 'expiry_days', 30)
+        if rdp_expiry_days <= 0:
+            rdp_expiry_days = 30
+        rdp_password = _kv_read_checked(rdpconf, 'password')
     try:
         gpu_driver = conf['gpu']['nvidia_driver']['source']
         if util.is_none_or_empty(gpu_driver):
@@ -964,6 +984,11 @@ def pool_settings(config):
             generate_docker_tunnel_script=ssh_gen_docker_tunnel,
             generated_file_export_path=ssh_gen_file_path,
             hpn_server_swap=ssh_hpn,
+        ),
+        rdp=RDPSettings(
+            username=rdp_username,
+            expiry_days=rdp_expiry_days,
+            password=rdp_password,
         ),
         gpu_driver=gpu_driver,
         additional_node_prep_commands=additional_node_prep_commands,

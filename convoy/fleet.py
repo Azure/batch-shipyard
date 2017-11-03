@@ -1359,6 +1359,10 @@ def _add_pool(
     # create admin user on each node if requested
     if pool_current_vm_count > 0:
         try:
+            batch.add_rdp_user(batch_client, config, nodes)
+        except Exception as e:
+            logger.exception(e)
+        try:
             batch.add_ssh_user(batch_client, config, nodes)
         except Exception as e:
             logger.exception(e)
@@ -1386,7 +1390,8 @@ def _add_pool(
                     logger.info(
                         'Not listing remote login settings due to VM count. '
                         'If you need a list of remote login settings for all '
-                        'nodes in the pool, issue the "pool grls" command.')
+                        'nodes in the pool, issue the "pool nodes grls" '
+                        'command.')
     # wait for storage ingress processes
     data.wait_for_storage_threads(storage_threads)
 
@@ -2716,9 +2721,9 @@ def action_pool_resize(batch_client, blob_client, config, wait):
             cmdline=cmdline)
 
 
-def action_pool_grls(batch_client, config):
+def action_pool_nodes_grls(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
-    """Action: Pool Grls
+    """Action: Pool Nodes Grls
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -2729,9 +2734,9 @@ def action_pool_grls(batch_client, config):
         batch_client, settings.pool_settings(config), None, None)
 
 
-def action_pool_listnodes(batch_client, config):
+def action_pool_nodes_list(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
-    """Action: Pool Listnodes
+    """Action: Pool Nodes List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -2740,26 +2745,32 @@ def action_pool_listnodes(batch_client, config):
     batch.list_nodes(batch_client, config)
 
 
-def action_pool_asu(batch_client, config):
+def action_pool_user_add(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
-    """Action: Pool Asu
+    """Action: Pool User Add
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
-    batch.add_ssh_user(batch_client, config)
+    if settings.is_windows_pool(config):
+        batch.add_rdp_user(batch_client, config)
+    else:
+        batch.add_ssh_user(batch_client, config)
 
 
-def action_pool_dsu(batch_client, config):
+def action_pool_user_del(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
-    """Action: Pool Dsu
+    """Action: Pool Dru
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
-    batch.del_ssh_user(batch_client, config)
+    if settings.is_windows_pool(config):
+        batch.del_rdp_user(batch_client, config)
+    else:
+        batch.del_ssh_user(batch_client, config)
 
 
 def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
@@ -2795,11 +2806,11 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
         command=command)
 
 
-def action_pool_delnode(
+def action_pool_nodes_del(
         batch_client, config, all_start_task_failed, all_starting,
         all_unusable, nodeid):
     # type: (batchsc.BatchServiceClient, dict, bool, bool, bool, str) -> None
-    """Action: Pool Delnode
+    """Action: Pool Nodes Del
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -2819,10 +2830,10 @@ def action_pool_delnode(
         all_unusable, nodeid)
 
 
-def action_pool_rebootnode(
+def action_pool_nodes_reboot(
         batch_client, config, all_start_task_failed, nodeid):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
-    """Action: Pool Rebootnode
+    """Action: Pool Nodes Reboot
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -2837,11 +2848,11 @@ def action_pool_rebootnode(
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
 
 
-def action_pool_updateimages(
+def action_pool_images_update(
         batch_client, config, docker_image, docker_image_digest,
         singularity_image, ssh):
     # type: (batchsc.BatchServiceClient, dict, str, str, str, bool) -> None
-    """Action: Pool Updateimages
+    """Action: Pool Images Update
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -2859,9 +2870,9 @@ def action_pool_updateimages(
         singularity_image, force_ssh=ssh)
 
 
-def action_pool_listimages(batch_client, config):
+def action_pool_images_list(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
-    """Action: Pool Listimages
+    """Action: Pool Images List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3008,10 +3019,10 @@ def action_jobs_list(batch_client, config):
     batch.list_jobs(batch_client, config)
 
 
-def action_jobs_listtasks(
+def action_jobs_tasks_list(
         batch_client, config, all, jobid, poll_until_tasks_complete):
     # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
-    """Action: Jobs Listtasks
+    """Action: Jobs Tasks List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3030,9 +3041,9 @@ def action_jobs_listtasks(
         time.sleep(5)
 
 
-def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
+def action_jobs_tasks_term(batch_client, config, jobid, taskid, wait, force):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool, bool) -> None
-    """Action: Jobs Termtasks
+    """Action: Jobs Tasks Term
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3053,9 +3064,9 @@ def action_jobs_termtasks(batch_client, config, jobid, taskid, wait, force):
         force=force)
 
 
-def action_jobs_deltasks(batch_client, config, jobid, taskid, wait):
+def action_jobs_tasks_del(batch_client, config, jobid, taskid, wait):
     # type: (batchsc.BatchServiceClient, dict, str, str, bool) -> None
-    """Action: Jobs Deltasks
+    """Action: Jobs Tasks Del
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3303,9 +3314,9 @@ def action_storage_clear(blob_client, table_client, config, poolid):
         blob_client, table_client, config, pool_id=poolid)
 
 
-def action_data_stream(batch_client, config, filespec, disk):
+def action_data_files_stream(batch_client, config, filespec, disk):
     # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
-    """Action: Data Stream
+    """Action: Data Files Stream
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3316,9 +3327,9 @@ def action_data_stream(batch_client, config, filespec, disk):
     batch.stream_file_and_wait_for_task(batch_client, config, filespec, disk)
 
 
-def action_data_listfiles(batch_client, config, jobid, taskid):
+def action_data_files_list(batch_client, config, jobid, taskid):
     # type: (batchsc.BatchServiceClient, dict, str, str) -> None
-    """Action: Data Listfiles
+    """Action: Data Files List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3333,9 +3344,9 @@ def action_data_listfiles(batch_client, config, jobid, taskid):
     batch.list_task_files(batch_client, config, jobid, taskid)
 
 
-def action_data_getfile(batch_client, config, all, filespec):
+def action_data_files_task(batch_client, config, all, filespec):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
-    """Action: Data Getfile
+    """Action: Data Files Task
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -3349,9 +3360,9 @@ def action_data_getfile(batch_client, config, all, filespec):
         batch.get_file_via_task(batch_client, config, filespec)
 
 
-def action_data_getfilenode(batch_client, config, all, nodeid):
+def action_data_files_node(batch_client, config, all, nodeid):
     # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
-    """Action: Data Getfilenode
+    """Action: Data Files Node
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict

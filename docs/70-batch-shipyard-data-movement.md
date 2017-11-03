@@ -226,13 +226,13 @@ locations.
 `shipyard.py` provides actions to help egress data off a compute node back to
 on premises. These actions are:
 
-1. `data getfile`: get a single file or all files from a compute node using a
-job id, task id and a file name.
-2. `data getfilenode`: get a single file or all files from a compute node
+1. `data files task`: get a single file or all files from a compute node
+using a job id, task id and a file name.
+2. `data files node`: get a single file or all files from a compute node
 using a node id and file path.
-3. `data stream`: stream a text file (decoded as UTF-8) back to the local
-console or stream a file back to local disk. This is particularly useful for
-progress monitoring via a file or tailing an output.
+3. `data files stream`: stream a text file (decoded as UTF-8) back to the
+local console or stream a file back to local disk. This is particularly
+useful for progress monitoring via a file or tailing an output.
 
 ### To Azure Storage
 If you need to egress data from a compute node and persist it to Azure

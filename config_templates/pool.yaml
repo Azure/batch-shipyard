@@ -61,7 +61,7 @@ pool_specification:
     file_mode: '0750'
     file_path: path/in/wd/file.bin
   ssh:
-    username: docker
+    username: shipyard
     expiry_days: 30
     ssh_public_key: /path/to/rsa/publickey.pub
     ssh_public_key_data: ssh-rsa ...
@@ -69,6 +69,10 @@ pool_specification:
     generate_docker_tunnel_script: true
     generated_file_export_path:
     hpn_server_swap: false
+  rdp:
+    username: shipyard
+    password: null
+    expiry_days: 30
   virtual_network:
     arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet

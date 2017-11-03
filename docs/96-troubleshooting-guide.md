@@ -8,7 +8,7 @@ that do not fall in to the categories below.
 2. [Azure Batch Service Issues](#batchservice)
 3. [Compute Node Issues](#computenode)
 4. [Job/Task Execution Issues](#task)
-5. [Docker Issues](#docker)
+5. [Container Issues](#container)
 
 ## <a name="install"></a>Installation Issues
 #### Anaconda Python Environments
@@ -75,7 +75,7 @@ If you are not using pools with `native` container support, then there may
 be an issue allocating the node from the Azure Cloud. Azure Batch
 automatically tries to recover from this state, but may not be able to
 on occasion. In these circumstances, you can delete the affected nodes
-with `pool delnode --all-starting` and then `pool resize` to scale the
+with `pool nodes del --all-starting` and then `pool resize` to scale the
 pool back to your desired amount.
 
 #### Compute Node appears to be stuck in `waiting_for_start_task` state
@@ -103,7 +103,7 @@ transient network faults when issuing system software updates or other
 issues. You can turn on automatic rebooting where Batch Shipyard can
 attempt to mitigate the issue on your behalf in the `pool.yaml` config file.
 Alternatively, you can issue the command
-`pool rebootnode --all-start-task-failed` which will attempt to reboot the
+`pool nodes reboot --all-start-task-failed` which will attempt to reboot the
 nodes that have entered this state.
 
 If the compute node fails to start properly, Batch Shipyard will automatically
@@ -114,9 +114,10 @@ files to see what the possible culprit for the issue is. If it appears to be
 transient, you can try to create the pool again. If it appears to be a Batch
 Shipyard issue, please report the issue on GitHub.
 
-Additionally, if you have specified an SSH user for your pool and there
-is a start task failure, you can still issue the command `pool asu` to add the
-pool SSH user and then `pool ssh` to SSH into the node to debug further.
+Additionally, if you have specified an SSH or RDP user for your pool and there
+is a start task failure, you can still issue the command `pool user add` to
+add the pool remote user and then `pool ssh` to SSH into the node to debug
+further, or manually RDP on Windows.
 
 Please note that the start task requires downloading some files that are
 uploaded to your Azure Storage account with the command `pool add`. These
@@ -134,7 +135,7 @@ an issue allocating the node from the Azure Cloud or that the Azure Batch
 service can no longer communicate with the compute node. Azure Batch
 automatically tries to recover from such situations, but may not be able to
 on occasion. In these circumstances, you can delete the affected nodes
-with `pool delnode --all-unusable` and then resize back up with `pool resize`
+with `pool nodes del --all-unusable` and then resize back up with `pool resize`
 or recreate the pool.
 
 ## <a name="task"></a>Job/Task Execution Issues
@@ -151,37 +152,37 @@ an infinite wait on a Docker image to be present that may not exist
 
 #### Task runs and completes but fails with a non-zero exit code or scheduling error
 In Azure Batch, a task that completes is independent of if the task is
-considered a success or failure. The `jobs listtasks` command will list
+considered a success or failure. The `jobs tasks list` command will list
 the status of all tasks for the jobs specified including exit codes and
 any scheduling errors. You can use this information in combination with the
 task's stdout and stderr files to determine what went wrong if your task
 has completed but has failed.
 
-## <a name="docker"></a>Docker Issues
-#### `pool udi` command doesn't run
-The pool update Docker images command runs as a normal job if your pool is
+## <a name="container"></a>Container Issues
+#### `pool images update` command doesn't run
+The `pool images update` command runs as a normal job if your pool is
 comprised entirely of dedicated compute nodes. Thus, your compute
 nodes must be able to accommodate this update job and task. If your pool only
 has one node in it, it will run as a single task under a job. If the node in
 this pool is busy and the `max_tasks_per_node` in your `pool.yaml` is either
 unspecified or set to 1, then it will be blocked behind the running task.
 
-For pools with more than 1 node, the update Docker images command will run
+For pools with more than 1 node, then the update images command will run
 as a multi-instance task to guarantee that all nodes in the pool have updated
-the specified Docker image to latest or the given hash. The multi-instance
+the specified container image to latest or the given hash. The multi-instance
 task will be run on the current number of nodes in the pool at the time
-the `pool udi` command is issued. If before the task can be scheduled, the
-pool is resized down and the number of nodes decreases, then the update
-Docker images job will not be able to execute and will stay active until
-the number of compute nodes reaches the prior number. Additionally, if
-`max_tasks_per_node` is set to 1 or unspecified in `pool.yaml` and any
-task is running on any node, the update Docker images job will be blocked
-until that task completes.
+the `pool images update` command is issued. If before the task can be
+scheduled, the pool is resized down and the number of nodes decreases, then
+the update container images job will not be able to execute and will stay
+active until the number of compute nodes reaches the prior number.
+Additionally, if `max_tasks_per_node` is set to 1 or unspecified in
+`pool.yaml` and any task is running on any node, the update container images
+job will be blocked until that task completes.
 
 You can work around this behavior by providing the `--ssh` option to the
-`pool udi` command. This will use an SSH side-channel to upgrade the Docker
-images on the pool. Please note that this requires a provisioned SSH user
-and `ssh` or `ssh.exe` available.
+`pool images update` command. This will use an SSH side-channel to upgrade the
+container images on the pool. Please note that this requires a provisioned SSH
+user and `ssh` or `ssh.exe` available.
 
-`pool udi` will always use the SSH side-channel method for pools containing
-a positive number of low priority nodes.
+`pool images update` will always use the SSH side-channel method for pools
+containing a positive number of low priority nodes.

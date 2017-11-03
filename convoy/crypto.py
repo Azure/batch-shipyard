@@ -30,6 +30,7 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import base64
 import collections
 import getpass
 import logging
@@ -72,6 +73,15 @@ def get_remotefs_ssh_key_prefix():
     :return: ssh key prefix for remote fs
     """
     return _REMOTEFS_SSH_KEY_PREFIX
+
+
+def generate_rdp_password():
+    # type: (None) -> str
+    """Generate an RDP password
+    :rtype: str
+    :return: rdp password
+    """
+    return base64.b64encode(os.urandom(8))
 
 
 def generate_ssh_keypair(export_path, prefix=None):

@@ -600,11 +600,11 @@ The above invocation will add the jobs specified in the jobs.yaml file to
 the designated pool.
 
 ```shell
-shipyard data stream --configdir . --filespec job1,task-00000,stdout.txt
+shipyard data files stream --configdir . --filespec job1,task-00000,stdout.txt
 
 # ... or use environment variables instead
 
-SHIPYARD_CONFIGDIR=. shipyard data stream --filespec job1,task-00000,stdout.txt
+SHIPYARD_CONFIGDIR=. shipyard data files stream --filespec job1,task-00000,stdout.txt
 ```
 The above invocation will stream the stdout.txt file from the job `job1` and
 task `task1` from a live compute node. Because all portions of the
