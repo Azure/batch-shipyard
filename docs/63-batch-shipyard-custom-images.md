@@ -32,18 +32,25 @@ role permission or a
 * `Microsoft.Compute/images/read`
 
 ## Creating Images for use with Azure Batch and Batch Shipyard
-### Creating an ARM Image with Packer
 It is recommended to use [Packer](https://packer.io/) to create a custom
 image that is an ARM Image resource compatible with Azure Batch and Batch
 Shipyard. You will need to create a preparation script and install all
 of the [required software](#provision) as outlined in the following sections
 of this guide.
 
-The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
-area of the repository contain example `packer` scripts to create a custom
-image from an existing Marketplace platform image.
+**Note:** Currently creating an ARM Image directly with Packer can only
+be used with User Subscription Batch accounts. For standard Batch Service
+pool allocation mode Batch accounts, Packer will need to create a VHD
+first, then you will need to import the VHD to an ARM Image. Please follow
+the appropriate path that matches your Batch account pool allocation mode.
 
-In the packer JSON file, ensure that you have defined the properties:
+### Creating an ARM Image Directly with Packer
+The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
+area of the repository contain example `packer` scripts to create an custom
+image directly as an ARM Image from an existing Marketplace platform image.
+
+In the packer JSON file (e.g., `build.json`), ensure that you have defined
+the properties:
 
 * `managed_image_name` which is the name of the ARM Image
 * `managed_image_name_resource_group` which places the ARM Image in the
@@ -54,6 +61,24 @@ The resource group should be in the same region as your Batch account.
 After you have created your ARM image with Packer, skip to
 [Step 3](#imageid) below to retrieve the ARM Image Id that is required for
 populating the `arm_image_id` property in the pool configuration file.
+
+### Creating a VHD with Packer
+The [contrib](https://github.com/Azure/batch-shipyard/tree/master/contrib)
+area of the repository contain example `packer` scripts to create a custom
+image as a page blob VHD from an existing Marketplace platform image.
+
+In the packer JSON file (e.g., `build-vhd.json`), ensure that you have
+defined the properties:
+
+* `resource_group_name` which places the VHD in the specified resource group
+* `storage_account` defines which storage account to use
+* `capture_container_name` defines the container to place the VHD into
+* `capture_name_prefix` defines the prefix for the VHD page blob
+
+The resource group should be in the same region as your Batch account.
+
+After you have created your VHD with Packer, then follow the steps below
+to create an ARM Image from this VHD.
 
 ### Importing a VHD to an ARM Image via Azure Portal
 The following will step you through creating an ARM Image from an existing

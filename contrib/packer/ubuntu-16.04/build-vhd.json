@@ -1,0 +1,55 @@
+{
+  "variables": {
+    "resource_group": "",
+    "storage_account": "",
+    "container_name": "",
+    "vhd_prefix": "",
+    "location": "",
+    "subscription_id": "",
+    "directory_id": "",
+    "application_id": "",
+    "auth_key": "",
+    "docker_version": "17.09.0~ce-0~ubuntu",
+    "bootstrap": "bootstrap.sh"
+  },
+  "builders": [
+      {
+          "type": "azure-arm",
+
+          "subscription_id": "{{user `subscription_id`}}",
+          "tenant_id": "{{user `directory_id`}}",
+          "client_id": "{{user `application_id`}}",
+          "client_secret": "{{user `auth_key`}}",
+
+          "resource_group_name": "{{user `resource_group`}}",
+          "storage_account": "{{user `storage_account`}}",
+          "capture_container_name": "{{user `container_name`}}",
+          "capture_name_prefix": "{{user `vhd_prefix`}}",
+
+          "os_type": "Linux",
+          "image_publisher": "Canonical",
+          "image_offer": "UbuntuServer",
+          "image_sku": "16.04-LTS",
+
+          "location": "{{user `location`}}",
+          "vm_size": "STANDARD_D2_V2"
+      }
+  ],
+  "provisioners": [
+      {
+          "type": "file",
+          "source": "{{user `bootstrap`}}",
+          "destination": "/tmp/{{user `bootstrap`}}"
+      },
+      {
+          "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
+          "inline": [
+              "chmod +x /tmp/{{user `bootstrap`}}",
+              "/tmp/{{user `bootstrap`}} {{user `docker_version`}}",
+              "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
+          ],
+          "inline_shebang": "/bin/bash -e",
+          "type": "shell"
+      }
+  ]
+}
