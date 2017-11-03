@@ -274,7 +274,7 @@ def wrap_commands_in_shell(commands, windows=False, wait=True):
     :return: wrapped commands
     """
     if windows:
-        return 'cmd.exe /c "{}"'.format(' && '.join(commands))
+        return 'cmd.exe /c {}'.format(' && '.join(commands))
     else:
         return '/bin/bash -c \'set -e; set -o pipefail; {}{}\''.format(
             '; '.join(commands), '; wait' if wait else '')

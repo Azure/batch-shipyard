@@ -7,7 +7,7 @@ set -f
 for spec in "$@"; do
     # unencrypted = bxver:kind:encrypted:sa:ep:saskey:remote_path:local_path:eo
     # encrypted   = bxver:kind:encrypted:<encrypted context>:local_path:eo
-    IFS=':' read -ra parts <<< "$spec"
+    IFS=',' read -ra parts <<< "$spec"
     bxver=${parts[0]}
     kind=${parts[1]}
     encrypted=${parts[2],,}
@@ -19,7 +19,7 @@ for spec in "$@"; do
         # decrypt ciphertext
         privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
         cipher=`echo $cipher | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
-        IFS=':' read -ra storage <<< "$cipher"
+        IFS=',' read -ra storage <<< "$cipher"
         sa=${storage[0]}
         ep=${storage[1]}
         saskey=${storage[2]}

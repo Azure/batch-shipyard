@@ -1577,6 +1577,11 @@ def _update_container_images(
                 'image distribution')
     except KeyError:
         pass
+    native = settings.is_native_docker_pool(config)
+    if native:
+        raise RuntimeError(
+            'cannot update container images for native container '
+            'support pools')
     # if image is not specified use images from global config
     singularity_images = None
     if util.is_none_or_empty(docker_image):

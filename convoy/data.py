@@ -158,11 +158,11 @@ def _process_storage_input_data(config, input_data, on_task):
         # kind:encrypted:<sa:ep:saskey:remote_path>:local_path:eo
         creds = crypto.encrypt_string(
             encrypt,
-            '{}:{}:{}:{}'.format(
+            '{},{},{},{}'.format(
                 storage_settings.account, storage_settings.endpoint,
                 saskey, remote_path),
             config)
-        args.append('"{bxver}:i:{enc}:{creds}:{lp}:{eo}"'.format(
+        args.append('"{bxver},i,{enc},{creds},{lp},{eo}"'.format(
             bxver=_BLOBXFER_VERSION,
             enc=encrypt,
             creds=creds,
@@ -218,6 +218,33 @@ def process_input_data(config, bxfile, spec, on_task=False):
     :rtype: str
     :return: additonal command
     """
+    tfmimage = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        bxcmd = ('powershell -ExecutionPolicy Unrestricted -command '
+                 '%AZ_BATCH_NODE_STARTUP_DIR%\\wd\\{} {{}}').format(bxfile[0])
+        tfmimage = '{}-windows'.format(tfmimage)
+        tfmbind = (
+            '-v %AZ_BATCH_NODE_ROOT_DIR%:%AZ_BATCH_NODE_ROOT_DIR% '
+            '-w %AZ_BATCH_TASK_WORKING_DIR% '
+            '-e "AZ_BATCH_NODE_STARTUP_DIR='
+            '%AZ_BATCH_NODE_STARTUP_DIR%" '
+        )
+        tfmcmd = 'C:\\batch-shipyard\\task_file_mover.cmd {{args}}'
+        tfmpre = ''
+        tfmpost = ''
+    else:
+        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}} set +f'.format(
+            bxfile[0])
+        tfmbind = (
+            '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
+            '-w $AZ_BATCH_TASK_WORKING_DIR '
+            '-e "AZ_BATCH_NODE_STARTUP_DIR='
+            '$AZ_BATCH_NODE_STARTUP_DIR" '
+        )
+        tfmcmd = '/opt/batch-shipyard/task_file_mover.sh {{args}}'
+        tfmpre = 'set -f; '
+        tfmpost = '; set +f'
     ret = []
     input_data = settings.input_data(spec)
     if util.is_not_empty(input_data):
@@ -225,21 +252,27 @@ def process_input_data(config, bxfile, spec, on_task=False):
             if key == 'azure_storage':
                 args = _process_storage_input_data(
                     config, input_data[key], on_task)
-                ret.append(
-                    ('set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {}; '
-                     'set +f').format(bxfile[0], ' '.join(args)))
+                if is_windows:
+                    cmds = []
+                    for arg in args:
+                        cmds.append('""{}""'.format(arg))
+                    args = cmds
+                ret.append(bxcmd.format(' '.join(args)))
             elif key == 'azure_batch':
                 args = _process_batch_input_data(
                     config, input_data[key], on_task)
+                if is_windows:
+                    cmds = []
+                    for arg in args:
+                        cmds.append('""{}""'.format(arg))
+                    args = cmds
                 ret.append(
-                    ('set -f; docker run --rm -t '
-                     '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
-                     '-w $AZ_BATCH_TASK_WORKING_DIR '
-                     '-e "AZ_BATCH_NODE_STARTUP_DIR='
-                     '$AZ_BATCH_NODE_STARTUP_DIR" '
-                     'alfpark/batch-shipyard:{}-cargo '
-                     '/opt/batch-shipyard/task_file_mover.sh {}; '
-                     'set +f'.format(__version__, ' '.join(args))))
+                    ('{tfmpre}docker run --rm -t {tfmbind} {tfmimage} '
+                     '{tfmcmd}{tfmpost}').format(
+                         tfmpre=tfmpre, tfmbind=tfmbind, tfmimage=tfmimage,
+                         tfmcmd=tfmcmd, tfmpost=tfmpost,
+                         args=' '.join(args))
+                )
             else:
                 raise ValueError(
                     'unknown input_data method: {}'.format(key))
@@ -335,11 +368,11 @@ def _process_storage_output_data(config, native, is_windows, output_data):
             # kind:encrypted:<sa:ep:saskey:remote_path>:local_path:eo
             creds = crypto.encrypt_string(
                 encrypt,
-                '{}:{}:{}:{}'.format(
+                '{},{},{},{}'.format(
                     storage_settings.account, storage_settings.endpoint,
                     saskey, remote_path),
                 config)
-            args.append('"{bxver}:e:{enc}:{creds}:{lp}:{eo}"'.format(
+            args.append('"{bxver},e,{enc},{creds},{lp},{eo}"'.format(
                 bxver=_BLOBXFER_VERSION,
                 enc=encrypt,
                 creds=creds,
@@ -361,7 +394,8 @@ def process_output_data(config, bxfile, spec):
     native = settings.is_native_docker_pool(config)
     is_windows = settings.is_windows_pool(config)
     if is_windows:
-        bxcmd = '%AZ_BATCH_NODE_STARTUP_DIR%\\wd\\{} {{}}'.format(bxfile[0])
+        bxcmd = ('powershell -ExecutionPolicy Unrestricted -command '
+                 '%AZ_BATCH_NODE_STARTUP_DIR%\\wd\\{} {{}}').format(bxfile[0])
     else:
         bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}} set +f'.format(
             bxfile[0])
@@ -372,6 +406,11 @@ def process_output_data(config, bxfile, spec):
             if key == 'azure_storage':
                 args = _process_storage_output_data(
                     config, native, is_windows, output_data[key])
+                if is_windows:
+                    cmds = []
+                    for arg in args:
+                        cmds.append('""{}""'.format(arg))
+                    args = cmds
                 if native:
                     ret.extend(args)
                 else:

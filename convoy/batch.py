@@ -622,6 +622,10 @@ def add_ssh_user(batch_client, config, nodes=None):
     :param list nodes: list of nodes
     """
     pool = settings.pool_settings(config)
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        logger.debug('skipping ssh config for windows pool {}'.format(pool.id))
+        return
     if util.is_none_or_empty(pool.ssh.username):
         logger.info('not creating ssh user on pool {}'.format(pool.id))
         return
@@ -2396,7 +2400,8 @@ def stream_file_and_wait_for_task(
                         'state of the resource.' in ex.message):
                     time.sleep(1)
                     continue
-                elif 'The specified file does not exist.' in ex.message:
+                elif ('The specified file does not exist.' in ex.message or
+                      'The specified path does not exist.' in ex.message):
                     notfound += 1
                     if notfound > 20:
                         raise
@@ -3288,7 +3293,7 @@ def add_jobs(
                 environment_settings=[
                     batchmodels.EnvironmentSetting(
                         'SINGULARITY_CACHEDIR',
-                        '{}/singularity/cache'.format(tempdisk)
+                        settings.get_singularity_cachedir(config)
                     ),
                 ],
             )
@@ -3392,28 +3397,47 @@ def add_jobs(
                             config, 'continue adding job schedule {}'.format(
                                 job_id)):
                         continue
-            if native:
-                jscs = batchmodels.TaskContainerSettings(
-                    container_run_options='--rm',
-                    image_name='alfpark/batch-shipyard:{}-cargo'.format(
-                        __version__)
-                )
+            jmimgname = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+            if is_windows:
+                jmimgname = '{}-windows'.format(jmimgname)
+                jscmdline = (
+                    'C:\\batch-shipyard\\recurrent_job_manager.cmd{}'
+                ).format(' --monitor' if kill_job_on_completion else '')
+            else:
                 jscmdline = (
                     '/opt/batch-shipyard/recurrent_job_manager.sh{}'
                 ).format(' --monitor' if kill_job_on_completion else '')
+            if native:
+                jscs = batchmodels.TaskContainerSettings(
+                    container_run_options='--rm',
+                    image_name=jmimgname)
             else:
                 jscs = None
+                if is_windows:
+                    envgrep = (
+                        'set | findstr AZ_BATCH_ >> .shipyard-jmtask.envlist'
+                    )
+                    bind = (
+                        '-v %AZ_BATCH_TASK_DIR%:%AZ_BATCH_TASK_DIR% '
+                        '-w %AZ_BATCH_TASK_WORKING_DIR%'
+                    )
+                else:
+                    envgrep = (
+                        'env | grep AZ_BATCH_ >> .shipyard-jmtask.envlist'
+                    )
+                    bind = (
+                        '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
+                        '-w $AZ_BATCH_TASK_WORKING_DIR'
+                    )
                 jscmdline = util.wrap_commands_in_shell([
-                    'env | grep AZ_BATCH_ > .shipyard-jmtask.envlist',
-                    ('docker run --rm --env-file '
-                     '.shipyard-jmtask.envlist '
-                     '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
-                     '-w $AZ_BATCH_TASK_WORKING_DIR '
-                     'alfpark/batch-shipyard:{}-cargo '
-                     '/opt/batch-shipyard/recurrent_job_manager.sh{}').format(
-                         __version__,
-                         ' --monitor' if kill_job_on_completion else '')
+                    envgrep,
+                    ('docker run --rm --env-file .shipyard-jmtask.envlist '
+                     '{bind} {jmimgname} {jscmdline}').format(
+                         bind=bind, jmimgname=jmimgname, jscmdline=jscmdline)
                 ], windows=is_windows)
+                del bind
+                del envgrep
+            del jmimgname
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
                 schedule=batchmodels.Schedule(
@@ -3670,8 +3694,14 @@ def add_jobs(
                         )
                     ]
                 else:
+                    if is_windows:
+                        envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(
+                            task.envfile)
+                    else:
+                        envgrep = 'env | grep AZ_BATCH_ >> {}'.format(
+                            task.envfile)
                     task_commands = [
-                        'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
+                        envgrep,
                         '{} {} {}{}'.format(
                             task.docker_run_cmd,
                             ' '.join(task.run_options),
@@ -3679,6 +3709,7 @@ def add_jobs(
                             '{}'.format(
                                 ' ' + task.command) if task.command else '')
                     ]
+                    del envgrep
             output_files = None
             # get registry login if missing images
             if (not native and allow_run_on_missing and
@@ -3724,7 +3755,7 @@ def add_jobs(
                     taskenv.append(
                         batchmodels.EnvironmentSetting(
                             'SINGULARITY_CACHEDIR',
-                            '{}/singularity/cache'.format(tempdisk)
+                            settings.get_singularity_cachedir(config)
                         )
                     )
                     if task.gpu:

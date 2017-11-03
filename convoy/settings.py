@@ -407,7 +407,11 @@ def get_singularity_tmpdir(config):
     :rtype: str
     :return: singularity tmpdir
     """
-    return '{}/singularity/tmp'.format(temp_disk_mountpoint(config))
+    if is_windows_pool(config):
+        sep = '\\'
+    else:
+        sep = '/'
+    return sep.join((temp_disk_mountpoint(config), 'singularity', 'tmp'))
 
 
 def get_singularity_cachedir(config):
@@ -417,7 +421,11 @@ def get_singularity_cachedir(config):
     :rtype: str
     :return: singularity cachedir
     """
-    return '{}/singularity/cache'.format(temp_disk_mountpoint(config))
+    if is_windows_pool(config):
+        sep = '\\'
+    else:
+        sep = '/'
+    return sep.join((temp_disk_mountpoint(config), 'singularity', 'cache'))
 
 
 def can_tune_tcp(vm_size):
@@ -2636,6 +2644,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     :return: task settings
     """
     native = is_native_docker_pool(config, vm_config=poolconf.vm_configuration)
+    is_windows = is_windows_pool(config, vm_config=poolconf.vm_configuration)
     # id must be populated by the time this function is invoked
     task_id = conf['id']
     if util.is_none_or_empty(task_id):
@@ -2656,6 +2665,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         raise ValueError(
             'Cannot run Singularity containers on native container '
             'support pools')
+    if is_windows and util.is_not_empty(singularity_image):
+        raise ValueError(
+            'Cannot run Singularity containers on windows pools')
     # get some pool props
     if cloud_pool is None:
         pool_id = poolconf.id
@@ -2797,47 +2809,48 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             run_opts.append('--entrypoint {}'.format(entrypoint))
         del entrypoint
         # get user identity settings
-        ui = _kv_read_checked(jobspec, 'user_identity', {})
-        ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
-        ui_specific = _kv_read(ui, 'specific_user', {})
-        ui_specific_uid = _kv_read(ui_specific, 'uid')
-        ui_specific_gid = _kv_read(ui_specific, 'gid')
-        del ui
-        del ui_specific
-        if ui_default_pool_admin and ui_specific_uid is not None:
-            raise ValueError(
-                'cannot specify both default_pool_admin and '
-                'specific_user:uid/gid at the same time')
-        ui = UserIdentitySettings(
-            default_pool_admin=ui_default_pool_admin,
-            specific_user_uid=ui_specific_uid,
-            specific_user_gid=ui_specific_gid,
-        )
-        # append user identity options
-        uiopt = None
-        attach_ui = False
-        if ui.default_pool_admin:
-            # run as the default pool admin user. note that this is
-            # *undocumented* behavior and may break at anytime
-            uiopt = '-u `id -u _azbatch`:`id -g _azbatch`'
-            attach_ui = True
-        elif ui.specific_user_uid is not None:
-            if ui.specific_user_gid is None:
+        if not is_windows:
+            ui = _kv_read_checked(jobspec, 'user_identity', {})
+            ui_default_pool_admin = _kv_read(ui, 'default_pool_admin', False)
+            ui_specific = _kv_read(ui, 'specific_user', {})
+            ui_specific_uid = _kv_read(ui_specific, 'uid')
+            ui_specific_gid = _kv_read(ui_specific, 'gid')
+            del ui
+            del ui_specific
+            if ui_default_pool_admin and ui_specific_uid is not None:
                 raise ValueError(
-                    'cannot specify a user identity uid without a gid')
-            uiopt = '-u {}:{}'.format(
-                ui.specific_user_uid, ui.specific_user_gid)
-            attach_ui = True
-        if util.is_not_empty(uiopt):
-            run_opts.append(uiopt)
-            docker_exec_options.append(uiopt)
-        if attach_ui:
-            run_opts.append('-v /etc/passwd:/etc/passwd:ro')
-            run_opts.append('-v /etc/group:/etc/group:ro')
-            run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
-        del attach_ui
-        del ui
-        del uiopt
+                    'cannot specify both default_pool_admin and '
+                    'specific_user:uid/gid at the same time')
+            ui = UserIdentitySettings(
+                default_pool_admin=ui_default_pool_admin,
+                specific_user_uid=ui_specific_uid,
+                specific_user_gid=ui_specific_gid,
+            )
+            # append user identity options
+            uiopt = None
+            attach_ui = False
+            if ui.default_pool_admin:
+                # run as the default pool admin user. note that this is
+                # *undocumented* behavior and may break at anytime
+                uiopt = '-u `id -u _azbatch`:`id -g _azbatch`'
+                attach_ui = True
+            elif ui.specific_user_uid is not None:
+                if ui.specific_user_gid is None:
+                    raise ValueError(
+                        'cannot specify a user identity uid without a gid')
+                uiopt = '-u {}:{}'.format(
+                    ui.specific_user_uid, ui.specific_user_gid)
+                attach_ui = True
+            if util.is_not_empty(uiopt):
+                run_opts.append(uiopt)
+                docker_exec_options.append(uiopt)
+            if attach_ui:
+                run_opts.append('-v /etc/passwd:/etc/passwd:ro')
+                run_opts.append('-v /etc/group:/etc/group:ro')
+                run_opts.append('-v /etc/sudoers:/etc/sudoers:ro')
+            del attach_ui
+            del ui
+            del uiopt
     # get command
     command = _kv_read_checked(conf, 'command')
     # parse data volumes
@@ -2857,14 +2870,22 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     # bind root dir and set working dir
     if not native:
         # mount batch root dir
-        run_opts.append(
-            '{} $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR'.format(
-                bindparm))
+        if is_windows:
+            run_opts.append(
+                '{} %AZ_BATCH_NODE_ROOT_DIR%:%AZ_BATCH_NODE_ROOT_DIR%'.format(
+                    bindparm))
+        else:
+            run_opts.append(
+                '{} $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR'.format(
+                    bindparm))
         # set working directory if not already set
         if util.is_not_empty(docker_image):
             if not any((x.startswith('-w ') or x.startswith('--workdir '))
                        for x in run_opts):
-                run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
+                if is_windows:
+                    run_opts.append('-w %AZ_BATCH_TASK_WORKING_DIR%')
+                else:
+                    run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
         else:
             if not any(x.startswith('--pwd ') for x in run_opts):
                 run_opts.append('--pwd $AZ_BATCH_TASK_WORKING_DIR')
@@ -2959,7 +2980,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     gpu = _kv_read(conf, 'gpu') or _kv_read(jobspec, 'gpu')
     # if not specified check for gpu pool and implicitly enable
     if gpu is None:
-        if is_gpu_pool(vm_size):
+        if is_gpu_pool(vm_size) and not is_windows:
             gpu = True
         else:
             gpu = False
@@ -2984,7 +3005,7 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     )
     # if not specified, check for rdma pool and implicitly enable
     if infiniband is None:
-        if is_rdma_pool(vm_size) and inter_node_comm:
+        if is_rdma_pool(vm_size) and inter_node_comm and not is_windows:
             infiniband = True
         else:
             infiniband = False
@@ -3121,14 +3142,19 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             else:
                 cc_args = None
         else:
+            if is_windows:
+                envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
+            else:
+                envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
             cc_args = [
-                'env | grep AZ_BATCH_ >> {}'.format(envfile),
+                envgrep,
                 '{} {} {}{}'.format(
                     docker_run_cmd,
                     ' '.join(run_opts),
                     docker_image,
                     coordination_command),
             ]
+            del envgrep
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):
