@@ -3,50 +3,90 @@ version: '{branch}-{build}'
 clone_depth: 5
 
 cache:
-    - '%LOCALAPPDATA%\pip\Cache'
+- '%LOCALAPPDATA%\pip\Cache'
 
 environment:
-    matrix:
-        - PYTHON: "C:\\Python27-x64"
-          PYTHON_VERSION: "2.7"
-          PYTHON_ARCH: "64"
-
-        - PYTHON: "C:\\Python36-x64"
-          PYTHON_VERSION: "3.6"
-          PYTHON_ARCH: "64"
+  matrix:
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    PYTHON: "C:\\Python27-x64"
+    PYTHON_VERSION: "2.7"
+    PYTHON_ARCH: "64"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    PYTHON: "C:\\Python36-x64"
+    PYTHON_VERSION: "3.6"
+    PYTHON_ARCH: "64"
+  DOCKER_USERNAME:
+    secure: S8n3Geq7JUkN7ZQKXo8CLg==
+  DOCKER_PASSWORD:
+    secure: BcI2Fs6IJeTfPq8cAD4KEQ==
+  DOCKER_IMAGE_TAG_PREFIX: "alfpark/batch-shipyard:"
 
 init:
-    - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
+- echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
 
 install:
-    - pip install -r requirements.txt
-    - pip install flake8
+- pip install -r requirements.txt
+- pip install flake8
 
 build: off
 
 test_script:
-    - flake8 --statistics shipyard.py convoy\\*.py
-    - IF "%PYTHON_VERSION%"=="3.6" (
-      flake8 --statistics cascade\\*.py cargo\\*.py
-      )
+- flake8 --statistics shipyard.py convoy\\*.py
+- IF "%PYTHON_VERSION%"=="3.6" (
+  flake8 --statistics cascade\\*.py cargo\\*.py
+  )
 
 after_test:
-    - echo is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME%
-    - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
-      echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &&
-      nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &&
-      7z l batch-shipyard.*.nupkg &&
-      appveyor PushArtifact batch-shipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg
-      )
+- echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH%
+- IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
+  echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &&
+  nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &&
+  7z l batch-shipyard.*.nupkg &&
+  appveyor PushArtifact batch-shipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg
+  )
+- ps: >-
+    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
+      Write-Host "Build is from a PR, not creating a Docker image"
+      return
+    }
+    if (!($env:PYTHON_VERSION -eq "3.6")) {
+      Write-Host "Python environment is not 3.6, not creating a Docker image"
+      return
+    }
+
+    $DOCKER_IMAGE_TAG_SUFFIX = $null
+
+    if ($env:APPVEYOR_REPO_TAG -eq "true") {
+      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-windows'
+    }
+    if ($DOCKER_IMAGE_TAG_SUFFIX -eq $null) {
+      Write-Host "Image tag suffix is null, not creating a Docker image"
+      return
+    }
+
+    $DOCKER_IMAGE_TAG = $env:DOCKER_IMAGE_TAG_PREFIX + $DOCKER_IMAGE_TAG_SUFFIX
+
+    Write-Host "Creating image with tag: $DOCKER_IMAGE_TAG"
+
+    docker version
+
+    pushd cargo\\windows
+
+    docker build --build-arg GIT_BRANCH=$env:APPVEYOR_REPO_BRANCH --build-arg GIT_COMMIT=$env:APPVEYOR_REPO_COMMIT -t $DOCKER_IMAGE_TAG .
+
+    docker login -u="$env:DOCKER_USERNAME" -p="$env:DOCKER_PASSWORD"
+
+    docker push $DOCKER_IMAGE_TAG
+
+    popd
 
 deploy:
-    - provider: NuGet
-      server: https://www.siteextensions.net
-      api_key:
-          secure: 7rnRHiBwGPW086Rgcn+acev2aG53VmVFnoklGqr589FJtHaMfJBL8gz/R35ZLh3+
-      skip_symbols: true
-      artifact: /.*\.nupkg/
-      on:
-          appveyor_repo_tag: true
-          PYTHON_VERSION: "3.6"
-
+- provider: NuGet
+  server: https://www.siteextensions.net
+  api_key:
+    secure: 7rnRHiBwGPW086Rgcn+acev2aG53VmVFnoklGqr589FJtHaMfJBL8gz/R35ZLh3+
+  skip_symbols: true
+  artifact: /.*\.nupkg/
+  on:
+    appveyor_repo_tag: true
+    PYTHON_VERSION: "3.6"

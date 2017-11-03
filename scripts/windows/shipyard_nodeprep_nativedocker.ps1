@@ -31,13 +31,12 @@ Write-Host "Encrypted: $e"
 Write-Host "Azure File: $a"
 Write-Host ""
 
-
 # check for docker
 Exec { docker --version }
 
 Write-Host "Mounts path: $MountsPath"
 
-# mount azure file shares
+# TODO mount azure file shares
 if ($a) {
 	Write-Host "Mounting file shares"
 }
@@ -60,7 +59,7 @@ if (!$?)
 }
 
 # pull required images
-#Exec { docker pull alfpark/batch-shipyard:${v}-cargo-windows }
+Exec { docker pull alfpark/batch-shipyard:${v}-cargo-windows }
 
 # touch node prep finished file
 New-Item -ItemType file $NodePrepFinished -Force
