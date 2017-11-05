@@ -683,7 +683,8 @@ def fs_cluster_options(f):
 @click.version_option(version=convoy.__version__)
 @click.pass_context
 def cli(ctx):
-    """Batch Shipyard: Provision and Execute Docker Workloads on Azure Batch"""
+    """Batch Shipyard: Provision and execute container workloads on
+    Azure Batch"""
     pass
 
 

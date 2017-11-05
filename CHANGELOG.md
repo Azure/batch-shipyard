@@ -5,6 +5,8 @@
 ### Added
 - Singularity support
 - Preliminary Windows server support
+- Pre-built binaries for CLI for some Linux distributions and Windows
+- Windows Docker image for CLI
 - Singularity HPCG and TensorFlow-GPU recipe
 
 ### Changed

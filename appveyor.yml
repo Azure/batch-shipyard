@@ -15,6 +15,10 @@ environment:
     PYTHON: "C:\\Python36-x64"
     PYTHON_VERSION: "3.6"
     PYTHON_ARCH: "64"
+  BLOBXFER_STORAGE_ACCOUNT_KEY:
+    secure: kc+BqqjCZH3FGmN+4ngtNa8p4p2CR93gTGB9ecXvAZBdeOC3aaQoAV1JSSxXemfYF1I8B8rWM6gp6YyFusqfkpH4KMTZAyI8pTzV9l8dDaKhTBfE21kYlXgsRpV+JUnj
+  BLOBXFER_STORAGE_ACCOUNT:
+    secure: Dlu9Wk8y1Mo4eGjx6cH6ex+35JEB2g7kpsK15bSZeAI=
   DOCKER_USERNAME:
     secure: S8n3Geq7JUkN7ZQKXo8CLg==
   DOCKER_PASSWORD:
@@ -46,31 +50,104 @@ after_test:
   )
 - ps: >-
     if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
-      Write-Host "Build is from a PR, not creating a Docker image"
+      Write-Host "Build is from a PR, not creating binary"
       return
     }
     if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating a Docker image"
+      Write-Host "Python environment is not 3.6, not creating binary"
+      return
+    }
+    if ($env:APPVEYOR_REPO_TAG -eq "true") {
+      $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_TAG_NAME + "-cli-win-amd64.exe"
+      $env:UPLOAD_PATH="releases/" + $env:APPVEYOR_REPO_TAG_NAME
+    }
+    else {
+      if ($env:APPVEYOR_REPO_BRANCH -eq "master" -Or $env:APPVEYOR_REPO_BRANCH -eq "develop") {
+        $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_BRANCH + "-" + $env:APPVEYOR_BUILD_NUMBER + "-cli-win-amd64.exe"
+        $env:UPLOAD_PATH="builds/" + $env:APPVEYOR_REPO_BRANCH
+      }
+      else {
+        Write-Host "Invalid tag or branch $env:APPVEYOR_REPO_BRANCH to build binary"
+        return
+      }
+    }
+- IF "%BATCH_SHIPYARD_CLI_ARITFACT%"=="" (
+    echo "Batch Shipyard CLI artifact not defined"
+  ) ELSE (
+    echo "Batch Shipyard CLI is %BATCH_SHIPYARD_CLI_ARITFACT% upload path %UPLOAD_PATH%" &&
+    pip install --upgrade --pre blobxfer &&
+    virtualenv -p "%PYTHON%\\python.exe" pyi &&
+    pyi\\Scripts\\activate.bat &&
+    pip install --upgrade pyinstaller &&
+    pip install -r requirements.txt &&
+    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py &&
+    pyi\\Scripts\\deactivate.bat &&
+    appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" &&
+    blobxfer upload --remote-path %UPLOAD_PATH% --local-path bin\\%BATCH_SHIPYARD_CLI_ARITFACT% --strip-components 1 --file-md5 --overwrite
+  )
+- ps: >-
+    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
+      Write-Host "Build is from a PR, not creating a Docker image for cargo"
+      return
+    }
+    if (!($env:PYTHON_VERSION -eq "3.6")) {
+      Write-Host "Python environment is not 3.6, not creating a Docker image for cargo"
       return
     }
 
     $DOCKER_IMAGE_TAG_SUFFIX = $null
 
     if ($env:APPVEYOR_REPO_TAG -eq "true") {
-      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-windows'
+      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-cargo-windows'
     }
     if ($DOCKER_IMAGE_TAG_SUFFIX -eq $null) {
-      Write-Host "Image tag suffix is null, not creating a Docker image"
+      Write-Host "Image tag suffix is null, not creating a Docker image for cargo"
       return
     }
 
     $DOCKER_IMAGE_TAG = $env:DOCKER_IMAGE_TAG_PREFIX + $DOCKER_IMAGE_TAG_SUFFIX
 
-    Write-Host "Creating image with tag: $DOCKER_IMAGE_TAG"
+    Write-Host "Creating Docker image for cargo with tag: $DOCKER_IMAGE_TAG"
 
     docker version
 
-    pushd cargo\\windows
+    pushd docker\\windows\\cargo
+
+    docker build --build-arg GIT_BRANCH=$env:APPVEYOR_REPO_BRANCH --build-arg GIT_COMMIT=$env:APPVEYOR_REPO_COMMIT -t $DOCKER_IMAGE_TAG .
+
+    docker login -u="$env:DOCKER_USERNAME" -p="$env:DOCKER_PASSWORD"
+
+    docker push $DOCKER_IMAGE_TAG
+
+    popd
+
+- ps: >-
+    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
+      Write-Host "Build is from a PR, not creating a Docker image for CLI"
+      return
+    }
+    if (!($env:PYTHON_VERSION -eq "3.6")) {
+      Write-Host "Python environment is not 3.6, not creating a Docker image for CLI"
+      return
+    }
+
+    $DOCKER_IMAGE_TAG_SUFFIX = $null
+
+    if ($env:APPVEYOR_REPO_TAG -eq "true") {
+      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-cli-windows'
+    }
+    if ($DOCKER_IMAGE_TAG_SUFFIX -eq $null) {
+      Write-Host "Image tag suffix is null, not creating a Docker image for CLI"
+      return
+    }
+
+    $DOCKER_IMAGE_TAG = $env:DOCKER_IMAGE_TAG_PREFIX + $DOCKER_IMAGE_TAG_SUFFIX
+
+    Write-Host "Creating Docker image for CLI with tag: $DOCKER_IMAGE_TAG"
+
+    docker version
+
+    pushd docker\\windows\\cli
 
     docker build --build-arg GIT_BRANCH=$env:APPVEYOR_REPO_BRANCH --build-arg GIT_COMMIT=$env:APPVEYOR_REPO_COMMIT -t $DOCKER_IMAGE_TAG .
 

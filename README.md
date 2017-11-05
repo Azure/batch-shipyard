@@ -97,9 +97,6 @@ required. Simply request a Cloud Shell session and type `shipyard` to invoke
 the CLI.
 
 ### Local Installation
-Installation is typically an easy two-step process. The CLI is also available
-as a Docker image:
-[alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard).
 Please see [the installation guide](http://batch-shipyard.readthedocs.io/en/latest/01-batch-shipyard-installation/)
 for more information regarding installation and requirements.
 

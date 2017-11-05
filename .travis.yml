@@ -1,13 +1,67 @@
 language: python
+
 cache: pip
+
 python:
   - 2.7
   - 3.4
   - 3.5
   - 3.6
+
+env:
+  global:
+  - BATCH_SHIPYARD_CLI_ARTIFACT=batch-shipyard-$TRAVIS_TAG-cli-$TRAVIS_OS_NAME-x86_64
+  - secure: "CsiojO04pOwYbCduqXcZfSsJZ01n0bc4hflza4tk9ZHLotcZkCRKGVsemdPVKZVNlzy+gUpzyc4Tc4/h0391piQ51CCTThde2csDWbXssoO71b4U/jIuKhOqMHyp+5dGznBXOcFye9d5gpdHF0z3AZbo9V7zkuO+3YD/ES1YLWJ5+6RRAR11FRofipfNFYQ7OPgPzrqI0IHHKOYG02JeN7ZmpX+fEitH/J561y9RMIhEtk2udBd51JSTIYao7IENEpHoD41CwwlpOLWKhr7oo9wmyOTdvwyNzLh6Z/CxBUMvmvKn4zsK2d/WzM77EwN4bcBwu2vJmfR+Hi5CD61L9KdhVM+rWUn8+OJUmiNo+ZYVM5w/cHdyC7BYe5hHDAEVmvg0dQIxFXTov5+PjAi0HjA2RNrI2i2ABX1N8wrtPCxlkL8Pnbb93DfTPWmYQVS6LsXrh77KuD7gRxu1s5KAmlfcG//bGuKvpDz6vm7+/cXxnB4sZX+Et9S/F1GV1VYOAr3YwLuE2Tl8MPyoUJa/PdK+md3klL9WteQWXJHLcLbnt34VvstF0jxGh/hqI/3lKtN1U5bsfRbGNBAvYGbGQKpVleF5/0yDLI5/kWI7bIuEF4FHYgIOSvIAzVdC+GXYAeXgrjlOHDFVKwOGL1lhvY3nA/fbENNhHeEN3RQc6N8="
+  - secure: "XgD2xFqMvimEDzwRvUwNmA7EAl6Y/ydwgXXq+O4eEE09Xl/UQvmCZ4soTwFqOUnf798Xqn6R2qXHdqpl2l4IXMILa4LteNUzRKd0txOj2lPGftFs1s09Odu729PkoEs9qbM446yjvK+PhbDUvD9GboQ3sWbzYSUPPDiJuPWiJ5KasooGdyfahV542hBo2iOc0Ezq+sziBwBffY407XcX7mTmXjEtQuwSezJGWynHUSD7gIywCXAuzTqdK3ikYYdSJTUn6SnlZZlLuICoOzVULT97VzA+o+puFU/rSnG9+czUUcXILpDzjpl231b858sQ7RdLocPdTiyIVx06FOfW/XfKUyDbRHGhiVZzsJ4xDMxtQk9haLb5NJjwZGFWmyy2tHnj86yNwxwmocbiRymqC2sz/rcIpmwMneKIGJG9MuXRMlGqeMxCcDb3FoaoUp6JIflkx5qsmgsaTEs4m0tcdyivf6ugW1dpBIGek8sf/LISmdakZTNeJxGUyMNYRFdSRWTTZvQ4fj3ZVxLoTCHLszwwHZ1l3AstbiYk86/5Zn8AS+5cWnVEZP3ayPkWqVKMjLxQrHQsLKGgpJBjDXTUp4NixssgXWmDmJMuME0TEjoT58hhoWDQk9PdKnpiiOHyne5jAVliTwhsDcKYCaqt9F8AAAOyuRkWobU32YpIEnU="
+
 install:
   - travis_retry pip install -r requirements.txt
   - travis_retry pip install flake8
+
 script:
   - flake8 --statistics shipyard.py convoy/*.py
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8 --statistics cascade/*.py cargo/*.py; fi
+
+after_success:
+- |
+    if [[ "$TRAVIS_PULL_REQUEST" != "false" ]]; then
+      echo "Not building binary with PR $TRAVIS_PULL_REQUEST"
+      return
+    fi
+    if [[ "$TRAVIS_PYTHON_VERSION" != "3.6" ]]; then
+      echo "Not building binary without Python 3.6"
+      return
+    fi
+    if [[ ! -z "$TRAVIS_TAG" ]]; then
+      export UPLOAD_PATH="releases/$TRAVIS_TAG"
+    elif [[ "$TRAVIS_BRANCH" == "master" ]] || [[ "$TRAVIS_BRANCH" == "develop" ]]; then
+      export BATCH_SHIPYARD_CLI_ARTIFACT="batch-shipyard-${TRAVIS_BRANCH}-${TRAVIS_BUILD_NUMBER}-cli-$TRAVIS_OS_NAME-x86_64"
+      export UPLOAD_PATH="builds/$TRAVIS_BRANCH"
+    else
+      echo "Invalid tag=$TRAVIS_TAG or branch=$TRAVIS_BRANCH to build binary"
+      return
+    fi
+    echo "BATCH_SHIPYARD_CLI_ARTIFACT=$BATCH_SHIPYARD_CLI_ARTIFACT UPLOAD_PATH=$UPLOAD_PATH"
+    if [[ ! -e "bin/$BATCH_SHIPYARD_CLI_ARTIFACT" ]]; then
+      travis_retry pip install --upgrade --pre blobxfer
+      virtualenv -p python3 pyi
+      $SHELL -c "set -e; source pyi/bin/activate; \
+                 pip install pyinstaller; \
+                 pip install --no-cache-dir -r requirements.txt; \
+                 pyinstaller -F -n $BATCH_SHIPYARD_CLI_ARTIFACT -p batch-shipyard --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+                 deactivate"
+      blobxfer upload --remote-path $UPLOAD_PATH --local-path bin/$BATCH_SHIPYARD_CLI_ARTIFACT --strip-components 1 --file-md5 --overwrite
+    fi
+
+deploy:
+  - provider: releases
+    skip_cleanup: true
+    on:
+      tags: true
+      condition: "$TRAVIS_PYTHON_VERSION == 3.6"
+    draft: true
+    overwrite: true
+    tag_name: $TRAVIS_TAG
+    file: bin/$BATCH_SHIPYARD_CLI_ARTIFACT
+    api_key:
+      secure: Mz2sWn3YAr4tenO1NflOR6QJ9xiy4bjQvnFl9HzZ4zifxrjwLyN/Nbms6X2l8lq7+HTIDOn4Nw8DsE60Upq7yG0UEkwv0BJJtl2qzPnWGOAymykjnTP5Vl5MlCcqEVtUmWL+Wl7WMid10eJLdxSo7TUHp/AW/NShJuKj4rqQsdOtWBpWHuE2rBVTYeuPpUVku74rGH813erxgX/BPzcSjWcloha3Zp25jglJQ4sjqtGrmdts3hXYI1/6oEvdnmFn2xePRMfrEhJxkHkGhqEukkehi4QMnxQubcv9Y9ETQTROf0QjtTeJ+h/HsK2wY5VdI4dcqe3b0/F0m5sZ2Z0PThzBoi/ga18OKeU8P/w1xWk2+DtvG9jGZ8yjbnfRLxOfEg8KNF8Y6B6KntkJWpoNBlIdDU9jOndnvdAjFu90KMmgerz53FtLw5DmZQxIUjoryRrFQMjnvR2dbaP8QF2LlbdlSPDXcGSlO4zVh9BxXFQJgJ9PYA9AQnVii32o1RL5+CelV59AKaheybtk2pqUVvF1mz+prPVbsIJOPo97YpaAfuNprqVvE8kfE9t5W7aOhMuqM+bS4LpENzqDsPIro2cJ2FROtFmB9Ts1YTt6P0UK0XY+m2v3URWjw8v7U4IqGPeNMdQUC6wEJgNxPH1Ko+T1ZMhQ9y94FWO2at0wF3Q=

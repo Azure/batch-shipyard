@@ -1,12 +1,18 @@
 # Batch Shipyard Installation
-Installation is an easy two-step process if not using Azure Cloud Shell:
-fetch the code and run the install script to download and setup dependencies.
+There are multiple available options for installing Batch Shipyard. Please
+pick an option that is most suitable for your work environment.
+
+* [Azure Cloud Shell](#cloudshell)
+* [Pre-built binary](#binary)
+* [Installers](#installers)
+* [Docker image](#docker-install)
+* [Jupyter Notebooks](#jupyter)
 
 If you wish to install Batch Shipyard into your Azure App Service (e.g.,
 Azure Function App) environment, please see
 [this guide](60-batch-shipyard-site-extension.md).
 
-### Azure Cloud Shell
+## <a name="cloudshell"></a>Azure Cloud Shell
 Batch Shipyard is now integrated into
 [Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
 with no installation required. Simply request a Cloud Shell session and type
@@ -20,12 +26,21 @@ the command `shipyard --version`.
 If you wish to install Batch Shipyard on your machine, please proceed to the
 Installation section.
 
-### Jupyter Notebooks
-There are community contributed [Jupyter notebooks](../contrib/notebooks) to
-help you quickly get started if you prefer that environment instead of a
-commandline.
+## <a name="binary"></a>Pre-built Binary
+Download an appropriate [Release](https://github.com/Azure/batch-shipyard/releases)
+binary for your operating system. Pre-built binaries are not available
+for all platforms and architectures at this time.
 
-## Installation
+Note that for the Linux pre-built binary, it may not work on all
+distributions. If this is the case, please pick an alternate installation
+method.
+
+## <a name="installers"></a>Installation via Script
+Installation is an easy two-step process if using the installers: fetch the
+code and run the install script to download and setup dependencies. This
+is typically the most flexible and compatible installation outside of the
+Docker image for the CLI.
+
 ### Step 1: Acquire Batch Shipyard
 Clone the repository:
 ```shell
@@ -305,6 +320,11 @@ You are now ready to execute it with `docker run`. Please see the
 [Batch Shipyard Usage](20-batch-shipyard-usage.md) guide for more information
 on how to execute the Batch Shipyard CLI Docker image.
 
+## <a name="jupyter"></a>Jupyter Notebooks
+There are community contributed [Jupyter notebooks](../contrib/notebooks) to
+help you quickly get started if you prefer that environment instead of a
+commandline.
+
 ## Upgrading to New Releases
 To upgrade to a new release, simply execute `git pull` or download a new
 release archive and unpack. Next, upgrade the dependencies for your
@@ -322,6 +342,9 @@ Rerun the `install.cmd` script with the same virtual environment parameter.
 #### CLI Docker
 If using the CLI Docker image, simply re-issue the `docker pull` command
 above.
+
+#### Pre-built Binary
+Download a new version of the binary.
 
 ## Windows Support
 Please note that while Batch Shipyard can run on Windows, some functionality

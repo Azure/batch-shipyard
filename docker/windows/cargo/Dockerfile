@@ -16,8 +16,8 @@ RUN git clone -b $Env:GIT_BRANCH --single-branch --depth 5 https://github.com/Az
     git checkout $Env:GIT_COMMIT ; \
     pip install --no-cache-dir -r cargo\requirements.txt ; \
 	del C:\batch-shipyard\cargo\*.sh ; \
-	del C:\batch-shipyard\cargo\Dockerfile ; \
-    copy C:\batch-shipyard\cargo\windows\*.cmd C:\batch-shipyard\cargo
+	del C:\batch-shipyard\cargo\requirements.txt ; \
+	del C:\batch-shipyard\cargo\Dockerfile
 
 RUN python -m compileall C:\Python\Lib ; \
     python -m compileall C:\batch-shipyard\cargo ; \
