@@ -2,12 +2,13 @@
 
 ## [Unreleased]
 
+## [3.0.0b1] - 2017-11-05
 ### Added
-- Singularity support
-- Preliminary Windows server support
-- Pre-built binaries for CLI for some Linux distributions and Windows
+- Singularity support (#135)
+- Preliminary Windows server support (#7)
+- Pre-built binaries for CLI for some Linux distributions and Windows (#131)
 - Windows Docker image for CLI
-- Singularity HPCG and TensorFlow-GPU recipe
+- Singularity HPCG and TensorFlow-GPU recipes
 
 ### Changed
 - **Breaking Change:** Many commands have been placed under more
@@ -19,6 +20,8 @@ more information.
 - Retry image configuration error pulls from Docker registries
 - AAD MFA token cache on Python2
 - Non-native coordination command fix, if not specified
+- Include min node counts in autoscale scenarios (#139)
+- `jobs tasks list` when there is a failed task (#142)
 
 ## [3.0.0a2] - 2017-10-27
 ### Added
@@ -975,7 +978,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...HEAD
+[3.0.0b1]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...3.0.0b1
 [3.0.0a2]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...3.0.0a2
 [3.0.0a1]: https://github.com/Azure/batch-shipyard/compare/2.9.6...3.0.0a1
 [2.9.6]: https://github.com/Azure/batch-shipyard/compare/2.9.5...2.9.6
