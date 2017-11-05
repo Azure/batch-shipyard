@@ -87,6 +87,8 @@ tunneling to Docker Hosts on compute nodes
 * Support for execution on an
 [Azure Function App environment](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
 * Support for [custom host images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/)
+* Support for [Windows Containers](https://docs.microsoft.com/en-us/virtualization/windowscontainers/about/)
+on compliant Windows compute node pools
 
 ## Installation
 ### Azure Cloud Shell
@@ -111,9 +113,12 @@ section for various sample Docker workloads using Azure Batch and Batch
 Shipyard.
 
 ## Batch Shipyard Compute Node OS Support
-Batch Shipyard is currently compatible with Azure Batch supported Marketplace
-Linux VMs and
-[compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/).
+Batch Shipyard is currently compatible with most Azure Batch supported
+Marketplace Linux VMs,
+[compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/),
+and native Azure Batch
+[Windows Server with Containers](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/Microsoft.WindowsServer?tab=Overview)
+VMs.
 
 ## Change Log
 Please see the

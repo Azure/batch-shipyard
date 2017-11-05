@@ -216,40 +216,45 @@ then invoked the `cert add` command. Please see the
 ## `data` Command
 The `data` command has the following sub-commands:
 ```
-  getfile      Retrieve file(s) from a job/task
-  getfilenode  Retrieve file(s) from a compute node
-  ingress      Ingress data into Azure
-  listfiles    List files for tasks in jobs
-  stream       Stream a text file to the local console
+  files    Compute node file actions
+  ingress  Ingress data into Azure
 ```
 
-* `getfile` will retrieve a file with job, task, filename semantics
-    * `--all --filespec <jobid>,<taskid>,<include pattern>` can be given to
-      download all files for the job and task with an optional include pattern
-    * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
-      specific file from the job and task. If `<taskid>` is set to
-      `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
-      will be used to locate the `<filename>`.
-* `getfilenode` will retrieve a file with node id and filename semantics
+The `data files` sub-command has the following sub-sub-commands:
+```
+  list    List files for tasks in jobs
+  node    Retrieve file(s) from a compute node
+  stream  Stream a file as text to the local console or...
+  task    Retrieve file(s) from a job/task
+```
+
+* `files list` will list files for all tasks in jobs
+    * `--jobid` force scope to just this job id
+    * `--taskid` force scope to just this task id
+* `files node ` will retrieve a file with node id and filename semantics
     * `--all --filespec <nodeid>,<include pattern>` can be given to download
       all files from the compute node with the optional include pattern
     * `--filespec <nodeid>,<filename>` can be given to download one
       specific file from compute node
-* `ingress` will ingress data as specified in configuration files
-    * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
-      configuration files to the specified remote file system storage cluster
-      instead of Azure Storage
-* `listfiles` will list files for all tasks in jobs
-    * `--jobid` force scope to just this job id
-    * `--taskid` force scope to just this task id
-* `stream` will stream a file as text (UTF-8 decoded) to the local console
-or binary if streamed to disk
+* `files stream` will stream a file as text (UTF-8 decoded) to the local
+console or binary if streamed to disk
     * `--disk` will write the streamed data as binary to disk instead of output
       to local console
     * `--filespec <jobid>,<taskid>,<filename>` can be given to stream a
       specific file. If `<taskid>` is set to `@FIRSTRUNNING`, then the first
       running task within the job of `<jobid>` will be used to locate the
       `<filename>`.
+* `files task` will retrieve a file with job, task, filename semantics
+    * `--all --filespec <jobid>,<taskid>,<include pattern>` can be given to
+      download all files for the job and task with an optional include pattern
+    * `--filespec <jobid>,<taskid>,<filename>` can be given to download one
+      specific file from the job and task. If `<taskid>` is set to
+      `@FIRSTRUNNING`, then the first running task within the job of `<jobid>`
+      will be used to locate the `<filename>`.
+* `ingress` will ingress data as specified in configuration files
+    * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
+      configuration files to the specified remote file system storage cluster
+      instead of Azure Storage
 
 ## `fs` Command
 The `fs` command has the following sub-commands which work on two different
@@ -345,18 +350,23 @@ assumed.
 ## `jobs` Command
 The `jobs` command has the following sub-commands:
 ```
-  add        Add jobs
-  cmi        Cleanup multi-instance jobs
-  del        Delete jobs and job schedules
-  deltasks   Delete specified tasks in jobs
-  disable    Disable jobs and job schedules
-  enable     Enable jobs and job schedules
-  list       List jobs
-  listtasks  List tasks within jobs
-  migrate    Migrate jobs or job schedules to another pool
-  stats      Get statistics about jobs
-  term       Terminate jobs and job schedules
-  termtasks  Terminate specified tasks in jobs
+  add      Add jobs
+  cmi      Cleanup non-native multi-instance jobs
+  del      Delete jobs and job schedules
+  disable  Disable jobs and job schedules
+  enable   Enable jobs and job schedules
+  list     List jobs
+  migrate  Migrate jobs or job schedules to another pool
+  stats    Get statistics about jobs
+  tasks    Tasks actions
+  term     Terminate jobs and job schedules
+```
+
+The `jobs tasks` sub-command has the following sub-sub-commands:
+```
+  del   Delete specified tasks in jobs
+  list  List tasks within jobs
+  term  Terminate specified tasks in jobs
 ```
 
 * `add` will add all jobs and tasks defined in the jobs configuration file
@@ -364,8 +374,8 @@ to the Batch pool
     * `--recreate` will recreate any completed jobs with the same id
     * `--tail` will tail the specified file of the last job and task added
       with this command invocation
-* `cmi` will cleanup any stale multi-instance tasks and jobs. Note that this
-sub-command is typically not required if `multi_instance_auto_complete` is
+* `cmi` will cleanup any stale non-native multi-instance tasks and jobs. Note
+that this sub-command is typically not required if `auto_complete` is
 set to `true` in the job specification for the job.
     * `--delete` will delete any stale cleanup jobs
 * `del` will delete jobs and job scheudles specified in the jobs
@@ -381,12 +391,6 @@ cleaned up.
       Termination of running tasks requires a valid SSH user if the tasks
       are running on a non-`native` container support pool.
     * `--wait` will wait for deletion to complete
-* `deltasks` will delete tasks within jobs specified in the jobs
-configuration file. Active or running tasks will be terminated first on
-non-`native` container support pools.
-    * `--jobid` force deletion scope to just this job id
-    * `--taskid` force deletion scope to just this task id
-    * `--wait` will wait for deletion to complete
 * `disable` will disable jobs or job schedules
     * `--jobid` force disable scope to just this job id
     * `--jobscheduleid` force disable scope to just this job schedule id
@@ -397,11 +401,6 @@ non-`native` container support pools.
     * `--jobid` force enable scope to just this job id
     * `--jobscheduleid` force enable scope to just this job schedule id
 * `list` will list all jobs in the Batch account
-* `listtasks` will list tasks from jobs specified in the jobs configuration
-file
-    * `--all` list all tasks in all jobs in the account
-    * `--jobid` force scope to just this job id
-    * `--poll-until-tasks-complete` will poll until all tasks have completed
 * `migrate` will migrate jobs or job schedules to another pool. Ensure that
 the new target pool has the Docker images required to run the job.
     * `--jobid` force migration scope to just this job id
@@ -412,6 +411,24 @@ the new target pool has the Docker images required to run the job.
     * `--wait` wait for running tasks to complete
 * `stats` will generate a statistics summary of a job or jobs
     * `--jobid` will query the specified job instead of all jobs
+* `tasks del` will delete tasks within jobs specified in the jobs
+configuration file. Active or running tasks will be terminated first on
+non-`native` container support pools.
+    * `--jobid` force deletion scope to just this job id
+    * `--taskid` force deletion scope to just this task id
+    * `--wait` will wait for deletion to complete
+* `tasks list` will list tasks from jobs specified in the jobs
+configuration file
+    * `--all` list all tasks in all jobs in the account
+    * `--jobid` force scope to just this job id
+    * `--poll-until-tasks-complete` will poll until all tasks have completed
+* `tasks term` will terminate tasks within jobs specified in the jobs
+configuration file. Termination of running tasks requires a valid SSH
+user if tasks are running on a non-`native` container support pool.
+    * `--force` force send docker kill signal regardless of task state
+    * `--jobid` force termination scope to just this job id
+    * `--taskid` force termination scope to just this task id
+    * `--wait` will wait for termination to complete
 * `term` will terminate jobs and job schedules found in the jobs
 configuration file. If an autopool is specified for all jobs and a jobid
 option is not specified, the storage associated with the autopool will be
@@ -424,13 +441,6 @@ cleaned up.
     * `--termtasks` will manually terminate tasks prior to termination.
       Termination of running tasks requires a valid SSH user if tasks are
       running on a non-`native` container support pool.
-    * `--wait` will wait for termination to complete
-* `termtasks` will terminate tasks within jobs specified in the jobs
-configuration file. Termination of running tasks requires a valid SSH
-user if tasks are running on a non-`native` container support pool.
-    * `--force` force send docker kill signal regardless of task state
-    * `--jobid` force termination scope to just this job id
-    * `--taskid` force termination scope to just this task id
     * `--wait` will wait for termination to complete
 
 ## `keyvault` Command
@@ -480,35 +490,54 @@ or has run the specified task
 ## `pool` Command
 The `pool` command has the following sub-commands:
 ```
-  add         Add a pool to the Batch account
-  asu         Add an SSH user to all nodes in pool
-  autoscale   Pool autoscale actions
-  del         Delete a pool from the Batch account
-  delnode     Delete a node from a pool
-  dsu         Delete an SSH user from all nodes in pool
-  grls        Get remote login settings for all nodes in...
-  list        List all pools in the Batch account
-  listimages  List Docker images in a pool
-  listnodes   List nodes in pool
-  listskus    List available VM configurations available to...
-  rebootnode  Reboot a node or nodes in a pool
-  resize      Resize a pool
-  ssh         Interactively login via SSH to a node in a...
-  stats       Get statistics about a pool
-  udi         Update Docker images in a pool
+  add        Add a pool to the Batch account
+  autoscale  Autoscale actions
+  del        Delete a pool from the Batch account
+  images     Container images actions
+  list       List all pools in the Batch account
+  listskus   List available VM configurations available to...
+  nodes      Compute node actions
+  resize     Resize a pool
+  ssh        Interactively login via SSH to a node in a...
+  stats      Get statistics about a pool
+  user       Remote user actions
+```
+
+The `pool autoscale` sub-command has the following sub-sub-commands:
+```
+  disable   Disable autoscale on a pool
+  enable    Enable autoscale on a pool
+  evaluate  Evaluate autoscale formula
+  lastexec  Get the result of the last execution of the...
+```
+
+The `pool images` sub-command has the following sub-sub-commands:
+```
+  list    List container images in a pool
+  update  Update container images in a pool
+```
+
+The `pool nodes` sub-command has the following sub-sub-commands:
+```
+  del     Delete a node from a pool
+  grls    Get remote login settings for all nodes in...
+  list    List nodes in pool
+  reboot  Reboot a node or nodes in a pool
+```
+
+The `pool user` sub-command has the following sub-sub-commands:
+```
+  add  Add a remote user to all nodes in pool
+  del  Delete a remote user from all nodes in pool
 ```
 
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
-* `asu` will add the SSH user defined in the pool configuration file to
-all nodes in the specified pool
-* `autoscale` will invoke the autoscale subcommand. The autoscale
-subcommand has 4 subcommands:
-    * `disable` will disable autoscale on the pool
-    * `enable` will enable autoscale on the pool
-    * `evaluate` will evaluate the autoscale formula in the pool configuration
-      file
-    * `lastexec` will query the last execution information for autoscale
+* `autoscale disable` will disable autoscale on the pool
+* `autoscale enable` will enable autoscale on the pool
+* `autoscale evaluate` will evaluate the autoscale formula in the pool
+configuration file
+* `autoscale lastexec` will query the last execution information for autoscale
 * `del` will delete the pool defined in the pool configuration file from
 the Batch account along with associated metadata in Azure Storage used by
 Batch Shipyard. It is recommended to use this command instead of deleting
@@ -518,22 +547,28 @@ Azure Storage.
     * `--poolid` will delete the specified pool instead of the pool from the
       pool configuration file
     * `--wait` will wait for deletion to complete
-* `delnode` will delete the specified node from the pool
+* `images list` will query the nodes in the pool for Docker images. Common
+and mismatched images will be listed. Requires a provisioned SSH user and
+private key.
+* `images update` will update container images on all compute nodes of the
+pool. This command may require a valid SSH user.
+    * `--docker-image` will restrict the update to just the Docker image or
+      image:tag
+    * `--docker-image-digest` will restrict the update to just the Docker
+      image or image:tag and a specific digest
+    * `--singularity-image` will restrict the update to just the Singularity
+      image or image:tag
+* `list` will list all pools in the Batch account
+* `nodes del` will delete the specified node from the pool
     * `--all-start-task-failed` will delete all nodes in the start task
       failed state
     * `--all-starting` will delete all nodes in the starting state
     * `--all-unusable` will delete all nodes in the unusable state
     * `--nodeid` is the node id to delete
-* `dsu` will delete the SSH user defined in the pool configuration file
-from all nodes in the specified pool
-* `grls` will retrieve all of the remote login settings for every node
+* `nodes grls` will retrieve all of the remote login settings for every node
 in the specified pool
-* `list` will list all pools in the Batch account
-* `listimages` will query the nodes in the pool for Docker images. Common
-and mismatched images will be listed. Requires a provisioned SSH user and
-private key.
-* `listnodes` will list all nodes in the specified pool
-* `rebootnode` will reboot a specified node in the pool
+* `nodes list` will list all nodes in the specified pool
+* `nodes reboot` will reboot a specified node in the pool
     * `--all-start-task-failed` will reboot all nodes in the start task
       failed state
     * `--nodeid` is the node id to reboot
@@ -552,11 +587,10 @@ configuration file
 * `stats` will generate a statistics summary of the pool
     * `--poolid` will query the specified pool instead of the pool from the
       pool configuration file
-* `udi` will update Docker images on all compute nodes of the pool. This
-command requires a valid SSH user.
-    * `--image` will restrict the update to just the image or image:tag
-    * `--digest` will restrict the update to just the image or image:tag and
-      a specific digest
+* `user add` will add an SSH or RDP user defined in the pool
+configuration file to all nodes in the specified pool
+* `user del` will delete the SSH or RDP user defined in the pool
+configuration file from all nodes in the specified pool
 
 ## `storage` Command
 The `storage` command has the following sub-commands:
@@ -578,6 +612,8 @@ for metadata purposes
 shipyard pool add --credentials credentials.yaml --config config.yaml --pool pool.yaml
 
 # ... or if all config files are in the current working directory named as above ...
+# (note this is strictly not necessary as Batch Shipyard will search the
+# current working directory if the options above are not explicitly specified
 
 shipyard pool add --configdir .
 

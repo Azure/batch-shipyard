@@ -138,6 +138,8 @@ Note that `files` is an array, therefore, Batch Shipyard accepts any number
 of `source`/`destination` pairings and even mixed GlusterFS and Azure Storage
 ingress objects.
 
+Data ingress from on-premises to Windows pools is not supported.
+
 ### From Azure Storage (Blob and File)
 Data from Azure Storage can be ingressed to compute nodes in many different
 ways with Batch Shipyard. The recommended method when using Batch Shipyard

@@ -49,8 +49,12 @@ no longer performed before a pool is created and will instead result in
 a ResizeError on the pool if not all compute nodes can be allocated.
 * Data movement between Batch tasks as defined by `input_data`:`azure_batch`
 is restricted to Batch accounts with keys (non-AAD).
-* Windows Server 2016, Clear Linux, and Oracle Linux are not supported with
-Batch Shipyard at this time.
+* Clear Linux and Oracle Linux are not supported with Batch Shipyard at this
+time.
+* Certain features, configuration options and usage commands are not
+supported with Windows compute node pools such as on-premises to compute
+node direct data ingress, storage cluster mounting, and credential
+encryption support.
 * Task dependencies are incompatible with multi-instance tasks. This is a
 current limitation of the underlying Azure Batch service.
 * Only Intel MPI (or polling-based IB uverbs) can be used in conjunction

@@ -1472,7 +1472,7 @@ def jobs_del(
 @aad_options
 @pass_cli_context
 def jobs_cmi(ctx, delete):
-    """Cleanup multi-instance jobs"""
+    """Cleanup non-native multi-instance jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_cmi(ctx.batch_client, ctx.config, delete)
 

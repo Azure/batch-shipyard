@@ -16,6 +16,7 @@ more information.
 - Mount `/opt/intel` into Singularity containers
 - Retry image configuration error pulls from Docker registries
 - AAD MFA token cache on Python2
+- Non-native coordination command fix, if not specified
 
 ## [3.0.0a2] - 2017-10-27
 ### Added

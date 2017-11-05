@@ -85,5 +85,5 @@ possible.
 * Yes, please see [the guide](63-batch-shipyard-custom-images.md).
 
 #### Does Batch Shipyard support Windows Server Containers?
-* Not at this time, we are tracking the issue
-[here](https://github.com/Azure/batch-shipyard/issues/7).
+* Yes, but with some feature, configuration, and CLI limitations. Please see
+the [current limitations](99-current-limitations.md) doc for more information.
