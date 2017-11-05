@@ -49,6 +49,7 @@ _GLUSTER_DEFAULT_VOLNAME = 'gv0'
 _GLUSTER_ON_COMPUTE_VOLUME = 'gluster_on_compute/{}'.format(
     _GLUSTER_DEFAULT_VOLNAME)
 _HOST_MOUNTS_DIR = '$AZ_BATCH_NODE_ROOT_DIR/mounts'
+_HOST_MOUNTS_DIR_WINDOWS = '%AZ_BATCH_NODE_ROOT_DIR%\\mounts'
 _TENSORBOARD_DOCKER_IMAGE = (
     'gcr.io/tensorflow/tensorflow',
     '/usr/local/lib/python2.7/dist-packages/tensorflow'
@@ -396,13 +397,14 @@ def get_gluster_on_compute_volume():
     return _GLUSTER_ON_COMPUTE_VOLUME
 
 
-def get_host_mounts_path():
-    # type: (None) -> str
+def get_host_mounts_path(is_windows):
+    # type: (bool) -> str
     """Get host mounts path
+    :param bool is_windows: is windows pool
     :rtype: str
     :return: host mounts dir
     """
-    return _HOST_MOUNTS_DIR
+    return _HOST_MOUNTS_DIR_WINDOWS if is_windows else _HOST_MOUNTS_DIR
 
 
 def get_singularity_tmpdir(config):
@@ -2054,16 +2056,18 @@ def azure_file_share_name(sdv, sdvkey):
     return sdv[sdvkey]['azure_file_share_name']
 
 
-def azure_file_host_mount_path(storage_account_name, share_name):
-    # type: (str, str) -> str
+def azure_file_host_mount_path(storage_account_name, share_name, is_windows):
+    # type: (str, str, bool) -> str
     """Get azure file share host mount path
     :param str storage_account_name: storage account name
     :param str share_name: file share name
+    :param bool is_windows: is windows
     :rtype: str
     :return: host mount path for azure file share
     """
-    return '{root}/azfile-{sa}-{share}'.format(
-        root=_HOST_MOUNTS_DIR,
+    return '{root}{sep}azfile-{sa}-{share}'.format(
+        root=get_host_mounts_path(is_windows),
+        sep='\\' if is_windows else '/',
         sa=storage_account_name,
         share=share_name)
 
@@ -2979,7 +2983,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                     config,
                     azure_file_storage_account_settings(sdv, sdvkey))
                 share_name = azure_file_share_name(sdv, sdvkey)
-                hmp = azure_file_host_mount_path(sa.account, share_name)
+                hmp = azure_file_host_mount_path(
+                    sa.account, share_name, is_windows)
                 run_opts.append('{} {}:{}{}'.format(
                     bindparm,
                     hmp,
@@ -3167,19 +3172,23 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             else:
                 cc_args = None
         else:
-            if is_windows:
-                envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
+            if util.is_not_empty(coordination_command):
+                if is_windows:
+                    envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
+                else:
+                    envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
+                cc_args = [
+                    envgrep,
+                    '{} {} {}{}'.format(
+                        docker_run_cmd,
+                        ' '.join(run_opts),
+                        docker_image,
+                        coordination_command),
+                ]
+                del envgrep
             else:
-                envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
-            cc_args = [
-                envgrep,
-                '{} {} {}{}'.format(
-                    docker_run_cmd,
-                    ' '.join(run_opts),
-                    docker_image,
-                    coordination_command),
-            ]
-            del envgrep
+                cc_args = None
+        del coordination_command
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):

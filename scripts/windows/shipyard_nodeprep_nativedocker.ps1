@@ -27,6 +27,7 @@ Write-Host "Configuration [Native Docker, Windows]:"
 Write-Host "---------------------------------------"
 Write-Host "Batch Shipyard version: $v"
 Write-Host "Blobxfer version: $x"
+Write-Host "Mounts path: $MountsPath"
 Write-Host "Encrypted: $e"
 Write-Host "Azure File: $a"
 Write-Host ""
@@ -34,11 +35,11 @@ Write-Host ""
 # check for docker
 Exec { docker --version }
 
-Write-Host "Mounts path: $MountsPath"
-
-# TODO mount azure file shares
+# mount azure file shares
 if ($a) {
 	Write-Host "Mounting file shares"
+	New-Item $MountsPath -type directory -force
+	.\azurefile-mount.cmd
 }
 
 if (Test-Path $NodePrepFinished -pathType Leaf)

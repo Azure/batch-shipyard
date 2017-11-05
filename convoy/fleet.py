@@ -392,25 +392,29 @@ def _setup_nvidia_docker_package(blob_client, config):
     return pkg
 
 
-def _generate_azfile_mount_script_name(batch_account_name, pool_id):
-    # type: (str, str) -> pathlib.Path
+def _generate_azfile_mount_script_name(
+        batch_account_name, pool_id, is_windows):
+    # type: (str, str, bool) -> pathlib.Path
     """Generate an azure file mount script name
     :param str batch_account_name: batch account name
     :param str pool_id: pool id
+    :param bool is_windows: is windows
     :rtype: pathlib.Path
     :return: path to azfile mount script
     """
-    return _RESOURCES_PATH / 'azurefile-mount-{}-{}.sh'.format(
-        batch_account_name.lower(), pool_id.lower())
+    return _RESOURCES_PATH / 'azurefile-mount-{}-{}.{}'.format(
+        batch_account_name.lower(), pool_id.lower(),
+        'cmd' if is_windows else 'sh')
 
 
-def _setup_azurefile_mounts(blob_client, config, bc):
+def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
     # type: (azure.storage.blob.BlockBlobService, dict,
-    #        settings.BatchCredentials) -> tuple
+    #        settings.BatchCredentials, bool) -> tuple
     """Set up the Azure File shares
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param settings.BatchCredentials bc: batch creds
+    :param bool is_windows: is windows pool
     :rtype: tuple
     :return: (bin path, service file path, service env file path,
         volume creation script path)
@@ -424,42 +428,64 @@ def _setup_azurefile_mounts(blob_client, config, bc):
                 config,
                 settings.azure_file_storage_account_settings(sdv, svkey))
             share = settings.azure_file_share_name(sdv, svkey)
-            hmp = settings.azure_file_host_mount_path(sa.account, share)
-            cmd = (
-                'mount -t cifs //{sa}.file.{ep}/{share} {hmp} -o '
-                'vers=3.0,username={sa},password={sakey},serverino').format(
-                    sa=sa.account,
-                    ep=sa.endpoint,
-                    share=share,
-                    hmp=hmp,
+            hmp = settings.azure_file_host_mount_path(
+                sa.account, share, is_windows)
+            if is_windows:
+                cmd = (
+                    'net use \\\\{sa}.file.{ep}\{share} {sakey} '
+                    '/user:Azure\{sa}'
+                ).format(
+                    sa=sa.account, ep=sa.endpoint, share=share,
                     sakey=sa.account_key)
-            # add any additional mount options
-            mo = settings.shared_data_volume_mount_options(sdv, svkey)
-            if util.is_not_empty(mo):
-                opts = []
-                # retain backward compatibility with filemode/dirmode options
-                # from the old Azure File Docker volume driver
-                for opt in mo:
-                    tmp = opt.split('=')
-                    if tmp[0] == 'filemode':
-                        opts.append('file_mode={}'.format(tmp[1]))
-                    elif tmp[0] == 'dirmode':
-                        opts.append('dir_mode={}'.format(tmp[1]))
-                    else:
-                        opts.append(opt)
-                cmd = '{},{}'.format(cmd, ','.join(opts))
-            cmds.append('mkdir -p {}'.format(hmp))
+                cmds.append(cmd)
+                cmd = 'mklink /d {hmp} \\\\{sa}.file.{ep}\{share}'.format(
+                    hmp=hmp, sa=sa.account, ep=sa.endpoint, share=share)
+            else:
+                cmd = (
+                    'mount -t cifs //{sa}.file.{ep}/{share} {hmp} -o '
+                    'vers=3.0,username={sa},password={sakey},'
+                    'serverino'
+                ).format(
+                    sa=sa.account, ep=sa.endpoint, share=share, hmp=hmp,
+                    sakey=sa.account_key)
+                # add any additional mount options
+                mo = settings.shared_data_volume_mount_options(sdv, svkey)
+                if util.is_not_empty(mo):
+                    opts = []
+                    # retain backward compatibility with filemode/dirmode
+                    # options from the old Azure File Docker volume driver
+                    for opt in mo:
+                        tmp = opt.split('=')
+                        if tmp[0] == 'filemode':
+                            opts.append('file_mode={}'.format(tmp[1]))
+                        elif tmp[0] == 'dirmode':
+                            opts.append('dir_mode={}'.format(tmp[1]))
+                        else:
+                            opts.append(opt)
+                    cmd = '{},{}'.format(cmd, ','.join(opts))
+            if not is_windows:
+                cmds.append('mkdir -p {}'.format(hmp))
             cmds.append(cmd)
     # create file share mount command script
     if util.is_none_or_empty(cmds):
         raise RuntimeError('Generated Azure file mount commands are invalid')
     volcreate = _generate_azfile_mount_script_name(
-        bc.account, settings.pool_id(config))
-    with volcreate.open('wb') as f:
-        f.write(b'#!/usr/bin/env bash\n\n')
-        f.write(b'set -e\n')
-        f.write(b'set -o pipefail\n\n')
-        f.write('\n'.join(cmds).encode('utf8'))
+        bc.account, settings.pool_id(config), is_windows)
+    newline = '\r\n' if is_windows else '\n'
+    with volcreate.open('w', newline=newline) as f:
+        if is_windows:
+            f.write('@echo off')
+            f.write(newline)
+        else:
+            f.write('#!/usr/bin/env bash')
+            f.write(newline)
+            f.write('set -e')
+            f.write(newline)
+            f.write('set -o pipefail')
+            f.write(newline)
+        for cmd in cmds:
+            f.write(cmd)
+            f.write(newline)
     return volcreate
 
 
@@ -563,7 +589,7 @@ def _create_storage_cluster_mount_args(
             '{fstype} {mo} 0 2').format(
                 remoteip=remote_ip,
                 srcpath=sc.file_server.mountpoint,
-                hmp=settings.get_host_mounts_path(),
+                hmp=settings.get_host_mounts_path(False),
                 scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo)
@@ -641,7 +667,7 @@ def _create_storage_cluster_mount_args(
             '{fstype} {mo} 0 2').format(
                 remoteip=primary_ip,
                 srcpath=settings.get_file_server_glusterfs_volume_name(sc),
-                hmp=settings.get_host_mounts_path(),
+                hmp=settings.get_host_mounts_path(False),
                 scid=sc_id,
                 fstype=sc.file_server.type,
                 mo=mo)
@@ -959,8 +985,10 @@ def _construct_pool_object(
         _rflist.append(_HPNSSH_FILE)
     # handle azurefile mounts
     if azurefile_vd:
-        afms = _setup_azurefile_mounts(blob_client, config, bc)
-        _rflist.append(('azurefile-mount.sh', afms))
+        afms = _setup_azurefile_mounts(blob_client, config, bc, is_windows)
+        _rflist.append(
+            ('azurefile-mount.{}'.format('cmd' if is_windows else 'sh'), afms)
+        )
     # gpu settings
     if (not native and settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):

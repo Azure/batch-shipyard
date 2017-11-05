@@ -3918,6 +3918,9 @@ def add_jobs(
                             mis.coordination_command_line))
                 logger.debug('task: {} command: {}'.format(
                     task.id, batchtask.command_line))
+                if native:
+                    logger.debug('native run options: {}'.format(
+                        batchtask.container_settings.container_run_options))
             if task.id in task_map:
                 raise RuntimeError(
                     'duplicate task id detected: {} for job {}'.format(

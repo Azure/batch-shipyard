@@ -123,6 +123,14 @@ The variable mapping is as follows:
 to the current working directory, i.e., `.`, if no other configuration file
 options are specified.
 
+### Behavioral Changes
+#### Azure File Mounts
+Azure File mounts now mount directly to the host instead of on a per-container
+invocation basis. A side-effect of this change means that the Azure File
+share is now visible for all users on the host and container invocations.
+This change was necessitated due to the unsupported Docker Azure File Volume
+driver and issues with concurrent tasks mounting the same file share.
+
 ### General Configuration Changes
 #### `input_data` with `azure_storage`
 Due to the migration to `blobxfer 1.0.0`, any specification with data

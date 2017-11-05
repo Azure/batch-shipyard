@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- Singularity support
+- Preliminary Windows server support
 - Singularity HPCG and TensorFlow-GPU recipe
 
 ### Changed

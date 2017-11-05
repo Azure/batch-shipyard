@@ -364,9 +364,8 @@ This property is required.
           to the compute nodes.
         * `container_path` is the path in the container to mount.
         * `mount_options` are the mount options to pass to the mount command.
-          Supported options are documented
-          [here](https://github.com/Azure/azurefile-dockervolumedriver). It is
-          recommended to use `0777` for both `file_mode` and `dir_mode` as the
+          This option is ignored on Windows pools. It is recommended to use
+          `0777` for both `file_mode` and `dir_mode` on Linux pools as the
           `uid` and `gid` cannot be reliably determined before the compute
           pool is allocated and this volume will be mounted as the root user.
         * (optional) `bind_options` are the bind options to use, typically
