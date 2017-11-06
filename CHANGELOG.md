@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Updated to blobxfer 1.0.0
+
 ### Fixed
 - Job submission on custom image pools with 4.0 SDK changes
 
