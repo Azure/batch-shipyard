@@ -261,6 +261,15 @@ def check_for_invalid_config(config):
                 'vm_configuration property.')
     except KeyError:
         pass
+    try:
+        if 'docker_volumes' in config['global_resources']:
+            logger.warning(
+                'DEPRECATION_WARNING: global_resources:docker_volumes is '
+                'set instead of global_resources:volumes. This property '
+                'has been renamed to support both Docker and Singularity '
+                'volume binding. Please update your configuration.')
+    except KeyError:
+        pass
 
 
 def populate_global_settings(config, fs_storage, pool_id=None):

@@ -218,6 +218,13 @@ If the Docker registry server where the image resides requires a login,
 then the server must have a corresponding credential in the credentials
 configuration under `docker_registry`.
 
+#### `docker_volumes` in `global_resources` has been renamed to `volumes`
+The old `docker_volumes` property supporting `data_volumes` and
+`shared_data_volumes` under `global_resources` has been renamed to simply
+`volumes` (still nested under `global_resources`). This change is
+due to adding Singularity support and `volumes` supports binding paths
+under both container types.
+
 #### Private registries backed to Azure Storage Blob
 Private registries backed directly to Azure Storage Blob are no longer
 supported. This is not to be confused with a "Classic" Azure Container
