@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Job submission on custom image pools with 4.0 SDK changes
+
 ## [3.0.0b1] - 2017-11-05
 ### Added
 - Singularity support (#135)

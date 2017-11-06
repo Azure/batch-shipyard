@@ -1350,7 +1350,13 @@ def credentials_storage(config, ssel):
     :rtype: StorageCredentialsSettings
     :return: storage creds
     """
-    conf = config['credentials']['storage'][ssel]
+    try:
+        conf = config['credentials']['storage'][ssel]
+    except KeyError:
+        raise ValueError(
+            ('Could not find storage account alias {} in credentials:storage '
+             'configuration. Please ensure the storage account alias '
+             'exists.').format(ssel))
     try:
         ep = conf['endpoint']
         if util.is_none_or_empty(ep):
@@ -2717,9 +2723,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         pool_id = cloud_pool.id
         vm_size = cloud_pool.vm_size.lower()
         inter_node_comm = cloud_pool.enable_inter_node_communication
-        is_custom_image = (
-            cloud_pool.virtual_machine_configuration.os_disk is not None
-        )
+        is_custom_image = util.is_not_empty(
+            cloud_pool.virtual_machine_configuration.image_reference.
+            virtual_machine_image_id)
         if is_custom_image:
             publisher = None
             offer = None
