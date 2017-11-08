@@ -33,7 +33,9 @@ for all platforms and architectures at this time.
 
 Note that for the Linux pre-built binary, it may not work on all
 distributions. If this is the case, please pick an alternate installation
-method.
+method. The Linux pre-built binary is gzipped. Please run gunzip on the
+file. Executable bit permission should be preserved by default, if it is
+not, then make sure the executable bit is set via `chmod +x`.
 
 ## <a name="installers"></a>Installation via Script
 Installation is an easy two-step process if using the installers: fetch the
