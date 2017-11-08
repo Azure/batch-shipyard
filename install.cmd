@@ -57,6 +57,7 @@ IF %ANACONDA% EQU 1 (
 		exit /b 1
 	)
 	virtualenv -p %PYTHON% %VENVNAME%
+	cmd.exe /c "%VENVNAME%\Scripts\activate & pip uninstall -y azure-storage & deactivate"
 	cmd.exe /c "%VENVNAME%\Scripts\activate & pip install --upgrade -r requirements.txt & deactivate"
 )
 

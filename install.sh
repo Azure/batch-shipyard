@@ -229,6 +229,9 @@ if [ ! -z $VENV_NAME ]; then
         fi
         source $VENV_NAME/bin/activate
         $PIP install --upgrade pip setuptools
+        set +e
+        $PIP uninstall -y azure-storage
+        set -e
         $PIP install --upgrade -r requirements.txt
         deactivate
     else
@@ -242,12 +245,16 @@ if [ ! -z $VENV_NAME ]; then
         # conda pip failing to reference the old setuptools version
         set +e
         $PIP install --upgrade setuptools
+        $PIP uninstall -y azure-storage
         set -e
         $PIP install --upgrade -r requirements.txt
         source deactivate $VENV_NAME
     fi
 else
     $SUDO $PIP install --upgrade pip setuptools
+    set +e
+    $PIP uninstall -y azure-storage
+    set -e
     $PIP install --upgrade --user -r requirements.txt
 fi
 

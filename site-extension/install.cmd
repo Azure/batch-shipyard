@@ -57,6 +57,7 @@ IF %ERRORLEVEL% NEQ 0 (
     echo "pip install pre-requisites failed"
     exit /b 1
 )
+"%PYTHON%" -m pip uninstall -y azure-storage
 "%PYTHON%" -m pip install --upgrade -r requirements.txt
 IF %ERRORLEVEL% NEQ 0 (
     echo "pip install requirements.txt failed"
