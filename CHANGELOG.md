@@ -7,6 +7,7 @@
 
 ### Fixed
 - Job submission on custom image pools with 4.0 SDK changes
+- Singularity registries with passwords in keyvault
 
 ## [3.0.0b1] - 2017-11-05
 ### Added

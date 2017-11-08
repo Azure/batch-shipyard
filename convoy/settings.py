@@ -1449,31 +1449,41 @@ def singularity_registry_login(config, server):
     return user, pw
 
 
-def iterate_docker_registry_servers(config):
-    # type: (dict) -> str
-    """Iterate docker registry servers
+def credentials_iterate_registry_servers(config, is_docker):
+    # type: (dict, bool) -> str
+    """Iterate registry servers
     :param dict config: configuration object
+    :param bool is_docker: is a docker registry
     :rtype: str
-    :return: docker registry name
+    :return: registry server name
     """
+    if is_docker:
+        kind = 'docker_registry'
+    else:
+        kind = 'singularity_registry'
     try:
-        for conf in config['credentials']['docker_registry']:
+        for conf in config['credentials'][kind]:
             yield conf
     except KeyError:
         pass
 
 
-def credentials_docker_registry_password_secret_id(config, dr):
-    # type: (dict, str) -> str
-    """Get Docker registry password KeyVault Secret Id
+def credentials_registry_password_secret_id(config, link, is_docker):
+    # type: (dict, str, bool) -> str
+    """Get registry password KeyVault Secret Id
     :param dict config: configuration object
-    :param str dr: docker registry link
+    :param str link: registry link
+    :param bool is_docker: is docker registry
     :rtype: str
     :return: keyvault secret id
     """
+    if is_docker:
+        kind = 'docker_registry'
+    else:
+        kind = 'singularity_registry'
     try:
-        secid = config['credentials'][
-            'docker_registry'][dr]['password_keyvault_secret_id']
+        secid = config['credentials'][kind][link][
+            'password_keyvault_secret_id']
         if util.is_none_or_empty(secid):
             raise KeyError()
     except KeyError:
@@ -1481,14 +1491,19 @@ def credentials_docker_registry_password_secret_id(config, dr):
     return secid
 
 
-def set_credentials_docker_registry_password(config, dr, password):
-    # type: (dict, str, str) -> None
-    """Set Docker registry password
+def set_credentials_registry_password(config, link, is_docker, password):
+    # type: (dict, str, bool, str) -> None
+    """Set registry password
     :param dict config: configuration object
-    :param str dr: docker registry link
+    :param str link: registry link
+    :param bool is_docker: is docker registry
     :param str password: password
     """
-    config['credentials']['docker_registry'][dr]['password'] = password
+    if is_docker:
+        kind = 'docker_registry'
+    else:
+        kind = 'singularity_registry'
+    config['credentials'][kind][link]['password'] = password
 
 
 # GLOBAL SETTINGS

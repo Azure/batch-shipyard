@@ -264,7 +264,7 @@ def check_for_invalid_config(config):
     try:
         if 'docker_volumes' in config['global_resources']:
             logger.warning(
-                'DEPRECATION_WARNING: global_resources:docker_volumes is '
+                'DEPRECATION WARNING: global_resources:docker_volumes is '
                 'set instead of global_resources:volumes. This property '
                 'has been renamed to support both Docker and Singularity '
                 'volume binding. Please update your configuration.')

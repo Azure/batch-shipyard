@@ -226,18 +226,33 @@ def parse_secret_ids(client, config):
                 'invalid'.format(secid))
         settings.set_credentials_storage_account_key(config, ssel, sakey)
     # docker registry passwords
-    for reg in settings.iterate_docker_registry_servers(config):
-        secid = settings.credentials_docker_registry_password_secret_id(
-            config, reg)
+    for reg in settings.credentials_iterate_registry_servers(config, True):
+        secid = settings.credentials_registry_password_secret_id(
+            config, reg, True)
         if secid is None:
             continue
         logger.debug(
-            ('fetching docker registry password for registry {} '
+            ('fetching Docker registry password for registry {} '
              'from keyvault').format(reg))
         password = get_secret(client, secid)
         if util.is_none_or_empty(password):
             raise ValueError(
-                'docker registry password retrieved for secret id {} is '
+                'Docker registry password retrieved for secret id {} is '
                 'invalid'.format(secid))
-        settings.set_credentials_docker_registry_password(
-            config, reg, password)
+        settings.set_credentials_registry_password(config, reg, True, password)
+    # singularity registry passwords
+    for reg in settings.credentials_iterate_registry_servers(config, False):
+        secid = settings.credentials_registry_password_secret_id(
+            config, reg, False)
+        if secid is None:
+            continue
+        logger.debug(
+            ('fetching Singularity registry password for registry {} '
+             'from keyvault').format(reg))
+        password = get_secret(client, secid)
+        if util.is_none_or_empty(password):
+            raise ValueError(
+                'Singularity registry password retrieved for secret id {} is '
+                'invalid'.format(secid))
+        settings.set_credentials_registry_password(
+            config, reg, False, password)
