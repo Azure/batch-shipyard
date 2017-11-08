@@ -3712,11 +3712,14 @@ def add_jobs(
                         task.multi_instance.coordination_command,
                         windows=is_windows, wait=False)
                 else:
+                    # no-op for singularity
                     if is_singularity:
-                        # no-op for singularity
                         cc = ':'
-                    else:
-                        cc = ''
+                if not native and util.is_none_or_empty(cc):
+                    raise ValueError(
+                        ('coordination_command cannot be empty for this '
+                         'configuration: native={} singularity={}').format(
+                             native, is_singularity))
                 mis = batchmodels.MultiInstanceSettings(
                     number_of_instances=task.multi_instance.num_instances,
                     coordination_command_line=cc,

@@ -57,28 +57,61 @@ _TENSORBOARD_DOCKER_IMAGE = (
     6006
 )
 _GPU_COMPUTE_INSTANCES = frozenset((
+    # standard_nc
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
+    # standard_nc_v2
+    'standard_nc6s_v2', 'standard_nc12s_v2', 'standard_nc24s_v2',
+    'standard_nc24rs_v2',
+    # standard_nd
+    'standard_nd6s', 'standard_nd12s', 'standard_nd24s', 'standard_nd24rs',
 ))
 _GPU_VISUALIZATION_INSTANCES = frozenset((
+    # standard_nv
     'standard_nv6', 'standard_nv12', 'standard_nv24',
 ))
 _GPU_INSTANCES = _GPU_COMPUTE_INSTANCES.union(_GPU_VISUALIZATION_INSTANCES)
 _RDMA_INSTANCES = frozenset((
-    'standard_a8', 'standard_a9', 'standard_h16r', 'standard_h16mr',
+    # standard_a
+    'standard_a8', 'standard_a9',
+    # standard_h
+    'standard_h16r', 'standard_h16mr',
+    # standard_nc
     'standard_nc24r',
+    # standard_nc_v2
+    'standard_nc24rs_v2',
+    # standard_nd
+    'standard_nd24rs',
 ))
 _PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
     'standard_ds', 'standard_gs',
 ))
 _PREMIUM_STORAGE_INSTANCE_SUFFIXES = frozenset((
-    's', 's_v3',
+    's', 's_v2', 's_v3',
 ))
 _VM_TCP_NO_TUNE = frozenset((
-    'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4', 'standard_a0',
-    'standard_a1', 'standard_a2', 'standard_a3', 'standard_a5', 'standard_a6',
-    'standard_a1_v2', 'standard_a2_v2', 'standard_a3_v2', 'standard_a4_v2',
-    'standard_a2m_v2', 'standard_a4m_v2', 'standard_d1', 'standard_d2',
-    'standard_d1_v2', 'standard_f1', 'standard_d2_v3', 'standard_e2_v3',
+    # basic
+    'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4',
+    # standard_a
+    'standard_a0', 'standard_a1', 'standard_a2', 'standard_a3', 'standard_a5',
+    'standard_a6',
+    # standard_a_v2
+    'standard_a1_v2', 'standard_a2_v2', 'standard_a4_v2', 'standard_a2m_v2',
+    'standard_a4m_v2',
+    # standard_d
+    'standard_d1', 'standard_ds1', 'standard_d2', 'standard_ds2',
+    # standard_d_v2
+    'standard_d1_v2', 'standard_ds1_v2',
+    # standard_d_v3
+    'standard_d2_v3', 'standard_d2s_v3',
+    # standard_e_v3
+    'standard_e2_v3', 'standard_e2s_v3',
+    # standard_f
+    'standard_f1', 'standard_f1s',
+    # standard_f_v2
+    'standard_f2s_v2',
+    # standard_b
+    'standard_b1s', 'standard_b1ms', 'standard_b2s', 'standard_b2ms',
+    'standard_b4ms', 'standard_b8ms',
 ))
 _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 # named tuples
@@ -3186,29 +3219,26 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             if native:
                 coordination_command = '/usr/sbin/sshd -p 23'
             else:
-                coordination_command = None
+                coordination_command = ''
         if native or util.is_not_empty(singularity_image):
             if util.is_not_empty(coordination_command):
                 cc_args = [coordination_command]
             else:
                 cc_args = None
         else:
-            if util.is_not_empty(coordination_command):
-                if is_windows:
-                    envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
-                else:
-                    envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
-                cc_args = [
-                    envgrep,
-                    '{} {} {}{}'.format(
-                        docker_run_cmd,
-                        ' '.join(run_opts),
-                        docker_image,
-                        coordination_command),
-                ]
-                del envgrep
+            if is_windows:
+                envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
             else:
-                cc_args = None
+                envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
+            cc_args = [
+                envgrep,
+                '{} {} {}{}'.format(
+                    docker_run_cmd,
+                    ' '.join(run_opts),
+                    docker_image,
+                    coordination_command),
+            ]
+            del envgrep
         del coordination_command
         # get num instances
         num_instances = conf['multi_instance']['num_instances']

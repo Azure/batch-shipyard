@@ -3,10 +3,16 @@
 ## [Unreleased]
 
 ### Changed
+- Update VM size support
+- SSH private key filemode check no longer results in an exception if it
+fails. Instead a warning is issued - this is to allow SSH invocations on WSL.
+- Install scripts now uninstall `azure-storage` first due to conflicts with
+the Azure Storage Python split library.
 - Updated to blobxfer 1.0.0
 
 ### Fixed
 - Job submission on custom image pools with 4.0 SDK changes
+- Empty coordination command issue for Docker tasks
 - Singularity registries with passwords in keyvault
 
 ## [3.0.0b1] - 2017-11-05
