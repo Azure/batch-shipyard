@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [3.0.0rc1] - 2017-11-08
 ### Changed
 - Update VM size support
 - SSH private key filemode check no longer results in an exception if it
@@ -991,7 +992,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...HEAD
+[3.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...3.0.0rc1
 [3.0.0b1]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...3.0.0b1
 [3.0.0a2]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...3.0.0a2
 [3.0.0a1]: https://github.com/Azure/batch-shipyard/compare/2.9.6...3.0.0a1
