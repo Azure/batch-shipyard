@@ -726,9 +726,8 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
         return
     if not crypto.check_ssh_private_key_filemode(ssh_priv_key):
         logger.warning(
-            ('cannot generate tunnel script with private SSH key that '
-             'is too permissive: {}').format(ssh_priv_key))
-        return
+            'SSH private key filemode is too permissive: {}'.format(
+                ssh_priv_key))
     ssh_args = [
         'ssh', '-o', 'StrictHostKeyChecking=no',
         '-o', 'UserKnownHostsFile={}'.format(os.devnull),

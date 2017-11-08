@@ -150,7 +150,7 @@ def connect_or_exec_ssh_command(
             ssh_private_key))
     # ensure file mode is set properly for the private key
     if not check_ssh_private_key_filemode(ssh_private_key):
-        raise RuntimeError(
+        logger.warning(
             'SSH private key filemode is too permissive: {}'.format(
                 ssh_private_key))
     # execute SSH command
