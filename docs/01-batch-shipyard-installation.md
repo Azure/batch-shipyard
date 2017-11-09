@@ -6,6 +6,7 @@ pick an option that is most suitable for your work environment.
 * [Pre-built binary](#binary)
 * [Installers](#installers)
 * [Docker image](#docker-install)
+* [Singularity image](#singularity-install)
 * [Jupyter Notebooks](#jupyter)
 
 If you wish to install Batch Shipyard into your Azure App Service (e.g.,
@@ -60,8 +61,9 @@ to your operating system specific installation instructions:
 * [Windows Subsystem for Linux](#wsl-install)
 
 Alternatively, you can install the Batch Shipyard CLI on your machine via
-[Docker](#docker-install). If using the Docker image, this is the only step
-needed and does not require any futher installation steps.
+[Docker](#docker-install) or [Singularity](#singularity-install). If using
+the Docker image, this is the only step needed and does not require any
+futher installation steps.
 
 ### <a name="linux-install"></a>Step 2 [Linux]: Run the `install.sh` Script
 Batch Shipyard includes an installation script to simplify installation on
@@ -317,10 +319,27 @@ To install:
 ```shell
 docker pull alfpark/batch-shipyard:latest-cli
 ```
-This will pull the cli Docker image of batch-shipyard to your local machine.
+This will pull the CLI Docker image of Batch Shipyard to your local machine.
 You are now ready to execute it with `docker run`. Please see the
 [Batch Shipyard Usage](20-batch-shipyard-usage.md) guide for more information
 on how to execute the Batch Shipyard CLI Docker image.
+
+## <a name="singularity-install"></a>Batch Shipyard CLI Installation via Singularity
+If using the [alfpark/batch-shipyard-singularity:cli](https://www.singularity-hub.org/collections/204)
+Singularity image, then all of the required software is bundled in the image
+itself, however, you will need an installation of Singularity on your
+machine. More information on installing Singularity to your local machine
+can be found [here](http://singularity.lbl.gov/).
+
+To install:
+```shell
+singularity pull shub://alfpark/batch-shipyard-singularity:cli
+```
+This will pull the CLI Singularity image of Batch Shipyard to your local
+machine (to the current working directory). You are now ready to execute
+it with `singularity run` or simply just executing the image. Please see
+the [Batch Shipyard Usage](20-batch-shipyard-usage.md) guide for more
+information on how to execute the Batch Shipyard CLI Singularity image.
 
 ## <a name="jupyter"></a>Jupyter Notebooks
 There are community contributed [Jupyter notebooks](../contrib/notebooks) to

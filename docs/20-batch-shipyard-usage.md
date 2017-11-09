@@ -1,8 +1,8 @@
 # Batch Shipyard Usage
 This page contains in-depth details on how to use the Batch Shipyard tool.
-Please see the [Batch Shipyard Docker Image CLI](#docker-cli) section for
-information regarding how to use the `alfpark/batch-shipyard:latest-cli`
-Docker image if not invoking the Python script directly.
+Please see the [Container Image CLI](#container-cli) section for information
+regarding how to use the Docker or Singularity image if not invoking the
+Python script or pre-built binary directly.
 
 ## Batch Shipyard Invocation
 If you installed Batch Shipyard using the `install.sh` script, then
@@ -646,12 +646,19 @@ The above invocation will stream the stdout.txt file from the job `job1` and
 task `task1` from a live compute node. Because all portions of the
 `--filespec` option are specified, the tool will not prompt for any input.
 
-## <a name="docker-cli"></a>Batch Shipyard Docker Image CLI Invocation
-If using the [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
-Docker image, then you would invoke the tool as:
+## <a name="container-cli"></a>Batch Shipyard Container Image CLI Invocation
+If using either the Docker image [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
+or the Singularity image
+[shub://alfpark/batch-shipyard-singularity:cli](https://www.singularity-hub.org/collections/204),
+then you would invoke Batch Shipyard as:
 
 ```shell
+# if using Docker
 docker run --rm -it alfpark/batch-shipyard:latest-cli \
+    <command> <subcommand> <options...>
+
+# if using Singularity
+singularity run shub://alfpark/batch-shipyard-singularity:cli \
     <command> <subcommand> <options...>
 ```
 
@@ -661,29 +668,37 @@ above and `<options...>` are any additional options to pass to the
 
 Invariably, you will need to pass config files to the tool which reside
 on the host and not in the container by default. Please use the `-v` volume
-mount option with `docker run` to mount host directories inside the container.
-For example, if your Batch Shipyard configs are stored in the host path
-`/home/user/batch-shipyard-configs` you could modify the docker run command
-as:
+mount option with `docker run` or `-B` bind option with `singularity run`
+to mount host directories inside the container. For example, if your Batch
+Shipyard configs are stored in the host path
+`/home/user/batch-shipyard-configs` you could modify the invocations as:
 
 ```shell
+# if using Docker
 docker run --rm -it \
     -v /home/user/batch-shipyard-configs:/configs \
-    -e SHIPYARD_CONFIGDIR=/configs \
+    -w /configs \
     alfpark/batch-shipyard:latest-cli \
+    <command> <subcommand> <options...>
+
+# if using Singularity
+singularity run \
+    -B /home/user/batch-shipyard-configs:/configs \
+    --pwd /configs \
+    shub://alfpark/batch-shipyard-singularity:cli \
     <command> <subcommand> <options...>
 ```
 
-Notice that we specified a Docker environment variable via
-`-e SHIPYARD_CONFIGDIR` to match the container path of the volume mount.
+Notice that we specified the working directory as `-w` for Docker or
+`--pwd` for Singularity to match the `/configs` container path.
 
 Additionally, if you wish to ingress data from locally accessible file
 systems using Batch Shipyard, then you will need to map additional volume
 mounts as appropriate from the host to the container.
 
 Batch Shipyard may generate files with some actions, such as adding a SSH
-user or creating a pool with an SSH user. In this case, you will need
-to create a volume mount with the `-v` option and also ensure that the
+user or creating a pool with an SSH user. In this case, you will need to
+create a volume mount with the `-v` (or `-B`) option and also ensure that the
 pool specification `ssh` object has a `generated_file_export_path` property
 set to the volume mount path. This will ensure that generated files will be
 written to the host and persisted after the docker container exits. Otherwise,

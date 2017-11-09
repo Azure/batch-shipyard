@@ -484,7 +484,7 @@ def _create_virtual_machine(
     vm_name = settings.generate_virtual_machine_name(
         rfs.storage_cluster, offset)
     # construct data disks array
-    lun = 3
+    lun = 0
     data_disks = []
     for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
         data_disks.append(

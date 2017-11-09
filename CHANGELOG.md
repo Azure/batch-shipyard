@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- CLI Singularity image (#135)
+
+### Changed
+- Start LUN numbering for remote fs disks at 0
+
 ## [3.0.0rc1] - 2017-11-08
 ### Changed
 - Update VM size support

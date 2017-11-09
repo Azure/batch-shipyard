@@ -18,7 +18,9 @@ assoicated datacenter data egress and storage costs, i.e., the same cost
 as if consuming
 [Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
 or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/)
-directly.
+directly. Additionally, Azure Batch provides the ability to run on
+[Low Priority VMs](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+which can dramatically lower costs for savings up to 80%!
 
 Azure Batch can handle workloads on any point of the parallel and distributed
 processing spectrum, from embarassingly parallel workloads all the way to
@@ -110,8 +112,8 @@ their respective packaging and tooling, users can spend less time hassling
 with the underlying infrastructure, VM application state consistency,
 potential dependency interaction side effects and spend more
 time on things that actually matter for their batch workloads: the job and
-task results themselves. And with Azure Batch, you can scale your workload up
-and only pay for the compute resources you use. The Batch Shipyard
+task results themselves. And with Azure Batch, you can automatically scale
+your workload and only pay for the compute resources you use. Batch Shipyard
 provides a way to combine your containers with the power of scale-out cloud
 computing with ease!
 

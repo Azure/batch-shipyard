@@ -18,11 +18,12 @@ RUN git clone -b $Env:GIT_BRANCH --single-branch --depth 5 https://github.com/Az
     Remove-Item .git -Force -Recurse ; \
     Remove-Item .git* -Force -Recurse ; \
     Remove-Item .travis.yml -Force -Recurse ; \
-    Remove-Item appveyor.yml -Force -Recurse ; \
+    Remove-Item *.yml -Force -Recurse ; \
     Remove-Item install* -Force -Recurse
 
 RUN python -m compileall C:\Python\Lib ; \
-    python -m compileall C:\batch-shipyard ; \
+    python -m compileall C:\batch-shipyard\shipyard.py ; \
+    python -m compileall C:\batch-shipyard\convoy ; \
 	exit 0
 
 FROM microsoft/nanoserver

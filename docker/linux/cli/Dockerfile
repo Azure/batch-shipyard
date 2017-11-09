@@ -14,9 +14,9 @@ RUN apk update \
     && cd /opt/batch-shipyard \
     && git checkout $GIT_COMMIT \
     && rm -rf .git \
-    && rm -f .git* .travis.yml appveyor.yml install* \
+    && rm -f .git* .travis.yml *.yml install* \
     && pip3 install --no-cache-dir -r requirements.txt \
-    && python3 -m compileall -f /opt/batch-shipyard \
+    && python3 -m compileall -f /opt/batch-shipyard/shipyard.py /opt/batch-shipyard/convoy \
     && apk del --purge build-base python3-dev libressl-dev libffi-dev git \
     && rm /var/cache/apk/*
 
