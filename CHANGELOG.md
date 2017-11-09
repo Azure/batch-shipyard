@@ -8,6 +8,9 @@
 ### Changed
 - Start LUN numbering for remote fs disks at 0
 
+### Fixed
+- Default Singularity tagged image names on disk
+
 ## [3.0.0rc1] - 2017-11-08
 ### Changed
 - Update VM size support
