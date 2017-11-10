@@ -1,2 +1,2 @@
 azure-cosmosdb-table==0.37.1
-azure-storage-blob==0.37.0
+azure-storage-blob==0.37.1

@@ -7,9 +7,12 @@
 
 ### Changed
 - Start LUN numbering for remote fs disks at 0
+- Allow path to `python.exe` to be specified in `install.cmd`
+- Update dependencies to latest
 
 ### Fixed
 - Default Singularity tagged image names on disk
+- Circular dependency in `task_factory` and `settings`
 
 ## [3.0.0rc1] - 2017-11-08
 ### Changed

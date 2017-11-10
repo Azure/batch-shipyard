@@ -1,3 +1,3 @@
 azure-batch==4.0.0
-msrest==0.4.16
+msrest==0.4.18
 requests==2.18.4
