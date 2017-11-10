@@ -42,7 +42,7 @@ import time
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
-import azure.mgmt.compute.models as computemodels
+import azure.mgmt.compute.v2016_04_30_preview.models as computemodels
 # local imports
 from . import autoscale
 from . import batch

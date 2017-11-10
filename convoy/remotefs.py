@@ -41,7 +41,7 @@ except ImportError:
 import socket
 import struct
 # non-stdlib imports
-import azure.mgmt.compute.models as computemodels
+import azure.mgmt.compute.v2016_04_30_preview.models as computemodels
 import azure.mgmt.network.models as networkmodels
 import msrestazure.azure_exceptions
 # local imports

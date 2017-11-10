@@ -3,7 +3,7 @@ azure-batch==4.0.0
 azure-cosmosdb-table==0.37.1
 azure-keyvault==0.3.7
 azure-mgmt-batch==4.1.0
-azure-mgmt-compute==1.0.0
+azure-mgmt-compute==3.0.1
 azure-mgmt-network==1.5.0
 azure-mgmt-resource==1.2.2
 azure-storage-blob==0.37.1

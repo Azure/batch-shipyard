@@ -83,7 +83,10 @@ class AsyncOperation(object):
         :rtype: object
         :return: result of async wait
         """
+        alloc_failures = 0
         while True:
+            last_status_code = None
+            last_error_message = None
             if self._noop:
                 return self._op  # will return None
             self._invoke()
@@ -96,6 +99,10 @@ class AsyncOperation(object):
                         logger.error('not retrying status_code={}'.format(
                             e.status_code))
                         raise
+                if e.status_code == 200 and 'Allocation failed' in e.message:
+                    alloc_failures += 1
+                    if alloc_failures > 10:
+                        raise
                 self._retry_count += 1
                 if (self._max_retries >= 0 and
                         self._retry_count > self._max_retries):
@@ -105,13 +112,16 @@ class AsyncOperation(object):
                              self._partial.func.__name__, self._partial.args,
                              self._partial.keywords, e.status_code))
                     raise
+                last_status_code = e.status_code
+                last_error_message = e.message
             self._op = None
             # randomly backoff
             time.sleep(random.randint(1, 3))
             logger.debug(
-                ('Attempting retry of operation: {}, retry_count={} '
-                 'max_retries={}').format(
-                     self._partial.func.__name__, self._retry_count,
+                ('Attempting retry of operation: {}, status={} message="{}" '
+                 'retry_count={} max_retries={}').format(
+                     self._partial.func.__name__, last_status_code,
+                     last_error_message, self._retry_count,
                      self._max_retries if self._max_retries >= 0 else 'inf'))
 
 
