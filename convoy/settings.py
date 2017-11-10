@@ -272,7 +272,7 @@ UserIdentitySettings = collections.namedtuple(
 )
 TaskFactoryStorageSettings = collections.namedtuple(
     'TaskFactoryStorageSettings', [
-        'storage_settings', 'storage_link_name', 'remote_path',
+        'storage_settings', 'storage_link_name', 'container', 'remote_path',
         'is_file_share', 'include', 'exclude',
     ]
 )
@@ -2421,11 +2421,13 @@ def job_tasks(config, conf):
             # get storage settings if applicable
             if 'file' in _task['task_factory']:
                 az = _task['task_factory']['file']['azure_storage']
+                drp = data_remote_path(az)
                 tfstorage = TaskFactoryStorageSettings(
                     storage_settings=credentials_storage(
                         config, data_storage_account_settings(az)),
                     storage_link_name=az['storage_account_settings'],
-                    remote_path=data_remote_path(az),
+                    container=data_container_from_remote_path(None, drp),
+                    remote_path=drp,
                     is_file_share=data_is_file_share(az),
                     include=_kv_read_checked(az, 'include'),
                     exclude=_kv_read_checked(az, 'exclude'),
