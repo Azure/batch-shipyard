@@ -2,7 +2,7 @@
 
 REM check for argument
 IF [%1] EQU [] (
-	echo Virtual environment name required.
+	echo Usage: install.cmd [virtual env name] [optional: path to python.exe]
 	exit /b 1
 )
 IF %~1 == shipyard.cmd (
@@ -11,20 +11,24 @@ IF %~1 == shipyard.cmd (
 )
 SET VENVNAME=%~1
 
+REM set python to use
+IF [%2] NEQ [] (
+	SET PYTHON=%~2
+) ELSE (
+	FOR /f %%i in ('where python.exe') do SET PYTHON="%%i"
+)
+IF NOT DEFINED PYTHON (
+	echo Python not found. Please ensure python.exe is in your PATH.
+	exit /b 1
+)
+echo Using python from %PYTHON%
+
 REM check that shipyard.py is in cwd
 SET SHIPYARDFILE="%cd%\shipyard.py"
 IF NOT EXIST %SHIPYARDFILE% (
 	echo shipyard.py does not exist in current working directory. Please run installer from Batch Shipyard root.
 	exit /b 1
 )
-
-REM find python
-FOR /f %%i in ('where python.exe') do SET PYTHON="%%i"
-IF NOT DEFINED PYTHON (
-	echo Python not found. Please ensure python.exe is in your PATH.
-	exit /b 1
-)
-echo Using python from %PYTHON%
 
 REM check for anaconda
 %PYTHON% -c "from __future__ import print_function; import sys; print(sys.version)" > .pyver.txt
