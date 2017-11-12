@@ -52,8 +52,7 @@ _HOST_MOUNTS_DIR = '$AZ_BATCH_NODE_ROOT_DIR/mounts'
 _HOST_MOUNTS_DIR_WINDOWS = '%AZ_BATCH_NODE_ROOT_DIR%\\mounts'
 _TENSORBOARD_DOCKER_IMAGE = (
     'gcr.io/tensorflow/tensorflow',
-    '/usr/local/lib/python2.7/dist-packages/tensorflow'
-    '/tensorboard/tensorboard.py',
+    '/usr/local/lib/python2.7/dist-packages/tensorboard/main.py',
     6006
 )
 _GPU_COMPUTE_INSTANCES = frozenset((

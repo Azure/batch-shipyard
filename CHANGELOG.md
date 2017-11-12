@@ -13,6 +13,7 @@
 ### Fixed
 - Default Singularity tagged image names on disk
 - Circular dependency in `task_factory` and `settings`
+- `misc tensorboard` command broken from latest TF image
 
 ## [3.0.0rc1] - 2017-11-08
 ### Changed
