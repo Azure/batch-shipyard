@@ -157,6 +157,8 @@ check_for_nvidia() {
         echo "INFO: No Nvidia card(s) detected!"
     else
         check_for_nvidia_driver
+        # enable persistence mode
+        nvidia-smi -pm 1
     fi
 }
 

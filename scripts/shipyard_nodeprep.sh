@@ -225,6 +225,9 @@ EOF
         cp /etc/nvidia/gridd.conf.template /etc/nvidia/gridd.conf
         echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf
     fi
+    # enable persistence daemon (and mode)
+    nvidia-persistenced --user root
+    nvidia-smi -pm 1
     # install nvidia-docker
     install_local_packages $offer $nvdocker
     # enable and start nvidia docker service
