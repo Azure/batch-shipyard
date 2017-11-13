@@ -2,12 +2,14 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2017-11-13 (SC17 Edition)
 ### Added
 - CLI Singularity image (#135)
 
 ### Changed
 - Start LUN numbering for remote fs disks at 0
 - Allow path to `python.exe` to be specified in `install.cmd`
+- Ensure persistence daemon/mode is enabled for GPUs
 - Update dependencies to latest
 
 ### Fixed
@@ -15,6 +17,7 @@
 - Default Singularity tagged image names on disk
 - Circular dependency in `task_factory` and `settings`
 - `misc tensorboard` command broken from latest TF image
+- Update NV driver
 
 ## [3.0.0rc1] - 2017-11-08
 ### Changed
@@ -1006,7 +1009,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0...HEAD
+[3.0.0]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...3.0.0
 [3.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...3.0.0rc1
 [3.0.0b1]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...3.0.0b1
 [3.0.0a2]: https://github.com/Azure/batch-shipyard/compare/3.0.0a1...3.0.0a2

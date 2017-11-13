@@ -43,7 +43,7 @@ test_script:
 after_test:
 - echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH%
 - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
-  set UPLOAD_NUGET=1
+  set UPLOAD_NUGET=1&
   echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
   nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &
   7z l batch-shipyard.*.nupkg &
