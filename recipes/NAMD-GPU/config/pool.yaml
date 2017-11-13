@@ -10,4 +10,4 @@ pool_specification:
     low_priority: 0
   vm_size: STANDARD_NC12
   ssh:
-    username: docker
+    username: shipyard

@@ -1,5 +1,5 @@
 pool_specification:
-  id: docker-linpack
+  id: singularity-linpack
   vm_configuration:
     platform_image:
       offer: CentOS-HPC

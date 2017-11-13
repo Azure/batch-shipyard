@@ -11,4 +11,4 @@ pool_specification:
   vm_size: STANDARD_D4_V2
   inter_node_communication_enabled: true
   ssh:
-    username: docker
+    username: shipyard

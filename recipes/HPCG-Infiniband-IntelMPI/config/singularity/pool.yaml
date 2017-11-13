@@ -1,5 +1,5 @@
 pool_specification:
-  id: docker-hpcg
+  id: singularity-hpcg
   vm_configuration:
     platform_image:
       offer: CentOS-HPC
@@ -11,4 +11,4 @@ pool_specification:
   vm_size: STANDARD_H16R
   inter_node_communication_enabled: true
   ssh:
-    username: docker
+    username: shipyard

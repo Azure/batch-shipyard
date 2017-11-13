@@ -10,4 +10,4 @@ pool_specification:
     low_priority: 0
   vm_size: STANDARD_D1_V2
   ssh:
-    username: docker
+    username: shipyard
