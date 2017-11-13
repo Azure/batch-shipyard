@@ -1,9 +1,9 @@
 # General Guidelines and Frequently Asked Questions
 
 ## General Guidelines
-* Smaller, widely-used platform (Marketplace) images typically will result
-in minimizing pool spin up (allocation) time. Reducing the size of the Docker
-images to load will also reduce the time to create a pool.
+* Reducing the size of container images to pre-load will minimize the pool
+spin up (allocation time). It is recommended to coalesce layers together or
+use multi-stage builds if using Docker images.
 * Please keep in mind that pool allocation speed is dependent upon a lot of
 factors that Batch Shipyard has no control over.
 
@@ -60,7 +60,8 @@ factors that Batch Shipyard has no control over.
 that the pool works under native Docker mode where the compute nodes
 understand how to launch and execute Docker containers. Please understand
 that only a subset of `platform_image` combinations are compatible with
-`native` mode.
+`native` mode. Compliant [custom images](63-batch-shipyard-custom-images.md)
+are compatible with `native` mode.
 
 Advantages of `native` mode are:
 

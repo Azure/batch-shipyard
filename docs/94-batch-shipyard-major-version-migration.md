@@ -58,7 +58,7 @@ files found.
 
 for file in $1/*; do
     ext="${file##*.}"
-    if [ "$ext" == ".yaml" ]; then
+    if [ "$ext" == "yaml" ]; then
         continue
     fi
     stem="${file%.*}"

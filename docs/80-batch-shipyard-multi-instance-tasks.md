@@ -59,14 +59,15 @@ jobs to run within Singularity containers as if they were running on
 the host OS.
 
 ## Docker Containers and MPI
-Docker images for MPI applications are nearly the same as other non-MPI
-applications but with a caveat. Outside of installing the necessary software
-required for MPI to run, the difference is that images that use MPI must
-also install SSH client/server software and enable the SSH server as the
-`CMD` with a port exposed to the host. Remember, the container will be
-running isolated from the host, so if you attempt to connect to the SSH
-server running on the host, the launcher will attempt to initialize on the
-host with an MPI runtime that doesn't exist.
+Docker images for MPI applications must be carefully crafted such that
+the MPI runtime is able to communicate properly with other compute nodes.
+Outside of installing the necessary software required for MPI to run, the
+difference is that images that use MPI must also install SSH client/server
+software and enable the SSH server as the `CMD` with a port exposed to the
+host. Remember, the container will be running isolated from the host, so if
+you attempt to connect to the SSH server running on the host, the launcher
+will attempt to initialize on the host with an MPI runtime that doesn't
+exist.
 
 ### Docker and MPI Mental Model
 With the basics reviewed above, we can construct a mental model of the layout
@@ -223,15 +224,19 @@ commands to work with the Azure Batch compute node environment.
 
 ## Which to choose for MPI? Docker or Singularity?
 In the context of Batch Shipyard, both approaches are somewhat similar as
-the tooling takes care of a lot of the complexity. However, if you are using
-a Docker image, then you need to ensure that your image contains the
-directives to install and start an SSH server.
+Batch Shipyard takes care of a lot of the complexity. However, if you are
+using a Docker image, then you need to ensure that your image contains the
+directives to install and start an SSH server (or whatever mechanism your
+MPI runtime requires as a launcher).
 
-Since Singularity is inherently more easy to work with for MPI programs,
+Since Singularity is inherently easier to use in conjunction with MPI programs,
 it may be beneficial to use Singularity to containerize your MPI application
-instead of Docker. There is no need to package an SSH server with your image
+instead of Docker. There is no need to package a launcher with your image
 and is handled more elegantly in Batch Shipyard without the need to split
-the execution and deal with potential cleanup artifacts.
+the execution and deal with potential cleanup artifacts. Additionally, there
+has been [some research](https://arxiv.org/abs/1709.10140) to indicate that
+Singularity outperforms other OS virtualization approaches and is more
+amenable for HPC applications.
 
 ### More Information
 For more general information about MPI and Azure Batch, please visit
