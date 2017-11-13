@@ -11,6 +11,7 @@
 - Update dependencies to latest
 
 ### Fixed
+- Non-Ubuntu/CentOS cascade failures from non-existent Singularity
 - Default Singularity tagged image names on disk
 - Circular dependency in `task_factory` and `settings`
 - `misc tensorboard` command broken from latest TF image

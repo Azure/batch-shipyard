@@ -1100,9 +1100,19 @@ async def download_monitor_async(
         # fixup filemodes/ownership for singularity images
         if (_GR_DONE and _SINGULARITY_CACHE_DIR is not None and
                 _AZBATCH_USER is not None):
-            logger.info('chown all files in {}'.format(_SINGULARITY_CACHE_DIR))
-            for file in scantree(str(_SINGULARITY_CACHE_DIR)):
-                os.chown(str(file.path), _AZBATCH_USER[2], _AZBATCH_USER[3])
+            if _SINGULARITY_CACHE_DIR.exists():
+                logger.info('chown all files in {}'.format(
+                    _SINGULARITY_CACHE_DIR))
+                for file in scantree(str(_SINGULARITY_CACHE_DIR)):
+                    os.chown(
+                        str(file.path),
+                        _AZBATCH_USER[2],
+                        _AZBATCH_USER[3]
+                    )
+            else:
+                logger.warning(
+                    'singularity cache dir {} does not exist'.format(
+                        _SINGULARITY_CACHE_DIR))
         # if not in peer-to-peer mode, allow exit
         if not _ENABLE_P2P and _GR_DONE:
             break
