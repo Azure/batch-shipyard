@@ -102,7 +102,7 @@ _NVIDIA_DRIVER = {
     'visualization': {
         'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
         'sha256': (
-            'dec622880879d2ead3601865d38656d77b44e5f47e2855375bf49d4eb8cdbad4'
+            '4a8885efc1a4f482f45afe45c6c3a239bafbc2a86cb1a1adbc2190939d15a015'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -1943,6 +1943,7 @@ def _adjust_settings_for_pool_creation(config):
             'cannot specify both a platform_image and a custom_image in the '
             'pool specification')
     is_windows = settings.is_windows_pool(config)
+    bs = settings.batch_shipyard_settings(config)
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
@@ -1996,7 +1997,8 @@ def _adjust_settings_for_pool_creation(config):
     # compute total vm count
     pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
     # adjust for shipyard container requirement
-    if shipyard_container_required or util.is_not_empty(node_agent):
+    if (not bs.use_shipyard_docker_image and
+            (shipyard_container_required or util.is_not_empty(node_agent))):
         settings.set_use_shipyard_docker_image(config, True)
         logger.debug(
             ('forcing shipyard docker image to be used due to '
