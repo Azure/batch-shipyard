@@ -1,5 +1,5 @@
-title: batch-shipyard
-description: Provision and execute Dockerized workloads on Azure Batch
+title: Batch Shipyard
+description: Provision and execute containerized workloads on Azure Batch
 google_analytics:
 show_downloads: false
 theme: jekyll-theme-architect
