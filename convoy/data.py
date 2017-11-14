@@ -234,7 +234,7 @@ def process_input_data(config, bxfile, spec, on_task=False):
         tfmpre = ''
         tfmpost = ''
     else:
-        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}} set +f'.format(
+        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}}; set +f'.format(
             bxfile[0])
         tfmbind = (
             '-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR '
@@ -397,7 +397,7 @@ def process_output_data(config, bxfile, spec):
         bxcmd = ('powershell -ExecutionPolicy Unrestricted -command '
                  '%AZ_BATCH_NODE_STARTUP_DIR%\\wd\\{} {{}}').format(bxfile[0])
     else:
-        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}} set +f'.format(
+        bxcmd = 'set -f; $AZ_BATCH_NODE_STARTUP_DIR/wd/{} {{}}; set +f'.format(
             bxfile[0])
     ret = []
     output_data = settings.output_data(spec)
