@@ -97,13 +97,13 @@ def _convert_filter_to_blobxfer_option(includes, excludes):
     if util.is_not_empty(includes):
         src_incl = []
         for include in includes:
-            src_incl.append('--include \'{}\''.format(include))
+            src_incl.append('--include \"{}\"'.format(include))
     else:
         src_incl = None
     if util.is_not_empty(excludes):
         src_excl = []
         for exclude in excludes:
-            src_excl.append('--exclude \'{}\''.format(exclude))
+            src_excl.append('--exclude \"{}\"'.format(exclude))
     else:
         src_excl = None
     return '{} {}'.format(
@@ -193,8 +193,16 @@ def _process_batch_input_data(config, input_data, on_task):
     for xfer in input_data:
         jobid = settings.input_data_job_id(xfer)
         taskid = settings.input_data_task_id(xfer)
-        include = settings.data_include(xfer, False)
+        include = settings.data_include(xfer)
+        if util.is_not_empty(include):
+            include = ';'.join(include)
+        else:
+            include = ''
         exclude = settings.data_exclude(xfer)
+        if util.is_not_empty(exclude):
+            exclude = ';'.join(exclude)
+        else:
+            exclude = ''
         local_path = settings.data_local_path(xfer, on_task)
         creds = crypto.encrypt_string(
             encrypt,

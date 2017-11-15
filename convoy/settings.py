@@ -2307,22 +2307,6 @@ def data_blobxfer_extra_options(conf):
     return _kv_read_checked(conf, 'blobxfer_extra_options', default='')
 
 
-def _data_filters(conf, name):
-    # type: (dict) -> str
-    """Retrieve data filters
-    :param dict conf: configuration object
-    :param str name: include or exclude
-    :rtype: str
-    :return: filters joined by ;
-    """
-    filters = _kv_read_checked(conf, name)
-    if filters is None:
-        filters = ''
-    else:
-        filters = ';'.join(filters)
-    return filters
-
-
 def data_include(conf):
     # type: (dict) -> str
     """Retrieve input data include filters
@@ -2330,7 +2314,7 @@ def data_include(conf):
     :rtype: str
     :return: include filters
     """
-    return _data_filters(conf, 'include')
+    return _kv_read_checked(conf, 'include', [])
 
 
 def data_exclude(conf):
@@ -2340,7 +2324,7 @@ def data_exclude(conf):
     :rtype: str
     :return: exclude filters
     """
-    return _data_filters(conf, 'exclude')
+    return _kv_read_checked(conf, 'exclude', [])
 
 
 def input_data_job_id(conf):
