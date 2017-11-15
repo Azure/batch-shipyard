@@ -38,7 +38,9 @@ remote_fs:
         subnet:
           address_prefix: 10.0.0.0/24
           name: my-server-subnet
-      static_public_ip: false
+      public_ip:
+        enabled: true
+        static: false
       vm_count: 2
       vm_size: STANDARD_F16S
       vm_disk_map:
