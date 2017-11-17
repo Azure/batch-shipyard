@@ -55,7 +55,7 @@ shift $((OPTIND-1))
 
 # get all data disks
 declare -a data_disks
-all_disks=($(lsblk -l -d -n -p -I 8 -o NAME))
+all_disks=($(lsblk -l -d -n -p -I 8,65,66,67,68 -o NAME))
 for disk in "${all_disks[@]}"; do
     # ignore os and ephemeral disks
 	if [ $disk != "/dev/sda" ] && [ $disk != "/dev/sdb" ]; then
