@@ -346,8 +346,8 @@ def _block_for_nodes_ready(
                         reboot_map[node.id] = 0
                         logger.error(
                             ('Detected start task failure, attempting to '
-                             'retrieve stdout/stderr for error diagnosis '
-                             'from node {}').format(node.id))
+                             'retrieve files for error diagnosis from '
+                             'node {}').format(node.id))
                         _retrieve_outputs_from_failed_nodes(
                             batch_client, config, nodeid=node.id)
                     if reboot_map[node.id] > _MAX_REBOOT_RETRIES:
@@ -355,11 +355,13 @@ def _block_for_nodes_ready(
                         raise RuntimeError(
                             ('Ran out of reboot retries for recovery. '
                              'Please inspect both the node status above and '
-                             'stdout.txt/stderr.txt files within the '
-                             '{}/{}/startup directory in the current working '
-                             'directory if available. If this error '
-                             'appears non-transient, please submit an '
-                             'issue on GitHub').format(
+                             'files found within the {}/{}/startup directory '
+                             '(in the current working directory) if '
+                             'available. If this error appears '
+                             'non-transient, please submit an issue on '
+                             'GitHub, if not you can delete these nodes with '
+                             '"pool nodes del --all-start-task-failed" first '
+                             'prior to the resize operation.').format(
                                  pool.id, node.id))
                     _reboot_node(batch_client, pool.id, node.id, True)
                     reboot_map[node.id] += 1
@@ -374,16 +376,17 @@ def _block_for_nodes_ready(
                 # fast path check for start task failures in non-reboot mode
                 logger.error(
                     'Detected start task failure, attempting to retrieve '
-                    'stdout/stderr for error diagnosis from nodes')
+                    'files for error diagnosis from nodes')
                 _retrieve_outputs_from_failed_nodes(batch_client, config)
                 pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
                     ('Please inspect both the node status above and '
-                     'stdout.txt/stderr.txt files within the '
-                     '{}/<nodes>/startup directory in the current working '
-                     'directory if available. If this error appears '
-                     'non-transient, please submit an issue on '
-                     'GitHub.').format(pool.id))
+                     'files found within the {}/<nodes>/startup directory '
+                     '(in the current working directory) if available. If '
+                     'this error appears non-transient, please submit an '
+                     'issue on GitHub, if not you can delete these nodes '
+                     'with "pool nodes del --all-start-task-failed" first '
+                     'prior to the resize operation.').format(pool.id))
         # check if any nodes are in unusable state
         elif (any(node.state == batchmodels.ComputeNodeState.unusable
                   for node in nodes)):
@@ -398,8 +401,8 @@ def _block_for_nodes_ready(
             else:
                 raise RuntimeError(
                     ('Unusable nodes detected in pool {}. You can delete '
-                     'unusable nodes with "pool delnode --all-unusable" '
-                     'first prior to retrying the resize operation.').format(
+                     'unusable nodes with "pool nodes del --all-unusable" '
+                     'first prior to the resize operation.').format(
                          pool.id))
         # check for full allocation
         if (len(nodes) == total_nodes and
@@ -411,8 +414,8 @@ def _block_for_nodes_ready(
                      'state of nodes in the pool above. If this appears to '
                      'be a transient error, please retry pool creation or '
                      'the resize operation. If any unusable nodes exist, you '
-                     'can delete them with "pool delnode --all-unusable" '
-                     'first prior to retrying the resize operation.').format(
+                     'can delete them with "pool nodes del --all-unusable" '
+                     'first prior to the resize operation.').format(
                          pool.id, end_states))
             else:
                 return nodes
