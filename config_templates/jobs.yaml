@@ -64,8 +64,10 @@ job_specifications:
           length: 2
           replacement: false
         permutations:
-          iterable: ABCDEF
-          length: 3
+          iterable:
+          - ABC
+          - DEF
+          length: 2
         product:
         - start: 0
           step: 1

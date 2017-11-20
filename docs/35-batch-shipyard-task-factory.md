@@ -430,9 +430,9 @@ may be similar to the following:
 task_factory:
   custom:
     input_args:
-    - 1
-    - 2
-    - 3
+    - '1'
+    - '2'
+    - '3'
     module: foo.generator
 command: /bin/bash -c "sleep {}"
 ```

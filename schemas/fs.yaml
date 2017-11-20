@@ -1,0 +1,202 @@
+desc: RemoteFS Configuration Schema
+
+type: map
+mapping:
+  remote_fs:
+    type: map
+    required: true
+    mapping:
+      resource_group:
+        type: str
+      location:
+        type: str
+        required: true
+      managed_disks:
+        type: map
+        mapping:
+          resource_group:
+            type: str
+          premium:
+            type: bool
+          disk_size_gb:
+            type: int
+            required: true
+          disk_names:
+            type: seq
+            sequence:
+              - type: str
+      storage_clusters:
+        type: map
+        mapping:
+          regex;(.+):
+            type: map
+            mapping:
+              resource_group:
+                type: str
+              hostname_prefix:
+                type: str
+                required: true
+              ssh:
+                type: map
+                required: true
+                mapping:
+                  username:
+                    type: str
+                    required: true
+                  ssh_public_key:
+                    type: str
+                  ssh_public_key_data:
+                    type: str
+                  ssh_private_key:
+                    type: str
+                  generated_file_export_path:
+                    type: str
+              public_ip:
+                type: map
+                mapping:
+                  enabled:
+                    type: bool
+                  static:
+                    type: bool
+              virtual_network:
+                type: map
+                required: true
+                mapping:
+                  name:
+                    type: str
+                    required: true
+                  resource_group:
+                    type: str
+                  existing_ok:
+                    type: bool
+                  address_space:
+                    type: str
+                  subnet:
+                    type: map
+                    mapping:
+                      name:
+                        type: str
+                        required: true
+                      address_prefix:
+                        type: str
+                        required: true
+              network_security:
+                type: map
+                mapping:
+                  ssh:
+                    type: seq
+                    sequence:
+                      - type: str
+                  nfs:
+                    type: seq
+                    sequence:
+                      - type: str
+                  glusterfs:
+                    type: seq
+                    sequence:
+                      - type: str
+                  smb:
+                    type: seq
+                    sequence:
+                      - type: str
+                  custom_inbound_rules:
+                    type: map
+                    mapping:
+                      regex;([a-zA-Z0-9]+):
+                        type: map
+                        mapping:
+                          destination_port_range:
+                            type: str
+                            required: true
+                          protocol:
+                            type: str
+                            enum: ['*', 'tcp', 'udp']
+                          source_address_prefix:
+                            type: seq
+                            required: true
+                            sequence:
+                              - type: str
+              file_server:
+                type: map
+                mapping:
+                  type:
+                    type: str
+                    enum: ['nfs', 'glusterfs']
+                    required: true
+                  mountpoint:
+                    type: str
+                    required: true
+                  mount_options:
+                    type: seq
+                    sequence:
+                      - type: str
+                  server_options:
+                    type: map
+                    mapping:
+                      nfs:
+                        type: map
+                        mapping:
+                          regex;(.+):
+                            type: str
+                      glusterfs:
+                        type: map
+                        mapping:
+                          transport:
+                            type: str
+                            enum: ['tcp']
+                          volume_name:
+                            type: str
+                          volume_type:
+                            type: str
+                            enum: ['distributed', 'replica', 'stripe']
+                          regex;(.+):
+                            type: str
+                  samba:
+                    type: map
+                    mapping:
+                      share_name:
+                        type: str
+                        required: true
+                      account:
+                        type: map
+                        mapping:
+                          username:
+                            type: str
+                            required: true
+                          password:
+                            type: str
+                            required: true
+                          uid:
+                            type: int
+                            required: true
+                          gid:
+                            type: int
+                            required: true
+                      read_only:
+                        type: bool
+                      create_mask:
+                        type: str
+                      directory_mask:
+                        type: str
+              vm_count:
+                type: int
+                required: true
+              vm_size:
+                type: str
+                required: true
+              fault_domains:
+                type: int
+              vm_disk_map:
+                type: map
+                mapping:
+                  regex;([0-9]+):
+                    type: map
+                    mapping:
+                      disk_array:
+                        type: seq
+                        sequence:
+                          - type: str
+                      filesystem:
+                        type: str
+                      raid_level:
+                        type: int

@@ -1,0 +1,250 @@
+desc: Pool Configuration Schema
+
+type: map
+mapping:
+  pool_specification:
+    type: map
+    required: true
+    mapping:
+      id:
+        type: str
+        required: true
+      vm_configuration:
+        type: map
+        required: true
+        mapping:
+          platform_image:
+            type: map
+            mapping:
+              publisher:
+                type: str
+                required: true
+              offer:
+                type: str
+                required: true
+              sku:
+                type: str
+                required: true
+              version:
+                type: str
+              native:
+                type: bool
+          custom_image:
+            type: map
+            mapping:
+              arm_image_id:
+                type: str
+                required: true
+              node_agent:
+                type: str
+                required: true
+              native:
+                type: bool
+      vm_size:
+        type: str
+        required: true
+      vm_count:
+        type: map
+        required: true
+        mapping:
+          dedicated:
+            type: int
+            range:
+              min: 0
+          low_priority:
+            type: int
+            range:
+              min: 0
+      max_tasks_per_node:
+        type: int
+        range:
+          min: 1
+      resize_timeout:
+        type: str
+      node_fill_type:
+        type: str
+        enum: ['spread', 'pack']
+      autoscale:
+        type: map
+        mapping:
+          evaluation_interval:
+            type: str
+          scenario:
+            type: map
+            mapping:
+              name:
+                type: str
+                required: true
+              maximum_vm_count:
+                type: map
+                mapping:
+                  dedicated:
+                    type: int
+                    range:
+                      min: 0
+                  low_priority:
+                    type: int
+                    range:
+                      min: 0
+              node_deallocation_option:
+                type: str
+                enum: ['requeue', 'retaineddata', 'taskcompletion', 'terminate']
+              sample_lookback_interval:
+                type: str
+              required_sample_percentage:
+                type: float
+                range:
+                  min: 0
+                  max: 100
+              bias_last_sample:
+                type: bool
+              bias_node_type:
+                type: str
+                enum: ['dedicated', 'low_priority']
+              rebalance_preemption_percentage:
+                type: float
+                range:
+                  min: 0
+                  max: 100
+          formula:
+            type: str
+      inter_node_communication_enabled:
+        type: bool
+      reboot_on_start_task_failed:
+        type: bool
+      attempt_recovery_on_unusable:
+        type: bool
+      block_until_all_global_resources_loaded:
+        type: bool
+      transfer_files_on_pool_creation:
+        type: bool
+      input_data:
+        type: map
+        mapping:
+          azure_batch:
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  destination:
+                    type: str
+                    required: true
+                  exclude:
+                    type: seq
+                    sequence:
+                      - type: str
+                  include:
+                    type: seq
+                    sequence:
+                      - type: str
+                  job_id:
+                    type: str
+                    required: true
+                  task_id:
+                    type: str
+                    required: true
+          azure_storage:
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  storage_account_settings:
+                    type: str
+                    required: true
+                  remote_path:
+                    type: str
+                    required: true
+                  local_path:
+                    type: str
+                    required: true
+                  is_file_share:
+                    type: bool
+                  exclude:
+                    type: seq
+                    sequence:
+                      - type: str
+                  include:
+                    type: seq
+                    sequence:
+                      - type: str
+                  blobxfer_extra_options:
+                    type: str
+      resource_files:
+        type: seq
+        sequence:
+          - type: map
+            mapping:
+              blob_source:
+                type: str
+                required: true
+              file_mode:
+                type: str
+              file_path:
+                type: str
+                required: true
+      ssh:
+        type: map
+        mapping:
+          username:
+            type: str
+            required: true
+          expiry_days:
+            type: int
+            range:
+              min: 0
+          ssh_public_key:
+            type: str
+          ssh_public_key_data:
+            type: str
+          ssh_private_key:
+            type: str
+          generate_docker_tunnel_script:
+            type: bool
+          generated_file_export_path:
+            type: str
+          hpn_server_swap:
+            type: bool
+      rdp:
+        type: map
+        mapping:
+          username:
+            type: str
+            required: true
+          password:
+            type: str
+          expiry_days:
+            type: int
+            range:
+              min: 0
+      virtual_network:
+        type: map
+        mapping:
+          arm_subnet_id:
+            type: str
+          name:
+            type: str
+          resource_group:
+            type: str
+          create_nonexistant:
+            type: bool
+          address_space:
+            type: str
+          subnet:
+            type: map
+            mapping:
+              name:
+                type: str
+              address_prefix:
+                type: str
+      gpu:
+        type: map
+        mapping:
+          nvidia_driver:
+            type: map
+            mapping:
+              source:
+                type: str
+      additional_node_prep_commands:
+        type: seq
+        sequence:
+          - type: str

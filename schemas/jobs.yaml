@@ -1,0 +1,498 @@
+desc: Jobs Configuration Schema
+
+type: map
+mapping:
+  job_specifications:
+    type: seq
+    required: true
+    sequence:
+      - type: map
+        mapping:
+          id:
+            type: str
+            required: true
+          auto_complete:
+            type: bool
+          environment_variables:
+            type: map
+            mapping:
+              regex;(.+):
+                type: str
+          environment_variables_keyvault_secret_id:
+            type: str
+          max_task_retries:
+            type: int
+          max_wall_time:
+            type: str
+          retention_time:
+            type: str
+          priority:
+            type: int
+          user_identity:
+            type: map
+            mapping:
+              default_pool_admin:
+                type: bool
+              specific_user:
+                type: map
+                mapping:
+                  gid:
+                    type: int
+                  uid:
+                    type: int
+          auto_pool:
+            type: map
+            mapping:
+              keep_alive:
+                type: bool
+              pool_lifetime:
+                type: str
+          recurrence:
+            type: map
+            mapping:
+              schedule:
+                type: map
+                mapping:
+                  do_not_run_after:
+                    type: str
+                  do_not_run_until:
+                    type: str
+                  recurrence_interval:
+                    type: str
+                  start_window:
+                    type: str
+              job_manager:
+                type: map
+                mapping:
+                  allow_low_priority_node:
+                    type: bool
+                  monitor_task_completion:
+                    type: bool
+                  run_exclusive:
+                    type: bool
+          allow_run_on_missing_image:
+            type: bool
+          remove_container_after_exit:
+            type: bool
+          shm_size:
+            type: str
+          infiniband:
+            type: bool
+          gpu:
+            type: bool
+          data_volumes:
+            type: seq
+            sequence:
+              - type: str
+          shared_data_volumes:
+            type: seq
+            sequence:
+              - type: str
+          input_data:
+            type: map
+            mapping:
+              azure_batch:
+                type: seq
+                sequence:
+                  - type: map
+                    mapping:
+                      job_id:
+                        type: str
+                        required: true
+                      task_id:
+                        type: str
+                        required: true
+                      exclude:
+                        type: seq
+                        sequence:
+                          - type: str
+                      include:
+                        type: seq
+                        sequence:
+                          - type: str
+                      destination:
+                        type: str
+              azure_storage:
+                type: seq
+                sequence:
+                  - type: map
+                    mapping:
+                      storage_account_settings:
+                        type: str
+                        required: true
+                      remote_path:
+                        type: str
+                        required: true
+                      local_path:
+                        type: str
+                      is_file_share:
+                        type: bool
+                      exclude:
+                        type: seq
+                        sequence:
+                          - type: str
+                      include:
+                        type: seq
+                        sequence:
+                          - type: str
+                      blobxfer_extra_options:
+                        type: str
+          tasks:
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  task_factory:
+                    type: map
+                    mapping:
+                      parametric_sweep:
+                        type: map
+                        mapping:
+                          combinations:
+                            type: map
+                            mapping:
+                              iterable:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              length:
+                                type: int
+                              replacement:
+                                type: bool
+                          permutations:
+                            type: map
+                            mapping:
+                              iterable:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              length:
+                                type: int
+                          product:
+                            type: seq
+                            sequence:
+                              - type: map
+                                mapping:
+                                  start:
+                                    type: int
+                                    required: true
+                                  stop:
+                                    type: int
+                                    required: true
+                                  step:
+                                    type: int
+                                    required: true
+                          zip:
+                            type: seq
+                            sequence:
+                              - type: str
+                      random:
+                        type: map
+                        mapping:
+                          distribution:
+                            type: map
+                            mapping:
+                              beta:
+                                type: map
+                                mapping:
+                                  alpha:
+                                    type: float
+                                  beta:
+                                    type: float
+                              exponential:
+                                type: map
+                                mapping:
+                                  lambda:
+                                    type: float
+                              gamma:
+                                type: map
+                                mapping:
+                                  alpha:
+                                    type: float
+                                  beta:
+                                    type: float
+                              gauss:
+                                type: map
+                                mapping:
+                                  mu:
+                                    type: float
+                                  sigma:
+                                    type: float
+                              lognormal:
+                                type: map
+                                mapping:
+                                  mu:
+                                    type: float
+                                  sigma:
+                                    type: float
+                              pareto:
+                                type: map
+                                mapping:
+                                  alpha:
+                                    type: float
+                              triangular:
+                                type: map
+                                mapping:
+                                  high:
+                                    type: float
+                                  low:
+                                    type: float
+                                  mode:
+                                    type: float
+                              uniform:
+                                type: map
+                                mapping:
+                                  a:
+                                    type: float
+                                  b:
+                                    type: float
+                              weibull:
+                                type: map
+                                mapping:
+                                  alpha:
+                                    type: float
+                                  beta:
+                                    type: float
+                          generate:
+                            type: int
+                            required: true
+                          integer:
+                            type: map
+                            mapping:
+                              start:
+                                type: int
+                                required: true
+                              step:
+                                type: int
+                                required: true
+                              stop:
+                                type: int
+                                required: true
+                          seed:
+                            type: int
+                      file:
+                        type: map
+                        mapping:
+                          azure_storage:
+                            type: map
+                            mapping:
+                              storage_account_settings:
+                                type: str
+                                required: true
+                              remote_path:
+                                type: str
+                                required: true
+                              is_file_share:
+                                type: bool
+                              exclude:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              include:
+                                type: seq
+                                sequence:
+                                  - type: str
+                          task_filepath:
+                            type: str
+                      custom:
+                        type: map
+                        mapping:
+                          input_args:
+                            type: seq
+                            sequence:
+                              - type: str
+                          input_kwargs:
+                            type: map
+                            mapping:
+                              regex;(.+):
+                                type: str
+                          module:
+                            type: str
+                            required: true
+                          package:
+                            type: str
+                      repeat:
+                        type: int
+                  id:
+                    type: str
+                  docker_image:
+                    type: str
+                  singularity_image:
+                    type: str
+                  singularity_execution:
+                    type: map
+                    mapping:
+                      cmd:
+                        type: str
+                        enum: ['exec', 'run']
+                      elevated:
+                        type: bool
+                  additional_singularity_options:
+                    type: seq
+                    sequence:
+                      - type: str
+                  name:
+                    type: str
+                  labels:
+                    type: seq
+                    sequence:
+                      - type: str
+                  environment_variables:
+                    type: map
+                    mapping:
+                      regex;(.+):
+                        type: str
+                  environment_variables_keyvault_secret_id:
+                    type: str
+                  ports:
+                    type: seq
+                    sequence:
+                      - type: str
+                  data_volumes:
+                    type: seq
+                    sequence:
+                      - type: str
+                  shared_data_volumes:
+                    type: seq
+                    sequence:
+                      - type: str
+                  resource_files:
+                    type: seq
+                    sequence:
+                      - type: map
+                        mapping:
+                          blob_source:
+                            type: str
+                            required: true
+                          file_mode:
+                            type: str
+                          file_path:
+                            type: str
+                            required: true
+                  input_data:
+                    type: map
+                    mapping:
+                      azure_batch:
+                        type: seq
+                        sequence:
+                          - type: map
+                            mapping:
+                              job_id:
+                                type: str
+                                required: true
+                              task_id:
+                                type: str
+                                required: true
+                              exclude:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              include:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              destination:
+                                type: str
+                      azure_storage:
+                        type: seq
+                        sequence:
+                          - type: map
+                            mapping:
+                              storage_account_settings:
+                                type: str
+                                required: true
+                              remote_path:
+                                type: str
+                                required: true
+                              local_path:
+                                type: str
+                              is_file_share:
+                                type: bool
+                              exclude:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              include:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              blobxfer_extra_options:
+                                type: str
+                  output_data:
+                    type: map
+                    mapping:
+                      azure_storage:
+                        type: seq
+                        sequence:
+                          - type: map
+                            mapping:
+                              storage_account_settings:
+                                type: str
+                                required: true
+                              remote_path:
+                                type: str
+                                required: true
+                              local_path:
+                                type: str
+                              is_file_share:
+                                type: bool
+                              exclude:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              include:
+                                type: seq
+                                sequence:
+                                  - type: str
+                              blobxfer_extra_options:
+                                type: str
+                  remove_container_after_exit:
+                    type: bool
+                  shm_size:
+                    type: str
+                  additional_docker_run_options:
+                    type: seq
+                    sequence:
+                      - type: str
+                  infiniband:
+                    type: bool
+                  gpu:
+                    type: bool
+                  depends_on:
+                    type: seq
+                    sequence:
+                      - type: str
+                  depends_on_range:
+                    type: seq
+                    sequence:
+                      - type: int
+                  max_task_retries:
+                    type: int
+                  max_wall_time:
+                    type: str
+                  retention_time:
+                    type: str
+                  multi_instance:
+                    type: map
+                    mapping:
+                      coordination_command:
+                        type: str
+                      num_instances:
+                        type: str
+                      resource_files:
+                        type: seq
+                        sequence:
+                          - type: map
+                            mapping:
+                              blob_source:
+                                type: str
+                                required: true
+                              file_mode:
+                                type: str
+                              file_path:
+                                type: str
+                                required: true
+                  entrypoint:
+                    type: str
+                  command:
+                    type: str
