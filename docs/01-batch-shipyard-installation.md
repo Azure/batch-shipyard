@@ -414,7 +414,7 @@ pip install --upgrade pip
 
 #### CentOS/RHEL/Fedora
 ```
-yum install -y gcc openssl-dev libffi-devel python-devel
+yum install -y gcc openssl-devel libffi-devel python-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
