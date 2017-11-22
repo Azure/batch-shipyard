@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [3.0.1] - 2017-11-22
+### Fixed
+- Fix on-disk file naming for Docker images pulled with Singularity
+- Data movement regressions
+- Public IP configs in RemoteFS recipes
+- Support more than 16 data disks per VM for RemoteFS servers
+- Documentation and other typos
+
 ## [3.0.0] - 2017-11-13 (SC17 Edition)
 ### Added
 - CLI Singularity image (#135)
@@ -1009,7 +1017,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.1...HEAD
+[3.0.1]: https://github.com/Azure/batch-shipyard/compare/3.0.0...3.0.1
 [3.0.0]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...3.0.0
 [3.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...3.0.0rc1
 [3.0.0b1]: https://github.com/Azure/batch-shipyard/compare/3.0.0a2...3.0.0b1
