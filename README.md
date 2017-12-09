@@ -106,7 +106,7 @@ Please refer to the
 
 Visit the
 [Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
-section for various sample Docker workloads using Azure Batch and Batch
+section for various sample container workloads using Azure Batch and Batch
 Shipyard.
 
 ## Batch Shipyard Compute Node OS Support

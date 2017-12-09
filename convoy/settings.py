@@ -2737,6 +2737,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         raise ValueError(
             'Cannot run Singularity containers on windows pools')
     # get some pool props
+    publisher = None
+    offer = None
+    node_agent = None
     if cloud_pool is None:
         pool_id = poolconf.id
         vm_size = poolconf.vm_size
@@ -2744,14 +2747,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         is_custom_image = not is_platform_image(
             config, vm_config=poolconf.vm_configuration)
         if is_custom_image:
-            publisher = None
-            offer = None
-            sku = None
             node_agent = poolconf.vm_configuration.node_agent
         else:
             publisher = poolconf.vm_configuration.publisher.lower()
             offer = poolconf.vm_configuration.offer.lower()
-            sku = poolconf.vm_configuration.sku.lower()
     else:
         pool_id = cloud_pool.id
         vm_size = cloud_pool.vm_size.lower()
@@ -2760,9 +2759,6 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             cloud_pool.virtual_machine_configuration.image_reference.
             virtual_machine_image_id)
         if is_custom_image:
-            publisher = None
-            offer = None
-            sku = None
             node_agent = cloud_pool.virtual_machine_configuration.\
                 node_agent_sku_id.lower()
         else:
@@ -2770,8 +2766,6 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 image_reference.publisher.lower()
             offer = cloud_pool.virtual_machine_configuration.\
                 image_reference.offer.lower()
-            sku = cloud_pool.virtual_machine_configuration.\
-                image_reference.sku.lower()
     # get depends on
     try:
         depends_on = conf['depends_on']
@@ -3003,6 +2997,8 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 raise ValueError(
                     ('ensure that the {} shared data volume exists in the '
                      'global configuration').format(sdvkey))
+            if util.is_not_empty(bindopt):
+                bindopt = ':{}'.format(bindopt)
             if is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
                 run_opts.append('{} {}/{}:{}{}'.format(
                     bindparm,
@@ -3126,16 +3122,16 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                     run_opts.remove('--net')
                 except ValueError:
                     pass
-            # only centos-hpc and sles-hpc:12-sp1 are supported
-            # for infiniband
-            if (publisher == 'openlogic' and offer == 'centos-hpc' or
-                    node_agent.startswith('batch.node.centos')):
+            # only centos-hpc and sles-hpc are supported for infiniband
+            if ((publisher == 'openlogic' and offer == 'centos-hpc') or
+                    (is_custom_image and
+                     node_agent.startswith('batch.node.centos'))):
                 run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(bindparm))
                 run_opts.append(
                     '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(bindparm))
-            elif (publisher == 'suse' and offer == 'sles-hpc' and
-                  sku == '12-sp1' or
-                  node_agent.startswith('batch.node.opensuse')):
+            elif ((publisher == 'suse' and offer == 'sles-hpc') or
+                  (is_custom_image and
+                   node_agent.startswith('batch.node.opensuse'))):
                 run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
                     bindparm))
                 run_opts.append(

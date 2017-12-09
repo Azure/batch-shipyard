@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- Errant bind option being propagated to volume name
+- Make error path more clear on attempting `infiniband` on non-supported
+images
+
 ## [3.0.1] - 2017-11-22
 ### Fixed
 - Fix on-disk file naming for Docker images pulled with Singularity
