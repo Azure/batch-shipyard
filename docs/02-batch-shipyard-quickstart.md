@@ -56,19 +56,20 @@ account.
 `shipyard` or `shipyard.cmd` helper scripts if on Linux or Windows,
 respectively), run the following commands:
 ```shell
-# NOTE: if you are on Windows, use ..\shipyard.cmd instead of ./shipyard
+# change working directory to the config directory
+cd config
 
 # create the compute pool
-cd config
+# NOTE: if you are on Windows, use ..\shipyard.cmd instead of ../shipyard
 ../shipyard pool add
 
 # ... wait for pool to allocate ...
 
 # add the training job and tail the output
 # if CNTK-CPU-OpenMPI, Caffe2-CPU, Chainer-CPU, Keras+Theano-CPU, MXNet-CPU, TensorFlow-CPU, or Torch-CPU
-./shipyard jobs add --tail stdout.txt
+../shipyard jobs add --tail stdout.txt
 # if Caffe-CPU
-./shipyard jobs add --tail stderr.txt
+../shipyard jobs add --tail stderr.txt
 ```
 The `--tail` option of the `jobs add` command will stream the stderr or stdout
 file to your local console which will provide you progress information about
@@ -77,9 +78,9 @@ your job.
 Once you are finished interacting with your jobs, tasks and pool, you can
 remove them with the following commands:
 ```shell
-# ... done interacting with jobs/tasks/pool
-./shipyard jobs del --wait
-./shipyard pool del
+# after you are done interacting with jobs/tasks/pool
+../shipyard jobs del --wait
+../shipyard pool del
 ```
 
 ## Step-by-step Tutorial
