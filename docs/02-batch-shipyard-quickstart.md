@@ -1,7 +1,7 @@
 # Batch Shipyard Quickstart
 If you are interested in executing Deep Learning workloads on Batch Shipyard
 and want to jump in without having to install anything, you can utilize the
-[Deep Learning Jupyter Notebooks](../contrib/notebooks/deep_learning)
+[Deep Learning Jupyter Notebooks](https://github.com/Azure/batch-shipyard/blob/master/contrib/notebooks/deep_learning)
 on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
 
 If you would like to use Batch Shipyard from the command line, this quickstart
@@ -9,14 +9,14 @@ doc will provide step-by-step instructions. Although Batch Shipyard
 supports various types of workloads, for the following quickstart example,
 we will select from the following Deep Learning recipes to quickly get started:
 
-* [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI)
-* [Caffe-CPU](../recipes/Caffe-CPU)
-* [Caffe2-CPU](../recipes/Caffe2-CPU)
-* [Chainer-CPU](../recipes/Chainer-CPU)
-* [Keras+Theano-CPU](../recipes/Keras+Theano-CPU)
-* [MXNet-CPU](../recipes/MXNet-CPU)
-* [TensorFlow-CPU](../recipes/TensorFlow-CPU)
-* [Torch-CPU](../recipes/Torch-CPU)
+* [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI)
+* [Caffe-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe-CPU)
+* [Caffe2-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe2-CPU)
+* [Chainer-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Chainer-CPU)
+* [Keras+Theano-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Keras+Theano-CPU)
+* [MXNet-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/MXNet-CPU)
+* [TensorFlow-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/TensorFlow-CPU)
+* [Torch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Torch-CPU)
 
 The example MNIST training sample will be used on one Azure Batch compute node
 regardless of which Deep Learning framework you prefer for the following.
@@ -32,14 +32,14 @@ from within Azure Cloud Shell.
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe
 of your choice to the `config` directory:
-    * [CNTK-CPU-OpenMPI](../recipes/CNTK-CPU-OpenMPI/config/singlenode/)
-    * [Caffe-CPU](../recipes/Caffe-CPU/config/)
-    * [Caffe2-CPU](../recipes/Caffe2-CPU/config/)
-    * [Chainer-CPU](../recipes/Chainer-CPU/config/)
-    * [Keras+Theano-CPU](../recipes/Keras+Theano-CPU/config/)
-    * [MXNet-CPU](../recipes/MXNet-CPU/config/singlenode/)
-    * [TensorFlow-CPU](../recipes/TensorFlow-CPU/config/)
-    * [Torch-CPU](../recipes/Torch-CPU/config/)
+    * [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI/config/singlenode/)
+    * [Caffe-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe-CPU/config/)
+    * [Caffe2-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe2-CPU/config/)
+    * [Chainer-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Chainer-CPU/config/)
+    * [Keras+Theano-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Keras+Theano-CPU/config/)
+    * [MXNet-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/MXNet-CPU/config/singlenode/)
+    * [TensorFlow-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/TensorFlow-CPU/config/)
+    * [Torch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Torch-CPU/config/)
 4. Edit the `config/credentials.yaml` file and populate it with your Azure
 Batch and Azure Storage credentials. If you do not have an Azure Batch account,
 you can create one via the
@@ -56,21 +56,19 @@ account.
 `shipyard` or `shipyard.cmd` helper scripts if on Linux or Windows,
 respectively), run the following commands:
 ```shell
-# NOTE: if you are on Windows, use shipyard.cmd instead of ./shipyard
+# NOTE: if you are on Windows, use ..\shipyard.cmd instead of ./shipyard
 
 # create the compute pool
-./shipyard pool add --configdir config
-# alternatively (if not on Windows), you can specify the configdir parameter
-# as an environment variable which some may find as more convenient
-SHIPYARD_CONFIGDIR=config ./shipyard pool add
+cd config
+../shipyard pool add
 
 # ... wait for pool to allocate ...
 
 # add the training job and tail the output
 # if CNTK-CPU-OpenMPI, Caffe2-CPU, Chainer-CPU, Keras+Theano-CPU, MXNet-CPU, TensorFlow-CPU, or Torch-CPU
-./shipyard jobs add --configdir config --tail stdout.txt
+./shipyard jobs add --tail stdout.txt
 # if Caffe-CPU
-./shipyard jobs add --configdir config --tail stderr.txt
+./shipyard jobs add --tail stderr.txt
 ```
 The `--tail` option of the `jobs add` command will stream the stderr or stdout
 file to your local console which will provide you progress information about
@@ -80,8 +78,8 @@ Once you are finished interacting with your jobs, tasks and pool, you can
 remove them with the following commands:
 ```shell
 # ... done interacting with jobs/tasks/pool
-./shipyard jobs del --configdir config --wait
-./shipyard pool del --configdir config
+./shipyard jobs del --wait
+./shipyard pool del
 ```
 
 ## Step-by-step Tutorial
