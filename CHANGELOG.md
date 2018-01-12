@@ -2,10 +2,15 @@
 
 ## [Unreleased]
 
+## [3.0.2] - 2018-01-12
 ### Fixed
 - Errant bind option being propagated to volume name
-- Make error path more clear on attempting `infiniband` on non-supported
-images
+- Clarify error path on attempting `infiniband` on non-supported images
+- Fix quickstart recipe links from Read the Docs (#150)
+
+### Security
+- Update NC driver to 384.111 to work with updated Linux kernels with
+Meltdown patches
 
 ## [3.0.1] - 2017-11-22
 ### Fixed
@@ -1022,7 +1027,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.2...HEAD
+[3.0.2]: https://github.com/Azure/batch-shipyard/compare/3.0.1...3.0.2
 [3.0.1]: https://github.com/Azure/batch-shipyard/compare/3.0.0...3.0.1
 [3.0.0]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...3.0.0
 [3.0.0rc1]: https://github.com/Azure/batch-shipyard/compare/3.0.0b1...3.0.0rc1
