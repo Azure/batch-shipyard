@@ -92,10 +92,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '384.81/NVIDIA-Linux-x86_64-384.81.run'
+            '384.111/NVIDIA-Linux-x86_64-384.111.run'
         ),
         'sha256': (
-            '13defb76b7baa919c700c604953fa5ba939053bcde3028931a13c42201e1594b'
+            'bd8af7654ccb224c37e74c8e81477a42f63fa9f2360b1b1ec6ae00b03ae21054'
         ),
         'target': 'nvidia-driver.run'
     },
