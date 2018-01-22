@@ -19,10 +19,12 @@ in Azure, independent of any integrated Azure Batch functionality.
 Batch Shipyard is now integrated directly into
 [Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
 and you can execute any Batch Shipyard workload using your web browser or
-the Microsoft Azure
-[Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
+the Microsoft Azure [Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
 and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
 app.
+
+Try Batch Shipyard now from your browser:
+[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
 
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) and
