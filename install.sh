@@ -233,6 +233,7 @@ if [ ! -z $VENV_NAME ]; then
         $PIP uninstall -y azure-storage
         set -e
         $PIP install --upgrade -r requirements.txt
+        $PIP install --no-deps -r req_nodeps.txt
         deactivate
     else
         # create conda env
@@ -248,6 +249,7 @@ if [ ! -z $VENV_NAME ]; then
         $PIP uninstall -y azure-storage
         set -e
         $PIP install --upgrade -r requirements.txt
+        $PIP install --no-deps -r req_nodeps.txt
         source deactivate $VENV_NAME
     fi
 else
@@ -256,6 +258,7 @@ else
     $PIP uninstall -y azure-storage
     set -e
     $PIP install --upgrade --user -r requirements.txt
+    $PIP install --upgrade --no-deps --user -r req_nodeps.txt
 fi
 
 # create shipyard script

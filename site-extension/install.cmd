@@ -63,6 +63,11 @@ IF %ERRORLEVEL% NEQ 0 (
     echo "pip install requirements.txt failed"
     exit /b 1
 )
+"%PYTHON%" -m pip install --upgrade --no-deps -r req_nodeps.txt
+IF %ERRORLEVEL% NEQ 0 (
+    echo "pip install req_nodeps.txt failed"
+    exit /b 1
+)
 popd
 
 REM futurize isodate (for some reason this is sometimes installed as python2)

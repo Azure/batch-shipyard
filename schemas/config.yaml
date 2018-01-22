@@ -38,6 +38,10 @@ mapping:
                 type: str
           public_key_pem:
             type: str
+      store_timing_metrics:
+        type: bool
+      use_shipyard_docker_image:
+        type: bool
 
   data_replication:
     type: map

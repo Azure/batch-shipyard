@@ -44,6 +44,7 @@ import convoy.clients
 import convoy.fleet
 import convoy.settings
 import convoy.util
+import convoy.validator
 
 # create logger
 logger = logging.getLogger('shipyard')
@@ -90,7 +91,13 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        try:
+            self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        except KeyError:
+            logger.error(
+                'Are you missing your configuration files or pointing to '
+                'the wrong location?')
+            raise
         self._init_config(
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
@@ -106,7 +113,13 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        try:
+            self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        except KeyError:
+            logger.error(
+                'Are you missing your configuration files or pointing to '
+                'the wrong location?')
+            raise
         self._init_config(
             skip_global_config=True, skip_pool_config=True, fs_storage=False)
         self._cleanup_after_initialize(
@@ -119,7 +132,13 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        try:
+            self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        except KeyError:
+            logger.error(
+                'Are you missing your configuration files or pointing to '
+                'the wrong location?')
+            raise
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
         self.resource_client, self.compute_client, self.network_client, \
@@ -277,6 +296,17 @@ class CliContext(object):
         if (self.conf_fs is not None and not isinstance(
                 self.conf_fs, pathlib.Path)):
             self.conf_fs = pathlib.Path(self.conf_fs)
+        # validate configuration files against schema
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Credentials, self.conf_credentials)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Global, self.conf_config)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Pool, self.conf_pool)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Jobs, self.conf_jobs)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.RemoteFS, self.conf_fs)
         # fetch credentials from keyvault, if conf file is missing
         kvcreds = None
         if self.conf_credentials is None or not self.conf_credentials.exists():
@@ -329,7 +359,6 @@ class CliContext(object):
         # adjust settings
         convoy.fleet.initialize_globals(convoy.settings.verbose(self.config))
         if not skip_global_config:
-            convoy.fleet.check_for_invalid_config(self.config)
             convoy.fleet.populate_global_settings(self.config, fs_storage)
         # show config if specified
         if self.show_config:

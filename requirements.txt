@@ -1,20 +1,20 @@
 adal==0.4.7
 azure-batch==4.0.0
-azure-cosmosdb-table==0.37.1
+azure-cosmosdb-table==1.0.1
 azure-keyvault==0.3.7
-azure-mgmt-batch==4.1.0
+azure-mgmt-batch==5.0.0
 azure-mgmt-compute==3.0.1
-azure-mgmt-network==1.5.0
+azure-mgmt-network==1.7.1
 azure-mgmt-resource==1.2.2
 azure-storage-blob==0.37.1
 azure-storage-file==0.37.0
-blobxfer==1.0.0
+blobxfer==1.1.0
 click==6.7
 future==0.16.0
-msrest==0.4.18
-msrestazure==0.4.16
+msrest==0.4.25
+msrestazure==0.4.20
 pathlib2==2.3.0; python_version < '3.5'
 python-dateutil==2.6.1
 requests==2.18.4
-ruamel.yaml==0.15.34
+ruamel.yaml==0.15.35
 scandir==1.6; python_version < '3.5'

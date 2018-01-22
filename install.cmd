@@ -63,6 +63,7 @@ IF %ANACONDA% EQU 1 (
 	virtualenv -p %PYTHON% %VENVNAME%
 	cmd.exe /c "%VENVNAME%\Scripts\activate & pip uninstall -y azure-storage & deactivate"
 	cmd.exe /c "%VENVNAME%\Scripts\activate & pip install --upgrade -r requirements.txt & deactivate"
+	cmd.exe /c "%VENVNAME%\Scripts\activate & pip install --upgrade --no-deps -r req_nodeps.txt & deactivate"
 )
 
 REM create launcher cmd

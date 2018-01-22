@@ -75,12 +75,12 @@ after_test:
     echo "Batch Shipyard CLI artifact not defined"
   ) ELSE (
     echo "Batch Shipyard CLI is %BATCH_SHIPYARD_CLI_ARITFACT% upload path %UPLOAD_PATH%" &&
-    pip install --upgrade --pre blobxfer &&
+    pip install --upgrade blobxfer &&
     virtualenv -p "%PYTHON%\\python.exe" pyi &&
     pyi\\Scripts\\activate.bat &&
     pip install --upgrade pyinstaller &&
     pip install -r requirements.txt &&
-    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py &&
+    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py &&
     pyi\\Scripts\\deactivate.bat &&
     appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" &&
     blobxfer upload --remote-path %UPLOAD_PATH% --local-path bin\\%BATCH_SHIPYARD_CLI_ARITFACT% --strip-components 1 --file-md5 --overwrite

@@ -48,7 +48,7 @@ after_success:
       $SHELL -c "set -e; source pyi/bin/activate; \
                  pip install pyinstaller; \
                  pip install --no-cache-dir -r requirements.txt; \
-                 pyinstaller -F -n $BATCH_SHIPYARD_CLI_ARTIFACT -p batch-shipyard --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+                 pyinstaller -F -n $BATCH_SHIPYARD_CLI_ARTIFACT -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
                  deactivate"
       chmod +x bin/$BATCH_SHIPYARD_CLI_ARTIFACT
       gzip bin/$BATCH_SHIPYARD_CLI_ARTIFACT

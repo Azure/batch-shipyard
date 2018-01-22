@@ -76,7 +76,7 @@ automatic job completion and task termination
 Infiniband/RDMA for MPI on HPC low-latency Azure VM instances:
     * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_A8, STANDARD\_A9
     * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_H16R, STANDARD\_H16MR
-    * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R
+    * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R, STANDARD\_NC24R\_V2, STANDARD\_ND24R
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs with containers
 * Support for job schedules and recurrences for automatic execution of

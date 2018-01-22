@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- Configuration validation. Validator supports both YAML and JSON
+configuration, please see special note in the Removed section below (#145)
+
+### Changed
+- Updated dependencies to latest
+
+### Removed
+- Integration of the schema validator has now removed or enforced strict
+behavior for the following previously deprecated configuration properties:
+    - `credentials`:`batch`:`account` has been removed
+    - `pool_specification`:`vm_count` must be a map
+    - `pool_specification`:`vm_configuration` must be specified instead of
+      directly specifying `publisher`, `offer`, `sku` on `pool_specification`
+    - `global_resources`:`volumes` must be replaced with
+      `global_resources`:`docker_volumes`
+    - `job_specifications`:`tasks`:`image` must be replaced with
+      `job_specifications`:`tasks`:`docker_image`
+
 ## [3.0.3] - 2018-01-22
 ### Security
 - Update NV driver to 384.111 to work with updated Linux kernels with

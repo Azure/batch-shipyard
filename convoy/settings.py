@@ -1304,7 +1304,6 @@ def credentials_batch(config):
     :return: batch creds
     """
     conf = config['credentials']['batch']
-    account = _kv_read_checked(conf, 'account')
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
     resource_group = _kv_read_checked(conf, 'resource_group')
@@ -1318,18 +1317,11 @@ def credentials_batch(config):
     # parse location from url
     tmp = account_service_url.split('.')
     location = tmp[1]
+    # parse account name from url
     if test_cluster:
-        acct_from_url = account_service_url.split('/')[-1]
+        account = account_service_url.split('/')[-1]
     else:
-        acct_from_url = tmp[0].split('/')[-1]
-    if util.is_none_or_empty(account):
-        account = acct_from_url
-    else:
-        # ensure url account matches account name
-        if account != acct_from_url:
-            raise ValueError(
-                ('Specified account {} is a mismatch with service '
-                 'url {}').format(account, account_service_url))
+        account = tmp[0].split('/')[-1]
     return BatchCredentialsSettings(
         aad=_aad_credentials(
             config['credentials'],
