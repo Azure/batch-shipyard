@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.0.3] - 2018-01-22
+### Security
+- Update NV driver to 384.111 to work with updated Linux kernels with
+speculative execution side channel vulnerability patches (#154)
+
 ## [3.0.2] - 2018-01-12
 ### Fixed
 - Errant bind option being propagated to volume name
@@ -10,7 +15,7 @@
 
 ### Security
 - Update NC driver to 384.111 to work with updated Linux kernels with
-Meltdown patches
+speculative execution side channel vulnerability patches
 
 ## [3.0.1] - 2017-11-22
 ### Fixed
@@ -1027,7 +1032,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.3...HEAD
+[3.0.3]: https://github.com/Azure/batch-shipyard/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/Azure/batch-shipyard/compare/3.0.1...3.0.2
 [3.0.1]: https://github.com/Azure/batch-shipyard/compare/3.0.0...3.0.1
 [3.0.0]: https://github.com/Azure/batch-shipyard/compare/3.0.0rc1...3.0.0

@@ -102,7 +102,7 @@ _NVIDIA_DRIVER = {
     'visualization': {
         'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
         'sha256': (
-            '4a8885efc1a4f482f45afe45c6c3a239bafbc2a86cb1a1adbc2190939d15a015'
+            'ca3fd5f5e9156ad3d983b2032bde3c009dca73400f2753f9b475825f4670a854'
         ),
         'target': 'nvidia-driver-grid.run'
     },
