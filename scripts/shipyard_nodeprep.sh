@@ -401,7 +401,7 @@ singularity_setup() {
         return
     fi
     # fetch docker image for singularity bits
-    di=alfpark/singularity:2.4-${offer}-${sku}
+    di=alfpark/singularity:2.4.2-${offer}-${sku}
     docker_pull_image $di
     mkdir -p /opt/singularity
     docker run --rm -v /opt/singularity:/opt/singularity $di \
@@ -694,7 +694,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir --upgrade pip
         pip3 install --no-cache-dir --upgrade wheel setuptools
-        pip3 install --no-cache-dir azure-cosmosdb-table==0.37.1 azure-storage-blob==0.37.1
+        pip3 install --no-cache-dir azure-cosmosdb-table==1.0.1 azure-storage-blob==0.37.1
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             install_packages $offer python3-libtorrent pigz

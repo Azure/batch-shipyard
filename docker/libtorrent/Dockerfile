@@ -1,6 +1,6 @@
 # Dockerfile for Azure/batch-shipyard (Cascade libtorrent multi-stage base)
 
-FROM alpine:3.6
+FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set environment variables

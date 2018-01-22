@@ -4,7 +4,7 @@ FROM ubuntu:16.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.4
+ENV SINGULARITY_VERSION=2.4.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -21,6 +21,6 @@ RUN curl -fSsL https://github.com/singularityware/singularity/releases/download/
     && make -j4 \
     && make install
 
-FROM alpine:3.6
+FROM alpine:3.7
 
 COPY --from=0 /opt/singularity /singularity

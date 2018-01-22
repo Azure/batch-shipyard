@@ -4,9 +4,9 @@
 FROM alfpark/libtorrent:1.0.11-py36
 
 # base image containing singularity
-FROM alfpark/singularity:2.4
+FROM alfpark/singularity:2.4.2
 
-FROM alpine:3.6
+FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # copy libtorrent dynlib and python package from base
