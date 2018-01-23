@@ -335,19 +335,92 @@ def _setup_nvidia_docker_package(blob_client, config):
     return pkg
 
 
-def _generate_azfile_mount_script_name(
-        batch_account_name, pool_id, is_windows):
-    # type: (str, str, bool) -> pathlib.Path
-    """Generate an azure file mount script name
+def _generate_azure_mount_script_name(
+        batch_account_name, pool_id, is_file_share, is_windows):
+    # type: (str, str, bool, bool) -> pathlib.Path
+    """Generate an azure blob/file mount script name
     :param str batch_account_name: batch account name
     :param str pool_id: pool id
+    :param boo is_file_share: is file share
     :param bool is_windows: is windows
     :rtype: pathlib.Path
-    :return: path to azfile mount script
+    :return: path to azure mount script
     """
-    return _RESOURCES_PATH / 'azurefile-mount-{}-{}.{}'.format(
-        batch_account_name.lower(), pool_id.lower(),
+    if is_file_share:
+        prefix = 'azurefile'
+    else:
+        prefix = 'azureblob'
+    return _RESOURCES_PATH / '{}-mount-{}-{}.{}'.format(
+        prefix, batch_account_name.lower(), pool_id.lower(),
         'cmd' if is_windows else 'sh')
+
+
+def _setup_azureblob_mounts(blob_client, config, bc):
+    # type: (azure.storage.blob.BlockBlobService, dict,
+    #        settings.BatchCredentials) -> tuple
+    """Set up the Azure Blob container via blobfuse
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param settings.BatchCredentials bc: batch creds
+    :rtype: tuple
+    :return: (bin path, service file path, service env file path,
+        volume creation script path)
+    """
+    tmpmount = settings.temp_disk_mountpoint(config)
+    # construct mount commands
+    cmds = []
+    sdv = settings.global_resources_shared_data_volumes(config)
+    for svkey in sdv:
+        if settings.is_shared_data_volume_azure_blob(sdv, svkey):
+            sa = settings.credentials_storage(
+                config,
+                settings.azure_storage_account_settings(sdv, svkey))
+            cont = settings.azure_blob_container_name(sdv, svkey)
+            hmp = settings.azure_blob_host_mount_path(sa.account, cont)
+            tmpmp = '{}/blobfuse-tmp/{}-{}'.format(tmpmount, sa.account, cont)
+            cmds.append('mkdir -p {}'.format(hmp))
+            cmds.append('chmod 0770 {}'.format(hmp))
+            cmds.append('mkdir -p {}'.format(tmpmp))
+            cmds.append('chown _azbatch:_azbatchgrp {}'.format(tmpmp))
+            cmds.append('chmod 0770 {}'.format(tmpmp))
+            conn = 'azblob-{}-{}.cfg'.format(sa.account, cont)
+            cmds.append('cat > {} << EOF'.format(conn))
+            cmds.append('accountName {}'.format(sa.account))
+            cmds.append('accountKey {}'.format(sa.account_key))
+            cmds.append('containerName {}'.format(cont))
+            cmds.append('EOF')
+            cmd = (
+                'blobfuse {hmp} --tmp-path={tmpmp} -o attr_timeout=240 '
+                '-o entry_timeout=240 -o negative_timeout=120 -o allow_other '
+                '--config-file={conn}'
+            ).format(hmp=hmp, tmpmp=tmpmp, conn=conn)
+            # add any additional mount options
+            mo = settings.shared_data_volume_mount_options(sdv, svkey)
+            if util.is_not_empty(mo):
+                opts = []
+                for opt in mo:
+                    if opt.strip() == '-o allow_other':
+                        continue
+                    opts.append(opt)
+                cmd = '{} {}'.format(cmd, ' '.join(opts))
+            cmds.append(cmd)
+    # create file share mount command script
+    if util.is_none_or_empty(cmds):
+        raise RuntimeError('Generated Azure blob mount commands are invalid')
+    volcreate = _generate_azure_mount_script_name(
+        bc.account, settings.pool_id(config), False, False)
+    newline = '\n'
+    with volcreate.open('w', newline=newline) as f:
+        f.write('#!/usr/bin/env bash')
+        f.write(newline)
+        f.write('set -e')
+        f.write(newline)
+        f.write('set -o pipefail')
+        f.write(newline)
+        for cmd in cmds:
+            f.write(cmd)
+            f.write(newline)
+    return volcreate
 
 
 def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
@@ -369,7 +442,7 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
         if settings.is_shared_data_volume_azure_file(sdv, svkey):
             sa = settings.credentials_storage(
                 config,
-                settings.azure_file_storage_account_settings(sdv, svkey))
+                settings.azure_storage_account_settings(sdv, svkey))
             share = settings.azure_file_share_name(sdv, svkey)
             hmp = settings.azure_file_host_mount_path(
                 sa.account, share, is_windows)
@@ -412,8 +485,8 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
     # create file share mount command script
     if util.is_none_or_empty(cmds):
         raise RuntimeError('Generated Azure file mount commands are invalid')
-    volcreate = _generate_azfile_mount_script_name(
-        bc.account, settings.pool_id(config), is_windows)
+    volcreate = _generate_azure_mount_script_name(
+        bc.account, settings.pool_id(config), True, is_windows)
     newline = '\r\n' if is_windows else '\n'
     with volcreate.open('w', newline=newline) as f:
         if is_windows:
@@ -807,6 +880,7 @@ def _construct_pool_object(
     :param dict config: configuration dict
     """
     # check shared data volume mounts before proceeding to allocate
+    azureblob_vd = False
     azurefile_vd = False
     gluster_on_compute = False
     storage_cluster_mounts = []
@@ -815,6 +889,8 @@ def _construct_pool_object(
         for sdvkey in sdv:
             if settings.is_shared_data_volume_azure_file(sdv, sdvkey):
                 azurefile_vd = True
+            elif settings.is_shared_data_volume_azure_blob(sdv, sdvkey):
+                azureblob_vd = True
             elif settings.is_shared_data_volume_gluster_on_compute(
                     sdv, sdvkey):
                 if gluster_on_compute:
@@ -926,7 +1002,10 @@ def _construct_pool_object(
                 _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
-    # handle azurefile mounts
+    # handle azure mounts
+    if azureblob_vd:
+        abms = _setup_azureblob_mounts(blob_client, config, bc)
+        _rflist.append(('azureblob-mount.sh', abms))
     if azurefile_vd:
         afms = _setup_azurefile_mounts(blob_client, config, bc, is_windows)
         _rflist.append(
@@ -979,10 +1058,11 @@ def _construct_pool_object(
                     container_registries=docker_registries,
                 )
         start_task = [
-            '{npf}{a}{b}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
+            '{npf}{a}{b}{c}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
                 npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
+                c=' -c' if azureblob_vd else '',
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
@@ -1022,9 +1102,10 @@ def _construct_pool_object(
         else:
             _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
             start_task = [
-                '{npf}{a}{e}{f}{m}{n}{v}{x}'.format(
+                '{npf}{a}{c}{e}{f}{m}{n}{v}{x}'.format(
                     npf=_NODEPREP_NATIVEDOCKER_FILE[0],
                     a=' -a' if azurefile_vd else '',
+                    c=' -c' if azureblob_vd else '',
                     e=' -e {}'.format(pfx.sha1) if encrypt else '',
                     f=' -f' if gluster_on_compute else '',
                     m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
@@ -1045,10 +1126,11 @@ def _construct_pool_object(
         )
         # create start task commandline
         start_task = [
-            '{npf}{a}{b}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
+            '{npf}{a}{b}{c}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
+                c=' -c' if azureblob_vd else '',
                 d=' -d' if bs.use_shipyard_docker_image else '',
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
@@ -1070,7 +1152,13 @@ def _construct_pool_object(
     # upload resource files
     sas_urls = storage.upload_resource_files(blob_client, config, _rflist)
     del _rflist
-    # remove temporary az file mount file created
+    # remove temporary az mount files created
+    if azureblob_vd:
+        try:
+            abms.unlink()
+            pass
+        except OSError:
+            pass
     if azurefile_vd:
         try:
             afms.unlink()
@@ -1987,7 +2075,7 @@ def _adjust_settings_for_pool_creation(config):
         raise ValueError(
             'inter node communication cannot be enabled with both '
             'dedicated and low priority nodes')
-    # glusterfs requires internode comms and more than 1 node
+    # check shared data volume settings
     try:
         num_gluster = 0
         sdv = settings.global_resources_shared_data_volumes(config)
@@ -2032,6 +2120,25 @@ def _adjust_settings_for_pool_creation(config):
                 if is_windows:
                     raise ValueError(
                         'storage cluster mounting is not supported on windows')
+            elif settings.is_shared_data_volume_azure_blob(sdv, sdvkey):
+                if is_windows:
+                    raise ValueError(
+                        'azure blob mounting is not supported on windows')
+                if native:
+                    raise ValueError(
+                        'azure blob mounting is not supported on native '
+                        'container pools')
+                if offer == 'ubuntuserver':
+                    if sku < '16.04-lts':
+                        raise ValueError(
+                            ('azure blob mounting is not supported '
+                             'on publisher={} offer={} sku={}').format(
+                                 publisher, offer, sku))
+                elif not offer.startswith('centos'):
+                    raise ValueError(
+                        ('azure blob mounting is not supported '
+                         'on publisher={} offer={} sku={}').format(
+                             publisher, offer, sku))
         if num_gluster > 1:
             raise ValueError(
                 'cannot create more than one GlusterFS on compute volume '

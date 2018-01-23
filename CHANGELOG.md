@@ -5,6 +5,7 @@
 ### Added
 - Configuration validation. Validator supports both YAML and JSON
 configuration, please see special note in the Removed section below (#145)
+- Support for Azure Blob storage container mounting via blobfuse (#159)
 
 ### Changed
 - Update Docker CE to 17.12.0

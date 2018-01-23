@@ -207,6 +207,10 @@ If a GlusterFS on compute shared data volume is required, then GlusterFS
 server and client tooling must be installed and invocable so the shared
 data volume can be created amongst the compute nodes.
 
+### Azure Blob Shared Data Volume
+If mounting an Azure Blob Storage container, you will need to install the
+[blobfuse](https://github.com/Azure/azure-storage-fuse) software.
+
 ### Installed/Configured Software
 Batch Shipyard may install and/or configure a minimal amount of software
 to enusre that components and directives work as intended.

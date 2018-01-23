@@ -50,6 +50,14 @@ global_resources:
         - file_mode=0777
         - dir_mode=0777
         bind_options: rw
+      azureblobvol:
+        volume_driver: azureblob
+        storage_account_settings: mystorageaccount
+        azure_blob_container_name: mycontainer
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/azblob
+        mount_options:
+        - --use-https=true
+        bind_options: rw
       glustervol:
         volume_driver: glusterfs_on_compute
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute

@@ -7,6 +7,7 @@ set -o pipefail
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
 # globals
+azureblob=0
 azurefile=0
 blobxferversion=latest
 block=
@@ -25,13 +26,14 @@ sc_args=
 version=
 
 # process command line options
-while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
+while getopts "h?abcde:fg:m:no:p:s:t:v:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
             echo ""
             echo "-a mount azurefile shares"
             echo "-b block until resources loaded"
+            echo "-c mount azureblob containers"
             echo "-d use docker container for cascade"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
@@ -53,6 +55,9 @@ while getopts "h?abde:fg:m:no:p:s:t:v:wx:" opt; do
             ;;
         b)
             block=${SHIPYARD_CONTAINER_IMAGES_PRELOAD}
+            ;;
+        c)
+            azureblob=1
             ;;
         d)
             cascadecontainer=1
@@ -202,8 +207,8 @@ EOF
         if [[ $offer == "centos-hpc" ]] || [[ $sku == "7.4" ]]; then
             install_packages $offer $kernel_devel_package
         elif [ $sku == "7.3" ]; then
-            curl -fSsLO http://vault.centos.org/7.3.1611/updates/x86_64/Packages/$kernel_devel_package.rpm
-            rpm -Uvh $kernel_devel_package.rpm
+            download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/${kernel_devel_package}.rpm
+            rpm -Uvh ${kernel_devel_package}.rpm
         else
             echo "ERROR: CentOS $sku not supported for GPU"
             exit 1
@@ -271,6 +276,55 @@ mount_azurefile_share() {
     ./azurefile-mount.sh
     chmod 700 azurefile-mount.sh
     chown root:root azurefile-mount.sh
+}
+
+mount_azureblob_container() {
+    offer=$1
+    sku=$2
+    if [ $offer == "ubuntuserver" ]; then
+        debfile=packages-microsoft-prod.deb
+        if [ ! -f ${debfile} ]; then
+            download_file https://packages.microsoft.com/config/ubuntu/16.04/${debfile}
+            install_local_packages $offer ${debfile}
+            refresh_package_index $offer
+            install_packages $offer blobfuse
+        fi
+    elif [[ $offer == "rhel" ]] || [[ $offer == centos* ]]; then
+        rpmfile=packages-microsoft-prod.rpm
+        if [ ! -f ${rpmfile} ]; then
+            download_file https://packages.microsoft.com/config/rhel/7/${rpmfile}
+            install_local_packages $offer ${rpmfile}
+            refresh_package_index $offer
+            install_packages $offer blobfuse
+        fi
+    else
+        echo "ERROR: unsupported distribution for Azure blob: $offer $sku"
+        exit 1
+    fi
+    chmod +x azureblob-mount.sh
+    ./azureblob-mount.sh
+    chmod 700 azureblob-mount.sh
+    chown root:root azureblob-mount.sh
+    chmod 600 *.cfg
+    chown root:root *.cfg
+}
+
+download_file() {
+    retries=10
+    set +e
+    while [ $retries -gt 0 ]; do
+        curl -fSsLO $1
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not download: $1"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
 }
 
 refresh_package_index() {
@@ -451,6 +505,7 @@ echo "Storage cluster mount: ${sc_args[*]}"
 echo "GPU: $gpu"
 echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
+echo "Azure Blob: $azureblob"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
 echo "Block on images: $block"
@@ -473,9 +528,12 @@ fi
 # create shared mount points
 mkdir -p $MOUNTS_PATH
 
-# mount azure file shares (this must be done every boot)
+# mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
     mount_azurefile_share $offer $sku
+fi
+if [ $azureblob -eq 1 ]; then
+    mount_azureblob_container $offer $sku
 fi
 
 # set node prep status files

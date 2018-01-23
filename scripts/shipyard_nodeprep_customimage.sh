@@ -7,6 +7,7 @@ set -o pipefail
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
 # globals
+azureblob=0
 azurefile=0
 blobxferversion=latest
 block=
@@ -20,13 +21,14 @@ sc_args=
 version=
 
 # process command line options
-while getopts "h?abef:m:np:t:v:x:" opt; do
+while getopts "h?abcef:m:np:t:v:x:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep_customimage.sh parameters"
             echo ""
             echo "-a mount azurefile shares"
             echo "-b block until resources loaded"
+            echo "-c mount azureblob containers"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-m [type:scid] mount storage cluster"
@@ -43,6 +45,9 @@ while getopts "h?abef:m:np:t:v:x:" opt; do
             ;;
         b)
             block=${SHIPYARD_CONTAINER_IMAGES_PRELOAD}
+            ;;
+        c)
+            azureblob=1
             ;;
         e)
             encrypted=${OPTARG,,}
@@ -238,6 +243,15 @@ mount_azurefile_share() {
     chown root:root azurefile-mount.sh
 }
 
+mount_azureblob_container() {
+    chmod +x azureblob-mount.sh
+    ./azureblob-mount.sh
+    chmod 700 azureblob-mount.sh
+    chown root:root azureblob-mount.sh
+    chmod 600 *.cfg
+    chown root:root *.cfg
+}
+
 docker_pull_image() {
     image=$1
     set +e
@@ -360,6 +374,7 @@ echo "Encrypted: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
 echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
+echo "Azure Blob: $azureblob"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "Block on images: $block"
 echo ""
@@ -410,9 +425,12 @@ fi
 # create shared mount points
 mkdir -p $AZ_BATCH_NODE_ROOT_DIR/mounts
 
-# mount azure file shares (this must be done every boot)
+# mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
     mount_azurefile_share $DISTRIB_ID $DISTRIB_RELEASE
+fi
+if [ $azureblob -eq 1 ]; then
+    mount_azureblob_container $DISTRIB_ID $DISTRIB_RELEASE
 fi
 
 # check if we're coming up from a reboot

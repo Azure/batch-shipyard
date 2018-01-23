@@ -54,6 +54,14 @@ global_resources:
         - file_mode=0777
         - dir_mode=0777
         bind_options: rw
+      azureblobvol:
+        volume_driver: azureblob
+        storage_account_settings: mystorageaccount
+        azure_blob_container_name: mycontainer
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/azblob
+        mount_options:
+        - --use-https=true
+        bind_options: rw
       glustervol:
         volume_driver: glusterfs_on_compute
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
@@ -348,14 +356,13 @@ This property is required.
           one of `ro` for read-only, `rw` for read-write. If unspecified or
           `null`, this defaults to `rw`.
     * (optional) `shared_data_volumes` property defines persistent
-      shared storage volumes. In the first shared volume, `shipyardvol` is
+      shared storage volumes. In the first shared volume, `azurefilevol` is
       the alias of this volume:
         * `volume_driver` property specifies the Docker Volume Driver to use.
-          Currently Batch Shipyard supports `azurefile`, `glusterfs_on_compute`
-          or `storage_cluster` as the `volume_driver`. Note that
-          `glusterfs_on_compute` is not a true Docker Volume Driver. For this
-          volume (`shipyardvol`), as this is an Azure File shared volume, the
-          `volume_driver` should be set as `azurefile`.
+          Currently Batch Shipyard supports `azureblob`, `azurefile`,
+          `glusterfs_on_compute` or `storage_cluster` as the `volume_driver`.
+          For this volume (`azurefilevol`), as this is an Azure File shared
+          volume, the `volume_driver` should be set as `azurefile`.
         * `storage_account_settings` is a link to the alias of the storage
           account specified that holds this Azure File Share.
         * `azure_file_share_name` is the name of the share name on Azure Files.
@@ -378,7 +385,28 @@ Azure Batch compute pool. Attempting to mount an Azure File share that is
 cross-region will result in failure as current Linux Samba clients do not
 support share level encryption at this time.
 
-The second shared volue, `glustervol`, is a
+The second shared volume, `azureblobvol` is an Azure Blob storage container
+mount via [blobfuse](https://github.com/Azure/azure-storage-fuse). Please
+carefully review the limitations with using blobfuse and may not necessarily
+be the best fit for your workload. If not, consider ingressing and/or
+egressing your data from/to blobs using the data movement capabilities of
+Batch Shipyard. These volumes have the following properties:
+
+* (required) `volume_driver` property should be set as `azureblob`.
+* (required) `storage_account_settings` is a link to the alias of the storage
+account specified that holds this Azure File Share.
+* (required) `azure_blob_container_name` is the name of the container on Azure
+Blob storage. Note that the Azure Blob container must exist.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `mount_options` are the mount and FUSE options to pass to the
+blobfuse mount command. Please see the
+[blobfuse documentation](https://github.com/Azure/azure-storage-fuse) for
+available options.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
+
+The third shared volume, `glustervol`, is a
 [GlusterFS](https://www.gluster.org/) network file system. Please note that
 `glusterfs_on_compute` are GlusterFS volumes co-located on the VM's temporary
 local disk space which is a shared resource. Sizes of the local temp disk for
@@ -394,17 +422,20 @@ properties:
 Currently, `replica` is the only supported type.
 * (optional) `volume_options` property defines additional GlusterFS volume
 options to set.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
 
 `glusterfs_on_compute` volumes are mounted on the host at
-`$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0`. Batch Shipyard will automatically
-replace container path references in direct and storage-based data
-ingress/egress with their host path equivalents.
+`$AZ_BATCH_NODE_ROOT_DIR/mounts/gluster_on_compute/gv0`. Batch Shipyard will
+automatically replace container path references in direct and storage-based
+data ingress/egress with their host path equivalents.
 
 Note that when resizing a pool with a `glusterfs_on_compute` shared file
 systems that you must resize with the `pool resize` command in `shipyard.py`
 and not with Azure Portal, Batch Labs or any other tool.
 
-The third shared volume, `nfs_server` is an NFS server that is to be
+The fourth shared volume, `nfs_server` is an NFS server that is to be
 mounted on to compute node hosts. The name `nfs_server` should match the
 `remote_fs`:`storage_cluster`:`id` specified as your NFS server. These NFS
 servers can be configured using the `fs` command in Batch Shipyard. These
@@ -414,8 +445,11 @@ volumes have the following properties:
 * (required) `container_path` is the path in the container to mount.
 * (optional) `mount_options` property defines additional mount options
 to pass when mounting this file system to the compute node.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
 
-The fourth shared volume, `glusterfs_cluster` is a GlusterFS cluster that is
+The fifth shared volume, `glusterfs_cluster` is a GlusterFS cluster that is
 mounted on to compute node hosts. The name `glusterfs_cluster` should match
 the `remote_fs`:`storage_cluster`:`id` specified as your GlusterFS cluster.
 These GlusterFS clusters can be configured using the `fs` command in Batch
@@ -425,6 +459,9 @@ Shipyard. These volumes have the following properties:
 * (required) `container_path` is the path in the container to mount.
 * (optional) `mount_options` property defines additional mount options
 to pass when mounting this file system to the compute node.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
 
 Finally, note that all `volumes` can be omitted completely along with
 one or all of `data_volumes` and `shared_data_volumes` if you do not require

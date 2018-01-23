@@ -104,7 +104,7 @@ mapping:
                 mapping:
                   volume_driver:
                     type: str
-                    enum: ['azurefile', 'glusterfs_on_compute', 'storage_cluster']
+                    enum: ['azureblob', 'azurefile', 'glusterfs_on_compute', 'storage_cluster']
                     required: true
                   container_path:
                     type: str
@@ -112,6 +112,8 @@ mapping:
                   storage_account_settings:
                     type: str
                   azure_file_share_name:
+                    type: str
+                  azure_blob_container_name:
                     type: str
                   mount_options:
                     type: seq

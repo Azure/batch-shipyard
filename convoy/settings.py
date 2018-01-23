@@ -1784,6 +1784,8 @@ def data_replication_settings(config):
         conf = {}
     try:
         concurrent_source_downloads = conf['concurrent_source_downloads']
+        if concurrent_source_downloads is None:
+            raise KeyError()
     except KeyError:
         concurrent_source_downloads = 10
     try:
@@ -2000,13 +2002,7 @@ def _global_resources_volumes(config):
         if util.is_none_or_empty(vols):
             raise KeyError()
     except KeyError:
-        try:
-            # backward compatibility with docker_volumes
-            vols = config['global_resources']['docker_volumes']
-            if util.is_none_or_empty(vols):
-                raise KeyError()
-        except KeyError:
-            vols = {}
+        vols = {}
     return vols
 
 
@@ -2079,9 +2075,9 @@ def shared_data_volume_mount_options(sdv, sdvkey):
     return mo
 
 
-def azure_file_storage_account_settings(sdv, sdvkey):
+def azure_storage_account_settings(sdv, sdvkey):
     # type: (dict, str) -> str
-    """Get azure file storage account link
+    """Get azure storage account link
     :param dict sdv: shared_data_volume configuration object
     :param str sdvkey: key to sdv
     :rtype: str
@@ -2101,6 +2097,17 @@ def azure_file_share_name(sdv, sdvkey):
     return sdv[sdvkey]['azure_file_share_name']
 
 
+def azure_blob_container_name(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get azure blob container name
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: azure blob container name
+    """
+    return sdv[sdvkey]['azure_blob_container_name']
+
+
 def azure_file_host_mount_path(storage_account_name, share_name, is_windows):
     # type: (str, str, bool) -> str
     """Get azure file share host mount path
@@ -2115,6 +2122,20 @@ def azure_file_host_mount_path(storage_account_name, share_name, is_windows):
         sep='\\' if is_windows else '/',
         sa=storage_account_name,
         share=share_name)
+
+
+def azure_blob_host_mount_path(storage_account_name, container_name):
+    # type: (str, str) -> str
+    """Get azure blob container host mount path
+    :param str storage_account_name: storage account name
+    :param str container_name: container name
+    :rtype: str
+    :return: host mount path for azure file share
+    """
+    return '{root}/azblob-{sa}-{cont}'.format(
+        root=get_host_mounts_path(False),
+        sa=storage_account_name,
+        cont=container_name)
 
 
 def gluster_volume_type(sdv, sdvkey):
@@ -2160,6 +2181,17 @@ def is_shared_data_volume_azure_file(sdv, sdvkey):
     :return: if shared data volume is azure file
     """
     return shared_data_volume_driver(sdv, sdvkey).lower() == 'azurefile'
+
+
+def is_shared_data_volume_azure_blob(sdv, sdvkey):
+    # type: (dict, str) -> bool
+    """Determine if shared data volume is an azure blob container via fuse
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: bool
+    :return: if shared data volume is azure blob
+    """
+    return shared_data_volume_driver(sdv, sdvkey).lower() == 'azureblob'
 
 
 def is_shared_data_volume_gluster_on_compute(sdv, sdvkey):
@@ -3005,10 +3037,21 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                     sdvkey,
                     shared_data_volume_container_path(sdv, sdvkey),
                     bindopt))
-            else:
+            elif is_shared_data_volume_azure_blob(sdv, sdvkey):
                 sa = credentials_storage(
                     config,
-                    azure_file_storage_account_settings(sdv, sdvkey))
+                    azure_storage_account_settings(sdv, sdvkey))
+                cont_name = azure_blob_container_name(sdv, sdvkey)
+                hmp = azure_blob_host_mount_path(sa.account, cont_name)
+                run_opts.append('{} {}:{}{}'.format(
+                    bindparm,
+                    hmp,
+                    shared_data_volume_container_path(sdv, sdvkey),
+                    bindopt))
+            elif is_shared_data_volume_azure_file(sdv, sdvkey):
+                sa = credentials_storage(
+                    config,
+                    azure_storage_account_settings(sdv, sdvkey))
                 share_name = azure_file_share_name(sdv, sdvkey)
                 hmp = azure_file_host_mount_path(
                     sa.account, share_name, is_windows)
@@ -3017,6 +3060,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                     hmp,
                     shared_data_volume_container_path(sdv, sdvkey),
                     bindopt))
+            else:
+                raise RuntimeError(
+                    'unknown shared data volume type: {}'.format(sdvkey))
     del shared_data_volumes
     # env vars
     env_vars = _kv_read_checked(conf, 'environment_variables', default={})
