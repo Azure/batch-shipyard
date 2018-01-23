@@ -253,7 +253,8 @@ if [ ! -z $VENV_NAME ]; then
         source deactivate $VENV_NAME
     fi
 else
-    $SUDO $PIP install --upgrade pip setuptools
+    $SUDO $PIP install --upgrade pip
+    $PIP install --upgrade --user setuptools
     set +e
     $PIP uninstall -y azure-storage
     set -e

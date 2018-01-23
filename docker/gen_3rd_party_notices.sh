@@ -36,6 +36,9 @@ DEPENDENCIES=(
     msrestazure
     https://github.com/Azure/msrestazure-for-python
     https://github.com/Azure/msrestazure-for-python/raw/master/LICENSE.md
+    pykwalify
+    https://github.com/Grokzen/pykwalify
+    https://github.com/Grokzen/pykwalify/raw/master/docs/License.txt
     Python
     https://python.org
     https://github.com/python/cpython/raw/master/LICENSE
@@ -45,6 +48,9 @@ DEPENDENCIES=(
     requests
     https://github.com/requests/requests
     https://github.com/requests/requests/raw/master/LICENSE
+    ruamel.yaml
+    https://bitbucket.org/ruamel/yaml
+    https://bitbucket.org/ruamel/yaml/raw/ef15acf88b039656570f9b1f45b5e7394c154997/LICENSE
 )
 DEPLEN=${#DEPENDENCIES[@]}
 
