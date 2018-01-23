@@ -7,6 +7,8 @@
 configuration, please see special note in the Removed section below (#145)
 
 ### Changed
+- Update Docker CE to 17.12.0
+- Update blobxfer to 1.1.0
 - Updated dependencies to latest
 
 ### Removed

@@ -549,7 +549,7 @@ fi
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     # name will be appended to dockerversion
-    dockerversion=17.09.0~ce-0~
+    dockerversion=17.12.0~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
@@ -712,7 +712,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
-        dockerversion=17.09.0.ce-1.el7.centos
+        dockerversion=17.12.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             srvstart="systemctl start docker.service"
@@ -807,23 +807,23 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # add Virtualization:containers repo for recent docker builds
         repodir=
         if [[ $offer == opensuse* ]]; then
-            dockerversion=1.12.6-30.2
-            if [[ $sku == "42.1" ]]; then
-                repodir=openSUSE_Leap_42.1
-            elif [[ $sku == "42.2" ]]; then
-                repodir=openSUSE_Leap_42.2
+            dockerversion=17.09.1_ce-254.1
+            if [[ $sku == "42.3" ]]; then
+                repodir=openSUSE_Leap_42.3
             fi
             # add container repo for zypper
             zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         elif [[ $offer == sles* ]]; then
-            dockerversion=1.12.6-90.1
+            dockerversion=17.09.1_ce-252.1
             if [[ $sku == "12-sp1" ]]; then
                 repodir=SLE_12_SP1
             elif [[ $sku == "12-sp2" ]]; then
                 repodir=SLE_12_SP2
+            elif [[ $sku == "12-sp3" ]]; then
+                repodir=SLE_12_SP3
             fi
-            # enable container module
-            SUSEConnect -p sle-module-containers/12/x86_64 -r ''
+            # add container repo for zypper
+            zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         fi
         if [ -z $repodir ]; then
             echo "ERROR: unsupported sku: $sku for offer: $offer"
