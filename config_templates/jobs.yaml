@@ -1,5 +1,5 @@
 job_specifications:
-- id: dockerjob
+- id: myjob
   auto_complete: true
   environment_variables:
     abc: xyz
@@ -55,7 +55,10 @@ job_specifications:
       - jobdata*.bin
       blobxfer_extra_options: null
   tasks:
-  - task_factory:
+  - id: null
+    docker_image: busybox
+    singularity_image: shub://singularityhub/busybox
+    task_factory:
       parametric_sweep:
         combinations:
           iterable:
@@ -130,9 +133,6 @@ job_specifications:
         module: mypkg.mymodule
         package: null
       repeat: 3
-    id: null
-    docker_image: busybox
-    singularity_image: shub://singularityhub/busybox
     singularity_execution:
       cmd: exec
       elevated: false
@@ -206,3 +206,7 @@ job_specifications:
         file_path: some/path/in/sharedtask/file
     entrypoint: null
     command: mycommand
+  merge_task:
+    id: null
+    # ... same properties found in task except for
+    # depends_on, depends_on_range, multi_instance, task_factory

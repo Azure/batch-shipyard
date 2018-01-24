@@ -6,6 +6,9 @@
 - Configuration validation. Validator supports both YAML and JSON
 configuration, please see special note in the Removed section below (#145)
 - Support for Azure Blob storage container mounting via blobfuse (#159)
+- Support for merge tasks which depend on all tasks specified in the
+`tasks` array. Please see the jobs configuration guide for more
+information (#149).
 
 ### Changed
 - Update Docker CE to 17.12.0
@@ -16,11 +19,12 @@ configuration, please see special note in the Removed section below (#145)
 - Integration of the schema validator has now removed or enforced strict
 behavior for the following previously deprecated configuration properties:
     - `credentials`:`batch`:`account` has been removed
-    - `pool_specification`:`vm_count` must be a map
+    - `pool_specification`:`vm_count` must be a map of `dedicated` and
+      `low_priority` VM counts
     - `pool_specification`:`vm_configuration` must be specified instead of
       directly specifying `publisher`, `offer`, `sku` on `pool_specification`
-    - `global_resources`:`volumes` must be replaced with
-      `global_resources`:`docker_volumes`
+    - `global_resources`:`docker_volumes` must be replaced with
+      `global_resources`:`volumes`
     - `job_specifications`:`tasks`:`image` must be replaced with
       `job_specifications`:`tasks`:`docker_image`
 

@@ -496,3 +496,161 @@ mapping:
                     type: str
                   command:
                     type: str
+          merge_task:
+            type: map
+            mapping:
+              id:
+                type: str
+              docker_image:
+                type: str
+              singularity_image:
+                type: str
+              singularity_execution:
+                type: map
+                mapping:
+                  cmd:
+                    type: str
+                    enum: ['exec', 'run']
+                  elevated:
+                    type: bool
+              additional_singularity_options:
+                type: seq
+                sequence:
+                  - type: str
+              name:
+                type: str
+              labels:
+                type: seq
+                sequence:
+                  - type: str
+              environment_variables:
+                type: map
+                mapping:
+                  regex;(.+):
+                    type: str
+              environment_variables_keyvault_secret_id:
+                type: str
+              ports:
+                type: seq
+                sequence:
+                  - type: str
+              data_volumes:
+                type: seq
+                sequence:
+                  - type: str
+              shared_data_volumes:
+                type: seq
+                sequence:
+                  - type: str
+              resource_files:
+                type: seq
+                sequence:
+                  - type: map
+                    mapping:
+                      blob_source:
+                        type: str
+                        required: true
+                      file_mode:
+                        type: str
+                      file_path:
+                        type: str
+                        required: true
+              input_data:
+                type: map
+                mapping:
+                  azure_batch:
+                    type: seq
+                    sequence:
+                      - type: map
+                        mapping:
+                          job_id:
+                            type: str
+                            required: true
+                          task_id:
+                            type: str
+                            required: true
+                          exclude:
+                            type: seq
+                            sequence:
+                              - type: str
+                          include:
+                            type: seq
+                            sequence:
+                              - type: str
+                          destination:
+                            type: str
+                  azure_storage:
+                    type: seq
+                    sequence:
+                      - type: map
+                        mapping:
+                          storage_account_settings:
+                            type: str
+                            required: true
+                          remote_path:
+                            type: str
+                            required: true
+                          local_path:
+                            type: str
+                          is_file_share:
+                            type: bool
+                          exclude:
+                            type: seq
+                            sequence:
+                              - type: str
+                          include:
+                            type: seq
+                            sequence:
+                              - type: str
+                          blobxfer_extra_options:
+                            type: str
+              output_data:
+                type: map
+                mapping:
+                  azure_storage:
+                    type: seq
+                    sequence:
+                      - type: map
+                        mapping:
+                          storage_account_settings:
+                            type: str
+                            required: true
+                          remote_path:
+                            type: str
+                            required: true
+                          local_path:
+                            type: str
+                          is_file_share:
+                            type: bool
+                          exclude:
+                            type: seq
+                            sequence:
+                              - type: str
+                          include:
+                            type: seq
+                            sequence:
+                              - type: str
+                          blobxfer_extra_options:
+                            type: str
+              remove_container_after_exit:
+                type: bool
+              shm_size:
+                type: str
+              additional_docker_run_options:
+                type: seq
+                sequence:
+                  - type: str
+              infiniband:
+                type: bool
+              gpu:
+                type: bool
+              max_task_retries:
+                type: int
+              max_wall_time:
+                type: str
+              retention_time:
+                type: str
+              entrypoint:
+                type: str
+              command:
+                type: str
