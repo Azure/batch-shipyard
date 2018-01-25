@@ -41,7 +41,6 @@ except ImportError:
 import socket
 import struct
 # non-stdlib imports
-import azure.mgmt.compute.v2016_04_30_preview.models as computemodels
 import azure.mgmt.network.models as networkmodels
 import msrestazure.azure_exceptions
 # local imports
@@ -68,21 +67,26 @@ def _create_managed_disk(compute_client, rfs, disk_name):
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: async operation handle
     """
-    if rfs.managed_disks.premium:
-        account_type = computemodels.StorageAccountTypes.premium_lrs
-    else:
-        account_type = computemodels.StorageAccountTypes.standard_lrs
+    account_type = (
+        compute_client.disks.models.StorageAccountTypes.premium_lrs
+        if rfs.managed_disks.premium else
+        compute_client.disks.models.StorageAccountTypes.standard_lrs
+    )
     logger.info('creating managed disk: {}'.format(disk_name))
     return compute_client.disks.create_or_update(
         resource_group_name=rfs.managed_disks.resource_group,
         disk_name=disk_name,
-        disk=computemodels.Disk(
+        disk=compute_client.disks.models.Disk(
             location=rfs.location,
-            account_type=account_type,
-            disk_size_gb=rfs.managed_disks.disk_size_gb,
-            creation_data=computemodels.CreationData(
-                create_option=computemodels.DiskCreateOption.empty
+            creation_data=compute_client.disks.models.CreationData(
+                create_option=compute_client.disks.models.
+                DiskCreateOption.empty,
             ),
+            sku=compute_client.disks.models.DiskSku(
+                name=account_type,
+            ),
+            os_type=compute_client.disks.models.OperatingSystemTypes.linux,
+            disk_size_gb=rfs.managed_disks.disk_size_gb,
         ),
     )
 
@@ -236,8 +240,8 @@ def list_disks(
         logger.info(
             '{} [provisioning_state={} created={} size={} type={}]'.format(
                 disk.id, disk.provisioning_state, disk.time_created,
-                disk.disk_size_gb, disk.account_type))
-        ret.append((disk.id, disk.account_type))
+                disk.disk_size_gb, disk.sku.name))
+        ret.append((disk.id, disk.sku.name))
         i += 1
     if i == 0:
         logger.error(
@@ -459,6 +463,8 @@ def _create_network_interface(
             location=rfs.location,
             network_security_group=nsg,
             ip_configurations=[network_ip_config],
+            enable_accelerated_networking=rfs.storage_cluster.
+            accelerated_networking,
         ),
     )
 
@@ -488,11 +494,12 @@ def _create_virtual_machine(
     data_disks = []
     for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
         data_disks.append(
-            computemodels.DataDisk(
+            compute_client.disks.models.DataDisk(
                 lun=lun,
                 name=diskname,
-                create_option=computemodels.DiskCreateOptionTypes.attach,
-                managed_disk=computemodels.ManagedDiskParameters(
+                create_option=compute_client.disks.models.
+                DiskCreateOptionTypes.attach,
+                managed_disk=compute_client.disks.models.ManagedDiskParameters(
                     id=disks[diskname][0],
                 ),
             )
@@ -500,7 +507,7 @@ def _create_virtual_machine(
         lun += 1
     # sub resource availbility set
     if availset is not None:
-        availset = computemodels.SubResource(
+        availset = compute_client.virtual_machines.models.SubResource(
             id=availset.id,
         )
     # create vm
@@ -508,14 +515,17 @@ def _create_virtual_machine(
     return compute_client.virtual_machines.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
         vm_name=vm_name,
-        parameters=computemodels.VirtualMachine(
+        parameters=compute_client.virtual_machines.models.VirtualMachine(
             location=rfs.location,
-            hardware_profile={
-                'vm_size': rfs.storage_cluster.vm_size,
-            },
+            hardware_profile=compute_client.virtual_machines.models.
+            HardwareProfile(
+                vm_size=rfs.storage_cluster.vm_size,
+            ),
             availability_set=availset,
-            storage_profile=computemodels.StorageProfile(
-                image_reference=computemodels.ImageReference(
+            storage_profile=compute_client.virtual_machines.models.
+            StorageProfile(
+                image_reference=compute_client.virtual_machines.models.
+                ImageReference(
                     publisher='Canonical',
                     offer='UbuntuServer',
                     sku='16.04-LTS',
@@ -523,19 +533,23 @@ def _create_virtual_machine(
                 ),
                 data_disks=data_disks,
             ),
-            network_profile=computemodels.NetworkProfile(
+            network_profile=compute_client.virtual_machines.models.
+            NetworkProfile(
                 network_interfaces=[
-                    computemodels.NetworkInterfaceReference(
+                    compute_client.virtual_machines.models.
+                    NetworkInterfaceReference(
                         id=nics[offset].id,
                     ),
                 ],
             ),
-            os_profile=computemodels.OSProfile(
+            os_profile=compute_client.virtual_machines.models.OSProfile(
                 computer_name=vm_name,
                 admin_username=rfs.storage_cluster.ssh.username,
-                linux_configuration=computemodels.LinuxConfiguration(
+                linux_configuration=compute_client.virtual_machines.models.
+                LinuxConfiguration(
                     disable_password_authentication=True,
-                    ssh=computemodels.SshConfiguration(
+                    ssh=compute_client.virtual_machines.models.
+                    SshConfiguration(
                         public_keys=[ssh_pub_key],
                     ),
                 ),
@@ -570,7 +584,8 @@ def _create_virtual_machine_extension(
     # get premium storage settings
     premium = False
     for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
-        if disks[diskname][1] == computemodels.StorageAccountTypes.premium_lrs:
+        if (disks[diskname][1] ==
+                compute_client.disks.models.StorageAccountTypes.premium_lrs):
             premium = True
             break
     # construct server options
@@ -639,7 +654,8 @@ def _create_virtual_machine_extension(
         resource_group_name=rfs.storage_cluster.resource_group,
         vm_name=vm_name,
         vm_extension_name=vm_ext_name,
-        extension_parameters=computemodels.VirtualMachineExtension(
+        extension_parameters=compute_client.virtual_machine_extensions.models.
+        VirtualMachineExtension(
             location=rfs.location,
             publisher='Microsoft.Azure.Extensions',
             virtual_machine_extension_type='CustomScript',
@@ -687,13 +703,15 @@ def _create_availability_set(compute_client, rfs):
     logger.debug('creating availability set: {}'.format(as_name))
     return compute_client.availability_sets.create_or_update(
         resource_group_name=rfs.storage_cluster.resource_group,
-        name=as_name,
+        availability_set_name=as_name,
         # user maximums ud, fd from settings due to region variability
-        parameters=computemodels.AvailabilitySet(
+        parameters=compute_client.virtual_machines.models.AvailabilitySet(
             location=rfs.location,
             platform_update_domain_count=20,
             platform_fault_domain_count=rfs.storage_cluster.fault_domains,
-            managed=True,
+            sku=compute_client.virtual_machines.models.Sku(
+                name='Aligned',
+            ),
         )
     )
 
@@ -759,7 +777,8 @@ def create_storage_cluster(
                     ('Referenced managed disk {} unavailable in set {} for '
                      'vm offset {}').format(disk, disk_map, i))
             if (disk_map[disk][1] ==
-                    computemodels.StorageAccountTypes.premium_lrs and
+                    compute_client.disks.models.
+                    StorageAccountTypes.premium_lrs and
                     not settings.is_premium_storage_vm_size(
                         rfs.storage_cluster.vm_size)):
                 raise RuntimeError(
@@ -837,7 +856,7 @@ def create_storage_cluster(
         logger.info(
             ('network interface: {} [provisioning_state={} private_ip={} '
              'private_ip_allocation_method={} network_security_group={} '
-             'accelerated={}]').format(
+             'accelerated_networking={}]').format(
                  nic.id, nic.provisioning_state,
                  nic.ip_configurations[0].private_ip_address,
                  nic.ip_configurations[0].private_ip_allocation_method,
@@ -857,7 +876,7 @@ def create_storage_cluster(
         # read public key data
         with ssh_pub_key.open('rb') as fd:
             key_data = fd.read().decode('utf8')
-    ssh_pub_key = computemodels.SshPublicKey(
+    ssh_pub_key = compute_client.virtual_machines.models.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
@@ -1114,7 +1133,7 @@ def resize_storage_cluster(
         # read public key data
         with ssh_pub_key.open('rb') as fd:
             key_data = fd.read().decode('utf8')
-    ssh_pub_key = computemodels.SshPublicKey(
+    ssh_pub_key = compute_client.virtual_machines.models.SshPublicKey(
         path='/home/{}/.ssh/authorized_keys'.format(
             rfs.storage_cluster.ssh.username),
         key_data=key_data,
@@ -1341,14 +1360,17 @@ def expand_storage_cluster(
         lun = sorted(entry['pe_disks']['luns'])[-1] + 1
         for diskname in entry['new_disks']:
             if (disk_map[diskname][1] ==
-                    computemodels.StorageAccountTypes.premium_lrs):
+                    compute_client.disks.models.
+                    StorageAccountTypes.premium_lrs):
                 premium = True
             vm.storage_profile.data_disks.append(
-                computemodels.DataDisk(
+                compute_client.disks.models.DataDisk(
                     lun=lun,
                     name=diskname,
-                    create_option=computemodels.DiskCreateOptionTypes.attach,
-                    managed_disk=computemodels.ManagedDiskParameters(
+                    create_option=compute_client.disks.models.
+                    DiskCreateOptionTypes.attach,
+                    managed_disk=compute_client.disks.models.
+                    ManagedDiskParameters(
                         id=disk_map[diskname][0],
                     ),
                 )
@@ -2080,7 +2102,8 @@ def stat_storage_cluster(
             vm = compute_client.virtual_machines.get(
                 resource_group_name=rfs.storage_cluster.resource_group,
                 vm_name=vm_name,
-                expand=computemodels.InstanceViewTypes.instance_view,
+                expand=compute_client.virtual_machines.models.
+                InstanceViewTypes.instance_view,
             )
         except msrestazure.azure_exceptions.CloudError as e:
             if e.status_code == 404:

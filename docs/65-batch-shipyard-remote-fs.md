@@ -51,6 +51,7 @@ machine to disk mapping
 * Automatic network security rule configuration based on file server type,
 if requested
 * Automatic placement in an availability set for GlusterFS virtual machines
+* Support for [accelerated networking](https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli)
 * Automatic SSH keypair provisioning and setup for all file servers in
 storage cluster
 * Configuration-driven data ingress support via scp and rsync+ssh, including

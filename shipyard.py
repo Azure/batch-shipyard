@@ -60,6 +60,7 @@ class CliContext(object):
         self.verbose = False
         self.yes = False
         self.config = None
+        self.conf_jobs = None
         self.conf_fs = None
         # clients
         self.batch_mgmt_client = None
@@ -299,10 +300,12 @@ class CliContext(object):
         # validate configuration files against schema
         convoy.validator.validate_config(
             convoy.validator.ConfigType.Credentials, self.conf_credentials)
-        convoy.validator.validate_config(
-            convoy.validator.ConfigType.Global, self.conf_config)
-        convoy.validator.validate_config(
-            convoy.validator.ConfigType.Pool, self.conf_pool)
+        if not skip_global_config:
+            convoy.validator.validate_config(
+                convoy.validator.ConfigType.Global, self.conf_config)
+        if not skip_pool_config:
+            convoy.validator.validate_config(
+                convoy.validator.ConfigType.Pool, self.conf_pool)
         convoy.validator.validate_config(
             convoy.validator.ConfigType.Jobs, self.conf_jobs)
         convoy.validator.validate_config(

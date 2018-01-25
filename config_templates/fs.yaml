@@ -74,6 +74,7 @@ remote_fs:
       vm_count: 2
       vm_size: STANDARD_F16S
       fault_domains: 2
+      accelerated_networking: false
       vm_disk_map:
         '0':
           disk_array:

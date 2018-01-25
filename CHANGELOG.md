@@ -9,11 +9,16 @@ configuration, please see special note in the Removed section below (#145)
 - Support for merge tasks which depend on all tasks specified in the
 `tasks` array. Please see the jobs configuration guide for more
 information (#149).
+- Support for accelerated networking in RemoteFS storage clusters (#158)
 
 ### Changed
 - Update Docker CE to 17.12.0
 - Update blobxfer to 1.1.0
 - Updated dependencies to latest
+
+### Fixed
+- Disabling `remove_container_after_exit`, `gpu`, `infiniband` at the
+task-level was not being honored properly
 
 ### Removed
 - Integration of the schema validator has now removed or enforced strict

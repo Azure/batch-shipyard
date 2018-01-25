@@ -186,6 +186,8 @@ mapping:
                 required: true
               fault_domains:
                 type: int
+              accelerated_networking:
+                type: bool
               vm_disk_map:
                 type: map
                 mapping:

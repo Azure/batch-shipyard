@@ -42,7 +42,6 @@ import time
 import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
-import azure.mgmt.compute.v2016_04_30_preview.models as computemodels
 # local imports
 from . import autoscale
 from . import batch
@@ -624,7 +623,8 @@ def _create_storage_cluster_mount_args(
             vm = compute_client.virtual_machines.get(
                 resource_group_name=sc.resource_group,
                 vm_name=vm_name,
-                expand=computemodels.InstanceViewTypes.instance_view,
+                expand=compute_client.virtual_machines.models.
+                InstanceViewTypes.instance_view,
             )
             nic = resource.get_nic_from_virtual_machine(
                 network_client, sc.resource_group, vm)

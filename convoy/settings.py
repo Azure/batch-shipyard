@@ -351,7 +351,7 @@ StorageClusterSettings = collections.namedtuple(
     'StorageClusterSettings', [
         'id', 'resource_group', 'virtual_network', 'network_security',
         'file_server', 'vm_count', 'vm_size', 'fault_domains', 'public_ip',
-        'hostname_prefix', 'ssh', 'vm_disk_map',
+        'hostname_prefix', 'ssh', 'vm_disk_map', 'accelerated_networking',
     ]
 )
 RemoteFsSettings = collections.namedtuple(
@@ -2885,10 +2885,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     name = None
     if util.is_not_empty(docker_image):
         # parse remove container option
-        rm_container = (
-            _kv_read(conf, 'remove_container_after_exit') or
-            _kv_read(jobspec, 'remove_container_after_exit', default=True)
-        )
+        rm_container = _kv_read(conf, 'remove_container_after_exit')
+        if rm_container is None:
+            rm_container = _kv_read(
+                jobspec, 'remove_container_after_exit', default=True)
         if rm_container and '--rm' not in run_opts:
             run_opts.append('--rm')
         del rm_container
@@ -3110,7 +3110,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     if util.is_not_empty(retention_time):
         retention_time = util.convert_string_to_timedelta(retention_time)
     # gpu
-    gpu = _kv_read(conf, 'gpu') or _kv_read(jobspec, 'gpu')
+    gpu = _kv_read(conf, 'gpu')
+    if gpu is None:
+        gpu = _kv_read(jobspec, 'gpu')
     # if not specified check for gpu pool and implicitly enable
     if gpu is None:
         if is_gpu_pool(vm_size) and not is_windows:
@@ -3133,9 +3135,9 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         docker_run_cmd = 'docker run'
         docker_exec_cmd = 'docker exec'
     # infiniband
-    infiniband = (
-        _kv_read(conf, 'infiniband') or _kv_read(jobspec, 'infiniband')
-    )
+    infiniband = _kv_read(conf, 'infiniband')
+    if infiniband is None:
+        _kv_read(jobspec, 'infiniband')
     # if not specified, check for rdma pool and implicitly enable
     if infiniband is None:
         if is_rdma_pool(vm_size) and inter_node_comm and not is_windows:
@@ -3527,6 +3529,7 @@ def remotefs_settings(config, sc_id=None):
         raise ValueError('fault_domains must be in range [2, 3]: {}'.format(
             sc_fault_domains))
     sc_hostname_prefix = _kv_read_checked(sc_conf, 'hostname_prefix')
+    sc_accel_net = _kv_read(sc_conf, 'accelerated_networking', False)
     # public ip settings
     pip_conf = _kv_read_checked(sc_conf, 'public_ip', {})
     sc_pip_enabled = _kv_read(pip_conf, 'enabled', True)
@@ -3690,6 +3693,7 @@ def remotefs_settings(config, sc_id=None):
             vm_count=sc_vm_count,
             vm_size=sc_vm_size,
             fault_domains=sc_fault_domains,
+            accelerated_networking=sc_accel_net,
             public_ip=PublicIpSettings(
                 enabled=sc_pip_enabled,
                 static=sc_pip_static,

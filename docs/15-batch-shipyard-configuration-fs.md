@@ -82,6 +82,7 @@ remote_fs:
       vm_count: 2
       vm_size: STANDARD_F16S
       fault_domains: 2
+      accelerated_networking: false
       vm_disk_map:
         '0':
           disk_array:
@@ -327,6 +328,9 @@ premium managed disks, you must use a
 the availability set. This only applies to `vm_count` > `1` and must be
 in the range [2, 3]. The default is `2` if not specified. Note that some
 regions do not support 3 fault domains.
+* (optional) `accelerated_networking` enables or disables
+[accelerated networking](https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli).
+The default is `false` if not specified.
 * (required) `vm_disk_map` is the virtual machine to managed disk mapping.
 The number of entries in this map must match the `vm_count`.
     * (required) `<instance number>` is the virtual machine instance number.

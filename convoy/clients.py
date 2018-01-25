@@ -94,7 +94,7 @@ def _create_compute_client(ctx, credentials=None, subscription_id=None):
             mgmt_aad = settings.credentials_management(ctx.config).aad
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
     return azure.mgmt.compute.ComputeManagementClient(
-        credentials, subscription_id, api_version='2016-04-30-preview')
+        credentials, subscription_id)
 
 
 def _create_network_client(ctx, credentials=None, subscription_id=None):
