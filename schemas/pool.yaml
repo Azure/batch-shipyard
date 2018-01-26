@@ -23,7 +23,7 @@ mapping:
                 type: str
                 required: true
               sku:
-                type: str
+                type: text
                 required: true
               version:
                 type: str

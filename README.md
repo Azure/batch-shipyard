@@ -23,9 +23,6 @@ the Microsoft Azure [Android](https://play.google.com/store/apps/details?id=com.
 and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
 app.
 
-Try Batch Shipyard now from your browser:
-[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
-
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) and
 [Singularity](http://singularity.lbl.gov/) installations tuned for
@@ -104,6 +101,9 @@ on compliant Windows compute node pools
 Batch Shipyard is now integrated into Azure Cloud Shell with no installation
 required. Simply request a Cloud Shell session and type `shipyard` to invoke
 the CLI.
+
+Try Batch Shipyard now from your browser:
+[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
 
 ### Local Installation
 Please see [the installation guide](http://batch-shipyard.readthedocs.io/en/latest/01-batch-shipyard-installation/)
