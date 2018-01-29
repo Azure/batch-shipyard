@@ -62,39 +62,13 @@ EOF
     chmod 755 $nvdriver
     $nvdriver -s
     # install nvidia-docker
-    curl -OfSsL https://github.com/NVIDIA/nvidia-docker/releases/download/v1.0.1/nvidia-docker_1.0.1-1_amd64.deb
-    dpkg -i nvidia-docker_1.0.1-1_amd64.deb
-    rm nvidia-docker_1.0.1-1_amd64.deb
-    # do not auto-enable nvidia docker service
-    systemctl disable nvidia-docker.service
-    systemctl start nvidia-docker.service
-    systemctl status nvidia-docker.service
-    # get driver version
-    nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
-    echo nvidia driver version $nvdriverver detected
-    # create the docker volume now to avoid volume driver conflicts for
-    # tasks. run this in a loop as it can fail if triggered too quickly
-    # after start
-    NV_START=$(date -u +"%s")
-    set +e
-    while :
-    do
-        echo "Attempting to create nvidia-docker volume with version $nvdriverver"
-        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
-        if [ $? -eq 0 ]; then
-            break
-        else
-            NV_NOW=$(date -u +"%s")
-            NV_DIFF=$((($NV_NOW-$NV_START)/60))
-            # fail after 5 minutes of attempts
-            if [ $NV_DIFF -ge 5 ]; then
-                echo "could not create nvidia-docker volume"
-                exit 1
-            fi
-            sleep 1
-        fi
-    done
-    set -e
+    curl -fSsL https://nvidia.github.io/nvidia-docker/gpgkey | apt-key add -
+    curl -fSsL https://nvidia.github.io/nvidia-docker/ubuntu16.04/amd64/nvidia-docker.list | \
+        tee /etc/apt/sources.list.d/nvidia-docker.list
+    apt-get update
+    apt-get install nvidia-docker2
+    pkill -SIGHUP dockerd
+    nvidia-docker version
 fi
 set -e
 

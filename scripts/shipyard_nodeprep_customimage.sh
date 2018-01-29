@@ -123,13 +123,9 @@ EOF
 
 check_for_nvidia_docker() {
     set +e
-    # enable and start nvidia docker service
-    systemctl enable nvidia-docker.service
-    systemctl start nvidia-docker.service
-    systemctl status nvidia-docker.service
-    nvidia-docker --version
+    nvidia-docker version
     if [ $? -ne 0 ]; then
-        echo "ERROR: nvidia-docker not installed"
+        echo "ERROR: nvidia-docker2 not installed"
         exit 1
     fi
     set -e

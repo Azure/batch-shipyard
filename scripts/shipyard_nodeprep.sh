@@ -176,8 +176,8 @@ install_nvidia_software() {
     check_for_nvidia_card
     # split arg into two
     IFS=':' read -ra GPUARGS <<< "$gpu"
+    is_viz=${GPUARGS[0]}
     nvdriver=${GPUARGS[1]}
-    nvdocker=${GPUARGS[2]}
     # remove nouveau
     set +e
     rmmod nouveau
@@ -208,7 +208,7 @@ EOF
             install_packages $offer $kernel_devel_package
         elif [ $sku == "7.3" ]; then
             download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/${kernel_devel_package}.rpm
-            rpm -Uvh ${kernel_devel_package}.rpm
+            install_local_packages $offer ${kernel_devel_package}.rpm
         else
             echo "ERROR: CentOS $sku not supported for GPU"
             exit 1
@@ -216,7 +216,7 @@ EOF
         install_packages $offer gcc binutils make
     fi
     # get additional dependency if NV-series VMs
-    if [ ${GPUARGS[0]} == "True" ]; then
+    if [ $is_viz == "True" ]; then
         if [ $offer == "ubuntuserver" ]; then
             install_packages $offer xserver-xorg-dev
         elif [[ $offer == centos* ]]; then
@@ -226,7 +226,7 @@ EOF
     # install driver
     ./$nvdriver -s
     # add flag to config for GRID driver
-    if [ ${GPUARGS[0]} == "True" ]; then
+    if [ $is_viz == "True" ]; then
         cp /etc/nvidia/gridd.conf.template /etc/nvidia/gridd.conf
         echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf
     fi
@@ -234,41 +234,17 @@ EOF
     nvidia-persistenced --user root
     nvidia-smi -pm 1
     # install nvidia-docker
-    install_local_packages $offer $nvdocker
-    # enable and start nvidia docker service
-    systemctl enable nvidia-docker.service
-    systemctl start nvidia-docker.service
-    systemctl status nvidia-docker.service
-    # get driver version
-    nvdriverver=`cat /proc/driver/nvidia/version | grep "Kernel Module" | cut -d ' ' -f 9`
-    echo nvidia driver version $nvdriverver detected
-    # create the docker volume now to avoid volume driver conflicts for
-    # tasks. run this in a loop as it can fail if triggered too quickly
-    # after start
-    NV_START=$(date -u +"%s")
-    set +e
-    while :
-    do
-        echo "INFO: Attempting to create nvidia-docker volume with version $nvdriverver"
-        docker volume create -d nvidia-docker --name nvidia_driver_$nvdriverver
-        if [ $? -eq 0 ]; then
-            docker volume inspect nvidia_driver_$nvdriverver
-            if [ $? -eq 0 ]; then
-                docker volume list
-                break
-            fi
-        else
-            NV_NOW=$(date -u +"%s")
-            NV_DIFF=$((($NV_NOW-$NV_START)/60))
-            # fail after 5 minutes of attempts
-            if [ $NV_DIFF -ge 5 ]; then
-                echo "ERROR: could not create nvidia-docker volume"
-                exit 1
-            fi
-            sleep 1
-        fi
-    done
-    set -e
+    if [ $offer == "ubuntuserver" ]; then
+        add_repo $offer https://nvidia.github.io/nvidia-docker/gpgkey
+        curl -fSsL https://nvidia.github.io/nvidia-docker/ubuntu16.04/amd64/nvidia-docker.list | \
+            tee /etc/apt/sources.list.d/nvidia-docker.list
+    elif [[ $offer == centos* ]]; then
+        add_repo $offer https://nvidia.github.io/nvidia-docker/centos7/x86_64/nvidia-docker.repo
+    fi
+    refresh_package_index $offer
+    install_packages $offer nvidia-docker2
+    pkill -SIGHUP dockerd
+    nvidia-docker version
 }
 
 mount_azurefile_share() {
@@ -320,6 +296,32 @@ download_file() {
         let retries=retries-1
         if [ $retries -eq 0 ]; then
             echo "ERROR: Could not download: $1"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+add_repo() {
+    offer=$1
+    url=$2
+    set +e
+    retries=120
+    while [ $retries -gt 0 ]; do
+        if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
+            curl -fSsL $url | apt-key add -
+        elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
+            yum-config-manager --add-repo $url
+        elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
+            zypper addrepo $url
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not add repo: $url"
             exit 1
         fi
         sleep 1
@@ -664,21 +666,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         install_packages $offer linux-image-extra-$(uname -r) linux-image-extra-virtual
     fi
     # add gpgkey for repo
-    set +e
-    retries=100
-    while [ $retries -gt 0 ]; do
-        curl -fsSL $gpgkey | apt-key add -
-        if [ $? -eq 0 ]; then
-            break
-        fi
-        let retries=retries-1
-        if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not add key for docker repo"
-            exit 1
-        fi
-        sleep 1
-    done
-    set -e
+    add_repo $offer $gpgkey
     # add repo
     add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
     # refresh index
@@ -797,7 +785,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     fi
     # add docker repo to yum
     install_packages $offer yum-utils device-mapper-persistent-data lvm2
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    add_repo $offer https://download.docker.com/linux/centos/docker-ce.repo
     refresh_package_index $offer
     install_packages $offer docker-ce-$dockerversion
     # modify docker opts
@@ -870,7 +858,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 repodir=openSUSE_Leap_42.3
             fi
             # add container repo for zypper
-            zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
+            add_repo $offer http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         elif [[ $offer == sles* ]]; then
             dockerversion=17.09.1_ce-252.1
             if [[ $sku == "12-sp1" ]]; then
@@ -881,7 +869,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                 repodir=SLE_12_SP3
             fi
             # add container repo for zypper
-            zypper addrepo http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
+            add_repo $offer http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         fi
         if [ -z $repodir ]; then
             echo "ERROR: unsupported sku: $sku for offer: $offer"
@@ -902,7 +890,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         systemctl status docker
         # set up glusterfs
         if [ $gluster_on_compute -eq 1 ]; then
-            zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
+            add_repo $offer http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
             zypper -n --gpg-auto-import-keys ref
             install_packages $offer glusterfs
             systemctl daemon-reload
@@ -922,7 +910,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                     systemctl enable rpcbind
                     systemctl start rpcbind
                 elif [ $server_type == "glusterfs" ]; then
-                    zypper addrepo http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
+                    add_repo $offer http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
                     zypper -n --gpg-auto-import-keys ref
                     install_packages $offer glusterfs acl
                 else

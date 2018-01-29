@@ -167,9 +167,10 @@ be invocable as root with default path and permissions. The Docker socket
 (`/var/run/docker.sock`) must be available (it is available by default).
 
 **Important Note:** If you have modified the Docker Root directory to
-mount on the node local temporary disk, then you must not enable the
+mount on the node local temporary disk, then you must disable the
 service to run on boot due to potential races with the disk not being
-set up properly before the service starts.
+set up before the service starts. Batch Shipyard will take care of properly
+starting the service on boot.
 
 #### SSH Server
 An SSH server should be installed and operational on port 22. You can
@@ -182,13 +183,8 @@ In order to utilize the GPUs available on compute nodes that have them
 (e.g., N-series VMs), the NVIDIA driver must be installed and loaded upon
 boot.
 
-Additionally, [nvidia-docker](https://github.com/NVIDIA/nvidia-docker)
+Additionally, [nvidia-docker2](https://github.com/NVIDIA/nvidia-docker)
 must be installed.
-
-**Important Note:** If you have modified the Docker Root directory to
-mount on the node local temporary disk, then you must not enable the
-nvidia-docker service to run on boot due to potential races with the disk
-not being set up properly before the service starts.
 
 #### Infiniband/RDMA-enabled Compute Nodes
 The host VM Infiniband/RDMA stack must be enabled with the proper drivers

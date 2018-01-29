@@ -63,30 +63,6 @@ util.setup_logger(logger)
 _REQUEST_CHUNK_SIZE = 4194304
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _RESOURCES_PATH = None
-__NVIDIA_DOCKER_RPM = {
-    'url': (
-        'https://github.com/NVIDIA/nvidia-docker/releases/download/'
-        'v1.0.1/nvidia-docker-1.0.1-1.x86_64.rpm'
-    ),
-    'sha256': (
-        'f05dfe7fe655ed39c399db0d6362e351b059f2708c3e6da17f590a000237ec3a'
-    ),
-    'target': 'nvidia-docker.rpm'
-}
-_NVIDIA_DOCKER = {
-    'ubuntuserver': {
-        'url': (
-            'https://github.com/NVIDIA/nvidia-docker/releases/download/'
-            'v1.0.1/nvidia-docker_1.0.1-1_amd64.deb'
-        ),
-        'sha256': (
-            '9fbfd98f87ef2fd2e2137e3ba59431890dde6caf96f113ea0a1bd15bb3e51afa'
-        ),
-        'target': 'nvidia-docker.deb'
-    },
-    'centos': __NVIDIA_DOCKER_RPM,
-    'centos-hpc': __NVIDIA_DOCKER_RPM,
-}
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
@@ -300,36 +276,6 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
         # check sha256
         if (util.compute_sha256_for_file(pkg, False) !=
                 _NVIDIA_DRIVER[gpu_type]['sha256']):
-            raise RuntimeError('sha256 mismatch for {}'.format(pkg))
-    return pkg
-
-
-def _setup_nvidia_docker_package(blob_client, config):
-    # type: (azure.storage.blob.BlockBlobService, dict) -> pathlib.Path
-    """Set up the nvidia docker package
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param dict config: configuration dict
-    :rtype: pathlib.Path
-    :return: package path
-    """
-    offer = settings.pool_offer(config, lower=True)
-    pkg = _RESOURCES_PATH / _NVIDIA_DOCKER[offer]['target']
-    # check to see if package is downloaded
-    if (not pkg.exists() or
-            util.compute_sha256_for_file(pkg, False) !=
-            _NVIDIA_DOCKER[offer]['sha256']):
-        # download package
-        logger.debug('downloading NVIDIA docker to {}'.format(
-            _NVIDIA_DOCKER[offer]['target']))
-        response = requests.get(_NVIDIA_DOCKER[offer]['url'], stream=True)
-        with pkg.open('wb') as f:
-            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-        logger.debug('wrote {} bytes to {}'.format(pkg.stat().st_size, pkg))
-        # check sha256
-        if (util.compute_sha256_for_file(pkg, False) !=
-                _NVIDIA_DOCKER[offer]['sha256']):
             raise RuntimeError('sha256 mismatch for {}'.format(pkg))
     return pkg
 
@@ -1022,12 +968,9 @@ def _construct_pool_object(
             gpu_type = settings.get_gpu_type_from_vm_size(
                 pool_settings.vm_size)
             gpu_driver = pathlib.Path(_NVIDIA_DRIVER[gpu_type]['target'])
-        gpupkg = _setup_nvidia_docker_package(blob_client, config)
-        _rflist.append((gpupkg.name, gpupkg))
-        gpu_env = '{}:{}:{}'.format(
+        gpu_env = '{}:{}'.format(
             settings.is_gpu_visualization_pool(pool_settings.vm_size),
-            gpu_driver.name,
-            gpupkg.name)
+            gpu_driver.name)
     else:
         gpu_env = None
     # get container registries
@@ -2006,8 +1949,9 @@ def _adjust_settings_for_pool_creation(config):
             config, vm_size=pool.vm_size)
     if not allowed and util.is_none_or_empty(node_agent):
         raise ValueError(
-            ('unsupported Docker Host VM Config, publisher={} offer={} '
-             'sku={} vm_size={}').format(publisher, offer, sku, pool.vm_size))
+            ('unsupported Docker (and/or GPU) Host VM Config, publisher={} '
+             'offer={} sku={} vm_size={}').format(
+                 publisher, offer, sku, pool.vm_size))
     # ensure HPC offers are matched with RDMA sizes
     if (not is_windows and (
             (offer == 'centos-hpc' or offer == 'sles-hpc') and
