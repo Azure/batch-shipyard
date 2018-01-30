@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [3.1.0] - 2018-01-30
 ### Added
 - Configuration validation. Validator supports both YAML and JSON
 configuration, please see special note in the Removed section below (#145)
@@ -12,8 +13,9 @@ information (#149).
 - Support for accelerated networking in RemoteFS storage clusters (#158)
 
 ### Changed
-- Update Docker CE to 17.12.0
-- Update blobxfer to 1.1.0
+- Update Docker CE to 17.12.0 for Ubuntu/CentOS
+- Update nvidia-docker 1.0.1 to nvidia-docker2
+- Update blobxfer to 1.1.1
 - Updated dependencies to latest
 
 ### Fixed
@@ -28,10 +30,10 @@ behavior for the following previously deprecated configuration properties:
       `low_priority` VM counts
     - `pool_specification`:`vm_configuration` must be specified instead of
       directly specifying `publisher`, `offer`, `sku` on `pool_specification`
-    - `global_resources`:`docker_volumes` must be replaced with
-      `global_resources`:`volumes`
-    - `job_specifications`:`tasks`:`image` must be replaced with
-      `job_specifications`:`tasks`:`docker_image`
+    - `global_resources`:`docker_volumes` is no longer valid and must be
+      replaced with `global_resources`:`volumes`
+    - `job_specifications`:`tasks`:`image` is no longer valid and must be
+      replaced with `job_specifications`:`tasks`:`docker_image`
 
 ## [3.0.3] - 2018-01-22
 ### Security
@@ -1063,7 +1065,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.0.3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.1.0...HEAD
+[3.1.0]: https://github.com/Azure/batch-shipyard/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/Azure/batch-shipyard/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/Azure/batch-shipyard/compare/3.0.1...3.0.2
 [3.0.1]: https://github.com/Azure/batch-shipyard/compare/3.0.0...3.0.1

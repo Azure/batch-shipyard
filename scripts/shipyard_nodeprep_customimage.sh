@@ -503,12 +503,12 @@ if [ ! -z $sc_args ]; then
     done
 fi
 
-# set up singularity
-singularity_setup $DISTRIB_ID $DISTRIB_RELEASE
-
 # retrieve docker images related to data movement
 docker_pull_image alfpark/blobxfer:$blobxferversion
 docker_pull_image alfpark/batch-shipyard:${version}-cargo
+
+# set up singularity
+singularity_setup $DISTRIB_ID $DISTRIB_RELEASE
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
