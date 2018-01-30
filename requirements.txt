@@ -6,9 +6,10 @@ azure-mgmt-batch==5.0.0
 azure-mgmt-compute==3.1.0rc3
 azure-mgmt-network==1.7.1
 azure-mgmt-resource==1.2.2
+azure-storage-common==1.0.0
 azure-storage-blob==1.0.0
 azure-storage-file==1.0.0
-blobxfer==1.1.0
+blobxfer==1.1.1
 click==6.7
 future==0.16.0
 msrest==0.4.25
