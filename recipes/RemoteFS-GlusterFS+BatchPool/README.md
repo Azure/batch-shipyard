@@ -11,9 +11,8 @@ The credentials configuration should have `management` Azure Active Directory
 credentials defined along with a valid storage account. The `management`
 section can be supplied through environment variables instead if preferred.
 
-Additionally, `batch` Azure Active Directory credentials with a valid
-[UserSubscription Batch account](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
-should be supplied.
+Additionally, valid `batch` Azure Active Directory credentials should be
+supplied.
 
 ### FS Configuration and GlusterFS storage cluster creation
 Please follow the explanations as presented in vanilla

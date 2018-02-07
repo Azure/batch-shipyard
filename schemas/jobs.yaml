@@ -478,7 +478,7 @@ mapping:
                       coordination_command:
                         type: str
                       num_instances:
-                        type: str
+                        type: text
                       resource_files:
                         type: seq
                         sequence:

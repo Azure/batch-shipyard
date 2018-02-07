@@ -41,6 +41,7 @@ remote_fs:
       public_ip:
         enabled: true
         static: false
+      accelerated_networking: true
       vm_count: 2
       vm_size: STANDARD_F16S
       vm_disk_map:

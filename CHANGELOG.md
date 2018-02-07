@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Minor schema validation updates
+- AAD check logic for pool VNet join
+
 ## [3.1.0] - 2018-01-30
 ### Added
 - Configuration validation. Validator supports both YAML and JSON

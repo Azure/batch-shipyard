@@ -58,11 +58,10 @@ storage cluster
 concurrent multi-node parallel transfers with GlusterFS storage clusters
 
 ## Azure Batch Integration Features
-* Automatic linking between Azure Batch pools (compute nodes) created with
-[UserSubscription Batch accounts](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
+* Automatic linking between Azure Batch pools (compute nodes)
 and Batch Shipyard provisioned remote filesystems
 * Support for mounting multiple disparate Batch Shipyard provisioned remote
-filesystem concurrently to the same pool and compute nodes
+filesystems concurrently to the same pool and compute nodes
 * Automatic failover for HA GlusterFS volume file lookups (compute node client
 mount) through remote filesystem deployment walk to find disparate upgrade and
 fault domains of the GlusterFS servers
@@ -84,7 +83,7 @@ layout of all of the components and possible interacting actors.
                           | | +---------------------------+ |                          |
                           | | |           +-------------+ | |                          |
                           | | |           | Data | Data | | |   +--------------------+ |
-                          | | |           | Disk | Disk | | |   |        Subnet      | |
+                          | | |           | Disk | Disk | | |   |        Subnet B    | |
                           | | | Virtual   |  00  |  01  | | |   |        10.1.0.0/16 | |
                           | | | Machine A +-------------+ | |   | +----------------+ | |
                           | | |           | Data | Data | | |   | |                | | |
@@ -102,19 +101,19 @@ layout of all of the components and possible interacting actors.
        |                  | | +-----------+--+-----v------+ |   |                    | |
        +----------------------> Public IP |  | Private IP | |   | +------------+---+ | |
            Brick Data     | | | 1.2.3.5   |  | 10.0.0.5   <-------> Private IP |   | | |
-                          | | +---------------------------+ |   | | 10.0.1.4   |   | | |
+                          | | +---------------------------+ |   | | 10.2.1.4   |   | | |
                           | | |           +-------------+ | |   | +------------+   | | |
                           | | |           | Data | Data | | |   | |                | | |
                           | | |           | Disk | Disk | | |   | | Azure Virtual  | | |
                           | | | Virtual   |  00  |  01  | | |   | | Machine Y      | | |
                           | | | Machine B +-------------+ | |   | |                | | |
                           | | |           | Data | Data | | |   | +----------------+ | |
-                          | | | GlusterFS | Disk | Disk | | |   |        Subnet      | |
-                          | | | Server 1  |  02  |  ..  | | |   |        10.0.1.0/24 | |
+                          | | | GlusterFS | Disk | Disk | | |   |        Subnet C    | |
+                          | | | Server 1  |  02  |  ..  | | |   |        10.2.1.0/24 | |
                           | | |           +------+------+ | |   +--------------------+ |
                           | | |             RAID-0 Array  | |                          |
                           | | +---------------------------+ |                          |
-                          | |                   Subnet      |                          |
+                          | |                   Subnet A    |                          |
                           | |                   10.0.0.0/24 |                          |
                           | +-------------------------------+                          |
                           |                                            Virtual Network |
@@ -129,7 +128,7 @@ network can be "partitioned" into sub-address spaces through the use of
 subnets. In the example above, we have three subnets where
 `Subnet A 10.0.0.0/24` hosts the GlusterFS infrastructure,
 `Subnet B 10.1.0.0/16` contains a pool of Azure Batch compute nodes, and
-`Subnet C 10.0.1.0/24` contains other Azure virtual machines. No resource
+`Subnet C 10.2.1.0/24` contains other Azure virtual machines. No resource
 in `Subnet B` or `Subnet C` is required for the Batch Shipyard provisioned
 filesystem to work, it is just to illustrate that other resources can
 access the filesystem within the same virtual network if configured to do
@@ -165,7 +164,8 @@ Batch Shipyard automatically places the virtual machines in an availability
 set along with maximally spreading virtual machines across update and fault
 domains. Single instance NFS servers will not be placed in an availbility
 set, however, if using a premium storage virtual machine size along with
-all premium disks, then you may qualify for single instance SLA.
+all premium disks, then you may qualify for
+[single instance SLA](https://azure.microsoft.com/en-us/support/legal/sla/virtual-machines).
 
 ## Configuration and Usage Documentation
 Please see [this page](15-batch-shipyard-configuration-fs.md) for a full

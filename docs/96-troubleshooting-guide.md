@@ -84,7 +84,13 @@ stuck at all. If you are not using pools with `native` container support
 and are specifying that nodes should block for all Docker images to
 be present on the node before allowing scheduling and your Docker images are
 large, it may take a while for your compute nodes to transition from waiting
-for start task to idle.
+for start task to idle. Additionally, if your Docker images are sourced from
+Docker Hub then Docker Hub may apply throttling or outright reject requests
+from your pool as compute nodes are attempting to retrieve your images. It
+is recommended to isolate from potential Docker Hub issues by provisioning
+your own Azure Container Registry within the region of your Batch account
+to reduce latency and improve bandwidth. Premium Azure Container Registries
+may be an appropriate option for very large pools.
 
 If you are certain the above is not the cause for this behavior, then it
 may indicate a regression in the Batch Shipyard code, a new Docker release
