@@ -191,4 +191,5 @@ container images on the pool. Please note that this requires a provisioned SSH
 user and `ssh` or `ssh.exe` available.
 
 `pool images update` will always use the SSH side-channel method for pools
-containing a positive number of low priority nodes.
+containing a positive number of low priority nodes or pools which are
+`native` mode enabled.

@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- Support to update Docker images in native container support pools via SSH
+
 ### Fixed
+- Custom image + native mode deployment for Linux pools
+- Potential command launch problems in native mode
 - Minor schema validation updates
-- AAD check logic for pool VNet join
+- AAD check logic for different points in pool allocation
+- `--ssh` parameter for `pool images update` was not correctly set as a flag
 
 ## [3.1.0] - 2018-01-30
 ### Added

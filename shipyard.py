@@ -1258,7 +1258,7 @@ def images(ctx):
 @click.option(
     '--singularity-image', help='Singularity image[:tag] to update')
 @click.option(
-    '--ssh', help='Update over SSH instead of using a Batch job')
+    '--ssh', is_flag=True, help='Update over SSH instead of using a Batch job')
 @common_options
 @batch_options
 @keyvault_options

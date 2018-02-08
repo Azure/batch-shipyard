@@ -558,6 +558,8 @@ pool. This command may require a valid SSH user.
       image or image:tag and a specific digest
     * `--singularity-image` will restrict the update to just the Singularity
       image or image:tag
+    * `--ssh` will force the update to occur over an SSH side channel rather
+      than a Batch job.
 * `list` will list all pools in the Batch account
 * `nodes del` will delete the specified node from the pool
     * `--all-start-task-failed` will delete all nodes in the start task

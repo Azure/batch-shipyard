@@ -976,62 +976,43 @@ def _construct_pool_object(
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set vm configuration
-    if util.is_not_empty(custom_image_na):
-        # check if AAD is enabled
-        if util.is_none_or_empty(bc.aad.directory_id):
-            raise RuntimeError(
-                'cannot allocate a pool with a custom image without AAD '
-                'credentials')
-        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
-        vmconfig = batchmodels.VirtualMachineConfiguration(
-            image_reference=batchmodels.ImageReference(
-                virtual_machine_image_id=pool_settings.
-                vm_configuration.arm_image_id,
-            ),
-            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
-        )
-        logger.debug('deploying custom image: {} node agent: {}'.format(
-            vmconfig.image_reference.virtual_machine_image_id,
-            vmconfig.node_agent_sku_id))
-        if native:
-            vmconfig.container_configuration = \
-                batchmodels.ContainerConfiguration(
-                    container_image_names=settings.
-                    global_resources_docker_images(config),
-                    container_registries=docker_registries,
-                )
-        start_task = [
-            '{npf}{a}{b}{c}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
-                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
-                a=' -a' if azurefile_vd else '',
-                b=' -b' if util.is_not_empty(block_for_gr) else '',
-                c=' -c' if azureblob_vd else '',
-                e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                f=' -f' if gluster_on_compute else '',
-                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                    sc_args) else '',
-                n=' -n' if settings.can_tune_tcp(
-                    pool_settings.vm_size) else '',
-                p=' -p {}'.format(bs.storage_entity_prefix)
-                if bs.storage_entity_prefix else '',
-                t=' -t {}'.format(torrentflags),
-                v=' -v {}'.format(__version__),
-                x=' -x {}'.format(data._BLOBXFER_VERSION),
+    if native:
+        if util.is_not_empty(custom_image_na):
+            # check if AAD is enabled
+            if util.is_not_empty(bc.account_key):
+                raise RuntimeError(
+                    'cannot allocate a pool with a custom image without AAD '
+                    'credentials')
+            vmconfig = batchmodels.VirtualMachineConfiguration(
+                image_reference=batchmodels.ImageReference(
+                    virtual_machine_image_id=pool_settings.
+                    vm_configuration.arm_image_id,
+                ),
+                node_agent_sku_id=pool_settings.vm_configuration.node_agent,
             )
-        ]
-    elif native:
-        image_ref, na_ref = _pick_node_agent_for_vm(
-            batch_client, pool_settings)
-        vmconfig = batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref,
-            node_agent_sku_id=na_ref,
-            container_configuration=batchmodels.ContainerConfiguration(
-                container_image_names=settings.global_resources_docker_images(
-                    config),
-                container_registries=docker_registries,
-            ),
+            logger.debug(
+                ('deploying custom image to pool in native mode: {} '
+                 'node agent: {}').format(
+                     vmconfig.image_reference.virtual_machine_image_id,
+                     vmconfig.node_agent_sku_id))
+        else:
+            image_ref, na_ref = _pick_node_agent_for_vm(
+                batch_client, pool_settings)
+            vmconfig = batchmodels.VirtualMachineConfiguration(
+                image_reference=image_ref,
+                node_agent_sku_id=na_ref,
+            )
+            logger.debug('deploying pool in native mode')
+        # attach container config
+        vmconfig.container_configuration = batchmodels.ContainerConfiguration(
+            container_image_names=settings.global_resources_docker_images(
+                config),
+            container_registries=docker_registries,
         )
         if is_windows:
+            if util.is_not_empty(custom_image_na):
+                raise RuntimeError(
+                    'Native mode and Windows custom images is not supported')
             _rflist.append(_NODEPREP_WINDOWS_FILE)
             start_task = [
                 ('powershell -ExecutionPolicy Unrestricted -command '
@@ -1059,6 +1040,42 @@ def _construct_pool_object(
                     x=' -x {}'.format(data._BLOBXFER_VERSION),
                 )
             ]
+    elif util.is_not_empty(custom_image_na):
+        # check if AAD is enabled
+        if util.is_not_empty(bc.account_key):
+            raise RuntimeError(
+                'cannot allocate a pool with a custom image without AAD '
+                'credentials')
+        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            image_reference=batchmodels.ImageReference(
+                virtual_machine_image_id=pool_settings.
+                vm_configuration.arm_image_id,
+            ),
+            node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+        )
+        logger.debug('deploying custom image: {} node agent: {}'.format(
+            vmconfig.image_reference.virtual_machine_image_id,
+            vmconfig.node_agent_sku_id))
+        start_task = [
+            '{npf}{a}{b}{c}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
+                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
+                a=' -a' if azurefile_vd else '',
+                b=' -b' if util.is_not_empty(block_for_gr) else '',
+                c=' -c' if azureblob_vd else '',
+                e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                f=' -f' if gluster_on_compute else '',
+                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
+                    sc_args) else '',
+                n=' -n' if settings.can_tune_tcp(
+                    pool_settings.vm_size) else '',
+                p=' -p {}'.format(bs.storage_entity_prefix)
+                if bs.storage_entity_prefix else '',
+                t=' -t {}'.format(torrentflags),
+                v=' -v {}'.format(__version__),
+                x=' -x {}'.format(data._BLOBXFER_VERSION),
+            )
+        ]
     else:
         _rflist.append(_NODEPREP_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
@@ -1585,10 +1602,9 @@ def _update_container_images(
     except KeyError:
         pass
     native = settings.is_native_docker_pool(config)
-    if native:
-        raise RuntimeError(
-            'cannot update container images for native container '
-            'support pools')
+    if native and not force_ssh:
+        logger.debug('forcing update via SSH due to native mode')
+        force_ssh = True
     # if image is not specified use images from global config
     singularity_images = None
     if util.is_none_or_empty(docker_image):

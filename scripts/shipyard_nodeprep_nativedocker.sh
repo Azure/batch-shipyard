@@ -8,6 +8,7 @@ MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
 # globals
 azurefile=0
+azureblob=0
 blobxferversion=latest
 encrypted=
 gluster_on_compute=0
@@ -16,12 +17,13 @@ sc_args=
 version=
 
 # process command line options
-while getopts "h?aef:m:nv:x:" opt; do
+while getopts "h?acef:m:nv:x:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep_nativedocker.sh parameters"
             echo ""
             echo "-a mount azurefile shares"
+            echo "-c mount azureblob containers"
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-m [type:scid] mount storage cluster"
@@ -33,6 +35,9 @@ while getopts "h?aef:m:nv:x:" opt; do
             ;;
         a)
             azurefile=1
+            ;;
+        c)
+            azureblob=1
             ;;
         e)
             encrypted=${OPTARG,,}
@@ -196,6 +201,30 @@ docker_pull_image() {
     set -e
 }
 
+install_local_packages() {
+    distrib=$1
+    shift
+    set +e
+    retries=120
+    while [ $retries -gt 0 ]; do
+        if [[ $distrib == "ubuntu" ]]; then
+            dpkg -i $*
+        else
+            rpm -Uvh --nodeps $*
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not install local packages: $*"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
 install_packages() {
     distrib=$1
     shift
@@ -213,6 +242,81 @@ install_packages() {
         let retries=retries-1
         if [ $retries -eq 0 ]; then
             echo "ERROR: Could not install packages: $*"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+refresh_package_index() {
+    distrib=$1
+    set +e
+    retries=120
+    while [ $retries -gt 0 ]; do
+        if [[ $distrib == "ubuntu" ]]; then
+            apt-get update
+        elif [[ $distrib == centos* ]]; then
+            yum makecache -y fast
+        else
+            echo "ERROR: Unknown distribution for refresh: $distrib"
+            exit 1
+        fi
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not update package index"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
+mount_azureblob_container() {
+    distrib=$1
+    release=$2
+    if [ $distrib == "ubuntu" ]; then
+        debfile=packages-microsoft-prod.deb
+        if [ ! -f ${debfile} ]; then
+            download_file https://packages.microsoft.com/config/ubuntu/16.04/${debfile}
+            install_local_packages $distrib ${debfile}
+            refresh_package_index $distrib
+            install_packages $distrib blobfuse
+        fi
+    elif [[ $distrib == centos* ]]; then
+        rpmfile=packages-microsoft-prod.rpm
+        if [ ! -f ${rpmfile} ]; then
+            download_file https://packages.microsoft.com/config/rhel/7/${rpmfile}
+            install_local_packages $distrib ${rpmfile}
+            refresh_package_index $distrib
+            install_packages $distrib blobfuse
+        fi
+    else
+        echo "ERROR: unsupported distribution for Azure blob: $distrib $release"
+        exit 1
+    fi
+    chmod +x azureblob-mount.sh
+    ./azureblob-mount.sh
+    chmod 700 azureblob-mount.sh
+    chown root:root azureblob-mount.sh
+    chmod 600 *.cfg
+    chown root:root *.cfg
+}
+
+download_file() {
+    retries=10
+    set +e
+    while [ $retries -gt 0 ]; do
+        curl -fSsLO $1
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        let retries=retries-1
+        if [ $retries -eq 0 ]; then
+            echo "ERROR: Could not download: $1"
             exit 1
         fi
         sleep 1

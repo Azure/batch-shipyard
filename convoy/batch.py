@@ -3326,9 +3326,15 @@ def _construct_task(
     mis = None
     if settings.is_multi_instance_task(_task):
         if util.is_not_empty(task.multi_instance.coordination_command):
-            cc = util.wrap_commands_in_shell(
-                task.multi_instance.coordination_command,
-                windows=is_windows, wait=False)
+            if native:
+                if is_windows:
+                    cc = ' && '.join(task.multi_instance.coordination_command)
+                else:
+                    cc = '; '.join(task.multi_instance.coordination_command)
+            else:
+                cc = util.wrap_commands_in_shell(
+                    task.multi_instance.coordination_command,
+                    windows=is_windows, wait=False)
         else:
             # no-op for singularity
             if is_singularity:
@@ -3464,7 +3470,13 @@ def _construct_task(
     del env_vars
     # create task
     if util.is_not_empty(task_commands):
-        tc = util.wrap_commands_in_shell(task_commands, windows=is_windows)
+        if native:
+            if is_windows:
+                tc = ' && '.join(task_commands)
+            else:
+                tc = '; '.join(task_commands)
+        else:
+            tc = util.wrap_commands_in_shell(task_commands, windows=is_windows)
     else:
         tc = ''
     batchtask = batchmodels.TaskAddParameter(
