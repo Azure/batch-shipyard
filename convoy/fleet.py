@@ -738,7 +738,7 @@ def _pool_virtual_network_subnet_address_space_check(
         logger.debug('no virtual network settings specified')
         return None
     # check if AAD is enabled
-    if network_client is None:
+    if util.is_not_empty(bc.account_key):
         raise RuntimeError(
             'cannot allocate a pool with a virtual network without AAD '
             'credentials')
