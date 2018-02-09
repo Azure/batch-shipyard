@@ -18,7 +18,7 @@ or via autoscale).
 backing metadata used by Batch Shipyard (i.e., the
 `batch_shipyard`:`storage_account_settings` option in the global
 configuration file).
-* If you must used a mixed-mode environment, please specify a different
+* If you must use a mixed-mode environment, please specify a different
 storage account (i.e., the `batch_shipyard`:`storage_account_settings`
 option) for metadata between the two versions in the global
 configuration file.
@@ -277,8 +277,8 @@ Please see this
 regarding when to choose `native` container support pools.
 
 ### Jobs Configuration Changes
-#### `docker_image` preferred over `image`
-In the tasks array, `docker_image` is now preferred over `image` for
+#### `docker_image` requires instead of `image`
+In the tasks array, `docker_image` is now required over `image` for
 disambiguation.
 
 #### Fully-qualified Docker image name required

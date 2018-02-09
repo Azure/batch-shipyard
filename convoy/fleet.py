@@ -660,6 +660,17 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
     :rtype: tuple
     :return: image reference to use, node agent id to use
     """
+    publisher = pool_settings.vm_configuration.publisher
+    offer = pool_settings.vm_configuration.offer
+    sku = pool_settings.vm_configuration.sku
+    # TODO special exception for CentOS HPC 7.1
+    if publisher == 'openlogic' and offer == 'centos-hpc' and sku == '7.1':
+        return ({
+            'publisher': publisher,
+            'offer': offer,
+            'sku': sku,
+            'version': pool_settings.vm_configuration.version,
+        }, 'batch.node.centos 7')
     # pick latest sku
     node_agent_skus = batch_client.account.list_node_agent_skus()
     skus_to_use = [
@@ -668,12 +679,9 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
             nas.verified_image_references,
             key=lambda item: item.sku
         )
-        if image_ref.publisher.lower() ==
-        pool_settings.vm_configuration.publisher.lower() and
-        image_ref.offer.lower() ==
-        pool_settings.vm_configuration.offer.lower() and
-        image_ref.sku.lower() ==
-        pool_settings.vm_configuration.sku.lower()
+        if image_ref.publisher.lower() == publisher and
+        image_ref.offer.lower() == offer and
+        image_ref.sku.lower() == sku
     ]
     try:
         sku_to_use, image_ref_to_use = skus_to_use[-1]

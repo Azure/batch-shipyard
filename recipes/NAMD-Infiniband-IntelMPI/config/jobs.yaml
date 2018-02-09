@@ -1,6 +1,7 @@
 job_specifications:
 - id: namdjob
   auto_complete: true
+  shm_size: 256m
   tasks:
   - docker_image: alfpark/namd:2.11-icc-mkl-intelmpi
     multi_instance:

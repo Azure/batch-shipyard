@@ -1,6 +1,7 @@
 job_specifications:
 - id: cntkjob
   auto_complete: true
+  shm_size: 256m
   tasks:
   - docker_image: alfpark/cntk:2.1-cpu-1bitsgd-py36-intelmpi-refdata
     multi_instance:

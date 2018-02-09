@@ -5,6 +5,9 @@
 ### Added
 - Support to update Docker images in native container support pools via SSH
 
+### Changed
+- Allow provisioning of OpenLogic CentOS-HPC 7.1
+
 ### Fixed
 - Custom image + native mode deployment for Linux pools
 - Potential command launch problems in native mode
