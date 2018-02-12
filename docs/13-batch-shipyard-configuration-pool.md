@@ -93,7 +93,9 @@ pool_specification:
   gpu:
     nvidia_driver:
       source: https://some.url
-  additional_node_prep_commands: []
+  additional_node_prep_commands:
+    pre: []
+    post: []
 ```
 
 The `pool_specification` property has the following members:
@@ -385,9 +387,14 @@ the driver for the `vm_size` specified.
     * `nvidia_driver` property contains the following required members:
         * `source` is the source url to download the driver. This should be
           the silent-installable driver package.
-* (optional) `additional_node_prep_commands` is an array of additional commands
-to execute on the compute node host as part of node preparation. This can
-be empty or omitted.
+* (optional) `additional_node_prep_commands` contains the following members:
+    * (optional) `pre` is an array of additional commands to execute on the
+      compute node host as part of node preparation which occur prior to
+      the Batch Shipyard node preparation steps. This is particularly useful
+      for preparing platform images with software for custom Linux mounts.
+    * (optional) `post` is an array of additional commands to execute on the
+      compute node host as part of node preparation which occur after the
+      Batch Shipyard node preparation steps.
 
 ## Full template
 A full template of a credentials file can be found

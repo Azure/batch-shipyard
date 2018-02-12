@@ -245,6 +245,11 @@ mapping:
               source:
                 type: str
       additional_node_prep_commands:
-        type: seq
-        sequence:
-          - type: str
+        type: map
+        mapping:
+          pre:
+            sequence:
+              - type: str
+          post:
+            sequence:
+              - type: str

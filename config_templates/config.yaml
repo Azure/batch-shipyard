@@ -41,7 +41,7 @@ global_resources:
         host_path: /tmp
         bind_options: rw
     shared_data_volumes:
-      azurefilevol:
+      azurefile_vol:
         volume_driver: azurefile
         storage_account_settings: mystorageaccount
         azure_file_share_name: myfileshare
@@ -50,19 +50,13 @@ global_resources:
         - file_mode=0777
         - dir_mode=0777
         bind_options: rw
-      azureblobvol:
+      azureblob_vol:
         volume_driver: azureblob
         storage_account_settings: mystorageaccount
         azure_blob_container_name: mycontainer
         container_path: $AZ_BATCH_NODE_SHARED_DIR/azblob
         mount_options:
         - --use-https=true
-        bind_options: rw
-      glustervol:
-        volume_driver: glusterfs_on_compute
-        container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
-        volume_type: replica
-        volume_options: []
         bind_options: rw
       nfs_server:
         volume_driver: storage_cluster
@@ -73,6 +67,22 @@ global_resources:
         volume_driver: storage_cluster
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_cluster
         mount_options: []
+        bind_options: null
+      glusterfs_on_compute_vol:
+        volume_driver: glusterfs_on_compute
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
+        volume_type: replica
+        volume_options: []
+        bind_options: rw
+      custom_vol:
+        volume_driver: custom_linux_mount
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/lustre
+        fstab_entry:
+          fs_spec: 10.1.0.4@tcp0:10.1.0.5@tcp0:/lustre
+          fs_vfstype: lustre
+          fs_mntops: defaults,_netdev
+          fs_freq: 0
+          fs_passno: 0
         bind_options: null
   files:
   - destination:

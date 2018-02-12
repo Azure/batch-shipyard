@@ -650,6 +650,29 @@ def _create_storage_cluster_mount_args(
     return (fstab_mount, sc_arg)
 
 
+def _create_custom_linux_mount_args(config, mount_name):
+    # type: (dict, str) -> str
+    """Create a custom linux mount fstab entry
+    :param dict config: configuration dict
+    :param str mount_name: mount name
+    :rtype: str
+    :return: fstab entry
+    """
+    sdv = settings.global_resources_shared_data_volumes(config)
+    fstab = settings.custom_linux_mount_fstab_options(sdv, mount_name)
+    fstab_mount = (
+        '{fs_spec} {hmp}/{name} {fs_vfstype} {fs_mntops} {fs_freq} '
+        '{fs_passno}').format(
+            fs_spec=fstab.fs_spec,
+            hmp=settings.get_host_mounts_path(False),
+            name=mount_name,
+            fs_vfstype=fstab.fs_vfstype,
+            fs_mntops=fstab.fs_mntops,
+            fs_freq=fstab.fs_freq,
+            fs_passno=fstab.fs_passno)
+    return fstab_mount
+
+
 def _pick_node_agent_for_vm(batch_client, pool_settings):
     # type: (azure.batch.batch_service_client.BatchServiceClient,
     #        settings.PoolSettings) -> (str, str)
@@ -838,6 +861,7 @@ def _construct_pool_object(
     azurefile_vd = False
     gluster_on_compute = False
     storage_cluster_mounts = []
+    custom_linux_mounts = []
     try:
         sdv = settings.global_resources_shared_data_volumes(config)
         for sdvkey in sdv:
@@ -854,6 +878,9 @@ def _construct_pool_object(
             elif settings.is_shared_data_volume_storage_cluster(
                     sdv, sdvkey):
                 storage_cluster_mounts.append(sdvkey)
+            elif settings.is_shared_data_volume_custom_linux_mount(
+                    sdv, sdvkey):
+                custom_linux_mounts.append(sdvkey)
             else:
                 raise ValueError('Unknown shared data volume: {}'.format(
                     settings.shared_data_volume_driver(sdv, sdvkey)))
@@ -893,18 +920,25 @@ def _construct_pool_object(
     subnet_id = _pool_virtual_network_subnet_address_space_check(
         resource_client, network_client, config, pool_settings, bc)
     # construct fstab mounts for storage clusters
-    fstab_mounts = []
+    sc_fstab_mounts = []
     sc_args = []
     if util.is_not_empty(storage_cluster_mounts):
         for sc_id in storage_cluster_mounts:
             fm, sca = _create_storage_cluster_mount_args(
                 compute_client, network_client, batch_mgmt_client, config,
                 sc_id, bc, subnet_id)
-            fstab_mounts.append(fm)
+            sc_fstab_mounts.append(fm)
             sc_args.append(sca)
         if settings.verbose(config):
             logger.debug('storage cluster args: {}'.format(sc_args))
     del storage_cluster_mounts
+    # constrcut fstab mounts for custom mounts
+    custom_linux_fstab_mounts = []
+    if util.is_not_empty(custom_linux_mounts):
+        for id in custom_linux_mounts:
+            custom_linux_fstab_mounts.append(
+                _create_custom_linux_mount_args(config, id))
+    del custom_linux_mounts
     # add encryption cert to account if specified
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
@@ -983,6 +1017,8 @@ def _construct_pool_object(
         gpu_env = None
     # get container registries
     docker_registries = settings.docker_registries(config)
+    # set additional start task commands (pre version)
+    start_task = pool_settings.additional_node_prep_commands_pre
     # set vm configuration
     if native:
         if util.is_not_empty(custom_image_na):
@@ -1022,7 +1058,7 @@ def _construct_pool_object(
                 raise RuntimeError(
                     'Native mode and Windows custom images is not supported')
             _rflist.append(_NODEPREP_WINDOWS_FILE)
-            start_task = [
+            start_task.append(
                 ('powershell -ExecutionPolicy Unrestricted -command '
                  '{npf}{a}{e}{v}{x}').format(
                      npf=_NODEPREP_WINDOWS_FILE[0],
@@ -1030,10 +1066,10 @@ def _construct_pool_object(
                      e=' -e {}'.format(pfx.sha1) if encrypt else '',
                      v=' -v {}'.format(__version__),
                      x=' -x {}'.format(data._BLOBXFER_VERSION))
-            ]
+            )
         else:
             _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
-            start_task = [
+            start_task.append(
                 '{npf}{a}{c}{e}{f}{m}{n}{v}{x}'.format(
                     npf=_NODEPREP_NATIVEDOCKER_FILE[0],
                     a=' -a' if azurefile_vd else '',
@@ -1047,7 +1083,7 @@ def _construct_pool_object(
                     v=' -v {}'.format(__version__),
                     x=' -x {}'.format(data._BLOBXFER_VERSION),
                 )
-            ]
+            )
     elif util.is_not_empty(custom_image_na):
         # check if AAD is enabled
         if util.is_not_empty(bc.account_key):
@@ -1065,7 +1101,7 @@ def _construct_pool_object(
         logger.debug('deploying custom image: {} node agent: {}'.format(
             vmconfig.image_reference.virtual_machine_image_id,
             vmconfig.node_agent_sku_id))
-        start_task = [
+        start_task.append(
             '{npf}{a}{b}{c}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
                 npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
                 a=' -a' if azurefile_vd else '',
@@ -1083,7 +1119,7 @@ def _construct_pool_object(
                 v=' -v {}'.format(__version__),
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
             )
-        ]
+        )
     else:
         _rflist.append(_NODEPREP_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
@@ -1093,7 +1129,7 @@ def _construct_pool_object(
             node_agent_sku_id=na_ref,
         )
         # create start task commandline
-        start_task = [
+        start_task.append(
             '{npf}{a}{b}{c}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
@@ -1115,8 +1151,8 @@ def _construct_pool_object(
                 v=' -v {}'.format(__version__),
                 w=' -w' if pool_settings.ssh.hpn_server_swap else '',
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
-            ),
-        ]
+            )
+        )
     # upload resource files
     sas_urls = storage.upload_resource_files(blob_client, config, _rflist)
     del _rflist
@@ -1139,9 +1175,8 @@ def _construct_pool_object(
     if addlcmds is not None:
         start_task.append(addlcmds)
     del addlcmds
-    # add additional start task commands, these should always be the last
-    # start task commands
-    start_task.extend(pool_settings.additional_node_prep_commands)
+    # add additional start task commands (post version)
+    start_task.extend(pool_settings.additional_node_prep_commands_post)
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
@@ -1237,15 +1272,24 @@ def _construct_pool_object(
             subnet_id=subnet_id,
         )
     # storage cluster settings
-    if util.is_not_empty(fstab_mounts):
+    if util.is_not_empty(sc_fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_STORAGE_CLUSTER_FSTAB',
-                '#'.join(fstab_mounts)
+                '#'.join(sc_fstab_mounts)
             )
         )
         del sc_args
-        del fstab_mounts
+        del sc_fstab_mounts
+    # custom linux mount settings
+    if util.is_not_empty(custom_linux_fstab_mounts):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                'SHIPYARD_CUSTOM_MOUNTS_FSTAB',
+                '#'.join(custom_linux_fstab_mounts)
+            )
+        )
+        del custom_linux_fstab_mounts
     # add optional environment variables
     if not native and bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
@@ -2107,6 +2151,11 @@ def _adjust_settings_for_pool_creation(config):
                         ('azure blob mounting is not supported '
                          'on publisher={} offer={} sku={}').format(
                              publisher, offer, sku))
+            elif settings.is_shared_data_volume_custom_linux_mount(
+                    sdv, sdvkey):
+                if is_windows:
+                    raise ValueError(
+                        'custom linux mounting is not supported on windows')
         if num_gluster > 1:
             raise ValueError(
                 'cannot create more than one GlusterFS on compute volume '

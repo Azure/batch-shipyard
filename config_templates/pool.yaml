@@ -1,5 +1,5 @@
 pool_specification:
-  id: dockerpool
+  id: batch-shipyard-pool
   vm_configuration:
     platform_image:
       publisher: Canonical
@@ -85,4 +85,6 @@ pool_specification:
   gpu:
     nvidia_driver:
       source: https://some.url
-  additional_node_prep_commands: []
+  additional_node_prep_commands:
+    pre: []
+    post: []

@@ -82,9 +82,11 @@ mapping:
                         required: true
               network_security:
                 type: map
+                required: true
                 mapping:
                   ssh:
                     type: seq
+                    required: true
                     sequence:
                       - type: str
                   nfs:

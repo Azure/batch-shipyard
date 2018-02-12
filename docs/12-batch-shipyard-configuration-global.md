@@ -45,7 +45,7 @@ global_resources:
         host_path: /tmp
         bind_options: rw
     shared_data_volumes:
-      azurefilevol:
+      azurefile_vol:
         volume_driver: azurefile
         storage_account_settings: mystorageaccount
         azure_file_share_name: myfileshare
@@ -54,19 +54,13 @@ global_resources:
         - file_mode=0777
         - dir_mode=0777
         bind_options: rw
-      azureblobvol:
+      azureblob_vol:
         volume_driver: azureblob
         storage_account_settings: mystorageaccount
         azure_blob_container_name: mycontainer
         container_path: $AZ_BATCH_NODE_SHARED_DIR/azblob
         mount_options:
         - --use-https=true
-        bind_options: rw
-      glustervol:
-        volume_driver: glusterfs_on_compute
-        container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
-        volume_type: replica
-        volume_options: []
         bind_options: rw
       nfs_server:
         volume_driver: storage_cluster
@@ -77,6 +71,22 @@ global_resources:
         volume_driver: storage_cluster
         container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_cluster
         mount_options: []
+        bind_options: null
+      glusterfs_on_compute_vol:
+        volume_driver: glusterfs_on_compute
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/glusterfs_on_compute
+        volume_type: replica
+        volume_options: []
+        bind_options: rw
+      custom_vol:
+        volume_driver: custom_linux_mount
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/lustre
+        fstab_entry:
+          fs_spec: 10.1.0.4@tcp0:10.1.0.5@tcp0:/lustre
+          fs_vfstype: lustre
+          fs_mntops: defaults,_netdev
+          fs_freq: 0
+          fs_passno: 0
         bind_options: null
   files:
   - destination:
@@ -406,7 +416,35 @@ available options.
 `ro` for read-only, `rw` for read-write. If unspecified or `null`, this
 defaults to `rw`.
 
-The third shared volume, `glustervol`, is a
+The third shared volume, `nfs_server` is an NFS server that is to be
+mounted on to compute node hosts. The name `nfs_server` should match the
+`remote_fs`:`storage_cluster`:`id` specified as your NFS server. These NFS
+servers can be configured using the `fs` command in Batch Shipyard. These
+volumes have the following properties:
+
+* (required) `volume_driver` property should be set as `storage_cluster`.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `mount_options` property defines additional mount options
+to pass when mounting this file system to the compute node.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
+
+The fourth shared volume, `glusterfs_cluster` is a GlusterFS cluster that is
+mounted on to compute node hosts. The name `glusterfs_cluster` should match
+the `remote_fs`:`storage_cluster`:`id` specified as your GlusterFS cluster.
+These GlusterFS clusters can be configured using the `fs` command in Batch
+Shipyard. These volumes have the following properties:
+
+* (required) `volume_driver` property should be set as `storage_cluster`.
+* (required) `container_path` is the path in the container to mount.
+* (optional) `mount_options` property defines additional mount options
+to pass when mounting this file system to the compute node.
+* (optional) `bind_options` are the bind options to use, typically one of
+`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
+defaults to `rw`.
+
+The fifth shared volume, `glustervol`, is a
 [GlusterFS](https://www.gluster.org/) network file system. Please note that
 `glusterfs_on_compute` are GlusterFS volumes co-located on the VM's temporary
 local disk space which is a shared resource. Sizes of the local temp disk for
@@ -435,30 +473,29 @@ Note that when resizing a pool with a `glusterfs_on_compute` shared file
 systems that you must resize with the `pool resize` command in `shipyard.py`
 and not with Azure Portal, Batch Labs or any other tool.
 
-The fourth shared volume, `nfs_server` is an NFS server that is to be
-mounted on to compute node hosts. The name `nfs_server` should match the
-`remote_fs`:`storage_cluster`:`id` specified as your NFS server. These NFS
-servers can be configured using the `fs` command in Batch Shipyard. These
-volumes have the following properties:
+The sixth shared volume, `custom_vol` is a custom Linux mount volume. This can
+be used to specify a custom filesystem mount where you would join the Batch
+compute nodes to an existing filesystem that is accessible (within the virtual
+network or publicly). Note that if the software and userland utilities do
+not exist by default on the host, mounting of these custom volumes will
+fail. Ensure that you have either populated the pool
+`additional_node_prep_commands`:`pre` with the proper commands to install
+the software or have prepared a custom image with the appropriate software.
+These volumes have the following properties:
 
-* (required) `volume_driver` property should be set as `storage_cluster`.
+* (required) `volume_driver` property should be set as `custom_linux_mount`.
 * (required) `container_path` is the path in the container to mount.
-* (optional) `mount_options` property defines additional mount options
-to pass when mounting this file system to the compute node.
-* (optional) `bind_options` are the bind options to use, typically one of
-`ro` for read-only, `rw` for read-write. If unspecified or `null`, this
-defaults to `rw`.
-
-The fifth shared volume, `glusterfs_cluster` is a GlusterFS cluster that is
-mounted on to compute node hosts. The name `glusterfs_cluster` should match
-the `remote_fs`:`storage_cluster`:`id` specified as your GlusterFS cluster.
-These GlusterFS clusters can be configured using the `fs` command in Batch
-Shipyard. These volumes have the following properties:
-
-* (required) `volume_driver` property should be set as `storage_cluster`.
-* (required) `container_path` is the path in the container to mount.
-* (optional) `mount_options` property defines additional mount options
-to pass when mounting this file system to the compute node.
+* (required) `fstab_entry` are the required
+[fstab components](http://man7.org/linux/man-pages/man5/fstab.5.html):
+    * (required) `fs_spec` is the first field, which is the bock special
+      device or the remote filesystem to be mounted
+    * (required) `fs_vfstype` is the third field, which is the filesystem type
+    * (optional) `fs_mntops` is the fourth field, which is the mount options
+      associated by the filesystem. If this is omitted, `defaults` is supplied.
+      Note that `mount_options` property used in other shared data volumes is
+      not used.
+    * (optional) `fs_freq` is the fifth field, which is used by dump
+    * (optional) `fs_passno` is the sixth field, which is used by fsck
 * (optional) `bind_options` are the bind options to use, typically one of
 `ro` for read-only, `rw` for read-write. If unspecified or `null`, this
 defaults to `rw`.

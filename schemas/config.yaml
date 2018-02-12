@@ -104,7 +104,7 @@ mapping:
                 mapping:
                   volume_driver:
                     type: str
-                    enum: ['azureblob', 'azurefile', 'glusterfs_on_compute', 'storage_cluster']
+                    enum: ['azureblob', 'azurefile', 'custom_linux_mount', 'glusterfs_on_compute', 'storage_cluster']
                     required: true
                   container_path:
                     type: str
@@ -126,6 +126,21 @@ mapping:
                     type: seq
                     sequence:
                       - type: str
+                  fstab_entry:
+                    type: map
+                    mapping:
+                      fs_spec:
+                        type: str
+                        required: true
+                      fs_vfstype:
+                        type: str
+                        required: true
+                      fs_mntops:
+                        type: str
+                      fs_freq:
+                        type: int
+                      fs_passno:
+                        type: int
                   bind_options:
                     type: str
                     enum: ['ro', 'rw']

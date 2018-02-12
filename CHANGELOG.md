@@ -3,10 +3,16 @@
 ## [Unreleased]
 
 ### Added
-- Support to update Docker images in native container support pools via SSH
+- Custom Linux Mount support for `shared_data_volumes`. Please see the
+global configuration doc for more information.
+- `shipyard pool images update` command now supports updating Docker images
+in native container support pools via SSH
 
 ### Changed
 - Allow provisioning of OpenLogic CentOS-HPC 7.1
+- `additional_node_prep_commands` is now a dictionary of `pre` and `post`
+properties which are executed either before or after the Batch Shipyard
+startup task. Please see the pool configuration doc for more information.
 
 ### Fixed
 - Custom image + native mode deployment for Linux pools

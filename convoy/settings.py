@@ -171,8 +171,9 @@ PoolSettings = collections.namedtuple(
         'reboot_on_start_task_failed', 'attempt_recovery_on_unusable',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
-        'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands',
-        'virtual_network', 'autoscale', 'node_fill_type',
+        'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
+        'additional_node_prep_commands_post', 'virtual_network',
+        'autoscale', 'node_fill_type',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -357,6 +358,11 @@ StorageClusterSettings = collections.namedtuple(
 RemoteFsSettings = collections.namedtuple(
     'RemoteFsSettings', [
         'location', 'managed_disks', 'storage_cluster',
+    ]
+)
+CustomMountFstabSettings = collections.namedtuple(
+    'CustomMountFstabSettings', [
+        'fs_spec', 'fs_vfstype', 'fs_mntops', 'fs_freq', 'fs_passno',
     ]
 )
 
@@ -990,12 +996,12 @@ def pool_settings(config):
             raise KeyError()
     except KeyError:
         gpu_driver = None
-    try:
-        additional_node_prep_commands = conf['additional_node_prep_commands']
-        if util.is_none_or_empty(additional_node_prep_commands):
-            raise KeyError()
-    except KeyError:
-        additional_node_prep_commands = []
+    addl_node_prep = _kv_read_checked(
+        conf, 'additional_node_prep_commands', default={})
+    additional_node_prep_commands_pre = _kv_read_checked(
+        addl_node_prep, 'pre', default=[])
+    additional_node_prep_commands_post = _kv_read_checked(
+        addl_node_prep, 'post', default=[])
     return PoolSettings(
         id=conf['id'],
         vm_size=conf['vm_size'].lower(),  # normalize
@@ -1026,7 +1032,8 @@ def pool_settings(config):
             password=rdp_password,
         ),
         gpu_driver=gpu_driver,
-        additional_node_prep_commands=additional_node_prep_commands,
+        additional_node_prep_commands_pre=additional_node_prep_commands_pre,
+        additional_node_prep_commands_post=additional_node_prep_commands_post,
         virtual_network=virtual_network_settings(
             conf,
             default_existing_ok=True,
@@ -2070,7 +2077,10 @@ def shared_data_volume_mount_options(sdv, sdvkey):
     :return: shared data volume mount options
     """
     try:
-        mo = sdv[sdvkey]['mount_options']
+        if is_shared_data_volume_custom_linux_mount(sdv, sdvkey):
+            mo = sdv[sdvkey]['fstab_entry']['fs_mntops']
+        else:
+            mo = sdv[sdvkey]['mount_options']
     except KeyError:
         mo = None
     return mo
@@ -2173,6 +2183,42 @@ def gluster_volume_options(sdv, sdvkey):
     return vo
 
 
+def custom_linux_mount_fstab_options(sdv, sdvkey):
+    # type: (dict, str) -> str
+    """Get custom mount fstab options
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: str
+    :return: custom mount fstab options
+    """
+    try:
+        fstab = sdv[sdvkey]['fstab_entry']
+        if util.is_none_or_empty(fstab):
+            raise KeyError()
+        fs_spec = _kv_read_checked(fstab, 'fs_spec')
+        if util.is_none_or_empty(fs_spec):
+            raise ValueError(
+                ('fs_spec for fstab_entry of custom mount {} is '
+                 'invalid').format(sdvkey))
+        fs_vfstype = _kv_read_checked(fstab, 'fs_vfstype')
+        if util.is_none_or_empty(fs_vfstype):
+            raise ValueError(
+                ('fs_vfstype for fstab_entry of custom mount {} is '
+                 'invalid').format(sdvkey))
+        fs_mntops = _kv_read_checked(fstab, 'fs_mntops', default='defaults')
+        fs_freq = _kv_read(fstab, 'fs_freq', default=0)
+        fs_passno = _kv_read(fstab, 'fs_passno', default=0)
+    except KeyError:
+        return None
+    return CustomMountFstabSettings(
+        fs_spec=fs_spec,
+        fs_vfstype=fs_vfstype,
+        fs_mntops=fs_mntops,
+        fs_freq=fs_freq,
+        fs_passno=fs_passno,
+    )
+
+
 def is_shared_data_volume_azure_file(sdv, sdvkey):
     # type: (dict, str) -> bool
     """Determine if shared data volume is an azure file share
@@ -2216,6 +2262,19 @@ def is_shared_data_volume_storage_cluster(sdv, sdvkey):
     :return: if shared data volume is storage_cluster
     """
     return shared_data_volume_driver(sdv, sdvkey).lower() == 'storage_cluster'
+
+
+def is_shared_data_volume_custom_linux_mount(sdv, sdvkey):
+    # type: (dict, str) -> bool
+    """Determine if shared data volume is a custom linux mount
+    :param dict sdv: shared_data_volume configuration object
+    :param str sdvkey: key to sdv
+    :rtype: bool
+    :return: if shared data volume is a custom linux mount
+    """
+    return (
+        shared_data_volume_driver(sdv, sdvkey).lower() == 'custom_linux_mount'
+    )
 
 
 # INPUT AND OUTPUT DATA SETTINGS
@@ -3088,6 +3147,13 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 run_opts.append('{} {}:{}{}'.format(
                     bindparm,
                     hmp,
+                    shared_data_volume_container_path(sdv, sdvkey),
+                    bindopt))
+            elif is_shared_data_volume_custom_linux_mount(sdv, sdvkey):
+                run_opts.append('{} {}/{}:{}{}'.format(
+                    bindparm,
+                    _HOST_MOUNTS_DIR,
+                    sdvkey,
                     shared_data_volume_container_path(sdv, sdvkey),
                     bindopt))
             else:

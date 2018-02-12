@@ -285,20 +285,20 @@ singularity_setup() {
     shift
     if [ $offer == "ubuntu" ]; then
         if [[ $sku != 16.04* ]]; then
-            echo "Singularity not supported on $offer $sku"
+            echo "WARN: Singularity not supported on $offer $sku"
             return
         fi
         singularity_basedir=/mnt/singularity
     elif [[ $offer == "centos" ]] || [[ $offer == "rhel" ]]; then
         if [[ $sku != 7* ]]; then
-            echo "Singularity not supported on $offer $sku"
+            echo "WARN: Singularity not supported on $offer $sku"
             return
         fi
         singularity_basedir=/mnt/resource/singularity
         offer=centos
         sku=7
     else
-        echo "Singularity not supported on $offer $sku"
+        echo "WARN: Singularity not supported on $offer $sku"
         return
     fi
     # fetch docker image for singularity bits
@@ -340,6 +340,39 @@ singularity_setup() {
     docker rmi $di
 }
 
+process_fstab_entry() {
+    desc=$1
+    mountpoint=$2
+    fstab_entry=$3
+    echo "INFO: Creating host directory for $desc at $mountpoint"
+    mkdir -p $mountpoint
+    chmod 777 $mountpoint
+    echo "INFO: Adding $mountpoint to fstab"
+    echo $fstab_entry >> /etc/fstab
+    tail -n1 /etc/fstab
+    echo "INFO: Mounting $mountpoint"
+    START=$(date -u +"%s")
+    set +e
+    while :
+    do
+        mount $mountpoint
+        if [ $? -eq 0 ]; then
+            break
+        else
+            NOW=$(date -u +"%s")
+            DIFF=$((($NOW-$START)/60))
+            # fail after 5 minutes of attempts
+            if [ $DIFF -ge 5 ]; then
+                echo "ERROR: Could not mount $desc on $mountpoint"
+                exit 1
+            fi
+            sleep 1
+        fi
+    done
+    set -e
+    echo "INFO: $mountpoint mounted."
+}
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -368,6 +401,7 @@ echo "Distrib ID/Release: $DISTRIB_ID $DISTRIB_RELEASE"
 echo "Network optimization: $networkopt"
 echo "Encrypted: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
+echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
 echo "P2P: $p2penabled"
 echo "Azure File: $azurefile"
 echo "Azure Blob: $azureblob"
@@ -469,37 +503,20 @@ if [ ! -z $sc_args ]; then
     i=0
     for sc_arg in ${sc_args[@]}; do
         IFS=':' read -ra sc <<< "$sc_arg"
-        mountpoint=$MOUNTS_PATH/${sc[1]}
-        echo "Creating host directory for storage cluster $sc_arg at $mountpoint"
-        mkdir -p $mountpoint
-        chmod 777 $mountpoint
-        echo "Adding $mountpoint to fstab"
-        # eval fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_entry="${fstabs[$i]}"
-        echo $fstab_entry >> /etc/fstab
-        tail -n1 /etc/fstab
-        echo "Mounting $mountpoint"
-        START=$(date -u +"%s")
-        set +e
-        while :
-        do
-            mount $mountpoint
-            if [ $? -eq 0 ]; then
-                break
-            else
-                NOW=$(date -u +"%s")
-                DIFF=$((($NOW-$START)/60))
-                # fail after 5 minutes of attempts
-                if [ $DIFF -ge 5 ]; then
-                    echo "Could not mount storage cluster $sc_arg on: $mountpoint"
-                    exit 1
-                fi
-                sleep 1
-            fi
-        done
-        set -e
-        echo "$mountpoint mounted."
+        process_fstab_entry "$sc_arg" "$MOUNTS_PATH/${sc[1]}" "$fstab_entry"
         i=$(($i + 1))
+    done
+fi
+
+# mount any custom mounts
+if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
+    IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
+    for fstab in "${fstab_mounts[@]}"; do
+        # eval and split fstab var to expand vars
+        fstab_entry=$(eval echo "$fstab")
+        IFS=' ' read -ra parts <<< "$fstab_entry"
+        process_fstab_entry "${parts[2]}" "${parts[1]}" "$fstab_entry"
     done
 fi
 
