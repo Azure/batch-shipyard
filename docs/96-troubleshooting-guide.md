@@ -144,6 +144,19 @@ on occasion. In these circumstances, you can delete the affected nodes
 with `pool nodes del --all-unusable` and then resize back up with `pool resize`
 or recreate the pool.
 
+#### Pool creation fails due to `Could not find an Azure Batch Node Agent Sku`
+If you are using a `platform_image`, you may encounter an error such as:
+
+```
+RuntimeError: Could not find an Azure Batch Node Agent Sku for this
+offer=abc publisher=def sku=xyz. You can list the valid and available
+Marketplace images with the command: pool listskus
+```
+
+This problem can happen if you are specifying a `sku` that is not listed
+by the `pool listskus` command. You will need to update your `sku` field
+to one that is listed.
+
 ## <a name="task"></a>Job/Task Execution Issues
 #### Task is submitted but doesn't run
 There are various reasons why this would happen:

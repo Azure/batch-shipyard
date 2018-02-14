@@ -1,4 +1,4 @@
-adal==0.4.7
+adal==0.5.0
 azure-batch==4.0.0
 azure-cosmosdb-table==1.0.1
 azure-keyvault==0.3.7
@@ -12,8 +12,8 @@ azure-storage-file==1.1.0
 blobxfer==1.1.1
 click==6.7
 future==0.16.0
-msrest==0.4.25
-msrestazure==0.4.20
+msrest==0.4.26
+msrestazure==0.4.21
 pathlib2==2.3.0; python_version < '3.5'
 python-dateutil==2.6.1
 requests==2.18.4

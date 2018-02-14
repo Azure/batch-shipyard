@@ -7,12 +7,14 @@
 global configuration doc for more information.
 - `shipyard pool images update` command now supports updating Docker images
 in native container support pools via SSH
+- Add support for CentOS 7.4 and Debian 9 compute node hosts
 
 ### Changed
 - Allow provisioning of OpenLogic CentOS-HPC 7.1
 - `additional_node_prep_commands` is now a dictionary of `pre` and `post`
 properties which are executed either before or after the Batch Shipyard
 startup task. Please see the pool configuration doc for more information.
+- Update dependencies to latest
 
 ### Fixed
 - Custom image + native mode deployment for Linux pools
@@ -20,6 +22,9 @@ startup task. Please see the pool configuration doc for more information.
 - Minor schema validation updates
 - AAD check logic for different points in pool allocation
 - `--ssh` parameter for `pool images update` was not correctly set as a flag
+- `--jobs` was not properly being merged with `--configdir` (#163)
+- Fix regression in `shipyard pool images update` that would not login to
+registries in multi-instance mode
 
 ## [3.1.0] - 2018-01-30
 ### Added

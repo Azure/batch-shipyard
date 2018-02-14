@@ -47,6 +47,8 @@ factors that Batch Shipyard has no control over.
   tag if using the git repository for consuming releases, or using a
   specific release tag for the Batch Shipyard CLI Docker image. This will
   allow you to upgrade on your schedule and at your own convenience.
+* At most two versions of a host operating system are supported at any
+  one time.
 
 #### Feature X is missing. Can you add support for it?
 * Please open an [issue](https://github.com/Azure/batch-shipyard/issues)

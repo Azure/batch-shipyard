@@ -3043,16 +3043,17 @@ def generate_docker_login_settings(config, for_ssh=False):
                     'SINGULARITY_LOGIN_PASSWORD',
                     crypto.encrypt_string(encrypt, value, config))
             )
-        # if ssh append script execution
+        # unset env for ssh
         if for_ssh:
             env = None
-            start_mnt = '/'.join((
-                settings.temp_disk_mountpoint(config),
-                'batch', 'tasks', 'startup',
-            ))
-            cmd.append('cd {}/wd'.format(start_mnt))
-            cmd.append('./registry_login.sh{}'.format(
-                ' -e' if encrypt else ''))
+        # append script execution
+        start_mnt = '/'.join((
+            settings.temp_disk_mountpoint(config),
+            'batch', 'tasks', 'startup',
+        ))
+        cmd.append('pushd {}/wd'.format(start_mnt))
+        cmd.append('./registry_login.sh{}'.format(' -e' if encrypt else ''))
+        cmd.append('popd')
     return env, cmd
 
 

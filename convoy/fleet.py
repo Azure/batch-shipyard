@@ -686,14 +686,16 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # TODO special exception for CentOS HPC 7.1
-    if publisher == 'openlogic' and offer == 'centos-hpc' and sku == '7.1':
-        return ({
-            'publisher': publisher,
-            'offer': offer,
-            'sku': sku,
-            'version': pool_settings.vm_configuration.version,
-        }, 'batch.node.centos 7')
+    # TODO special exception for CentOS HPC 7.1 and normal 7.3
+    if publisher == 'openlogic':
+        if ((offer == 'centos-hpc' and sku == '7.1') or
+                (offer == 'centos' and sku == '7.3')):
+            return ({
+                'publisher': publisher,
+                'offer': offer,
+                'sku': sku,
+                'version': pool_settings.vm_configuration.version,
+            }, 'batch.node.centos 7')
     # pick latest sku
     node_agent_skus = batch_client.account.list_node_agent_skus()
     skus_to_use = [
@@ -1754,10 +1756,7 @@ def _update_container_images(
     if force_ssh:
         _update_container_images_over_ssh(batch_client, config, pool, coordcmd)
         return
-    if is_windows:
-        coordcmd.append('copy /y nul .update_images_success')
-    else:
-        coordcmd.append('touch .update_images_success')
+    if not is_windows:
         # update taskenv for Singularity
         taskenv.append(
             batchmodels.EnvironmentSetting(
@@ -1793,19 +1792,15 @@ def _update_container_images(
         )
         # create application command line
         if is_windows:
-            appcmd = util.wrap_commands_in_shell([
-                'if not exist %AZ_BATCH_TASK_WORKING_DIR%\\'
-                '.update_images_success exit 1'
-            ], windows=is_windows)
+            appcmd = util.wrap_commands_in_shell(['rem'], windows=is_windows)
         else:
-            appcmd = util.wrap_commands_in_shell([
-                '[[ -f $AZ_BATCH_TASK_WORKING_DIR/.update_images_success ]] '
-                '|| exit 1'
-            ], windows=is_windows)
+            appcmd = util.wrap_commands_in_shell([':'], windows=is_windows)
         batchtask.command_line = appcmd
     # add job and task
     batch_client.job.add(job)
     batch_client.task.add(job_id=job_id, task=batchtask)
+    if settings.verbose(config):
+        logger.debug('executing update command: {}'.format(coordcmd))
     logger.debug(
         ('waiting for update container images task {} in job {} '
          'to complete').format(batchtask.id, job_id))
@@ -1815,39 +1810,13 @@ def _update_container_images(
         if batchtask.state == batchmodels.TaskState.completed:
             break
         time.sleep(1)
-    # ensure all nodes have success file if multi-instance
-    success = True
-    if pool.current_dedicated_nodes > 1:
-        if is_windows:
-            sep = '\\'
-        else:
-            sep = '/'
-        uis_file = sep.join(
-            ('workitems', job_id, 'job-1', batchtask.id, 'wd',
-             '.update_images_success')
-        )
-        nodes = batch_client.compute_node.list(pool_id)
-        for node in nodes:
-            try:
-                batch_client.file.get_properties_from_compute_node(
-                    pool_id, node.id, uis_file)
-            except batchmodels.BatchErrorException:
-                logger.error(
-                    'update images success file absent on node {}'.format(
-                        node.id))
-                success = False
-                break
-    else:
-        task = batch_client.task.get(job_id, batchtask.id)
-        if task.execution_info is None or task.execution_info.exit_code != 0:
-            success = False
-            # stream stderr to console
-            batch.stream_file_and_wait_for_task(
-                batch_client, config,
-                '{},{},stderr.txt'.format(batchtask.id, job_id))
-    # delete job
+    # stream out the stdout file for diagnosis of issues
+    batch.stream_file_and_wait_for_task(
+        batch_client, config, filespec='{},{},{}'.format(
+            job_id, batchtask.id, 'stdout.txt'))
+    # clean up
     batch_client.job.delete(job_id)
-    if not success:
+    if batchtask.execution_info.exit_code != 0:
         raise RuntimeError('update container images job failed')
     logger.info(
         'update container images task {} in job {} completed'.format(

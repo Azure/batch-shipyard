@@ -676,6 +676,17 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gpgkey=https://download.docker.com/linux/debian/gpg
         repo=https://download.docker.com/linux/debian
         dockerversion=${dockerversion}debian
+    elif [[ $sku == "9" ]]; then
+        name=debian-stretch
+        srvstart="systemctl start docker.service"
+        srvstop="systemctl stop docker.service"
+        srvenable="systemctl enable docker.service"
+        srvstatus="systemctl status docker.service"
+        gfsstart="systemctl start glusterd.service"
+        gfsenable="systemctl enable glusterd.service"
+        gpgkey=https://download.docker.com/linux/debian/gpg
+        repo=https://download.docker.com/linux/debian
+        dockerversion=${dockerversion}debian
     else
         echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
@@ -695,7 +706,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     # refresh package index
     refresh_package_index $offer
     # install required software first
-    install_packages $offer apt-transport-https ca-certificates curl software-properties-common
+    install_packages $offer apt-transport-https ca-certificates curl gnupg2 software-properties-common
     if [ $name == "ubuntu-trusty" ]; then
         install_packages $offer linux-image-extra-$(uname -r) linux-image-extra-virtual
     fi
@@ -715,7 +726,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         $srvstop
         set +e
         rm -f /var/lib/docker/network/files/local-kv.db
-        if [ $name == "debian-jessie" ]; then
+        if [[ $name == debian* ]]; then
             mkdir -p /mnt/resource/docker-tmp
             sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
@@ -724,7 +735,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/docker-tmp\" >> /etc/default/docker
             sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
         fi
-        if [[ $name == "ubuntu-xenial" ]] || [[ $name == "debian-jessie" ]]; then
+        if [ "$name" != "ubuntu-trusty" ]; then
             sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
             sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
             set -e
@@ -774,7 +785,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir --upgrade pip
         pip3 install --no-cache-dir --upgrade wheel setuptools
-        pip3 install --no-cache-dir azure-cosmosdb-table==1.0.1 azure-storage-blob==0.37.1
+        pip3 install --no-cache-dir azure-cosmosdb-table==1.0.1 azure-storage-common==1.1.0 azure-storage-blob==1.1.0
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             install_packages $offer python3-libtorrent pigz

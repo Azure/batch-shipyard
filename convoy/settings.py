@@ -565,11 +565,12 @@ def gpu_configuration_check(config, vm_size=None):
     elif (publisher == 'canonical' and offer == 'ubuntuserver' and
             sku > '16.04'):
         return True
-    elif (publisher == 'openlogic' and
-          (offer == 'centos' or offer == 'centos-hpc') and sku == '7.3'):
-        return True
-    else:
-        return False
+    elif publisher == 'openlogic':
+        if offer == 'centos-hpc' and sku == '7.3':
+            return True
+        elif offer == 'centos' and sku == '7.3':
+            return True
+    return False
 
 
 def is_native_docker_pool(config, vm_config=None):
