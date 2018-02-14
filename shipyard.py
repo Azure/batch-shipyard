@@ -85,6 +85,18 @@ class CliContext(object):
         # management options
         self.subscription_id = None
 
+    @staticmethod
+    def ensure_pathlib_conf(conf):
+        # type: (Any) -> pathlib.Path
+        """Ensure conf object is a pathlib object
+        :param str or pathlib.Path or None conf: conf object
+        :rtype: pathlib.Path or None
+        :return: conf object as pathlib
+        """
+        if conf is not None and not isinstance(conf, pathlib.Path):
+            conf = pathlib.Path(conf)
+        return conf
+
     def initialize_for_fs(self):
         # type: (CliContext) -> None
         """Initialize context for fs commands
@@ -253,8 +265,8 @@ class CliContext(object):
         self.conf_credentials = self._form_conf_path(
             self.conf_credentials, 'credentials')
         if self.conf_credentials is not None:
-            if not isinstance(self.conf_credentials, pathlib.Path):
-                self.conf_credentials = pathlib.Path(self.conf_credentials)
+            self.conf_credentials = CliContext.ensure_pathlib_conf(
+                self.conf_credentials)
             if self.conf_credentials.exists():
                 self._read_config_file(self.conf_credentials)
 
@@ -274,29 +286,23 @@ class CliContext(object):
         # set config files
         self.conf_credentials = self._form_conf_path(
             self.conf_credentials, 'credentials')
+        self.conf_fs = self._form_conf_path(self.conf_fs, 'fs')
         if not skip_global_config:
             self.conf_config = self._form_conf_path(self.conf_config, 'config')
-        if not skip_pool_config:
-            self.conf_pool = self._form_conf_path(self.conf_pool, 'pool')
-            self.conf_jobs = self._form_conf_path(self.conf_jobs, 'jobs')
-        self.conf_fs = self._form_conf_path(self.conf_fs, 'fs')
-        # check for required conf files
-        if (self.conf_credentials is not None and
-                not isinstance(self.conf_credentials, pathlib.Path)):
-            self.conf_credentials = pathlib.Path(self.conf_credentials)
-        if not skip_global_config:
             if self.conf_config is None:
                 raise ValueError('config conf file was not specified')
-            elif not isinstance(self.conf_config, pathlib.Path):
-                self.conf_config = pathlib.Path(self.conf_config)
         if not skip_pool_config:
+            self.conf_pool = self._form_conf_path(self.conf_pool, 'pool')
             if self.conf_pool is None:
                 raise ValueError('pool conf file was not specified')
-            elif not isinstance(self.conf_pool, pathlib.Path):
-                self.conf_pool = pathlib.Path(self.conf_pool)
-        if (self.conf_fs is not None and not isinstance(
-                self.conf_fs, pathlib.Path)):
-            self.conf_fs = pathlib.Path(self.conf_fs)
+            self.conf_jobs = self._form_conf_path(self.conf_jobs, 'jobs')
+        # ensure configs are pathlib objects
+        self.conf_credentials = CliContext.ensure_pathlib_conf(
+            self.conf_credentials)
+        self.conf_config = CliContext.ensure_pathlib_conf(self.conf_config)
+        self.conf_pool = CliContext.ensure_pathlib_conf(self.conf_pool)
+        self.conf_jobs = CliContext.ensure_pathlib_conf(self.conf_jobs)
+        self.conf_fs = CliContext.ensure_pathlib_conf(self.conf_fs)
         # validate configuration files against schema
         convoy.validator.validate_config(
             convoy.validator.ConfigType.Credentials, self.conf_credentials)
@@ -355,8 +361,7 @@ class CliContext(object):
         if not skip_pool_config:
             self._read_config_file(self.conf_pool)
             if self.conf_jobs is not None:
-                if not isinstance(self.conf_jobs, pathlib.Path):
-                    self.conf_jobs = pathlib.Path(self.conf_jobs)
+                self.conf_jobs = CliContext.ensure_pathlib_conf(self.conf_jobs)
                 if self.conf_jobs.exists():
                     self._read_config_file(self.conf_jobs)
         # adjust settings
