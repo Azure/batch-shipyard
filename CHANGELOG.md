@@ -25,6 +25,8 @@ startup task. Please see the pool configuration doc for more information.
 - `--jobs` was not properly being merged with `--configdir` (#163)
 - Fix regression in `shipyard pool images update` that would not login to
 registries in multi-instance mode
+- Fix `shipyard pool images` commands to work with distros requiring
+pseudo-tty for sudo
 
 ## [3.1.0] - 2018-01-30
 ### Added

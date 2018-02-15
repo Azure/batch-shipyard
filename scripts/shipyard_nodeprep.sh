@@ -637,6 +637,8 @@ net.ipv4.route.flush=1
 EOF
         fi
     fi
+    # set sudoers to not require tty
+    sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
 
 # install docker host engine

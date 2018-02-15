@@ -458,10 +458,11 @@ def subprocess_nowait_pipe_stdout(
     if pipe_stderr:
         return subprocess.Popen(
             cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            cwd=cwd, env=env)
+            universal_newlines=True, cwd=cwd, env=env)
     else:
         return subprocess.Popen(
-            cmd, shell=shell, stdout=subprocess.PIPE, cwd=cwd, env=env)
+            cmd, shell=shell, stdout=subprocess.PIPE, universal_newlines=True,
+            cwd=cwd, env=env)
 
 
 def subprocess_attach_stdin(cmd, shell=False):
@@ -481,23 +482,26 @@ def subprocess_wait_all(procs, poll=True):
     :param list procs: list of processes to wait on
     :param bool poll: use poll(), otherwise communicate() if using PIPEs
     :rtype: list
-    :return: list of return codes
+    :return: (list of return codes, list of stdout, list of stderr)
     """
     if procs is None or len(procs) == 0:
         raise ValueError('procs is invalid')
     rcodes = [None] * len(procs)
+    stdout = [None] * len(procs)
+    stderr = [None] * len(procs)
     while True:
         for i in range(0, len(procs)):
             if rcodes[i] is None:
-                if poll and procs[i].poll() == 0:
-                    rcodes[i] = procs[i].returncode
+                if poll:
+                    if procs[i].poll() is not None:
+                        rcodes[i] = procs[i].returncode
                 else:
-                    procs[i].communicate()
+                    stdout[i], stderr[i] = procs[i].communicate()
                     rcodes[i] = procs[i].returncode
         if all(x is not None for x in rcodes):
             break
-        time.sleep(0.03)
-    return rcodes
+        time.sleep(0.1)
+    return rcodes, stdout, stderr
 
 
 def subprocess_wait_any(procs):
@@ -511,9 +515,9 @@ def subprocess_wait_any(procs):
         raise ValueError('procs is invalid')
     while True:
         for i in range(0, len(procs)):
-            if procs[i].poll() == 0:
+            if procs[i].poll() is not None:
                 return i, procs[i].returncode
-        time.sleep(0.03)
+        time.sleep(0.1)
 
 
 def subprocess_wait_multi(procs1, procs2):
@@ -529,10 +533,10 @@ def subprocess_wait_multi(procs1, procs2):
     while True:
         if procs1 is not None and len(procs1) > 0:
             for i in range(0, len(procs1)):
-                if procs1[i].poll() == 0:
+                if procs1[i].poll() is not None:
                     return procs1, i, procs1[i].returncode
         if procs2 is not None and len(procs2) > 0:
             for i in range(0, len(procs2)):
-                if procs2[i].poll() == 0:
+                if procs2[i].poll() is not None:
                     return procs2, i, procs2[i].returncode
-        time.sleep(0.03)
+        time.sleep(0.1)

@@ -1607,23 +1607,35 @@ def _update_container_images_over_ssh(batch_client, config, pool, cmd):
             pool.id, node.id)
         procs.append(crypto.connect_or_exec_ssh_command(
             rls.remote_login_ip_address, rls.remote_login_port,
-            ssh_private_key, username, sync=False, command=command))
+            ssh_private_key, username, sync=False, tty=False, command=command))
         if len(procs) >= 40:
             logger.debug('waiting for {} update processes to complete'.format(
                 len(procs)))
-            rcs = util.subprocess_wait_all(procs, poll=False)
+            rcs, stdout, stderr = util.subprocess_wait_all(procs, poll=False)
             if any([x != 0 for x in rcs]):
+                if settings.verbose(config):
+                    logger.warning('return codes: {}'.format(rcs))
+                    logger.warning('stdout: {}'.format(stdout))
+                    logger.warning('stderr: {}'.format(stderr))
                 failures = True
             procs = []
             del rcs
+            del stdout
+            del stderr
     if len(procs) > 0:
         logger.debug('waiting for {} update processes to complete'.format(
             len(procs)))
-        rcs = util.subprocess_wait_all(procs, poll=False)
+        rcs, stdout, stderr = util.subprocess_wait_all(procs, poll=False)
         if any([x != 0 for x in rcs]):
+            if settings.verbose(config):
+                logger.warning('return codes: {}'.format(rcs))
+                logger.warning('stdout: {}'.format(stdout))
+                logger.warning('stderr: {}'.format(stderr))
             failures = True
-        procs = []
+        del procs
         del rcs
+        del stdout
+        del stderr
     if failures:
         raise RuntimeError(
             'failures detected updating container image on pool: {}'.format(
@@ -1796,11 +1808,11 @@ def _update_container_images(
         else:
             appcmd = util.wrap_commands_in_shell([':'], windows=is_windows)
         batchtask.command_line = appcmd
+    if settings.verbose(config):
+        logger.debug('update command: {}'.format(coordcmd))
     # add job and task
     batch_client.job.add(job)
     batch_client.task.add(job_id=job_id, task=batchtask)
-    if settings.verbose(config):
-        logger.debug('executing update command: {}'.format(coordcmd))
     logger.debug(
         ('waiting for update container images task {} in job {} '
          'to complete').format(batchtask.id, job_id))
@@ -1857,13 +1869,14 @@ def _list_docker_images(batch_client, config):
     nodes = batch_client.compute_node.list(pool.id)
     procs = {}
     stdout = {}
+    stderr = {}
     failures = False
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool.id, node.id)
         procs[node.id] = crypto.connect_or_exec_ssh_command(
             rls.remote_login_ip_address, rls.remote_login_port,
-            ssh_private_key, username, sync=False,
+            ssh_private_key, username, sync=False, tty=False,
             command=[
                 'sudo', 'docker', 'images', '--format',
                 '"{{.ID}} {{.Repository}}:{{.Tag}}"'
@@ -1872,23 +1885,30 @@ def _list_docker_images(batch_client, config):
             logger.debug('waiting for {} processes to complete'.format(
                 len(procs)))
             for key in procs:
-                stdout[key] = procs[key].communicate()[0].decode(
-                    'utf8').split('\n')
-            rcs = util.subprocess_wait_all(list(procs.values()))
+                stdout[key], stderr[key] = procs[key].communicate()
+            rcs, _, _ = util.subprocess_wait_all(
+                list(procs.values()), poll=True)
             if any([x != 0 for x in rcs]):
+                if settings.verbose(config):
+                    logger.warning('return codes: {}'.format(rcs))
+                    logger.warning('stdout: {}'.format(stdout))
+                    logger.warning('stderr: {}'.format(stderr))
                 failures = True
-            procs.clear()
+            procs = []
             del rcs
     if len(procs) > 0:
         logger.debug('waiting for {} processes to complete'.format(
             len(procs)))
         for key in procs:
-            stdout[key] = procs[key].communicate()[0].decode(
-                'utf8').split('\n')
-        rcs = util.subprocess_wait_all(list(procs.values()))
+            stdout[key], stderr[key] = procs[key].communicate()
+        rcs, _, _ = util.subprocess_wait_all(list(procs.values()), poll=True)
         if any([x != 0 for x in rcs]):
+            if settings.verbose(config):
+                logger.warning('return codes: {}'.format(rcs))
+                logger.warning('stdout: {}'.format(stdout))
+                logger.warning('stderr: {}'.format(stderr))
             failures = True
-        procs.clear()
+        del procs
         del rcs
     if failures:
         raise RuntimeError(
@@ -1899,7 +1919,8 @@ def _list_docker_images(batch_client, config):
     all_images = {}
     for key in stdout:
         node_images[key] = set()
-        for out in stdout[key]:
+        spout = stdout[key].split('\n')
+        for out in spout:
             if util.is_not_empty(out):
                 dec = out.split()
                 if (not dec[1].startswith('alfpark/batch-shipyard') and

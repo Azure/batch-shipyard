@@ -478,6 +478,8 @@ if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
     set +e
     optimize_tcp_network_settings $DISTRIB_ID $DISTRIB_RELEASE
     set -e
+    # set sudoers to not require tty
+    sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
 
 # check for docker host engine

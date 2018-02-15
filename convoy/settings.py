@@ -1697,6 +1697,8 @@ def docker_registries(config):
         if len(tmp) > 1:
             if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
                 servers.append(tmp[0])
+    # create unique set
+    servers = set(servers)
     # get login info for each registry
     registries = []
     # add docker hub if found
