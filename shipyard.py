@@ -283,37 +283,38 @@ class CliContext(object):
         # reset config
         self.config = None
         self._set_global_cli_options()
-        # set config files
+        # set/validate credentials config
         self.conf_credentials = self._form_conf_path(
             self.conf_credentials, 'credentials')
-        self.conf_fs = self._form_conf_path(self.conf_fs, 'fs')
+        self.conf_credentials = CliContext.ensure_pathlib_conf(
+            self.conf_credentials)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Credentials, self.conf_credentials)
+        # set/validate global config
         if not skip_global_config:
             self.conf_config = self._form_conf_path(self.conf_config, 'config')
             if self.conf_config is None:
                 raise ValueError('config conf file was not specified')
+            self.conf_config = CliContext.ensure_pathlib_conf(self.conf_config)
+            convoy.validator.validate_config(
+                convoy.validator.ConfigType.Global, self.conf_config)
+        # set/validate batch config
         if not skip_pool_config:
+            # set/validate pool config
             self.conf_pool = self._form_conf_path(self.conf_pool, 'pool')
             if self.conf_pool is None:
                 raise ValueError('pool conf file was not specified')
-            self.conf_jobs = self._form_conf_path(self.conf_jobs, 'jobs')
-        # ensure configs are pathlib objects
-        self.conf_credentials = CliContext.ensure_pathlib_conf(
-            self.conf_credentials)
-        self.conf_config = CliContext.ensure_pathlib_conf(self.conf_config)
-        self.conf_pool = CliContext.ensure_pathlib_conf(self.conf_pool)
-        self.conf_jobs = CliContext.ensure_pathlib_conf(self.conf_jobs)
-        self.conf_fs = CliContext.ensure_pathlib_conf(self.conf_fs)
-        # validate configuration files against schema
-        convoy.validator.validate_config(
-            convoy.validator.ConfigType.Credentials, self.conf_credentials)
-        if not skip_global_config:
-            convoy.validator.validate_config(
-                convoy.validator.ConfigType.Global, self.conf_config)
-        if not skip_pool_config:
+            self.conf_pool = CliContext.ensure_pathlib_conf(self.conf_pool)
             convoy.validator.validate_config(
                 convoy.validator.ConfigType.Pool, self.conf_pool)
-        convoy.validator.validate_config(
-            convoy.validator.ConfigType.Jobs, self.conf_jobs)
+            # set/validate jobs config
+            self.conf_jobs = self._form_conf_path(self.conf_jobs, 'jobs')
+            self.conf_jobs = CliContext.ensure_pathlib_conf(self.conf_jobs)
+            convoy.validator.validate_config(
+                convoy.validator.ConfigType.Jobs, self.conf_jobs)
+        # set/validate fs config
+        self.conf_fs = self._form_conf_path(self.conf_fs, 'fs')
+        self.conf_fs = CliContext.ensure_pathlib_conf(self.conf_fs)
         convoy.validator.validate_config(
             convoy.validator.ConfigType.RemoteFS, self.conf_fs)
         # fetch credentials from keyvault, if conf file is missing
