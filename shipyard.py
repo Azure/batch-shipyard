@@ -249,13 +249,16 @@ class CliContext(object):
         # use configdir if available
         if conf_var is None:
             cd = self.configdir or '.'
-            path = pathlib.Path(cd, '{}.yaml'.format(prefix))
-            if path.exists():
-                return path
+            pathyaml = pathlib.Path(cd, '{}.yaml'.format(prefix))
+            if pathyaml.exists():
+                return pathyaml
             path = pathlib.Path(cd, '{}.yml'.format(prefix))
             if path.exists():
                 return path
-            return pathlib.Path(cd, '{}.json'.format(prefix))
+            path = pathlib.Path(cd, '{}.json'.format(prefix))
+            if path.exists():
+                return path
+            return pathyaml
         else:
             return conf_var
 

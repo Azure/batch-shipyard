@@ -42,6 +42,7 @@ except ImportError:
     import pathlib
 import pickle
 import ssl
+import sys
 import tempfile
 import time
 # non-stdlib imports
@@ -567,7 +568,14 @@ def create_pool(batch_client, config, pool):
         logger.info('Created pool: {}'.format(pool.id))
     except batchmodels.BatchErrorException as e:
         if e.error.code != 'PoolExists':
-            raise
+            if len(e.error.values) == 0:
+                raise
+            else:
+                logger.error('{}: {}'.format(
+                    e.error.code, e.error.message.value))
+                for detail in e.error.values:
+                    logger.error('{}: {}'.format(detail.key, detail.value))
+                sys.exit(1)
         else:
             logger.error('Pool {!r} already exists'.format(pool.id))
     # wait for pool idle

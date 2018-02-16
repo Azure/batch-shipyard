@@ -20,6 +20,7 @@ on GPU nodes is currently unsupported; CentOS 7.3 will continue to work.
 properties which are executed either before or after the Batch Shipyard
 startup task. Please see the pool configuration doc for more information.
 - Default management endpoint for public Azure cloud updated
+- Improve some error messages/handling
 - Update dependencies to latest
 
 ### Fixed
