@@ -597,7 +597,7 @@ def is_windows_pool(config, vm_config=None):
     if vm_config is None:
         vm_config = _populate_pool_vm_configuration(config)
     if is_platform_image(config, vm_config=vm_config):
-        return vm_config.offer == 'windowsserver'
+        return vm_config.publisher == 'microsoftwindowsserver'
     else:
         return vm_config.node_agent.startswith('batch.node.windows')
 
@@ -750,9 +750,12 @@ def _populate_pool_vm_configuration(config):
         offer = conf['offer'].lower()
         sku = str(conf['sku']).lower()
         # auto convert windows native if detected
-        if (publisher == 'microsoftwindowsserver' and
-                offer == 'windowsserver' and
-                sku == '2016-datacenter-with-containers'):
+        if ((publisher == 'microsoftwindowsserver' and
+             offer == 'windowsserver' and
+             sku == '2016-datacenter-with-containers') or
+                (publisher == 'microsoftwindowsserver' and
+                 offer == 'windowsserversemiannual' and
+                 sku == 'datacenter-core-1709-with-containers-smalldisk')):
             vm_config = PoolVmPlatformImageSettings(
                 publisher=publisher,
                 offer=offer,

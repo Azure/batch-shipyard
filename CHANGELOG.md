@@ -11,8 +11,10 @@ in native container support pools via SSH
 credential configuration, `--aad-authority-url` command line option or
 `SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant
 documentation for credentials and usage.
-- Added support for CentOS 7.4 and Debian 9 compute node hosts. CentOS 7.4
+- Support for CentOS 7.4 and Debian 9 compute node hosts. CentOS 7.4
 on GPU nodes is currently unsupported; CentOS 7.3 will continue to work.
+- Support for offer `WindowsServerSemiAnnual` and sku
+`Datacenter-Core-1709-with-Containers-smalldisk`
 
 ### Changed
 - Allow provisioning of OpenLogic CentOS-HPC 7.1

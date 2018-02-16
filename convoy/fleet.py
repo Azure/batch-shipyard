@@ -696,6 +696,16 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
                 'sku': sku,
                 'version': pool_settings.vm_configuration.version,
             }, 'batch.node.centos 7')
+    # support windows server semi annual
+    if (publisher == 'microsoftwindowsserver' and
+            offer == 'windowsserversemiannual' and
+            sku == 'datacenter-core-1709-with-containers-smalldisk'):
+        return ({
+            'publisher': publisher,
+            'offer': offer,
+            'sku': sku,
+            'version': pool_settings.vm_configuration.version,
+        }, 'batch.node.windows amd64')
     # pick latest sku
     node_agent_skus = batch_client.account.list_node_agent_skus()
     skus_to_use = [
@@ -2000,6 +2010,9 @@ def _adjust_settings_for_pool_creation(config):
     elif publisher == 'microsoftwindowsserver':
         if offer == 'windowsserver':
             if sku == '2016-datacenter-with-containers':
+                allowed = True
+        elif offer == 'windowsserversemiannual':
+            if sku == 'datacenter-core-1709-with-containers-smalldisk':
                 allowed = True
     # check if allowed for gpu (if gpu vm size)
     if allowed:
