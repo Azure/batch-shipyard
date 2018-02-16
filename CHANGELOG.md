@@ -22,6 +22,7 @@ startup task. Please see the pool configuration doc for more information.
 - Default management endpoint for public Azure cloud updated
 - Improve some error messages/handling
 - Update dependencies to latest
+- Linux pre-built binary is no longer gzipped
 
 ### Fixed
 - AAD auth for ARM endpoints in non-public Azure cloud regions
