@@ -8,6 +8,7 @@ The credentials schema is as follows:
 ```yaml
 credentials:
   aad:
+    authority_url: https://login.microsoftonline.com
     directory_id: 01234567-89ab-cdef-0123-456789abcdef
     application_id: 01234567-89ab-cdef-0123-456789abcdef
     auth_key: 01234...
@@ -17,6 +18,7 @@ credentials:
     password: aad_user_password
   batch:
     aad:
+      authority_url: https://login.microsoftonline.com
       endpoint: https://batch.core.windows.net/
       directory_id: 01234567-89ab-cdef-0123-456789abcdef
       application_id: 01234567-89ab-cdef-0123-456789abcdef
@@ -54,7 +56,8 @@ credentials:
       password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
   management:
     aad:
-      endpoint: https://management.core.windows.net/
+      authority_url: https://login.microsoftonline.com
+      endpoint: https://management.azure.com/
       directory_id: 01234567-89ab-cdef-0123-456789abcdef
       application_id: 01234567-89ab-cdef-0123-456789abcdef
       auth_key: 01234...
@@ -68,6 +71,7 @@ credentials:
     subscription_id: 01234567-89ab-cdef-0123-456789abcdef
   keyvault:
     aad:
+      authority_url: https://login.microsoftonline.com
       endpoint: https://keyvault.core.windows.net/
       directory_id: 01234567-89ab-cdef-0123-456789abcdef
       application_id: 01234567-89ab-cdef-0123-456789abcdef
@@ -123,6 +127,8 @@ environment variable instead. For example, if you do not want to store the
 
 Authentication independent settings:
 
+* (optional) `authority_url` is the AAD authority URL. If this is not
+specified, then this defaults to the Azure Public cloud AAD authority.
 * (optional) `endpoint` is the AAD endpoint for the associated resource. If
 not specified, these default to the Azure Public cloud endpoints for the
 respective resource.

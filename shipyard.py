@@ -74,6 +74,7 @@ class CliContext(object):
         # aad/keyvault options
         self.keyvault_uri = None
         self.keyvault_credentials_secret_id = None
+        self.aad_authority_url = None
         self.aad_directory_id = None
         self.aad_application_id = None
         self.aad_auth_key = None
@@ -210,6 +211,7 @@ class CliContext(object):
         # free cli options
         del self.verbose
         del self.yes
+        del self.aad_authority_url
         del self.aad_directory_id
         del self.aad_application_id
         del self.aad_auth_key
@@ -501,6 +503,19 @@ def _aad_auth_key_option(f):
         callback=callback)(f)
 
 
+def _aad_authority_url_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.aad_authority_url = value
+        return value
+    return click.option(
+        '--aad-authority-url',
+        expose_value=False,
+        envvar='SHIPYARD_AAD_AUTHORITY_URL',
+        help='Azure Active Directory authority URL',
+        callback=callback)(f)
+
+
 def _aad_user_option(f):
     def callback(ctx, param, value):
         clictx = ctx.ensure_object(CliContext)
@@ -685,6 +700,7 @@ def aad_options(f):
     f = _aad_cert_private_key_option(f)
     f = _aad_password_option(f)
     f = _aad_user_option(f)
+    f = _aad_authority_url_option(f)
     f = _aad_auth_key_option(f)
     f = _aad_application_id_option(f)
     f = _aad_directory_id_option(f)

@@ -7,16 +7,23 @@
 global configuration doc for more information.
 - `shipyard pool images update` command now supports updating Docker images
 in native container support pools via SSH
-- Add support for CentOS 7.4 and Debian 9 compute node hosts
+- Ability to specify an AAD authority URL via the `aad`:`authority_url`
+credential configuration, `--aad-authority-url` command line option or
+`SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant
+documentation for credentials and usage.
+- Added support for CentOS 7.4 and Debian 9 compute node hosts. CentOS 7.4
+on GPU nodes is currently unsupported; CentOS 7.3 will continue to work.
 
 ### Changed
 - Allow provisioning of OpenLogic CentOS-HPC 7.1
 - `additional_node_prep_commands` is now a dictionary of `pre` and `post`
 properties which are executed either before or after the Batch Shipyard
 startup task. Please see the pool configuration doc for more information.
+- Default management endpoint for public Azure cloud updated
 - Update dependencies to latest
 
 ### Fixed
+- AAD auth for ARM endpoints in non-public Azure cloud regions
 - Custom image + native mode deployment for Linux pools
 - Potential command launch problems in native mode
 - Minor schema validation updates
@@ -25,8 +32,7 @@ startup task. Please see the pool configuration doc for more information.
 - `--jobs` was not properly being merged with `--configdir` (#163)
 - Fix regression in `shipyard pool images update` that would not login to
 registries in multi-instance mode
-- Fix `shipyard pool images` commands to work with distros requiring
-pseudo-tty for sudo
+- Fix `shipyard pool images` commands to more reliably work with SSH
 
 ## [3.1.0] - 2018-01-30
 ### Added

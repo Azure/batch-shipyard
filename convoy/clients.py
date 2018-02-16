@@ -53,13 +53,15 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
-def _create_resource_client(ctx, credentials=None, subscription_id=None):
-    # type: (CliContext, object, str) ->
+def _create_resource_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
+    # type: (CliContext, object, str, str) ->
     #        azure.mgmt.resource.resources.ResourceManagementClient
     """Create resource management client
     :param CliContext ctx: Cli Context
     :param object credentials: credentials object
     :param str subscription_id: subscription id
+    :param str endpoint: endpoint
     :rtype: azure.mgmt.resource.resources.ResourceManagementClient
     :return: resource management client
     """
@@ -71,17 +73,21 @@ def _create_resource_client(ctx, credentials=None, subscription_id=None):
         if mgmt_aad is None:
             mgmt_aad = settings.credentials_management(ctx.config).aad
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
     return azure.mgmt.resource.resources.ResourceManagementClient(
-        credentials, subscription_id)
+        credentials, subscription_id, base_url=endpoint)
 
 
-def _create_compute_client(ctx, credentials=None, subscription_id=None):
+def _create_compute_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
     # type: (CliContext, object, str) ->
     #        azure.mgmt.compute.ComputeManagementClient
     """Create compute management client
     :param CliContext ctx: Cli Context
     :param object credentials: credentials object
     :param str subscription_id: subscription id
+    :param str endpoint: endpoint
     :rtype: azure.mgmt.compute.ComputeManagementClient
     :return: compute management client
     """
@@ -93,15 +99,21 @@ def _create_compute_client(ctx, credentials=None, subscription_id=None):
         if mgmt_aad is None:
             mgmt_aad = settings.credentials_management(ctx.config).aad
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
     return azure.mgmt.compute.ComputeManagementClient(
-        credentials, subscription_id)
+        credentials, subscription_id, base_url=endpoint)
 
 
-def _create_network_client(ctx, credentials=None, subscription_id=None):
-    # type: (CliContext, object, str) ->
+def _create_network_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
+    # type: (CliContext, object, str, str) ->
     #        azure.mgmt.network.NetworkManagementClient
     """Create network management client
     :param CliContext ctx: Cli Context
+    :param object credentials: credentials object
+    :param str subscription_id: subscription id
+    :param str endpoint: endpoint
     :rtype: azure.mgmt.network.NetworkManagementClient
     :return: network management client
     """
@@ -113,17 +125,21 @@ def _create_network_client(ctx, credentials=None, subscription_id=None):
         if mgmt_aad is None:
             mgmt_aad = settings.credentials_management(ctx.config).aad
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
     return azure.mgmt.network.NetworkManagementClient(
-        credentials, subscription_id)
+        credentials, subscription_id, base_url=endpoint)
 
 
-def _create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
-    # type: (CliContext, object, str) ->
+def _create_batch_mgmt_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
+    # type: (CliContext, object, str, str) ->
     #        azure.mgmt.batch.BatchManagementClient
     """Create batch management client
     :param CliContext ctx: Cli Context
     :param object credentials: credentials object
     :param str subscription_id: subscription id
+    :param str endpoint: endpoint
     :rtype: azure.mgmt.batch.BatchManagementClient
     :return: batch management client
     """
@@ -135,8 +151,10 @@ def _create_batch_mgmt_client(ctx, credentials=None, subscription_id=None):
         if mgmt_aad is None:
             mgmt_aad = settings.credentials_management(ctx.config).aad
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
     batch_mgmt_client = azure.mgmt.batch.BatchManagementClient(
-        credentials, subscription_id)
+        credentials, subscription_id, base_url=endpoint)
     batch_mgmt_client.config.add_user_agent(
         'batch-shipyard/{}'.format(__version__))
     return batch_mgmt_client
@@ -162,6 +180,7 @@ def create_arm_clients(ctx, batch_clients=False):
     """
     mgmt = settings.credentials_management(ctx.config)
     subscription_id = ctx.subscription_id or mgmt.subscription_id
+    endpoint = ctx.aad_endpoint or mgmt.aad.endpoint
     if util.is_none_or_empty(subscription_id):
         credentials = None
         resource_client = None
@@ -175,17 +194,21 @@ def create_arm_clients(ctx, batch_clients=False):
         credentials = aad.create_aad_credentials(ctx, mgmt.aad)
         # create clients
         resource_client = _create_resource_client(
-            ctx, credentials=credentials, subscription_id=subscription_id)
+            ctx, credentials=credentials, subscription_id=subscription_id,
+            endpoint=endpoint)
         compute_client = _create_compute_client(
-            ctx, credentials=credentials, subscription_id=subscription_id)
+            ctx, credentials=credentials, subscription_id=subscription_id,
+            endpoint=endpoint)
         network_client = _create_network_client(
-            ctx, credentials=credentials, subscription_id=subscription_id)
+            ctx, credentials=credentials, subscription_id=subscription_id,
+            endpoint=endpoint)
     if batch_clients:
         try:
             if credentials is None:
                 credentials = aad.create_aad_credentials(ctx, mgmt.aad)
             batch_mgmt_client = _create_batch_mgmt_client(
-                ctx, credentials=credentials, subscription_id=subscription_id)
+                ctx, credentials=credentials, subscription_id=subscription_id,
+                endpoint=endpoint)
         except Exception:
             if settings.verbose(ctx.config):
                 logger.warning('could not create batch management client')

@@ -110,6 +110,9 @@ def get_batch_account(batch_mgmt_client, config):
             'Batch management client is invalid, please specify management '
             'aad credentials')
     bc = settings.credentials_batch(config)
+    if util.is_none_or_empty(bc.resource_group):
+        raise ValueError(
+            'resource_group is unspecified in batch aad credentials')
     return batch_mgmt_client.batch_account.get(
         resource_group_name=bc.resource_group,
         account_name=bc.account,

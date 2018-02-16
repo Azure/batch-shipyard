@@ -192,7 +192,7 @@ AADSettings = collections.namedtuple(
     'AADSettings', [
         'directory_id', 'application_id', 'auth_key', 'rsa_private_key_pem',
         'x509_cert_sha1_thumbprint', 'user', 'password', 'endpoint',
-        'token_cache_file',
+        'token_cache_file', 'authority_url',
     ]
 )
 KeyVaultCredentialsSettings = collections.namedtuple(
@@ -1222,6 +1222,10 @@ def _aad_credentials(
             _kv_read_checked(service_aad, 'x509_cert_sha1_thumbprint') or
             _kv_read_checked(super_aad, 'x509_cert_sha1_thumbprint')
         )
+        aad_authority_url = (
+            _kv_read_checked(service_aad, 'authority_url') or
+            _kv_read_checked(super_aad, 'authority_url')
+        )
         aad_endpoint = _kv_read_checked(
             service_aad, 'endpoint', default=default_endpoint)
         token_cache = _kv_read_checked(service_aad, 'token_cache', default={})
@@ -1240,6 +1244,7 @@ def _aad_credentials(
             x509_cert_sha1_thumbprint=aad_cert_thumbprint,
             endpoint=aad_endpoint,
             token_cache_file=token_cache_file,
+            authority_url=aad_authority_url,
         )
     else:
         return AADSettings(
@@ -1252,6 +1257,7 @@ def _aad_credentials(
             x509_cert_sha1_thumbprint=None,
             endpoint=default_endpoint,
             token_cache_file=None,
+            authority_url=None,
         )
 
 
@@ -1296,7 +1302,7 @@ def credentials_management(config):
         aad=_aad_credentials(
             config['credentials'],
             'management',
-            default_endpoint='https://management.core.windows.net/',
+            default_endpoint='https://management.azure.com/',
             default_token_cache_file=(
                 '.batch_shipyard_aad_management_token.json'
             ),
@@ -3556,7 +3562,12 @@ def remotefs_settings(config, sc_id=None):
     :return: remote fs settings
     """
     # general settings
-    conf = config['remote_fs']
+    try:
+        conf = config['remote_fs']
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError('remote_fs settings are invalid or missing')
     resource_group = _kv_read_checked(conf, 'resource_group')
     location = conf['location']
     if util.is_none_or_empty(location):

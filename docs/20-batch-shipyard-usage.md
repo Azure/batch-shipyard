@@ -97,6 +97,7 @@ These options must be specified after the command and sub-command. These are:
   --aad-application-id TEXT       Azure Active Directory application (client)
                                   id
   --aad-auth-key TEXT             Azure Active Directory authentication key
+  --aad-authority-url TEXT        Azure Active Directory authority URL
   --aad-user TEXT                 Azure Active Directory user
   --aad-password TEXT             Azure Active Directory password
   --aad-cert-private-key TEXT     Azure Active Directory private key for X.509
@@ -136,6 +137,7 @@ the credential file.
 * `--aad-directory-id` is the Active Directory Directory Id (or Tenant Id)
 * `--aad-application-id` is the Active Directory Application Id (or Client Id)
 * `--aad-auth-key` is the authentication key for the application (or client)
+* `--aad-authority-url` is the Azure Active Directory Authority URL
 * `--aad-user` is the Azure Active Directory user
 * `--aad-password` is the Azure Active Directory password for the user
 * `--aad-cert-private-key` is the Azure Active Directory Service Principal
@@ -165,6 +167,7 @@ instead:
 * `SHIPYARD_AAD_DIRECTORY_ID` in lieu of `--aad-directory-id`
 * `SHIPYARD_AAD_APPLICATION_ID` in lieu of `--aad-application-id`
 * `SHIPYARD_AAD_AUTH_KEY` in lieu of `--aad-auth-key`
+* `SHIPYARD_AAD_AUTHORITY_URL` in lieu of `--aad-authority-url`
 * `SHIPYARD_AAD_USER` in lieu of `--aad-user`
 * `SHIPYARD_AAD_PASSWORD` in lieu of `--aad-password`
 * `SHIPYARD_AAD_CERT_PRIVATE_KEY` in lieu of `--aad-cert-private-key`

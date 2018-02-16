@@ -207,6 +207,11 @@ def create_aad_credentials(ctx, aad_settings):
     aad_cert_thumbprint = (
         ctx.aad_cert_thumbprint or aad_settings.x509_cert_sha1_thumbprint
     )
+    aad_authority_url = ctx.aad_authority_url or aad_settings.authority_url
+    if util.is_not_empty(aad_authority_url):
+        aad_authority_url = aad_authority_url.rstrip('/')
+    else:
+        aad_authority_url = _LOGIN_AUTH_URI
     endpoint = ctx.aad_endpoint or aad_settings.endpoint
     token_cache_file = aad_settings.token_cache_file
     # check for aad parameter validity
@@ -224,12 +229,12 @@ def create_aad_credentials(ctx, aad_settings):
             raise ValueError('cannot specify both cert auth and password')
         if settings.verbose(ctx.config):
             logger.debug(
-                ('using aad auth with certificate, endpoint={} directoryid={} '
-                 'appid={} cert_thumbprint={}').format(
-                     endpoint, aad_directory_id, aad_application_id,
-                     aad_cert_thumbprint))
+                ('using aad auth with certificate, auth={} endpoint={} '
+                 'directoryid={} appid={} cert_thumbprint={}').format(
+                     aad_authority_url, endpoint, aad_directory_id,
+                     aad_application_id, aad_cert_thumbprint))
         context = adal.AuthenticationContext(
-            '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id))
+            '{}/{}'.format(aad_authority_url, aad_directory_id))
         return msrestazure.azure_active_directory.AdalAuthentication(
             lambda: context.acquire_token_with_client_certificate(
                 endpoint,
@@ -244,25 +249,29 @@ def create_aad_credentials(ctx, aad_settings):
                 'Cannot specify both an AAD Service Principal and User')
         if settings.verbose(ctx.config):
             logger.debug(
-                ('using aad auth with key, endpoint={} directoryid={} '
-                 'appid={}').format(
-                     endpoint, aad_directory_id, aad_application_id))
+                ('using aad auth with key, auth={} endpoint={} '
+                 'directoryid={} appid={}').format(
+                     aad_authority_url, endpoint, aad_directory_id,
+                     aad_application_id))
         return azure.common.credentials.ServicePrincipalCredentials(
             aad_application_id,
             aad_auth_key,
             tenant=aad_directory_id,
+            auth_uri=aad_authority_url,
             resource=endpoint,
         )
     elif util.is_not_empty(aad_password):
         if settings.verbose(ctx.config):
             logger.debug(
-                ('using aad auth with username and password, endpoint={} '
-                 'directoryid={} username={}').format(
-                     endpoint, aad_directory_id, aad_user))
+                ('using aad auth with username and password, auth={} '
+                 'endpoint={} directoryid={} username={}').format(
+                     aad_authority_url, endpoint, aad_directory_id, aad_user))
         try:
             return azure.common.credentials.UserPassCredentials(
                 username=aad_user,
                 password=aad_password,
+                tenant=aad_directory_id,
+                auth_uri=aad_authority_url,
                 resource=endpoint,
             )
         except msrest.exceptions.AuthenticationError as e:
@@ -270,14 +279,17 @@ def create_aad_credentials(ctx, aad_settings):
                 raise RuntimeError('{} {}'.format(
                     e.args[0][2:],
                     'Do not pass an AAD password and try again.'))
+            else:
+                raise
     else:
         if settings.verbose(ctx.config):
             logger.debug(
-                ('using aad auth with device code, endpoint={} '
-                 'directoryid={}').format(endpoint, aad_directory_id))
+                ('using aad auth with device code, auth={} endpoint={} '
+                 'directoryid={}').format(
+                     aad_authority_url, endpoint, aad_directory_id))
         return DeviceCodeAuthentication(
             context=adal.AuthenticationContext(
-                '{}/{}'.format(_LOGIN_AUTH_URI, aad_directory_id)),
+                '{}/{}'.format(aad_authority_url, aad_directory_id)),
             resource=endpoint,
             client_id=_CLIENT_ID,
             token_cache_file=token_cache_file,
