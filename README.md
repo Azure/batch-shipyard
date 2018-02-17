@@ -10,7 +10,8 @@ provision and execute container-based batch processing and HPC workloads on
 pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
 [Singularity](http://singularity.lbl.gov/) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
-your containers with easy-to-understand configuration files.
+your containers with easy-to-understand configuration files. All Azure
+regions are supported, including non-public Azure regions.
 
 Additionally, Batch Shipyard provides the ability to provision and manage
 entire [standalone remote file systems (storage clusters)](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
@@ -55,6 +56,7 @@ support for
       via [blobfuse](https://github.com/Azure/azure-storage-fuse)
     * [GlusterFS](https://www.gluster.org/) provisioned directly on compute
       nodes
+    * Custom Linux mount support (fstab)
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)

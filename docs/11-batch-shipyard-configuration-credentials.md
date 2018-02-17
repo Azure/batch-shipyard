@@ -94,6 +94,9 @@ are defined. Azure Active Directory (AAD) must be used with `keyvault` and
 for `batch` credentials but are required for `batch` credentials when using
 UserSubscription Batch accounts.
 
+For non-public Azure regions, please see [this section](#non-public) after
+reviewing the options below.
+
 ### Azure Active Directory: `aad`
 `aad` can be specified at the "global" level, which would apply to all
 resources that can be accessed through Azure Active Directory: `batch`,
@@ -247,6 +250,44 @@ Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
 for more information regarding `*_keyvault_secret_id` properties and how
 they are used for credential management with Azure KeyVault.
+
+## <a name="non-public"></a>Non-Public Azure Regions
+To connect to non-public Azure regions, you will need to ensure that your
+credentials configuration is populated with the correct `authority_url` and
+`endpoint` for each section. Please refer to the appropriate documentation
+below for your region:
+
+* [Azure China](https://docs.microsoft.com/en-us/azure/china/china-get-started-developer-guide#check-endpoints-in-azure)
+* [Azure Germany](https://docs.microsoft.com/en-us/azure/germany/germany-developer-guide#endpoint-mapping)
+* [Azure Government](https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-developer-guide#endpoint-mapping)
+
+Here is an example skeleton for connecting to Azure Government with AAD:
+
+```yaml
+  aad:
+    authority_url: https://login.microsoftonline.us
+    directory_id: # insert your directory/tenant id
+    application_id: # insert your service principal/app id
+    # fill in your AAD auth method of choice
+  batch:
+    aad:
+      endpoint: https://batch.core.usgovcloudapi.net/
+    account_service_url: # insert your account service url/endpoint
+    resource_group: # insert your batch account resource group
+  management:
+    aad:
+      endpoint: https://management.usgovcloudapi.net/
+    subscription_id: # insert your subscription id
+  storage:
+    mystorageaccount:
+      account: # insert your account name
+      account_key: # insert your account key
+      endpoint: core.usgovcloudapi.net
+  # other credentials settings
+```
+
+If you are using shared key auth, you would remove all `aad` settings and
+add your `batch`:`account_key` instead.
 
 ## Full template
 A full template of a credentials file can be found
