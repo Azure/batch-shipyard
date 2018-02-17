@@ -33,7 +33,7 @@ credentials:
     account_key: 01234...
     account_key_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
     account_service_url: https://<batch_account_name>.<region>.batch.azure.com/
-    resource_group: resource-group-for-vnet-and-remotefs
+    resource_group: resource-group-of-batch-account
   storage:
     mystorageaccount:
       account: storage_account_name

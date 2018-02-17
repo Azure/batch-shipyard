@@ -2264,6 +2264,41 @@ def _check_batch_client(batch_client):
             'proper "batch" credentials')
 
 
+def action_account_info(batch_mgmt_client, config, name, resource_group):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) -> None
+    """Action: Account Info
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param dict config: configuration dict
+    :param str account_name: account name
+    :param str resource_group: resource group of Batch account
+    """
+    batch.log_batch_account_info(
+        batch_mgmt_client, config, account_name=name,
+        resource_group=resource_group)
+
+
+def action_account_list(batch_mgmt_client, config, resource_group):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str) -> None
+    """Action: Account List
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param dict config: configuration dict
+    :param str resource_group: resource group limiter
+    """
+    batch.log_batch_account_list(
+        batch_mgmt_client, config, resource_group=resource_group)
+
+
+def action_account_quota(batch_mgmt_client, config, location):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str) -> None
+    """Action: Account Quota
+    :param azure.mgmt.batch.BatchManagementClient: batch_mgmt_client
+    :param dict config: configuration dict
+    :param str location: location
+    """
+    batch.log_batch_account_service_quota(
+        batch_mgmt_client, config, location)
+
+
 def action_fs_disks_add(resource_client, compute_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient, dict) -> None

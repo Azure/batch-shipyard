@@ -47,6 +47,7 @@ import tempfile
 import time
 # non-stdlib imports
 import azure.batch.models as batchmodels
+import azure.mgmt.batch.models as mgmtbatchmodels
 import dateutil.tz
 # local imports
 from . import autoscale
@@ -96,28 +97,129 @@ NodeStateCountCollection = collections.namedtuple(
 )
 
 
-def get_batch_account(batch_mgmt_client, config):
-    # type: (azure.mgmt.batch.BatchManagementClient, dict) ->
+def get_batch_account(
+        batch_mgmt_client, config, account_name=None, resource_group=None):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) ->
     #        azure.mgmt.batch.models.BatchAccount
     """Get Batch account properties from ARM
     :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
         batch management client
     :param dict config: configuration dict
+    :param str account_name: account name
+    :param str resource_group: resource group of Batch account
     :rtype: azure.mgmt.batch.models.BatchAccount
     :return: Batch account
     """
     if batch_mgmt_client is None:
         raise RuntimeError(
             'Batch management client is invalid, please specify management '
-            'aad credentials')
-    bc = settings.credentials_batch(config)
-    if util.is_none_or_empty(bc.resource_group):
-        raise ValueError(
-            'resource_group is unspecified in batch aad credentials')
+            'aad credentials and valid subscription_id')
+    if (util.is_none_or_empty(account_name) or
+            util.is_none_or_empty(resource_group)):
+        bc = settings.credentials_batch(config)
+        if util.is_none_or_empty(account_name):
+            account_name = bc.account
+        if util.is_none_or_empty(resource_group):
+            resource_group = bc.resource_group
+        if util.is_none_or_empty(bc.resource_group):
+            raise ValueError(
+                ('Please specify the resource_group in credentials '
+                 'associated with the Batch account {}'.format(bc.account)))
     return batch_mgmt_client.batch_account.get(
-        resource_group_name=bc.resource_group,
-        account_name=bc.account,
+        resource_group_name=resource_group,
+        account_name=account_name,
     )
+
+
+def _generate_batch_account_log_entry(ba):
+    log = ['* name: {}'.format(ba.name)]
+    log.append('  * location: {}'.format(ba.location))
+    log.append('  * account url: https://{}'.format(ba.account_endpoint))
+    log.append('  * pool allocation mode: {}'.format(
+        ba.pool_allocation_mode.value))
+    if (ba.pool_allocation_mode ==
+            mgmtbatchmodels.PoolAllocationMode.user_subscription):
+        log.append('  * keyvault reference: {}'.format(
+            ba.key_vault_reference.url))
+    log.append('  * core quotas:')
+    if (ba.pool_allocation_mode ==
+            mgmtbatchmodels.PoolAllocationMode.user_subscription):
+        log.append('    * dedicated: (see subscription regional core quotas)')
+    else:
+        log.append('    * dedicated: {}'.format(ba.dedicated_core_quota))
+    log.append('    * low priority: {}'.format(ba.low_priority_core_quota))
+    log.append('  * pool quota: {}'.format(ba.pool_quota))
+    log.append('  * active job and job schedule quota: {}'.format(
+        ba.active_job_and_job_schedule_quota))
+    return log
+
+
+def log_batch_account_info(
+        batch_mgmt_client, config, account_name=None, resource_group=None):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) -> None
+    """Log Batch account properties from ARM
+    :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
+        batch management client
+    :param dict config: configuration dict
+    :param str account_name: account name
+    :param str resource_group: resource group of Batch account
+    """
+    ba = get_batch_account(
+        batch_mgmt_client, config, account_name=account_name,
+        resource_group=resource_group)
+    log = ['batch account information']
+    log.extend(_generate_batch_account_log_entry(ba))
+    logger.info(os.linesep.join(log))
+
+
+def log_batch_account_list(batch_mgmt_client, config, resource_group=None):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str) -> None
+    """Log Batch account properties from ARM
+    :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
+        batch management client
+    :param dict config: configuration dict
+    :param str resource_group: resource group of Batch account
+    """
+    if batch_mgmt_client is None:
+        raise RuntimeError(
+            'Batch management client is invalid, please specify management '
+            'aad credentials and valid subscription_id')
+    if resource_group is None:
+        accounts = batch_mgmt_client.batch_account.list()
+    else:
+        accounts = batch_mgmt_client.batch_account.list_by_resource_group(
+            resource_group)
+    mgmt_aad = settings.credentials_management(config)
+    log = ['all batch accounts in subscription {}'.format(
+        mgmt_aad.subscription_id)]
+    for ba in accounts:
+        log.extend(_generate_batch_account_log_entry(ba))
+    if len(log) == 1:
+        logger.error('no batch accounts found in subscription {}'.format(
+            mgmt_aad.subscription_id))
+    else:
+        logger.info(os.linesep.join(log))
+
+
+def log_batch_account_service_quota(batch_mgmt_client, config, location):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str) -> None
+    """Log Batch account service quota
+    :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
+        batch management client
+    :param dict config: configuration dict
+    :param str location: location
+    """
+    if batch_mgmt_client is None:
+        raise RuntimeError(
+            'Batch management client is invalid, please specify management '
+            'aad credentials and valid subscription_id')
+    mgmt_aad = settings.credentials_management(config)
+    blc = batch_mgmt_client.location.get_quotas(location)
+    log = ['batch service quota']
+    log.append('* subscription id: {}'.format(mgmt_aad.subscription_id))
+    log.append('  * location: {}'.format(location))
+    log.append('  * account quota: {}'.format(blc.account_quota))
+    logger.info(os.linesep.join(log))
 
 
 def list_node_agent_skus(batch_client):

@@ -5,7 +5,13 @@
 ### Added
 - Custom Linux Mount support for `shared_data_volumes`. Please see the
 global configuration doc for more information.
-- `shipyard pool images update` command now supports updating Docker images
+- `account` command added with the following sub-commands:
+    - `info` provides information about a Batch account
+    - `list` provides information about all (or a resource group subset) of
+      accounts within the subscription specified in credentials
+    - `quota` provides service level quota information for the subscription
+      for a given location
+- `pool images update` command now supports updating Docker images
 in native container support pools via SSH
 - Ability to specify an AAD authority URL via the `aad`:`authority_url`
 credential configuration, `--aad-authority-url` command line option or
@@ -17,10 +23,11 @@ on GPU nodes is currently unsupported; CentOS 7.3 will continue to work.
 `Datacenter-Core-1709-with-Containers-smalldisk`
 
 ### Changed
+- **Breaking Change:** `additional_node_prep_commands` is now a dictionary
+of `pre` and `post` properties which are executed either before or after the
+Batch Shipyard startup task. Please see the pool configuration doc for more
+information.
 - Allow provisioning of OpenLogic CentOS-HPC 7.1
-- `additional_node_prep_commands` is now a dictionary of `pre` and `post`
-properties which are executed either before or after the Batch Shipyard
-startup task. Please see the pool configuration doc for more information.
 - Default management endpoint for public Azure cloud updated
 - Improve some error messages/handling
 - Update dependencies to latest
@@ -34,9 +41,9 @@ startup task. Please see the pool configuration doc for more information.
 - AAD check logic for different points in pool allocation
 - `--ssh` parameter for `pool images update` was not correctly set as a flag
 - `--jobs` was not properly being merged with `--configdir` (#163)
-- Fix regression in `shipyard pool images update` that would not login to
+- Fix regression in `pool images update` that would not login to
 registries in multi-instance mode
-- Fix `shipyard pool images` commands to more reliably work with SSH
+- Fix `pool images` commands to more reliably work with SSH
 
 ## [3.1.0] - 2018-01-30
 ### Added

@@ -747,6 +747,58 @@ def cli(ctx):
 
 @cli.group()
 @pass_cli_context
+def account(ctx):
+    """Batch account actions"""
+    pass
+
+
+@account.command('info')
+@click.option('--name', help='Batch account name')
+@click.option('--resource-group', help='Batch account resource group')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def account_info(ctx, name, resource_group):
+    """Retrieve Batch account information and quotas"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_account_info(
+        ctx.batch_mgmt_client, ctx.config, name, resource_group)
+
+
+@account.command('list')
+@click.option('--resource-group', help='Scope query to resource group')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def account_list(ctx, resource_group):
+    """Retrieve a list of Batch accounts and associated quotas in
+    subscription"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_account_list(
+        ctx.batch_mgmt_client, ctx.config, resource_group)
+
+
+@account.command('quota')
+@click.argument('location')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def account_quota(ctx, location):
+    """Retrieve Batch account quota at the subscription level for the
+    specified location"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_account_quota(
+        ctx.batch_mgmt_client, ctx.config, location)
+
+
+@cli.group()
+@pass_cli_context
 def fs(ctx):
     """Filesystem in Azure actions"""
     pass

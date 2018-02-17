@@ -177,6 +177,7 @@ instead:
 `shipyard` (and `shipyard.py`) script contains the following top-level
 commands:
 ```
+  account   Batch account actions
   cert      Certificate actions
   data      Data actions
   fs        Filesystem in Azure actions
@@ -187,6 +188,7 @@ commands:
   storage   Storage actions
 ```
 
+* `account` commands deal with Batch accounts
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
 * `fs` commands deal with Batch Shipyard provisioned remote filesystems in
@@ -198,6 +200,27 @@ Shipyard
 categories
 * `pool` commands deal with Azure Batch pools
 * `storage` commands deal with Batch Shipyard metadata on Azure Storage
+
+## `account` Command
+The `account` command has the following sub-commands:
+```
+  info   Retrieve Batch account information and quotas
+  list   Retrieve a list of Batch accounts and...
+  quota  Retrieve Batch account quota at the...
+```
+
+* `info` provides information about the specified batch account provided
+in credentials
+    * `--name` is the name of the Batch account to query instead of the
+      one specified in credentials
+    * `--resource-group` is the name of the resource group to use associated
+      with the Batch account instead of the one specified in credentials
+* `list` provides information about all (or a subset) of accounts within
+the subscription in credentials
+    * `--resource-group` is the name of the resource group to scope the
+      query to
+* `quota` provides service level quota information for the subscription
+for a given location. Requires a valid location argument, e.g., `westus`.
 
 ## `cert` Command
 The `cert` command has the following sub-commands:
