@@ -166,12 +166,14 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
         if [ $PYTHON == "python" ]; then
             PYTHON_PKGS="python-devel"
         else
-            if [ $(yum list installed epel-release) -ne 0 ]; then
+            yum list installed epel-release
+            if [ $? -ne 0 ]; then
                 echo "epel-release package not installed."
                 echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
                 exit 1
             fi
-            if [ $(yum list installed python34) -ne 0 ]; then
+            yum list installed python34
+            if [ $? -ne 0 ]; then
                 echo "python34 epel package not installed."
                 echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
                 exit 1
@@ -181,7 +183,7 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
         $SUDO yum install -y gcc openssl-devel libffi-devel openssl \
             openssh-clients rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
-            curl -fSsL https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
+            curl -fSsL --tlsv1 https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
     elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
         $SUDO zypper ref
@@ -193,7 +195,7 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
         $SUDO zypper -n in gcc libopenssl-devel libffi48-devel openssl \
             openssh rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
-            curl -fSsL https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
+            curl -fSsL --tlsv1 https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
     elif [ $DISTRIB_ID == "Darwin" ]; then
         # check for pip, otherwise install it
