@@ -1,10 +1,18 @@
-# Batch Shipyard and Task Factories
-The focus of this article is to describe the task factory concept and how it
-can be utilized to generate arbitrary task arrays. This is particularly useful
-in creating parameter (parametric) sweeps, replicated/repeated tasks, or
-assigning generated parameters for tasks.
+# Batch Shipyard Task Factory and Merge Tasks
+The focus of this article is to describe the task factory and merge task
+concepts. Task factories can be utilized to generate arbitrary task arrays,
+and are particularly useful in creating parameter (parametric) sweeps,
+replicated/repeated tasks, or assigning generated parameters for tasks.
+Merge tasks can be used to automatically create dependent final tasks.
+A merge task is useful in cases where a final task is required after a set
+of tasks are run, and should only be run after those tasks complete.
 
-# Task Factory
+### Quick Navigation
+
+- [Task Factory](#taskfactory)
+- [Merge Task](#mergetask)
+
+# <a name="taskfactory"></a>Task Factory
 The normal configuration structure for a job in Batch Shipyard is through the
 definition of a `tasks` array which contain individual task specifications.
 Sometimes it is necessary to create a set of tasks where the base task
@@ -26,7 +34,7 @@ potentially different types of task factories per job.
 
 Now we'll dive into each type of task factory available in Batch Shipyard.
 
-#### Quick Navigation
+#### Task Factory Quick Navigation
 1. [Parametric Sweep: Product](#ps-product)
 2. [Parametric Sweep: Combinations](#ps-combinations)
 3. [Parametric Sweep: Permutations](#ps-permutations)
@@ -466,6 +474,27 @@ Shipyard environment into a virtual environment and your dependencies are
 non-local (i.e., not in the Batch Shipyard directory), then you need to
 ensure that your dependencies are properly installed in the correct
 environment.
+
+# <a name="mergetask"></a>Merge Task
+A merge task can be thought of as a final task that is run after all tasks
+specified within the `tasks` array complete successfully. The tasks for which
+a merge task is dependent upon can be manually generated or a task factory.
+
+For instance:
+
+```yaml
+tasks:
+- task_factory:
+    repeat: 3
+  command: /bin/bash -c "sleep 1"
+merge_task:
+  command: /bin/bash -c "echo merge"
+```
+
+would create four total tasks. Batch Shipyard will automatically create
+the dependencies between the `merge_task` which echoes "merge" with the
+three "sleep 1" tasks. Thus, the `merge_task` will run after all three
+sleep tasks complete successfully.
 
 ## Configuration guide
 Please see the [jobs configuration guide](14-batch-shipyard-configuration-jobs.md)
