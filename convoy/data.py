@@ -414,14 +414,14 @@ def process_output_data(config, bxfile, spec):
             if key == 'azure_storage':
                 args = _process_storage_output_data(
                     config, native, is_windows, output_data[key])
-                if is_windows:
-                    cmds = []
-                    for arg in args:
-                        cmds.append('""{}""'.format(arg))
-                    args = cmds
                 if native:
                     ret.extend(args)
                 else:
+                    if is_windows:
+                        cmds = []
+                        for arg in args:
+                            cmds.append('""{}""'.format(arg))
+                        args = cmds
                     ret.append(bxcmd.format(' '.join(args)))
             else:
                 raise ValueError(

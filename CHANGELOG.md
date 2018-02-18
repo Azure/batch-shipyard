@@ -44,6 +44,7 @@ information.
 - Fix regression in `pool images update` that would not login to
 registries in multi-instance mode
 - Fix `pool images` commands to more reliably work with SSH
+- Fix `output_data` with windows containers pools (#165)
 
 ## [3.1.0] - 2018-01-30
 ### Added

@@ -3589,6 +3589,7 @@ def _construct_task(
                 tc = ' && '.join(task_commands)
             else:
                 tc = '; '.join(task_commands)
+            tc = tc.strip()
         else:
             tc = util.wrap_commands_in_shell(task_commands, windows=is_windows)
     else:
