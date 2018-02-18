@@ -1251,6 +1251,28 @@ def pool_ssh(ctx, cardinal, nodeid, tty, command):
         ctx.batch_client, ctx.config, cardinal, nodeid, tty, command)
 
 
+@pool.command('rdp')
+@click.option(
+    '--cardinal',
+    help='Zero-based cardinal number of compute node in pool to connect to',
+    type=int)
+@click.option(
+    '--no-auto', is_flag=True,
+    help='Do not automatically login if RDP password is present')
+@click.option(
+    '--nodeid', help='NodeId of compute node in pool to connect to')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def pool_rdp(ctx, cardinal, no_auto, nodeid):
+    """Interactively login via RDP to a node in a pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_rdp(
+        ctx.batch_client, ctx.config, cardinal, nodeid, no_auto=no_auto)
+
+
 @pool.command('stats')
 @click.option('--poolid', help='Get stats on specified pool')
 @common_options

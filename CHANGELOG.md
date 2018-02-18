@@ -13,6 +13,7 @@ global configuration doc for more information.
       for a given location
 - `pool images update` command now supports updating Docker images
 in native container support pools via SSH
+- `pool rdp` sub-command added, please see usage doc for more information
 - Ability to specify an AAD authority URL via the `aad`:`authority_url`
 credential configuration, `--aad-authority-url` command line option or
 `SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant

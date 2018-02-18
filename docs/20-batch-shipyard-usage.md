@@ -523,6 +523,7 @@ The `pool` command has the following sub-commands:
   list       List all pools in the Batch account
   listskus   List available VM configurations available to...
   nodes      Compute node actions
+  rdp        Interactively login via RDP to a node in a...
   resize     Resize a pool
   ssh        Interactively login via SSH to a node in a...
   stats      Get statistics about a pool
@@ -600,6 +601,13 @@ in the specified pool
     * `--all-start-task-failed` will reboot all nodes in the start task
       failed state
     * `--nodeid` is the node id to reboot
+* `rdp` will interactively log into a compute node via RDP. If neither
+`--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed.
+    * `--cardinal` is the zero-based cardinal number of the compute node in
+      the pool to connect to as listed by `grls`
+    * `--no-auto` will prevent automatic login via temporary credential
+      saving if an RDP password is supplied via the pool configuration file
+    * `--nodeid` is the node id to connect to in the pool
 * `resize` will resize the pool to the `vm_count` specified in the pool
 configuration file
     * `--wait` will wait for resize to complete

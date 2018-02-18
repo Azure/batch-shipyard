@@ -88,8 +88,8 @@ on all other tasks within the job
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools
-* Automatic setup of SSH users to all nodes in the compute pool and optional
-tunneling to Docker Hosts on compute nodes
+* Automatic setup of SSH or RDP users to all nodes in the compute pool and
+optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
 * Support for execution on an

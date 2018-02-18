@@ -2941,6 +2941,47 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
         command=command)
 
 
+def action_pool_rdp(batch_client, config, cardinal, nodeid, no_auto=False):
+    # type: (batchsc.BatchServiceClient, dict, int, str, bool) -> None
+    """Action: Pool Rdp
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal node num
+    :param str nodeid: node id
+    :param bool no_auto: no auto login
+    """
+    _check_batch_client(batch_client)
+    if cardinal is not None and nodeid is not None:
+        raise ValueError('cannot specify both cardinal and nodeid options')
+    if cardinal is None and nodeid is None:
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or nodeid option '
+            'was specified')
+        cardinal = 0
+    if cardinal is not None and cardinal < 0:
+            raise ValueError('invalid cardinal option value')
+    pool = settings.pool_settings(config)
+    ip, port = batch.get_remote_login_setting_for_node(
+        batch_client, config, cardinal, nodeid)
+    if not no_auto and util.is_not_empty(pool.rdp.password):
+        rc = util.subprocess_with_output(
+            'cmdkey.exe /generic:TERMSRV/{ip} /user:{user} /pass:{pw}'.format(
+                ip=ip, port=port, user=pool.rdp.username,
+                pw=pool.rdp.password),
+            shell=True)
+        if rc != 0:
+            logger.warning('cmdkey exit code: {}'.format(rc))
+    util.subprocess_nowait(
+        'mstsc.exe /v:{ip}:{port}'.format(ip=ip, port=port), shell=True)
+    if not no_auto and util.is_not_empty(pool.rdp.password):
+        time.sleep(2)
+        rc = util.subprocess_with_output(
+            'cmdkey.exe /delete:TERMSRV/{}'.format(ip), shell=True)
+        if rc != 0:
+            logger.warning('cmdkey exit code: {}'.format(rc))
+
+
 def action_pool_nodes_del(
         batch_client, config, all_start_task_failed, all_starting,
         all_unusable, nodeid):
