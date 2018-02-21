@@ -10,7 +10,8 @@ provision and execute container-based batch processing and HPC workloads on
 pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
 [Singularity](http://singularity.lbl.gov/) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
-your containers with easy-to-understand configuration files.
+your containers with easy-to-understand configuration files. All Azure
+regions are supported, including non-public Azure regions.
 
 Additionally, Batch Shipyard provides the ability to provision and manage
 entire [standalone remote file systems (storage clusters)](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
@@ -19,8 +20,7 @@ in Azure, independent of any integrated Azure Batch functionality.
 Batch Shipyard is now integrated directly into
 [Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
 and you can execute any Batch Shipyard workload using your web browser or
-the Microsoft Azure
-[Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
+the Microsoft Azure [Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
 and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
 app.
 
@@ -44,21 +44,27 @@ and other Internet-accessible public and private registries
 * Support for the [Singularity Hub](https://singularity-hub.org/) Container
 Registry
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
-with integration to auto-link these filesystems to compute nodes with support for
+with integration to auto-link these filesystems to compute nodes with
+support for
     * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
     * [GlusterFS](https://www.gluster.org/) distributed network file system
 * Automatic shared data volume support
     * Remote Filesystems as provisioned by Batch Shipyard
-    * [Azure File](https://azure.microsoft.com/en-us/services/storage/files/) via SMB
-    * [GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
+    * [Azure File](https://azure.microsoft.com/en-us/services/storage/files/)
+      via SMB
+    * [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/)
+      via [blobfuse](https://github.com/Azure/azure-storage-fuse)
+    * [GlusterFS](https://www.gluster.org/) provisioned directly on compute
+      nodes
+    * Custom Linux mount support (fstab)
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/)
 to containers executed on compute nodes
 * Support for [Low Priority Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
-* Support for [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/) and autopool
-to dynamically scale and control computing resources on-demand
-* Support for [Task Factories](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory/)
+* Support for [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/)
+and autopool to dynamically scale and control computing resources on-demand
+* Support for [Task Factories and merge tasks](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)
 with the ability to generate tasks based on parametric (parameter) sweeps,
 randomized input, file enumeration, replication, and custom Python code-based
 generators
@@ -74,14 +80,16 @@ automatic job completion and task termination
 Infiniband/RDMA for MPI on HPC low-latency Azure VM instances:
     * [A-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_A8, STANDARD\_A9
     * [H-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-hpc): STANDARD\_H16R, STANDARD\_H16MR
-    * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R
+    * [N-Series](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/sizes-gpu): STANDARD\_NC24R, STANDARD\_NC24RS\_V2, STANDARD\_ND24RS
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/en-us/documentation/articles/batch-task-dependencies/)
-allowing complex processing pipelines and DAGs with containers
+allowing complex processing pipelines and DAGs
+* Support for merge or final task specification that automatically depends
+on all other tasks within the job
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools
-* Automatic setup of SSH users to all nodes in the compute pool and optional
-tunneling to Docker Hosts on compute nodes
+* Automatic setup of SSH or RDP users to all nodes in the compute pool and
+optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/)
 * Support for execution on an
@@ -96,6 +104,9 @@ Batch Shipyard is now integrated into Azure Cloud Shell with no installation
 required. Simply request a Cloud Shell session and type `shipyard` to invoke
 the CLI.
 
+Try Batch Shipyard now from your browser:
+[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
+
 ### Local Installation
 Please see [the installation guide](http://batch-shipyard.readthedocs.io/en/latest/01-batch-shipyard-installation/)
 for more information regarding installation and requirements.
@@ -106,7 +117,7 @@ Please refer to the
 
 Visit the
 [Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
-section for various sample Docker workloads using Azure Batch and Batch
+section for various sample container workloads using Azure Batch and Batch
 Shipyard.
 
 ## Batch Shipyard Compute Node OS Support
@@ -115,7 +126,9 @@ Marketplace Linux VMs,
 [compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/),
 and native Azure Batch
 [Windows Server with Containers](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/Microsoft.WindowsServer?tab=Overview)
-VMs.
+VMs. Please see the
+[platform image support](http://batch-shipyard.readthedocs.io/en/latest/25-batch-shipyard-platform-image-support/)
+documentation for more information.
 
 ## Change Log
 Please see the
