@@ -9,7 +9,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.09.0.ce-1.el7.centos",
+    "docker_version": "17.12.0.ce-1.el7.centos",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [
@@ -29,7 +29,7 @@
           "os_type": "Linux",
           "image_publisher": "OpenLogic",
           "image_offer": "CentOS",
-          "image_sku": "7.3",
+          "image_sku": "7.4",
 
           "location": "{{user `location`}}",
           "vm_size": "STANDARD_D2_V2"
@@ -49,7 +49,9 @@
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/bash -e",
-          "type": "shell"
+          "type": "shell",
+          "expect_disconnect": true,
+          "pause_before": "10s"
       }
   ]
 }

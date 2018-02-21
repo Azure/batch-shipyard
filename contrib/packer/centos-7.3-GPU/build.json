@@ -1,15 +1,13 @@
 {
   "variables": {
+    "image_name": "",
     "resource_group": "",
-    "storage_account": "",
-    "container_name": "",
-    "vhd_prefix": "",
     "location": "",
     "subscription_id": "",
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.12.0~ce-0~ubuntu",
+    "docker_version": "17.12.0.ce-1.el7.centos",
     "nvdriver": "NVIDIA-Linux-x86_64-384.111.run",
     "bootstrap": "bootstrap.sh"
   },
@@ -22,15 +20,13 @@
           "client_id": "{{user `application_id`}}",
           "client_secret": "{{user `auth_key`}}",
 
-          "resource_group_name": "{{user `resource_group`}}",
-          "storage_account": "{{user `storage_account`}}",
-          "capture_container_name": "{{user `container_name`}}",
-          "capture_name_prefix": "{{user `vhd_prefix`}}",
+          "managed_image_name": "{{user `image_name`}}",
+          "managed_image_resource_group_name": "{{user `resource_group`}}",
 
           "os_type": "Linux",
-          "image_publisher": "Canonical",
-          "image_offer": "UbuntuServer",
-          "image_sku": "16.04-LTS",
+          "image_publisher": "OpenLogic",
+          "image_offer": "CentOS",
+          "image_sku": "7.3",
 
           "location": "{{user `location`}}",
           "vm_size": "STANDARD_NC6"
@@ -55,7 +51,9 @@
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/bash -e",
-          "type": "shell"
+          "type": "shell",
+          "expect_disconnect": true,
+          "pause_before": "10s"
       }
   ]
 }

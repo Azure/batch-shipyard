@@ -9,7 +9,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.12.0~ce-0~ubuntu",
+    "docker_version": "17.12.0.ce-1.el7.centos",
     "nvdriver": "NVIDIA-Linux-x86_64-384.111.run",
     "bootstrap": "bootstrap.sh"
   },
@@ -28,9 +28,9 @@
           "capture_name_prefix": "{{user `vhd_prefix`}}",
 
           "os_type": "Linux",
-          "image_publisher": "Canonical",
-          "image_offer": "UbuntuServer",
-          "image_sku": "16.04-LTS",
+          "image_publisher": "OpenLogic",
+          "image_offer": "CentOS",
+          "image_sku": "7.3",
 
           "location": "{{user `location`}}",
           "vm_size": "STANDARD_NC6"
@@ -55,7 +55,9 @@
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/bash -e",
-          "type": "shell"
+          "type": "shell",
+          "expect_disconnect": true,
+          "pause_before": "10s"
       }
   ]
 }

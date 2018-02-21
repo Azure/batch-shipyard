@@ -7,7 +7,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.09.0~ce-0~ubuntu",
+    "docker_version": "17.12.0~ce-0~ubuntu",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [

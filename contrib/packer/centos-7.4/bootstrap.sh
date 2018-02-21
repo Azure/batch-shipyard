@@ -6,6 +6,14 @@ set -o pipefail
 dockerversion=$1
 shift
 
+# install LIS
+curl -fSsL http://download.microsoft.com/download/6/8/F/68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.3-5.tar.gz | tar -zxvpf -
+cd LISISO
+./install.sh
+cd ..
+rm -rf LISISO
+shutdown -r now
+
 # install docker
 yum install -y yum-utils device-mapper-persistent-data lvm2
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo

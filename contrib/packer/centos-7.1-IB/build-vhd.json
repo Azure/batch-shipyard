@@ -1,13 +1,15 @@
 {
   "variables": {
-    "image_name": "",
     "resource_group": "",
+    "storage_account": "",
+    "container_name": "",
+    "vhd_prefix": "",
     "location": "",
     "subscription_id": "",
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.09.0.ce-1.el7.centos",
+    "docker_version": "17.12.0.ce-1.el7.centos",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [
@@ -19,16 +21,20 @@
           "client_id": "{{user `application_id`}}",
           "client_secret": "{{user `auth_key`}}",
 
-          "managed_image_name": "{{user `image_name`}}",
-          "managed_image_resource_group_name": "{{user `resource_group`}}",
+          "resource_group_name": "{{user `resource_group`}}",
+          "storage_account": "{{user `storage_account`}}",
+          "capture_container_name": "{{user `container_name`}}",
+          "capture_name_prefix": "{{user `vhd_prefix`}}",
 
           "os_type": "Linux",
           "image_publisher": "OpenLogic",
           "image_offer": "CentOS",
-          "image_sku": "7.3",
+          "image_sku": "7.1",
+
+          "ssh_pty": "true",
 
           "location": "{{user `location`}}",
-          "vm_size": "STANDARD_D2_V2"
+          "vm_size": "STANDARD_A8"
       }
   ],
   "provisioners": [
@@ -45,7 +51,8 @@
               "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
           ],
           "inline_shebang": "/bin/bash -e",
-          "type": "shell"
+          "type": "shell",
+          "skip_clean": true
       }
   ]
 }
