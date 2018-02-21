@@ -148,17 +148,22 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
 
 
 def delete_managed_disks(
-        compute_client, config, name, resource_group=None, all=False,
-        wait=False, confirm_override=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str or list,
-    #        bool, bool, bool) -> dict
+        resource_client, compute_client, config, name, resource_group=None,
+        all=False, delete_resource_group=False, wait=False,
+        confirm_override=False):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient, dict, str or list,
+    #        bool, bool, bool, bool) -> dict
     """Delete managed disks
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param str or list name: specific disk name or list of names
     :param str resource_group: resource group of the disks
     :param bool all: delete all disks in resource group
+    :param bool delete_resource_group: delete resource group
     :param bool wait: wait for operation to complete
     :param bool confirm_override: override confirmation of delete
     :rtype: dict or None
@@ -168,6 +173,21 @@ def delete_managed_disks(
     # retrieve remotefs settings
     rfs = settings.remotefs_settings(config)
     resource_group = resource_group or rfs.managed_disks.resource_group
+    # delete rg if specified
+    if delete_resource_group:
+        if (not confirm_override and not util.confirm_action(
+                config, 'delete resource group {}'.format(resource_group))):
+            return
+        logger.info('deleting resource group {}'.format(resource_group))
+        async_delete = resource_client.resource_groups.delete(
+            resource_group_name=resource_group)
+        if wait:
+            logger.debug('waiting for resource group {} to delete'.format(
+                resource_group))
+            async_delete.result()
+            logger.info('resource group {} deleted'.format(
+                resource_group))
+        return
     # set disks to delete
     if all:
         disks = [

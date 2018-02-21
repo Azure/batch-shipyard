@@ -2315,22 +2315,27 @@ def action_fs_disks_add(resource_client, compute_client, config):
 
 
 def action_fs_disks_del(
-        compute_client, config, name, resource_group, all, wait):
-    # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
-    #        str, bool, bool) -> None
+        resource_client, compute_client, config, name, resource_group, all,
+        delete_resource_group, wait):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient, dict, str,
+    #        str, bool, bool, bool) -> None
     """Action: Fs Disks Del
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param str name: disk name
     :param str resource_group: resource group
     :param bool all: delete all in resource group
+    :param bool delete_resource_group: delete resource group
     :param bool wait: wait for operation to complete
     """
     _check_compute_client(compute_client)
     remotefs.delete_managed_disks(
-        compute_client, config, name, resource_group, all, wait,
-        confirm_override=False)
+        resource_client, compute_client, config, name, resource_group, all,
+        delete_resource_group, wait, confirm_override=False)
 
 
 def action_fs_disks_list(

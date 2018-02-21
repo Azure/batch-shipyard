@@ -977,6 +977,9 @@ def fs_disks_add(ctx):
 @click.option(
     '--all', is_flag=True, help='Delete all disks in resource group')
 @click.option(
+    '--delete-resource-group', is_flag=True,
+    help='Delete specified resource group')
+@click.option(
     '--name', help='Delete disk with specified name only')
 @click.option(
     '--resource-group',
@@ -988,11 +991,13 @@ def fs_disks_add(ctx):
 @fs_options
 @aad_options
 @pass_cli_context
-def fs_disks_del(ctx, all, name, resource_group, no_wait):
+def fs_disks_del(
+        ctx, all, delete_resource_group, name, resource_group, no_wait):
     """Delete managed disks in Azure"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_del(
-        ctx.compute_client, ctx.config, name, resource_group, all, not no_wait)
+        ctx.resource_client, ctx.compute_client, ctx.config, name,
+        resource_group, all, delete_resource_group, not no_wait)
 
 
 @disks.command('list')

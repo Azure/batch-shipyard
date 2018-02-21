@@ -132,7 +132,17 @@ def get_batch_account(
 
 
 def _generate_batch_account_log_entry(ba):
+    # type: (batchmgmtmodels.BatchAccount) -> list
+    """Generate a Batch account log entry
+    :param azure.mgmt.batch.models.BatchAccount ba: batch account
+    :rtype: list
+    :return: log entries for batch account
+    """
     log = ['* name: {}'.format(ba.name)]
+    # parse out sub id and resource group
+    tmp = ba.id.split('/')
+    log.append('  * subscription id: {}'.format(tmp[2]))
+    log.append('  * resource group: {}'.format(tmp[4]))
     log.append('  * location: {}'.format(ba.location))
     log.append('  * account url: https://{}'.format(ba.account_endpoint))
     log.append('  * pool allocation mode: {}'.format(

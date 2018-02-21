@@ -365,6 +365,7 @@ assumed.
 * `add` creates managed disks as specified in the fs config file
 * `del` deletes managed disks as specified in the fs config file
     * `--all` deletes all managed disks found in a specified resource group
+    * `--delete-resource-group` deletes the specified resource group
     * `--name` deletes a specific named disk in a resource group
     * `--no-wait` does not wait for disk deletion to complete. It is not
       recommended to use this parameter.

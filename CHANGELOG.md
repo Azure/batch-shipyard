@@ -6,7 +6,8 @@
 - Custom Linux Mount support for `shared_data_volumes`. Please see the
 global configuration doc for more information.
 - `account` command added with the following sub-commands:
-    - `info` provides information about a Batch account
+    - `info` provides information about a Batch account (including account
+      level quotas)
     - `list` provides information about all (or a resource group subset) of
       accounts within the subscription specified in credentials
     - `quota` provides service level quota information for the subscription
@@ -19,9 +20,13 @@ credential configuration, `--aad-authority-url` command line option or
 `SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant
 documentation for credentials and usage.
 - Support for CentOS 7.4 and Debian 9 compute node hosts. CentOS 7.4
-on GPU nodes is currently unsupported; CentOS 7.3 will continue to work.
+on GPU nodes is currently unsupported; CentOS 7.3 will continue to work on
+N-series.
 - Support for offer `WindowsServerSemiAnnual` and sku
 `Datacenter-Core-1709-with-Containers-smalldisk`
+- `--delete-resource-group` option added to `fs disks del` command
+- CentOS-HPC 7.1, CentOS 7.3 GPU, and CentOS 7.4 packer scripts added to
+contrib area
 
 ### Changed
 - **Breaking Change:** `additional_node_prep_commands` is now a dictionary
@@ -33,6 +38,7 @@ information.
 - Improve some error messages/handling
 - Update dependencies to latest
 - Linux pre-built binary is no longer gzipped
+- Update packer scripts in contrib area
 
 ### Fixed
 - AAD auth for ARM endpoints in non-public Azure cloud regions
