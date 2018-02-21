@@ -2,10 +2,11 @@
 
 ## [Unreleased]
 
+## [3.2.0] - 2018-02-21
 ### Added
 - Custom Linux Mount support for `shared_data_volumes`. Please see the
 global configuration doc for more information.
-- `account` command added with the following sub-commands:
+- `account` command added with the following sub-commands (requires AAD auth):
     - `info` provides information about a Batch account (including account
       level quotas)
     - `list` provides information about all (or a resource group subset) of
@@ -14,7 +15,9 @@ global configuration doc for more information.
       for a given location
 - `pool images update` command now supports updating Docker images
 in native container support pools via SSH
-- `pool rdp` sub-command added, please see usage doc for more information
+- `pool rdp` sub-command added, please see usage doc for more information.
+Requires Batch Shipyard executing on Windows with target Windows containers
+pools.
 - Ability to specify an AAD authority URL via the `aad`:`authority_url`
 credential configuration, `--aad-authority-url` command line option or
 `SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant
@@ -22,11 +25,13 @@ documentation for credentials and usage.
 - Support for CentOS 7.4 and Debian 9 compute node hosts. CentOS 7.4
 on GPU nodes is currently unsupported; CentOS 7.3 will continue to work on
 N-series.
-- Support for offer `WindowsServerSemiAnnual` and sku
+- Support for publisher `MicrosoftWindowsServer`, offer
+`WindowsServerSemiAnnual`, and sku
 `Datacenter-Core-1709-with-Containers-smalldisk`
 - `--delete-resource-group` option added to `fs disks del` command
 - CentOS-HPC 7.1, CentOS 7.3 GPU, and CentOS 7.4 packer scripts added to
 contrib area
+- Add documentation for which `platform_image`s are supported
 
 ### Changed
 - **Breaking Change:** `additional_node_prep_commands` is now a dictionary
@@ -1116,7 +1121,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.1.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.2.0...HEAD
+[3.2.0]: https://github.com/Azure/batch-shipyard/compare/3.1.0...3.2.0
 [3.1.0]: https://github.com/Azure/batch-shipyard/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/Azure/batch-shipyard/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/Azure/batch-shipyard/compare/3.0.1...3.0.2
