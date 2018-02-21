@@ -19,6 +19,7 @@ pages:
   - Jobs: 14-batch-shipyard-configuration-jobs.md
   - RemoteFS: 15-batch-shipyard-configuration-fs.md
 - CLI Commands and Usage: 20-batch-shipyard-usage.md
+- Platform Image support: 25-batch-shipyard-platform-image-support.md
 - In-Depth Feature Guides:
   - Autoscale: 30-batch-shipyard-autoscale.md
   - Task Factory and Merge Tasks: 35-batch-shipyard-task-factory-merge-task.md

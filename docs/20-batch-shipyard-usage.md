@@ -603,7 +603,9 @@ in the specified pool
       failed state
     * `--nodeid` is the node id to reboot
 * `rdp` will interactively log into a compute node via RDP. If neither
-`--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed.
+`--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed. This
+command requires Batch Shipyard executing on Windows with target Windows
+containers pools.
     * `--cardinal` is the zero-based cardinal number of the compute node in
       the pool to connect to as listed by `grls`
     * `--no-auto` will prevent automatic login via temporary credential

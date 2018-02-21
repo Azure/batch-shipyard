@@ -126,7 +126,9 @@ Marketplace Linux VMs,
 [compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/),
 and native Azure Batch
 [Windows Server with Containers](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/Microsoft.WindowsServer?tab=Overview)
-VMs.
+VMs. Please see the
+[platform image support](http://batch-shipyard.readthedocs.io/en/latest/25-batch-shipyard-platform-image-support/)
+documentation for more information.
 
 ## Change Log
 Please see the
