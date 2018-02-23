@@ -62,7 +62,7 @@ Job Schedule in which users can specify times for when a job should run or
 as part of any recurring schedule.
 
 Files required as part of a task or generated as a side-effect of a task
-can be referenced using a compute job heirarchy or a compute node heirarchy
+can be referenced using a compute job hierarchy or a compute node hierarchy
 (if the absolute file location is known). Files existing on compute nodes can
 be transferred to any accessible endpoint, including Azure Storage. Files
 may also be fetched from live compute nodes (i.e., nodes that have not yet
