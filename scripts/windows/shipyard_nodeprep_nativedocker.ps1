@@ -1,6 +1,7 @@
 param(
 	[switch] $a,  # mount azurefile shares
 	[String] $e,  # encrypted sha1 cert
+	[switch] $u,  # custom image
 	[String] $v,  # batch-shipyard version
 	[String] $x   # blobxfer version
 )
@@ -28,6 +29,7 @@ Write-Host "---------------------------------------"
 Write-Host "Batch Shipyard version: $v"
 Write-Host "Blobxfer version: $x"
 Write-Host "Mounts path: $MountsPath"
+Write-Host "Custom image: $u"
 Write-Host "Encrypted: $e"
 Write-Host "Azure File: $a"
 Write-Host ""

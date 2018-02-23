@@ -10,6 +10,7 @@ MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 azurefile=0
 azureblob=0
 blobxferversion=latest
+custom_image=0
 encrypted=
 gluster_on_compute=0
 networkopt=0
@@ -17,7 +18,7 @@ sc_args=
 version=
 
 # process command line options
-while getopts "h?acef:m:nv:x:" opt; do
+while getopts "h?acef:m:nuv:x:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep_nativedocker.sh parameters"
@@ -28,6 +29,7 @@ while getopts "h?acef:m:nv:x:" opt; do
             echo "-f set up glusterfs on compute"
             echo "-m [type:scid] mount storage cluster"
             echo "-n optimize network TCP settings"
+            echo "-u custom image"
             echo "-v [version] batch-shipyard version"
             echo "-x [blobxfer version] blobxfer version"
             echo ""
@@ -50,6 +52,9 @@ while getopts "h?acef:m:nv:x:" opt; do
             ;;
         n)
             networkopt=1
+            ;;
+        u)
+            custom_image=1
             ;;
         v)
             version=$OPTARG
@@ -157,6 +162,15 @@ check_docker_root_dir() {
 
 check_for_docker_host_engine() {
     set +e
+    # enable and start docker service if custom image
+    if [ $custom_image -eq 1 ]; then
+        docker --version
+        if [ $? -ne 0 ]; then
+            systemctl enable docker.service
+            systemctl start docker.service
+        fi
+    fi
+    systemctl status docker.service
     docker --version
     if [ $? -ne 0 ]; then
         echo "ERROR: Docker not installed"
@@ -382,6 +396,7 @@ echo "------------------------------"
 echo "Batch Shipyard version: $version"
 echo "Blobxfer version: $blobxferversion"
 echo "Distrib ID/Release: $DISTRIB_ID $DISTRIB_RELEASE"
+echo "Custom image: $custom_image"
 echo "Network optimization: $networkopt"
 echo "Encrypted: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
@@ -453,59 +468,63 @@ check_docker_root_dir $DISTRIB_ID
 # check for nvidia card/driver/docker
 check_for_nvidia
 
-# install gluster on compute
-if [ $gluster_on_compute -eq 1 ]; then
-    if [ $DISTRIB_ID == "ubuntu" ]; then
-        install_packages $DISTRIB_ID glusterfs-server
-        systemctl enable glusterfs-server
-        systemctl start glusterfs-server
-        # create brick directory
-        mkdir -p /mnt/gluster
-    elif [[ $DISTRIB_ID == centos* ]]; then
-        install_packages $DISTRIB_ID epel-release centos-release-gluster38
-        sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-        install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server
-        systemctl daemon-reload
-        chkconfig glusterd on
-        systemctl start glusterd
-        # create brick directory
-        mkdir -p /mnt/resource/gluster
+# install gluster on compute software
+if [ $custom_image -eq 0 ]; then
+    if [ $gluster_on_compute -eq 1 ]; then
+        if [ $DISTRIB_ID == "ubuntu" ]; then
+            install_packages $DISTRIB_ID glusterfs-server
+            systemctl enable glusterfs-server
+            systemctl start glusterfs-server
+            # create brick directory
+            mkdir -p /mnt/gluster
+        elif [[ $DISTRIB_ID == centos* ]]; then
+            install_packages $DISTRIB_ID epel-release centos-release-gluster38
+            sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+            install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server
+            systemctl daemon-reload
+            chkconfig glusterd on
+            systemctl start glusterd
+            # create brick directory
+            mkdir -p /mnt/resource/gluster
+        fi
     fi
 fi
 
 # install storage cluster software
-if [ ! -z $sc_args ]; then
-    if [ $DISTRIB_ID == "ubuntu" ]; then
-        for sc_arg in ${sc_args[@]}; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
-                install_packages $DISTRIB_ID nfs-common nfs4-acl-tools
-            elif [ $server_type == "glusterfs" ]; then
-                install_packages $DISTRIB_ID glusterfs-client acl
-            else
-                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
-                exit 1
-            fi
-        done
-    elif [[ $DISTRIB_ID == centos* ]]; then
-        for sc_arg in ${sc_args[@]}; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
-                install_packages $DISTRIB_ID nfs-utils nfs4-acl-tools
-                systemctl daemon-reload
-                systemctl enable rpcbind
-                systemctl start rpcbind
-            elif [ $server_type == "glusterfs" ]; then
-                install_packages $DISTRIB_ID epel-release centos-release-gluster38
-                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server acl
-            else
-                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
-                exit 1
-            fi
-        done
+if [ $custom_image -eq 0 ]; then
+    if [ ! -z $sc_args ]; then
+        if [ $DISTRIB_ID == "ubuntu" ]; then
+            for sc_arg in ${sc_args[@]}; do
+                IFS=':' read -ra sc <<< "$sc_arg"
+                server_type=${sc[0]}
+                if [ $server_type == "nfs" ]; then
+                    install_packages $DISTRIB_ID nfs-common nfs4-acl-tools
+                elif [ $server_type == "glusterfs" ]; then
+                    install_packages $DISTRIB_ID glusterfs-client acl
+                else
+                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                    exit 1
+                fi
+            done
+        elif [[ $DISTRIB_ID == centos* ]]; then
+            for sc_arg in ${sc_args[@]}; do
+                IFS=':' read -ra sc <<< "$sc_arg"
+                server_type=${sc[0]}
+                if [ $server_type == "nfs" ]; then
+                    install_packages $DISTRIB_ID nfs-utils nfs4-acl-tools
+                    systemctl daemon-reload
+                    systemctl enable rpcbind
+                    systemctl start rpcbind
+                elif [ $server_type == "glusterfs" ]; then
+                    install_packages $DISTRIB_ID epel-release centos-release-gluster38
+                    sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
+                    install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server acl
+                else
+                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                    exit 1
+                fi
+            done
+        fi
     fi
 fi
 

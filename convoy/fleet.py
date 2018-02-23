@@ -1072,17 +1072,18 @@ def _construct_pool_object(
             _rflist.append(_NODEPREP_WINDOWS_FILE)
             start_task.append(
                 ('powershell -ExecutionPolicy Unrestricted -command '
-                 '{npf}{a}{e}{v}{x}').format(
+                 '{npf}{a}{e}{u}{v}{x}').format(
                      npf=_NODEPREP_WINDOWS_FILE[0],
                      a=' -a' if azurefile_vd else '',
                      e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                     u=' -u' if util.is_not_empty(custom_image_na) else '',
                      v=' -v {}'.format(__version__),
                      x=' -x {}'.format(data._BLOBXFER_VERSION))
             )
         else:
             _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
             start_task.append(
-                '{npf}{a}{c}{e}{f}{m}{n}{v}{x}'.format(
+                '{npf}{a}{c}{e}{f}{m}{n}{u}{v}{x}'.format(
                     npf=_NODEPREP_NATIVEDOCKER_FILE[0],
                     a=' -a' if azurefile_vd else '',
                     c=' -c' if azureblob_vd else '',
@@ -1092,6 +1093,7 @@ def _construct_pool_object(
                         sc_args) else '',
                     n=' -n' if settings.can_tune_tcp(
                         pool_settings.vm_size) else '',
+                    u=' -u' if util.is_not_empty(custom_image_na) else '',
                     v=' -v {}'.format(__version__),
                     x=' -x {}'.format(data._BLOBXFER_VERSION),
                 )
