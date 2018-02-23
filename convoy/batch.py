@@ -2438,6 +2438,8 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
         if node.errors is not None:
             for err in node.errors:
                 errors.append('    * {}: {}'.format(err.code, err.message))
+                for de in err.error_details:
+                    errors.append('      * {}: {}'.format(de.name, de.value))
         else:
             errors = ['  * no errors']
         st = ['  * start task:']
