@@ -164,14 +164,14 @@ check_for_docker_host_engine() {
     set +e
     # enable and start docker service if custom image
     if [ $custom_image -eq 1 ]; then
-        docker --version
+        docker version --format '{{.Server.Version}}'
         if [ $? -ne 0 ]; then
             systemctl enable docker.service
             systemctl start docker.service
         fi
     fi
     systemctl status docker.service
-    docker --version
+    docker version --format '{{.Server.Version}}'
     if [ $? -ne 0 ]; then
         echo "ERROR: Docker not installed"
         exit 1
@@ -440,10 +440,17 @@ fi
 # create shared mount points
 mkdir -p $AZ_BATCH_NODE_ROOT_DIR/mounts
 
-# mount azure file shares (this must be done every boot)
+# mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
     mount_azurefile_share $DISTRIB_ID $DISTRIB_RELEASE
 fi
+if [ $azureblob -eq 1 ]; then
+    mount_azureblob_container $DISTRIB_ID $DISTRIB_RELEASE
+fi
+
+# check for docker host engine
+check_for_docker_host_engine
+check_docker_root_dir $DISTRIB_ID
 
 # check if we're coming up from a reboot
 if [ -f $nodeprepfinished ]; then
@@ -452,7 +459,7 @@ if [ -f $nodeprepfinished ]; then
 fi
 
 # one-time setup
-if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
+if [ $networkopt -eq 1 ]; then
     # do not fail script if this function fails
     set +e
     optimize_tcp_network_settings $DISTRIB_ID $DISTRIB_RELEASE
@@ -460,10 +467,6 @@ if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
     # set sudoers to not require tty
     sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
-
-# check for docker host engine
-check_for_docker_host_engine
-check_docker_root_dir $DISTRIB_ID
 
 # check for nvidia card/driver/docker
 check_for_nvidia

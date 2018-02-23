@@ -576,9 +576,6 @@ fi
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
-# get ip address of eth0
-ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
-
 # decrypt encrypted creds
 if [ ! -z $encrypted ]; then
     # convert pfx to pem
@@ -609,6 +606,9 @@ elif [ -f $nodeprepfinished ]; then
     echo "INFO: $nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
+
+# get ip address of eth0
+ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
 
 # one-time setup
 if [ ! -f $nodeprepfinished ]; then
@@ -656,6 +656,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
         repo=https://download.docker.com/linux/ubuntu
         dockerversion=${dockerversion}ubuntu
+        USER_MOUNTPOINT=/mnt
     elif [[ $sku == 16.04* ]]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
@@ -667,6 +668,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gpgkey=https://download.docker.com/linux/ubuntu/gpg
         repo=https://download.docker.com/linux/ubuntu
         dockerversion=${dockerversion}ubuntu
+        USER_MOUNTPOINT=/mnt
     elif [[ $sku == "8" ]]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
@@ -678,6 +680,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gpgkey=https://download.docker.com/linux/debian/gpg
         repo=https://download.docker.com/linux/debian
         dockerversion=${dockerversion}debian
+        USER_MOUNTPOINT=/mnt/resource
     elif [[ $sku == "9" ]]; then
         name=debian-stretch
         srvstart="systemctl start docker.service"
@@ -689,6 +692,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         gpgkey=https://download.docker.com/linux/debian/gpg
         repo=https://download.docker.com/linux/debian
         dockerversion=${dockerversion}debian
+        USER_MOUNTPOINT=/mnt/resource
     else
         echo "ERROR: unsupported sku: $sku for offer: $offer"
         exit 1
@@ -718,40 +722,29 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
     # refresh index
     refresh_package_index $offer
-    # ensure docker opts service modifications are idempotent
-    set +e
-    grep '^DOCKER_OPTS=' /etc/default/docker
-    if [ $? -ne 0 ]; then
+    # ensure docker daemon modifications are idempotent
+    if [ ! -s "/etc/docker/daemon.json" ]; then
         # install docker engine
         install_packages $offer docker-ce=$dockerversion
         set -e
         $srvstop
         set +e
-        rm -f /var/lib/docker/network/files/local-kv.db
-        if [[ $name == debian* ]]; then
-            mkdir -p /mnt/resource/docker-tmp
-            sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
-            sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
-        else
-            mkdir -p /mnt/docker-tmp
-            sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/docker-tmp\" >> /etc/default/docker
-            sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/docker\" >> /etc/default/docker
-        fi
+        rm -rf /var/lib/docker
+        mkdir -p /etc/docker
+        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        # ensure no options are specified after dockerd
         if [ "$name" != "ubuntu-trusty" ]; then
-            sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
-            sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
-            set -e
+            sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
             systemctl daemon-reload
-            $srvenable
-            set +e
         fi
         set -e
+        $srvenable
         $srvstart
         set +e
     fi
-    set -e
     # ensure docker daemon is running
     $srvstatus
+    docker version --format '{{.Server.Version}}'
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         install_nvidia_software $offer $sku
@@ -794,6 +787,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         fi
     fi
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then
+    USER_MOUNTPOINT=/mnt/resource
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
         echo "ERROR: only supported through shipyard container"
@@ -809,6 +803,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         if [[ $offer == "oracle-linux" ]]; then
             srvenable="systemctl enable docker.service"
             srvstart="systemctl start docker.service"
+            srvstop="systemctl stop docker.service"
             srvstatus="systemctl status docker.service"
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
@@ -818,6 +813,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         else
             srvenable="chkconfig docker on"
             srvstart="systemctl start docker.service"
+            srvstop="systemctl stop docker.service"
             srvstatus="systemctl status docker.service"
             gfsenable="chkconfig glusterd on"
             rpcbindenable="chkconfig rpcbind on"
@@ -835,17 +831,23 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     add_repo $offer https://download.docker.com/linux/centos/docker-ce.repo
     refresh_package_index $offer
     install_packages $offer docker-ce-$dockerversion
-    # modify docker opts
-    mkdir -p /mnt/resource/docker-tmp
-    sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
-    sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/default/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/default/docker
-    sed -i '/^\[Service\]/a EnvironmentFile=/etc/default/docker' /lib/systemd/system/docker.service
-    sed -i '/^ExecStart=/ s/$/ $DOCKER_OPTS/' /lib/systemd/system/docker.service
-    systemctl daemon-reload
+    # ensure docker daemon modifications are idempotent
+    if [ ! -s "/etc/docker/daemon.json" ]; then
+        set -e
+        $srvstop
+        set +e
+        rm -rf /var/lib/docker
+        mkdir -p /etc/docker
+        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        # ensure no options are specified after dockerd
+        sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
+        systemctl daemon-reload
+    fi
     # start docker service and enable docker daemon on boot
     $srvenable
     $srvstart
     $srvstatus
+    docker version --format '{{.Server.Version}}'
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         install_nvidia_software $offer $sku
@@ -882,6 +884,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         done
     fi
 elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
+    USER_MOUNTPOINT=/mnt/resource
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
         echo "ERROR: only supported through shipyard container"
@@ -926,15 +929,22 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         refresh_package_index $offer
         # install docker engine
         install_packages $offer docker-$dockerversion
-        # modify docker opts, docker opts in /etc/sysconfig/docker
-        mkdir -p /mnt/resource/docker-tmp
-        sed -i -e 's,.*export DOCKER_TMPDIR=.*,export DOCKER_TMPDIR="/mnt/resource/docker-tmp",g' /etc/default/docker || echo export DOCKER_TMPDIR=\"/mnt/resource/docker-tmp\" >> /etc/default/docker
-        sed -i -e '/^DOCKER_OPTS=.*/,${s||DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\"|;b};$q1' /etc/sysconfig/docker || echo DOCKER_OPTS=\"-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -g /mnt/resource/docker\" >> /etc/sysconfig/docker
-        systemctl daemon-reload
-        # start docker service and enable docker daemon on boot
+        # ensure docker daemon modifications are idempotent
+        if [ ! -s "/etc/docker/daemon.json" ]; then
+            set -e
+            systemctl stop docker
+            set +e
+            rm -rf /var/lib/docker
+            mkdir -p /etc/docker
+            echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+            # ensure no options are specified after dockerd
+            sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /usr/lib/systemd/system/docker.service
+            systemctl daemon-reload
+        fi
         systemctl enable docker
         systemctl start docker
         systemctl status docker
+        docker version --format '{{.Server.Version}}'
         # set up glusterfs
         if [ $gluster_on_compute -eq 1 ]; then
             add_repo $offer http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo

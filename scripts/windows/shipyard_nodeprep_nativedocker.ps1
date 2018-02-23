@@ -35,7 +35,7 @@ Write-Host "Azure File: $a"
 Write-Host ""
 
 # check for docker
-Exec { docker --version }
+Exec { docker version --format '{{.Server.Version}}' }
 
 # mount azure file shares
 if ($a) {

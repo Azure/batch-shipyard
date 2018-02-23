@@ -183,7 +183,7 @@ check_for_docker_host_engine() {
     systemctl enable docker.service
     systemctl start docker.service
     systemctl status docker.service
-    docker --version
+    docker version --format '{{.Server.Version}}'
     if [ $? -ne 0 ]; then
         echo "ERROR: Docker not installed"
         exit 1
@@ -427,9 +427,6 @@ fi
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
-# get ip address of eth0
-ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
-
 # decrypt encrypted creds
 if [ ! -z $encrypted ]; then
     # convert pfx to pem
@@ -463,6 +460,10 @@ if [ $azureblob -eq 1 ]; then
     mount_azureblob_container $DISTRIB_ID $DISTRIB_RELEASE
 fi
 
+# check for docker host engine
+check_for_docker_host_engine
+check_docker_root_dir $DISTRIB_ID
+
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
     echo "$cascadefailed file exists, assuming cascade failure during node prep"
@@ -472,8 +473,11 @@ elif [ -f $nodeprepfinished ]; then
     exit 0
 fi
 
+# get ip address of eth0
+ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
+
 # one-time setup
-if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
+if [ $networkopt -eq 1 ]; then
     # do not fail script if this function fails
     set +e
     optimize_tcp_network_settings $DISTRIB_ID $DISTRIB_RELEASE
@@ -481,10 +485,6 @@ if [ ! -f $nodeprepfinished ] && [ $networkopt -eq 1 ]; then
     # set sudoers to not require tty
     sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
-
-# check for docker host engine
-check_for_docker_host_engine
-check_docker_root_dir $DISTRIB_ID
 
 # check for nvidia card/driver/docker
 check_for_nvidia
