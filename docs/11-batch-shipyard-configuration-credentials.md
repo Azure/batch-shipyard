@@ -264,6 +264,7 @@ below for your region:
 Here is an example skeleton for connecting to Azure Government with AAD:
 
 ```yaml
+credentials:
   aad:
     authority_url: https://login.microsoftonline.us
     directory_id: # insert your directory/tenant id
