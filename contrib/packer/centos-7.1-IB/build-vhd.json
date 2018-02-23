@@ -28,7 +28,7 @@
 
           "os_type": "Linux",
           "image_publisher": "OpenLogic",
-          "image_offer": "CentOS",
+          "image_offer": "CentOS-HPC",
           "image_sku": "7.1",
 
           "ssh_pty": "true",
