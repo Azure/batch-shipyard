@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+- Expand node error details
+- Name resources for RemoteFS with 3 digits (e.g., 000 instead of 0) for
+improved alpha ordering
+
+### Fixed
+- Remote FS cluster del with disks error
+- Unintended interaction between native mode and custom images
+- Update packer scripts and fix typos
+- Minor doc updates
+
 ## [3.2.0] - 2018-02-21
 ### Added
 - Custom Linux Mount support for `shared_data_volumes`. Please see the

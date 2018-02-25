@@ -1830,7 +1830,7 @@ def delete_storage_cluster(
             continue
         if len(data_disks) > 0:
             async_ops['data_disks'].append(delete_managed_disks(
-                compute_client, config, data_disks,
+                resource_client, compute_client, config, data_disks,
                 resource_group=rfs.managed_disks.resource_group, wait=False))
     # delete os disks
     async_ops['os_disk'] = []
@@ -1839,7 +1839,7 @@ def delete_storage_cluster(
         if util.is_none_or_empty(os_disk):
             continue
         async_ops['os_disk'].append(delete_managed_disks(
-            compute_client, config, os_disk,
+            resource_client, compute_client, config, os_disk,
             resource_group=rfs.storage_cluster.resource_group, wait=False,
             confirm_override=True))
     # delete nsg

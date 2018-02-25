@@ -3821,7 +3821,7 @@ def generate_virtual_machine_name(sc, i):
     :rtype: str
     :return: vm name
     """
-    return '{}-vm{}'.format(sc.hostname_prefix, i)
+    return '{}-vm{}'.format(sc.hostname_prefix, str(i).zfill(3))
 
 
 def get_offset_from_virtual_machine_name(vm_name):
@@ -3841,7 +3841,7 @@ def generate_virtual_machine_extension_name(sc, i):
     :rtype: str
     :return: vm extension name
     """
-    return '{}-vmext{}'.format(sc.hostname_prefix, i)
+    return '{}-vmext{}'.format(sc.hostname_prefix, str(i).zfill(3))
 
 
 def generate_network_security_group_name(sc):
@@ -3861,7 +3861,7 @@ def generate_network_security_inbound_rule_name(rule_name, i):
     :rtype: str
     :return: inbound rule name
     """
-    return '{}_in-{}'.format(rule_name, i)
+    return '{}_in-{}'.format(rule_name, str(i).zfill(3))
 
 
 def generate_network_security_inbound_rule_description(rule_name, i):
@@ -3871,7 +3871,7 @@ def generate_network_security_inbound_rule_description(rule_name, i):
     :rtype: str
     :return: inbound description
     """
-    return '{} inbound ({})'.format(rule_name, i)
+    return '{} inbound ({})'.format(rule_name, str(i).zfill(3))
 
 
 def generate_public_ip_name(sc, i):
@@ -3881,7 +3881,7 @@ def generate_public_ip_name(sc, i):
     :rtype: str
     :return: public ip name
     """
-    return '{}-pip{}'.format(sc.hostname_prefix, i)
+    return '{}-pip{}'.format(sc.hostname_prefix, str(i).zfill(3))
 
 
 def generate_hostname(sc, i):
@@ -3891,7 +3891,7 @@ def generate_hostname(sc, i):
     :rtype: str
     :return: hostname
     """
-    return '{}{}'.format(sc.hostname_prefix, i)
+    return '{}{}'.format(sc.hostname_prefix, str(i).zfill(3))
 
 
 def generate_network_interface_name(sc, i):
@@ -3901,7 +3901,7 @@ def generate_network_interface_name(sc, i):
     :rtype: str
     :return: network interface name
     """
-    return '{}-ni{}'.format(sc.hostname_prefix, i)
+    return '{}-ni{}'.format(sc.hostname_prefix, str(i).zfill(3))
 
 
 def get_file_server_glusterfs_volume_name(sc):
