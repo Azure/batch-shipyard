@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- `storage sas create` command added as a utility helper function to create
+SAS tokens for given storage accounts in credentials
+
 ### Changed
 - Expand node error details
 - Name resources for RemoteFS with 3 digits (e.g., 000 instead of 0) for

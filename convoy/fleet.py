@@ -3497,6 +3497,26 @@ def action_storage_clear(blob_client, table_client, config, poolid):
         blob_client, table_client, config, pool_id=poolid)
 
 
+def action_storage_sas_create(
+        config, storage_account, path, file, create, read, write, delete):
+    # type: (dict, str, str, bool, bool, bool, bool, bool) -> None
+    """Action: Storage Sas Create
+    :param dict config: configuration dict
+    :param str storage_account: storage account
+    :param str path: path
+    :param bool file: file sas
+    :param bool create: create perm
+    :param bool read: read perm
+    :param bool write: write perm
+    :param bool delete: delete perm
+    """
+    # reset storage settings to target poolid
+    creds = settings.credentials_storage(config, storage_account)
+    sas = storage.create_saskey(creds, path, file, create, read, write, delete)
+    logger.info('generated SAS URL: https://{}.{}.{}/{}?{}'.format(
+        creds.account, 'file' if file else 'blob', creds.endpoint, path, sas))
+
+
 def action_data_files_stream(batch_client, config, filespec, disk):
     # type: (batchsc.BatchServiceClient, dict, str, bool) -> None
     """Action: Data Files Stream

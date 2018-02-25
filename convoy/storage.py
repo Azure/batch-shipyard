@@ -227,6 +227,65 @@ def create_file_share_saskey(
     )
 
 
+def create_saskey(storage_settings, path, file, create, read, write, delete):
+    # type: (settings.StorageCredentialsSettings, str, bool, bool, bool,
+    #        bool, bool) -> None
+    """Create an object-level sas key
+    :param settings.StorageCredentialsSetting storage_settings:
+        storage settings
+    :param str path: path
+    :param bool file: file sas
+    :param bool create: create perm
+    :param bool read: read perm
+    :param bool write: write perm
+    :param bool delete: delete perm
+    :rtype: str
+    :return: sas token
+    """
+    if file:
+        client = azurefile.FileService(
+            account_name=storage_settings.account,
+            account_key=storage_settings.account_key,
+            endpoint_suffix=storage_settings.endpoint)
+        perm = azurefile.FilePermissions(
+            read=read, create=create, write=write, delete=delete)
+        tmp = path.split('/')
+        if len(tmp) < 2:
+            raise ValueError('path is invalid: {}'.format(path))
+        share_name = tmp[0]
+        if len(tmp) == 2:
+            directory_name = ''
+            file_name = tmp[1]
+        else:
+            directory_name = tmp[1]
+            file_name = '/'.join(tmp[2:])
+        sas = client.generate_file_shared_access_signature(
+            share_name=share_name, directory_name=directory_name,
+            file_name=file_name, permission=perm,
+            expiry=datetime.datetime.utcnow() +
+            datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
+        )
+    else:
+        client = azureblob.BlockBlobService(
+            account_name=storage_settings.account,
+            account_key=storage_settings.account_key,
+            endpoint_suffix=storage_settings.endpoint)
+        perm = azureblob.BlobPermissions(
+            read=read, create=create, write=write, delete=delete)
+        tmp = path.split('/')
+        if len(tmp) < 1:
+            raise ValueError('path is invalid: {}'.format(path))
+        container_name = tmp[0]
+        blob_name = '/'.join(tmp[1:])
+        sas = client.generate_blob_shared_access_signature(
+            container_name=container_name, blob_name=blob_name,
+            permission=perm,
+            expiry=datetime.datetime.utcnow() +
+            datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
+        )
+    return sas
+
+
 def _construct_partition_key_from_config(config, pool_id=None):
     # type: (dict, str) -> str
     """Construct partition key from config

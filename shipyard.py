@@ -1055,6 +1055,37 @@ def storage_clear(ctx, poolid):
         ctx.blob_client, ctx.table_client, ctx.config, poolid)
 
 
+@storage.group()
+@pass_cli_context
+def sas(ctx):
+    """SAS key actions"""
+    pass
+
+
+@sas.command('create')
+@click.option(
+    '--create', is_flag=True, help='Create permission')
+@click.option(
+    '--delete', is_flag=True, help='Delete permission')
+@click.option(
+    '--file', is_flag=True, help='Create file SAS instead of blob SAS')
+@click.option(
+    '--read', is_flag=True, help='Read permission')
+@click.option(
+    '--write', is_flag=True, help='Write permission')
+@click.argument('storage-account')
+@click.argument('path')
+@common_options
+@batch_options
+@keyvault_options
+@pass_cli_context
+def sas_create(ctx, create, delete, file, read, write, storage_account, path):
+    """Create an object-level SAS key"""
+    ctx.initialize_for_storage()
+    convoy.fleet.action_storage_sas_create(
+        ctx.config, storage_account, path, file, create, read, write, delete)
+
+
 @cli.group()
 @pass_cli_context
 def keyvault(ctx):
