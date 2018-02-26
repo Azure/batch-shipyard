@@ -986,15 +986,25 @@ def list_pools(batch_client):
             errors = ['  * resize errors:']
             for err in pool.resize_errors:
                 errors.append('    * {}: {}'.format(err.code, err.message))
+                for de in err.values:
+                    de.append('      * {}: {}'.format(de.name, de.value))
         else:
             errors = ['  * no resize errors']
         entry = [
             '* pool id: {}'.format(pool.id),
             '  * vm size: {}'.format(pool.vm_size),
-            '  * state: {}'.format(pool.state),
-            '  * allocation state: {}'.format(pool.allocation_state),
+            '  * creation time: {}'.format(pool.creation_time),
+            '  * state: {} @ {}'.format(
+                pool.state.value, pool.state_transition_time),
+            '  * allocation state: {} @ {}'.format(
+                pool.allocation_state.value,
+                pool.allocation_state_transition_time),
         ]
         entry.extend(errors)
+        if len(pool.metadata) > 0:
+            entry.append('  * metadata:')
+            for md in pool.metadata:
+                entry.append('    * {}: {}'.format(md.name, md.value))
         entry.extend([
             '  * vm count:',
             '    * dedicated:',
@@ -1003,6 +1013,17 @@ def list_pools(batch_client):
             '    * low priority:',
             '      * current: {}'.format(pool.current_low_priority_nodes),
             '      * target: {}'.format(pool.target_low_priority_nodes),
+            '  * max tasks per node: {}'.format(pool.max_tasks_per_node),
+            '  * enable inter node communication: {}'.format(
+                pool.enable_inter_node_communication),
+            '  * autoscale enabled: {}'.format(pool.enable_auto_scale),
+            '  * autoscale evaluation interval: {}'.format(
+                pool.auto_scale_evaluation_interval),
+            '  * scheduling policy: {}'.format(
+                pool.task_scheduling_policy.node_fill_type.value),
+            '  * virtual network: {}'.format(
+                pool.network_configuration.subnet_id
+                if pool.network_configuration is not None else 'n/a'),
             '  * node agent: {}'.format(
                 pool.virtual_machine_configuration.node_agent_sku_id),
         ])
@@ -2446,12 +2467,16 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
         if node.start_task_info is not None:
             if node.start_task_info.failure_info is not None:
                 st.append(
-                    '    * failure info: {}, {}: {}'.format(
-                        node.start_task_info.failure_info.category,
+                    '    * failure info: {}'.format(
+                        node.start_task_info.failure_info.category.value))
+                st.append(
+                    '      * {}: {}'.format(
                         node.start_task_info.failure_info.code,
                         node.start_task_info.failure_info.message
                     )
                 )
+                for de in node.start_task_info.failure_info.details:
+                    st.append('        * {}: {}'.format(de.name, de.value))
             else:
                 if node.start_task_info.end_time is not None:
                     duration = (
@@ -2461,20 +2486,26 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
                 else:
                     duration = 'n/a'
                 st.extend([
-                    '    * exit code: {}'.format(
-                        node.start_task_info.exit_code),
+                    '    * state: {}'.format(node.start_task_info.state.value),
                     '    * started: {}'.format(
                         node.start_task_info.start_time),
                     '    * completed: {}'.format(
                         node.start_task_info.end_time),
                     '    * duration: {}'.format(duration),
+                    '    * result: {}'.format(
+                        node.start_task_info.result.value),
+                    '    * exit code: {}'.format(
+                        node.start_task_info.exit_code),
                 ])
         else:
             st = ['  * no start task info']
         entry = [
             '* node id: {}'.format(node.id),
-            '  * state: {}'.format(node.state),
-            '  * scheduling state: {}'.format(node.scheduling_state),
+            '  * state: {} @ {}'.format(
+                node.state.value, node.state_transition_time),
+            '  * allocation time: {}'.format(node.allocation_time),
+            '  * last boot time: {}'.format(node.last_boot_time),
+            '  * scheduling state: {}'.format(node.scheduling_state.value),
         ]
         entry.extend(errors)
         entry.extend(st)
@@ -2885,16 +2916,43 @@ def list_jobs(batch_client, config):
             duration = (
                 job.execution_info.end_time - job.execution_info.start_time
             )
+            tr = job.execution_info.terminate_reason
         else:
             duration = 'n/a'
+            tr = 'n/a'
         log.extend([
             '* job id: {}'.format(job.id),
-            '  * state: {}'.format(job.state),
-            '  * pool id: {}'.format(job.pool_info.pool_id),
+            '  * state: {} @ {}'.format(
+                job.state.value, job.state_transition_time),
+            '  * previous state: {} @ {}'.format(
+                job.previous_state.value
+                if job.previous_state is not None else 'n/a',
+                job.previous_state_transition_time),
+            '  * priority: {}'.format(job.priority),
+            '  * on all tasks complete: {}'.format(
+                job.on_all_tasks_complete.value),
+            '  * on task failure: {}'.format(job.on_task_failure.value),
+            '  * created: {}'.format(job.creation_time),
+            '  * pool id: {}'.format(job.execution_info.pool_id),
             '  * started: {}'.format(job.execution_info.start_time),
             '  * completed: {}'.format(job.execution_info.end_time),
             '  * duration: {}'.format(duration),
+            '  * terminate reason: {}'.format(tr),
         ])
+        if len(job.metadata) > 0:
+            log.append('  * metadata:')
+            for md in job.metadata:
+                log.append('    * {}: {}'.format(md.name, md.value))
+        if job.execution_info.scheduling_error is not None:
+            log.extend([
+                '  * scheduling error: {}'.format(
+                    job.execution_info.scheduling_error.category.value),
+                '    * {}: {}'.format(
+                    job.execution_info.scheduling_error.code,
+                    job.execution_info.scheduling_error.message),
+            ])
+            for de in job.execution_info.scheduling_error.details:
+                log.append('      * {}: {}'.format(de.name, de.value))
         i += 1
     if i == 0:
         logger.error('no jobs found')
@@ -2906,7 +2964,12 @@ def list_jobs(batch_client, config):
     for js in jobschedules:
         log.extend([
             '* job schedule id: {}'.format(js.id),
-            '  * state: {}'.format(js.state),
+            '  * state: {} @ {}'.format(
+                js.state.value, js.state_transition_time),
+            '  * previous state: {} @ {}'.format(
+                js.previous_state.value
+                if js.previous_state is not None else 'n/a',
+                js.previous_state_transition_time),
             '  * pool id: {}'.format(js.job_specification.pool_info.pool_id),
             '  * do not run until: {}'.format(js.schedule.do_not_run_until),
             '  * do not run after: {}'.format(js.schedule.do_not_run_after),
@@ -2957,23 +3020,55 @@ def list_tasks(batch_client, config, all=False, jobid=None):
         try:
             tasks = batch_client.task.list(jobid)
             for task in tasks:
-                fi = None
+                fi = []
                 if task.execution_info is not None:
                     if task.execution_info.failure_info is not None:
-                        fi = '    * failure info: {}, {}: {}'.format(
-                            task.execution_info.failure_info.category,
-                            task.execution_info.failure_info.code,
-                            task.execution_info.failure_info.message)
+                        fi.append(
+                            '    * failure info: {}'.format(
+                                task.execution_info.failure_info.
+                                category.value))
+                        fi.append(
+                            '      * {}: {}'.format(
+                                task.execution_info.failure_info.code,
+                                task.execution_info.failure_info.message
+                            )
+                        )
+                        for de in task.execution_info.failure_info.details:
+                            fi.append('        * {}: {}'.format(
+                                de.name, de.value))
                     if (task.execution_info.end_time is not None and
                             task.execution_info.start_time is not None):
                         duration = (task.execution_info.end_time -
                                     task.execution_info.start_time)
                     else:
                         duration = 'n/a'
+                if task.exit_conditions is not None:
+                    default_job_action = (
+                        task.exit_conditions.default.job_action.value
+                    )
+                    default_dependency_action = (
+                        task.exit_conditions.default.dependency_action.value
+                        if task.exit_conditions.default.dependency_action
+                        is not None else 'n/a'
+                    )
+                else:
+                    default_job_action = 'n/a'
+                    default_dependency_action = 'n/a'
                 log.extend([
                     '* task id: {}'.format(task.id),
                     '  * job id: {}'.format(jobid),
-                    '  * state: {}'.format(task.state),
+                    '  * state: {} @ {}'.format(
+                        task.state.value, task.state_transition_time),
+                    '  * previous state: {} @ {}'.format(
+                        task.previous_state.value
+                        if task.previous_state is not None else 'n/a',
+                        task.previous_state_transition_time),
+                    '  * has upstream dependencies: {}'.format(
+                        task.depends_on is not None),
+                    '  * default exit options:',
+                    '    * job action: {}'.format(default_job_action),
+                    '    * dependency action: {}'.format(
+                        default_dependency_action),
                     '  * max retries: {}'.format(
                         task.constraints.max_task_retry_count),
                     '  * retention time: {}'.format(
@@ -2992,12 +3087,18 @@ def list_tasks(batch_client, config, all=False, jobid=None):
                         task.execution_info.end_time
                         if task.execution_info is not None else 'n/a'),
                     '    * duration: {}'.format(duration),
+                    '    * retry count: {}'.format(
+                        task.execution_info.retry_count),
+                    '    * requeue count: {}'.format(
+                        task.execution_info.requeue_count),
+                    '    * result: {}'.format(
+                        task.execution_info.result.value
+                        if task.execution_info.result is not None else 'n/a'),
                     '    * exit code: {}'.format(
                         task.execution_info.exit_code
                         if task.execution_info is not None else 'n/a'),
                 ])
-                if fi is not None:
-                    log.append(fi)
+                log.extend(fi)
                 if task.state != batchmodels.TaskState.completed:
                     all_complete = False
                 i += 1
@@ -3315,12 +3416,16 @@ def _add_task_collection(batch_client, job_id, task_map):
                 retry = []
                 for result in results.value:
                     if result.status == batchmodels.TaskAddStatus.client_error:
+                        de = [
+                            '{}: {}'.format(x.key, x.value)
+                            for x in result.error.values
+                        ]
                         logger.error(
                             ('skipping retry of adding task {} as it '
-                             'returned a client error (code={} message={}) '
+                             'returned a client error (code={} message={} {}) '
                              'for job {}').format(
                                  result.task_id, result.error.code,
-                                 result.error.message, job_id))
+                                 result.error.message, ' '.join(de), job_id))
                     elif (result.status ==
                           batchmodels.TaskAddStatus.server_error):
                         retry.append(task_map[result.task_id])
@@ -3343,12 +3448,14 @@ def _construct_task(
         bs, native, is_windows, tempdisk, allow_run_on_missing,
         docker_missing_images, singularity_missing_images, cloud_pool,
         pool, jobspec, job_id, job_env_vars, task_map, existing_tasklist,
-        reserved_task_id, lasttaskid, is_merge_task, _task):
+        reserved_task_id, lasttaskid, is_merge_task, uses_task_dependencies,
+        on_task_failure, _task):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
     #        azure.keyvault.KeyVaultClient, dict, tuple,
     #        settings.BatchShipyardSettings, bool, bool, str, bool,
     #        list, list, batchmodels.CloudPool, settings.PoolSettings,
-    #        dict, str, dict, dict, list, str, str, bool, dict) -> str
+    #        dict, str, dict, dict, list, str, str, bool, bool,
+    #        batchmodels.OnTaskFailure, dict) -> str
     """Contruct a Batch task and add it to the task map
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -3372,6 +3479,8 @@ def _construct_task(
     :param str reserved_task_id: reserved task id
     :param str lasttaskid: last task id
     :param bool is_merge_task: is merge task
+    :param bool uses_task_dependencies: uses task dependencies
+    :param batchmodels.OntaskFailure on_task_failure: on task failure
     :param dict _task: task spec
     :rtype: str
     :return: task id added to task map
@@ -3659,6 +3768,22 @@ def _construct_task(
             task_ids=task.depends_on,
             task_id_ranges=task_id_ranges,
         )
+    # add exit conditions
+    if on_task_failure != batchmodels.OnTaskFailure.no_action:
+        job_action = task.default_exit_options.job_action
+    else:
+        job_action = None
+    if uses_task_dependencies:
+        dependency_action = task.default_exit_options.dependency_action
+    else:
+        dependency_action = None
+    if job_action is not None or dependency_action is not None:
+        batchtask.exit_conditions = batchmodels.ExitConditions(
+            default=batchmodels.ExitOptions(
+                job_action=job_action,
+                dependency_action=dependency_action,
+            )
+        )
     # create task
     if settings.verbose(config):
         if mis is not None:
@@ -3731,12 +3856,14 @@ def add_jobs(
         lastjob = job_id
         # perform checks:
         # 1. check docker images in task against pre-loaded on pool
-        # 2. if tasks have dependencies, set it if so
-        # 3. if there are multi-instance tasks
+        # 2. if tasks have exit condition job actions
+        # 3. if tasks have dependencies, set it if so
+        # 4. if there are multi-instance tasks
         auto_complete = settings.job_auto_complete(jobspec)
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
+        on_task_failure = None
         uses_task_dependencies = False
         docker_missing_images = []
         singularity_missing_images = []
@@ -3773,6 +3900,12 @@ def add_jobs(
                              job_id, si, pool.id))
             del di
             del si
+            if settings.has_task_exit_condition_job_action(task):
+                on_task_failure = (
+                    batchmodels.OnTaskFailure.perform_exit_options_job_action
+                )
+            else:
+                on_task_failure = batchmodels.OnTaskFailure.no_action
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
             if settings.has_depends_on_task(task) or has_merge_task:
@@ -4008,6 +4141,7 @@ def add_jobs(
                     priority=settings.job_priority(jobspec),
                     uses_task_dependencies=uses_task_dependencies,
                     on_all_tasks_complete=on_all_tasks_complete,
+                    on_task_failure=on_task_failure,
                     constraints=job_constraints,
                     job_manager_task=batchmodels.JobManagerTask(
                         id='shipyard-jmtask',
@@ -4045,6 +4179,7 @@ def add_jobs(
                 pool_info=pool_info,
                 constraints=job_constraints,
                 uses_task_dependencies=uses_task_dependencies,
+                on_task_failure=on_task_failure,
                 job_preparation_task=jptask,
                 job_release_task=jrtask,
                 metadata=[
@@ -4084,11 +4219,27 @@ def add_jobs(
                         # retrieve job and check for version consistency
                         _job = batch_client.job.get(job_id)
                         _check_metadata_mismatch('job', _job.metadata)
+                        # check for task dependencies and job actions
+                        # compatibility
+                        if (uses_task_dependencies and
+                                not _job.uses_task_dependencies):
+                            raise RuntimeError(
+                                ('existing job {} has an incompatible task '
+                                 'dependency setting: existing={} '
+                                 'desired={}').format(
+                                     job_id, _job.uses_task_dependencies,
+                                     uses_task_dependencies))
+                        if (_job.on_task_failure != on_task_failure):
+                            raise RuntimeError(
+                                ('existing job {} has an incompatible '
+                                 'on_task_failure setting: existing={} '
+                                 'desired={}').format(
+                                     job_id, _job.on_task_failure.value,
+                                     on_task_failure.value))
                 else:
                     raise
         del multi_instance
         del mi_docker_container_name
-        del uses_task_dependencies
         # get base env vars from job
         job_env_vars = settings.job_environment_variables(jobspec)
         _job_env_vars_secid = \
@@ -4107,7 +4258,8 @@ def add_jobs(
                 bs, native, is_windows, tempdisk, allow_run_on_missing,
                 docker_missing_images, singularity_missing_images, cloud_pool,
                 pool, jobspec, job_id, job_env_vars, task_map,
-                existing_tasklist, reserved_task_id, lasttaskid, False, _task)
+                existing_tasklist, reserved_task_id, lasttaskid, False,
+                uses_task_dependencies, on_task_failure, _task)
         if has_merge_task:
             _task = settings.job_merge_task(jobspec)
             merge_task_id = _construct_task(
@@ -4115,7 +4267,8 @@ def add_jobs(
                 bs, native, is_windows, tempdisk, allow_run_on_missing,
                 docker_missing_images, singularity_missing_images, cloud_pool,
                 pool, jobspec, job_id, job_env_vars, task_map,
-                existing_tasklist, reserved_task_id, lasttaskid, True, _task)
+                existing_tasklist, reserved_task_id, lasttaskid, True,
+                uses_task_dependencies, on_task_failure, _task)
             # set dependencies on merge task
             merge_task = task_map.pop(merge_task_id)
             merge_task.depends_on = batchmodels.TaskDependencies(

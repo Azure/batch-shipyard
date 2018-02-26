@@ -197,6 +197,11 @@ job_specifications:
     max_task_retries: 1
     max_wall_time: 03:00:00
     retention_time: 1.12:00:00
+    exit_conditions:
+      default:
+        exit_options:
+          job_action: none
+          dependency_action: block
     multi_instance:
       coordination_command:
       num_instances: pool_current_dedicated

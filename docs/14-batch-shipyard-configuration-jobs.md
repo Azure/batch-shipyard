@@ -203,6 +203,11 @@ job_specifications:
     max_task_retries: 1
     max_wall_time: 03:00:00
     retention_time: 1.12:00:00
+    exit_conditions:
+      default:
+        exit_options:
+          job_action: none
+          dependency_action: block
     multi_instance:
       coordination_command:
       num_instances: pool_current_dedicated
@@ -245,7 +250,9 @@ operating under the job. The secret stored in KeyVault must be a valid
 YAML/JSON string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry all tasks in this job for. By default, Azure Batch
-does not retry tasks that fail (i.e. `max_task_retries` is 0).
+does not retry tasks that fail (i.e. `max_task_retries` is 0). Note that
+`remove_container_after_exit` must be `true` (the default) in order for
+retries to work properly.
 * (optional) `max_wall_time` sets the maximum wallclock time that the job
 can stay active for (i.e., time period after it has been created). By
 default, or if not set, the job may stay active for an infinite period. The
@@ -689,7 +696,8 @@ behavior as the job-level property if not set.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry this task for. This overrides the job-level task
 retry count. By default, Azure Batch does not retry tasks that fail
-(i.e. `max_task_retries` is 0).
+(i.e. `max_task_retries` is 0). Note that `remove_container_after_exit`
+must be `true` (the default) in order for retries to work properly.
 * (optional) `max_wall_time` sets the maximum wallclock time for this task.
 Please note that if this is greater than the job-level constraint, then
 the job-level contraint takes precendence. By default, or if not set, this
@@ -704,6 +712,18 @@ to clean up this task's directory 36 hours after the task completed. The
 default, if unspecified, is effectively infinite - i.e., task data is
 retained forever on the compute node that ran the task. This overrides the
 job-level property.
+* (optional) `exit_conditions` sets the exit conditions for this task.
+Currently only the `default` exit conditions can be set which react to
+any non-zero exit code.
+    * (required) `default` is the default exit conditions. Meaning if this
+      task exits with a non-zero exit code, perform the following actions
+      below.
+        * (optional) `job_action` is the job action to perform if this task
+          exits with a non-zero exit code. This can be set to `none`,
+          `disable`, or `terminate`. The default is `none`.
+        * (optional) `dependency_action` is the dependency action to perform
+          if this task exits with a non-zero exit code. This can be set to
+          `block` or `satisfy`. The default is `block`.
 * (optional) `multi_instance` is a property indicating that this task is a
 multi-instance task. This is required if the task to run is an MPI
 program. Additional information about multi-instance tasks and Batch

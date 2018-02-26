@@ -367,14 +367,25 @@ This property is required.
           `null`, this defaults to `rw`.
     * (optional) `shared_data_volumes` property defines persistent
       shared storage volumes. In the first shared volume, `azurefilevol` is
-      the alias of this volume:
+      the alias of this volume (please see the following section for
+      information regarding other types of supported `shared_data_volumes`
+      types:
         * `volume_driver` property specifies the Docker Volume Driver to use.
           Currently Batch Shipyard supports `azureblob`, `azurefile`,
-          `glusterfs_on_compute` or `storage_cluster` as the `volume_driver`.
-          For this volume (`azurefilevol`), as this is an Azure File shared
-          volume, the `volume_driver` should be set as `azurefile`.
+          `glusterfs_on_compute`, `storage_cluster`, or `custom_linux_mount`
+          as the `volume_driver`. For this volume (`azurefilevol`), as this
+          is an Azure File shared volume, the `volume_driver` should be set
+          as `azurefile`.
         * `storage_account_settings` is a link to the alias of the storage
-          account specified that holds this Azure File Share.
+          account specified that holds this Azure File Share. Note that when
+          using `azurefile` for a shared data volume, the storage account
+          that holds the file share must reside within the same Azure region
+          as the Azure Batch compute pool for certain
+          [Linux host operating systems](https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error115-operation-now-in-progress-when-you-mount-azure-files-by-using-smb-30).
+          Attempting to mount an Azure File share that is
+          cross-region for operating systems that do not support such
+          functionality will result in failure as those Linux Samba clients
+          do not support share level encryption at this time.
         * `azure_file_share_name` is the name of the share name on Azure Files.
           Note that the Azure File share must be created beforehand, the
           toolkit does not create Azure File shares, it only mounts them
@@ -389,11 +400,12 @@ This property is required.
           one of `ro` for read-only, `rw` for read-write. If unspecified or
           `null`, this defaults to `rw`.
 
-Note that when using `azurefile` for a shared data volume, the storage account
-that holds the file share must reside within the same Azure region as the
-Azure Batch compute pool. Attempting to mount an Azure File share that is
-cross-region will result in failure as current Linux Samba clients do not
-support share level encryption at this time.
+**Important note:** Specifying a `shared_data_volumes` property and any
+number of shared data volumes does not automatically bind these specified
+mounts to the container when a task is run. Binding of the mount to the
+container when the task is run is specified in the
+[jobs configuration](14-batch-shipyard-configuration-jobs.md) on a per job
+or per task basis.
 
 The second shared volume, `azureblobvol` is an Azure Blob storage container
 mount via [blobfuse](https://github.com/Azure/azure-storage-fuse). Please

@@ -279,6 +279,11 @@ TaskFactoryStorageSettings = collections.namedtuple(
         'is_file_share', 'include', 'exclude',
     ]
 )
+TaskExitOptions = collections.namedtuple(
+    'TaskExitOptions', [
+        'job_action', 'dependency_action',
+    ]
+)
 TaskSettings = collections.namedtuple(
     'TaskSettings', [
         'id', 'docker_image', 'singularity_image', 'name', 'run_options',
@@ -287,7 +292,7 @@ TaskSettings = collections.namedtuple(
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
         'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
         'retention_time', 'docker_run_cmd', 'docker_exec_cmd',
-        'multi_instance',
+        'multi_instance', 'default_exit_options',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -2731,7 +2736,7 @@ def job_merge_task(conf):
 def has_depends_on_task(conf):
     # type: (dict) -> bool
     """Determines if task has task dependencies
-    :param dict conf: job configuration object
+    :param dict conf: task configuration object
     :rtype: bool
     :return: task has task dependencies
     """
@@ -2744,6 +2749,20 @@ def has_depends_on_task(conf):
                 'depends_on_range is set')
         return True
     return False
+
+
+def has_task_exit_condition_job_action(conf):
+    # type: (dict) -> bool
+    """Determines if task has task exit condition job action
+    :param dict conf: task configuration object
+    :rtype: bool
+    :return: task has exit condition job action
+    """
+    try:
+        conf['exit_conditions']['default']['exit_options']['job_action']
+    except KeyError:
+        return False
+    return True
 
 
 def is_multi_instance_task(conf):
@@ -3192,6 +3211,15 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     )
     if util.is_not_empty(retention_time):
         retention_time = util.convert_string_to_timedelta(retention_time)
+    # exit conditions, right now specific exit codes/ranges are not supported
+    default_eo = _kv_read_checked(
+        _kv_read_checked(conf, 'exit_conditions', default={}),
+        'default', default={})
+    default_eo = _kv_read_checked(default_eo, 'exit_options', default={})
+    job_action = batchmodels.JobAction(
+        _kv_read_checked(default_eo, 'job_action', default='none'))
+    dependency_action = batchmodels.DependencyAction(
+        _kv_read_checked(default_eo, 'dependency_action', default='block'))
     # gpu
     gpu = _kv_read(conf, 'gpu')
     if gpu is None:
@@ -3452,6 +3480,10 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             num_instances=num_instances,
             coordination_command=cc_args,
             resource_files=mi_resource_files,
+        ),
+        default_exit_options=TaskExitOptions(
+            job_action=job_action,
+            dependency_action=dependency_action,
         ),
     )
 
