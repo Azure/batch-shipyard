@@ -2508,7 +2508,7 @@ def action_fs_cluster_start(
     if wait:
         action_fs_cluster_status(
             compute_client, network_client, config, storage_cluster_id,
-            detail=True, hosts=False)
+            detail=False, hosts=False)
 
 
 def action_fs_cluster_status(

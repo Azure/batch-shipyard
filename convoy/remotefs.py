@@ -1219,11 +1219,13 @@ def resize_storage_cluster(
     stdout, stderr = proc.communicate()
     logline = 'add brick script completed with ec={}'.format(proc.returncode)
     if util.is_not_empty(stdout):
-        stdout = stdout.decode('utf8')
+        if util.on_python2():
+            stdout = stdout.decode('utf8')
         if util.on_windows():
             stdout = stdout.replace('\n', os.linesep)
     if util.is_not_empty(stderr):
-        stderr = stderr.decode('utf8')
+        if util.on_python2():
+            stderr = stderr.decode('utf8')
         if util.on_windows():
             stderr = stderr.replace('\n', os.linesep)
     if proc.returncode != 0:
@@ -1444,11 +1446,13 @@ def expand_storage_cluster(
             command=['sudo', script_cmd])
         stdout, stderr = proc.communicate()
         if util.is_not_empty(stdout):
-            stdout = stdout.decode('utf8')
+            if util.on_python2():
+                stdout = stdout.decode('utf8')
             if util.on_windows():
                 stdout = stdout.replace('\n', os.linesep)
         if util.is_not_empty(stderr):
-            stderr = stderr.decode('utf8')
+            if util.on_python2():
+                stderr = stderr.decode('utf8')
             if util.on_windows():
                 stderr = stderr.replace('\n', os.linesep)
         vms[offset]['status'] = proc.returncode
@@ -2194,7 +2198,8 @@ def stat_storage_cluster(
                 command=['sudo', script_cmd])
             stdout = proc.communicate()[0]
             if util.is_not_empty(stdout):
-                stdout = stdout.decode('utf8')
+                if util.on_python2():
+                    stdout = stdout.decode('utf8')
                 if util.on_windows():
                     stdout = stdout.replace('\n', os.linesep)
             fsstatfmt = '>> File Server Status for {} ec={}:{}{}'
