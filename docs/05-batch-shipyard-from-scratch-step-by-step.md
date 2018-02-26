@@ -51,13 +51,13 @@ credentials:
 
 Now, replace the text `<batch account key>` with the Batch account key and
 the text `<batch account service url>` with the Batch account service url.
-If you do now know these values, you can retrieve them from the
+If you do not know these values, you can retrieve them from the
 [Azure Portal](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Batch%2FbatchAccounts)
 under Batch Accounts.
 
 Next, replace the text `<storage account name>` with the Storage account name
 and `<storage account key>` with the Storage account key.
-If you do now know these values, you can retrieve them from the
+If you do not know these values, you can retrieve them from the
 [Azure Portal](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Storage%2FStorageAccounts)
 under Storage Accounts.
 

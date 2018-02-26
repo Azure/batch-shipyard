@@ -250,7 +250,7 @@ does not retry tasks that fail (i.e. `max_task_retries` is 0).
 can stay active for (i.e., time period after it has been created). By
 default, or if not set, the job may stay active for an infinite period. The
 format for this property is a timedelta with a string representation of
-"d.HH:mm:ss". Note that the job will transition to completed state after the
+"d.HH:mm:ss". Note that the job will transition to completed state after
 the maximum wall clock time is reached along with termination of any
 running tasks.
 * (optional) `retention_time` sets the timedelta to retain any tasks
