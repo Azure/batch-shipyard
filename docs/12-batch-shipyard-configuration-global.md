@@ -487,7 +487,7 @@ These volumes have the following properties:
 * (required) `container_path` is the path in the container to mount.
 * (required) `fstab_entry` are the required
 [fstab components](http://man7.org/linux/man-pages/man5/fstab.5.html):
-    * (required) `fs_spec` is the first field, which is the bock special
+    * (required) `fs_spec` is the first field, which is the block special
       device or the remote filesystem to be mounted
     * (required) `fs_vfstype` is the third field, which is the filesystem type
     * (optional) `fs_mntops` is the fourth field, which is the mount options
