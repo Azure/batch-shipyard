@@ -528,6 +528,19 @@ process_fstab_entry() {
     echo "INFO: $mountpoint mounted."
 }
 
+check_for_docker_host_engine() {
+    set +e
+    # start docker service
+    systemctl start docker.service
+    systemctl status docker.service
+    docker version --format '{{.Server.Version}}'
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Docker not installed"
+        exit 1
+    fi
+    set -e
+}
+
 echo "Configuration [Non-Native Docker]:"
 echo "----------------------------------"
 echo "Batch Shipyard version: $version"
@@ -561,17 +574,6 @@ else
     npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
 fi
 
-# create shared mount points
-mkdir -p $MOUNTS_PATH
-
-# mount azure resources (this must be done every boot)
-if [ $azurefile -eq 1 ]; then
-    mount_azurefile_share $offer $sku
-fi
-if [ $azureblob -eq 1 ]; then
-    mount_azureblob_container $offer $sku
-fi
-
 # set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
@@ -598,11 +600,45 @@ if [ $p2penabled -eq 1 ]; then
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
 
+# create shared mount points
+mkdir -p $MOUNTS_PATH
+
+# mount azure resources (this must be done every boot)
+if [ $azurefile -eq 1 ]; then
+    mount_azurefile_share $offer $sku
+fi
+if [ $azureblob -eq 1 ]; then
+    mount_azureblob_container $offer $sku
+fi
+
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
     echo "ERROR: $cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
 elif [ -f $nodeprepfinished ]; then
+    # mount any storage clusters
+    if [ ! -z $sc_args ]; then
+        # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
+        fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
+        IFS='#' read -ra fstabs <<< "$fstab_mounts"
+        i=0
+        for sc_arg in ${sc_args[@]}; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            mount $MOUNTS_PATH/${sc[1]}
+        done
+    fi
+    # mount any custom mounts
+    if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
+        IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
+        for fstab in "${fstab_mounts[@]}"; do
+            # eval and split fstab var to expand vars
+            fstab_entry=$(eval echo "$fstab")
+            IFS=' ' read -ra parts <<< "$fstab_entry"
+            mount ${parts[1]}
+        done
+    fi
+    # start docker engine
+    check_for_docker_host_engine
     echo "INFO: $nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
@@ -661,7 +697,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=ubuntu-xenial
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
-        srvenable="systemctl enable docker.service"
+        srvdisable="systemctl disable docker.service"
         srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
@@ -673,7 +709,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=debian-jessie
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
-        srvenable="systemctl enable docker.service"
+        srvdisable="systemctl disable docker.service"
         srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterfs-server"
         gfsenable="systemctl enable glusterfs-server"
@@ -685,7 +721,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         name=debian-stretch
         srvstart="systemctl start docker.service"
         srvstop="systemctl stop docker.service"
-        srvenable="systemctl enable docker.service"
+        srvdisable="systemctl disable docker.service"
         srvstatus="systemctl status docker.service"
         gfsstart="systemctl start glusterd.service"
         gfsenable="systemctl enable glusterd.service"
@@ -738,7 +774,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             systemctl daemon-reload
         fi
         set -e
-        $srvenable
+        $srvdisable
         $srvstart
         set +e
     fi
@@ -801,7 +837,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     if [[ $sku == 7.* ]]; then
         dockerversion=17.12.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
-            srvenable="systemctl enable docker.service"
+            srvdisable="systemctl disable docker.service"
             srvstart="systemctl start docker.service"
             srvstop="systemctl stop docker.service"
             srvstatus="systemctl status docker.service"
@@ -811,7 +847,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             echo "ERROR: oracle linux is not supported at this time"
             exit 1
         else
-            srvenable="chkconfig docker on"
+            srvdisable="systemctl disable docker.service"
             srvstart="systemctl start docker.service"
             srvstop="systemctl stop docker.service"
             srvstatus="systemctl status docker.service"
@@ -843,8 +879,8 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
         systemctl daemon-reload
     fi
-    # start docker service and enable docker daemon on boot
-    $srvenable
+    # start docker service and disable docker daemon on boot
+    $srvdisable
     $srvstart
     $srvstatus
     docker version --format '{{.Server.Version}}'
@@ -941,7 +977,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /usr/lib/systemd/system/docker.service
             systemctl daemon-reload
         fi
-        systemctl enable docker
+        systemctl disable docker
         systemctl start docker
         systemctl status docker
         docker version --format '{{.Server.Version}}'

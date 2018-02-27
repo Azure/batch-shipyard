@@ -528,12 +528,16 @@ def _create_storage_cluster_mount_args(
         # get private ip of vm
         remote_ip = nic.ip_configurations[0].private_ip_address
         # construct mount options
-        mo = '_netdev,auto,nfsvers=4,intr'
+        mo = '_netdev,noauto,nfsvers=4,intr'
         amo = settings.shared_data_volume_mount_options(sdv, sc_id)
         if util.is_not_empty(amo):
             if 'udp' in mo:
                 raise RuntimeError(
                     ('udp cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            if 'auto' in mo:
+                raise RuntimeError(
+                    ('auto cannot be specified as a mount option for '
                      'storage cluster {}').format(sc_id))
             if any([x.startswith('nfsvers=') for x in amo]):
                 raise RuntimeError(
@@ -610,10 +614,14 @@ def _create_storage_cluster_mount_args(
             (primary_ip, primary_ud, primary_fd),
             (backup_ip, backup_ud, backup_fd)))
         # construct mount options
-        mo = '_netdev,auto,transport=tcp,backupvolfile-server={}'.format(
+        mo = '_netdev,noauto,transport=tcp,backupvolfile-server={}'.format(
             backup_ip)
         amo = settings.shared_data_volume_mount_options(sdv, sc_id)
         if util.is_not_empty(amo):
+            if 'auto' in mo:
+                raise RuntimeError(
+                    ('auto cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
             if any([x.startswith('backupvolfile-server=') for x in amo]):
                 raise RuntimeError(
                     ('backupvolfile-server cannot be specified as a mount '
@@ -660,8 +668,16 @@ def _create_custom_linux_mount_args(config, mount_name):
     """
     sdv = settings.global_resources_shared_data_volumes(config)
     fstab = settings.custom_linux_mount_fstab_options(sdv, mount_name)
+    if 'noauto' in fstab.fs_mntops:
+        raise RuntimeError(
+            ('noauto cannot be specified as a mount option for custom '
+             'linux mount {}').format(mount_name))
+    elif 'auto' in fstab.fs_mntops:
+        raise RuntimeError(
+            ('auto cannot be specified as a mount option for custom '
+             'linux mount {}').format(mount_name))
     fstab_mount = (
-        '{fs_spec} {hmp}/{name} {fs_vfstype} {fs_mntops} {fs_freq} '
+        '{fs_spec} {hmp}/{name} {fs_vfstype} noauto,{fs_mntops} {fs_freq} '
         '{fs_passno}').format(
             fs_spec=fstab.fs_spec,
             hmp=settings.get_host_mounts_path(False),

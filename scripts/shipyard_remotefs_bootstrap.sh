@@ -165,7 +165,7 @@ setup_glusterfs() {
     declare -a hosts
     set +e
     for ip in "${peers[@]}"; do
-        local host=${hostname_prefix}-vm$i
+        local host=${hostname_prefix}-vm$(printf %03d $i)
         hosts=("${hosts[@]}" "$host")
         if [ ${peers[$i]} == $ipaddress ]; then
             myhostname=$host
