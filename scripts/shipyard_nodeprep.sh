@@ -816,7 +816,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         install_packages $offer build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
         pip3 install --no-cache-dir --upgrade pip
         pip3 install --no-cache-dir --upgrade wheel setuptools
-        pip3 install --no-cache-dir azure-cosmosdb-table==1.0.1 azure-storage-common==1.1.0 azure-storage-blob==1.1.0
+        pip3 install --no-cache-dir azure-cosmosdb-table==1.0.2 azure-storage-blob==1.1.0
         # install cascade dependencies
         if [ $p2penabled -eq 1 ]; then
             install_packages $offer python3-libtorrent pigz
