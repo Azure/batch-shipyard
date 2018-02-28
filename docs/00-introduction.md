@@ -3,7 +3,7 @@ This page is the starting point for those unfamiliar with any of the
 Azure Batch service, Docker, or Singularity.
 
 ## Azure Batch
-[Azure Batch](https://azure.microsoft.com/en-us/services/batch/) is a scalable
+[Azure Batch](https://azure.microsoft.com/services/batch/) is a scalable
 job scheduling system leveraging the
 [Microsoft Azure Cloud](https://azure.microsoft.com). Users can specify what
 their jobs are (e.g., executing a binary to process text data), when to run
@@ -16,10 +16,10 @@ is provided as a free value-added service on top of compute resources in
 Azure. Costs are incurred only for compute resources consumed and any
 assoicated datacenter data egress and storage costs, i.e., the same cost
 as if consuming
-[Virtual Machines](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/)
-or [Cloud Services](https://azure.microsoft.com/en-us/pricing/details/cloud-services/)
+[Virtual Machines](https://azure.microsoft.com/pricing/details/virtual-machines/)
+or [Cloud Services](https://azure.microsoft.com/pricing/details/cloud-services/)
 directly. Additionally, Azure Batch provides the ability to run on
-[Low Priority VMs](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+[Low Priority VMs](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 which can dramatically lower costs for savings up to 80%!
 
 Azure Batch can handle workloads on any point of the parallel and distributed
@@ -41,7 +41,7 @@ Windows or Linux. Pools are comprised of a target number of compute nodes
 which are identical VMs provisioned from the Azure cloud. Multiple Batch
 accounts can be provisioned per Azure Subscription, and multiple compute
 pools can be provisioned per Batch account. Please refer to
-[this page](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
+[this page](https://docs.microsoft.com/azure/batch/batch-quota-limit)
 for default service limits, including separate core quota limits that only
 apply to the Batch service.
 
@@ -69,9 +69,9 @@ may also be fetched from live compute nodes (i.e., nodes that have not yet
 been deleted).
 
 A high level overview of Azure Batch service basics can be found
-[here](https://azure.microsoft.com/en-us/documentation/articles/batch-technical-overview/).
+[here](https://azure.microsoft.com/documentation/articles/batch-technical-overview/).
 Further in-depth treatment of Azure Batch concepts can be found
-[here](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/).
+[here](https://azure.microsoft.com/documentation/articles/batch-api-basics/).
 
 ## Docker
 The Docker ecosystem is a comprehensive suite of userland tooling and

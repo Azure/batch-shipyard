@@ -32,7 +32,7 @@ Windows.
 ## <a name="batchservice"></a>Azure Batch Service Issues
 #### Check Azure Batch Service Status
 If you suspect possible Azure Batch service issues, you can check the status
-of Azure services [at this website](https://azure.microsoft.com/en-us/status/).
+of Azure services [at this website](https://azure.microsoft.com/status/).
 
 ## <a name="computenode"></a>Compute Pool and Node Issues
 #### Resize Error is encounted with pool
@@ -51,7 +51,7 @@ There are typically three common reasons for Resize Errors:
 have 20 cores associated with them. These core quota are managed independently
 of any core quota on the associated subscription. UserSubscription Batch
 Accounts have core quota that is associated with the subscription. Please
-follow [this guide](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit)
+follow [this guide](https://docs.microsoft.com/azure/batch/batch-quota-limit)
 for submitting a support request to increase your core quota.
 2. Operation(s) took longer than expected: Resizing the pool to a different
 target VM count may take longer than the specified timeout. In these cases,

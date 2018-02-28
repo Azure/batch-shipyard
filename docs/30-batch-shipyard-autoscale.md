@@ -23,7 +23,7 @@ pool automatically resizes to these target node counts without any
 intervention needed by the user.
 
 For more information about Azure Batch Autoscale, please visit this
-[document](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling).
+[document](https://docs.microsoft.com/azure/batch/batch-automatic-scaling).
 
 ## Batch Shipyard and Pool Autoscale
 Batch Shipyard exposes pool autoscale functionality in the pool configuration
@@ -72,7 +72,7 @@ as needed:
 * `node_deallocation_option` which specify when a node is targeted for
 deallocation but has a running task, what should be the action applied to
 the task: `requeue`, `terminate`, `taskcompletion`, and `retaineddata`.
-Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables)
+Please see [this doc](https://docs.microsoft.com/azure/batch/batch-automatic-scaling#variables)
 for more information about these options. This option applies to all
 scenarios.
 * `sample_lookback_interval` is the time interval to lookback for past
@@ -124,4 +124,4 @@ These formulas should be specified on the `formula` member within the
 
 For more information about how to create your own custom autoscale formula,
 please visit this
-[document](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling).
+[document](https://docs.microsoft.com/azure/batch/batch-automatic-scaling).

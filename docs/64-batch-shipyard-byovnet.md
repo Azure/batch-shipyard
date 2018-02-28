@@ -24,7 +24,7 @@ authentication method of your choosing.
 
 Your service principal requires at least the `Virtual Machine Contributor`
 role permission or a
-[custom role with the action](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
+[custom role with the action](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles):
 
 * `Microsoft.Network/virtualNetworks/subnets/join/action`
 

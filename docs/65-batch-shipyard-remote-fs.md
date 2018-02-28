@@ -51,7 +51,7 @@ machine to disk mapping
 * Automatic network security rule configuration based on file server type,
 if requested
 * Automatic placement in an availability set for GlusterFS virtual machines
-* Support for [accelerated networking](https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli)
+* Support for [accelerated networking](https://docs.microsoft.com/azure/virtual-network/create-vm-accelerated-networking-cli)
 * Automatic SSH keypair provisioning and setup for all file servers in
 storage cluster
 * Configuration-driven data ingress support via scp and rsync+ssh, including
@@ -165,7 +165,7 @@ set along with maximally spreading virtual machines across update and fault
 domains. Single instance NFS servers will not be placed in an availbility
 set, however, if using a premium storage virtual machine size along with
 all premium disks, then you may qualify for
-[single instance SLA](https://azure.microsoft.com/en-us/support/legal/sla/virtual-machines).
+[single instance SLA](https://azure.microsoft.com/support/legal/sla/virtual-machines).
 
 ## Configuration and Usage Documentation
 Please see [this page](15-batch-shipyard-configuration-fs.md) for a full
@@ -175,7 +175,7 @@ on `fs` command usage.
 
 You can find information regarding User Subscription Batch accounts and how
 to create them at this
-[blog post](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode).
+[blog post](https://docs.microsoft.com/azure/batch/batch-account-create-portal#user-subscription-mode).
 
 ## Sample Recipes
 Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can

@@ -5,6 +5,9 @@
 ### Added
 - `storage sas create` command added as a utility helper function to create
 SAS tokens for given storage accounts in credentials
+- Support for activating
+[Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
+for Windows pools
 
 ### Changed
 - Expand node error details
@@ -531,7 +534,7 @@ filter contains no wildcards (#88)
 
 ## [2.7.0b1] - 2017-05-12
 ### Added
-- Support for [Low Priority Batch Compute Nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+- Support for [Low Priority Batch Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 - `resize_timeout` can now be specified on the pool specification
 - `--clear-tables` option to `storage del` command which will delete
 blob containers and queues but clear table entries
@@ -703,7 +706,7 @@ guide for more information. (#55)
 - Support for provisioning managed disks via the `fs disks` command
 - Support for data ingress to provisioned storage clusters
 - Support for
-[UserSubscription Batch accounts](https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#user-subscription-mode)
+[UserSubscription Batch accounts](https://docs.microsoft.com/azure/batch/batch-account-create-portal#user-subscription-mode)
 - Azure Active Directory authentication support for Batch accounts
 - Support for specifying a virtual network to use with a compute pool
 - `allow_run_on_missing_image` option to jobs that allows tasks to execute
@@ -812,7 +815,7 @@ and will increment properly past 99999 but will not be padded after that (#27)
 ## [2.5.0] - 2017-01-19
 ### Added
 - Support for
-[Task Dependency Id Ranges](https://docs.microsoft.com/en-us/azure/batch/batch-task-dependencies#task-id-range)
+[Task Dependency Id Ranges](https://docs.microsoft.com/azure/batch/batch-task-dependencies#task-id-range)
 with the `depends_on_range` property under each task json property in `tasks`
 in the jobs configuration file. Please see the configuration doc for more
 information.
@@ -889,7 +892,7 @@ of cascade and tfm based on latest commits are now disabled.
 ## [2.0.0] - 2016-11-23
 ### Added
 - Support for any Internet accessible container registry, including
-[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/).
+[Azure Container Registry](https://azure.microsoft.com/services/container-registry/).
 Please see the configuration doc for information on how to integrate with
 a private container registry.
 

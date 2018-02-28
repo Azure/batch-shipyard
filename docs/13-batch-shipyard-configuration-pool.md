@@ -130,10 +130,10 @@ specify both. If using a custom image, please see the
           Singularity conatiners. The default is `false`.
         * (optional) `license_type` specifies the type of on-premises license
           to be used when deploying the operating system. This activates the
-          [Azure Hybrid Use Benefit](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/)
+          [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
           for qualifying license holders. This only applies to Windows OS
           types. You must comply with the terms set forth by this program;
-          please consult the [FAQ](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/faq/)
+          please consult the [FAQ](https://azure.microsoft.com/pricing/hybrid-benefit/faq/)
           for further information. The only valid value is `windows_server`.
     * (required for custom image) `custom_image` defines the custom image to
       use. AAD `batch` credentials are required to use custom iamges for both
@@ -152,13 +152,13 @@ specify both. If using a custom image, please see the
           Blobs. The default is `false`.
         * (optional) `license_type` specifies the type of on-premises license
           to be used when deploying the operating system. This activates the
-          [Azure Hybrid Use Benefit](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/)
+          [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
           for qualifying license holders. This only applies to Windows OS
           types. You must comply with the terms set forth by this program;
-          please consult the [FAQ](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/faq/)
+          please consult the [FAQ](https://azure.microsoft.com/pricing/hybrid-benefit/faq/)
           for further information. The only valid value is `windows_server`.
 * (required) `vm_size` is the
-[Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
+[Azure Virtual Machine Instance Size](https://azure.microsoft.com/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
 * (required) `vm_count` is the number of compute nodes to allocate. You may
 specify a mixed number of compute nodes in the following properties:
@@ -217,7 +217,7 @@ each node type for `scenario` based autoscale.
           removal, what action is performed for the running task is specified
           with this option. The valid values are: `requeue`, `terminate`,
           `taskcompletion`, and `retaineddata`. The default is `taskcompletion`.
-          Please see [this doc](https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling#variables) for more information.
+          Please see [this doc](https://docs.microsoft.com/azure/batch/batch-automatic-scaling#variables) for more information.
         * (optional) `sample_lookback_interval` is the time interval to
           lookback for past history for certain scenarios such as autoscale
           based on active and pending tasks. The format for this property is

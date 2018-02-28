@@ -20,7 +20,7 @@ factors that Batch Shipyard has no control over.
       [here](https://social.msdn.microsoft.com/Forums/azure/en-US/home?forum=azurebatch).
 
 #### I don't have enough core (or other) quota. How do I increase it?
-* Please see this [page](https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit).
+* Please see this [page](https://docs.microsoft.com/azure/batch/batch-quota-limit).
 
 #### How do new versions and backward compatiblity work?
 * Versioning follows `MAJOR.MINOR.PATCH`:

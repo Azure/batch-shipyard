@@ -210,7 +210,7 @@ Azure Container Registry or private repositories on Docker Hub.
       Azure KeyVault.
     * (optional) `myserver-myorg.azurecr.io` is an example property that
       defines a private container registry to connect to. This is an example to
-      connect to the [Azure Container Registry service](https://azure.microsoft.com/en-us/services/container-registry/).
+      connect to the [Azure Container Registry service](https://azure.microsoft.com/services/container-registry/).
       The private registry defined here should be defined as the `server`
       property in the `docker_registry`:`private` property in the global
       configuration.
@@ -257,9 +257,9 @@ credentials configuration is populated with the correct `authority_url` and
 `endpoint` for each section. Please refer to the appropriate documentation
 below for your region:
 
-* [Azure China](https://docs.microsoft.com/en-us/azure/china/china-get-started-developer-guide#check-endpoints-in-azure)
-* [Azure Germany](https://docs.microsoft.com/en-us/azure/germany/germany-developer-guide#endpoint-mapping)
-* [Azure Government](https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-developer-guide#endpoint-mapping)
+* [Azure China](https://docs.microsoft.com/azure/china/china-get-started-developer-guide#check-endpoints-in-azure)
+* [Azure Germany](https://docs.microsoft.com/azure/germany/germany-developer-guide#endpoint-mapping)
+* [Azure Government](https://docs.microsoft.com/azure/azure-government/documentation-government-developer-guide#endpoint-mapping)
 
 Here is an example skeleton for connecting to Azure Government with AAD:
 

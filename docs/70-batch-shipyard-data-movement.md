@@ -69,7 +69,7 @@ file systems.
 From on premises, you can ingress your data to both Azure Storage and
 Azure Batch Pools directly. You can also egress data from Azure Batch Pools
 and Azure Storage (via [blobxfer](https://github.com/Azure/blobxfer) or
-[AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/))
+[AzCopy](https://azure.microsoft.com/documentation/articles/storage-use-azcopy/))
 back to your local machine.
 
 Within Azure, you can ingress data from Azure Storage to Azure Batch pools,
@@ -131,7 +131,7 @@ file. Within the `data_transfer` property, you will need to specify either
 `container` or `file_share` depending upon if you want to send your files to
 Azure Blob or File Storage, respectively. Please note that there can be
 significant difference in performance between the two, please visit
-[this page](https://azure.microsoft.com/en-us/documentation/articles/storage-scalability-targets/)
+[this page](https://azure.microsoft.com/documentation/articles/storage-scalability-targets/)
 for more information. The second step is outlined in the next section.
 
 Note that `files` is an array, therefore, Batch Shipyard accepts any number

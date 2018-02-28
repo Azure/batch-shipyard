@@ -232,7 +232,7 @@ Registry which is still supported.
 
 If you are still using this mechanism, please migrate your images to another
 Docker registry such as
-[Azure Container Registry](https://azure.microsoft.com/en-us/services/container-registry/).
+[Azure Container Registry](https://azure.microsoft.com/services/container-registry/).
 
 #### Additional registries
 If you want to execute tasks referencing Docker images that are not specified

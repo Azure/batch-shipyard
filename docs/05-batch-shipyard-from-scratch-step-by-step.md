@@ -15,13 +15,13 @@ image) to your machine or are using Batch Shipyard on Azure Cloud Shell.
 You will need to create an Azure Batch and a general purpose Azure Storage
 account in order to use Batch Shipyard. If you do not have an Azure Batch
 account, you can create one via the
-[Azure Portal](https://azure.microsoft.com/en-us/documentation/articles/batch-account-create-portal/),
-[Azure CLI 2.0](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli), or
-[Azure PowerShell](https://azure.microsoft.com/en-us/documentation/articles/batch-powershell-cmdlets-get-started/).
+[Azure Portal](https://azure.microsoft.com/documentation/articles/batch-account-create-portal/),
+[Azure CLI 2.0](https://docs.microsoft.com/cli/azure/install-azure-cli), or
+[Azure PowerShell](https://azure.microsoft.com/documentation/articles/batch-powershell-cmdlets-get-started/).
 Note the account service URL and account key after creating your Batch account.
 
 You can create a standard general purpose
-[Azure Storage account](https://docs.microsoft.com/en-us/azure/storage/storage-create-storage-account#create-a-storage-account)
+[Azure Storage account](https://docs.microsoft.com/azure/storage/storage-create-storage-account#create-a-storage-account)
 using any of the aforementioned methods similar to creating an Azure Batch
 account. Note the storage account name and account key after creating your
 Storage account.
@@ -130,7 +130,7 @@ pool_specification:
 Here, we want to create a pool with an ID `mypool` that is an Ubuntu 16.04
 VM. We have also indicated that the Azure VM size should be `STANDARD_D1_V2`
 with a count of `1` dedicated node. Note that Azure Batch supports
-[`low_priority` nodes](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+[`low_priority` nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 as well.
 
 ### Step 6: Submit your work

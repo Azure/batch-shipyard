@@ -240,7 +240,7 @@ amenable for HPC applications.
 
 ### More Information
 For more general information about MPI and Azure Batch, please visit
-[this page](https://azure.microsoft.com/en-us/documentation/articles/batch-mpi/).
+[this page](https://azure.microsoft.com/documentation/articles/batch-mpi/).
 
 ## Example recipes and samples
 Please visit the

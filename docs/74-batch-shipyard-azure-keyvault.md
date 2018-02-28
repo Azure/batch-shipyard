@@ -13,7 +13,7 @@ itself in a repository with secure, controlled access. There are benefits to
 this approach such as securing keys without a physical file, centralized
 repository of secrets, etc.
 
-[Azure KeyVault](https://azure.microsoft.com/en-us/services/key-vault/) is
+[Azure KeyVault](https://azure.microsoft.com/services/key-vault/) is
 a managed service that handles storing sensitive information such as keys
 and secrets in a secure manner. Batch Shipyard can interact with provisioned
 Key Vaults to store and retrieve credentials required for Batch Shipyard to
@@ -110,8 +110,8 @@ retrieved again.
 ### Azure Active Directory Setup with Service Principal Certificate-based Authentication
 The following describes how to set up Azure Active Directory with asymmetric
 X.509 certificate-based authentication. You will need either
-[Azure CLI](https://docs.microsoft.com/en-us/azure/xplat-cli-install) or
-[Azure CLI 2.0](https://docs.microsoft.com/en-us/cli/azure/install-az-cli2)
+[Azure CLI](https://docs.microsoft.com/azure/xplat-cli-install) or
+[Azure CLI 2.0](https://docs.microsoft.com/cli/azure/install-az-cli2)
 to perform the actions in this section. Other tools such as Azure PowerShell
 can also be used with the analogs found in the Azure PowerShell cmdlets.
 
@@ -523,20 +523,20 @@ the lookup and secret retrieval automatically.
 
 ## More Documentation
 You can perform many Azure Active Directory setup steps through the Azure CLI.
-This [document](https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-authenticate-service-principal-cli)
+This [document](https://docs.microsoft.com/azure/azure-resource-manager/resource-group-authenticate-service-principal-cli)
 explains how to create a Service Principal among other topics. To create
 an Azure KeyVault with the Azure CLI, this
-[document](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-manage-with-cli#register-an-application-with-azure-active-directory)
+[document](https://docs.microsoft.com/azure/key-vault/key-vault-manage-with-cli#register-an-application-with-azure-active-directory)
 explains the steps involved. Additionally, it shows how to authorize an AAD
 Application for use with KeyVault.
 
 Securing your KeyVault can be handled through the Azure Portal or through
 the Azure CLI. This
-[document](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-secure-your-key-vault)
+[document](https://docs.microsoft.com/azure/key-vault/key-vault-secure-your-key-vault)
 explains concepts and how to secure your KeyVault. A general overview of
 Role-Based Access Control (RBAC) and how to manage access to various
 resources can be found in this
-[document](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-what-is).
+[document](https://docs.microsoft.com/azure/active-directory/role-based-access-control-what-is).
 
 For further Batch Shipyard documentation, please see
 [this page](10-batch-shipyard-configuration.md) for a full

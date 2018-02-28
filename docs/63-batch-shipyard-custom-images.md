@@ -26,7 +26,7 @@ authentication method of your choosing.
 
 Your service principal requires at least `Contributor`
 role permission or a
-[custom role with the actions](https://docs.microsoft.com/en-us/azure/active-directory/role-based-access-control-custom-roles):
+[custom role with the actions](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles):
 
 * `Microsoft.Compute/disks/beginGetAccess/action`
 * `Microsoft.Compute/images/read`
@@ -102,7 +102,7 @@ and then click `Browse` to select the source Storage blob. If you do not
 see the Storage Account with your source VHD, you must copy it into an ARM
 Storage Account within the same `Location` that you have selected.
 You can use [blobxfer](https://github.com/Azure/blobxfer) or
-[AzCopy](https://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/)
+[AzCopy](https://azure.microsoft.com/documentation/articles/storage-use-azcopy/)
 to copy your page blob VHDs if they are in a different region than your
 Batch account. Select the proper `Account type` if you are using HDD or
 SSD backed VMs and then hit `Create` to finish the process.

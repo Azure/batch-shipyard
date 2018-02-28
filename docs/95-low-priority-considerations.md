@@ -1,7 +1,7 @@
 # Low Priority Compute Node Considerations
 Please read the following carefully concerning pools allocated with low-
 priority compute nodes. You may also want to read the
-[Azure Batch Low Priority Compute Node](https://docs.microsoft.com/en-us/azure/batch/batch-low-pri-vms)
+[Azure Batch Low Priority Compute Node](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 documentation.
 
 ### Pool Allocation and Resizing

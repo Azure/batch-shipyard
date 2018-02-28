@@ -269,7 +269,7 @@ This property is required.
               transferring to a pool with one single node in it, thus, no
               `shared_data_volume` is specified in the prior property, then
               this is relative to
-              [$AZ_BATCH_NODE_ROOT_DIR](https://azure.microsoft.com/en-us/documentation/articles/batch-api-basics/#files-and-directories).
+              [$AZ_BATCH_NODE_ROOT_DIR](https://azure.microsoft.com/documentation/articles/batch-api-basics/#files-and-directories).
               To place files directly in `$AZ_BATCH_NODE_ROOT_DIR` (not
               recommended), you can specify this property as empty string
               when not ingressing to a `shared_data_volume`. Note that
@@ -381,7 +381,7 @@ This property is required.
           using `azurefile` for a shared data volume, the storage account
           that holds the file share must reside within the same Azure region
           as the Azure Batch compute pool for certain
-          [Linux host operating systems](https://docs.microsoft.com/en-us/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error115-operation-now-in-progress-when-you-mount-azure-files-by-using-smb-30).
+          [Linux host operating systems](https://docs.microsoft.com/azure/storage/files/storage-troubleshoot-linux-file-connection-problems#mount-error115-operation-now-in-progress-when-you-mount-azure-files-by-using-smb-30).
           Attempting to mount an Azure File share that is
           cross-region for operating systems that do not support such
           functionality will result in failure as those Linux Samba clients
@@ -461,7 +461,7 @@ The fifth shared volume, `glustervol`, is a
 `glusterfs_on_compute` are GlusterFS volumes co-located on the VM's temporary
 local disk space which is a shared resource. Sizes of the local temp disk for
 each VM size can be found
-[here](https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-windows-sizes/).
+[here](https://azure.microsoft.com/documentation/articles/virtual-machines-windows-sizes/).
 If specifying a `glusterfs_on_compute` volume, you must enable internode
 communication in the pool configuration file. These volumes have the following
 properties:

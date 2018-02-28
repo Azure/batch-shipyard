@@ -101,7 +101,7 @@ remote_fs:
 ## Details
 The remote fs schema is constructed from two portions. The first section
 specifies
-[Azure Managed Disks](https://docs.microsoft.com/en-us/azure/storage/storage-managed-disks-overview)
+[Azure Managed Disks](https://docs.microsoft.com/azure/storage/storage-managed-disks-overview)
 to use in the storage cluster. The second section defines the storage cluster
 itself, including networking and virtual machine to disk mapping.
 
@@ -126,9 +126,9 @@ defined in this section.
 disks. If this is not specified, then the `resource_group` specified in
 the parent is used. At least one `resource_group` must be defined.
 * (optional) `premium` defines if
-[premium managed disks](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage)
+[premium managed disks](https://docs.microsoft.com/azure/storage/storage-premium-storage)
 should be created. Premium storage provisions a
-[guaranteed level of IOPS and bandwidth](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage#premium-storage-scalability-and-performance-targets)
+[guaranteed level of IOPS and bandwidth](https://docs.microsoft.com/azure/storage/storage-premium-storage#premium-storage-scalability-and-performance-targets)
 that scales with disk size. The default is `false` which creates
 standard managed disks. Regardless of the type of storage used to back
 managed disks, all data written is durable and persistent backed to Azure
@@ -138,7 +138,7 @@ data disks to create. Note that for managed disks, you are billed rounded
 up to the nearest provisioned size. If you are unfamiliar with
 how Azure prices managed disks with regard to the size of disk chosen,
 please refer to
-[this link](https://docs.microsoft.com/en-us/azure/storage/storage-managed-disks-overview#pricing-and-billing).
+[this link](https://docs.microsoft.com/azure/storage/storage-managed-disks-overview#pricing-and-billing).
 * (required) `disk_names` is an array of disk names to create. All disks
 will be created identically with the properties defined in the `managed_disks`
 section.
@@ -296,7 +296,7 @@ to each virtual machine in the storage cluster.
           automatically provisions the proper GlusterFS FUSE client on compute
           nodes that require access to GlusterFS-based storage clusters.
     * (optional) `samba` defines properties required for enabling
-      [SMB](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365233(v=vs.85).aspx)
+      [SMB](https://msdn.microsoft.com/library/windows/desktop/aa365233(v=vs.85).aspx)
       support on storage cluster nodes. This support is accomplished by
       running [Samba](https://www.samba.org/) alongside the NFS or GlusterFS
       server software. If this section is omitted, SMB access will be disabled.
@@ -323,13 +323,13 @@ pNFS is not supported at this time. For `glusterfs` storage clusters, this
 value must be at least 2.
 * (required) `vm_size` is the virtual machine instance size to use. To attach
 premium managed disks, you must use a
-[premium storage compatible virtual machine size](https://docs.microsoft.com/en-us/azure/storage/storage-premium-storage#premium-storage-supported-vms).
+[premium storage compatible virtual machine size](https://docs.microsoft.com/azure/storage/storage-premium-storage#premium-storage-supported-vms).
 * (optional) `fault_domains` is the number of fault domains to configure for
 the availability set. This only applies to `vm_count` > `1` and must be
 in the range [2, 3]. The default is `2` if not specified. Note that some
 regions do not support 3 fault domains.
 * (optional) `accelerated_networking` enables or disables
-[accelerated networking](https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli).
+[accelerated networking](https://docs.microsoft.com/azure/virtual-network/create-vm-accelerated-networking-cli).
 The default is `false` if not specified.
 * (required) `vm_disk_map` is the virtual machine to managed disk mapping.
 The number of entries in this map must match the `vm_count`.

@@ -15,7 +15,7 @@ Azure Function App) environment, please see
 
 ## <a name="cloudshell"></a>Azure Cloud Shell
 Batch Shipyard is now integrated into
-[Azure Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/overview)
+[Azure Cloud Shell](https://docs.microsoft.com/azure/cloud-shell/overview)
 with no installation required. Simply request a Cloud Shell session and type
 `shipyard` to invoke the CLI. Data stored in your home directory or
 `clouddrive` will persist between Cloud Shell sessions.
@@ -270,7 +270,7 @@ Windows Subsystem for Linux (using Ubuntu) now comes with Python3 installed
 out of the box. This is the recommended Python interpreter to use with Batch
 Shipyard. First, you must enable and install Windows Subsystem for Linux.
 Please follow the
-[installation guide from Microsoft](https://msdn.microsoft.com/en-us/commandline/wsl/install_guide),
+[installation guide from Microsoft](https://msdn.microsoft.com/commandline/wsl/install_guide),
 if you have not enabled and installed it.
 
 The `install.sh` script supports isolated installation through a virtual
