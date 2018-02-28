@@ -333,6 +333,8 @@ def _reboot_node(batch_client, pool_id, node_id, wait):
     :param str node_id: node id to delete
     :param bool wait: wait for node to enter rebooting state
     """
+    if util.is_none_or_empty(node_id):
+        raise ValueError('node id must be specified for reboot')
     logger.info('Rebooting node {} in pool {}'.format(node_id, pool_id))
     batch_client.compute_node.reboot(
         pool_id=pool_id,

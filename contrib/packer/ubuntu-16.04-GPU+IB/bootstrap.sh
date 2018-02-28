@@ -22,18 +22,6 @@ apt-get update
 apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \
     docker-ce=$dockerversion
 
-# prep docker
-systemctl stop docker.service
-rm -rf /var/lib/docker
-mkdir -p /etc/docker
-echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
-sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
-systemctl daemon-reload
-# do not auto-enable docker to start due to temp disk issues
-systemctl disable docker.service
-systemctl start docker.service
-systemctl status docker.service
-
 # install nvidia driver/nvidia-docker
 set +e
 out=$(lspci)
@@ -72,6 +60,20 @@ EOF
     nvidia-docker version
 fi
 set -e
+
+# prep docker
+systemctl stop docker.service
+rm -rf /var/lib/docker
+mkdir -p /etc/docker
+echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+rm -f /etc/docker/daemon.json.merge
+sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
+systemctl daemon-reload
+# do not auto-enable docker to start due to temp disk issues
+systemctl disable docker.service
+systemctl start docker.service
+systemctl status docker.service
 
 # install userland IB requirements
 apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends \

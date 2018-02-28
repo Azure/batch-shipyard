@@ -6,6 +6,9 @@ set -o pipefail
 # consts
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
+# mutables
+USER_MOUNTPOINT=
+
 # globals
 azureblob=0
 azurefile=0
@@ -243,6 +246,15 @@ EOF
     fi
     refresh_package_index $offer
     install_packages $offer nvidia-docker2
+    # we need to merge daemon configs
+    if [ $offer == "ubuntuserver" ]; then
+        python -c "import json;a=json.load(open('/etc/docker/daemon.json.dpkg-old'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+        rm -f /etc/docker/daemon.json.dpkg-old
+    elif [[ $offer == centos* ]]; then
+        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+        python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+        rm -f /etc/docker/daemon.json.merge
+    fi
     pkill -SIGHUP dockerd
     nvidia-docker version
 }
