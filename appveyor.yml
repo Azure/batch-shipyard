@@ -51,9 +51,9 @@ after_test:
 - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
   set UPLOAD_NUGET=1&
   echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
-  nuget pack site-extension\\batch-shipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &
-  7z l batch-shipyard.*.nupkg &
-  appveyor PushArtifact batch-shipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg || set UPLOAD_NUGET=0)
+  nuget pack site-extension\\BatchShipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &
+  7z l BatchShipyard.*.nupkg &
+  appveyor PushArtifact BatchShipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg || set UPLOAD_NUGET=0)
 - ps: >-
     if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
       Write-Host "Build is from a PR, not creating binary"
@@ -166,9 +166,8 @@ after_test:
 
 deploy:
 - provider: NuGet
-  server: https://www.siteextensions.net
   api_key:
-    secure: 7rnRHiBwGPW086Rgcn+acev2aG53VmVFnoklGqr589FJtHaMfJBL8gz/R35ZLh3+
+    secure: 96ugMCJGT1hnOc+UyTqsjTgh8FgN3VgmdKGgG8EGfLYEMlPAnls1pIe2e3s0BGGh
   skip_symbols: true
   artifact: /.*\.nupkg/
   on:

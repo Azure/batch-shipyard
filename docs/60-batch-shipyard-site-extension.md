@@ -34,9 +34,10 @@ In the next blade, select `Advanced tools (Kudu)`.
 ![60-site-extension-step2-1.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-1.png)
 
 Click on `Extensions` on the top navigation bar and then click on
-`Gallery` below. This will load all of the available site extensions
-defaulted to [siteextensions.net](https://siteextensions.net/) which is the
-official nuget feed for Azure App Site Extensions.
+`Gallery` below. This will load all of the available site extensions from
+[nuget.org](https://www.nuget.org/). For the curious, the Batch Shipyard
+site extension nuget page can be found
+[here](https://www.nuget.org/packages/BatchShipyard).
 
 ![60-site-extension-step2-2.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-2.png)
 

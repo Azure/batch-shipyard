@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
-    <id>batch-shipyard</id>
+    <id>BatchShipyard</id>
     <version>0.0.0</version>
     <title>Batch Shipyard</title>
     <authors>Fred Park</authors>
@@ -12,7 +12,10 @@
     <licenseUrl>https://github.com/Azure/batch-shipyard/blob/master/LICENSE</licenseUrl>
     <copyright>Microsoft</copyright>
     <releaseNotes>https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md</releaseNotes>
-    <tags>azure batch shipyard docker containers parallel distributed jobs hpc python</tags>
+    <tags>AzureSiteExtension azure batch shipyard containers docker singularity parallel distributed jobs hpc python</tags>
+    <packageTypes>
+      <packageType name="AzureSiteExtension" />
+    </packageTypes>
   </metadata>
   <files>
     <file src="*.cmd" target="content" />
