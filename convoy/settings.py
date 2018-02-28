@@ -130,6 +130,7 @@ PoolVmPlatformImageSettings = collections.namedtuple(
         'sku',
         'version',
         'native',
+        'license_type',
     ]
 )
 PoolVmCustomImageSettings = collections.namedtuple(
@@ -137,6 +138,7 @@ PoolVmCustomImageSettings = collections.namedtuple(
         'arm_image_id',
         'node_agent',
         'native',
+        'license_type',
     ]
 )
 PoolAutoscaleScenarioSettings = collections.namedtuple(
@@ -767,6 +769,7 @@ def _populate_pool_vm_configuration(config):
                 sku=sku,
                 version=_kv_read_checked(conf, 'version', default='latest'),
                 native=True,
+                license_type=_kv_read_checked(conf, 'license_type'),
             )
         else:
             vm_config = PoolVmPlatformImageSettings(
@@ -775,6 +778,7 @@ def _populate_pool_vm_configuration(config):
                 sku=sku,
                 version=_kv_read_checked(conf, 'version', default='latest'),
                 native=False,
+                license_type=None,
             )
         # TODO re-enable this when platform support is available
         # auto convert vm config to native if specified
@@ -788,6 +792,7 @@ def _populate_pool_vm_configuration(config):
                     sku='16-04-lts',
                     version='latest',
                     native=True,
+                    license_type=None,
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos' and
@@ -798,6 +803,7 @@ def _populate_pool_vm_configuration(config):
                     sku='7-3',
                     version='latest',
                     native=True,
+                    license_type=None,
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos-hpc' and
@@ -808,6 +814,7 @@ def _populate_pool_vm_configuration(config):
                     sku='7-3',
                     version='latest',
                     native=True,
+                    license_type=None,
                 )
         return vm_config
     else:
@@ -815,12 +822,15 @@ def _populate_pool_vm_configuration(config):
         node_agent = conf['node_agent'].lower()
         if node_agent == 'batch.node.windows amd64':
             native = True
+            license_type = _kv_read_checked(conf, 'license_type')
         else:
             native = _kv_read(conf, 'native', default=False)
+            license_type = None
         return PoolVmCustomImageSettings(
             arm_image_id=_kv_read_checked(conf, 'arm_image_id'),
             node_agent=node_agent,
             native=native,
+            license_type=license_type,
         )
 
 

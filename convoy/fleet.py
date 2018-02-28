@@ -1061,6 +1061,7 @@ def _construct_pool_object(
                     vm_configuration.arm_image_id,
                 ),
                 node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+                license_type=pool_settings.vm_configuration.license_type,
             )
             logger.debug(
                 ('deploying custom image to pool in native mode: {} '
@@ -1073,6 +1074,7 @@ def _construct_pool_object(
             vmconfig = batchmodels.VirtualMachineConfiguration(
                 image_reference=image_ref,
                 node_agent_sku_id=na_ref,
+                license_type=pool_settings.vm_configuration.license_type,
             )
             logger.debug('deploying pool in native mode')
         # attach container config
@@ -1127,6 +1129,7 @@ def _construct_pool_object(
                 vm_configuration.arm_image_id,
             ),
             node_agent_sku_id=pool_settings.vm_configuration.node_agent,
+            license_type=pool_settings.vm_configuration.license_type,
         )
         logger.debug('deploying custom image: {} node agent: {}'.format(
             vmconfig.image_reference.virtual_machine_image_id,
@@ -1157,6 +1160,7 @@ def _construct_pool_object(
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref,
             node_agent_sku_id=na_ref,
+            license_type=pool_settings.vm_configuration.license_type,
         )
         # create start task commandline
         start_task.append(

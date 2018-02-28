@@ -29,6 +29,9 @@ mapping:
                 type: str
               native:
                 type: bool
+              license_type:
+                type: str
+                enum: ['windows_server']
           custom_image:
             type: map
             mapping:
@@ -40,6 +43,9 @@ mapping:
                 required: true
               native:
                 type: bool
+              license_type:
+                type: str
+                enum: ['windows_server']
       vm_size:
         type: str
         required: true

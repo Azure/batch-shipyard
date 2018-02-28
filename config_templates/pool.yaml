@@ -7,10 +7,12 @@ pool_specification:
       sku: 16.04-LTS
       version: latest
       native: false
+      license_type: null
     custom_image:
       arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/images/<image_name>
       node_agent: <node agent sku id>
       native: false
+      license_type: null
   vm_size: STANDARD_D2_V2
   vm_count:
     dedicated: 4

@@ -15,10 +15,12 @@ pool_specification:
       sku: 16.04-LTS
       version: latest
       native: false
+      license_type: null
     custom_image:
       arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/images/<image_name>
       node_agent: <node agent sku id>
       native: false
+      license_type: null
   vm_size: STANDARD_D2_V2
   vm_count:
     dedicated: 4
@@ -123,9 +125,16 @@ specify both. If using a custom image, please see the
           in this mode such as task-level data ingress or task-level data
           egress that is not bound for Azure Storage Blobs. If there is
           no `native` conversion equivalent for the specified `publisher`,
-          `offer`, `sku` then no conversion is performed. Note that `native`
-          mode is not compatible with Singularity conatiners. The default is
-          `false`.
+          `offer`, `sku` then no conversion is performed and this option will
+          be force disabled. Note that `native` mode is not compatible with
+          Singularity conatiners. The default is `false`.
+        * (optional) `license_type` specifies the type of on-premises license
+          to be used when deploying the operating system. This activates the
+          [Azure Hybrid Use Benefit](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/)
+          for qualifying license holders. This only applies to Windows OS
+          types. You must comply with the terms set forth by this program;
+          please consult the [FAQ](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/faq/)
+          for further information. The only valid value is `windows_server`.
     * (required for custom image) `custom_image` defines the custom image to
       use. AAD `batch` credentials are required to use custom iamges for both
       Batch service and User Subscription modes.
@@ -141,6 +150,13 @@ specify both. If using a custom image, please see the
           features that are not available in this mode such as task-level data
           ingress or task-level data egress that is not bound for Azure Storage
           Blobs. The default is `false`.
+        * (optional) `license_type` specifies the type of on-premises license
+          to be used when deploying the operating system. This activates the
+          [Azure Hybrid Use Benefit](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/)
+          for qualifying license holders. This only applies to Windows OS
+          types. You must comply with the terms set forth by this program;
+          please consult the [FAQ](https://azure.microsoft.com/en-us/pricing/hybrid-benefit/faq/)
+          for further information. The only valid value is `windows_server`.
 * (required) `vm_size` is the
 [Azure Virtual Machine Instance Size](https://azure.microsoft.com/en-us/pricing/details/virtual-machines/).
 Please note that not all regions have every VM size available.
