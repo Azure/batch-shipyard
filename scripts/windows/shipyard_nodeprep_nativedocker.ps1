@@ -9,6 +9,16 @@ param(
 Set-Variable NodePrepFinished -option Constant -value (Join-Path $env:AZ_BATCH_NODE_SHARED_DIR -ChildPath ".nodeprepfinished")
 Set-Variable MountsPath -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "mounts")
 
+# Enable TLS > 1.0
+$security_protcols = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::SystemDefault
+if ([Net.SecurityProtocolType].GetMember("Tls11").Count -gt 0) {
+    $security_protcols = $security_protcols -bor [Net.SecurityProtocolType]::Tls11
+}
+if ([Net.SecurityProtocolType].GetMember("Tls12").Count -gt 0) {
+    $security_protcols = $security_protcols -bor [Net.SecurityProtocolType]::Tls12
+}
+[Net.ServicePointManager]::SecurityProtocol = $security_protcols
+
 function Exec
 {
     [CmdletBinding()]
@@ -57,8 +67,7 @@ Write-Host "Downloading blobxfer $x binary as $bxoutf"
 Invoke-WebRequest -Uri $bxurl -OutFile $bxoutf
 if (!$?)
 {
-	Write-Error "Download from $bxurl to $bxoutf failed"
-	exit 1
+	throw "Download from $bxurl to $bxoutf failed"
 }
 
 # pull required images
