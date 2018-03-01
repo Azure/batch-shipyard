@@ -144,41 +144,52 @@ if [ $DISTRIB_ID != "Darwin" ]; then
     DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 fi
 
+echo "Detected OS: $DISTRIB_ID $DISTRIB_RELEASE"
+
 # install requisite packages from distro repo
 if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
     if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
         $SUDO apt-get update
-        if [ $PYTHON == "python" ]; then
-            PYTHON_PKGS="libpython-dev python-dev"
-            if [ $ANACONDA -eq 0 ]; then
-                PYTHON_PKGS="$PYTHON_PKGS python-pip"
-            fi
+        if [ $ANACONDA -eq 1 ]; then
+            PYTHON_PKGS=
         else
-            PYTHON_PKGS="libpython3-dev python3-dev"
-            if [ $ANACONDA -eq 0 ]; then
-                PYTHON_PKGS="$PYTHON_PKGS python3-pip"
+            if [ $PYTHON == "python" ]; then
+                PYTHON_PKGS="libpython-dev python-dev"
+                if [ $ANACONDA -eq 0 ]; then
+                    PYTHON_PKGS="$PYTHON_PKGS python-pip"
+                fi
+            else
+                PYTHON_PKGS="libpython3-dev python3-dev"
+                if [ $ANACONDA -eq 0 ]; then
+                    PYTHON_PKGS="$PYTHON_PKGS python3-pip"
+                fi
             fi
         fi
         $SUDO apt-get install -y --no-install-recommends \
             build-essential libssl-dev libffi-dev openssl \
             openssh-client rsync $PYTHON_PKGS
     elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
-        if [ $PYTHON == "python" ]; then
-            PYTHON_PKGS="python-devel"
+        $SUDO yum makecache fast
+        if [ $ANACONDA -eq 1 ]; then
+            PYTHON_PKGS=
         else
-            yum list installed epel-release
-            if [ $? -ne 0 ]; then
-                echo "epel-release package not installed."
-                echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
-                exit 1
+            if [ $PYTHON == "python" ]; then
+                PYTHON_PKGS="python-devel"
+            else
+                yum list installed epel-release
+                if [ $? -ne 0 ]; then
+                    echo "epel-release package not installed."
+                    echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
+                    exit 1
+                fi
+                yum list installed python34
+                if [ $? -ne 0 ]; then
+                    echo "python34 epel package not installed."
+                    echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
+                    exit 1
+                fi
+                PYTHON_PKGS="python34-devel"
             fi
-            yum list installed python34
-            if [ $? -ne 0 ]; then
-                echo "python34 epel package not installed."
-                echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
-                exit 1
-            fi
-            PYTHON_PKGS="python34-devel"
         fi
         $SUDO yum install -y gcc openssl-devel libffi-devel openssl \
             openssh-clients rsync $PYTHON_PKGS
@@ -187,10 +198,14 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
         fi
     elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
         $SUDO zypper ref
-        if [ $PYTHON == "python" ]; then
-            PYTHON_PKGS="python-devel"
+        if [ $ANACONDA -eq 1 ]; then
+            PYTHON_PKGS=
         else
-            PYTHON_PKGS="python3-devel"
+            if [ $PYTHON == "python" ]; then
+                PYTHON_PKGS="python-devel"
+            else
+                PYTHON_PKGS="python3-devel"
+            fi
         fi
         $SUDO zypper -n in gcc libopenssl-devel libffi48-devel openssl \
             openssh rsync $PYTHON_PKGS
@@ -238,9 +253,12 @@ if [ ! -z $VENV_NAME ]; then
         $PIP install --upgrade --no-deps -r req_nodeps.txt
         deactivate
     else
+        # set python version
+        pyver=$($PYTHON -c "import sys;a=sys.version_info;print('{}.{}'.format(a[0],a[1]));")
+        echo "Creating conda env for Python $pyver"
         # create conda env
         set +e
-        conda create --yes --name $VENV_NAME
+        conda create --yes --name $VENV_NAME python=$pyver
         set -e
         source activate $VENV_NAME
         conda install --yes pip
