@@ -64,6 +64,20 @@ right.
 You are now ready to run Batch Shipyard in your Azure Function App
 environment.
 
+**Note about installation failures:** If you receive a message such as
+`Failed to install` then it's possible that the installation did not complete
+in the time allotted (which can happen for App Service Plans which are
+underpowered). To continue the installation, follow these steps:
+
+1. Load Kudu, go to `Debug console` and select `CMD`
+2. Navigate to `D:\home\SiteExtensions\BatchShipyard`
+3. Run the command `install.cmd`. Let this command run to completion
+(it may take a long time).
+4. Restart your site.
+5. To verify: Re-load Kudu, go back to the `Debug console`, select `CMD` and
+then run `%BATCH_SHIPYARD_CMD% --version`. There will be a delay, but you
+should see the version in the output.
+
 ## Invoking Batch Shipyard in an Azure Function App
 The Batch Shipyard site extension automatically attempts to find the version
 of Python installed via the site extension and links the version found with
