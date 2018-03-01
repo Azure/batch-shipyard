@@ -550,7 +550,10 @@ The `pool nodes` sub-command has the following sub-sub-commands:
   del     Delete a node from a pool
   grls    Get remote login settings for all nodes in...
   list    List nodes in pool
+  prune   Prune container/image data on nodes in pool
+  ps      List running containers on nodes in pool
   reboot  Reboot a node or nodes in a pool
+  zap     Zap all container processes on nodes in pool
 ```
 
 The `pool user` sub-command has the following sub-sub-commands:
@@ -598,10 +601,16 @@ pool. This command may require a valid SSH user.
 * `nodes grls` will retrieve all of the remote login settings for every node
 in the specified pool
 * `nodes list` will list all nodes in the specified pool
+* `nodes prune` will prune unused Docker data
+    * `--volumes` will also include volumes
+* `nodes ps` will list all Docker containers and their status
 * `nodes reboot` will reboot a specified node in the pool
     * `--all-start-task-failed` will reboot all nodes in the start task
       failed state
     * `--nodeid` is the node id to reboot
+* `nodes zap` will send a kill signal to all running Docker containers
+    * `--no-remove` will not remove exited containers
+    * `--stop` will execute docker stop instead
 * `rdp` will interactively log into a compute node via RDP. If neither
 `--cardinal` or `--nodeid` are specified, `--cardinal 0` is assumed. This
 command requires Batch Shipyard executing on Windows with target Windows

@@ -1482,6 +1482,49 @@ def nodes_list(ctx):
     convoy.fleet.action_pool_nodes_list(ctx.batch_client, ctx.config)
 
 
+@nodes.command('zap')
+@click.option(
+    '--no-remove', is_flag=True, help='Do not remove exited containers')
+@click.option(
+    '--stop', is_flag=True, help='Use docker stop instead of kill')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_zap(ctx, no_remove, stop):
+    """Zap all container processes on nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_zap(
+        ctx.batch_client, ctx.config, not no_remove, stop)
+
+
+@nodes.command('prune')
+@click.option(
+    '--volumes', is_flag=True, help='Prune volumes as well')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_prune(ctx, volumes):
+    """Prune container/image data on nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_prune(ctx.batch_client, ctx.config, volumes)
+
+
+@nodes.command('ps')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_ps(ctx):
+    """List running containers on nodes in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_ps(ctx.batch_client, ctx.config)
+
+
 @nodes.command('del')
 @click.option(
     '--all-start-task-failed',

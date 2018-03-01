@@ -1604,22 +1604,36 @@ def _setup_glusterfs(
             batchtask.id, job_id))
 
 
-def _update_container_images_over_ssh(batch_client, config, pool, cmd):
-    # type: (batchsc.BatchServiceClient, dict, batchmodels.CloudPool,
-    #        list) -> None
-    """Update docker images in pool over ssh
+def _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, desc, cmd):
+    # type: (batchsc.BatchServiceClient, dict, batchmodels.CloudPool, str,
+    #        list) -> dict
+    """Execute a command on all nodes in pool over ssh
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param batchmodels.CloudPool pool: cloud pool
+    :param str desc: description of action
     :param list cmd: command
+    :rtype: dict
+    :return: keyed stdout by node id
     """
+    # TODO NYI disable SSH commands with windows pools
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        raise RuntimeError(
+            '{} is currently not supported for windows pools'.format(desc))
+    # check if there are nodes to run command on
+    if (pool.current_dedicated_nodes == 0 and
+            pool.current_low_priority_nodes == 0):
+        logger.warning('pool {} has no compute nodes'.format(pool.id))
+        return
     _pool = settings.pool_settings(config)
     # get ssh settings
     username = _pool.ssh.username
     if util.is_none_or_empty(username):
         raise ValueError(
-            'cannot update container images without an SSH username')
+            'cannot {} without an SSH username'.format(desc))
     ssh_private_key = _pool.ssh.ssh_private_key
     if ssh_private_key is None:
         ssh_private_key = pathlib.Path(
@@ -1627,23 +1641,30 @@ def _update_container_images_over_ssh(batch_client, config, pool, cmd):
     if not ssh_private_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_private_key))
-    command = ['sudo', '/bin/bash -c "{}"'.format(' && '.join(cmd))]
+    # set command
+    command = ['sudo', '/bin/bash -c \'{}\''.format(' && '.join(cmd))]
     if settings.verbose(config):
         logger.debug('executing command: {}'.format(command))
     # iterate through all nodes
     nodes = batch_client.compute_node.list(pool.id)
-    procs = []
+    procs = {}
+    stdout = {}
+    stderr = {}
     failures = False
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool.id, node.id)
-        procs.append(crypto.connect_or_exec_ssh_command(
+        procs[node.id] = crypto.connect_or_exec_ssh_command(
             rls.remote_login_ip_address, rls.remote_login_port,
-            ssh_private_key, username, sync=False, tty=False, command=command))
+            ssh_private_key, username, sync=False, tty=False,
+            command=command)
         if len(procs) >= 40:
-            logger.debug('waiting for {} update processes to complete'.format(
+            logger.debug('waiting for {} processes to complete'.format(
                 len(procs)))
-            rcs, stdout, stderr = util.subprocess_wait_all(procs, poll=False)
+            for key in procs:
+                stdout[key], stderr[key] = procs[key].communicate()
+            rcs, _, _ = util.subprocess_wait_all(
+                list(procs.values()), poll=True)
             if any([x != 0 for x in rcs]):
                 if settings.verbose(config):
                     logger.warning('return codes: {}'.format(rcs))
@@ -1652,12 +1673,12 @@ def _update_container_images_over_ssh(batch_client, config, pool, cmd):
                 failures = True
             procs = []
             del rcs
-            del stdout
-            del stderr
     if len(procs) > 0:
-        logger.debug('waiting for {} update processes to complete'.format(
+        logger.debug('waiting for {} processes to complete'.format(
             len(procs)))
-        rcs, stdout, stderr = util.subprocess_wait_all(procs, poll=False)
+        for key in procs:
+            stdout[key], stderr[key] = procs[key].communicate()
+        rcs, _, _ = util.subprocess_wait_all(list(procs.values()), poll=True)
         if any([x != 0 for x in rcs]):
             if settings.verbose(config):
                 logger.warning('return codes: {}'.format(rcs))
@@ -1666,15 +1687,73 @@ def _update_container_images_over_ssh(batch_client, config, pool, cmd):
             failures = True
         del procs
         del rcs
-        del stdout
-        del stderr
     if failures:
         raise RuntimeError(
-            'failures detected updating container image on pool: {}'.format(
-                pool.id))
+            'failures detected performing {} on pool: {}'.format(
+                desc, pool.id))
     else:
-        logger.info('container image update completed for pool: {}'.format(
-            pool.id))
+        logger.info('{} completed for pool: {}'.format(desc, pool.id))
+    return stdout
+
+
+def _log_stdout_by_nodeid(pool_id, desc, stdout):
+    # type: (str, str, list) -> None
+    """Log stdout returned by keyed SSH remote execution
+    :param str pool_id: pool id
+    :param str desc: description
+    :param list stdout: keyed stdout by node id
+    """
+    log = [
+        'stdout for {} on pool {}'.format(desc, pool_id)
+    ]
+    for key in stdout:
+        log.append('* node id: {}'.format(key))
+        for line in stdout[key].split('\n'):
+            if len(line) == 0:
+                continue
+            log.append('  >> {}'.format(line))
+    logger.info(os.linesep.join(log))
+
+
+def _docker_system_prune_over_ssh(batch_client, config, volumes):
+    # type: (batchsc.BatchServiceClient, dict, bool) -> None
+    """Prune docker system data over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param bool volumes: remove volumes as well
+    """
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    desc = 'prune unused data'
+    cmd = [
+        'docker system prune -f{}'.format(' --volumes' if volumes else '')
+    ]
+    stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, desc, cmd)
+    _log_stdout_by_nodeid(pool_id, desc, stdout)
+
+
+def _zap_all_container_processes_over_ssh(batch_client, config, remove, stop):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool) -> None
+    """Zap all docker container processes over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param bool remove: remove exited containers as well
+    :param bool stop: docker stop instead of kill
+    """
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    desc = 'zap all container processes'
+    cmd = [
+        'docker ps -q | xargs -r docker {}'.format('stop' if stop else 'kill'),
+    ]
+    if remove:
+        cmd.append('docker ps -aq -f status=exited | xargs -r docker rm')
+    stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, desc, cmd)
+    _log_stdout_by_nodeid(pool_id, desc, stdout)
 
 
 def _update_container_images(
@@ -1798,7 +1877,9 @@ def _update_container_images(
         coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
             settings.get_singularity_cachedir(config)))
     if force_ssh:
-        _update_container_images_over_ssh(batch_client, config, pool, coordcmd)
+        stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+            batch_client, config, pool, 'update container images', coordcmd)
+        _log_stdout_by_nodeid(pool_id, 'uci', stdout)
         return
     if not is_windows:
         # update taskenv for Singularity
@@ -1867,85 +1948,34 @@ def _update_container_images(
             batchtask.id, job_id))
 
 
+def _docker_ps_over_ssh(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """docker ps in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    desc = 'docker ps'
+    cmd = ['docker ps -a']
+    stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, desc, cmd)
+    _log_stdout_by_nodeid(pool_id, desc, stdout)
+
+
 def _list_docker_images(batch_client, config):
     # type: (batchsc.BatchServiceClient, dict) -> None
     """List Docker images in pool over ssh
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
-    :param batchmodels.CloudPool pool: cloud pool
     """
-    _pool = settings.pool_settings(config)
-    pool = batch_client.pool.get(_pool.id)
-    if (pool.current_dedicated_nodes == 0 and
-            pool.current_low_priority_nodes == 0):
-        logger.warning('pool {} has no compute nodes'.format(pool.id))
-        return
-    is_windows = settings.is_windows_pool(config)
-    # TODO temporarily disable listimages with windows pools
-    if is_windows:
-        raise RuntimeError(
-            'listing images is currently not supported for windows pools')
-    # get ssh settings
-    username = _pool.ssh.username
-    if util.is_none_or_empty(username):
-        raise ValueError('cannot list docker images without an SSH username')
-    ssh_private_key = _pool.ssh.ssh_private_key
-    if ssh_private_key is None:
-        ssh_private_key = pathlib.Path(
-            _pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
-    if not ssh_private_key.exists():
-        raise RuntimeError('SSH private key file not found at: {}'.format(
-            ssh_private_key))
-    # iterate through all nodes
-    nodes = batch_client.compute_node.list(pool.id)
-    procs = {}
-    stdout = {}
-    stderr = {}
-    failures = False
-    for node in nodes:
-        rls = batch_client.compute_node.get_remote_login_settings(
-            pool.id, node.id)
-        procs[node.id] = crypto.connect_or_exec_ssh_command(
-            rls.remote_login_ip_address, rls.remote_login_port,
-            ssh_private_key, username, sync=False, tty=False,
-            command=[
-                'sudo', 'docker', 'images', '--format',
-                '"{{.ID}} {{.Repository}}:{{.Tag}}"'
-            ])
-        if len(procs) >= 40:
-            logger.debug('waiting for {} processes to complete'.format(
-                len(procs)))
-            for key in procs:
-                stdout[key], stderr[key] = procs[key].communicate()
-            rcs, _, _ = util.subprocess_wait_all(
-                list(procs.values()), poll=True)
-            if any([x != 0 for x in rcs]):
-                if settings.verbose(config):
-                    logger.warning('return codes: {}'.format(rcs))
-                    logger.warning('stdout: {}'.format(stdout))
-                    logger.warning('stderr: {}'.format(stderr))
-                failures = True
-            procs = []
-            del rcs
-    if len(procs) > 0:
-        logger.debug('waiting for {} processes to complete'.format(
-            len(procs)))
-        for key in procs:
-            stdout[key], stderr[key] = procs[key].communicate()
-        rcs, _, _ = util.subprocess_wait_all(list(procs.values()), poll=True)
-        if any([x != 0 for x in rcs]):
-            if settings.verbose(config):
-                logger.warning('return codes: {}'.format(rcs))
-                logger.warning('stdout: {}'.format(stdout))
-                logger.warning('stderr: {}'.format(stderr))
-            failures = True
-        del procs
-        del rcs
-    if failures:
-        raise RuntimeError(
-            'failures retrieving docker images on pool: {}'.format(
-                pool.id))
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    cmd = ['docker images --format "{{.ID}} {{.Repository}}:{{.Tag}}"']
+    stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, 'list docker images', cmd)
     # process stdout
     node_images = {}
     all_images = {}
@@ -2905,6 +2935,42 @@ def action_pool_nodes_list(batch_client, config):
     """
     _check_batch_client(batch_client)
     batch.list_nodes(batch_client, config)
+
+
+def action_pool_nodes_zap(batch_client, config, remove, stop):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool) -> None
+    """Action: Pool Nodes Zap
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param bool remove: remove containers all exited containers
+    :param bool stop: docker stop instead of kill
+    """
+    _check_batch_client(batch_client)
+    _zap_all_container_processes_over_ssh(batch_client, config, remove, stop)
+
+
+def action_pool_nodes_prune(batch_client, config, volumes):
+    # type: (batchsc.BatchServiceClient, dict, bool) -> None
+    """Action: Pool Nodes Prune
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param bool volumes: remove volumes as well
+    """
+    _check_batch_client(batch_client)
+    _docker_system_prune_over_ssh(batch_client, config, volumes)
+
+
+def action_pool_nodes_ps(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """Action: Pool Nodes Ps
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    _check_batch_client(batch_client)
+    _docker_ps_over_ssh(batch_client, config)
 
 
 def action_pool_user_add(batch_client, config):
