@@ -794,12 +794,7 @@ factories that generate parameters to modify the `command`:
 `{}` positional, `{0}` numbering style, or `{keyword}` keyword style
 formatters are required depending upon the `task_factory` used. Please
 see the [Task Factory Guide](35-batch-shipyard-task-factory-merge-task.md)
-for more information. Note that if environment variables are used on the
-command line with non-native pools, they must be quoted properly. For
-example, if your command is `/bin/bash -c "echo $myvar"`, the `$myvar`
-variable will be evaluated prior to the command being issued within the
-Docker container. The proper way to quote such a command would be
-`/bin/bash -c '\''echo $myvar'\''`.
+for more information.
 
 `merge_task` is an optional property that defines a final task that should
 be run after all tasks specified within the `tasks` array complete. All

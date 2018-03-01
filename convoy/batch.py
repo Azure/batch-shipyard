@@ -3641,18 +3641,21 @@ def _construct_task(
             ]
         else:
             if is_windows:
-                envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(task.envfile)
+                task_commands = [
+                    'set | findstr AZ_BATCH_ >> {}'.format(task.envfile),
+                ]
             else:
-                envgrep = 'env | grep AZ_BATCH_ >> {}'.format(task.envfile)
-            task_commands = [
-                envgrep,
+                task_commands = [
+                    'export $(cat {} | xargs)'.format(task.envfile),
+                    'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
+                ]
+            task_commands.append(
                 '{} {} {}{}'.format(
                     task.docker_run_cmd,
                     ' '.join(task.run_options),
                     task.docker_image,
                     '{}'.format(' ' + task.command) if task.command else '')
-            ]
-            del envgrep
+            )
     output_files = None
     # get registry login if missing images
     if (not native and allow_run_on_missing and
@@ -4105,29 +4108,31 @@ def add_jobs(
             else:
                 jscs = None
                 if is_windows:
-                    envgrep = (
-                        'set | findstr AZ_BATCH_ >> .shipyard-jmtask.envlist'
-                    )
+                    jscmd = [
+                        'set | findstr AZ_BATCH_ >> .shipyard-jmtask.envlist',
+                    ]
                     bind = (
                         '-v %AZ_BATCH_TASK_DIR%:%AZ_BATCH_TASK_DIR% '
                         '-w %AZ_BATCH_TASK_WORKING_DIR%'
                     )
                 else:
-                    envgrep = (
-                        'env | grep AZ_BATCH_ >> .shipyard-jmtask.envlist'
-                    )
+                    jscmd = [
+                        'export $(cat .shipyard-jmtask.envlist | xargs)',
+                        'env | grep AZ_BATCH_ >> .shipyard-jmtask.envlist',
+                    ]
                     bind = (
                         '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
                         '-w $AZ_BATCH_TASK_WORKING_DIR'
                     )
-                jscmdline = util.wrap_commands_in_shell([
-                    envgrep,
+                jscmd.append(
                     ('docker run --rm --env-file .shipyard-jmtask.envlist '
                      '{bind} {jmimgname} {jscmdline}').format(
                          bind=bind, jmimgname=jmimgname, jscmdline=jscmdline)
-                ], windows=is_windows)
+                )
+                jscmdline = util.wrap_commands_in_shell(
+                    jscmd, windows=is_windows)
                 del bind
-                del envgrep
+                del jscmd
             del jmimgname
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
