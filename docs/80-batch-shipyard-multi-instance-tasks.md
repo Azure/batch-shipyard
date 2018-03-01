@@ -233,10 +233,11 @@ Since Singularity is inherently easier to use in conjunction with MPI programs,
 it may be beneficial to use Singularity to containerize your MPI application
 instead of Docker. There is no need to package a launcher with your image
 and is handled more elegantly in Batch Shipyard without the need to split
-the execution and deal with potential cleanup artifacts. Additionally, there
-has been [some research](https://arxiv.org/abs/1709.10140) to indicate that
-Singularity outperforms other OS virtualization approaches and is more
-amenable for HPC applications.
+the execution and deal with potential cleanup artifacts if executing in
+non-`native` mode. Additionally, there has been
+[published research](https://arxiv.org/abs/1709.10140) to indicate that
+Singularity outperforms other OS virtualization approaches for certain
+benchmarks and is more amenable for HPC applications.
 
 ### More Information
 For more general information about MPI and Azure Batch, please visit

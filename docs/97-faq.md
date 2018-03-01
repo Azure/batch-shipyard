@@ -69,18 +69,21 @@ Advantages of `native` mode are:
 
 * Batch Shipyard with a provisioned SSH user is no longer necessary to
 perform actions such as terminating tasks where tasks are still running or
-deleting jobs with running tasks.
-* Multi-instance task execution is cleaner. You can execute multiple
-multi-instance tasks per job.
-* Potentially faster provisioning times, particularly pools with GPU devices.
+deleting jobs with running tasks in cases where normal Batch task termination
+fails to properly end the Docker container processes.
+* Multi-instance task execution (e.g., MPI job) is cleaner. You can execute
+multiple multi-instance tasks per job. If your workload is predominantly
+multi-instance, then it is recommended to use `native` mode.
 
 Disadvantages of `native` mode are:
 
 * Singularity containers are not supported.
-* `input_data` of any kind at the task-level is not possible.
-* `output_data` to `azure_storage` Azure Files (i.e., file shares) is not
-possible.
+* `input_data` of any kind at the task-level is not possible; you must either
+use `resource_files` or build your own solution.
+* `output_data` options are limited and egress to `azure_storage` Azure Files
+(i.e., file shares) is not possible.
 * Peer-to-peer distribution of Docker and Singularity images is not possible.
+* Other experimental features may not be supported.
 
 #### Does Batch Shipyard support Linux custom images?
 * Yes, please see [the guide](63-batch-shipyard-custom-images.md).

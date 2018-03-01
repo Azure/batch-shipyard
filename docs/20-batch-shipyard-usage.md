@@ -601,14 +601,17 @@ pool. This command may require a valid SSH user.
 * `nodes grls` will retrieve all of the remote login settings for every node
 in the specified pool
 * `nodes list` will list all nodes in the specified pool
-* `nodes prune` will prune unused Docker data
+* `nodes prune` will prune unused Docker data. This command requires a
+provisioned SSH user.
     * `--volumes` will also include volumes
-* `nodes ps` will list all Docker containers and their status
+* `nodes ps` will list all Docker containers and their status. This command
+requires a provisioned SSH user.
 * `nodes reboot` will reboot a specified node in the pool
     * `--all-start-task-failed` will reboot all nodes in the start task
       failed state
     * `--nodeid` is the node id to reboot
-* `nodes zap` will send a kill signal to all running Docker containers
+* `nodes zap` will send a kill signal to **all** running Docker containers.
+This command requires a provisioned SSH user.
     * `--no-remove` will not remove exited containers
     * `--stop` will execute docker stop instead
 * `rdp` will interactively log into a compute node via RDP. If neither

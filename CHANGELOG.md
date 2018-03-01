@@ -2,21 +2,44 @@
 
 ## [Unreleased]
 
+## [3.3.0] - 2018-03-01
 ### Added
-- `storage sas create` command added as a utility helper function to create
-SAS tokens for given storage accounts in credentials
+- Support for specifying default task exit conditions (i.e., non-zero exit
+codes). Please see the jobs configuration doc for more information.
+- New commands (please see usage doc for more information):
+    - `pool nodes prune` will remove all unused Docker-related data on all
+      nodes in the pool (requires an SSH user)
+    - `pool nodes ps` performs a `docker ps -a` on all nodes in the pool
+      (requires an SSH user)
+    - `pool nodes zap` will kill (and optionally remove) **all** running
+      Docker containers on nodes in a pool (requires an SSH user). Note that
+      `jobs tasks term` is the preferred command to control individual
+      (or grouped) task termination or `jobs term --termtasks` to terminate
+      at the job level.
+    - `storage sas create` command added as a utility helper function to
+      create SAS tokens for given storage accounts in credentials
 - Support for activating
 [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
 for Windows pools
 
 ### Changed
-- Expand node error details
+- Greatly expand pool, node, job, and task details for `list` sub-commands
+- Expand error detail key/value pairs if present
 - Name resources for RemoteFS with 3 digits (e.g., 000 instead of 0) for
 improved alpha ordering
+- Move site extension to nuget.org (#172)
 
 ### Fixed
-- Remote FS cluster del with disks error
+- Command lines in non-native mode now properly expand environment variables
+with normal quoting
+- RemoteFS cluster del with disks error
+- RemoteFS cluster status decoding issues
 - Unintended interaction between native mode and custom images
+- Handle starting Docker service for all deployments
+- Do not automatically mount storage cluster or custom linux mounts on boot
+due to potential race conditions with the ephemeral disk mount
+- Fix TLS issue with powershell (#171)
+- Fix conflicts when using install.sh with Anaconda environments
 - Update packer scripts and fix typos
 - Minor doc updates
 
@@ -24,18 +47,20 @@ improved alpha ordering
 ### Added
 - Custom Linux Mount support for `shared_data_volumes`. Please see the
 global configuration doc for more information.
-- `account` command added with the following sub-commands (requires AAD auth):
-    - `info` provides information about a Batch account (including account
-      level quotas)
-    - `list` provides information about all (or a resource group subset) of
-      accounts within the subscription specified in credentials
-    - `quota` provides service level quota information for the subscription
-      for a given location
+- New commands (please see usage doc for more information):
+    - `account` command added with the following sub-commands (requires
+      AAD auth):
+        - `info` provides information about a Batch account (including account
+          level quotas)
+        - `list` provides information about all (or a resource group subset)
+          of accounts within the subscription specified in credentials
+        - `quota` provides service level quota information for the
+          subscription for a given location
+    - `pool rdp` sub-command added, please see usage doc for more information.
+      Requires Batch Shipyard executing on Windows with target Windows
+      containers pools.
 - `pool images update` command now supports updating Docker images
 in native container support pools via SSH
-- `pool rdp` sub-command added, please see usage doc for more information.
-Requires Batch Shipyard executing on Windows with target Windows containers
-pools.
 - Ability to specify an AAD authority URL via the `aad`:`authority_url`
 credential configuration, `--aad-authority-url` command line option or
 `SHIPYARD_AAD_AUTHORITY_URL` environment variable. Please see relevant
@@ -1139,7 +1164,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.2.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.3.0...HEAD
+[3.3.0]: https://github.com/Azure/batch-shipyard/compare/3.2.0...3.3.0
 [3.2.0]: https://github.com/Azure/batch-shipyard/compare/3.1.0...3.2.0
 [3.1.0]: https://github.com/Azure/batch-shipyard/compare/3.0.3...3.1.0
 [3.0.3]: https://github.com/Azure/batch-shipyard/compare/3.0.2...3.0.3
