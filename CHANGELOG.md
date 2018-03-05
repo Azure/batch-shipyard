@@ -8,6 +8,7 @@ arguments to specify deleting and rebooting multiple nodes at the same time,
 respectively
 - `pool nodes prune`, `pool nodes reboot`, `pool nodes zap` will now ask
 for confirmation first. `-y` flag can be specified to suppress confirmation.
+- Docker CE updated to 17.12.1
 
 ## [3.3.0] - 2018-03-01
 ### Added
