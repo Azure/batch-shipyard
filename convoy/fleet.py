@@ -767,6 +767,20 @@ def _explode_arm_subnet_id(arm_subnet_id):
     return subid, rg, provider, vnet, subnet
 
 
+def _check_for_batch_aad(bc, rmsg):
+    # type: (settings.BatchCredentialSettings, str) -> None
+    """Check for Batch AAD
+    :param settings.BatchCredentialsSettings bc: batch cred settings
+    :param str rmsg: error message
+    """
+    if util.is_not_empty(bc.account_key):
+        raise RuntimeError(
+            'Cannot {} without Batch AAD credentials. Please ensure that '
+            'an "account_key" is not specified under the "batch" section in '
+            'credentials and an "aad" section is specified either directly '
+            'under "credentials" or under "batch".')
+
+
 def _pool_virtual_network_subnet_address_space_check(
         resource_client, network_client, config, pool_settings, bc):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
@@ -789,10 +803,7 @@ def _pool_virtual_network_subnet_address_space_check(
         logger.debug('no virtual network settings specified')
         return None
     # check if AAD is enabled
-    if util.is_not_empty(bc.account_key):
-        raise RuntimeError(
-            'cannot allocate a pool with a virtual network without AAD '
-            'credentials')
+    _check_for_batch_aad(bc, 'allocate a pool with a virtual network')
     # get subnet object
     subnet_id = None
     if util.is_not_empty(pool_settings.virtual_network.arm_subnet_id):
@@ -1051,10 +1062,7 @@ def _construct_pool_object(
     if native:
         if util.is_not_empty(custom_image_na):
             # check if AAD is enabled
-            if util.is_not_empty(bc.account_key):
-                raise RuntimeError(
-                    'cannot allocate a pool with a custom image without AAD '
-                    'credentials')
+            _check_for_batch_aad(bc, 'allocate a pool with a custom image')
             vmconfig = batchmodels.VirtualMachineConfiguration(
                 image_reference=batchmodels.ImageReference(
                     virtual_machine_image_id=pool_settings.
@@ -1118,10 +1126,7 @@ def _construct_pool_object(
             )
     elif util.is_not_empty(custom_image_na):
         # check if AAD is enabled
-        if util.is_not_empty(bc.account_key):
-            raise RuntimeError(
-                'cannot allocate a pool with a custom image without AAD '
-                'credentials')
+        _check_for_batch_aad(bc, 'allocate a pool with a custom image')
         _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=batchmodels.ImageReference(
@@ -1724,6 +1729,10 @@ def _docker_system_prune_over_ssh(batch_client, config, volumes):
     :param bool volumes: remove volumes as well
     """
     pool_id = settings.pool_id(config)
+    if not util.confirm_action(
+            config,
+            msg='prune all unused Docker data on pool {}'.format(pool_id)):
+        return
     pool = batch_client.pool.get(pool_id)
     desc = 'prune unused data'
     cmd = [
@@ -1744,6 +1753,10 @@ def _zap_all_container_processes_over_ssh(batch_client, config, remove, stop):
     :param bool stop: docker stop instead of kill
     """
     pool_id = settings.pool_id(config)
+    if not util.confirm_action(
+            config,
+            msg='zap all Docker containers on pool {}'.format(pool_id)):
+        return
     pool = batch_client.pool.get(pool_id)
     desc = 'zap all container processes'
     cmd = [
@@ -3078,7 +3091,7 @@ def action_pool_rdp(batch_client, config, cardinal, nodeid, no_auto=False):
 def action_pool_nodes_del(
         batch_client, config, all_start_task_failed, all_starting,
         all_unusable, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, bool, bool, bool, str) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, bool, bool, list) -> None
     """Action: Pool Nodes Del
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -3086,7 +3099,7 @@ def action_pool_nodes_del(
     :param bool all_start_task_failed: delete all start task failed nodes
     :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
-    :param str nodeid: nodeid to delete
+    :param list nodeid: list of nodeids to delete
     """
     _check_batch_client(batch_client)
     if ((all_start_task_failed or all_starting or all_unusable) and
@@ -3094,20 +3107,20 @@ def action_pool_nodes_del(
         raise ValueError(
             'cannot specify all start task failed nodes or unusable with '
             'a specific node id')
-    batch.del_node(
+    batch.del_nodes(
         batch_client, config, all_start_task_failed, all_starting,
         all_unusable, nodeid)
 
 
 def action_pool_nodes_reboot(
         batch_client, config, all_start_task_failed, nodeid):
-    # type: (batchsc.BatchServiceClient, dict, bool, str) -> None
+    # type: (batchsc.BatchServiceClient, dict, bool, list) -> None
     """Action: Pool Nodes Reboot
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
     :param bool all_start_task_failed: reboot all start task failed nodes
-    :param str nodeid: nodeid to reboot
+    :param list nodeid: list of nodeids to reboot
     """
     _check_batch_client(batch_client)
     if all_start_task_failed and nodeid is not None:

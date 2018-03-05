@@ -1539,7 +1539,8 @@ def nodes_ps(ctx):
     is_flag=True,
     help='Delete all nodes in unusable state')
 @click.option(
-    '--nodeid', help='NodeId of compute node in pool to delete')
+    '--nodeid', multiple=True,
+    help='NodeId of compute node in pool to delete')
 @common_options
 @batch_options
 @keyvault_options
@@ -1560,7 +1561,8 @@ def nodes_del(
     is_flag=True,
     help='Reboot all nodes in start task failed state')
 @click.option(
-    '--nodeid', help='NodeId of compute node in pool to reboot')
+    '--nodeid', multiple=True,
+    help='NodeId of compute node in pool to reboot')
 @common_options
 @batch_options
 @keyvault_options

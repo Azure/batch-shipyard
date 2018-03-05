@@ -512,7 +512,7 @@ def _block_for_nodes_ready(
             if pool_settings.attempt_recovery_on_unusable:
                 logger.warning(
                     'Unusable nodes detected, deleting unusable nodes')
-                del_node(
+                del_nodes(
                     batch_client, config, False, False, True, None,
                     suppress_confirm=True)
                 unusable_delete = True
@@ -1428,14 +1428,14 @@ def pool_autoscale_lastexec(batch_client, config):
     _output_autoscale_result(pool.auto_scale_run)
 
 
-def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
-    # type: (batch.BatchServiceClient, dict, bool, str) -> None
+def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
+    # type: (batch.BatchServiceClient, dict, bool, list) -> None
     """Reboot nodes in a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param bool all_start_task_failed: reboot all start task failed nodes
-    :param str node_id: node id to delete
+    :param list node_ids: list of node ids to reboot
     """
     pool_id = settings.pool_id(config)
     if all_start_task_failed:
@@ -1453,25 +1453,33 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_id):
                 continue
             _reboot_node(batch_client, pool_id, node.id, False)
     else:
-        _reboot_node(batch_client, pool_id, node_id, False)
+        if util.is_none_or_empty(node_ids):
+            raise ValueError('node ids to reboot is empty or invalid')
+        for node_id in node_ids:
+            if not util.confirm_action(
+                    config, 'reboot node {} from {} pool'.format(
+                        node_id, pool_id)):
+                continue
+            _reboot_node(batch_client, pool_id, node_id, False)
 
 
-def del_node(
+def del_nodes(
         batch_client, config, all_start_task_failed, all_starting,
-        all_unusable, node_id, suppress_confirm=False):
-    # type: (batch.BatchServiceClient, dict, bool, bool, bool, str,
+        all_unusable, node_ids, suppress_confirm=False):
+    # type: (batch.BatchServiceClient, dict, bool, bool, bool, list,
     #        bool) -> None
-    """Delete a node in a pool
+    """Delete nodes from a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param bool all_start_task_failed: delete all start task failed nodes
     :param bool all_starting: delete all starting nodes
     :param bool all_unusable: delete all unusable nodes
-    :param str node_id: node id to delete
+    :param list node_ids: list of node ids to delete
     :param bool suppress_confirm: suppress confirm ask
     """
-    node_ids = []
+    if util.is_none_or_empty(node_ids):
+        node_ids = []
     pool_id = settings.pool_id(config)
     if all_start_task_failed or all_starting or all_unusable:
         filters = []
@@ -1494,12 +1502,12 @@ def del_node(
                         node.id, pool_id)):
                 node_ids.append(node.id)
     else:
-        if util.is_none_or_empty(node_id):
-            raise ValueError('node id is invalid')
-        if suppress_confirm or util.confirm_action(
-                config, 'delete node {} from {} pool'.format(
-                    node_id, pool_id)):
-            node_ids.append(node_id)
+        if util.is_none_or_empty(node_ids):
+            raise ValueError('node ids to delete is empty or invalid')
+        if not suppress_confirm and not util.confirm_action(
+                config, 'delete {} nodes from {} pool'.format(
+                    len(node_ids), pool_id)):
+            return
     if util.is_none_or_empty(node_ids):
         logger.warning('no nodes to delete from pool: {}'.format(pool_id))
         return

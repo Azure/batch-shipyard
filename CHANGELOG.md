@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- `pool nodes del` and `pool nodes reboot` now accept multiple `--nodeid`
+arguments to specify deleting and rebooting multiple nodes at the same time,
+respectively
+- `pool nodes prune`, `pool nodes reboot`, `pool nodes zap` will now ask
+for confirmation first. `-y` flag can be specified to suppress confirmation.
+
 ## [3.3.0] - 2018-03-01
 ### Added
 - Support for specifying default task exit conditions (i.e., non-zero exit
