@@ -139,7 +139,9 @@ mapping:
                         type: map
                         mapping:
                           regex;(.+):
-                            type: str
+                            type: seq
+                            sequence:
+                             - type: str
                       glusterfs:
                         type: map
                         mapping:

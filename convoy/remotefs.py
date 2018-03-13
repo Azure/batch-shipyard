@@ -612,9 +612,9 @@ def _create_virtual_machine_extension(
     server_options = []
     st = rfs.storage_cluster.file_server.type
     so = rfs.storage_cluster.file_server.server_options
-    # special processing for gluster (always create these options
-    # if they don't exist)
+    # special processing for gluster
     if st == 'glusterfs':
+        # always create the following options if they don't exist
         server_options.append(
             settings.get_file_server_glusterfs_volume_name(
                 rfs.storage_cluster))
@@ -624,14 +624,34 @@ def _create_virtual_machine_extension(
         server_options.append(
             settings.get_file_server_glusterfs_transport(
                 rfs.storage_cluster))
-    # process key pairs
-    if st in so:
-        for key in so[st]:
-            if (st == 'glusterfs' and
-                    (key == 'volume_name' or key == 'volume_type' or
-                     key == 'transport')):
-                continue
-            server_options.append('{}:{}'.format(key, so[st][key]))
+        # process key pairs
+        if st in so:
+            for key in so[st]:
+                if (key == 'volume_name' or key == 'volume_type' or
+                        key == 'transport'):
+                    continue
+                server_options.append('{}:{}'.format(key, so[st][key]))
+        server_options = ','.join(server_options)
+    elif st == 'nfs':
+        try:
+            nfs_hosts = so[st]
+        except KeyError:
+            nfs_hosts = None
+        if util.is_none_or_empty(nfs_hosts):
+            nfs_hosts = {'*': []}
+        nfs_exports = []
+        for host in nfs_hosts:
+            opt = []
+            for eo in nfs_hosts[host]:
+                if (not eo.startswith('mountpath=') and
+                        not eo.startswith('mp=')):
+                    opt.append(eo)
+            if util.is_none_or_empty(opt):
+                opt.extend(['rw', 'sync', 'root_squash', 'no_subtree_check'])
+            nfs_exports.append('{}%{}'.format(host, ','.join(opt)))
+        server_options = ';'.join(nfs_exports)
+        del nfs_hosts
+        del nfs_exports
     logger.debug('server options: {}'.format(server_options))
     # create samba option
     if util.is_not_empty(rfs.storage_cluster.file_server.samba.share_name):
@@ -658,7 +678,7 @@ def _create_virtual_machine_extension(
             ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
         m=' -m {}'.format(rfs.storage_cluster.file_server.mountpoint),
         n=' -n' if settings.can_tune_tcp(rfs.storage_cluster.vm_size) else '',
-        o=' -o \'{}\''.format(','.join(server_options)) if util.is_not_empty(
+        o=' -o \'{}\''.format(server_options) if util.is_not_empty(
             server_options) else '',
         p=' -p' if premium else '',
         r=' -r {}'.format(rfs.storage_cluster.vm_disk_map[offset].raid_level),

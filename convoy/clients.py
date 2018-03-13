@@ -196,12 +196,18 @@ def create_arm_clients(ctx, batch_clients=False):
         resource_client = _create_resource_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
+        resource_client.config.add_user_agent(
+            'batch-shipyard/{}'.format(__version__))
         compute_client = _create_compute_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
+        compute_client.config.add_user_agent(
+            'batch-shipyard/{}'.format(__version__))
         network_client = _create_network_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
+        network_client.config.add_user_agent(
+            'batch-shipyard/{}'.format(__version__))
     if batch_clients:
         try:
             if credentials is None:

@@ -51,10 +51,14 @@ setup_nfs() {
         add_exports=1
     fi
     if [ $add_exports -eq 1 ]; then
-        # note that the * address/hostname allow is ok since we block nfs
-        # inbound traffic at the network security group except for allowed
-        # ip addresses as specified in the fs.json file
-        echo "${mountpath} *(rw,sync,root_squash,no_subtree_check,mountpoint=${mountpath})" >> /etc/exports
+        # parse server options for export mappings
+        set -f
+        IFS='%' read -ra so <<< "$server_options"
+        IFS=',' read -ra hosts <<< "${so[0]}"
+        for host in ${hosts[@]}; do
+            echo "${mountpath} ${host}(${so[1]},mountpoint=${mountpath})" >> /etc/exports
+        done
+        set +f
         systemctl reload nfs-kernel-server.service
         exportfs -v
     fi

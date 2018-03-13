@@ -69,6 +69,12 @@ remote_fs:
             transport: tcp
             volume_name: gv0
             volume_type: distributed
+          nfs:
+            '*':
+            - rw
+            - sync
+            - root_squash
+            - no_subtree_check
         samba:
           share_name: data
           account:
@@ -268,33 +274,48 @@ to each virtual machine in the storage cluster.
       mounting the filesystem. The examples here `noatime` and `nodiratime`
       reduce file metadata updates for access times on files and directories.
     * (optional) `server_options` is a key-value array of server options with
-      the key of the filesystem `type`. In this example, we are explicitly
-      definining options for `glusterfs`. `volume_name`, `volume_type` and
-      `transport` are all special keywords.
-        * (optional) `volume_name` is the name of the gluster volume. The
-          default is `gv0`.
-        * (optional) `volume_type` is the type of volume to create. If not
-          specified, the default is the gluster default of a distributed
-          volume. Please note that the `volume_type` specified here will
-          have significant impact on performance and data availability
-          delivered by GlusterFS for your workload. It is imperative to
-          understand your data I/O and access patterns and selecting the
-          proper volume type to maximize performance and/or availability.
-          Although written data is durable due to managed disks, VM
-          availability can cause reliability issues if a virtual machine
-          fails or becomes unavailable thus resulting in unavailability of the
-          brick hosting the data. You can view all of the available GlusterFS
-          volume types
-          [here](https://gluster.readthedocs.io/en/latest/Quick-Start-Guide/Architecture/#types-of-volumes).
-        * (optional) `transport` is the transport type to use. The default and
-          only valid value is `tcp`.
-        * (optional) Other GlusterFS tuning options can be further specified
-          here as key-value pairs. You can find all of the tuning options
-          [here](https://gluster.readthedocs.io/en/latest/Administrator%20Guide/Managing%20Volumes/#tuning-volume-options).
-          Please note that nfs-related options, although they can be enabled,
-          are not inherently supported by Batch Shipyard. Batch Shipyard
-          automatically provisions the proper GlusterFS FUSE client on compute
-          nodes that require access to GlusterFS-based storage clusters.
+      the key of the file server `type`.
+        * (optional) `glusterfs` are server options for `glusterfs` file
+          server `type`.
+            * (optional) `volume_name` is the name of the gluster volume. The
+              default is `gv0`.
+            * (optional) `volume_type` is the type of volume to create. If not
+              specified, the default is the gluster default of a distributed
+              volume. Please note that the `volume_type` specified here will
+              have significant impact on performance and data availability
+              delivered by GlusterFS for your workload. It is imperative to
+              understand your data I/O and access patterns and selecting the
+              proper volume type to maximize performance and/or availability.
+              Although written data is durable due to managed disks, VM
+              availability can cause reliability issues if a virtual machine
+              fails or becomes unavailable thus resulting in unavailability of
+              the brick hosting the data. You can view all of the available
+              GlusterFS volume types
+              [here](https://gluster.readthedocs.io/en/latest/Quick-Start-Guide/Architecture/#types-of-volumes).
+            * (optional) `transport` is the transport type to use. The default
+              and only valid value is `tcp`.
+            * (optional) Other GlusterFS tuning options can be further
+              specified here as key-value pairs. You can find all of the
+              tuning options
+              [here](https://gluster.readthedocs.io/en/latest/Administrator%20Guide/Managing%20Volumes/#tuning-volume-options).
+              Please note that nfs-related options for glusterfs, although
+              they can be enabled, are not inherently supported by Batch
+              Shipyard. Batch Shipyard automatically provisions the proper
+              GlusterFS FUSE client on compute nodes that require access to
+              GlusterFS-based storage clusters.
+        * (optional) `nfs` are server options for `nfs` file server `type`.
+          Each dictionary defined maps a host entry to the
+          [/etc/exports](https://linux.die.net/man/5/exports) options for
+          the NFS exported volume. Note that this can be omitted for the
+          default of allowing all hosts within the Virtual Network (`*`) to
+          access the share with options `rw,sync,root_squash,no_subtree_check`.
+            * (optional) `*` or any IP address or resolvable hostname. Note
+              that `*` is safe to specify here assuming the default
+              `network_security` rules are in place for `nfs` and you don't
+              need to restrict access to VMs on your Virtual Network.
+                * (optional) List of export options for this volume. Please
+                  refer to any `/etc/exports` guide for applicable options
+                  or [this link](https://linux.die.net/man/5/exports).
     * (optional) `samba` defines properties required for enabling
       [SMB](https://msdn.microsoft.com/library/windows/desktop/aa365233(v=vs.85).aspx)
       support on storage cluster nodes. This support is accomplished by

@@ -40,18 +40,15 @@ Registry
 [Azure Functions](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
 with integration to auto-link these filesystems to compute nodes with
-support for
-    * [NFS](https://en.wikipedia.org/wiki/Network_File_System)
-    * [GlusterFS](https://www.gluster.org/) distributed network file system
-* Automatic shared data volume support
-    * Remote Filesystems as provisioned by Batch Shipyard
-    * [Azure File](https://azure.microsoft.com/services/storage/files/)
-      via SMB
-    * [Azure Blob](https://azure.microsoft.com/services/storage/blobs/)
-      via [blobfuse](https://github.com/Azure/azure-storage-fuse)
-    * [GlusterFS](https://www.gluster.org/) provisioned directly on compute
-      nodes
-    * Custom Linux mount support (fstab)
+support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and
+[GlusterFS](https://www.gluster.org/) distributed network file system
+* Automatic shared data volume support for linking to Remote Filesystems as
+provisioned by Batch Shipyard, [Azure File](https://azure.microsoft.com/services/storage/files/)
+via SMB, [Azure Blob](https://azure.microsoft.com/services/storage/blobs/)
+via [blobfuse](https://github.com/Azure/azure-storage-fuse),
+[GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
+which can act as a distributed local file system/cache, and custom Linux mount
+support (fstab)
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
@@ -59,7 +56,7 @@ to containers executed on compute nodes
 * Support for [Low Priority Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 * Support for [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/)
 and autopool to dynamically scale and control computing resources on-demand
-* Support for [Task Factories and merge tasks](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)
+* Support for [Task Factories](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)
 with the ability to generate tasks based on parametric (parameter) sweeps,
 randomized input, file enumeration, replication, and custom Python code-based
 generators

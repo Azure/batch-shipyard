@@ -61,6 +61,12 @@ remote_fs:
             transport: tcp
             volume_name: gv0
             volume_type: distributed
+          nfs:
+            '*':
+            - rw
+            - sync
+            - root_squash
+            - no_subtree_check
         samba:
           share_name: data
           account:
