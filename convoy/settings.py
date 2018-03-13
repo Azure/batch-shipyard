@@ -61,6 +61,9 @@ _GPU_COMPUTE_INSTANCES = frozenset((
     # standard_nc_v2
     'standard_nc6s_v2', 'standard_nc12s_v2', 'standard_nc24s_v2',
     'standard_nc24rs_v2',
+    # standard nc_v3
+    'standard_nc6s_v3', 'standard_nc12s_v3', 'standard_nc24s_v3',
+    'standard_nc24rs_v3',
     # standard_nd
     'standard_nd6s', 'standard_nd12s', 'standard_nd24s', 'standard_nd24rs',
 ))
@@ -78,6 +81,8 @@ _RDMA_INSTANCES = frozenset((
     'standard_nc24r',
     # standard_nc_v2
     'standard_nc24rs_v2',
+    # standard_nc_v3
+    'standard_nc24rs_v3',
     # standard_nd
     'standard_nd24rs',
 ))
