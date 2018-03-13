@@ -2539,6 +2539,7 @@ def job_tasks(config, conf):
             else:
                 tfstorage = None
             for task in task_factory.generate_task(_task, tfstorage):
+                task['##tfgen'] = True
                 yield task
         else:
             yield _task
@@ -2758,7 +2759,8 @@ def has_depends_on_task(conf):
     if ('depends_on' in conf and util.is_not_empty(conf['depends_on']) or
             'depends_on_range' in conf and
             util.is_not_empty(conf['depends_on_range'])):
-        if 'id' not in conf or util.is_none_or_empty(conf['id']):
+        if (('id' not in conf or util.is_none_or_empty(conf['id'])) and
+                ('##tfgen' not in conf or not conf['##tfgen'])):
             raise ValueError(
                 'task id is not specified, but depends_on or '
                 'depends_on_range is set')
