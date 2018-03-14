@@ -1305,10 +1305,48 @@ def _construct_pool_object(
                     file_mode=rf.file_mode,
                 )
             )
-    # virtual network settings
-    if subnet_id is not None:
+    # network settings (subnet and/or remote access control)
+    if (subnet_id is not None or
+            pool_settings.remote_access_control.allow is not None or
+            pool_settings.remote_access_control.deny is not None):
+        priority = 150
+        rules = []
+        inp = batchmodels.InboundNATPool(
+            name='BatchShipyard-RemoteAccessControl',
+            protocol=pool_settings.remote_access_control.protocol,
+            backend_port=pool_settings.remote_access_control.backend_port,
+            frontend_port_range_start=pool_settings.remote_access_control.
+            starting_port,
+            frontend_port_range_end=pool_settings.remote_access_control.
+            starting_port + 999,
+            network_security_group_rules=rules,
+        )
+        if pool_settings.remote_access_control.allow is not None:
+            for ar in pool_settings.remote_access_control.allow:
+                rules.append(batchmodels.NetworkSecurityGroupRule(
+                    priority=priority,
+                    access=batchmodels.NetworkSecurityGroupRuleAccess.allow,
+                    source_address_prefix=ar,
+                ))
+                priority += 1
+        if pool_settings.remote_access_control.deny is not None:
+            for dr in pool_settings.remote_access_control.deny:
+                rules.append(batchmodels.NetworkSecurityGroupRule(
+                    priority=priority,
+                    access=batchmodels.NetworkSecurityGroupRuleAccess.deny,
+                    source_address_prefix=dr,
+                ))
+                priority += 1
+        if util.is_not_empty(rules):
+            pec = batchmodels.PoolEndpointConfiguration(
+                inbound_nat_pools=[inp],
+            )
+        else:
+            pec = None
+        # add subnet and NAT rules
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet_id,
+            endpoint_configuration=pec,
         )
     # storage cluster settings
     if util.is_not_empty(sc_fstab_mounts):

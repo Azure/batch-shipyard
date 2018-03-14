@@ -222,6 +222,19 @@ mapping:
             type: int
             range:
               min: 0
+      remote_access_control:
+        type: map
+        mapping:
+          starting_port:
+            type: int
+          allow:
+            type: seq
+            sequence:
+              - type: str
+          deny:
+            type: seq
+            sequence:
+              - type: str
       virtual_network:
         type: map
         mapping:

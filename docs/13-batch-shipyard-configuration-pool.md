@@ -83,6 +83,12 @@ pool_specification:
     username: shipyard
     password: null
     expiry_days: 30
+  remote_access_control:
+    starting_port: 49000
+    allow:
+    - 1.2.3.4
+    deny:
+    - '*'
   virtual_network:
     arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet
@@ -397,6 +403,21 @@ created with pool creation. This property is ignored for Linux-based pools.
       by Azure Batch. If left omitted, unspecified or set to `null`, then
       a random password is generated and logged during any `pool add` call
       with this section defined, or `pool user add`.
+* (optional) `remote_access_control` is a property to control access to the
+remote access port (SSH or RDP). If this section is omitted, then the Batch
+service defaults are applied which do not apply any network security
+rules on these ports.
+    * (optional) `starting_port` is the starting port for each SSH port
+      on each node to map to the "front-end" load balancer. The default value
+      is `49000` if not specified. Ports from `50000` to `55000` are
+      reserved by the Batch service.
+    * (optional) `allow` is a list of allowable address prefixes in CIDR
+      format.
+    * (optional) `deny` is a list of address prefixes in CIDR format to
+      deny. `deny` rules have lower priority than `allow` rules. Therefore,
+      you can specify a set of allowable address prefixes and then specify
+      a single deny rule of `*` to deny all other IP addresses from
+      connecting to the remote access port.
 * (optional) `gpu` property defines additional information for NVIDIA
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.

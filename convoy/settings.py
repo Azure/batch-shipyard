@@ -180,7 +180,7 @@ PoolSettings = collections.namedtuple(
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
         'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
         'additional_node_prep_commands_post', 'virtual_network',
-        'autoscale', 'node_fill_type',
+        'autoscale', 'node_fill_type', 'remote_access_control',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -193,6 +193,11 @@ SSHSettings = collections.namedtuple(
 RDPSettings = collections.namedtuple(
     'RDPSettings', [
         'username', 'expiry_days', 'password',
+    ]
+)
+RemoteAccessControl = collections.namedtuple(
+    'RemoteAccessControl', [
+        'starting_port', 'backend_port', 'protocol', 'allow', 'deny',
     ]
 )
 AADSettings = collections.namedtuple(
@@ -1014,12 +1019,21 @@ def pool_settings(config):
         if rdp_expiry_days <= 0:
             rdp_expiry_days = 30
         rdp_password = _kv_read_checked(rdpconf, 'password')
+    # remote access control
+    rac = _kv_read_checked(conf, 'remote_access_control', default={})
+    rac = RemoteAccessControl(
+        starting_port=_kv_read(rac, 'starting_port', default=49000),
+        backend_port='22' if ssh_username is not None else '3389',
+        protocol='tcp',
+        allow=_kv_read_checked(rac, 'allow'),
+        deny=_kv_read_checked(rac, 'deny'),
+    )
+    # gpu driver
     try:
-        gpu_driver = conf['gpu']['nvidia_driver']['source']
-        if util.is_none_or_empty(gpu_driver):
-            raise KeyError()
+        gpu_driver = _kv_read_checked(conf['gpu']['nvidia_driver'], 'source')
     except KeyError:
         gpu_driver = None
+    # additional node prep
     addl_node_prep = _kv_read_checked(
         conf, 'additional_node_prep_commands', default={})
     additional_node_prep_commands_pre = _kv_read_checked(
@@ -1065,6 +1079,7 @@ def pool_settings(config):
         ),
         autoscale=pool_autoscale_settings(config),
         node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
+        remote_access_control=rac,
     )
 
 
