@@ -255,6 +255,19 @@ mapping:
                 type: str
               address_prefix:
                 type: str
+      certificates:
+        type: map
+        mapping:
+          regex;(.+):
+            type: map
+            required: true
+            mapping:
+              visibility:
+                type: seq
+                required: true
+                sequence:
+                  - type: str
+                    enum: ['node_prep', 'remote_user', 'task']
       gpu:
         type: map
         mapping:

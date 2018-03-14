@@ -98,6 +98,12 @@ pool_specification:
     subnet:
       name: subnet-for-batch-vms
       address_prefix: 10.0.0.0/20
+  certificates:
+    sha1-thumbprint:
+      visibility:
+      - task
+      - start_task
+      - remote_user
   gpu:
     nvidia_driver:
       source: https://some.url
@@ -410,7 +416,9 @@ rules on these ports.
     * (optional) `starting_port` is the starting port for each SSH port
       on each node to map to the "front-end" load balancer. The default value
       is `49000` if not specified. Ports from `50000` to `55000` are
-      reserved by the Batch service.
+      reserved by the Batch service. You must specify enough space for
+      1000 ports; e.g., `49500` would not be valid since the range would
+      overlap into the reserved range.
     * (optional) `allow` is a list of allowable address prefixes in CIDR
       format.
     * (optional) `deny` is a list of address prefixes in CIDR format to
@@ -418,6 +426,14 @@ rules on these ports.
       you can specify a set of allowable address prefixes and then specify
       a single deny rule of `*` to deny all other IP addresses from
       connecting to the remote access port.
+* (optional) `certificates` property defines any certificate references to
+add on this pool. These certificates must already be present on the Batch
+account and are only applied to new pool allocations.
+    * (required) `sha1-thumbprint` is the actual SHA-1 thumbprint of the
+      certificate to add to the pool.
+        * (required) `visibility` is a list of visibility settings to apply
+          to the certificate. Valid values are `node_prep`, `remote_user`,
+          and `task`.
 * (optional) `gpu` property defines additional information for NVIDIA
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.

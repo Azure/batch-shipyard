@@ -5,6 +5,8 @@
 ### Added
 - Support for adding network access rules to the remote access port (SSH or
 RDP). Please see the pool configuration guide for more details.
+- Support for adding certificate references to a pool. Please see the
+pool configuration guide for more details.
 - Support for
 [NCv3 VM sizes](https://azure.microsoft.com/blog/ncv3-vms-generally-available-other-gpus-expanding-regions/).
 Note that ND/NCv2/NCv3 all require separate quota approval; please raise a

@@ -181,6 +181,7 @@ PoolSettings = collections.namedtuple(
         'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
         'additional_node_prep_commands_post', 'virtual_network',
         'autoscale', 'node_fill_type', 'remote_access_control',
+        'certificates',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1028,6 +1029,10 @@ def pool_settings(config):
         allow=_kv_read_checked(rac, 'allow'),
         deny=_kv_read_checked(rac, 'deny'),
     )
+    if (rac.starting_port < 1 or
+            (rac.starting_port > 49000 and rac.starting_port <= 55000) or
+            rac.starting_port > 64536):
+        raise ValueError('starting_port is invalid or in a reserved range')
     # gpu driver
     try:
         gpu_driver = _kv_read_checked(conf['gpu']['nvidia_driver'], 'source')
@@ -1040,6 +1045,23 @@ def pool_settings(config):
         addl_node_prep, 'pre', default=[])
     additional_node_prep_commands_post = _kv_read_checked(
         addl_node_prep, 'post', default=[])
+    # certificates
+    certdict = _kv_read_checked(conf, 'certificates', default={})
+    certs = []
+    for tp in certdict:
+        visibility = []
+        for vis in certdict[tp]['visibility']:
+            if vis == 'remote_user':
+                visibility.append(
+                    batchmodels.CertificateVisibility.remote_user)
+            elif vis == 'start_task':
+                visibility.append(batchmodels.CertificateVisibility.start_task)
+            elif vis == 'task':
+                visibility.append(batchmodels.CertificateVisibility.task)
+        certs.append(batchmodels.CertificateReference(
+            thumbprint=tp, thumbprint_algorithm='sha1',
+            visibility=visibility
+        ))
     return PoolSettings(
         id=conf['id'],
         vm_size=conf['vm_size'].lower(),  # normalize
@@ -1080,6 +1102,7 @@ def pool_settings(config):
         autoscale=pool_autoscale_settings(config),
         node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
         remote_access_control=rac,
+        certificates=certs,
     )
 
 

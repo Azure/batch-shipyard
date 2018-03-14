@@ -90,6 +90,12 @@ pool_specification:
     subnet:
       name: subnet-for-batch-vms
       address_prefix: 10.0.0.0/20
+  certificates:
+    sha1-thumbprint:
+      visibility:
+      - node_prep
+      - remote_user
+      - task
   gpu:
     nvidia_driver:
       source: https://some.url

@@ -1251,10 +1251,11 @@ def _construct_pool_object(
             ),
         ],
         task_scheduling_policy=task_scheduling_policy,
+        certificate_references=[]
     )
     if encrypt:
         if is_windows:
-            pool.certificate_references = [
+            pool.certificate_references.append(
                 batchmodels.CertificateReference(
                     pfx.sha1, 'sha1',
                     visibility=[
@@ -1262,14 +1263,16 @@ def _construct_pool_object(
                         batchmodels.CertificateVisibility.task,
                     ]
                 )
-            ]
+            )
         else:
-            pool.certificate_references = [
+            pool.certificate_references.append(
                 batchmodels.CertificateReference(
                     pfx.sha1, 'sha1',
                     visibility=[batchmodels.CertificateVisibility.start_task]
                 )
-            ]
+            )
+    if util.is_not_empty(pool_settings.certificates):
+        pool.certificate_references.extend(pool_settings.certificates)
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
