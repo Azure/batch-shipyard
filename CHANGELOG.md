@@ -23,6 +23,9 @@ for confirmation first. `-y` flag can be specified to suppress confirmation.
 - Docker CE updated to 17.12.1
 - Added Batch Shipyard version to user agent for all ARM clients
 
+### Fixed
+- Previous environment variable expansion fix applied to multi-instance tasks
+
 ## [3.3.0] - 2018-03-01
 ### Added
 - Support for specifying default task exit conditions (i.e., non-zero exit

@@ -3577,9 +3577,14 @@ def _construct_task(
                 else:
                     cc = '; '.join(task.multi_instance.coordination_command)
             else:
+                coordcmd = [
+                    'export $(grep -v "^AZ_BATCH_" {} | xargs)'.format(
+                        task.envfile),
+                ]
+                coordcmd.extend(task.multi_instance.coordination_command)
                 cc = util.wrap_commands_in_shell(
-                    task.multi_instance.coordination_command,
-                    windows=is_windows, wait=False)
+                    coordcmd, windows=is_windows, wait=False)
+                del coordcmd
         else:
             # no-op for singularity
             if is_singularity:
@@ -3622,16 +3627,20 @@ def _construct_task(
             )
             # singularity command is passed as-is for multi-instance
             task_commands = [
+                'export $(grep -v "^AZ_BATCH_" {} | xargs)'.format(
+                    task.envfile),
                 '{}'.format(' ' + task.command) if task.command else ''
             ]
         else:
             task_commands = [
+                'export $(grep -v "^AZ_BATCH_" {} | xargs)'.format(
+                    task.envfile),
                 '{} {} {} {}'.format(
                     task.docker_exec_cmd,
                     ' '.join(task.docker_exec_options),
                     task.name,
                     task.command,
-                )
+                ),
             ]
     else:
         if native:
@@ -3640,6 +3649,7 @@ def _construct_task(
             ]
         elif is_singularity:
             task_commands = [
+                'export $(cat {} | xargs)'.format(task.envfile),
                 'singularity {} {} {}{}'.format(
                     task.singularity_cmd,
                     ' '.join(task.run_options),
