@@ -982,7 +982,8 @@ def _construct_pool_object(
     encrypt = settings.batch_shipyard_encryption_enabled(config)
     if encrypt:
         pfx = crypto.get_encryption_pfx_settings(config)
-        batch.add_certificate_to_account(batch_client, config)
+        batch.add_certificate_to_account(
+            batch_client, config, None, False, False, None)
     # construct block list
     block_for_gr = None
     if pool_settings.block_until_all_global_resources_loaded:
@@ -2706,23 +2707,39 @@ def action_keyvault_list(keyvault_client, keyvault_uri):
     keyvault.list_secrets(keyvault_client, keyvault_uri)
 
 
-def action_cert_create(config):
-    # type: (dict) -> None
+def action_cert_create(config, file_prefix, pfx_password):
+    # type: (dict, str, str) -> None
     """Action: Cert Create
     :param dict config: configuration dict
+    :param str file_prefix: prefix of file to create
+    :param str pfx_password: pfx password
     """
-    sha1tp = crypto.generate_pem_pfx_certificates(config)
+    sha1tp = crypto.generate_pem_pfx_certificates(
+        config, file_prefix, pfx_password)
     logger.info('SHA1 Thumbprint: {}'.format(sha1tp))
 
 
-def action_cert_add(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_cert_add(
+        batch_client, config, file, pem_no_certs, pem_public_key,
+        pfx_password):
+    # type: (batchsc.BatchServiceClient, dict, str, bool, bool, str) -> None
     """Action: Cert Add
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
+    :param str file: file to add
+    :param bool pem_no_certs: don't export certs from pem
+    :param bool pem_public_key: only add public key from pem
+    :param str pfx_password: pfx password
     """
     _check_batch_client(batch_client)
-    batch.add_certificate_to_account(batch_client, config, False)
+    if pem_public_key or pem_no_certs:
+        if util.is_not_empty(file) and not file.lower().endswith('.pem'):
+            raise ValueError(
+                'cannot specify a --pem-* option and a non-PEM file')
+        elif util.is_none_or_empty(file):
+            raise ValueError('cannot specify --pem-* option and no file')
+    batch.add_certificate_to_account(
+        batch_client, config, file, pem_no_certs, pem_public_key, pfx_password)
 
 
 def action_cert_list(batch_client):
@@ -2734,14 +2751,15 @@ def action_cert_list(batch_client):
     batch.list_certificates_in_account(batch_client)
 
 
-def action_cert_del(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_cert_del(batch_client, config, sha1):
+    # type: (batchsc.BatchServiceClient, dict, List[str]) -> None
     """Action: Cert Del
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
     :param dict config: configuration dict
+    :param list sha1: list of sha1 thumbprints to delete
     """
     _check_batch_client(batch_client)
-    batch.del_certificate_from_account(batch_client, config)
+    batch.del_certificate_from_account(batch_client, config, sha1)
 
 
 def action_pool_listskus(batch_client):

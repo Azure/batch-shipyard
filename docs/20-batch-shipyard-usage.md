@@ -227,17 +227,39 @@ The `cert` command has the following sub-commands:
 ```
   add     Add a certificate to a Batch account
   create  Create a certificate to use with a Batch...
-  del     Deletes a certificate from the Batch account
+  del     Deletes certificate from a Batch account
   list    List all certificates in a Batch account
 ```
 
 * `add` will add a certificate to the Batch account
+    * `--file` is the certificate file to add. The operation to transform
+      the cert so it is acceptable for the Batch Service is determined by
+      the file extension. Only `.cer`, `.pem` and `.pfx` files are supported.
+      If this option is omitted, the `encryption`:`pfx` specified in the
+      global configuration is used.
+    * `--pem-no-certs` will convert and add the PEM file as a CER in the
+      Batch service without any certificates.
+    * `--pem-public-key` will convert and add the PEM file as a CER in the
+      Batch service with only the public key.
+    * `--pfx-password` is the PFX password to use
 * `create` will create a certificate locally for use with the Batch account.
-You must edit your `config.yaml` to incorporate the generated certificate and
-then invoked the `cert add` command. Please see the
-[credential encryption](75-batch-shipyard-credential-encryption.md) guide for more information.
-* `del` will delete a certificate from the Batch account
+    * `--file-prefix` is the PEM and PFX file name prefix to use. If this
+      option is omitted, the global configuration `encryption`:`pfx` section
+      options are used.
+    * `--pfx-password` is the PFX passphrase to set. If this option is
+      omitted, the global configuration `encryption`:`pfx` section options
+      are used. If neither are specified, the passphrase is prompted.
+* `del` will delete certificates from the Batch account
+    * `--sha1` specifies the thumbprint to delete. If this option is omitted,
+      then the certificate referenced in the global configuration setting
+      `encryption`:`pfx` will be deleted.
 * `list` will list certificates in the Batch account
+
+Note that in order to use certificates created by `cert create` for
+credential encryption, you must edit your `config.yaml` to incorporate the
+generated certificate and then invoke the `cert add` command. Please see the
+[credential encryption](75-batch-shipyard-credential-encryption.md) guide
+for more information.
 
 ## `data` Command
 The `data` command has the following sub-commands:

@@ -246,39 +246,135 @@ def list_node_agent_skus(batch_client):
                     sku.os_type, img.publisher, img.offer, img.sku, sku.id))
 
 
-def add_certificate_to_account(batch_client, config, rm_pfxfile=False):
-    # type: (batch.BatchServiceClient, dict, bool) -> None
+def add_certificate_to_account(
+        batch_client, config, file, pem_no_certs, pem_public_key,
+        pfx_password):
+    # type: (batch.BatchServiceClient, dict, str, bool, bool, str) -> None
     """Adds a certificate to a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param str file: file to add
+    :param bool pem_no_certs: don't export certs from pem
+    :param bool pem_public_key: only add public key from pem
+    :param str pfx_password: pfx password
+    """
+    # retrieve encryption cert from config if file isn't specified
+    if util.is_none_or_empty(file):
+        pfx = crypto.get_encryption_pfx_settings(config)
+        add_pfx_cert_to_account(
+            batch_client, config, pfx, pfx_password=None, rm_pfxfile=False)
+        return
+    fpath = pathlib.Path(file)
+    if not fpath.exists():
+        raise ValueError('certificate file {} does not exist'.format(fpath))
+    fext = fpath.suffix.lower()
+    if fext == '.cer':
+        add_cer_cert_to_account(batch_client, config, file, rm_cerfile=False)
+    elif fext == '.pem':
+        if pem_public_key:
+            # export public portion as cer
+            cer = crypto.convert_pem_to_cer(file, pem_no_certs)
+            if util.is_none_or_empty(cer):
+                raise RuntimeError(
+                    'could not convert pem {} to cer'.format(file))
+            add_cer_cert_to_account(batch_client, config, cer, rm_cerfile=True)
+        else:
+            # export pem as pfx
+            pfx, pfx_password = crypto.convert_pem_to_pfx(
+                file, pem_no_certs, pfx_password)
+            if util.is_none_or_empty(pfx):
+                raise RuntimeError(
+                    'could not convert pem {} to pfx'.format(file))
+            add_pfx_cert_to_account(
+                batch_client, config, pfx, pfx_password=pfx_password,
+                rm_pfxfile=True)
+    elif fext == '.pfx':
+        add_pfx_cert_to_account(
+            batch_client, config, file, pfx_password=pfx_password,
+            rm_pfxfile=False)
+    else:
+        raise ValueError(
+            'unknown certificate format {} for file {}'.format(fext, fpath))
+
+
+def add_cer_cert_to_account(batch_client, config, cer, rm_cerfile=False):
+    # type: (batch.BatchServiceClient, dict, str, bool) -> None
+    """Adds a cer certificate to a Batch account
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str cer: cer file to add
+    :param bool rm_cerfile: remove CER file from local disk
+    """
+    # get thumbprint for cer
+    thumbprint = crypto.get_sha1_thumbprint_cer(cer)
+    # first check if this cert exists
+    bc = settings.credentials_batch(config)
+    certs = batch_client.certificate.list()
+    for cert in certs:
+        if cert.thumbprint.lower() == thumbprint:
+            logger.error(
+                'cert with thumbprint {} already exists for account {}'.format(
+                    thumbprint, bc.account))
+            # remove cerfile
+            if rm_cerfile:
+                os.unlink(cer)
+            return
+    # add cert to account
+    data = util.base64_encode_string(open(cer, 'rb').read())
+    batch_client.certificate.add(
+        certificate=batchmodels.CertificateAddParameter(
+            thumbprint, 'sha1', data,
+            certificate_format=batchmodels.CertificateFormat.cer)
+    )
+    logger.info('added cer cert with thumbprint {} to account {}'.format(
+        thumbprint, bc.account))
+    # remove cerfile
+    if rm_cerfile:
+        os.unlink(cer)
+
+
+def add_pfx_cert_to_account(
+        batch_client, config, pfx, pfx_password=None, rm_pfxfile=False):
+    # type: (batch.BatchServiceClient, dict, str, bool) -> None
+    """Adds a pfx certificate to a Batch account
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     :param str sha1_cert_tp: sha1 thumbprint of pfx
+    :param str pfx_password: pfx password
     :param bool rm_pfxfile: remove PFX file from local disk
     """
-    pfx = crypto.get_encryption_pfx_settings(config)
+    if not isinstance(pfx, crypto.PfxSettings):
+        pfx = crypto.PfxSettings(
+            filename=pfx,
+            passphrase=pfx_password,
+            sha1=crypto.get_sha1_thumbprint_pfx(pfx, pfx_password),
+        )
     # first check if this cert exists
+    bc = settings.credentials_batch(config)
     certs = batch_client.certificate.list()
     for cert in certs:
         if cert.thumbprint.lower() == pfx.sha1:
             logger.error(
-                'cert with thumbprint {} already exists for account'.format(
-                    pfx.sha1))
+                'cert with thumbprint {} already exists for account {}'.format(
+                    pfx.sha1, bc.account))
             # remove pfxfile
             if rm_pfxfile:
                 os.unlink(pfx.filename)
             return
+    # set pfx password
+    passphrase = pfx.passphrase or getpass.getpass('Enter password for PFX: ')
     # add cert to account
-    if pfx.passphrase is None:
-        pfx.passphrase = getpass.getpass('Enter password for PFX: ')
-    logger.debug('adding pfx cert with thumbprint {} to account'.format(
-        pfx.sha1))
     data = util.base64_encode_string(open(pfx.filename, 'rb').read())
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
             pfx.sha1, 'sha1', data,
             certificate_format=batchmodels.CertificateFormat.pfx,
-            password=pfx.passphrase)
+            password=passphrase)
     )
+    logger.info('added pfx cert with thumbprint {} to account {}'.format(
+        pfx.sha1, bc.account))
     # remove pfxfile
     if rm_pfxfile:
         os.unlink(pfx.filename)
@@ -294,18 +390,24 @@ def list_certificates_in_account(batch_client):
     log = ['list of certificates']
     certs = batch_client.certificate.list()
     for cert in certs:
-        if cert.delete_certificate_error is not None:
-            ce = '  * delete error: {}: {}'.format(
-                cert.delete_certificate_error.code,
-                cert.delete_certificate_error.message)
-        else:
-            ce = '  * no delete errors'
         log.extend([
             '* thumbprint: {}'.format(cert.thumbprint),
             '  * thumbprint algorithm: {}'.format(cert.thumbprint_algorithm),
-            '  * state: {}'.format(cert.state),
-            ce,
+            '  * state: {} @ {}'.format(
+                cert.state.value, cert.state_transition_time),
+            '  * previous state: {} @ {}'.format(
+                cert.previous_state.value
+                if cert.previous_state is not None else 'n/a',
+                cert.previous_state_transition_time),
         ])
+        if cert.delete_certificate_error is not None:
+            log.append('  * delete error: {}: {}'.format(
+                cert.delete_certificate_error.code,
+                cert.delete_certificate_error.message))
+            for de in cert.delete_certificate_error.values:
+                log.append('    * {}: {}'.format(de.name, de.value))
+        else:
+            log.append('  * no delete errors')
         i += 1
     if i == 0:
         logger.error('no certificates found')
@@ -313,15 +415,26 @@ def list_certificates_in_account(batch_client):
         logger.info(os.linesep.join(log))
 
 
-def del_certificate_from_account(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
+def del_certificate_from_account(batch_client, config, sha1):
+    # type: (batch.BatchServiceClient, dict, List[str]) -> None
     """Delete a certificate from a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
+    :param list sha1: list of sha1 thumbprints to delete
     """
-    pfx = crypto.get_encryption_pfx_settings(config)
-    batch_client.certificate.delete('sha1', pfx.sha1)
+    if util.is_none_or_empty(sha1):
+        pfx = crypto.get_encryption_pfx_settings(config)
+        sha1 = [pfx.sha1]
+    bc = settings.credentials_batch(config)
+    for tp in sha1:
+        if not util.confirm_action(
+                config, 'delete certificate {} from account {}'.format(
+                    tp, bc.account)):
+            return
+        batch_client.certificate.delete('sha1', tp)
+        logger.info('certificate {} deleted from account {}'.format(
+            tp, bc.account))
 
 
 def _reboot_node(batch_client, pool_id, node_id, wait):
@@ -3055,6 +3168,8 @@ def list_tasks(batch_client, config, all=False, jobid=None):
                 if task.exit_conditions is not None:
                     default_job_action = (
                         task.exit_conditions.default.job_action.value
+                        if task.exit_conditions.default.job_action
+                        is not None else 'n/a'
                     )
                     default_dependency_action = (
                         task.exit_conditions.default.dependency_action.value

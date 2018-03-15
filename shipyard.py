@@ -1138,27 +1138,37 @@ def cert(ctx):
 
 
 @cert.command('create')
+@click.option('--file-prefix', help='Certificate file prefix')
+@click.option('--pfx-password', help='PFX password')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def cert_create(ctx):
+def cert_create(ctx, file_prefix, pfx_password):
     """Create a certificate to use with a Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_cert_create(ctx.config)
+    convoy.fleet.action_cert_create(ctx.config, file_prefix, pfx_password)
 
 
 @cert.command('add')
+@click.option('--file', help='Certificate file to add')
+@click.option(
+    '--pem-no-certs', is_flag=True, help='Do not export certs from PEM file')
+@click.option(
+    '--pem-public-key', is_flag=True, help='Add public key only from PEM file')
+@click.option('--pfx-password', help='PFX password')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def cert_add(ctx):
+def cert_add(ctx, file, pem_no_certs, pem_public_key, pfx_password):
     """Add a certificate to a Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_cert_add(ctx.batch_client, ctx.config)
+    convoy.fleet.action_cert_add(
+        ctx.batch_client, ctx.config, file, pem_no_certs, pem_public_key,
+        pfx_password)
 
 
 @cert.command('list')
@@ -1174,15 +1184,17 @@ def cert_list(ctx):
 
 
 @cert.command('del')
+@click.option(
+    '--sha1', multiple=True, help='SHA1 thumbprint of certificate to delete')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def cert_del(ctx):
-    """Delete a certificate from a Batch account"""
+def cert_del(ctx, sha1):
+    """Delete certificates from a Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_cert_del(ctx.batch_client, ctx.config)
+    convoy.fleet.action_cert_del(ctx.batch_client, ctx.config, sha1)
 
 
 @cli.group()

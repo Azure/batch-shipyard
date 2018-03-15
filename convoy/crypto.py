@@ -32,6 +32,7 @@ from builtins import (  # noqa
 # stdlib imports
 import base64
 import collections
+import datetime
 import getpass
 import logging
 import os
@@ -54,7 +55,10 @@ _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _REMOTEFS_SSH_KEY_PREFIX = '{}_remotefs'.format(_SSH_KEY_PREFIX)
 # named tuples
 PfxSettings = collections.namedtuple(
-    'PfxSettings', ['filename', 'passphrase', 'sha1'])
+    'PfxSettings', [
+        'filename', 'passphrase', 'sha1',
+    ]
+)
 
 
 def get_ssh_key_prefix():
@@ -245,6 +249,86 @@ def derive_public_key_pem_from_pfx(pfxfile, passphrase=None, pemfile=None):
     return pemfile
 
 
+def convert_pem_to_pfx(pemfile, no_certs, passphrase):
+    # type: (str, bool, str) -> str
+    """Convert pem to password-protected pfx
+    :param str pemfile: path of pem file to convert from
+    :param bool no_certs: don't export certs
+    :param str passphrase: passphrase for pfx
+    :rtype: tuple
+    :return: path of pfx file, passphrase
+    """
+    if pemfile is None:
+        raise ValueError('pem file is invalid')
+    if passphrase is None:
+        passphrase = getpass.getpass('Enter password for PFX: ')
+    # convert pem to pfx
+    f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
+    f.close()
+    pfxfile = f.name
+    try:
+        if no_certs:
+            subprocess.check_call(
+                ['openssl', 'pkcs12', '-export', '-nocerts', '-inkey', pemfile,
+                 '-out', pfxfile, '-password', 'pass:' + passphrase]
+            )
+        else:
+            subprocess.check_call(
+                ['openssl', 'pkcs12', '-export', '-in', pemfile, '-out',
+                 pfxfile, '-password', 'pass:' + passphrase]
+            )
+    except Exception:
+        fp = pathlib.Path(pfxfile)
+        if fp.exists():
+            fp.unlink()
+        pfxfile = None
+    return pfxfile, passphrase
+
+
+def convert_pem_to_cer(pemfile, no_certs):
+    # type: (str) -> str
+    """Convert pem to cer containing public key only
+    :param str pemfile: path of pem file to convert from
+    :param bool no_certs: don't export certs
+    :rtype: str
+    :return: path of cer file
+    """
+    if pemfile is None:
+        raise ValueError('pem file is invalid')
+    # convert pem to cer
+    f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
+    f.close()
+    cerfile = f.name
+    try:
+        if no_certs:
+            subprocess.check_call(
+                ['openssl', 'req', '-new', '-x509', '-key', pemfile,
+                 '-outform', 'DER', '-out', cerfile,
+                 '-subj', _autofill_subject()]
+            )
+        else:
+            pf = None
+            try:
+                pf = tempfile.NamedTemporaryFile(mode='wb', delete=False)
+                pf.close()
+                subprocess.check_call(
+                    ['openssl', 'req', '-new', '-x509', '-in', pemfile,
+                     '-outform', 'DER', '-nodes', '-keyout', pf.name,
+                     '-out', cerfile, '-subj', _autofill_subject()]
+                )
+            finally:
+                if pf is not None:
+                    fp = pathlib.Path(pf.name)
+                    if fp.exists():
+                        fp.unlink()
+    except Exception:
+        fp = pathlib.Path(cerfile)
+        if fp.exists():
+            fp.unlink()
+        cerfile = None
+    return cerfile
+
+
 def _parse_sha1_thumbprint_openssl(output):
     # type: (str) -> str
     """Get SHA1 thumbprint from buffer
@@ -262,7 +346,7 @@ def _parse_sha1_thumbprint_openssl(output):
 def get_sha1_thumbprint_pfx(pfxfile, passphrase):
     # type: (str, str) -> str
     """Get SHA1 thumbprint of PFX
-    :param str pfxfile: name of the pfx file to export
+    :param str pfxfile: name of the pfx file
     :param str passphrase: passphrase for pfx
     :rtype: str
     :return: sha1 thumbprint of pfx
@@ -286,7 +370,7 @@ def get_sha1_thumbprint_pfx(pfxfile, passphrase):
 def get_sha1_thumbprint_pem(pemfile):
     # type: (str) -> str
     """Get SHA1 thumbprint of PEM
-    :param str pfxfile: name of the pfx file to export
+    :param str pfxfile: name of the pfx file
     :rtype: str
     :return: sha1 thumbprint of pem
     """
@@ -297,26 +381,63 @@ def get_sha1_thumbprint_pem(pemfile):
     return _parse_sha1_thumbprint_openssl(proc.communicate()[0])
 
 
-def generate_pem_pfx_certificates(config):
-    # type: (dict) -> str
+def get_sha1_thumbprint_cer(cerfile):
+    # type: (str) -> str
+    """Get SHA1 thumbprint of CER
+    :param str cerfile: name of the cer file
+    :rtype: str
+    :return: sha1 thumbprint of cer
+    """
+    proc = subprocess.Popen(
+        ['openssl', 'x509', '-noout', '-fingerprint', '-inform', 'DER',
+         '-in', cerfile],
+        stdout=subprocess.PIPE
+    )
+    return _parse_sha1_thumbprint_openssl(proc.communicate()[0])
+
+
+def _autofill_subject():
+    # type: (None) -> str
+    """Generate an autofill subject for openssl
+    :rtype: str
+    :return: generated autofill subject
+    """
+    return '/C=/ST=/L=/O=/CN=BatchShipyard{}'.format(
+        datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
+
+
+def generate_pem_pfx_certificates(config, file_prefix=None, pfx_password=None):
+    # type: (dict, str, str) -> str
     """Generate a pem and a derived pfx file
     :param dict config: configuration dict
+    :param str file_prefix: prefix of file to create
+    :param str pfx_password: pfx password
     :rtype: str
     :return: sha1 thumbprint of pfx
     """
     # gather input
-    pemfile = settings.batch_shipyard_encryption_public_key_pem(config)
-    pfxfile = settings.batch_shipyard_encryption_pfx_filename(config)
-    passphrase = settings.batch_shipyard_encryption_pfx_passphrase(config)
-    if pemfile is None:
-        pemfile = util.get_input('Enter public key PEM filename to create: ')
-    if pfxfile is None:
-        pfxfile = util.get_input('Enter PFX filename to create: ')
-    if passphrase is None:
-        while util.is_none_or_empty(passphrase):
-            passphrase = getpass.getpass('Enter password for PFX: ')
-            if len(passphrase) == 0:
-                print('passphrase cannot be empty')
+    if util.is_not_empty(file_prefix):
+        pemfile = file_prefix + '.pem'
+    else:
+        pemfile = (
+            settings.batch_shipyard_encryption_public_key_pem(config) or
+            util.get_input('Enter public key PEM filename to create: ')
+        )
+    if util.is_not_empty(file_prefix):
+        pfxfile = file_prefix + '.pfx'
+    else:
+        pfxfile = (
+            settings.batch_shipyard_encryption_pfx_filename(config) or
+            util.get_input('Enter PFX filename to create: ')
+        )
+    passphrase = (
+        pfx_password or
+        settings.batch_shipyard_encryption_pfx_passphrase(config)
+    )
+    while util.is_none_or_empty(passphrase):
+        passphrase = getpass.getpass('Enter password for PFX: ')
+        if len(passphrase) == 0:
+            print('passphrase cannot be empty')
     privatekey = pemfile + '.key'
     # generate pem file with private key and no password
     f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
@@ -324,8 +445,8 @@ def generate_pem_pfx_certificates(config):
     try:
         subprocess.check_call(
             ['openssl', 'req', '-new', '-nodes', '-x509', '-newkey',
-             'rsa:2048', '-keyout', privatekey, '-out', f.name, '-days', '730',
-             '-subj', '/C=US/ST=None/L=None/O=None/CN=BatchShipyard']
+             'rsa:2048', '-keyout', privatekey, '-out', f.name,
+             '-days', '3650', '-subj', _autofill_subject()]
         )
         # extract public key from private key
         subprocess.check_call(
