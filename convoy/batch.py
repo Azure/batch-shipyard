@@ -3907,10 +3907,10 @@ def _construct_task(
             task_id_ranges=task_id_ranges,
         )
     # add exit conditions
-    if on_task_failure != batchmodels.OnTaskFailure.no_action:
-        job_action = task.default_exit_options.job_action
-    else:
+    if on_task_failure == batchmodels.OnTaskFailure.no_action:
         job_action = None
+    else:
+        job_action = task.default_exit_options.job_action
     if uses_task_dependencies:
         dependency_action = task.default_exit_options.dependency_action
     else:
@@ -4001,7 +4001,7 @@ def add_jobs(
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
-        on_task_failure = None
+        on_task_failure = batchmodels.OnTaskFailure.no_action
         uses_task_dependencies = False
         docker_missing_images = []
         singularity_missing_images = []
@@ -4038,12 +4038,13 @@ def add_jobs(
                              job_id, si, pool.id))
             del di
             del si
-            if settings.has_task_exit_condition_job_action(task):
+            if (on_task_failure != batchmodels.OnTaskFailure.
+                    perform_exit_options_job_action and
+                    settings.has_task_exit_condition_job_action(
+                        jobspec, task)):
                 on_task_failure = (
                     batchmodels.OnTaskFailure.perform_exit_options_job_action
                 )
-            else:
-                on_task_failure = batchmodels.OnTaskFailure.no_action
             # do not break, check to ensure ids are set on each task if
             # task dependencies are set
             if settings.has_depends_on_task(task) or has_merge_task:

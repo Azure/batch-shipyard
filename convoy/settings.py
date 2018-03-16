@@ -2806,9 +2806,10 @@ def has_depends_on_task(conf):
     return False
 
 
-def has_task_exit_condition_job_action(conf):
-    # type: (dict) -> bool
+def has_task_exit_condition_job_action(jobspec, conf):
+    # type: (dict, dict) -> bool
     """Determines if task has task exit condition job action
+    :param dict jobspec: job configuration object
     :param dict conf: task configuration object
     :rtype: bool
     :return: task has exit condition job action
@@ -2816,7 +2817,10 @@ def has_task_exit_condition_job_action(conf):
     try:
         conf['exit_conditions']['default']['exit_options']['job_action']
     except KeyError:
-        return False
+        try:
+            jobspec['exit_conditions']['default']['exit_options']['job_action']
+        except KeyError:
+            return False
     return True
 
 
@@ -3267,14 +3271,51 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     if util.is_not_empty(retention_time):
         retention_time = util.convert_string_to_timedelta(retention_time)
     # exit conditions, right now specific exit codes/ranges are not supported
-    default_eo = _kv_read_checked(
-        _kv_read_checked(conf, 'exit_conditions', default={}),
-        'default', default={})
-    default_eo = _kv_read_checked(default_eo, 'exit_options', default={})
+    job_default_eo = _kv_read_checked(
+        _kv_read_checked(
+            _kv_read_checked(
+                jobspec,
+                'exit_conditions',
+                default={}
+            ),
+            'default',
+            default={}
+        ),
+        'exit_options',
+        default={}
+    )
+    task_default_eo = _kv_read_checked(
+        _kv_read_checked(
+            _kv_read_checked(
+                conf,
+                'exit_conditions',
+                default={}
+            ),
+            'default',
+            default={}
+        ),
+        'exit_options',
+        default={}
+    )
     job_action = batchmodels.JobAction(
-        _kv_read_checked(default_eo, 'job_action', default='none'))
+        _kv_read_checked(
+            task_default_eo,
+            'job_action',
+            default=batchmodels.JobAction(
+                _kv_read_checked(job_default_eo, 'job_action', default='none')
+            )
+        )
+    )
     dependency_action = batchmodels.DependencyAction(
-        _kv_read_checked(default_eo, 'dependency_action', default='block'))
+        _kv_read_checked(
+            task_default_eo,
+            'dependency_action',
+            default=batchmodels.DependencyAction(
+                _kv_read_checked(
+                    job_default_eo, 'dependency_action', default='block')
+            )
+        )
+    )
     # gpu
     gpu = _kv_read(conf, 'gpu')
     if gpu is None:

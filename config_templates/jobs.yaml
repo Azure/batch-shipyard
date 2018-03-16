@@ -31,6 +31,11 @@ job_specifications:
   shm_size: 256m
   infiniband: false
   gpu: false
+  exit_conditions:
+    default:
+      exit_options:
+        job_action: none
+        dependency_action: block
   data_volumes:
   - joblevelvol
   shared_data_volumes:

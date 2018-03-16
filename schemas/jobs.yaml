@@ -80,6 +80,21 @@ mapping:
             type: bool
           gpu:
             type: bool
+          exit_conditions:
+            type: map
+            mapping:
+              default:
+                type: map
+                mapping:
+                  exit_options:
+                    type: map
+                    mapping:
+                      job_action:
+                        type: str
+                        enum: ['none', 'disable', 'terminate']
+                      dependency_action:
+                        type: str
+                        enum: ['block', 'satisfy']
           data_volumes:
             type: seq
             sequence:

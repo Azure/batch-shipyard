@@ -15,6 +15,9 @@ ticket through the Azure Portal.
 - Support for fine-tuning `/etc/exports` when creating NFS file servers via
 `server_options` and `nfs`. Please see the remote FS configuration doc
 for more information.
+- Support for job-level default task exit condition options. These options
+can be overriden on a per-task basis. Please see the job configuration doc
+for more information.
 
 ### Changed
 - Improve `cert` commands
@@ -40,6 +43,8 @@ for confirmation first. `-y` flag can be specified to suppress confirmation.
 - Previous environment variable expansion fix applied to multi-instance tasks
 - `jobs tasks list` command with undefined job action but with dependency
 actions
+- `job_action` for task default exit condition was being overwritten
+incorrectly in certain scenarios
 
 ## [3.3.0] - 2018-03-01
 ### Added

@@ -39,6 +39,11 @@ job_specifications:
   shm_size: 256m
   infiniband: false
   gpu: false
+  exit_conditions:
+    default:
+      exit_options:
+        job_action: none
+        dependency_action: block
   data_volumes:
   - joblevelvol
   shared_data_volumes:
@@ -396,6 +401,18 @@ If this property is not set, it will default to `true` if the task
 is destined for a compute pool with GPUs. This option has no effect on
 `native` container support pools as it is automatically enabled by the
 system.
+* (optional) `exit_conditions` sets the exit conditions for all tasks
+under this job. Currently only the `default` exit conditions can be set
+which react to any non-zero exit code.
+    * (required) `default` is the default exit conditions. Meaning if any
+      task in this job exits with a non-zero exit code, perform the following
+      actions below.
+        * (optional) `job_action` is the job action to perform if any task
+          in this job exits with a non-zero exit code. This can be set to
+          `none`, `disable`, or `terminate`. The default is `none`.
+        * (optional) `dependency_action` is the dependency action to perform
+          if any task in this job exits with a non-zero exit code. This can
+          be set to `block` or `satisfy`. The default is `block`.
 * (optional) `data_volumes` is an array of `data_volume` aliases as defined
 in the global configuration file. These volumes will be mounted in
 all containers under the job.
@@ -719,7 +736,8 @@ retained forever on the compute node that ran the task. This overrides the
 job-level property.
 * (optional) `exit_conditions` sets the exit conditions for this task.
 Currently only the `default` exit conditions can be set which react to
-any non-zero exit code.
+any non-zero exit code. This and any nested property within `exit_conditions`
+setting overrides the job-level property, if set.
     * (required) `default` is the default exit conditions. Meaning if this
       task exits with a non-zero exit code, perform the following actions
       below.
