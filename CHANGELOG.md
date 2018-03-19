@@ -36,8 +36,10 @@ arguments to specify deleting and rebooting multiple nodes at the same time,
 respectively
 - `pool nodes prune`, `pool nodes reboot`, `pool nodes zap` will now ask
 for confirmation first. `-y` flag can be specified to suppress confirmation.
-- Docker CE updated to 17.12.1
 - Added Batch Shipyard version to user agent for all ARM clients
+- Docker CE updated to 17.12.1
+- Singularity updated to 2.4.4
+- Dependencies updated
 
 ### Fixed
 - Previous environment variable expansion fix applied to multi-instance tasks

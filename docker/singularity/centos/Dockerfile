@@ -4,7 +4,7 @@ FROM centos:7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.4.2
+ENV SINGULARITY_VERSION=2.4.4
 
 RUN yum groupinstall -y \
         "Development Tools" \

@@ -5,6 +5,7 @@ set -o pipefail
 
 # consts
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
+SINGULARITY_VERSION=2.4.4
 
 # mutables
 USER_MOUNTPOINT=
@@ -469,7 +470,7 @@ singularity_setup() {
         return
     fi
     # fetch docker image for singularity bits
-    di=alfpark/singularity:2.4.2-${offer}-${sku}
+    di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
     docker_pull_image $di
     mkdir -p /opt/singularity
     docker run --rm -v /opt/singularity:/opt/singularity $di \
