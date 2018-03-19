@@ -425,7 +425,9 @@ rules on these ports.
       deny. `deny` rules have lower priority than `allow` rules. Therefore,
       you can specify a set of allowable address prefixes and then specify
       a single deny rule of `*` to deny all other IP addresses from
-      connecting to the remote access port.
+      connecting to the remote access port. Take care when specifying
+      `deny` rules when your nodes must make use of SSH or RDP to perform
+      actions between compute nodes.
 * (optional) `certificates` property defines any certificate references to
 add on this pool. These certificates must already be present on the Batch
 account and are only applied to new pool allocations.
