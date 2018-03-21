@@ -37,6 +37,7 @@ respectively
 - `pool nodes prune`, `pool nodes reboot`, `pool nodes zap` will now ask
 for confirmation first. `-y` flag can be specified to suppress confirmation.
 - Added Batch Shipyard version to user agent for all ARM clients
+- CUDA 9.1 support on ND/NCv2/NCv3 with Tesla Driver 390.30
 - Docker CE updated to 17.12.1
 - Singularity updated to 2.4.4
 - Dependencies updated

@@ -55,6 +55,9 @@ _TENSORBOARD_DOCKER_IMAGE = (
     '/usr/local/lib/python2.7/dist-packages/tensorboard/main.py',
     6006
 )
+_GPU_CUDA9_INSTANCES = frozenset((
+    'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
+))
 _GPU_COMPUTE_INSTANCES = frozenset((
     # standard_nc
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
@@ -547,12 +550,15 @@ def get_gpu_type_from_vm_size(vm_size):
     """Get GPU type as string
     :param str vm_size: vm size
     :rtype: str
-    :return: compute for gpgpu and visualization for viz
+    :return: type of gpu and compute capability
     """
     if is_gpu_compute_pool(vm_size):
-        return 'compute'
+        if vm_size.lower() in _GPU_CUDA9_INSTANCES:
+            return 'compute_cc37'
+        else:
+            return 'compute_cc6-7'
     elif is_gpu_visualization_pool(vm_size):
-        return 'visualization'
+        return 'viz_cc52'
     else:
         return None
 
