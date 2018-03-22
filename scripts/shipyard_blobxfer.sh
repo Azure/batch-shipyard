@@ -45,7 +45,7 @@ for spec in "$@"; do
         # egress from compute node to storage
         action=upload
     else
-        echo "unknown $kind transfer"
+        echo "ERROR: unknown $kind transfer"
         exit 1
     fi
 

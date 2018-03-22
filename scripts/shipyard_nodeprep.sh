@@ -3,6 +3,12 @@
 set -e
 set -o pipefail
 
+log() {
+    local level=$1
+    shift
+    echo "$(date -u -Ins) - $level - $*"
+}
+
 # consts
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 SINGULARITY_VERSION=2.4.4
@@ -114,15 +120,15 @@ shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 # check args
 if [ -z $offer ]; then
-    echo "ERROR: vm offer not specified"
+    log ERROR "vm offer not specified"
     exit 1
 fi
 if [ -z $sku ]; then
-    echo "ERROR: vm sku not specified"
+    log ERROR "vm sku not specified"
     exit 1
 fi
 if [ -z $version ]; then
-    echo "ERROR: batch-shipyard version not specified"
+    log ERROR "batch-shipyard version not specified"
     exit 1
 fi
 
@@ -138,7 +144,7 @@ else
 fi
 
 if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
-    echo "Unknown DISTRIB_ID or DISTRIB_RELEASE."
+    log ERROR "Unknown DISTRIB_ID or DISTRIB_RELEASE."
     exit 1
 fi
 
@@ -153,9 +159,15 @@ check_for_buggy_ntfs_mount() {
     rc=$?
     set -e
     if [ $rc -eq 0 ]; then
-        echo "ERROR: /dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+        log ERROR "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
         exit 1
     fi
+}
+
+save_startup_to_volatile() {
+    set +e
+    touch $AZ_BATCH_NODE_ROOT_DIR/volatile/startup/.save
+    set -e
 }
 
 check_for_nvidia_card() {
@@ -166,12 +178,13 @@ check_for_nvidia_card() {
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
-        echo "ERROR: No Nvidia card(s) detected!"
+        log ERROR "No Nvidia card(s) detected!"
         exit 1
     fi
 }
 
 install_nvidia_software() {
+    log INFO "Installing Nvidia Software"
     offer=$1
     shift
     sku=$1
@@ -192,7 +205,7 @@ install_nvidia_software() {
     elif [[ $offer == centos* ]]; then
         yum erase -y xorg-x11-drv-nouveau
     else
-        echo "ERROR: unsupported distribution for nvidia/GPU, offer: $offer"
+        log ERROR "unsupported distribution for nvidia/GPU, offer: $offer"
         exit 1
     fi
     # blacklist nouveau from being loaded if rebooted
@@ -214,7 +227,7 @@ EOF
             download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/${kernel_devel_package}.rpm
             install_local_packages $offer ${kernel_devel_package}.rpm
         else
-            echo "ERROR: CentOS $sku not supported for GPU"
+            log ERROR "CentOS $sku not supported for GPU"
             exit 1
         fi
         install_packages $offer gcc binutils make
@@ -258,9 +271,13 @@ EOF
     fi
     pkill -SIGHUP dockerd
     nvidia-docker version
+    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    log DEBUG "Graph root: $rootdir"
+    nvidia-smi
 }
 
 mount_azurefile_share() {
+    log INFO "Mounting Azure File Shares"
     chmod +x azurefile-mount.sh
     ./azurefile-mount.sh
     chmod 700 azurefile-mount.sh
@@ -268,6 +285,7 @@ mount_azurefile_share() {
 }
 
 mount_azureblob_container() {
+    log INFO "Mounting Azure Blob Containers"
     offer=$1
     sku=$2
     if [ $offer == "ubuntuserver" ]; then
@@ -299,6 +317,7 @@ mount_azureblob_container() {
 }
 
 download_file() {
+    log INFO "Downloading: $1"
     retries=10
     set +e
     while [ $retries -gt 0 ]; do
@@ -308,7 +327,7 @@ download_file() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not download: $1"
+            log ERROR "Could not download: $1"
             exit 1
         fi
         sleep 1
@@ -334,7 +353,7 @@ add_repo() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not add repo: $url"
+            log ERROR "Could not add repo: $url"
             exit 1
         fi
         sleep 1
@@ -359,7 +378,7 @@ refresh_package_index() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not update package index"
+            log ERROR "Could not update package index"
             exit 1
         fi
         sleep 1
@@ -385,7 +404,7 @@ install_packages() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not install packages: $*"
+            log ERROR "Could not install packages: $*"
             exit 1
         fi
         sleep 1
@@ -409,7 +428,7 @@ install_local_packages() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not install local packages: $*"
+            log ERROR "Could not install local packages: $*"
             exit 1
         fi
         sleep 1
@@ -419,6 +438,7 @@ install_local_packages() {
 
 docker_pull_image() {
     image=$1
+    log DEBUG "Pulling Docker Image: $1"
     set +e
     retries=60
     while [ $retries -gt 0 ]; do
@@ -431,14 +451,14 @@ docker_pull_image() {
         # non-zero exit code: check if pull output has toomanyrequests,
         # connection resets, or image config error
         if [[ ! -z "$(grep 'toomanyrequests' <<<$pull_out)" ]] || [[ ! -z "$(grep 'connection reset by peer' <<<$pull_out)" ]] || [[ ! -z "$(grep 'error pulling image configuration' <<<$pull_out)" ]]; then
-            echo "WARNING: will retry: $pull_out"
+            log WARNING "will retry: $pull_out"
         else
-            echo "ERROR: $pull_out"
+            log ERROR "$pull_out"
             exit $rc
         fi
         let retries=retries-1
         if [ $retries -le 0 ]; then
-            echo "ERROR: Could not pull docker image: $image"
+            log ERROR "Could not pull docker image: $image"
             exit $rc
         fi
         sleep $[($RANDOM % 5) + 1]s
@@ -454,21 +474,22 @@ singularity_setup() {
     shift
     if [ $offer == "ubuntu" ]; then
         if [[ $sku != 16.04* ]]; then
-            echo "WARN: Singularity not supported on $offer $sku"
+            log WARNING "Singularity not supported on $offer $sku"
         fi
         singularity_basedir=/mnt/singularity
     elif [[ $offer == "centos" ]] || [[ $offer == "rhel" ]]; then
         if [[ $sku != 7* ]]; then
-            echo "WARN: Singularity not supported on $offer $sku"
+            log WARNING "Singularity not supported on $offer $sku"
             return
         fi
         singularity_basedir=/mnt/resource/singularity
         offer=centos
         sku=7
     else
-        echo "WARN: Singularity not supported on $offer $sku"
+        log WARNING "Singularity not supported on $offer $sku"
         return
     fi
+    log DEBUG "Setting up Singularity for $offer $sku"
     # fetch docker image for singularity bits
     di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
     docker_pull_image $di
@@ -512,7 +533,7 @@ process_fstab_entry() {
     desc=$1
     mountpoint=$2
     fstab_entry=$3
-    echo "INFO: Creating host directory for $desc at $mountpoint"
+    log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p $mountpoint
     chmod 777 $mountpoint
     echo "INFO: Adding $mountpoint to fstab"
@@ -538,7 +559,7 @@ process_fstab_entry() {
         fi
     done
     set -e
-    echo "INFO: $mountpoint mounted."
+    log INFO "$mountpoint mounted."
 }
 
 check_for_docker_host_engine() {
@@ -548,7 +569,7 @@ check_for_docker_host_engine() {
     systemctl status docker.service
     docker version --format '{{.Server.Version}}'
     if [ $? -ne 0 ]; then
-        echo "ERROR: Docker not installed"
+        log ERROR "Docker not installed"
         exit 1
     fi
     set -e
@@ -572,9 +593,13 @@ echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
 echo "Block on images: $block"
 echo ""
+log INFO "Prep start"
 
 # check sdb1 mount
 check_for_buggy_ntfs_mount
+
+# save startup stderr/stdout
+save_startup_to_volatile
 
 # set python env vars
 LC_ALL=en_US.UTF-8
@@ -626,7 +651,7 @@ fi
 
 # check if we're coming up from a reboot
 if [ -f $cascadefailed ]; then
-    echo "ERROR: $cascadefailed file exists, assuming cascade failure during node prep"
+    log ERROR "$cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
 elif [ -f $nodeprepfinished ]; then
     # mount any storage clusters
@@ -652,7 +677,7 @@ elif [ -f $nodeprepfinished ]; then
     fi
     # start docker engine
     check_for_docker_host_engine
-    echo "INFO: $nodeprepfinished file exists, assuming successful completion of node prep"
+    log INFO "$nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
 
@@ -743,11 +768,11 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         dockerversion=${dockerversion}debian
         USER_MOUNTPOINT=/mnt/resource
     else
-        echo "ERROR: unsupported sku: $sku for offer: $offer"
+        log ERROR "unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     if [ ! -z $gpu ] && [ $name != "ubuntu-xenial" ]; then
-        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
+        log ERROR "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
@@ -793,7 +818,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     fi
     # ensure docker daemon is running
     $srvstatus
-    docker version --format '{{.Server.Version}}'
+    docker info
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         install_nvidia_software $offer $sku
@@ -818,7 +843,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
             elif [ $server_type == "glusterfs" ]; then
                 install_packages $offer glusterfs-client acl
             else
-                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
             fi
         done
@@ -839,12 +864,12 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     USER_MOUNTPOINT=/mnt/resource
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "ERROR: only supported through shipyard container"
+        log ERROR "only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
     if [[ ! -z $gpu ]] && [[ $offer != centos* ]]; then
-        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
+        log ERROR "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
@@ -857,7 +882,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             gfsenable="systemctl enable glusterd"
             rpcbindenable="systemctl enable rpcbind"
             # TODO, in order to support docker > 1.9, need to upgrade to UEKR4
-            echo "ERROR: oracle linux is not supported at this time"
+            log ERROR "oracle linux is not supported at this time"
             exit 1
         else
             srvdisable="systemctl disable docker.service"
@@ -868,7 +893,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
             rpcbindenable="chkconfig rpcbind on"
         fi
     else
-        echo "ERROR: unsupported sku: $sku for offer: $offer"
+        log ERROR "unsupported sku: $sku for offer: $offer"
         exit 1
     fi
     # reload network settings
@@ -896,7 +921,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
     $srvdisable
     $srvstart
     $srvstatus
-    docker version --format '{{.Server.Version}}'
+    docker info
     # install gpu related items
     if [ ! -z $gpu ] && [ ! -f $nodeprepfinished ]; then
         install_nvidia_software $offer $sku
@@ -927,7 +952,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
                 sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
                 install_packages $offer --enablerepo=centos-gluster38,epel glusterfs-server acl
             else
-                echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
                 exit 1
             fi
         done
@@ -936,12 +961,12 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
     USER_MOUNTPOINT=/mnt/resource
     # ensure container only support
     if [ $cascadecontainer -eq 0 ]; then
-        echo "ERROR: only supported through shipyard container"
+        log ERROR "only supported through shipyard container"
         exit 1
     fi
     # gpu is not supported on these offers
     if [ ! -z $gpu ]; then
-        echo "ERROR: gpu unsupported on this sku: $sku for offer $offer"
+        log ERROR "gpu unsupported on this sku: $sku for offer $offer"
         exit 1
     fi
     # reload network settings
@@ -971,7 +996,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
             add_repo $offer http://download.opensuse.org/repositories/Virtualization:containers/$repodir/Virtualization:containers.repo
         fi
         if [ -z $repodir ]; then
-            echo "ERROR: unsupported sku: $sku for offer: $offer"
+            log ERROR "unsupported sku: $sku for offer: $offer"
             exit 1
         fi
         # update index
@@ -993,7 +1018,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         systemctl disable docker
         systemctl start docker
         systemctl status docker
-        docker version --format '{{.Server.Version}}'
+        docker info
         # set up glusterfs
         if [ $gluster_on_compute -eq 1 ]; then
             add_repo $offer http://download.opensuse.org/repositories/filesystems/$repodir/filesystems.repo
@@ -1020,7 +1045,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
                     zypper -n --gpg-auto-import-keys ref
                     install_packages $offer glusterfs acl
                 else
-                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                    log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
                 fi
             done
@@ -1028,7 +1053,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         # if hpc sku, set up intel mpi
         if [[ $offer == sles-hpc* ]]; then
             if [ $sku != "12-sp1" ]; then
-                echo "ERROR: unsupported sku for intel mpi setup on SLES"
+                log ERROR "unsupported sku for intel mpi setup on SLES"
                 exit 1
             fi
             install_packages $offer lsb
@@ -1038,7 +1063,7 @@ elif [[ $offer == opensuse* ]] || [[ $offer == sles* ]]; then
         fi
     fi
 else
-    echo "ERROR: unsupported offer: $offer (sku: $sku)"
+    log ERROR "unsupported offer: $offer (sku: $sku)"
     exit 1
 fi
 
@@ -1127,6 +1152,7 @@ EOF
             -v $singularity_basedir:$singularity_basedir \
             -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
     fi
+    log DEBUG "Starting Cascade"
     # launch container
     docker run $detached --net=host --env-file $envfile \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -1148,6 +1174,7 @@ else
         # mark start cascade
         ./perf.py cascade start $prefix
     fi
+    log DEBUG "Starting Cascade"
     ./cascade.py $p2p --ipaddress $ipaddress $prefix &
     cascadepid=$!
 fi
@@ -1157,7 +1184,7 @@ if [ $p2penabled -eq 0 ]; then
     wait $cascadepid
     rc=$?
     if [ $rc -ne 0 ]; then
-        echo "ERROR: cascade exited with non-zero exit code: $rc"
+        log ERROR "cascade exited with non-zero exit code: $rc"
         rm -f $nodeprepfinished
         exit $rc
     fi

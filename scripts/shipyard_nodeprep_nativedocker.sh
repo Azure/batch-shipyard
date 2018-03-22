@@ -3,6 +3,12 @@
 set -e
 set -o pipefail
 
+log() {
+    local level=$1
+    shift
+    echo "$(date -u -Ins) - $level - $*"
+}
+
 # consts
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
@@ -72,9 +78,15 @@ check_for_buggy_ntfs_mount() {
     set +e
     mount | grep /dev/sdb1 | grep fuseblk
     if [ $? -eq 0 ]; then
-        echo "ERROR: /dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+        log ERROR "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
         exit 1
     fi
+    set -e
+}
+
+save_startup_to_volatile() {
+    set +e
+    touch $AZ_BATCH_NODE_ROOT_DIR/volatile/startup/.save
     set -e
 }
 
@@ -108,7 +120,7 @@ check_for_nvidia_docker() {
     set +e
     nvidia-docker version
     if [ $? -ne 0 ]; then
-        echo "ERROR: nvidia-docker2 not installed"
+        log ERROR "nvidia-docker2 not installed"
         exit 1
     fi
     set -e
@@ -122,7 +134,7 @@ check_for_nvidia_driver() {
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
-        echo "ERROR: No Nvidia drivers detected!"
+        log ERROR "No Nvidia drivers detected!"
         exit 1
     else
         check_for_nvidia_docker
@@ -130,6 +142,7 @@ check_for_nvidia_driver() {
 }
 
 check_for_nvidia() {
+    log INFO "Checking for Nvidia Hardware"
     # first check for card
     set +e
     out=$(lspci)
@@ -138,11 +151,12 @@ check_for_nvidia() {
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
-        echo "INFO: No Nvidia card(s) detected!"
+        log INFO "No Nvidia card(s) detected!"
     else
         check_for_nvidia_driver
         # enable persistence mode
         nvidia-smi -pm 1
+        nvidia-smi
     fi
 }
 
@@ -150,13 +164,13 @@ check_docker_root_dir() {
     set +e
     rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     set -e
-    echo "$rootdir"
+    log DEBUG "Graph root: $rootdir"
     if [ -z "$rootdir" ]; then
-        echo "ERROR: could not determine docker graph root"
+        log ERROR "could not determine docker graph root"
     elif [[  "$rootdir" == /mnt/* && "$1" == "ubuntu" ]] || [[ "$rootdir" == /mnt/resource/* && "$1" != "ubuntu" ]]; then
-        echo "INFO: docker root is within ephemeral temp disk"
+        log INFO "docker root is within ephemeral temp disk"
     else
-        echo "WARNING: docker graph root is on the OS disk. Performance may be impacted."
+        log WARNING "docker graph root is on the OS disk. Performance may be impacted."
     fi
 }
 
@@ -172,13 +186,15 @@ check_for_docker_host_engine() {
     systemctl status docker.service
     docker version --format '{{.Server.Version}}'
     if [ $? -ne 0 ]; then
-        echo "ERROR: Docker not installed"
+        log ERROR "Docker not installed"
         exit 1
     fi
     set -e
+    docker info
 }
 
 mount_azurefile_share() {
+    log INFO "Mounting Azure File Shares"
     chmod +x azurefile-mount.sh
     ./azurefile-mount.sh
     chmod 700 azurefile-mount.sh
@@ -187,6 +203,7 @@ mount_azurefile_share() {
 
 docker_pull_image() {
     image=$1
+    log DEBUG "Pulling Docker Image: $1"
     set +e
     retries=60
     while [ $retries -gt 0 ]; do
@@ -199,14 +216,14 @@ docker_pull_image() {
         # non-zero exit code: check if pull output has toomanyrequests,
         # connection resets, or image config error
         if [[ ! -z "$(grep 'toomanyrequests' <<<$pull_out)" ]] || [[ ! -z "$(grep 'connection reset by peer' <<<$pull_out)" ]] || [[ ! -z "$(grep 'error pulling image configuration' <<<$pull_out)" ]]; then
-            echo "WARNING: will retry: $pull_out"
+            log WARNING "will retry: $pull_out"
         else
-            echo "ERROR: $pull_out"
+            log ERROR "$pull_out"
             exit $rc
         fi
         let retries=retries-1
         if [ $retries -le 0 ]; then
-            echo "ERROR: Could not pull docker image: $image"
+            log ERROR "Could not pull docker image: $image"
             exit $rc
         fi
         sleep $[($RANDOM % 5) + 1]s
@@ -230,7 +247,7 @@ install_local_packages() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not install local packages: $*"
+            log ERROR "Could not install local packages: $*"
             exit 1
         fi
         sleep 1
@@ -254,7 +271,7 @@ install_packages() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not install packages: $*"
+            log ERROR "Could not install packages: $*"
             exit 1
         fi
         sleep 1
@@ -272,7 +289,7 @@ refresh_package_index() {
         elif [[ $distrib == centos* ]]; then
             yum makecache -y fast
         else
-            echo "ERROR: Unknown distribution for refresh: $distrib"
+            log ERROR "Unknown distribution for refresh: $distrib"
             exit 1
         fi
         if [ $? -eq 0 ]; then
@@ -280,7 +297,7 @@ refresh_package_index() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not update package index"
+            log ERROR "Could not update package index"
             exit 1
         fi
         sleep 1
@@ -289,6 +306,7 @@ refresh_package_index() {
 }
 
 mount_azureblob_container() {
+    log INFO "Mounting Azure Blob Containers"
     distrib=$1
     release=$2
     if [ $distrib == "ubuntu" ]; then
@@ -308,7 +326,7 @@ mount_azureblob_container() {
             install_packages $distrib blobfuse
         fi
     else
-        echo "ERROR: unsupported distribution for Azure blob: $distrib $release"
+        log ERROR "unsupported distribution for Azure blob: $distrib $release"
         exit 1
     fi
     chmod +x azureblob-mount.sh
@@ -320,6 +338,7 @@ mount_azureblob_container() {
 }
 
 download_file() {
+    log INFO "Downloading: $1"
     retries=10
     set +e
     while [ $retries -gt 0 ]; do
@@ -329,7 +348,7 @@ download_file() {
         fi
         let retries=retries-1
         if [ $retries -eq 0 ]; then
-            echo "ERROR: Could not download: $1"
+            log ERROR "Could not download: $1"
             exit 1
         fi
         sleep 1
@@ -341,13 +360,13 @@ process_fstab_entry() {
     desc=$1
     mountpoint=$2
     fstab_entry=$3
-    echo "INFO: Creating host directory for $desc at $mountpoint"
+    log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p $mountpoint
     chmod 777 $mountpoint
-    echo "INFO: Adding $mountpoint to fstab"
+    log INFO "Adding $mountpoint to fstab"
     echo $fstab_entry >> /etc/fstab
     tail -n1 /etc/fstab
-    echo "INFO: Mounting $mountpoint"
+    log INFO "Mounting $mountpoint"
     START=$(date -u +"%s")
     set +e
     while :
@@ -360,14 +379,14 @@ process_fstab_entry() {
             DIFF=$((($NOW-$START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
-                echo "ERROR: Could not mount $desc on $mountpoint"
+                log ERROR "Could not mount $desc on $mountpoint"
                 exit 1
             fi
             sleep 1
         fi
     done
     set -e
-    echo "INFO: $mountpoint mounted."
+    log INFO "$mountpoint mounted."
 }
 
 # try to get /etc/lsb-release
@@ -382,7 +401,7 @@ else
 fi
 
 if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
-    echo "Unknown DISTRIB_ID or DISTRIB_RELEASE."
+    log ERROR "Unknown DISTRIB_ID or DISTRIB_RELEASE."
     exit 1
 fi
 
@@ -404,9 +423,13 @@ echo "Azure File: $azurefile"
 echo "Azure Blob: $azureblob"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo ""
+log INFO "Prep start"
 
 # check sdb1 mount
 check_for_buggy_ntfs_mount
+
+# save startup stderr/stdout
+save_startup_to_volatile
 
 # set python env vars
 LC_ALL=en_US.UTF-8
@@ -474,7 +497,7 @@ if [ -f $nodeprepfinished ]; then
             mount ${parts[1]}
         done
     fi
-    echo "$nodeprepfinished file exists, assuming successful completion of node prep"
+    log INFO "$nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
 
@@ -525,7 +548,7 @@ if [ $custom_image -eq 0 ]; then
                 elif [ $server_type == "glusterfs" ]; then
                     install_packages $DISTRIB_ID glusterfs-client acl
                 else
-                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                    log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
                 fi
             done
@@ -543,7 +566,7 @@ if [ $custom_image -eq 0 ]; then
                     sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
                     install_packages $DISTRIB_ID --enablerepo=centos-gluster38,epel glusterfs-server acl
                 else
-                    echo "ERROR: Unknown file server type ${sc[0]} for ${sc[1]}"
+                    log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
                     exit 1
                 fi
             done

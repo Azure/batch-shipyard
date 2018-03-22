@@ -3,6 +3,12 @@
 set -e
 set -o pipefail
 
+log() {
+    local level=$1
+    shift
+    echo "$(date -u -Iseconds) - $level - $*"
+}
+
 # decrypt passwords if necessary
 if [ "$1" == "-e" ]; then
     if [ ! -z $DOCKER_LOGIN_PASSWORD ]; then
@@ -22,14 +28,14 @@ if [ ! -z $DOCKER_LOGIN_PASSWORD ]; then
     # loop through each server and login
     nservers=${#servers[@]}
     if [ $nservers -ge 1 ]; then
-        echo "Logging into $nservers Docker registry servers..."
+        log DEBUG "Logging into $nservers Docker registry servers..."
         for i in $(seq 0 $((nservers-1))); do
             docker login --username ${users[$i]} --password ${passwords[$i]} ${servers[$i]}
         done
-        echo "Docker registry logins completed."
+        log INFO "Docker registry logins completed."
     fi
 else
-    echo "No Docker registry servers found."
+    log WARNING "No Docker registry servers found."
 fi
 
 # "login" to Singularity registries
@@ -41,7 +47,7 @@ if [ ! -z $SINGULARITY_LOGIN_PASSWORD ]; then
     # loop through each server and login
     nservers=${#servers[@]}
     if [ $nservers -ge 1 ]; then
-        echo "Creating export script into $nservers Singularity registry servers..."
+        log DEBUG "Creating export script into $nservers Singularity registry servers..."
         touch singularity-registry-login
         for i in $(seq 0 $((nservers-1))); do
 cat >> singularity-login << EOF
@@ -50,8 +56,8 @@ SINGULARITY_DOCKER_PASSWORD=${passwords[$i]}
 EOF
         done
         chmod 600 singularity-registry-login
-        echo "Singularity registry logins script created."
+        log INFO "Singularity registry logins script created."
     fi
 else
-    echo "No Singularity registry servers found."
+    log WARNING "No Singularity registry servers found."
 fi

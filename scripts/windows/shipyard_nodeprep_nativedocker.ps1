@@ -7,6 +7,7 @@ param(
 )
 
 Set-Variable NodePrepFinished -option Constant -value (Join-Path $env:AZ_BATCH_NODE_SHARED_DIR -ChildPath ".nodeprepfinished")
+Set-Variable VolatileStartupSave -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath "startup" | Join-Path -ChildPath ".save")
 Set-Variable MountsPath -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "mounts")
 
 # Enable TLS > 1.0
@@ -44,8 +45,11 @@ Write-Host "Encrypted: $e"
 Write-Host "Azure File: $a"
 Write-Host ""
 
+# touch volatile startup save file
+New-Item -ItemType file $VolatileStartupSave -Force
+
 # check for docker
-Exec { docker version --format '{{.Server.Version}}' }
+Exec { docker info }
 
 # mount azure file shares
 if ($a) {
