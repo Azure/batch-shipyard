@@ -53,22 +53,23 @@ setup_nfs() {
     if [ $add_exports -eq 1 ]; then
         # parse server options for export mappings
         set -f
-        IFS='%' read -ra so <<< "$server_options"
-        IFS=',' read -ra hosts <<< "${so[0]}"
-        for host in ${hosts[@]}; do
-            echo "${mountpath} ${host}(${so[1]},mountpoint=${mountpath})" >> /etc/exports
+        IFS=';' read -ra so <<< "$server_options"
+        for host in "${so[@]}"; do
+            IFS='%' read -ra he <<< "$host"
+            echo "${mountpath} ${he[0]}(${he[1]},mountpoint=${mountpath})" >> /etc/exports
         done
         set +f
         systemctl reload nfs-kernel-server.service
-        exportfs -v
     fi
     systemctl status nfs-kernel-server.service
     if [ $? -ne 0 ]; then
         set -e
         # attempt to start
         systemctl start nfs-kernel-server.service
+        systemctl status nfs-kernel-server.service
     fi
     set -e
+    exportfs -v
 }
 
 gluster_peer_probe() {
