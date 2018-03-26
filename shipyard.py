@@ -1955,6 +1955,42 @@ def files_node(ctx, all, filespec):
 
 @cli.group()
 @pass_cli_context
+def diag(ctx):
+    """Diagnostics actions"""
+    pass
+
+
+@diag.group()
+@pass_cli_context
+def logs(ctx):
+    """Diagnostic log actions"""
+    pass
+
+
+@logs.command('upload')
+@click.option(
+    '--cardinal',
+    help='Zero-based cardinal number of compute node in pool to egress '
+    'service logs from',
+    type=int)
+@click.option(
+    '--nodeid', help='NodeId of compute node in to egress service logs from')
+@click.option(
+    '--wait', is_flag=True, help='Wait for log upload to complete')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def diag_logs_upload(ctx, cardinal, nodeid, wait):
+    """Upload Batch Service Logs from compute node"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_diag_logs_upload(
+        ctx.batch_client, ctx.blob_client, ctx.config, cardinal, nodeid, wait)
+
+
+@cli.group()
+@pass_cli_context
 def misc(ctx):
     """Miscellaneous actions"""
     pass

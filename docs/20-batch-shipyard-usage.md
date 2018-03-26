@@ -180,6 +180,7 @@ commands:
   account   Batch account actions
   cert      Certificate actions
   data      Data actions
+  diag      Diagnostics actions
   fs        Filesystem in Azure actions
   jobs      Jobs actions
   keyvault  KeyVault actions
@@ -191,6 +192,7 @@ commands:
 * `account` commands deal with Batch accounts
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
+* `diag` commands deal with diganostics for Azure Batch
 * `fs` commands deal with Batch Shipyard provisioned remote filesystems in
 Azure
 * `jobs` commands deal with Azure Batch jobs and tasks
@@ -303,6 +305,24 @@ console or binary if streamed to disk
     * `--to-fs <STORAGE_CLUSTER_ID>` transfers data as specified in
       configuration files to the specified remote file system storage cluster
       instead of Azure Storage
+
+## `diag` Command
+The `diag` command has the following sub-commands:
+```
+  logs  Diagnostic log actions
+```
+
+The `diag logs` sub-command has the following sub-sub-commands:
+```
+  upload  Upload Batch Service Logs from compute node
+```
+
+* `logs upload` will upload the Batch compute node service logs to a
+specified Azure storage container.
+    * `--cardinal` is the zero-based cardinal number of the compute node in
+      the pool to upload from
+    * `--nodeid` is the node id to upload from
+    * `--wait` will wait until the operation completes
 
 ## `fs` Command
 The `fs` command has the following sub-commands which work on two different

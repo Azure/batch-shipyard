@@ -12,6 +12,9 @@ improvements to the `cert` command.
 [NCv3 VM sizes](https://azure.microsoft.com/blog/ncv3-vms-generally-available-other-gpus-expanding-regions/).
 Note that ND/NCv2/NCv3 all require separate quota approval; please raise a
 ticket through the Azure Portal.
+- Support for uploading Batch compute node service logs to the specified
+Azure storage account used by Batch Shipyard. Please see the
+`diag logs upload` command in the usage docs.
 - Support for fine-tuning `/etc/exports` when creating NFS file servers via
 `server_options` and `nfs`. Please see the remote FS configuration doc
 for more information.

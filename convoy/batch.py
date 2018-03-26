@@ -2696,6 +2696,80 @@ def get_remote_login_setting_for_node(batch_client, config, cardinal, node_id):
     return rls.remote_login_ip_address, rls.remote_login_port
 
 
+def egress_service_logs(
+        batch_client, blob_client, config, cardinal=None, node_id=None,
+        wait=False):
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
+    #        int, str, bool) -> None
+    """Action: Pool Nodes Logs
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal node num
+    :param str nodeid: node id
+    :param bool wait: wait for upload to complete
+    """
+    pool_id = settings.pool_id(config)
+    if node_id is None:
+        if cardinal is None:
+            raise ValueError('cardinal is invalid with no node_id specified')
+        nodes = list(batch_client.compute_node.list(pool_id))
+        if cardinal >= len(nodes):
+            raise ValueError(
+                ('cardinal value {} invalid for number of nodes {} in '
+                 'pool {}').format(cardinal, len(nodes), pool_id))
+        node_id = nodes[cardinal].id
+    # get node allocation time
+    node = batch_client.compute_node.get(pool_id, node_id)
+    # generate container sas and create container
+    bs = settings.batch_shipyard_settings(config)
+    cont = bs.storage_entity_prefix + '-logs'
+    storage_settings = settings.credentials_storage(
+        config, bs.storage_account_settings)
+    sas = storage.create_blob_container_saskey(
+        storage_settings, cont, 'egress', create_container=True)
+    url = 'https://{}.blob.{}/{}?{}'.format(
+        storage_settings.account, storage_settings.endpoint, cont, sas)
+    logger.info(
+        ('egressing Batch service logs from compute node {} on pool {} '
+         'to container {} on storage account {} beginning from {}').format(
+             node_id, pool_id, cont, storage_settings.account,
+             node.allocation_time))
+    # issue service call to egress
+    resp = batch_client.compute_node.upload_batch_service_logs(
+        pool_id, node_id,
+        upload_batch_service_logs_configuration=batchmodels.
+        UploadBatchServiceLogsConfiguration(
+            container_url=url,
+            start_time=node.allocation_time,
+        )
+    )
+    if resp.number_of_files_uploaded > 0:
+        logger.info(
+            'initiated upload of {} log files to virtual directory {}'.format(
+                resp.number_of_files_uploaded, resp.virtual_directory_name))
+    else:
+        logger.error('no log files to be uploaded')
+    # wait for upload to complete if specified
+    if wait and resp.number_of_files_uploaded > 0:
+        # list blobs in vdir until we have the number specified
+        logger.debug('waiting for {} log files to be uploaded'.format(
+            resp.number_of_files_uploaded))
+        while True:
+            blobs = blob_client.list_blobs(
+                cont, prefix=resp.virtual_directory_name,
+                num_results=resp.number_of_files_uploaded)
+            if len(list(blobs)) == resp.number_of_files_uploaded:
+                logger.info(
+                    ('all {} files uploaded to container {} on storage '
+                     'account {}').format(
+                         resp.number_of_files_uploaded, cont,
+                         storage_settings.account))
+                break
+            time.sleep(2)
+
+
 def stream_file_and_wait_for_task(
         batch_client, config, filespec=None, disk=False):
     # type: (batch.BatchServiceClient, dict, str, bool) -> None

@@ -3103,7 +3103,7 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
             'was specified')
         cardinal = 0
     if cardinal is not None and cardinal < 0:
-            raise ValueError('invalid cardinal option value')
+        raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
     ssh_private_key = pool.ssh.ssh_private_key
     if ssh_private_key is None:
@@ -3197,6 +3197,33 @@ def action_pool_nodes_reboot(
             'cannot specify all start task failed nodes with a specific '
             'node id')
     batch.reboot_nodes(batch_client, config, all_start_task_failed, nodeid)
+
+
+def action_diag_logs_upload(
+        batch_client, blob_client, config, cardinal, nodeid, wait):
+    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
+    #        int, str, bool) -> None
+    """Action: Diag Logs Upload
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param int cardinal: cardinal node num
+    :param str nodeid: node id
+    :param bool wait: wait for upload to complete
+    """
+    _check_batch_client(batch_client)
+    if cardinal is not None and nodeid is not None:
+        raise ValueError('cannot specify both cardinal and nodeid options')
+    if cardinal is None and nodeid is None:
+        logger.warning(
+            'assuming node cardinal of 0 as no cardinal or nodeid option '
+            'was specified')
+        cardinal = 0
+    if cardinal is not None and cardinal < 0:
+        raise ValueError('invalid cardinal option value')
+    batch.egress_service_logs(
+        batch_client, blob_client, config, cardinal, nodeid, wait)
 
 
 def action_pool_images_update(
