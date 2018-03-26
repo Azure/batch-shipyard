@@ -7,7 +7,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "17.12.1~ce-0~ubuntu",
+    "docker_version": "18.03.0~ce-0~ubuntu",
     "intel_mpi_rt": "l_mpi-rt_2017.3.196.tgz",
     "bootstrap": "bootstrap.sh"
   },

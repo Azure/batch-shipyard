@@ -719,7 +719,7 @@ fi
 if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
     DEBIAN_FRONTEND=noninteractive
     # name will be appended to dockerversion
-    dockerversion=17.12.1~ce-0~
+    dockerversion=18.03.0~ce-0~
     name=
     if [[ $sku == 14.04.* ]]; then
         name=ubuntu-trusty
@@ -873,7 +873,7 @@ elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-l
         exit 1
     fi
     if [[ $sku == 7.* ]]; then
-        dockerversion=17.12.1.ce-1.el7.centos
+        dockerversion=18.03.0.ce-1.el7.centos
         if [[ $offer == "oracle-linux" ]]; then
             srvdisable="systemctl disable docker.service"
             srvstart="systemctl start docker.service"
