@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [3.4.0] - 2018-03-26
 ### Added
 - Support for adding network access rules to the remote access port (SSH or
 RDP). Please see the pool configuration guide for more details.
@@ -1216,7 +1217,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.3.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.4.0...HEAD
+[3.4.0]: https://github.com/Azure/batch-shipyard/compare/3.3.0...3.4.0
 [3.3.0]: https://github.com/Azure/batch-shipyard/compare/3.2.0...3.3.0
 [3.2.0]: https://github.com/Azure/batch-shipyard/compare/3.1.0...3.2.0
 [3.1.0]: https://github.com/Azure/batch-shipyard/compare/3.0.3...3.1.0
