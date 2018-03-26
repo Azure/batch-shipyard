@@ -569,7 +569,7 @@ The `pool images` sub-command has the following sub-sub-commands:
 
 The `pool nodes` sub-command has the following sub-sub-commands:
 ```
-  del     Delete a node from a pool
+  del     Delete a node or nodes from a pool
   grls    Get remote login settings for all nodes in...
   list    List nodes in pool
   prune   Prune container/image data on nodes in pool

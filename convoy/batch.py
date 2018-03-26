@@ -517,7 +517,7 @@ def _block_for_nodes_ready(
     :rtype: list
     :return: list of nodes
     """
-    logger.info(
+    logger.debug(
         'waiting for all nodes in pool {} to reach one of: {!r}'.format(
             pool_id, stopping_states))
     pool_settings = settings.pool_settings(config)
@@ -668,11 +668,11 @@ def _block_for_nodes_ready(
                      pool.vm_size,
                      pool.id,
                      pool.resize_timeout,
-                     pool.allocation_state,
+                     pool.allocation_state.value,
                      pool.allocation_state_transition_time))
             if len(nodes) <= 3:
                 for node in nodes:
-                    logger.debug('{}: {}'.format(node.id, node.state))
+                    logger.debug('{}: {}'.format(node.id, node.state.value))
             else:
                 logger.debug(_node_state_counts(nodes))
             if failed_node_list_count > 0:

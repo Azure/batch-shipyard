@@ -1560,7 +1560,7 @@ def nodes_ps(ctx):
 @pass_cli_context
 def nodes_del(
         ctx, all_start_task_failed, all_starting, all_unusable, nodeid):
-    """Delete a node from a pool"""
+    """Delete a node or nodes from a pool"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_nodes_del(
         ctx.batch_client, ctx.config, all_start_task_failed, all_starting,
