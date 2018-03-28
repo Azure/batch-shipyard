@@ -197,7 +197,7 @@ check_for_docker_host_engine() {
     # start docker service
     systemctl start docker.service
     systemctl status docker.service
-    docker version --format '{{.Server.Version}}'
+    docker version
     if [ $? -ne 0 ]; then
         log ERROR "Docker not installed"
         exit 1
@@ -392,6 +392,8 @@ process_fstab_entry() {
     log INFO "$mountpoint mounted."
 }
 
+uname -ar
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -450,6 +452,9 @@ fi
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
+# create shared mount points
+mkdir -p $MOUNTS_PATH
+
 # decrypt encrypted creds
 if [ ! -z $encrypted ]; then
     # convert pfx to pem
@@ -476,8 +481,8 @@ fi
 check_for_docker_host_engine
 check_docker_root_dir $DISTRIB_ID
 
-# create shared mount points
-mkdir -p $MOUNTS_PATH
+# check for nvidia card/driver/docker
+check_for_nvidia
 
 # mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
@@ -529,9 +534,6 @@ if [ $networkopt -eq 1 ]; then
     # set sudoers to not require tty
     sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
-
-# check for nvidia card/driver/docker
-check_for_nvidia
 
 # check for gluster
 if [ $gluster_on_compute -eq 1 ]; then

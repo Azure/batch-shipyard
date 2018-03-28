@@ -389,6 +389,8 @@ process_fstab_entry() {
     log INFO "$mountpoint mounted."
 }
 
+uname -ar
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -445,6 +447,9 @@ fi
 # set node prep status files
 nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 
+# create shared mount points
+mkdir -p $MOUNTS_PATH
+
 # decrypt encrypted creds
 if [ ! -z $encrypted ]; then
     # convert pfx to pem
@@ -463,8 +468,8 @@ fi
 check_for_docker_host_engine
 check_docker_root_dir $DISTRIB_ID
 
-# create shared mount points
-mkdir -p $MOUNTS_PATH
+# check for nvidia card/driver/docker
+check_for_nvidia
 
 # mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
@@ -510,9 +515,6 @@ if [ $networkopt -eq 1 ]; then
     # set sudoers to not require tty
     sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 fi
-
-# check for nvidia card/driver/docker
-check_for_nvidia
 
 # install gluster on compute software
 if [ $custom_image -eq 0 ]; then

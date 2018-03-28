@@ -132,6 +132,8 @@ if [ -z $version ]; then
     exit 1
 fi
 
+uname -ar
+
 # try to get /etc/lsb-release
 if [ -e /etc/lsb-release ]; then
     . /etc/lsb-release
@@ -170,9 +172,27 @@ save_startup_to_volatile() {
     set -e
 }
 
+ensure_nvidia_driver_installed() {
+    check_for_nvidia_card
+    # ensure that nvidia drivers are loaded
+    set +e
+    local out=$(lsmod)
+    echo "$out" | grep -i nvidia > /dev/null
+    rc=$?
+    set -e
+    echo "$out"
+    if [ $rc -ne 0 ]; then
+        log WARNING "Nvidia driver not present!"
+        install_nvidia_software $1 $2
+    else
+        log INFO "Nvidia driver detected"
+        nvidia-smi
+    fi
+}
+
 check_for_nvidia_card() {
     set +e
-    out=$(lspci)
+    local out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
     rc=$?
     set -e
@@ -185,9 +205,9 @@ check_for_nvidia_card() {
 
 install_nvidia_software() {
     log INFO "Installing Nvidia Software"
-    offer=$1
+    local offer=$1
     shift
-    sku=$1
+    local sku=$1
     shift
     # check for nvidia card
     check_for_nvidia_card
@@ -260,14 +280,21 @@ EOF
     fi
     refresh_package_index $offer
     install_packages $offer nvidia-docker2
-    # we need to merge daemon configs
-    if [ $offer == "ubuntuserver" ]; then
-        python -c "import json;a=json.load(open('/etc/docker/daemon.json.dpkg-old'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
-        rm -f /etc/docker/daemon.json.dpkg-old
-    elif [[ $offer == centos* ]]; then
-        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
-        python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
-        rm -f /etc/docker/daemon.json.merge
+    # merge daemon configs if necessary
+    set +e
+    grep \"graph\" /etc/docker/daemon.json
+    local rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+        log DEBUG "Graph root not detected in Docker daemon.json"
+        if [ $offer == "ubuntuserver" ]; then
+            python -c "import json;a=json.load(open('/etc/docker/daemon.json.dpkg-old'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+            rm -f /etc/docker/daemon.json.dpkg-old
+        elif [[ $offer == centos* ]]; then
+            echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+            python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+            rm -f /etc/docker/daemon.json.merge
+        fi
     fi
     pkill -SIGHUP dockerd
     nvidia-docker version
@@ -567,7 +594,7 @@ check_for_docker_host_engine() {
     # start docker service
     systemctl start docker.service
     systemctl status docker.service
-    docker version --format '{{.Server.Version}}'
+    docker version
     if [ $? -ne 0 ]; then
         log ERROR "Docker not installed"
         exit 1
@@ -677,6 +704,10 @@ elif [ -f $nodeprepfinished ]; then
     fi
     # start docker engine
     check_for_docker_host_engine
+    # ensure nvidia software has been installed
+    if [ ! -z $gpu ]; then
+        ensure_nvidia_driver_installed $offer $sku
+    fi
     log INFO "$nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi
