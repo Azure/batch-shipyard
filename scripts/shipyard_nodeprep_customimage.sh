@@ -109,7 +109,7 @@ save_startup_to_volatile() {
 }
 
 optimize_tcp_network_settings() {
-    sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
+    local sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
     if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
 cat > $sysctlfile << EOF
 net.core.rmem_default=16777216
@@ -134,6 +134,25 @@ EOF
     fi
 }
 
+blacklist_kernel_upgrade() {
+    local offer=$1
+    shift
+    local sku=$1
+    shift
+    if [ $offer != "ubuntu" ]; then
+        log DEBUG "No kernel upgrade blacklist required on $offer $sku"
+        return
+    fi
+    set +e
+    grep linux-azure /etc/apt/apt.conf.d/50unattended-upgrades
+    local rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+        sed -i "/^Unattended-Upgrade::Package-Blacklist {/alinux-azure\nlinux-cloud-tools-azure\nlinux-headers-azure\nlinux-image-azure\nlinux-tools-azure" /etc/apt/apt.conf.d/50unattended-upgrades
+        log INFO "Added linux-azure to package blacklist for unattended upgrades"
+    fi
+}
+
 check_for_nvidia_docker() {
     set +e
     nvidia-docker version
@@ -146,9 +165,9 @@ check_for_nvidia_docker() {
 
 check_for_nvidia_driver() {
     set +e
-    out=$(lsmod)
+    local out=$(lsmod)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
@@ -163,14 +182,15 @@ check_for_nvidia() {
     log INFO "Checking for Nvidia Hardware"
     # first check for card
     set +e
-    out=$(lspci)
+    local out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
         log INFO "No Nvidia card(s) detected!"
     else
+        blacklist_kernel_upgrade $1 $2
         check_for_nvidia_driver
         # enable persistence mode
         nvidia-smi -pm 1
@@ -180,7 +200,7 @@ check_for_nvidia() {
 
 check_docker_root_dir() {
     set +e
-    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    local rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     set -e
     log DEBUG "Graph root: $rootdir"
     if [ -z "$rootdir" ]; then
@@ -209,9 +229,9 @@ check_for_docker_host_engine() {
 check_for_glusterfs_on_compute() {
     set +e
     gluster
-    rc0=$?
+    local rc0=$?
     glusterfs -V
-    rc1=$?
+    local rc1=$?
     set -e
     if [ $rc0 -ne 0 ] || [ $rc1 -ne 0 ]; then
         log ERROR "gluster server and client not installed"
@@ -220,20 +240,20 @@ check_for_glusterfs_on_compute() {
 }
 
 check_for_storage_cluster_software() {
-    rc=0
+    local rc=0
     if [ ! -z $sc_args ]; then
         for sc_arg in ${sc_args[@]}; do
             IFS=':' read -ra sc <<< "$sc_arg"
-            server_type=${sc[0]}
+            local server_type=${sc[0]}
             if [ $server_type == "nfs" ]; then
                 set +e
                 mount.nfs4 -V
-                rc=$?
+                local rc=$?
                 set -e
             elif [ $server_type == "glusterfs" ]; then
                 set +e
                 glusterfs -V
-                rc=$?
+                local rc=$?
                 set -e
             else
                 log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
@@ -266,13 +286,13 @@ mount_azureblob_container() {
 }
 
 docker_pull_image() {
-    image=$1
+    local image=$1
     log DEBUG "Pulling Docker Image: $1"
     set +e
-    retries=60
+    local retries=60
     while [ $retries -gt 0 ]; do
-        pull_out=$(docker pull $image 2>&1)
-        rc=$?
+        local pull_out=$(docker pull $image 2>&1)
+        local rc=$?
         if [ $rc -eq 0 ]; then
             echo "$pull_out"
             break
@@ -285,7 +305,7 @@ docker_pull_image() {
             log ERROR "$pull_out"
             exit $rc
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -le 0 ]; then
             log ERROR "Could not pull docker image: $image"
             exit $rc
@@ -297,9 +317,9 @@ docker_pull_image() {
 
 singularity_basedir=
 singularity_setup() {
-    offer=$1
+    local offer=$1
     shift
-    sku=$1
+    local sku=$1
     shift
     if [ $offer == "ubuntu" ]; then
         if [[ $sku != 16.04* ]]; then
@@ -313,15 +333,15 @@ singularity_setup() {
             return
         fi
         singularity_basedir=/mnt/resource/singularity
-        offer=centos
-        sku=7
+        local offer=centos
+        local sku=7
     else
         log WARNING "Singularity not supported on $offer $sku"
         return
     fi
     log DEBUG "Setting up Singularity for $offer $sku"
     # fetch docker image for singularity bits
-    di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
+    local di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
     docker_pull_image $di
     mkdir -p /opt/singularity
     docker run --rm -v /opt/singularity:/opt/singularity $di \
@@ -360,9 +380,9 @@ singularity_setup() {
 }
 
 process_fstab_entry() {
-    desc=$1
-    mountpoint=$2
-    fstab_entry=$3
+    local desc=$1
+    local mountpoint=$2
+    local fstab_entry=$3
     log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p $mountpoint
     chmod 777 $mountpoint
@@ -370,7 +390,7 @@ process_fstab_entry() {
     echo $fstab_entry >> /etc/fstab
     tail -n1 /etc/fstab
     log INFO "Mounting $mountpoint"
-    START=$(date -u +"%s")
+    local START=$(date -u +"%s")
     set +e
     while :
     do
@@ -378,8 +398,8 @@ process_fstab_entry() {
         if [ $? -eq 0 ]; then
             break
         else
-            NOW=$(date -u +"%s")
-            DIFF=$((($NOW-$START)/60))
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
                 log ERROR "Could not mount $desc on $mountpoint"
@@ -482,7 +502,7 @@ check_for_docker_host_engine
 check_docker_root_dir $DISTRIB_ID
 
 # check for nvidia card/driver/docker
-check_for_nvidia
+check_for_nvidia $DISTRIB_ID $DISTRIB_RELEASE
 
 # mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then

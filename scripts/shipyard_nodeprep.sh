@@ -158,7 +158,7 @@ check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
     mount | grep /dev/sdb1 | grep fuseblk
-    rc=$?
+    local rc=$?
     set -e
     if [ $rc -eq 0 ]; then
         log ERROR "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
@@ -178,7 +178,7 @@ ensure_nvidia_driver_installed() {
     set +e
     local out=$(lsmod)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
@@ -194,7 +194,7 @@ check_for_nvidia_card() {
     set +e
     local out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
@@ -213,8 +213,8 @@ install_nvidia_software() {
     check_for_nvidia_card
     # split arg into two
     IFS=':' read -ra GPUARGS <<< "$gpu"
-    is_viz=${GPUARGS[0]}
-    nvdriver=${GPUARGS[1]}
+    local is_viz=${GPUARGS[0]}
+    local nvdriver=${GPUARGS[1]}
     # remove nouveau
     set +e
     rmmod nouveau
@@ -240,7 +240,7 @@ EOF
     if [ $offer == "ubuntuserver" ]; then
         install_packages $offer build-essential
     elif [[ $offer == centos* ]]; then
-        kernel_devel_package="kernel-devel-$(uname -r)"
+        local kernel_devel_package="kernel-devel-$(uname -r)"
         if [[ $offer == "centos-hpc" ]] || [[ $sku == "7.4" ]]; then
             install_packages $offer $kernel_devel_package
         elif [ $sku == "7.3" ]; then
@@ -298,7 +298,7 @@ EOF
     fi
     pkill -SIGHUP dockerd
     nvidia-docker version
-    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    local rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     log DEBUG "Graph root: $rootdir"
     nvidia-smi
 }
@@ -313,8 +313,8 @@ mount_azurefile_share() {
 
 mount_azureblob_container() {
     log INFO "Mounting Azure Blob Containers"
-    offer=$1
-    sku=$2
+    local offer=$1
+    local sku=$2
     if [ $offer == "ubuntuserver" ]; then
         debfile=packages-microsoft-prod.deb
         if [ ! -f ${debfile} ]; then
@@ -345,14 +345,14 @@ mount_azureblob_container() {
 
 download_file() {
     log INFO "Downloading: $1"
-    retries=10
+    local retries=10
     set +e
     while [ $retries -gt 0 ]; do
         curl -fSsLO $1
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=$((retries-1))
         if [ $retries -eq 0 ]; then
             log ERROR "Could not download: $1"
             exit 1
@@ -363,10 +363,10 @@ download_file() {
 }
 
 add_repo() {
-    offer=$1
-    url=$2
+    local offer=$1
+    local url=$2
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             curl -fSsL $url | apt-key add -
@@ -378,7 +378,7 @@ add_repo() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=$((retries-1))
         if [ $retries -eq 0 ]; then
             log ERROR "Could not add repo: $url"
             exit 1
@@ -389,9 +389,9 @@ add_repo() {
 }
 
 refresh_package_index() {
-    offer=$1
+    local offer=$1
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             apt-get update
@@ -403,7 +403,7 @@ refresh_package_index() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=$((retries-1))
         if [ $retries -eq 0 ]; then
             log ERROR "Could not update package index"
             exit 1
@@ -414,10 +414,10 @@ refresh_package_index() {
 }
 
 install_packages() {
-    offer=$1
+    local offer=$1
     shift
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
@@ -429,7 +429,7 @@ install_packages() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=$((retries-1))
         if [ $retries -eq 0 ]; then
             log ERROR "Could not install packages: $*"
             exit 1
@@ -440,10 +440,10 @@ install_packages() {
 }
 
 install_local_packages() {
-    offer=$1
+    local offer=$1
     shift
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $offer == "ubuntuserver" ]] || [[ $offer == "debian" ]]; then
             dpkg -i $*
@@ -453,7 +453,7 @@ install_local_packages() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -eq 0 ]; then
             log ERROR "Could not install local packages: $*"
             exit 1
@@ -464,13 +464,13 @@ install_local_packages() {
 }
 
 docker_pull_image() {
-    image=$1
+    local image=$1
     log DEBUG "Pulling Docker Image: $1"
     set +e
-    retries=60
+    local retries=60
     while [ $retries -gt 0 ]; do
-        pull_out=$(docker pull $image 2>&1)
-        rc=$?
+        local pull_out=$(docker pull $image 2>&1)
+        local rc=$?
         if [ $rc -eq 0 ]; then
             echo "$pull_out"
             break
@@ -483,7 +483,7 @@ docker_pull_image() {
             log ERROR "$pull_out"
             exit $rc
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -le 0 ]; then
             log ERROR "Could not pull docker image: $image"
             exit $rc
@@ -495,9 +495,9 @@ docker_pull_image() {
 
 singularity_basedir=
 singularity_setup() {
-    offer=$1
+    local offer=$1
     shift
-    sku=$1
+    local sku=$1
     shift
     if [ $offer == "ubuntu" ]; then
         if [[ $sku != 16.04* ]]; then
@@ -510,15 +510,15 @@ singularity_setup() {
             return
         fi
         singularity_basedir=/mnt/resource/singularity
-        offer=centos
-        sku=7
+        local offer=centos
+        local sku=7
     else
         log WARNING "Singularity not supported on $offer $sku"
         return
     fi
     log DEBUG "Setting up Singularity for $offer $sku"
     # fetch docker image for singularity bits
-    di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
+    local di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
     docker_pull_image $di
     mkdir -p /opt/singularity
     docker run --rm -v /opt/singularity:/opt/singularity $di \
@@ -557,9 +557,9 @@ singularity_setup() {
 }
 
 process_fstab_entry() {
-    desc=$1
-    mountpoint=$2
-    fstab_entry=$3
+    local desc=$1
+    local mountpoint=$2
+    local fstab_entry=$3
     log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p $mountpoint
     chmod 777 $mountpoint
@@ -567,7 +567,7 @@ process_fstab_entry() {
     echo $fstab_entry >> /etc/fstab
     tail -n1 /etc/fstab
     echo "INFO: Mounting $mountpoint"
-    START=$(date -u +"%s")
+    local START=$(date -u +"%s")
     set +e
     while :
     do
@@ -575,8 +575,8 @@ process_fstab_entry() {
         if [ $? -eq 0 ]; then
             break
         else
-            NOW=$(date -u +"%s")
-            DIFF=$((($NOW-$START)/60))
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
                 echo "ERROR: Could not mount $desc on $mountpoint"

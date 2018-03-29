@@ -91,7 +91,7 @@ save_startup_to_volatile() {
 }
 
 optimize_tcp_network_settings() {
-    sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
+    local sysctlfile=/etc/sysctl.d/60-azure-batch-shipyard.conf
     if [ ! -e $sysctlfile ] || [ ! -s $sysctlfile ]; then
 cat > $sysctlfile << EOF
 net.core.rmem_default=16777216
@@ -116,6 +116,25 @@ EOF
     fi
 }
 
+blacklist_kernel_upgrade() {
+    local offer=$1
+    shift
+    local sku=$1
+    shift
+    if [ $offer != "ubuntu" ]; then
+        log DEBUG "No kernel upgrade blacklist required on $offer $sku"
+        return
+    fi
+    set +e
+    grep linux-azure /etc/apt/apt.conf.d/50unattended-upgrades
+    local rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+        sed -i "/^Unattended-Upgrade::Package-Blacklist {/alinux-azure\nlinux-cloud-tools-azure\nlinux-headers-azure\nlinux-image-azure\nlinux-tools-azure" /etc/apt/apt.conf.d/50unattended-upgrades
+        log INFO "Added linux-azure to package blacklist for unattended upgrades"
+    fi
+}
+
 check_for_nvidia_docker() {
     set +e
     nvidia-docker version
@@ -128,9 +147,9 @@ check_for_nvidia_docker() {
 
 check_for_nvidia_driver() {
     set +e
-    out=$(lsmod)
+    local out=$(lsmod)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
@@ -145,14 +164,15 @@ check_for_nvidia() {
     log INFO "Checking for Nvidia Hardware"
     # first check for card
     set +e
-    out=$(lspci)
+    local out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
-    rc=$?
+    local rc=$?
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
         log INFO "No Nvidia card(s) detected!"
     else
+        blacklist_kernel_upgrade $1 $2
         check_for_nvidia_driver
         # enable persistence mode
         nvidia-smi -pm 1
@@ -162,7 +182,7 @@ check_for_nvidia() {
 
 check_docker_root_dir() {
     set +e
-    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    local rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     set -e
     log DEBUG "Graph root: $rootdir"
     if [ -z "$rootdir" ]; then
@@ -202,13 +222,13 @@ mount_azurefile_share() {
 }
 
 docker_pull_image() {
-    image=$1
+    local image=$1
     log DEBUG "Pulling Docker Image: $1"
     set +e
-    retries=60
+    local retries=60
     while [ $retries -gt 0 ]; do
-        pull_out=$(docker pull $image 2>&1)
-        rc=$?
+        local pull_out=$(docker pull $image 2>&1)
+        local rc=$?
         if [ $rc -eq 0 ]; then
             echo "$pull_out"
             break
@@ -221,7 +241,7 @@ docker_pull_image() {
             log ERROR "$pull_out"
             exit $rc
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -le 0 ]; then
             log ERROR "Could not pull docker image: $image"
             exit $rc
@@ -232,10 +252,10 @@ docker_pull_image() {
 }
 
 install_local_packages() {
-    distrib=$1
+    local distrib=$1
     shift
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $distrib == "ubuntu" ]]; then
             dpkg -i $*
@@ -245,7 +265,7 @@ install_local_packages() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -eq 0 ]; then
             log ERROR "Could not install local packages: $*"
             exit 1
@@ -256,10 +276,10 @@ install_local_packages() {
 }
 
 install_packages() {
-    distrib=$1
+    local distrib=$1
     shift
     set +e
-    retries=30
+    local retries=30
     while [ $retries -gt 0 ]; do
         if [[ $distrib == "ubuntu" ]]; then
             apt-get install -y -q -o Dpkg::Options::="--force-confnew" --no-install-recommends $*
@@ -269,7 +289,7 @@ install_packages() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -eq 0 ]; then
             log ERROR "Could not install packages: $*"
             exit 1
@@ -280,9 +300,9 @@ install_packages() {
 }
 
 refresh_package_index() {
-    distrib=$1
+    local distrib=$1
     set +e
-    retries=120
+    local retries=120
     while [ $retries -gt 0 ]; do
         if [[ $distrib == "ubuntu" ]]; then
             apt-get update
@@ -295,7 +315,7 @@ refresh_package_index() {
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -eq 0 ]; then
             log ERROR "Could not update package index"
             exit 1
@@ -307,10 +327,10 @@ refresh_package_index() {
 
 mount_azureblob_container() {
     log INFO "Mounting Azure Blob Containers"
-    distrib=$1
-    release=$2
+    local distrib=$1
+    local release=$2
     if [ $distrib == "ubuntu" ]; then
-        debfile=packages-microsoft-prod.deb
+        local debfile=packages-microsoft-prod.deb
         if [ ! -f ${debfile} ]; then
             download_file https://packages.microsoft.com/config/ubuntu/16.04/${debfile}
             install_local_packages $distrib ${debfile}
@@ -318,7 +338,7 @@ mount_azureblob_container() {
             install_packages $distrib blobfuse
         fi
     elif [[ $distrib == centos* ]]; then
-        rpmfile=packages-microsoft-prod.rpm
+        local rpmfile=packages-microsoft-prod.rpm
         if [ ! -f ${rpmfile} ]; then
             download_file https://packages.microsoft.com/config/rhel/7/${rpmfile}
             install_local_packages $distrib ${rpmfile}
@@ -339,14 +359,14 @@ mount_azureblob_container() {
 
 download_file() {
     log INFO "Downloading: $1"
-    retries=10
+    local retries=10
     set +e
     while [ $retries -gt 0 ]; do
         curl -fSsLO $1
         if [ $? -eq 0 ]; then
             break
         fi
-        let retries=retries-1
+        retries=retries-1
         if [ $retries -eq 0 ]; then
             log ERROR "Could not download: $1"
             exit 1
@@ -357,9 +377,9 @@ download_file() {
 }
 
 process_fstab_entry() {
-    desc=$1
-    mountpoint=$2
-    fstab_entry=$3
+    local desc=$1
+    local mountpoint=$2
+    local fstab_entry=$3
     log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p $mountpoint
     chmod 777 $mountpoint
@@ -367,7 +387,7 @@ process_fstab_entry() {
     echo $fstab_entry >> /etc/fstab
     tail -n1 /etc/fstab
     log INFO "Mounting $mountpoint"
-    START=$(date -u +"%s")
+    local START=$(date -u +"%s")
     set +e
     while :
     do
@@ -375,8 +395,8 @@ process_fstab_entry() {
         if [ $? -eq 0 ]; then
             break
         else
-            NOW=$(date -u +"%s")
-            DIFF=$((($NOW-$START)/60))
+            local NOW=$(date -u +"%s")
+            local DIFF=$((($NOW-$START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
                 log ERROR "Could not mount $desc on $mountpoint"
@@ -469,7 +489,7 @@ check_for_docker_host_engine
 check_docker_root_dir $DISTRIB_ID
 
 # check for nvidia card/driver/docker
-check_for_nvidia
+check_for_nvidia $DISTRIB_ID $DISTRIB_RELEASE
 
 # mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
