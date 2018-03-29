@@ -11,26 +11,26 @@ log() {
 
 # decrypt passwords if necessary
 if [ "$1" == "-e" ]; then
-    if [ ! -z $DOCKER_LOGIN_PASSWORD ]; then
-        DOCKER_LOGIN_PASSWORD=$(echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
+    if [ ! -z "$DOCKER_LOGIN_PASSWORD" ]; then
+        DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
     fi
-    if [ ! -z $SINGULARITY_LOGIN_PASSWORD ]; then
-        SINGULARITY_LOGIN_PASSWORD=$(echo $SINGULARITY_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
+    if [ ! -z "$SINGULARITY_LOGIN_PASSWORD" ]; then
+        SINGULARITY_LOGIN_PASSWORD=$(echo "$SINGULARITY_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
     fi
 fi
 
 # login to Docker registries
-if [ ! -z $DOCKER_LOGIN_PASSWORD ]; then
+if [ ! -z "$DOCKER_LOGIN_PASSWORD" ]; then
     # parse env vars
     IFS=',' read -ra servers <<< "${DOCKER_LOGIN_SERVER}"
     IFS=',' read -ra users <<< "${DOCKER_LOGIN_USERNAME}"
     IFS=',' read -ra passwords <<< "${DOCKER_LOGIN_PASSWORD}"
     # loop through each server and login
     nservers=${#servers[@]}
-    if [ $nservers -ge 1 ]; then
+    if [ "$nservers" -ge 1 ]; then
         log DEBUG "Logging into $nservers Docker registry servers..."
         for i in $(seq 0 $((nservers-1))); do
-            docker login --username ${users[$i]} --password ${passwords[$i]} ${servers[$i]}
+            docker login --username "${users[$i]}" --password "${passwords[$i]}" "${servers[$i]}"
         done
         log INFO "Docker registry logins completed."
     fi
@@ -39,14 +39,14 @@ else
 fi
 
 # "login" to Singularity registries
-if [ ! -z $SINGULARITY_LOGIN_PASSWORD ]; then
+if [ ! -z "$SINGULARITY_LOGIN_PASSWORD" ]; then
     # parse env vars
     IFS=',' read -ra servers <<< "${SINGULARITY_LOGIN_SERVER}"
     IFS=',' read -ra users <<< "${SINGULARITY_LOGIN_USERNAME}"
     IFS=',' read -ra passwords <<< "${SINGULARITY_LOGIN_PASSWORD}"
     # loop through each server and login
     nservers=${#servers[@]}
-    if [ $nservers -ge 1 ]; then
+    if [ "$nservers" -ge 1 ]; then
         log DEBUG "Creating export script into $nservers Singularity registry servers..."
         touch singularity-registry-login
         for i in $(seq 0 $((nservers-1))); do

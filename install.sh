@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC1090
+# shellcheck disable=SC1091
+
 set -e
 set -o pipefail
 
@@ -47,7 +50,7 @@ shift $((OPTIND-1))
 # non-cloud shell environment checks
 if [ ! -z $SUDO ]; then
     # check to ensure this is not being run directly as root
-    if [ $(id -u) -eq 0 ]; then
+    if [ "$(id -u)" -eq 0 ]; then
         echo "Installation cannot be performed as root or via sudo."
         echo "Please install as a regular user."
         exit 1
@@ -62,7 +65,7 @@ if [ ! -z $SUDO ]; then
 fi
 
 # check that shipyard.py is in cwd
-if [ ! -f $PWD/shipyard.py ]; then
+if [ ! -f "${PWD}"/shipyard.py ]; then
     echo "shipyard.py not found in $PWD."
     echo "Please run install.sh from the same directory as shipyard.py."
     exit 1
@@ -79,8 +82,7 @@ fi
 # check for anaconda
 set +e
 ANACONDA=0
-$PYTHON -c "from __future__ import print_function; import sys; print(sys.version)" | grep -Ei 'anaconda|continuum|conda-forge'
-if [ $? -eq 0 ]; then
+if $PYTHON -c "from __future__ import print_function; import sys; print(sys.version)" | grep -Ei 'anaconda|continuum|conda-forge'; then
     # check for conda
     if hash conda 2> /dev/null; then
         echo "Anaconda environment detected."
@@ -88,7 +90,7 @@ if [ $? -eq 0 ]; then
         echo "Anaconda environment detected, but conda command not found."
         exit 1
     fi
-    if [ -z $VENV_NAME ]; then
+    if [ -z "$VENV_NAME" ]; then
         echo "Virtual environment name must be supplied for Anaconda installations."
         exit 1
     fi
@@ -99,7 +101,7 @@ set -e
 
 # perform some virtual env parameter checks
 INSTALL_VENV_BIN=0
-if [ ! -z $VENV_NAME ]; then
+if [ ! -z "$VENV_NAME" ]; then
     # check if virtual env, env is not named shipyard
     if [ "$VENV_NAME" == "shipyard" ]; then
         echo "Virtual environment name cannot be shipyard. Please use a different virtual environment name."
@@ -139,7 +141,7 @@ if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
 fi
 
 # lowercase vars
-if [ $DISTRIB_ID != "Darwin" ]; then
+if [ "$DISTRIB_ID" != "Darwin" ]; then
     DISTRIB_ID=${DISTRIB_ID,,}
     DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
 fi
@@ -147,8 +149,8 @@ fi
 echo "Detected OS: $DISTRIB_ID $DISTRIB_RELEASE"
 
 # install requisite packages from distro repo
-if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
-    if [ $DISTRIB_ID == "ubuntu" ] || [ $DISTRIB_ID == "debian" ]; then
+if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
+    if [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "debian" ]; then
         $SUDO apt-get update
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
@@ -165,10 +167,11 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
                 fi
             fi
         fi
+        # shellcheck disable=SC2086
         $SUDO apt-get install -y --no-install-recommends \
             build-essential libssl-dev libffi-dev openssl \
             openssh-client rsync $PYTHON_PKGS
-    elif [ $DISTRIB_ID == "centos" ] || [ $DISTRIB_ID == "rhel" ]; then
+    elif [ "$DISTRIB_ID" == "centos" ] || [ "$DISTRIB_ID" == "rhel" ]; then
         $SUDO yum makecache fast
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
@@ -176,14 +179,12 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
             if [ $PYTHON == "python" ]; then
                 PYTHON_PKGS="python-devel"
             else
-                yum list installed epel-release
-                if [ $? -ne 0 ]; then
+                if ! yum list installed epel-release; then
                     echo "epel-release package not installed."
                     echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
                     exit 1
                 fi
-                yum list installed python34
-                if [ $? -ne 0 ]; then
+                if ! yum list installed python34; then
                     echo "python34 epel package not installed."
                     echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
                     exit 1
@@ -191,12 +192,13 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
                 PYTHON_PKGS="python34-devel"
             fi
         fi
+        # shellcheck disable=SC2086
         $SUDO yum install -y gcc openssl-devel libffi-devel openssl \
             openssh-clients rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
             curl -fSsL --tlsv1 https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
-    elif [ $DISTRIB_ID == "opensuse" ] || [ $DISTRIB_ID == "sles" ]; then
+    elif [ "$DISTRIB_ID" == "opensuse" ] || [ "$DISTRIB_ID" == "sles" ]; then
         $SUDO zypper ref
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
@@ -207,12 +209,13 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
                 PYTHON_PKGS="python3-devel"
             fi
         fi
+        # shellcheck disable=SC2086
         $SUDO zypper -n in gcc libopenssl-devel libffi48-devel openssl \
             openssh rsync $PYTHON_PKGS
         if [ $ANACONDA -eq 0 ]; then
             curl -fSsL --tlsv1 https://bootstrap.pypa.io/get-pip.py | $SUDO $PYTHON
         fi
-    elif [ $DISTRIB_ID == "Darwin" ]; then
+    elif [ "$DISTRIB_ID" == "Darwin" ]; then
         # check for pip, otherwise install it
         if hash $PIP 2> /dev/null; then
             echo "$PIP detected."
@@ -228,10 +231,10 @@ if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
 fi
 
 # create virtual env if required and install required python packages
-if [ ! -z $VENV_NAME ]; then
+if [ ! -z "$VENV_NAME" ]; then
     # install virtual env if required
     if [ $INSTALL_VENV_BIN -eq 1 ]; then
-        if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
+        if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
             $SUDO $PIP install virtualenv
         else
             $PIP install --user virtualenv
@@ -239,12 +242,12 @@ if [ ! -z $VENV_NAME ]; then
     fi
     if [ $ANACONDA -eq 0 ]; then
         # create venv if it doesn't exist
-        if [ ! -z $SUDO ] || [ $(id -u) -eq 0 ]; then
-            virtualenv -p $PYTHON $VENV_NAME
+        if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
+            virtualenv -p $PYTHON "$VENV_NAME"
         else
-            $HOME/.local/bin/virtualenv -p $PYTHON $VENV_NAME
+            "${HOME}"/.local/bin/virtualenv -p $PYTHON "$VENV_NAME"
         fi
-        source $VENV_NAME/bin/activate
+        source "${VENV_NAME}"/bin/activate
         $PIP install --upgrade pip setuptools
         set +e
         $PIP uninstall -y azure-storage
@@ -258,9 +261,9 @@ if [ ! -z $VENV_NAME ]; then
         echo "Creating conda env for Python $pyver"
         # create conda env
         set +e
-        conda create --yes --name $VENV_NAME python=$pyver
+        conda create --yes --name "$VENV_NAME" python="${pyver}"
         set -e
-        source activate $VENV_NAME
+        source activate "$VENV_NAME"
         conda install --yes pip
         # temporary workaround with pip requirements upgrading setuptools and
         # conda pip failing to reference the old setuptools version
@@ -270,7 +273,7 @@ if [ ! -z $VENV_NAME ]; then
         set -e
         $PIP install --upgrade -r requirements.txt
         $PIP install --upgrade --no-deps -r req_nodeps.txt
-        source deactivate $VENV_NAME
+        source deactivate "$VENV_NAME"
     fi
 else
     $SUDO $PIP install --upgrade pip
@@ -302,7 +305,7 @@ fi
 
 EOF
 
-if [ ! -z $VENV_NAME ]; then
+if [ ! -z "$VENV_NAME" ]; then
     if [ $ANACONDA -eq 0 ]; then
 cat >> shipyard << 'EOF'
 source $BATCH_SHIPYARD_ROOT_DIR/$VENV_NAME/bin/activate
@@ -324,7 +327,7 @@ python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
 fi
 
-if [ ! -z $VENV_NAME ]; then
+if [ ! -z "$VENV_NAME" ]; then
     if [ $ANACONDA -eq 0 ]; then
 cat >> shipyard << 'EOF'
 deactivate
@@ -339,7 +342,8 @@ fi
 chmod 755 shipyard
 
 echo ""
-if [ -z $VENV_NAME ]; then
+if [ -z "$VENV_NAME" ]; then
+    # shellcheck disable=SC2016
     echo '>> Please add $HOME/.local/bin to your $PATH. You can do this '
     echo '>> permanently in your shell rc script, e.g., .bashrc for bash shells.'
     echo ""

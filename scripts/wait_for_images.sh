@@ -15,14 +15,14 @@ block_singularity=${cip[1]}
 log DEBUG "Block for Docker images: $block_docker"
 log DEBUG "Block for Singularity images: $block_singularity"
 
-if [ ! -z $block_docker ]; then
+if [ ! -z "$block_docker" ]; then
     log INFO "blocking until Docker images ready: $block_docker"
     IFS=',' read -ra RES <<< "$block_docker"
     declare -a missing
     while :
         do
         for image in "${RES[@]}";  do
-            if [ -z "$(docker images -q $image 2>/dev/null)" ]; then
+            if [ -z "$(docker images -q "$image" 2>/dev/null)" ]; then
                 missing=("${missing[@]}" "$image")
             fi
         done
@@ -36,7 +36,7 @@ if [ ! -z $block_docker ]; then
     done
 fi
 
-if [ ! -z $block_singularity ]; then
+if [ ! -z "$block_singularity" ]; then
     log INFO "blocking until Singularity images ready: $block_singularity"
     log DEBUG "Singularity cache dir: ${SINGULARITY_CACHEDIR}"
     IFS=',' read -ra RES <<< "$block_singularity"

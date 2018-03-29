@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive
 
 # constants
 gluster_brick_mountpath=/gluster/brick
@@ -20,27 +20,27 @@ volume_type=
 gluster_peer_probe() {
     # detach peer if it was connected already
     set +e
-    gluster peer detach $1 2>&1
+    gluster peer detach "$1" 2>&1
     set -e
     echo "Attempting to peer with $1"
     peered=0
-    local START=$(date -u +"%s")
+    local START
+    START=$(date -u +"%s")
     set +e
     while :
     do
         # attempt to ping before peering
-        ping -c 2 $1 > /dev/null
-        if [ $? -eq 0 ]; then
-            gluster peer probe $1 2>&1
-            if [ $? -eq 0 ]; then
+        if ping -c 2 "$1" > /dev/null; then
+            if gluster peer probe "$1" 2>&1; then
                 peered=1
             fi
         fi
         if [ $peered -eq 1 ]; then
             break
         else
-            local NOW=$(date -u +"%s")
-            local DIFF=$((($NOW-$START)/60))
+            local NOW
+            NOW=$(date -u +"%s")
+            local DIFF=$(((NOW-START)/60))
             # fail after 15 minutes of attempts
             if [ $DIFF -ge 15 ]; then
                 echo "Could not probe peer $1"
@@ -54,14 +54,15 @@ gluster_peer_probe() {
 }
 
 gluster_poll_for_connections() {
-    local numpeers=$(($vm_count - 1))
+    local numpeers=$((vm_count - 1))
     echo "Waiting for $numpeers peers to reach connected state..."
     # get peer info
     set +e
     while :
     do
-        local numready=$(gluster peer status | grep -e '^State: Peer in Cluster' | wc -l)
-        if [ $numready == $numpeers ]; then
+        local numready
+        numready=$(gluster peer status | grep -c '^State: Peer in Cluster')
+        if [ "$numready" == "$numpeers" ]; then
             break
         fi
         sleep 1
@@ -79,7 +80,7 @@ gluster_add_bricks() {
     IFS=',' read -ra hosts <<< "$hostnames"
     # cross-validate length
     if [ ${#peers[@]} -ne ${#hosts[@]} ]; then
-        echo "${peers[@]} length does not match ${hosts[@]} length"
+        echo "${peers[*]} length does not match ${hosts[*]} length"
         exit 1
     fi
     # construct brick locations
@@ -88,7 +89,7 @@ gluster_add_bricks() {
     do
         bricks+=" $host:$gluster_brick_location"
         # probe peer
-        gluster_peer_probe $host
+        gluster_peer_probe "$host"
     done
     # wait for connections
     gluster_poll_for_connections
@@ -107,9 +108,9 @@ gluster_add_bricks() {
     echo "Adding bricks to gluster volume $gluster_volname $volarg ($bricks)"
     if [[ "$volume_type" == stripe* ]]; then
         # this should be gated by remotefs.py
-        echo -e "y\n" | gluster volume add-brick $gluster_volname $volarg $bricks
+        echo -e "y\\n" | gluster volume add-brick $gluster_volname $volarg "$bricks"
     else
-        gluster volume add-brick $gluster_volname $volarg $bricks $force
+        gluster volume add-brick $gluster_volname $volarg "$bricks"
     fi
     # get info and status
     gluster volume info $gluster_volname
@@ -117,8 +118,7 @@ gluster_add_bricks() {
     # rebalance
     echo "Rebalancing gluster volume $gluster_volname"
     set +e
-    gluster volume rebalance $gluster_volname start
-    if [ $? -eq 0 ]; then
+    if gluster volume rebalance $gluster_volname start; then
         sleep 5
         gluster volume rebalance $gluster_volname status
     fi

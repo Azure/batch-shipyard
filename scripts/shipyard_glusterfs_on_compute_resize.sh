@@ -8,7 +8,7 @@ shift
 mntpath=$1
 shift
 numnodes=$1
-numpeers=$(($numnodes - 1))
+numpeers=$((numnodes - 1))
 shift
 masterip=$1
 shift
@@ -18,14 +18,14 @@ echo "temp disk mountpoint: $mntpath"
 echo "master ip: $masterip"
 
 # get my ip address
-ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
+ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 echo "ip address: $ipaddress"
 
 # check if my ip address is a new node
 domount=0
 for i in "$@"
 do
-    if [ $i == $ipaddress ]; then
+    if [ "$i" == "$ipaddress" ]; then
         domount=1
         break
     fi
@@ -33,22 +33,22 @@ done
 echo "mount: $domount"
 
 # master peers and adds the bricks
-if [ $masterip == $ipaddress ]; then
+if [ "$masterip" == "$ipaddress" ]; then
     # probe new nodes
     bricks=
     for node in "$@"
     do
         bricks+=" $node:$mntpath/gluster/brick"
         echo "probing $node"
-        gluster peer probe $node
+        gluster peer probe "$node"
     done
 
     # get peer info
     set +e
     while :
     do
-        numready=`gluster peer status | grep -e '^State: Peer in Cluster' | wc -l`
-        if [ $numready == $numpeers ]; then
+        numready=$(gluster peer status | grep -c '^State: Peer in Cluster')
+        if [ "$numready" == "$numpeers" ]; then
             break
         fi
         sleep 1
@@ -60,7 +60,7 @@ if [ $masterip == $ipaddress ]; then
     sleep 5
 
     # add bricks to volume
-    gluster volume add-brick $voltype $numnodes gv0$bricks
+    gluster volume add-brick "$voltype" "$numnodes" gv0"$bricks"
 
     # get volume info
     gluster volume info
@@ -71,7 +71,7 @@ echo "waiting for gv0 volume..."
 set +e
 while :
 do
-    numbricks=`gluster volume info gv0 | grep -e '^Number of Bricks:' | cut -d' ' -f4`
+    numbricks=$(gluster volume info gv0 | grep -e '^Number of Bricks:' | cut -d' ' -f4)
     if [ "$numbricks" == "$numnodes" ]; then
         # delay to wait for subvolumes
         sleep 5
@@ -85,8 +85,8 @@ set -e
 if [ $domount -eq 1 ]; then
     # add gv0 to /etc/fstab for auto-mount on reboot
     mountpoint=$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0
-    mkdir -p $mountpoint
-    chmod 775 $mountpoint
+    mkdir -p "$mountpoint"
+    chmod 775 "$mountpoint"
     echo "adding $mountpoint to fstab"
     echo "$ipaddress:/gv0 $mountpoint glusterfs defaults,_netdev 0 0" >> /etc/fstab
 
@@ -96,12 +96,11 @@ if [ $domount -eq 1 ]; then
     set +e
     while :
     do
-        mount $mountpoint
-        if [ $? -eq 0 ]; then
+        if mount "$mountpoint"; then
             break
         else
             NOW=$(date -u +"%s")
-            DIFF=$((($NOW-$START)/60))
+            DIFF=$(((NOW-START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
                 echo "could not mount gluster volume: $mountpoint"
@@ -111,7 +110,7 @@ if [ $domount -eq 1 ]; then
         fi
     done
     set -e
-    chmod 775 $mountpoint
+    chmod 775 "$mountpoint"
 fi
 
 # touch file noting success

@@ -12,13 +12,13 @@ for spec in "$@"; do
     kind=${parts[1]}
     encrypted=${parts[2],,}
 
-    if [ $encrypted == "true" ]; then
+    if [ "$encrypted" == "true" ]; then
         cipher=${parts[3]}
         local_path=${parts[4]}
         eo=${parts[5]}
         # decrypt ciphertext
         privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
-        cipher=`echo $cipher | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+        cipher=$(echo "$cipher" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
         IFS=',' read -ra storage <<< "$cipher"
         sa=${storage[0]}
         ep=${storage[1]}
@@ -36,12 +36,12 @@ for spec in "$@"; do
     fi
 
     wd=$(dirname "$local_path")
-    if [ $kind == "i" ]; then
+    if [ "$kind" == "i" ]; then
         # create destination working directory
-        mkdir -p $wd
+        mkdir -p "$wd"
         # ingress data from storage
         action=download
-    elif [ $kind == "e" ]; then
+    elif [ "$kind" == "e" ]; then
         # egress from compute node to storage
         action=upload
     else
@@ -50,8 +50,8 @@ for spec in "$@"; do
     fi
 
     # execute blobxfer
-    docker run --rm -t -v $wd:$wd -w $wd alfpark/blobxfer:$bxver \
-        $action --storage-account $sa --sas $saskey --endpoint $ep \
-        --remote-path $remote_path --local-path $local_path \
-        --no-progress-bar $eo
+    docker run --rm -t -v "$wd":"$wd" -w "$wd" alfpark/blobxfer:"$bxver" \
+        "$action" --storage-account "$sa" --sas "$saskey" --endpoint "$ep" \
+        --remote-path "$remote_path" --local-path "$local_path" \
+        --no-progress-bar "$eo"
 done

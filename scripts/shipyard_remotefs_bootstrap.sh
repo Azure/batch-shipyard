@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive
 
 # constants
 gluster_brick_mountpath=/gluster/brick
@@ -28,11 +28,13 @@ mount_options=
 # functions
 wait_for_device() {
     local device=$1
-    local START=$(date -u +"%s")
+    local START
+    START=$(date -u +"%s")
     echo "Waiting for device $device..."
-    while [ ! -b $device ]; do
-        local NOW=$(date -u +"%s")
-        local DIFF=$((($NOW-$START)/60))
+    while [ ! -b "$device" ]; do
+        local NOW
+        NOW=$(date -u +"%s")
+        local DIFF=$(((NOW-START)/60))
         # fail after 5 minutes of waiting
         if [ $DIFF -ge 5 ]; then
             echo "Could not find device $device"
@@ -46,8 +48,7 @@ setup_nfs() {
     # amend /etc/exports if needed
     add_exports=0
     set +e
-    grep "^${mountpath}" /etc/exports
-    if [ $? -ne 0 ]; then
+    if ! grep "^${mountpath}" /etc/exports; then
         add_exports=1
     fi
     if [ $add_exports -eq 1 ]; then
@@ -61,8 +62,7 @@ setup_nfs() {
         set +f
         systemctl reload nfs-kernel-server.service
     fi
-    systemctl status nfs-kernel-server.service
-    if [ $? -ne 0 ]; then
+    if ! systemctl status nfs-kernel-server.service; then
         set -e
         # attempt to start
         systemctl start nfs-kernel-server.service
@@ -75,23 +75,23 @@ setup_nfs() {
 gluster_peer_probe() {
     echo "Attempting to peer with $1"
     peered=0
-    local START=$(date -u +"%s")
+    local START
+    START=$(date -u +"%s")
     set +e
     while :
     do
         # attempt to ping before peering
-        ping -c 2 $1 > /dev/null
-        if [ $? -eq 0 ]; then
-            gluster peer probe $1
-            if [ $? -eq 0 ]; then
+        if ping -c 2 "$1" > /dev/null; then
+            if gluster peer probe "$1"; then
                 peered=1
             fi
         fi
         if [ $peered -eq 1 ]; then
             break
         else
-            local NOW=$(date -u +"%s")
-            local DIFF=$((($NOW-$START)/60))
+            local NOW
+            NOW=$(date -u +"%s")
+            local DIFF=$(((NOW-START)/60))
             # fail after 15 minutes of attempts
             if [ $DIFF -ge 15 ]; then
                 echo "Could not probe peer $1"
@@ -106,14 +106,15 @@ gluster_peer_probe() {
 
 gluster_poll_for_connections() {
     local numnodes=$1
-    local numpeers=$(($numnodes - 1))
+    local numpeers=$((numnodes - 1))
     echo "Waiting for $numpeers peers to reach connected state..."
     # get peer info
     set +e
     while :
     do
-        local numready=$(gluster peer status | grep -e '^State: Peer in Cluster' | wc -l)
-        if [ $numready == $numpeers ]; then
+        local numready
+        numready=$(gluster peer status | grep -c '^State: Peer in Cluster')
+        if [ "$numready" == "$numpeers" ]; then
             break
         fi
         sleep 1
@@ -126,19 +127,19 @@ gluster_poll_for_connections() {
 
 gluster_poll_for_volume() {
     echo "Waiting for gluster volume $1"
-    local START=$(date -u +"%s")
+    local START
+    START=$(date -u +"%s")
     set +e
     while :
     do
-        gluster volume info $1
-        if [ $? -eq 0 ]; then
-            echo $gv_info
+        if gluster volume info "$1"; then
             # delay to wait for subvolumes
             sleep 5
             break
         else
-            local NOW=$(date -u +"%s")
-            local DIFF=$((($NOW-$START)/60))
+            local NOW
+            NOW=$(date -u +"%s")
+            local DIFF=$(((NOW-START)/60))
             # fail after 15 minutes of attempts
             if [ $DIFF -ge 15 ]; then
                 echo "Could not connect to gluster volume $1"
@@ -169,36 +170,36 @@ setup_glusterfs() {
     local i=0
     declare -a hosts
     set +e
-    for ip in "${peers[@]}"; do
-        local host=${hostname_prefix}-vm$(printf %03d $i)
+    while [ $i -lt ${#peers[@]} ]; do
+        local host
+        host=${hostname_prefix}-vm$(printf %03d $i)
         hosts=("${hosts[@]}" "$host")
-        if [ ${peers[$i]} == $ipaddress ]; then
+        if [ "${peers[$i]}" == "$ipaddress" ]; then
             myhostname=$host
         fi
-        i=$(($i + 1))
+        i=$((i + 1))
     done
     set -e
-    if [ -z $myhostname ]; then
+    if [ -z "$myhostname" ]; then
         echo "Could not determine own hostname from prefix"
         exit 1
     fi
     # master (first host) performs peering
-    if [ ${peers[0]} == $ipaddress ]; then
+    if [ "${peers[0]}" == "$ipaddress" ]; then
         # construct brick locations
-        local bricks=
-        for host in "${hosts[@]}"
-        do
+        local bricks
+        for host in "${hosts[@]}"; do
             bricks+=" $host:$gluster_brick_location"
             # probe peer
-            if [ $host != $myhostname ]; then
-                gluster_peer_probe $host
+            if [ "$host" != "$myhostname" ]; then
+                gluster_peer_probe "$host"
             fi
         done
         # wait for connections
         local numnodes=${#peers[@]}
-        gluster_poll_for_connections $numnodes
+        gluster_poll_for_connections "$numnodes"
         local voltype=${so[1],,}
-        local volarg=
+        local volarg
         if [ "$voltype" == "replica" ] || [ "$voltype" == "stripe" ]; then
             volarg="$voltype $numnodes"
         elif [ "$voltype" != "distributed" ]; then
@@ -206,17 +207,15 @@ setup_glusterfs() {
             volarg=$voltype
         fi
         local transport=${so[2],,}
-        if [ -z $transport ]; then
+        if [ -z "$transport" ]; then
             transport="tcp"
         fi
         # check if volume exists
         local start_only=0
-        local force=
+        local force
         set +e
-        gluster volume info $gluster_volname 2>&1 | grep "does not exist"
-        if [ $? -ne 0 ]; then
-            gluster volume info $gluster_volname 2>&1 | grep "Volume Name: $gluster_volname"
-            if [ $? -eq 0 ]; then
+        if ! gluster volume info "$gluster_volname" 2>&1 | grep "does not exist"; then
+            if gluster volume info "$gluster_volname" 2>&1 | grep "Volume Name: $gluster_volname"; then
                 start_only=1
             else
                 force="force"
@@ -226,29 +225,28 @@ setup_glusterfs() {
         # create volume
         if [ $start_only -eq 0 ]; then
             echo "Creating gluster volume $gluster_volname $volarg ($force$bricks)"
-            gluster volume create $gluster_volname $volarg transport $transport$bricks $force
+            gluster volume create "$gluster_volname" "$volarg" transport "${transport}""${bricks}" $force
             # modify volume properties as per input
             for e in "${so[@]:3}"; do
                 IFS=':' read -ra kv <<< "$e"
-                echo "Setting volume option ${kv[@]}"
-                gluster volume set $gluster_volname "${kv[0]}" "${kv[1]}"
+                echo "Setting volume option ${kv[*]}"
+                gluster volume set "$gluster_volname" "${kv[0]}" "${kv[1]}"
             done
         fi
         # start volume
         echo "Starting gluster volume $gluster_volname"
-        gluster volume start $gluster_volname
+        gluster volume start "$gluster_volname"
         # heal volume if force created with certain volume types
         if [ ! -z $force ]; then
             if [[ "$voltype" == replica* ]] || [[ "$voltype" == disperse* ]]; then
                 echo "Checking if gluster volume $gluster_volname needs healing"
                 set +e
-                gluster volume heal $gluster_volname info
-                if [ $? -eq 0 ]; then
-                    gluster volume heal $gluster_volname
+                if gluster volume heal "$gluster_volname" info; then
+                    gluster volume heal "$gluster_volname"
                     # print status after heal
-                    gluster volume heal $gluster_volname info healed
-                    gluster volume heal $gluster_volname info heal-failed
-                    gluster volume heal $gluster_volname info split-brain
+                    gluster volume heal "$gluster_volname" info healed
+                    gluster volume heal "$gluster_volname" info heal-failed
+                    gluster volume heal "$gluster_volname" info split-brain
                 fi
                 set -e
             fi
@@ -256,13 +254,12 @@ setup_glusterfs() {
     fi
 
     # poll for volume created
-    gluster_poll_for_volume $gluster_volname
+    gluster_poll_for_volume "$gluster_volname"
 
     # check if volume is mounted
     local mounted=0
     set +e
-    mountpoint -q $mountpath
-    if [ $? -eq 0 ]; then
+    if mountpoint -q "$mountpath"; then
         mounted=1
     fi
     set -e
@@ -271,8 +268,7 @@ setup_glusterfs() {
         # check if fstab entry exists
         add_fstab=0
         set +e
-        grep "$mountpath glusterfs" /etc/fstab
-        if [ $? -ne 0 ]; then
+        if ! grep "$mountpath glusterfs" /etc/fstab; then
             add_fstab=1
         fi
         set -e
@@ -287,19 +283,20 @@ setup_glusterfs() {
         mkdir -p $mountpath
         # mount it
         echo "Mounting gluster volume $gluster_volname locally to $mountpath"
-        local START=$(date -u +"%s")
+        local START
+        START=$(date -u +"%s")
         set +e
         while :
         do
-            mount $mountpath
-            if [ $? -eq 0 ]; then
+            if mount "$mountpath"; then
                 break
             else
-                local NOW=$(date -u +"%s")
-                local DIFF=$((($NOW-$START)/60))
+                local NOW
+                NOW=$(date -u +"%s")
+                local DIFF=$(((NOW-START)/60))
                 # fail after 5 minutes of attempts
                 if [ $DIFF -ge 5 ]; then
-                    echo "Could not mount gluster volume $gluster_volume to $mountpath"
+                    echo "Could not mount gluster volume $gluster_volname to $mountpath"
                     exit 1
                 fi
                 sleep 1
@@ -307,7 +304,7 @@ setup_glusterfs() {
         done
         set -e
         # ensure proper permissions on mounted directory
-        chmod 1777 $mountpath
+        chmod 1777 "$mountpath"
     fi
 }
 
@@ -381,7 +378,7 @@ shift $((OPTIND-1))
 
 echo "Parameters:"
 echo "  Attach mode: $attach_disks"
-echo "  Samba options: ${samba_options[@]}"
+echo "  Samba options: ${samba_options[*]}"
 echo "  Rebalance filesystem: $rebalance"
 echo "  Filesystem: $filesystem"
 echo "  Mountpath: $mountpath"
@@ -424,13 +421,12 @@ EOF
     fi
     # install required server_type software
     apt-get update
-    if [ $server_type == "nfs" ]; then
+    if [ "$server_type" == "nfs" ]; then
         apt-get install -y --no-install-recommends nfs-kernel-server nfs4-acl-tools
         # patch buggy nfs-mountd.service unit file
         # https://bugs.launchpad.net/ubuntu/+source/nfs-utils/+bug/1590799
         set +e
-        grep "^After=network.target local-fs.target" /lib/systemd/system/nfs-mountd.service
-        if [ $? -eq 0 ]; then
+        if grep "^After=network.target local-fs.target" /lib/systemd/system/nfs-mountd.service; then
             set -e
             sed -i -e "s/^After=network.target local-fs.target/After=rpcbind.target/g" /lib/systemd/system/nfs-mountd.service
         fi
@@ -441,14 +437,13 @@ EOF
         systemctl enable nfs-kernel-server.service
         # start service if not started
         set +e
-        systemctl status nfs-kernel-server.service
-        if [ $? -ne 0 ]; then
+        if ! systemctl status nfs-kernel-server.service; then
             set -e
             systemctl start nfs-kernel-server.service
             systemctl status nfs-kernel-server.service
         fi
         set -e
-    elif [ $server_type == "glusterfs" ]; then
+    elif [ "$server_type" == "glusterfs" ]; then
         # to prevent a race where the master (aka prober) script execution
         # runs well before the child, we should block all gluster connection
         # requests with iptables. we should not remove the filter rules
@@ -461,8 +456,7 @@ EOF
         systemctl enable glusterfs-server
         # start service if not started
         set +e
-        systemctl status glusterfs-server
-        if [ $? -ne 0 ]; then
+        if ! systemctl status glusterfs-server; then
             set -e
             systemctl start glusterfs-server
             systemctl status glusterfs-server
@@ -477,31 +471,31 @@ fi
 
 # get all data disks
 declare -a data_disks
-all_disks=($(lsblk -l -d -n -p -I 8,65,66,67,68 -o NAME))
+mapfile -t all_disks < <(lsblk -l -d -n -p -I 8,65,66,67,68 -o NAME)
 for disk in "${all_disks[@]}"; do
     # ignore os and ephemeral disks
-	if [ $disk != "/dev/sda" ] && [ $disk != "/dev/sdb" ]; then
+	if [ "$disk" != "/dev/sda" ] && [ "$disk" != "/dev/sdb" ]; then
         data_disks=("${data_disks[@]}" "$disk")
     fi
 done
 unset all_disks
 numdisks=${#data_disks[@]}
-echo "found $numdisks data disks: ${data_disks[@]}"
+echo "found $numdisks data disks: ${data_disks[*]}"
 
 # check if data disks are already partitioned
 declare -a skipped_part
 for disk in "${data_disks[@]}"; do
-    part1=$(partprobe -d -s $disk | cut -d' ' -f4)
-    if [ -z $part1 ]; then
+    part1=$(partprobe -d -s "$disk" | cut -d' ' -f4)
+    if [ -z "$part1" ]; then
         echo "$disk: partition 1 not found. Partitioning $disk."
-        parted -a opt -s $disk mklabel gpt mkpart primary 0% 100%
-        part1=$(partprobe -d -s $disk | cut -d' ' -f4)
-        if [ -z $part1 ]; then
+        parted -a opt -s "$disk" mklabel gpt mkpart primary 0% 100%
+        part1=$(partprobe -d -s "$disk" | cut -d' ' -f4)
+        if [ -z "$part1" ]; then
             echo "$disk: partition 1 not found after partitioning."
             exit 1
         fi
         # wait for block device
-        wait_for_device $disk$part1
+        wait_for_device "${disk}""${part1}"
     else
         echo "$disk: partition 1 found. Skipping partitioning."
         skipped_part=("${skipped_part[@]}" "$disk")
@@ -509,65 +503,66 @@ for disk in "${data_disks[@]}"; do
 done
 
 # set format target
-target=
+target_md=
 target_uuid=
 format_target=1
 # check if there was only one skipped disk during partitioning
-if [ ${#skipped_part[@]} -eq $numdisks ] && [ $numdisks -eq 1 ]; then
-    target=${skipped_part[0]}
-    read target_uuid target_fs < <(blkid -u filesystem $target | awk -F "[= ]" '{print $3" "$5}'|tr -d "\"")
-    if [ ! -z $target_fs ]; then
+if [ ${#skipped_part[@]} -eq "$numdisks" ] && [ "$numdisks" -eq 1 ]; then
+    target_md=${skipped_part[0]}
+    read -r target_uuid target_fs < <(blkid -u filesystem "$target_md" | awk -F "[= ]" '{print $3" "$5}'|tr -d "\"")
+    if [ ! -z "$target_fs" ]; then
         format_target=0
     fi
 fi
 
 # check if disks are already in raid set
 raid_resized=0
-if [ $raid_level -ge 0 ]; then
+if [ "$raid_level" -ge 0 ]; then
     # redirect mountpath if gluster for bricks
     saved_mp=$mountpath
-    if [ $server_type == "glusterfs" ]; then
+    if [ "$server_type" == "glusterfs" ]; then
         mountpath=$gluster_brick_mountpath
     fi
     format_target=0
     md_preexist=0
-    if [ $filesystem == "btrfs" ]; then
-        if [ $raid_level -ne 0 ]; then
+    if [ "$filesystem" == "btrfs" ]; then
+        if [ "$raid_level" -ne 0 ]; then
             echo "btrfs with non-RAID 0 is not supported."
             exit 1
         fi
     else
         # find any pre-existing targets
         set +e
-        mdadm --detail --scan
-        if [ $? -eq 0 ]; then
-            target=($(find /dev/md* -maxdepth 0 -type b))
+        if mdadm --detail --scan; then
+            mapfile -t target < <(find /dev/md* -maxdepth 0 -type b)
             if [ ${#target[@]} -ne 0 ]; then
-                target=${target[0]}
                 md_preexist=1
-                echo "Existing array found: $target"
+                target_md=${target[0]}
+                echo "Existing array found: $target_md"
                 # refresh target uuid to md target
-                read target_uuid < <(blkid ${target} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
+                read -r target_uuid < <(blkid "$target_md" | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
             else
                 echo "No pre-existing md target could be found"
             fi
         fi
         set -e
-        if [ -z $target ]; then
-            target=/dev/md0
-            echo "Setting default target: $target"
+        if [ -z "$target_md" ]; then
+            target_md=/dev/md0
+            echo "Setting default target: $target_md"
         fi
     fi
     declare -a raid_array
     declare -a all_raid_disks
     set +e
     for disk in "${data_disks[@]}"; do
-        if [ $filesystem == "btrfs" ]; then
+        if [ "$filesystem" == "btrfs" ]; then
             btrfs device scan "${disk}1"
+            rc=$?
         else
             mdadm --examine "${disk}1"
+            rc=$?
         fi
-        if [ $? -ne 0 ]; then
+        if [ $rc -ne 0 ]; then
             raid_array=("${raid_array[@]}" "${disk}1")
         fi
         all_raid_disks=("${all_raid_disks[@]}" "${disk}1")
@@ -575,64 +570,64 @@ if [ $raid_level -ge 0 ]; then
     set -e
     no_raid_count=${#raid_array[@]}
     # take action depending upon no raid count
-    if [ $no_raid_count -eq 0 ]; then
+    if [ "$no_raid_count" -eq 0 ]; then
         echo "No disks require RAID setup"
-    elif [ $no_raid_count -eq $numdisks ]; then
-        echo "$numdisks data disks require RAID setup: ${raid_array[@]}"
-        if [ $filesystem == "btrfs" ]; then
-            if [ $raid_level -eq 0 ]; then
-                mkfs.btrfs -d raid0 ${raid_array[@]}
+    elif [ "$no_raid_count" -eq "$numdisks" ]; then
+        echo "$numdisks data disks require RAID setup: ${raid_array[*]}"
+        if [ "$filesystem" == "btrfs" ]; then
+            if [ "$raid_level" -eq 0 ]; then
+                mkfs.btrfs -d raid0 "${raid_array[@]}"
             else
-                mkfs.btrfs -m raid${raid_level} ${raid_array[@]}
+                mkfs.btrfs -m raid"${raid_level}" "${raid_array[@]}"
             fi
         else
             set +e
             # first check if this is a pre-existing array
             mdadm_detail=$(mdadm --detail --scan)
-            if [ -z $mdadm_detail ]; then
+            if [ -z "$mdadm_detail" ]; then
                 set -e
-                mdadm --create --verbose $target --level=$raid_level --raid-devices=$numdisks ${raid_array[@]}
+                mdadm --create --verbose $target_md --level="$raid_level" --raid-devices="$numdisks" "${raid_array[@]}"
                 format_target=1
             else
                 if [ $md_preexist -eq 0 ]; then
                     echo "Could not determine pre-existing md target"
                     exit 1
                 fi
-                echo "Not creating a new array since pre-exsting md target found: $target"
+                echo "Not creating a new array since pre-exsting md target found: $target_md"
             fi
             set -e
         fi
     else
         echo "Mismatch of non-RAID disks $no_raid_count to total disks $numdisks."
-        if [ $raid_level -ne 0 ]; then
+        if [ "$raid_level" -ne 0 ]; then
             echo "Cannot resize with RAID level of $raid_level."
             exit 1
         fi
-        if [ $filesystem == "btrfs" ]; then
+        if [ "$filesystem" == "btrfs" ]; then
             # add new block devices first
-            echo "Adding devices ${raid_array[@]} to $mountpath"
-            btrfs device add ${raid_array[@]} $mountpath
+            echo "Adding devices ${raid_array[*]} to $mountpath"
+            btrfs device add "${raid_array[@]}" $mountpath
             raid_resized=1
         else
             # add new block device first
-            echo "Adding devices ${raid_array[@]} to $target"
-            mdadm --add $target ${raid_array[@]}
+            echo "Adding devices ${raid_array[*]} to $target_md"
+            mdadm --add $target_md "${raid_array[@]}"
             # grow the array
-            echo "Growing array $target to a total of $numdisks devices"
-            mdadm --grow --raid-devices=$numdisks $target
+            echo "Growing array $target_md to a total of $numdisks devices"
+            mdadm --grow --raid-devices="$numdisks" "$target_md"
             raid_resized=1
         fi
     fi
     # dump diagnostic info
-    if [ $filesystem == "btrfs" ]; then
+    if [ "$filesystem" == "btrfs" ]; then
         btrfs filesystem show
     else
         cat /proc/mdstat
-        mdadm --detail $target
+        mdadm --detail $target_md
     fi
     # get uuid of first disk as target uuid if not populated
-    if [ -z $target_uuid ]; then
-        read target_uuid < <(blkid ${all_raid_disks[0]} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
+    if [ -z "$target_uuid" ]; then
+        read -r target_uuid < <(blkid "${all_raid_disks[0]}" | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
     fi
     # restore mountpath
     mountpath=$saved_mp
@@ -641,49 +636,47 @@ fi
 
 # create filesystem on target device
 if [ $format_target -eq 1 ]; then
-    if [ -z $target ]; then
+    if [ -z "$target_md" ]; then
         echo "Target not specified for format"
         exit 1
     fi
-    echo "Creating filesystem on $target."
-    if [ $filesystem == "btrfs" ]; then
-        mkfs.btrfs $target
+    echo "Creating filesystem on $target_md"
+    if [ "$filesystem" == "btrfs" ]; then
+        mkfs.btrfs "$target_md"
     elif [[ $filesystem == ext* ]]; then
-        mkfs.${filesystem} -m 0 $target
+        mkfs."${filesystem}" -m 0 "$target_md"
     else
         echo "Unknown filesystem: $filesystem"
         exit 1
     fi
     # refresh target uuid
-    read target_uuid < <(blkid ${target} | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
+    read -r target_uuid < <(blkid "${target_md}" | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
 fi
 
 # mount filesystem
 if [ $attach_disks -eq 0 ]; then
     # redirect mountpath if gluster for bricks
     saved_mp=$mountpath
-    if [ $server_type == "glusterfs" ]; then
+    if [ "$server_type" == "glusterfs" ]; then
         mountpath=$gluster_brick_mountpath
     fi
     # check if filesystem is mounted (active array)
     mounted=0
     set +e
-    mountpoint -q $mountpath
-    if [ $? -eq 0 ]; then
+    if mountpoint -q $mountpath; then
         mounted=1
     fi
     set -e
     # add fstab entry and mount
     if [ $mounted -eq 0 ]; then
-        if [ -z $target_uuid ]; then
+        if [ -z "$target_uuid" ]; then
             echo "Target UUID not populated!"
             exit 1
         fi
         # check if fstab entry exists
         add_fstab=0
         set +e
-        grep "^UUID=${target_uuid}" /etc/fstab
-        if [ $? -ne 0 ]; then
+        if ! grep "^UUID=${target_uuid}" /etc/fstab; then
             add_fstab=1
         fi
         set -e
@@ -691,14 +684,14 @@ if [ $attach_disks -eq 0 ]; then
         if [ $add_fstab -eq 1 ]; then
             echo "Adding $target_uuid to mountpoint $mountpath to /etc/fstab"
             # construct mount options
-            if [ -z $mount_options ]; then
+            if [ -z "$mount_options" ]; then
                 mount_options="defaults"
             else
                 mount_options="defaults,$mount_options"
             fi
             if [ $premium_storage -eq 1 ]; then
                 # disable barriers due to cache
-                if [ $filesystem == "btrfs" ]; then
+                if [ "$filesystem" == "btrfs" ]; then
                     # also enable ssd optimizations on btrfs
                     mount_options+=",nobarrier,ssd"
                 else
@@ -714,10 +707,10 @@ if [ $attach_disks -eq 0 ]; then
         mkdir -p $mountpath
         # mount
         mount $mountpath
-        if [ $server_type == "nfs" ]; then
+        if [ "$server_type" == "nfs" ]; then
             # ensure proper permissions
             chmod 1777 $mountpath
-        elif [ $server_type == "glusterfs" ]; then
+        elif [ "$server_type" == "glusterfs" ]; then
             # create the brick location
             mkdir -p $gluster_brick_location
         fi
@@ -734,11 +727,11 @@ fi
 if [ $raid_resized -eq 1 ]; then
     # redirect mountpath if gluster for bricks
     saved_mp=$mountpath
-    if [ $server_type == "glusterfs" ]; then
+    if [ "$server_type" == "glusterfs" ]; then
         mountpath=$gluster_brick_mountpath
     fi
     echo "Resizing filesystem at $mountpath."
-    if [ $filesystem == "btrfs" ]; then
+    if [ "$filesystem" == "btrfs" ]; then
         btrfs filesystem resize max $mountpath
         # rebalance data and metadata across all devices
         if [ $rebalance -eq 1 ]; then
@@ -759,9 +752,9 @@ fi
 
 # set up server_type software
 if [ $attach_disks -eq 0 ]; then
-    if [ $server_type == "nfs" ]; then
+    if [ "$server_type" == "nfs" ]; then
         setup_nfs
-    elif [ $server_type == "glusterfs" ]; then
+    elif [ "$server_type" == "glusterfs" ]; then
         flush_glusterfs_firewall_rules
         setup_glusterfs
     else
@@ -769,7 +762,7 @@ if [ $attach_disks -eq 0 ]; then
         exit 1
     fi
     # setup samba server if specified
-    if [ ! -z $samba_options ]; then
+    if [ ! -z "$samba_options" ]; then
         # install samba
         apt-get install -y -q --no-install-recommends samba
         # parse options
@@ -791,16 +784,16 @@ cat >> /etc/samba/smb.conf << EOF
   create mask = $smb_create_mask
   directory mask = $smb_directory_mask
 EOF
-        if [ $smb_username != "nobody" ]; then
+        if [ "$smb_username" != "nobody" ]; then
             # create group
-            groupadd -o -g $smb_gid $smb_username
+            groupadd -o -g "$smb_gid" "$smb_username"
             # create user (disable login)
-            useradd -N -g $smb_gid -p '!' -o -u $smb_uid -s /bin/bash -m -d /home/$smb_username $smb_username
+            useradd -N -g "$smb_gid" -p '!' -o -u "$smb_uid" -s /bin/bash -m -d /home/"${smb_username}" "$smb_username"
             # add user to smb tdbsam
-            echo -ne "${smb_password}\n${smb_password}\n" | smbpasswd -a -s $smb_username
-            smbpasswd -e $smb_username
+            echo -ne "${smb_password}\\n${smb_password}\\n" | smbpasswd -a -s "$smb_username"
+            smbpasswd -e "$smb_username"
             # modify smb.conf global
-            sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto" /etc/samba/smb.conf
+            sed -i "/^\\[global\\]/a load printers = no\\nprinting = bsd\\nprintcap name = /dev/null\\ndisable spoolss = yes\\nsecurity = user\\nserver signing = auto\\nsmb encrypt = auto" /etc/samba/smb.conf
             # modify smb.conf share
 cat >> /etc/samba/smb.conf << EOF
   guest ok = no
@@ -809,7 +802,7 @@ cat >> /etc/samba/smb.conf << EOF
 EOF
         else
             # modify smb.conf global
-            sed -i "/^\[global\]/a load printers = no\nprinting = bsd\nprintcap name = /dev/null\ndisable spoolss = yes\nsecurity = user\nserver signing = auto\nsmb encrypt = auto\nguest account = $smb_username" /etc/samba/smb.conf
+            sed -i "/^\\[global\\]/a load printers = no\\nprinting = bsd\\nprintcap name = /dev/null\\ndisable spoolss = yes\\nsecurity = user\\nserver signing = auto\\nsmb encrypt = auto\\nguest account = $smb_username" /etc/samba/smb.conf
             # modify smb.conf share
 cat >> /etc/samba/smb.conf << EOF
   guest ok = yes

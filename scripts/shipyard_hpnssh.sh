@@ -6,7 +6,7 @@ set -o pipefail
 offer=$1
 sku=$2
 
-if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
+if [ "$offer" == "ubuntuserver" ] || [ "$offer" == "debian" ]; then
     if [[ $sku == 14.04* ]]; then
         srvrestart="initctl restart sshd"
         mkdir /tmp/hpnssh
@@ -32,9 +32,7 @@ if [ $offer == "ubuntuserver" ] || [ $offer == "debian" ]; then
         exit 1
     fi
     # modify sshd config settings
-    echo "HPNDisabled=no" >> /etc/ssh/sshd_config
-    echo "TcpRcvBufPoll=yes" >> /etc/ssh/sshd_config
-    echo "NoneEnabled=yes" >> /etc/ssh/sshd_config
+    { echo "HPNDisabled=no"; echo "TcpRcvBufPoll=yes"; echo "NoneEnabled=yes"; } >> /etc/ssh/sshd_config
     # restart sshd
     $srvrestart
 elif [[ $offer == centos* ]] || [[ $offer == "rhel" ]] || [[ $offer == "oracle-linux" ]]; then

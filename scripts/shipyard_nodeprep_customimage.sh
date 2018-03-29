@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC1091
+
 set -e
 set -o pipefail
 
@@ -74,7 +76,7 @@ while getopts "h?abcef:m:np:t:v:x:" opt; do
         t)
             p2p=${OPTARG,,}
             IFS=':' read -ra p2pflags <<< "$p2p"
-            if [ ${p2pflags[0]} == "true" ]; then
+            if [ "${p2pflags[0]}" == "true" ]; then
                 p2penabled=1
             else
                 p2penabled=0
@@ -94,8 +96,7 @@ shift $((OPTIND-1))
 check_for_buggy_ntfs_mount() {
     # Check to ensure sdb1 mount is not mounted as ntfs
     set +e
-    mount | grep /dev/sdb1 | grep fuseblk
-    if [ $? -eq 0 ]; then
+    if mount | grep /dev/sdb1 | grep fuseblk; then
         log ERROR "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
         exit 1
     fi
@@ -104,7 +105,7 @@ check_for_buggy_ntfs_mount() {
 
 save_startup_to_volatile() {
     set +e
-    touch $AZ_BATCH_NODE_ROOT_DIR/volatile/startup/.save
+    touch "${AZ_BATCH_NODE_ROOT_DIR}"/volatile/startup/.save
     set -e
 }
 
@@ -127,7 +128,7 @@ net.ipv4.tcp_abort_on_overflow=1
 net.ipv4.route.flush=1
 EOF
     fi
-    if [ "$1" == "ubuntu" ] && [ "$2" == 14.04* ]; then
+    if [[ "$1" == "ubuntu" ]] && [[ "$2" == 14.04* ]]; then
         service procps start
     else
         service procps reload
@@ -139,7 +140,7 @@ blacklist_kernel_upgrade() {
     shift
     local sku=$1
     shift
-    if [ $offer != "ubuntu" ]; then
+    if [ "$offer" != "ubuntu" ]; then
         log DEBUG "No kernel upgrade blacklist required on $offer $sku"
         return
     fi
@@ -148,15 +149,14 @@ blacklist_kernel_upgrade() {
     local rc=$?
     set -e
     if [ $rc -ne 0 ]; then
-        sed -i "/^Unattended-Upgrade::Package-Blacklist {/alinux-azure\nlinux-cloud-tools-azure\nlinux-headers-azure\nlinux-image-azure\nlinux-tools-azure" /etc/apt/apt.conf.d/50unattended-upgrades
+        sed -i "/^Unattended-Upgrade::Package-Blacklist {/a\"linux-azure\";\\n\"linux-cloud-tools-azure\";\\n\"linux-headers-azure\";\\n\"linux-image-azure\";\\n\"linux-tools-azure\";" /etc/apt/apt.conf.d/50unattended-upgrades
         log INFO "Added linux-azure to package blacklist for unattended upgrades"
     fi
 }
 
 check_for_nvidia_docker() {
     set +e
-    nvidia-docker version
-    if [ $? -ne 0 ]; then
+    if ! nvidia-docker version; then
         log ERROR "nvidia-docker2 not installed"
         exit 1
     fi
@@ -165,7 +165,8 @@ check_for_nvidia_docker() {
 
 check_for_nvidia_driver() {
     set +e
-    local out=$(lsmod)
+    local out
+    out=$(lsmod)
     echo "$out" | grep -i nvidia > /dev/null
     local rc=$?
     set -e
@@ -182,7 +183,8 @@ check_for_nvidia() {
     log INFO "Checking for Nvidia Hardware"
     # first check for card
     set +e
-    local out=$(lspci)
+    local out
+    out=$(lspci)
     echo "$out" | grep -i nvidia > /dev/null
     local rc=$?
     set -e
@@ -190,7 +192,7 @@ check_for_nvidia() {
     if [ $rc -ne 0 ]; then
         log INFO "No Nvidia card(s) detected!"
     else
-        blacklist_kernel_upgrade $1 $2
+        blacklist_kernel_upgrade "$1" "$2"
         check_for_nvidia_driver
         # enable persistence mode
         nvidia-smi -pm 1
@@ -200,7 +202,8 @@ check_for_nvidia() {
 
 check_docker_root_dir() {
     set +e
-    local rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
+    local rootdir
+    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     set -e
     log DEBUG "Graph root: $rootdir"
     if [ -z "$rootdir" ]; then
@@ -217,8 +220,7 @@ check_for_docker_host_engine() {
     # start docker service
     systemctl start docker.service
     systemctl status docker.service
-    docker version
-    if [ $? -ne 0 ]; then
+    if ! docker version; then
         log ERROR "Docker not installed"
         exit 1
     fi
@@ -241,16 +243,16 @@ check_for_glusterfs_on_compute() {
 
 check_for_storage_cluster_software() {
     local rc=0
-    if [ ! -z $sc_args ]; then
-        for sc_arg in ${sc_args[@]}; do
+    if [ ! -z "$sc_args" ]; then
+        for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             local server_type=${sc[0]}
-            if [ $server_type == "nfs" ]; then
+            if [ "$server_type" == "nfs" ]; then
                 set +e
                 mount.nfs4 -V
                 local rc=$?
                 set -e
-            elif [ $server_type == "glusterfs" ]; then
+            elif [ "$server_type" == "glusterfs" ]; then
                 set +e
                 glusterfs -V
                 local rc=$?
@@ -281,8 +283,8 @@ mount_azureblob_container() {
     ./azureblob-mount.sh
     chmod 700 azureblob-mount.sh
     chown root:root azureblob-mount.sh
-    chmod 600 *.cfg
-    chown root:root *.cfg
+    chmod 600 ./*.cfg
+    chown root:root ./*.cfg
 }
 
 docker_pull_image() {
@@ -291,7 +293,8 @@ docker_pull_image() {
     set +e
     local retries=60
     while [ $retries -gt 0 ]; do
-        local pull_out=$(docker pull $image 2>&1)
+        local pull_out
+        pull_out=$(docker pull "$image" 2>&1)
         local rc=$?
         if [ $rc -eq 0 ]; then
             echo "$pull_out"
@@ -299,18 +302,24 @@ docker_pull_image() {
         fi
         # non-zero exit code: check if pull output has toomanyrequests,
         # connection resets, or image config error
-        if [[ ! -z "$(grep 'toomanyrequests' <<<$pull_out)" ]] || [[ ! -z "$(grep 'connection reset by peer' <<<$pull_out)" ]] || [[ ! -z "$(grep 'error pulling image configuration' <<<$pull_out)" ]]; then
+        local tmr
+        tmr=$(grep 'toomanyrequests' <<<"$pull_out")
+        local crbp
+        crbp=$(grep 'connection reset by peer' <<<"$pull_out")
+        local epic
+        epic=$(grep 'error pulling image configuration' <<<"$pull_out")
+        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
             exit $rc
         fi
-        retries=retries-1
+        retries=$((retries-1))
         if [ $retries -le 0 ]; then
             log ERROR "Could not pull docker image: $image"
             exit $rc
         fi
-        sleep $[($RANDOM % 5) + 1]s
+        sleep $((RANDOM % 5 + 1))s
     done
     set -e
 }
@@ -321,7 +330,7 @@ singularity_setup() {
     shift
     local sku=$1
     shift
-    if [ $offer == "ubuntu" ]; then
+    if [ "$offer" == "ubuntu" ]; then
         if [[ $sku != 16.04* ]]; then
             log WARNING "Singularity not supported on $offer $sku"
             return
@@ -384,22 +393,23 @@ process_fstab_entry() {
     local mountpoint=$2
     local fstab_entry=$3
     log INFO "Creating host directory for $desc at $mountpoint"
-    mkdir -p $mountpoint
-    chmod 777 $mountpoint
+    mkdir -p "$mountpoint"
+    chmod 777 "$mountpoint"
     log INFO "Adding $mountpoint to fstab"
-    echo $fstab_entry >> /etc/fstab
+    echo "$fstab_entry" >> /etc/fstab
     tail -n1 /etc/fstab
     log INFO "Mounting $mountpoint"
-    local START=$(date -u +"%s")
+    local START
+    START=$(date -u +"%s")
     set +e
     while :
     do
-        mount $mountpoint
-        if [ $? -eq 0 ]; then
+        if mount "$mountpoint"; then
             break
         else
-            local NOW=$(date -u +"%s")
-            local DIFF=$((($NOW-$START)/60))
+            local NOW
+            NOW=$(date -u +"%s")
+            local DIFF=$(((NOW-START)/60))
             # fail after 5 minutes of attempts
             if [ $DIFF -ge 5 ]; then
                 log ERROR "Could not mount $desc on $mountpoint"
@@ -458,14 +468,14 @@ check_for_buggy_ntfs_mount
 save_startup_to_volatile
 
 # set python env vars
-LC_ALL=en_US.UTF-8
-PYTHONASYNCIODEBUG=1
+export LC_ALL=en_US.UTF-8
+export PYTHONASYNCIODEBUG=1
 
 # store node prep start
 if command -v python3 > /dev/null 2>&1; then
-    npstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
+    npstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
 else
-    npstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
+    npstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
 fi
 
 # set node prep status files
@@ -473,20 +483,20 @@ nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
 cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
 # create shared mount points
-mkdir -p $MOUNTS_PATH
+mkdir -p "$MOUNTS_PATH"
 
 # decrypt encrypted creds
-if [ ! -z $encrypted ]; then
+if [ ! -z "$encrypted" ]; then
     # convert pfx to pem
     pfxfile=$AZ_BATCH_CERTIFICATES_DIR/sha1-$encrypted.pfx
     privatekey=$AZ_BATCH_CERTIFICATES_DIR/key.pem
-    openssl pkcs12 -in $pfxfile -out $privatekey -nodes -password file:$pfxfile.pw
+    openssl pkcs12 -in "$pfxfile" -out "$privatekey" -nodes -password file:"${pfxfile}".pw
     # remove pfx-related files
-    rm -f $pfxfile $pfxfile.pw
+    rm -f "$pfxfile" "${pfxfile}".pw
     # decrypt creds
-    SHIPYARD_STORAGE_ENV=`echo $SHIPYARD_STORAGE_ENV | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+    SHIPYARD_STORAGE_ENV=$(echo "$SHIPYARD_STORAGE_ENV" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
     if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
-        DOCKER_LOGIN_PASSWORD=`echo $DOCKER_LOGIN_PASSWORD | base64 -d | openssl rsautl -decrypt -inkey $privatekey`
+        DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
     fi
 fi
 
@@ -499,33 +509,33 @@ fi
 
 # check for docker host engine
 check_for_docker_host_engine
-check_docker_root_dir $DISTRIB_ID
+check_docker_root_dir "$DISTRIB_ID"
 
 # check for nvidia card/driver/docker
-check_for_nvidia $DISTRIB_ID $DISTRIB_RELEASE
+check_for_nvidia "$DISTRIB_ID" "$DISTRIB_RELEASE"
 
 # mount azure resources (this must be done every boot)
 if [ $azurefile -eq 1 ]; then
-    mount_azurefile_share $DISTRIB_ID $DISTRIB_RELEASE
+    mount_azurefile_share "$DISTRIB_ID" "$DISTRIB_RELEASE"
 fi
 if [ $azureblob -eq 1 ]; then
-    mount_azureblob_container $DISTRIB_ID $DISTRIB_RELEASE
+    mount_azureblob_container "$DISTRIB_ID" "$DISTRIB_RELEASE"
 fi
 
 # check if we're coming up from a reboot
-if [ -f $cascadefailed ]; then
+if [ -f "$cascadefailed" ]; then
     log ERROR "$cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
-elif [ -f $nodeprepfinished ]; then
+elif [ -f "$nodeprepfinished" ]; then
     # mount any storage clusters
-    if [ ! -z $sc_args ]; then
+    if [ ! -z "$sc_args" ]; then
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
         IFS='#' read -ra fstabs <<< "$fstab_mounts"
         i=0
-        for sc_arg in ${sc_args[@]}; do
+        for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
-            mount $MOUNTS_PATH/${sc[1]}
+            mount "${MOUNTS_PATH}"/"${sc[1]}"
         done
     fi
     # mount any custom mounts
@@ -535,7 +545,7 @@ elif [ -f $nodeprepfinished ]; then
             # eval and split fstab var to expand vars
             fstab_entry=$(eval echo "$fstab")
             IFS=' ' read -ra parts <<< "$fstab_entry"
-            mount ${parts[1]}
+            mount "${parts[1]}"
         done
     fi
     log INFO "$nodeprepfinished file exists, assuming successful completion of node prep"
@@ -543,13 +553,13 @@ elif [ -f $nodeprepfinished ]; then
 fi
 
 # get ip address of eth0
-ipaddress=`ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1`
+ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
 
 # one-time setup
 if [ $networkopt -eq 1 ]; then
     # do not fail script if this function fails
     set +e
-    optimize_tcp_network_settings $DISTRIB_ID $DISTRIB_RELEASE
+    optimize_tcp_network_settings "$DISTRIB_ID" "$DISTRIB_RELEASE"
     set -e
     # set sudoers to not require tty
     sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
@@ -564,16 +574,16 @@ fi
 check_for_storage_cluster_software
 
 # mount any storage clusters
-if [ ! -z $sc_args ]; then
+if [ ! -z "$sc_args" ]; then
     # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
     fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
     IFS='#' read -ra fstabs <<< "$fstab_mounts"
     i=0
-    for sc_arg in ${sc_args[@]}; do
+    for sc_arg in "${sc_args[@]}"; do
         IFS=':' read -ra sc <<< "$sc_arg"
         fstab_entry="${fstabs[$i]}"
         process_fstab_entry "$sc_arg" "$MOUNTS_PATH/${sc[1]}" "$fstab_entry"
-        i=$(($i + 1))
+        i=$((i + 1))
     done
 fi
 
@@ -589,11 +599,11 @@ if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
 fi
 
 # retrieve docker images related to data movement
-docker_pull_image alfpark/blobxfer:$blobxferversion
-docker_pull_image alfpark/batch-shipyard:${version}-cargo
+docker_pull_image alfpark/blobxfer:"${blobxferversion}"
+docker_pull_image alfpark/batch-shipyard:"${version}"-cargo
 
 # set up singularity
-singularity_setup $DISTRIB_ID $DISTRIB_RELEASE
+singularity_setup "$DISTRIB_ID" "$DISTRIB_RELEASE"
 
 # login to registry servers (do not specify -e as creds have been decrypted)
 ./registry_login.sh
@@ -602,9 +612,9 @@ if [ -f singularity-registry-login ]; then
 fi
 
 # touch node prep finished file to preserve idempotency
-touch $nodeprepfinished
+touch "$nodeprepfinished"
 # touch cascade failed file, this will be removed once cascade is successful
-touch $cascadefailed
+touch "$cascadefailed"
 
 # execute cascade
 set +e
@@ -618,9 +628,9 @@ else
 fi
 # store docker cascade start
 if command -v python3 > /dev/null 2>&1; then
-    drpstart=`python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'`
+    drpstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
 else
-    drpstart=`python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'`
+    drpstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
 fi
 # create env file
 envfile=.cascade_envfile
@@ -632,14 +642,14 @@ sku=$sku
 npstart=$npstart
 drpstart=$drpstart
 p2p=$p2p
-`env | grep SHIPYARD_`
-`env | grep AZ_BATCH_`
-`env | grep DOCKER_LOGIN_`
-`env | grep SINGULARITY_`
+$(env | grep SHIPYARD_)
+$(env | grep AZ_BATCH_)
+$(env | grep DOCKER_LOGIN_)
+$(env | grep SINGULARITY_)
 EOF
 chmod 600 $envfile
 # pull image
-docker_pull_image alfpark/batch-shipyard:${version}-cascade
+docker_pull_image alfpark/batch-shipyard:"${version}"-cascade
 # set singularity options
 singularity_binds=
 if [ ! -z $singularity_basedir ]; then
@@ -649,15 +659,16 @@ if [ ! -z $singularity_basedir ]; then
 fi
 # launch container
 log DEBUG "Starting Cascade"
+# shellcheck disable=SC2086
 docker run $detached --net=host --env-file $envfile \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v /etc/passwd:/etc/passwd:ro \
     -v /etc/group:/etc/group:ro \
-    $singularity_binds \
-    -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR \
-    -w $AZ_BATCH_TASK_WORKING_DIR \
+    ${singularity_binds} \
+    -v "$AZ_BATCH_NODE_ROOT_DIR":"$AZ_BATCH_NODE_ROOT_DIR" \
+    -w "$AZ_BATCH_TASK_WORKING_DIR" \
     -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-    alfpark/batch-shipyard:${version}-cascade &
+    alfpark/batch-shipyard:"${version}"-cascade &
 cascadepid=$!
 
 # if not in p2p mode, then wait for cascade exit
@@ -666,19 +677,19 @@ if [ $p2penabled -eq 0 ]; then
     rc=$?
     if [ $rc -ne 0 ]; then
         log ERROR "cascade exited with non-zero exit code: $rc"
-        rm -f $nodeprepfinished
+        rm -f "$nodeprepfinished"
         exit $rc
     fi
 fi
 set -e
 
 # remove cascade failed file
-rm -f $cascadefailed
+rm -f "$cascadefailed"
 
 # block for images if necessary
-$AZ_BATCH_TASK_WORKING_DIR/wait_for_images.sh $block
+"${AZ_BATCH_TASK_WORKING_DIR}"/wait_for_images.sh "$block"
 
 # clean up cascade env file if block
-if [ ! -z $block ]; then
+if [ ! -z "$block" ]; then
     rm -f $envfile
 fi
