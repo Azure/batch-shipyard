@@ -4,7 +4,7 @@
 FROM alfpark/libtorrent:1.0.11-py36
 
 # base image containing singularity
-FROM alfpark/singularity:2.4.4
+FROM alfpark/singularity:2.4.5
 
 FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>

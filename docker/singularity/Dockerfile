@@ -3,7 +3,7 @@
 FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
-ENV SINGULARITY_VERSION=2.4.4
+ENV SINGULARITY_VERSION=2.4.5
 
 RUN apk update \
     && apk add --update --no-cache \

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- Integrate shellcheck
+- Singularity updated to 2.4.5
+- Update dependencies to latest
+
+### Fixed
+- Kernel unattended upgrades causes GPU jobs to fail on reboot (#174)
+
 ## [3.4.0] - 2018-03-26
 ### Added
 - Support for adding network access rules to the remote access port (SSH or

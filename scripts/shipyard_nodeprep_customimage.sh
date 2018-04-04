@@ -13,7 +13,7 @@ log() {
 
 # consts
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
-SINGULARITY_VERSION=2.4.4
+SINGULARITY_VERSION=2.4.5
 
 # globals
 azureblob=0
