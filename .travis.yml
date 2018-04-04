@@ -14,6 +14,10 @@ env:
   - secure: "CsiojO04pOwYbCduqXcZfSsJZ01n0bc4hflza4tk9ZHLotcZkCRKGVsemdPVKZVNlzy+gUpzyc4Tc4/h0391piQ51CCTThde2csDWbXssoO71b4U/jIuKhOqMHyp+5dGznBXOcFye9d5gpdHF0z3AZbo9V7zkuO+3YD/ES1YLWJ5+6RRAR11FRofipfNFYQ7OPgPzrqI0IHHKOYG02JeN7ZmpX+fEitH/J561y9RMIhEtk2udBd51JSTIYao7IENEpHoD41CwwlpOLWKhr7oo9wmyOTdvwyNzLh6Z/CxBUMvmvKn4zsK2d/WzM77EwN4bcBwu2vJmfR+Hi5CD61L9KdhVM+rWUn8+OJUmiNo+ZYVM5w/cHdyC7BYe5hHDAEVmvg0dQIxFXTov5+PjAi0HjA2RNrI2i2ABX1N8wrtPCxlkL8Pnbb93DfTPWmYQVS6LsXrh77KuD7gRxu1s5KAmlfcG//bGuKvpDz6vm7+/cXxnB4sZX+Et9S/F1GV1VYOAr3YwLuE2Tl8MPyoUJa/PdK+md3klL9WteQWXJHLcLbnt34VvstF0jxGh/hqI/3lKtN1U5bsfRbGNBAvYGbGQKpVleF5/0yDLI5/kWI7bIuEF4FHYgIOSvIAzVdC+GXYAeXgrjlOHDFVKwOGL1lhvY3nA/fbENNhHeEN3RQc6N8="
   - secure: "XgD2xFqMvimEDzwRvUwNmA7EAl6Y/ydwgXXq+O4eEE09Xl/UQvmCZ4soTwFqOUnf798Xqn6R2qXHdqpl2l4IXMILa4LteNUzRKd0txOj2lPGftFs1s09Odu729PkoEs9qbM446yjvK+PhbDUvD9GboQ3sWbzYSUPPDiJuPWiJ5KasooGdyfahV542hBo2iOc0Ezq+sziBwBffY407XcX7mTmXjEtQuwSezJGWynHUSD7gIywCXAuzTqdK3ikYYdSJTUn6SnlZZlLuICoOzVULT97VzA+o+puFU/rSnG9+czUUcXILpDzjpl231b858sQ7RdLocPdTiyIVx06FOfW/XfKUyDbRHGhiVZzsJ4xDMxtQk9haLb5NJjwZGFWmyy2tHnj86yNwxwmocbiRymqC2sz/rcIpmwMneKIGJG9MuXRMlGqeMxCcDb3FoaoUp6JIflkx5qsmgsaTEs4m0tcdyivf6ugW1dpBIGek8sf/LISmdakZTNeJxGUyMNYRFdSRWTTZvQ4fj3ZVxLoTCHLszwwHZ1l3AstbiYk86/5Zn8AS+5cWnVEZP3ayPkWqVKMjLxQrHQsLKGgpJBjDXTUp4NixssgXWmDmJMuME0TEjoT58hhoWDQk9PdKnpiiOHyne5jAVliTwhsDcKYCaqt9F8AAAOyuRkWobU32YpIEnU="
 
+before_install:
+  - wget -c https://goo.gl/ZzKHFv -O - | tar -xvJ -C /tmp/
+  - PATH="/tmp/shellcheck-latest:$PATH"
+
 install:
   - travis_retry pip install -r requirements.txt
   - travis_retry pip install --no-deps -r req_nodeps.txt
@@ -23,6 +27,7 @@ install:
 script:
   - flake8 --statistics shipyard.py convoy/*.py
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8 --statistics cascade/*.py cargo/*.py; fi
+  - shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh
 
 after_success:
 - |
