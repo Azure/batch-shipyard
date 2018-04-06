@@ -70,7 +70,7 @@ echo ""
 # check server_type software
 if [ "$server_type" == "nfs" ]; then
     echo "NFS service status:"
-    systemctl status nfs-kernel-server.service
+    systemctl --no-pager status nfs-kernel-server.service
     echo ""
     echo "exportfs:"
     exportfs -v
@@ -82,7 +82,7 @@ if [ "$server_type" == "nfs" ]; then
     netstat -tn | grep :2049
 elif [ "$server_type" == "glusterfs" ]; then
     echo "glusterfs service status:"
-    systemctl status glusterfs-server
+    systemctl --no-pager status glusterfs-server
     echo ""
     gluster volume info all
     echo ""
@@ -148,7 +148,7 @@ fi
 if [ $samba -eq 1 ]; then
     echo ""
     echo "smbd service status:"
-    systemctl status smbd.service
+    systemctl --no-pager status smbd.service
     echo ""
     echo "smbstatus:"
     smbstatus

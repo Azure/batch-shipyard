@@ -108,9 +108,11 @@ gluster_add_bricks() {
     echo "Adding bricks to gluster volume $gluster_volname $volarg ($bricks)"
     if [[ "$volume_type" == stripe* ]]; then
         # this should be gated by remotefs.py
-        echo -e "y\\n" | gluster volume add-brick $gluster_volname $volarg "$bricks"
+        # shellcheck disable=SC2086
+        echo -e "y\\n" | gluster volume add-brick $gluster_volname ${volarg} ${bricks}
     else
-        gluster volume add-brick $gluster_volname $volarg "$bricks"
+        # shellcheck disable=SC2086
+        gluster volume add-brick $gluster_volname ${volarg} ${bricks}
     fi
     # get info and status
     gluster volume info $gluster_volname

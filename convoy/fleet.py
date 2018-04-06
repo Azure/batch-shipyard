@@ -108,14 +108,6 @@ _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
 )
-_NODEPREP_CUSTOMIMAGE_FILE = (
-    'shipyard_nodeprep_customimage.sh',
-    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_customimage.sh')
-)
-_NODEPREP_NATIVEDOCKER_FILE = (
-    'shipyard_nodeprep_nativedocker.sh',
-    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep_nativedocker.sh')
-)
 _NODEPREP_WINDOWS_FILE = (
     'shipyard_nodeprep_nativedocker.ps1',
     pathlib.Path(
@@ -1102,43 +1094,9 @@ def _construct_pool_object(
                 config),
             container_registries=docker_registries,
         )
-        if is_windows:
-            if util.is_not_empty(custom_image_na):
-                raise RuntimeError(
-                    'Native mode and Windows custom images is not supported')
-            _rflist.append(_NODEPREP_WINDOWS_FILE)
-            start_task.append(
-                ('powershell -ExecutionPolicy Unrestricted -command '
-                 '{npf}{a}{e}{u}{v}{x}').format(
-                     npf=_NODEPREP_WINDOWS_FILE[0],
-                     a=' -a' if azurefile_vd else '',
-                     e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                     u=' -u' if util.is_not_empty(custom_image_na) else '',
-                     v=' -v {}'.format(__version__),
-                     x=' -x {}'.format(data._BLOBXFER_VERSION))
-            )
-        else:
-            _rflist.append(_NODEPREP_NATIVEDOCKER_FILE)
-            start_task.append(
-                '{npf}{a}{c}{e}{f}{m}{n}{u}{v}{x}'.format(
-                    npf=_NODEPREP_NATIVEDOCKER_FILE[0],
-                    a=' -a' if azurefile_vd else '',
-                    c=' -c' if azureblob_vd else '',
-                    e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                    f=' -f' if gluster_on_compute else '',
-                    m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                        sc_args) else '',
-                    n=' -n' if settings.can_tune_tcp(
-                        pool_settings.vm_size) else '',
-                    u=' -u' if util.is_not_empty(custom_image_na) else '',
-                    v=' -v {}'.format(__version__),
-                    x=' -x {}'.format(data._BLOBXFER_VERSION),
-                )
-            )
     elif util.is_not_empty(custom_image_na):
         # check if AAD is enabled
         _check_for_batch_aad(bc, 'allocate a pool with a custom image')
-        _rflist.append(_NODEPREP_CUSTOMIMAGE_FILE)
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=batchmodels.ImageReference(
                 virtual_machine_image_id=pool_settings.
@@ -1150,27 +1108,7 @@ def _construct_pool_object(
         logger.debug('deploying custom image: {} node agent: {}'.format(
             vmconfig.image_reference.virtual_machine_image_id,
             vmconfig.node_agent_sku_id))
-        start_task.append(
-            '{npf}{a}{b}{c}{e}{f}{m}{n}{p}{t}{v}{x}'.format(
-                npf=_NODEPREP_CUSTOMIMAGE_FILE[0],
-                a=' -a' if azurefile_vd else '',
-                b=' -b' if util.is_not_empty(block_for_gr) else '',
-                c=' -c' if azureblob_vd else '',
-                e=' -e {}'.format(pfx.sha1) if encrypt else '',
-                f=' -f' if gluster_on_compute else '',
-                m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
-                    sc_args) else '',
-                n=' -n' if settings.can_tune_tcp(
-                    pool_settings.vm_size) else '',
-                p=' -p {}'.format(bs.storage_entity_prefix)
-                if bs.storage_entity_prefix else '',
-                t=' -t {}'.format(torrentflags),
-                v=' -v {}'.format(__version__),
-                x=' -x {}'.format(data._BLOBXFER_VERSION),
-            )
-        )
     else:
-        _rflist.append(_NODEPREP_FILE)
         image_ref, na_ref = _pick_node_agent_for_vm(
             batch_client, pool_settings)
         vmconfig = batchmodels.VirtualMachineConfiguration(
@@ -1178,9 +1116,28 @@ def _construct_pool_object(
             node_agent_sku_id=na_ref,
             license_type=pool_settings.vm_configuration.license_type,
         )
+    # modify rflist and start task for node prep script
+    if is_windows:
+        if util.is_not_empty(custom_image_na):
+            raise RuntimeError(
+                'Native mode and Windows custom images is not supported')
+        _rflist.append(_NODEPREP_WINDOWS_FILE)
         # create start task commandline
         start_task.append(
-            '{npf}{a}{b}{c}{d}{e}{f}{g}{m}{n}{o}{p}{s}{t}{v}{w}{x}'.format(
+            ('powershell -ExecutionPolicy Unrestricted -command '
+             '{npf}{a}{e}{u}{v}{x}').format(
+                 npf=_NODEPREP_WINDOWS_FILE[0],
+                 a=' -a' if azurefile_vd else '',
+                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                 u=' -u' if util.is_not_empty(custom_image_na) else '',
+                 v=' -v {}'.format(__version__),
+                 x=' -x {}'.format(data._BLOBXFER_VERSION))
+        )
+    else:
+        _rflist.append(_NODEPREP_FILE)
+        # create start task commandline
+        start_task.append(
+            '{npf}{a}{b}{c}{d}{e}{f}{g}{m}{n}{p}{s}{t}{u}{v}{w}{x}'.format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1191,13 +1148,13 @@ def _construct_pool_object(
                 g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
                     sc_args) else '',
-                n=' -n' if settings.can_tune_tcp(
+                n=' -n' if native else '',
+                p=' -p {}'.format(bs.storage_entity_prefix) if (
+                    bs.storage_entity_prefix) else '',
+                s=' -s {}'.format(torrentflags),
+                t=' -t' if settings.can_tune_tcp(
                     pool_settings.vm_size) else '',
-                o=' -o {}'.format(pool_settings.vm_configuration.offer),
-                p=' -p {}'.format(bs.storage_entity_prefix)
-                if bs.storage_entity_prefix else '',
-                s=' -s {}'.format(pool_settings.vm_configuration.sku),
-                t=' -t {}'.format(torrentflags),
+                u=' -u' if util.is_not_empty(custom_image_na) else '',
                 v=' -v {}'.format(__version__),
                 w=' -w' if pool_settings.ssh.hpn_server_swap else '',
                 x=' -x {}'.format(data._BLOBXFER_VERSION),

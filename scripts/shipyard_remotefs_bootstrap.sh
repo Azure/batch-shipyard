@@ -225,7 +225,8 @@ setup_glusterfs() {
         # create volume
         if [ $start_only -eq 0 ]; then
             echo "Creating gluster volume $gluster_volname $volarg ($force$bricks)"
-            gluster volume create "$gluster_volname" "$volarg" transport "${transport}""${bricks}" $force
+            # shellcheck disable=SC2086
+            gluster volume create "$gluster_volname" ${volarg} transport "${transport}"${bricks} $force
             # modify volume properties as per input
             for e in "${so[@]:3}"; do
                 IFS=':' read -ra kv <<< "$e"
