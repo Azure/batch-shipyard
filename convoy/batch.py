@@ -3681,8 +3681,8 @@ def _construct_task(
     :param bool uses_task_dependencies: uses task dependencies
     :param batchmodels.OntaskFailure on_task_failure: on task failure
     :param dict _task: task spec
-    :rtype: str
-    :return: task id added to task map
+    :rtype: tuple
+    :return: (list of committed task ids for job, task id added to task map)
     """
     _task_id = settings.task_id(_task)
     if util.is_none_or_empty(_task_id):
@@ -4014,7 +4014,7 @@ def _construct_task(
             'duplicate task id detected: {} for job {}'.format(
                 task.id, job_id))
     task_map[task.id] = batchtask
-    return task.id
+    return existing_tasklist, task.id
 
 
 def add_jobs(
@@ -4470,7 +4470,7 @@ def add_jobs(
         # add all tasks under job
         task_map = {}
         for _task in settings.job_tasks(config, jobspec):
-            lasttaskid = _construct_task(
+            existing_tasklist, lasttaskid = _construct_task(
                 batch_client, blob_client, keyvault_client, config, bxfile,
                 bs, native, is_windows, tempdisk, allow_run_on_missing,
                 docker_missing_images, singularity_missing_images, cloud_pool,
@@ -4479,7 +4479,7 @@ def add_jobs(
                 uses_task_dependencies, on_task_failure, _task)
         if has_merge_task:
             _task = settings.job_merge_task(jobspec)
-            merge_task_id = _construct_task(
+            existing_tasklist, merge_task_id = _construct_task(
                 batch_client, blob_client, keyvault_client, config, bxfile,
                 bs, native, is_windows, tempdisk, allow_run_on_missing,
                 docker_missing_images, singularity_missing_images, cloud_pool,
