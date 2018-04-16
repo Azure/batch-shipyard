@@ -59,6 +59,7 @@ class CliContext(object):
         self.show_config = False
         self.verbose = False
         self.yes = False
+        self.raw = None
         self.config = None
         self.conf_jobs = None
         self.conf_fs = None
@@ -188,6 +189,7 @@ class CliContext(object):
         # set internal config kv pairs
         self.config['_verbose'] = self.verbose
         self.config['_auto_confirm'] = self.yes
+        self.config['_raw'] = self.raw
         # increase detail in logger formatters
         if self.verbose:
             convoy.util.set_verbose_logger_handlers()
@@ -211,6 +213,7 @@ class CliContext(object):
         # free cli options
         del self.verbose
         del self.yes
+        del self.raw
         del self.aad_authority_url
         del self.aad_directory_id
         del self.aad_application_id
@@ -438,6 +441,20 @@ def _verbose_option(f):
         expose_value=False,
         is_flag=True,
         help='Verbose output',
+        callback=callback)(f)
+
+
+def _raw_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.raw = value
+        return value
+    return click.option(
+        '--raw',
+        expose_value=False,
+        is_flag=True,
+        help='Output data as returned by the service for supported '
+        'operations as raw json',
         callback=callback)(f)
 
 
@@ -693,6 +710,7 @@ def common_options(f):
     f = _configdir_option(f)
     f = _verbose_option(f)
     f = _show_config_option(f)
+    f = _raw_option(f)
     # f = _log_file_option(f)
     f = _confirm_option(f)
     return f
@@ -1180,7 +1198,7 @@ def cert_add(ctx, file, pem_no_certs, pem_public_key, pfx_password):
 def cert_list(ctx):
     """List all certificates in a Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_cert_list(ctx.batch_client)
+    convoy.fleet.action_cert_list(ctx.batch_client, ctx.config)
 
 
 @cert.command('del')
@@ -1213,7 +1231,7 @@ def pool(ctx):
 def pool_listskus(ctx):
     """List available VM configurations available to the Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_listskus(ctx.batch_client)
+    convoy.fleet.action_pool_listskus(ctx.batch_client, ctx.config)
 
 
 @pool.command('add')
@@ -1241,7 +1259,7 @@ def pool_add(ctx):
 def pool_list(ctx):
     """List all pools in the Batch account"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_list(ctx.batch_client)
+    convoy.fleet.action_pool_list(ctx.batch_client, ctx.config)
 
 
 @pool.command('del')
@@ -1616,15 +1634,20 @@ def jobs_add(ctx, recreate, tail):
 
 
 @jobs.command('list')
+@click.option(
+    '--jobid', help='Get the specified job id')
+@click.option(
+    '--jobscheduleid', help='Terminate just the specified job schedule id')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def jobs_list(ctx):
+def jobs_list(ctx, jobid, jobscheduleid):
     """List jobs"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_jobs_list(ctx.batch_client, ctx.config)
+    convoy.fleet.action_jobs_list(
+        ctx.batch_client, ctx.config, jobid, jobscheduleid)
 
 
 @jobs.command('term')
@@ -1797,17 +1820,19 @@ def tasks(ctx):
 @click.option(
     '--poll-until-tasks-complete', is_flag=True,
     help='Poll until all tasks are in completed state')
+@click.option(
+    '--taskid', help='Get specified task within the specified job id')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def tasks_list(ctx, all, jobid, poll_until_tasks_complete):
+def tasks_list(ctx, all, jobid, poll_until_tasks_complete, taskid):
     """List tasks within jobs"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_tasks_list(
         ctx.batch_client, ctx.config, all, jobid,
-        poll_until_tasks_complete)
+        poll_until_tasks_complete, taskid)
 
 
 @tasks.command('term')

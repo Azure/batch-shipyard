@@ -125,6 +125,12 @@ def get_batch_account(
             raise ValueError(
                 ('Please specify the resource_group in credentials '
                  'associated with the Batch account {}'.format(bc.account)))
+    if settings.raw(config):
+        util.print_raw_output(
+            batch_mgmt_client.batch_account.get,
+            resource_group_name=resource_group,
+            account_name=account_name)
+        return
     return batch_mgmt_client.batch_account.get(
         resource_group_name=resource_group,
         account_name=account_name,
@@ -177,6 +183,8 @@ def log_batch_account_info(
     ba = get_batch_account(
         batch_mgmt_client, config, account_name=account_name,
         resource_group=resource_group)
+    if settings.raw(config):
+        return
     log = ['batch account information']
     log.extend(_generate_batch_account_log_entry(ba))
     logger.info(os.linesep.join(log))
@@ -224,6 +232,10 @@ def log_batch_account_service_quota(batch_mgmt_client, config, location):
             'Batch management client is invalid, please specify management '
             'aad credentials and valid subscription_id')
     mgmt_aad = settings.credentials_management(config)
+    if settings.raw(config):
+        util.print_raw_output(
+            batch_mgmt_client.location.get_quotas, location)
+        return
     blc = batch_mgmt_client.location.get_quotas(location)
     log = ['batch service quota']
     log.append('* subscription id: {}'.format(mgmt_aad.subscription_id))
@@ -232,12 +244,16 @@ def log_batch_account_service_quota(batch_mgmt_client, config, location):
     logger.info(os.linesep.join(log))
 
 
-def list_node_agent_skus(batch_client):
-    # type: (batch.BatchServiceClient) -> None
+def list_node_agent_skus(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
     """List all node agent skus
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     """
+    if settings.raw(config):
+        util.print_raw_paged_output(batch_client.account.list_node_agent_skus)
+        return
     node_agent_skus = batch_client.account.list_node_agent_skus()
     for sku in node_agent_skus:
         for img in sku.verified_image_references:
@@ -380,12 +396,16 @@ def add_pfx_cert_to_account(
         os.unlink(pfx.filename)
 
 
-def list_certificates_in_account(batch_client):
-    # type: (batch.BatchServiceClient) -> None
+def list_certificates_in_account(batch_client, config):
+    # type: (batch.BatchServiceClient, dict) -> None
     """List all certificates in a Batch account
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     """
+    if settings.raw(config):
+        util.print_raw_paged_output(batch_client.certificate.list)
+        return
     i = 0
     log = ['list of certificates']
     certs = batch_client.certificate.list()
@@ -1087,12 +1107,17 @@ def del_ssh_user(batch_client, config, nodes=None):
                 raise
 
 
-def list_pools(batch_client):
-    # type: (azure.batch.batch_service_client.BatchServiceClient) -> None
+def list_pools(batch_client, config):
+    # type: (azure.batch.batch_service_client.BatchServiceClient,
+    #        config) -> None
     """List pools
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
     """
+    if settings.raw(config):
+        util.print_raw_paged_output(batch_client.pool.list)
+        return
     i = 0
     log = ['list of pools']
     pools = batch_client.pool.list()
@@ -1517,6 +1542,12 @@ def pool_autoscale_evaluate(batch_client, config):
             ('cannot evaluate autoscale for pool {}, not enabled or '
              'no formula').format(pool.id))
         return
+    if settings.raw(config):
+        raw = util.print_raw_output(
+            batch_client.pool.evaluate_auto_scale, pool.id, return_json=True,
+            auto_scale_formula=autoscale.get_formula(pool))
+        util.print_raw_json(raw)
+        return
     result = batch_client.pool.evaluate_auto_scale(
         pool_id=pool.id,
         auto_scale_formula=autoscale.get_formula(pool),
@@ -1532,6 +1563,12 @@ def pool_autoscale_lastexec(batch_client, config):
     :param dict config: configuration dict
     """
     pool_id = settings.pool_id(config)
+    if settings.raw(config):
+        raw = util.print_raw_output(
+            batch_client.pool.get, pool_id, return_json=True)
+        if 'autoScaleRun' in raw:
+            util.print_raw_json(raw['autoScaleRun'])
+        return
     pool = batch_client.pool.get(pool_id)
     if not pool.enable_auto_scale:
         logger.error(
@@ -1816,9 +1853,18 @@ def job_stats(batch_client, config, jobid=None):
         '* Total tasks: {} ({})'.format(
             total_tasks, task_counts.validation_status
         ),
-        '  * Active: {}'.format(task_counts.active),
-        '  * Running: {}'.format(task_counts.running),
-        '  * Completed: {}'.format(task_counts.completed),
+        '  * Active: {0} ({1:.2f}% of total)'.format(
+            task_counts.active,
+            100 * task_counts.active / total_tasks if total_tasks > 0 else 0
+        ),
+        '  * Running: {0} ({1:.2f}% of total)'.format(
+            task_counts.running,
+            100 * task_counts.running / total_tasks if total_tasks > 0 else 0
+        ),
+        '  * Completed: {0} ({1:.2f}% of total)'.format(
+            task_counts.completed,
+            100 * task_counts.completed / total_tasks if total_tasks > 0 else 0
+        ),
         '    * Succeeded: {0} ({1:.2f}% of completed)'.format(
             task_counts.succeeded,
             100 * task_counts.succeeded / task_counts.completed
@@ -2572,6 +2618,9 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
     """
     if util.is_none_or_empty(pool_id):
         pool_id = settings.pool_id(config)
+    if settings.raw(config):
+        util.print_raw_paged_output(batch_client.compute_node.list, pool_id)
+        return
     log = ['compute nodes for pool {}'.format(pool_id)]
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
@@ -2661,12 +2710,20 @@ def get_remote_login_settings(batch_client, config, nodes=None):
     if nodes is None:
         nodes = batch_client.compute_node.list(pool_id)
     ret = {}
+    raw = []
     for node in nodes:
         rls = batch_client.compute_node.get_remote_login_settings(
             pool_id, node.id)
-        logger.info('node {}: ip {} port {}'.format(
-            node.id, rls.remote_login_ip_address, rls.remote_login_port))
         ret[node.id] = rls
+        if settings.raw(config):
+            raw.append(util.print_raw_output(
+                batch_client.compute_node.get_remote_login_settings, pool_id,
+                node.id, return_json=True))
+        else:
+            logger.info('node {}: ip {} port {}'.format(
+                node.id, rls.remote_login_ip_address, rls.remote_login_port))
+    if util.is_not_empty(raw):
+        util.print_raw_json(raw)
     return ret
 
 
@@ -3098,6 +3155,111 @@ def get_file_via_node(batch_client, config, filespec=None):
         file, pool_id, node_id, fp.stat().st_size))
 
 
+def log_job(job):
+    """Log job
+    :param job: job
+    :rtype: list
+    :return: log entries
+    """
+    log = []
+    if job.execution_info.end_time is not None:
+        duration = (
+            job.execution_info.end_time - job.execution_info.start_time
+        )
+        tr = job.execution_info.terminate_reason
+    else:
+        duration = 'n/a'
+        tr = 'n/a'
+    log.extend([
+        '* job id: {}'.format(job.id),
+        '  * state: {} @ {}'.format(
+            job.state.value, job.state_transition_time),
+        '  * previous state: {} @ {}'.format(
+            job.previous_state.value
+            if job.previous_state is not None else 'n/a',
+            job.previous_state_transition_time),
+        '  * priority: {}'.format(job.priority),
+        '  * on all tasks complete: {}'.format(
+            job.on_all_tasks_complete.value),
+        '  * on task failure: {}'.format(job.on_task_failure.value),
+        '  * created: {}'.format(job.creation_time),
+        '  * pool id: {}'.format(job.execution_info.pool_id),
+        '  * started: {}'.format(job.execution_info.start_time),
+        '  * completed: {}'.format(job.execution_info.end_time),
+        '  * duration: {}'.format(duration),
+        '  * terminate reason: {}'.format(tr),
+    ])
+    if len(job.metadata) > 0:
+        log.append('  * metadata:')
+        for md in job.metadata:
+            log.append('    * {}: {}'.format(md.name, md.value))
+    if job.execution_info.scheduling_error is not None:
+        log.extend([
+            '  * scheduling error: {}'.format(
+                job.execution_info.scheduling_error.category.value),
+            '    * {}: {}'.format(
+                job.execution_info.scheduling_error.code,
+                job.execution_info.scheduling_error.message),
+        ])
+        for de in job.execution_info.scheduling_error.details:
+            log.append('      * {}: {}'.format(de.name, de.value))
+    return log
+
+
+def log_job_schedule(js):
+    """Log job schedule
+    :param js: job schedule
+    :rtype: list
+    :return: log entries
+    """
+    log = [
+        '* job schedule id: {}'.format(js.id),
+        '  * state: {} @ {}'.format(
+            js.state.value, js.state_transition_time),
+        '  * previous state: {} @ {}'.format(
+            js.previous_state.value
+            if js.previous_state is not None else 'n/a',
+            js.previous_state_transition_time),
+        '  * pool id: {}'.format(js.job_specification.pool_info.pool_id),
+        '  * do not run until: {}'.format(js.schedule.do_not_run_until),
+        '  * do not run after: {}'.format(js.schedule.do_not_run_after),
+        '  * recurrence interval: {}'.format(
+            js.schedule.recurrence_interval),
+        '  * next run time: {}'.format(
+            js.execution_info.next_run_time),
+        '  * recent job: {}'.format(
+            js.execution_info.recent_job.id
+            if js.execution_info.recent_job is not None else None),
+        '  * created: {}'.format(js.creation_time),
+        '  * completed: {}'.format(js.execution_info.end_time),
+    ]
+    return log
+
+
+def get_job_or_job_schedule(batch_client, config, jobid, jobscheduleid):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str) -> None
+    """Get job or job schedule
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id
+    :param str jobscheduleid: job schedule id
+    """
+    if settings.raw(config):
+        util.print_raw_output(batch_client.job.get, jobid)
+        return
+    if util.is_not_empty(jobid):
+        job = batch_client.job.get(jobid)
+        log = ['job info']
+        log.extend(log_job(job))
+    elif util.is_not_empty(jobscheduleid):
+        js = batch_client.job_schedule.get(jobscheduleid)
+        log = ['job schedule info']
+        log.extend(log_job_schedule(js))
+    logger.info(os.linesep.join(log))
+
+
 def list_jobs(batch_client, config):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict) -> None
     """List all jobs
@@ -3105,51 +3267,20 @@ def list_jobs(batch_client, config):
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     """
+    if settings.raw(config):
+        raw = {
+            'jobs': util.print_raw_paged_output(
+                batch_client.job.list, return_json=True),
+            'job_schedules': util.print_raw_paged_output(
+                batch_client.job_schedule.list, return_json=True),
+        }
+        util.print_raw_json(raw)
+        return
     jobs = batch_client.job.list()
     log = ['list of jobs:']
     i = 0
     for job in jobs:
-        if job.execution_info.end_time is not None:
-            duration = (
-                job.execution_info.end_time - job.execution_info.start_time
-            )
-            tr = job.execution_info.terminate_reason
-        else:
-            duration = 'n/a'
-            tr = 'n/a'
-        log.extend([
-            '* job id: {}'.format(job.id),
-            '  * state: {} @ {}'.format(
-                job.state.value, job.state_transition_time),
-            '  * previous state: {} @ {}'.format(
-                job.previous_state.value
-                if job.previous_state is not None else 'n/a',
-                job.previous_state_transition_time),
-            '  * priority: {}'.format(job.priority),
-            '  * on all tasks complete: {}'.format(
-                job.on_all_tasks_complete.value),
-            '  * on task failure: {}'.format(job.on_task_failure.value),
-            '  * created: {}'.format(job.creation_time),
-            '  * pool id: {}'.format(job.execution_info.pool_id),
-            '  * started: {}'.format(job.execution_info.start_time),
-            '  * completed: {}'.format(job.execution_info.end_time),
-            '  * duration: {}'.format(duration),
-            '  * terminate reason: {}'.format(tr),
-        ])
-        if len(job.metadata) > 0:
-            log.append('  * metadata:')
-            for md in job.metadata:
-                log.append('    * {}: {}'.format(md.name, md.value))
-        if job.execution_info.scheduling_error is not None:
-            log.extend([
-                '  * scheduling error: {}'.format(
-                    job.execution_info.scheduling_error.category.value),
-                '    * {}: {}'.format(
-                    job.execution_info.scheduling_error.code,
-                    job.execution_info.scheduling_error.message),
-            ])
-            for de in job.execution_info.scheduling_error.details:
-                log.append('      * {}: {}'.format(de.name, de.value))
+        log.extend(log_job(job))
         i += 1
     if i == 0:
         logger.error('no jobs found')
@@ -3159,32 +3290,125 @@ def list_jobs(batch_client, config):
     log = ['list of job schedules:']
     jobschedules = batch_client.job_schedule.list()
     for js in jobschedules:
-        log.extend([
-            '* job schedule id: {}'.format(js.id),
-            '  * state: {} @ {}'.format(
-                js.state.value, js.state_transition_time),
-            '  * previous state: {} @ {}'.format(
-                js.previous_state.value
-                if js.previous_state is not None else 'n/a',
-                js.previous_state_transition_time),
-            '  * pool id: {}'.format(js.job_specification.pool_info.pool_id),
-            '  * do not run until: {}'.format(js.schedule.do_not_run_until),
-            '  * do not run after: {}'.format(js.schedule.do_not_run_after),
-            '  * recurrence interval: {}'.format(
-                js.schedule.recurrence_interval),
-            '  * next run time: {}'.format(
-                js.execution_info.next_run_time),
-            '  * recent job: {}'.format(
-                js.execution_info.recent_job.id
-                if js.execution_info.recent_job is not None else None),
-            '  * created: {}'.format(js.creation_time),
-            '  * completed: {}'.format(js.execution_info.end_time),
-        ])
+        log.extend(log_job_schedule(js))
         i += 1
     if i == 0:
         logger.error('no job schedules found')
     else:
         logger.info(os.linesep.join(log))
+
+
+def log_task(task, jobid):
+    """Log task
+    :param task: task struct
+    :param str jobid: job id
+    :rtype: list
+    :return: list of log entries
+    """
+    fi = []
+    if task.execution_info is not None:
+        if task.execution_info.failure_info is not None:
+            fi.append(
+                '    * failure info: {}'.format(
+                    task.execution_info.failure_info.
+                    category.value))
+            fi.append(
+                '      * {}: {}'.format(
+                    task.execution_info.failure_info.code,
+                    task.execution_info.failure_info.message
+                )
+            )
+            for de in task.execution_info.failure_info.details:
+                fi.append('        * {}: {}'.format(
+                    de.name, de.value))
+        if (task.execution_info.end_time is not None and
+                task.execution_info.start_time is not None):
+            duration = (task.execution_info.end_time -
+                        task.execution_info.start_time)
+        else:
+            duration = 'n/a'
+    if task.exit_conditions is not None:
+        default_job_action = (
+            task.exit_conditions.default.job_action.value
+            if task.exit_conditions.default.job_action
+            is not None else 'n/a'
+        )
+        default_dependency_action = (
+            task.exit_conditions.default.dependency_action.value
+            if task.exit_conditions.default.dependency_action
+            is not None else 'n/a'
+        )
+    else:
+        default_job_action = 'n/a'
+        default_dependency_action = 'n/a'
+    ret = [
+        '* task id: {}'.format(task.id),
+        '  * job id: {}'.format(jobid),
+        '  * state: {} @ {}'.format(
+            task.state.value, task.state_transition_time),
+        '  * previous state: {} @ {}'.format(
+            task.previous_state.value
+            if task.previous_state is not None else 'n/a',
+            task.previous_state_transition_time),
+        '  * has upstream dependencies: {}'.format(
+            task.depends_on is not None),
+        '  * default exit options:',
+        '    * job action: {}'.format(default_job_action),
+        '    * dependency action: {}'.format(
+            default_dependency_action),
+        '  * max retries: {}'.format(
+            task.constraints.max_task_retry_count),
+        '  * retention time: {}'.format(
+            task.constraints.retention_time),
+        '  * execution details:',
+        '    * pool id: {}'.format(
+            task.node_info.pool_id if task.node_info is not None
+            else 'n/a'),
+        '    * node id: {}'.format(
+            task.node_info.node_id if task.node_info is not None
+            else 'n/a'),
+        '    * started: {}'.format(
+            task.execution_info.start_time
+            if task.execution_info is not None else 'n/a'),
+        '    * completed: {}'.format(
+            task.execution_info.end_time
+            if task.execution_info is not None else 'n/a'),
+        '    * duration: {}'.format(duration),
+        '    * retry count: {}'.format(
+            task.execution_info.retry_count),
+        '    * requeue count: {}'.format(
+            task.execution_info.requeue_count),
+        '    * result: {}'.format(
+            task.execution_info.result.value
+            if task.execution_info.result is not None else 'n/a'),
+        '    * exit code: {}'.format(
+            task.execution_info.exit_code
+            if task.execution_info is not None else 'n/a'),
+    ]
+    ret.extend(fi)
+    return ret
+
+
+def get_task(batch_client, config, jobid, taskid):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool, str, bool) -> bool
+    """Get a single task for the specified job
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id
+    :param str taskid: task id
+    :rtype: bool
+    :return: if tasks has completed
+    """
+    if settings.raw(config):
+        util.print_raw_output(batch_client.task.get, jobid, taskid)
+        return
+    task = batch_client.task.get(jobid, taskid)
+    log = ['task info']
+    log.extend(log_task(task, jobid))
+    logger.info(os.linesep.join(log))
+    return task.state == batchmodels.TaskState.completed
 
 
 def list_tasks(batch_client, config, all=False, jobid=None):
@@ -3207,6 +3431,7 @@ def list_tasks(batch_client, config, all=False, jobid=None):
             jobs = settings.job_specifications(config)
         else:
             jobs = [{'id': jobid}]
+    raw = {}
     for job in jobs:
         if all:
             jobid = job.id
@@ -3215,89 +3440,13 @@ def list_tasks(batch_client, config, all=False, jobid=None):
         log = ['list of tasks for job {}'.format(jobid)]
         i = 0
         try:
+            if settings.raw(config):
+                raw[jobid] = util.print_raw_paged_output(
+                    batch_client.task.list, jobid, return_json=True)
+                continue
             tasks = batch_client.task.list(jobid)
             for task in tasks:
-                fi = []
-                if task.execution_info is not None:
-                    if task.execution_info.failure_info is not None:
-                        fi.append(
-                            '    * failure info: {}'.format(
-                                task.execution_info.failure_info.
-                                category.value))
-                        fi.append(
-                            '      * {}: {}'.format(
-                                task.execution_info.failure_info.code,
-                                task.execution_info.failure_info.message
-                            )
-                        )
-                        for de in task.execution_info.failure_info.details:
-                            fi.append('        * {}: {}'.format(
-                                de.name, de.value))
-                    if (task.execution_info.end_time is not None and
-                            task.execution_info.start_time is not None):
-                        duration = (task.execution_info.end_time -
-                                    task.execution_info.start_time)
-                    else:
-                        duration = 'n/a'
-                if task.exit_conditions is not None:
-                    default_job_action = (
-                        task.exit_conditions.default.job_action.value
-                        if task.exit_conditions.default.job_action
-                        is not None else 'n/a'
-                    )
-                    default_dependency_action = (
-                        task.exit_conditions.default.dependency_action.value
-                        if task.exit_conditions.default.dependency_action
-                        is not None else 'n/a'
-                    )
-                else:
-                    default_job_action = 'n/a'
-                    default_dependency_action = 'n/a'
-                log.extend([
-                    '* task id: {}'.format(task.id),
-                    '  * job id: {}'.format(jobid),
-                    '  * state: {} @ {}'.format(
-                        task.state.value, task.state_transition_time),
-                    '  * previous state: {} @ {}'.format(
-                        task.previous_state.value
-                        if task.previous_state is not None else 'n/a',
-                        task.previous_state_transition_time),
-                    '  * has upstream dependencies: {}'.format(
-                        task.depends_on is not None),
-                    '  * default exit options:',
-                    '    * job action: {}'.format(default_job_action),
-                    '    * dependency action: {}'.format(
-                        default_dependency_action),
-                    '  * max retries: {}'.format(
-                        task.constraints.max_task_retry_count),
-                    '  * retention time: {}'.format(
-                        task.constraints.retention_time),
-                    '  * execution details:',
-                    '    * pool id: {}'.format(
-                        task.node_info.pool_id if task.node_info is not None
-                        else 'n/a'),
-                    '    * node id: {}'.format(
-                        task.node_info.node_id if task.node_info is not None
-                        else 'n/a'),
-                    '    * started: {}'.format(
-                        task.execution_info.start_time
-                        if task.execution_info is not None else 'n/a'),
-                    '    * completed: {}'.format(
-                        task.execution_info.end_time
-                        if task.execution_info is not None else 'n/a'),
-                    '    * duration: {}'.format(duration),
-                    '    * retry count: {}'.format(
-                        task.execution_info.retry_count),
-                    '    * requeue count: {}'.format(
-                        task.execution_info.requeue_count),
-                    '    * result: {}'.format(
-                        task.execution_info.result.value
-                        if task.execution_info.result is not None else 'n/a'),
-                    '    * exit code: {}'.format(
-                        task.execution_info.exit_code
-                        if task.execution_info is not None else 'n/a'),
-                ])
-                log.extend(fi)
+                log.extend(log_task(task, jobid))
                 if task.state != batchmodels.TaskState.completed:
                     all_complete = False
                 i += 1
@@ -3311,6 +3460,8 @@ def list_tasks(batch_client, config, all=False, jobid=None):
             logger.error('no tasks found for job {}'.format(jobid))
         else:
             logger.info(os.linesep.join(log))
+    if util.is_not_empty(raw):
+        util.print_raw_json(raw)
     return all_complete
 
 

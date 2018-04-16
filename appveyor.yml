@@ -31,7 +31,7 @@ init:
 install:
 - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
 - where pip
-- pip install --upgrade --user pip
+- pip install --upgrade --user pip==9.0.3
 - pip install --upgrade setuptools wheel
 - pip install -r requirements.txt
 - pip install --no-deps -r req_nodeps.txt

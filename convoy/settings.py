@@ -706,6 +706,16 @@ def verbose(config):
     return config['_verbose']
 
 
+def raw(config):
+    # type: (dict) -> bool
+    """Get raw setting
+    :param dict config: configuration object
+    :rtype: bool
+    :return: raw setting
+    """
+    return config['_raw']
+
+
 def set_auto_confirm(config, flag):
     # type: (dict, bool) -> None
     """Set autoconfirm setting

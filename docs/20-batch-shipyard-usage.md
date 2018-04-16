@@ -73,6 +73,8 @@ There are a set of shared options which are used between most sub-commands.
 These options must be specified after the command and sub-command. These are:
 ```
   -y, --yes                       Assume yes for all confirmation prompts
+  --raw                           Output data as returned by the service for
+                                  supported operations as raw json
   --show-config                   Show configuration
   -v, --verbose                   Verbose output
   --configdir TEXT                Configuration directory where all
@@ -107,6 +109,8 @@ These options must be specified after the command and sub-command. These are:
 ```
 
 * `-y` or `--yes` is to assume yes for all confirmation prompts
+* `--raw` will output JSON to stdout for the command result. Only a subset
+of commands support this option.
 * `--show-config` will output the merged configuration prior to execution
 * `-v` or `--verbose` is for verbose output
 * `--configdir path` can be used instead of the individual config switches

@@ -34,6 +34,7 @@ import base64
 import copy
 import datetime
 import hashlib
+import json
 import logging
 import logging.handlers
 import os
@@ -217,6 +218,59 @@ def merge_dict(dict1, dict2):
         else:
             result[k] = copy.deepcopy(v)
     return result
+
+
+def print_raw_paged_output(func, *args, **kwargs):
+    # type: (Callable, *Any, **Any) -> Optional[Dict]
+    """Print raw output for paged enumerable. Specify 'return_json'
+    in kwargs as True to return json object.
+    :param func: function call
+    :param args: positional args
+    :param kwargs: kwargs
+    :rtype: Dict or None
+    :return: raw json or None
+    """
+    return_json = kwargs.pop('return_json', False)
+    raw = []
+    ri = func(*args, **kwargs)
+    try:
+        while ri.advance_page():
+            raw.append(ri.raw.response.text)
+    except StopIteration:
+        pass
+    raw = '[' + ','.join(raw) + ']'
+    jraw = json.loads(raw, encoding='utf8')
+    if return_json:
+        return jraw
+    else:
+        print_raw_json(json.loads(raw, encoding='utf8'))
+
+
+def print_raw_output(func, *args, **kwargs):
+    # type: (Callable, *Any, **Any) -> Optional[Dict]
+    """Print raw output from point query. Specify 'return_json'
+    in kwargs as True to return json object.
+    :param func: function call
+    :param args: positional args
+    :param kwargs: kwargs
+    :rtype: Dict or None
+    :return: raw json or None
+    """
+    return_json = kwargs.pop('return_json', False)
+    raw = func(*args, raw=True, **kwargs).response.text
+    jraw = json.loads(raw, encoding='utf8')
+    if return_json:
+        return jraw
+    else:
+        print_raw_json(jraw)
+
+
+def print_raw_json(raw):
+    # type: (dict) -> None
+    """Print raw json to stdout
+    :param dict raw: raw json
+    """
+    print(json.dumps(raw, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def scantree(path):

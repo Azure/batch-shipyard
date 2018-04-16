@@ -691,12 +691,13 @@ def _create_custom_linux_mount_args(config, mount_name):
     return fstab_mount
 
 
-def _pick_node_agent_for_vm(batch_client, pool_settings):
+def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     # type: (azure.batch.batch_service_client.BatchServiceClient,
-    #        settings.PoolSettings) -> (str, str)
+    #        dict, settings.PoolSettings) -> (str, str)
     """Pick a node agent id for the vm
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
+    :param dict config: configuration dict
     :param settings.PoolSettings pool_settings: pool settings
     :rtype: tuple
     :return: image reference to use, node agent id to use
@@ -725,7 +726,7 @@ def _pick_node_agent_for_vm(batch_client, pool_settings):
             'version': pool_settings.vm_configuration.version,
         }, 'batch.node.windows amd64')
     # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus()
+    node_agent_skus = batch_client.account.list_node_agent_skus(config)
     skus_to_use = [
         (nas, image_ref) for nas in node_agent_skus
         for image_ref in sorted(
@@ -1081,7 +1082,7 @@ def _construct_pool_object(
                      vmconfig.node_agent_sku_id))
         else:
             image_ref, na_ref = _pick_node_agent_for_vm(
-                batch_client, pool_settings)
+                batch_client, config, pool_settings)
             vmconfig = batchmodels.VirtualMachineConfiguration(
                 image_reference=image_ref,
                 node_agent_sku_id=na_ref,
@@ -1110,7 +1111,7 @@ def _construct_pool_object(
             vmconfig.node_agent_sku_id))
     else:
         image_ref, na_ref = _pick_node_agent_for_vm(
-            batch_client, pool_settings)
+            batch_client, config, pool_settings)
         vmconfig = batchmodels.VirtualMachineConfiguration(
             image_reference=image_ref,
             node_agent_sku_id=na_ref,
@@ -1710,23 +1711,37 @@ def _execute_command_on_pool_over_ssh_with_keyed_output(
     return stdout
 
 
-def _log_stdout_by_nodeid(pool_id, desc, stdout):
-    # type: (str, str, list) -> None
+def _log_stdout_by_nodeid(config, pool_id, desc, stdout):
+    # type: (dict, str, str, list) -> None
     """Log stdout returned by keyed SSH remote execution
+    :param dict config: configuration dict
     :param str pool_id: pool id
     :param str desc: description
     :param list stdout: keyed stdout by node id
     """
-    log = [
-        'stdout for {} on pool {}'.format(desc, pool_id)
-    ]
-    for key in stdout:
-        log.append('* node id: {}'.format(key))
-        for line in stdout[key].split('\n'):
-            if len(line) == 0:
-                continue
-            log.append('  >> {}'.format(line))
-    logger.info(os.linesep.join(log))
+    if settings.raw(config):
+        raw = {
+            'pool_id': pool_id,
+            'nodes': {},
+        }
+        for key in stdout:
+            raw['nodes'][key] = []
+            for line in stdout[key].split('\n'):
+                if len(line) == 0:
+                    continue
+                raw['nodes'][key].append(line)
+        util.print_raw_json(raw)
+    else:
+        log = [
+            'stdout for {} on pool {}'.format(desc, pool_id)
+        ]
+        for key in stdout:
+            log.append('* node id: {}'.format(key))
+            for line in stdout[key].split('\n'):
+                if len(line) == 0:
+                    continue
+                log.append('  >> {}'.format(line))
+        logger.info(os.linesep.join(log))
 
 
 def _docker_system_prune_over_ssh(batch_client, config, volumes):
@@ -1749,7 +1764,7 @@ def _docker_system_prune_over_ssh(batch_client, config, volumes):
     ]
     stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
         batch_client, config, pool, desc, cmd)
-    _log_stdout_by_nodeid(pool_id, desc, stdout)
+    _log_stdout_by_nodeid(config, pool_id, desc, stdout)
 
 
 def _zap_all_container_processes_over_ssh(batch_client, config, remove, stop):
@@ -1775,7 +1790,7 @@ def _zap_all_container_processes_over_ssh(batch_client, config, remove, stop):
         cmd.append('docker ps -aq -f status=exited | xargs -r docker rm')
     stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
         batch_client, config, pool, desc, cmd)
-    _log_stdout_by_nodeid(pool_id, desc, stdout)
+    _log_stdout_by_nodeid(config, pool_id, desc, stdout)
 
 
 def _update_container_images(
@@ -1901,7 +1916,7 @@ def _update_container_images(
     if force_ssh:
         stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
             batch_client, config, pool, 'update container images', coordcmd)
-        _log_stdout_by_nodeid(pool_id, 'uci', stdout)
+        _log_stdout_by_nodeid(config, pool_id, 'uci', stdout)
         return
     if not is_windows:
         # update taskenv for Singularity
@@ -1983,7 +1998,7 @@ def _docker_ps_over_ssh(batch_client, config):
     cmd = ['docker ps -a']
     stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
         batch_client, config, pool, desc, cmd)
-    _log_stdout_by_nodeid(pool_id, desc, stdout)
+    _log_stdout_by_nodeid(config, pool_id, desc, stdout)
 
 
 def _list_docker_images(batch_client, config):
@@ -2014,24 +2029,43 @@ def _list_docker_images(batch_client, config):
                         all_images[dec[0]] = dec[1]
     # find set intersection among all nodes
     intersecting_images = set.intersection(*list(node_images.values()))
-    logger.info('Common Docker images across all nodes in pool {}:{}{}'.format(
-        pool.id,
-        os.linesep,
-        os.linesep.join(
-            ['{} {}'.format(key, all_images[key])
-             for key in intersecting_images])
-    ))
+    if settings.raw(config):
+        raw = {
+            'pool_id': pool.id,
+            'common': {},
+            'mismatched': {}
+        }
+        for key in intersecting_images:
+            raw['common'][key] = all_images[key]
+    else:
+        logger.info(
+            'Common Docker images across all nodes in pool {}:{}{}'.format(
+                pool.id,
+                os.linesep,
+                os.linesep.join(
+                    ['{} {}'.format(key, all_images[key])
+                     for key in intersecting_images])
+            ))
     # find mismatched images on nodes
     for node in node_images:
         images = set(node_images[node])
         diff = images.difference(intersecting_images)
         if len(diff) > 0:
-            logger.warning('Docker images present only on node {}:{}{}'.format(
-                node, os.linesep,
-                os.linesep.join(
-                    ['{} {}'.format(key, all_images[key])
-                     for key in diff])
-            ))
+            if settings.raw(config):
+                if node not in raw['mismatched']:
+                    raw['mismatched'][node] = {}
+                for key in diff:
+                    raw['mismatched'][node][key] = all_images[key]
+            else:
+                logger.warning(
+                    'Docker images present only on node {}:{}{}'.format(
+                        node, os.linesep,
+                        os.linesep.join(
+                            ['{} {}'.format(key, all_images[key])
+                             for key in diff])
+                    ))
+    if settings.raw(config):
+        util.print_raw_json(raw)
 
 
 def _adjust_settings_for_pool_creation(config):
@@ -2709,13 +2743,14 @@ def action_cert_add(
         batch_client, config, file, pem_no_certs, pem_public_key, pfx_password)
 
 
-def action_cert_list(batch_client):
-    # type: (batchsc.BatchServiceClient) -> None
+def action_cert_list(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Cert List
     :param azure.batch.batch_service_client.BatchServiceClient: batch client
+    :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
-    batch.list_certificates_in_account(batch_client)
+    batch.list_certificates_in_account(batch_client, config)
 
 
 def action_cert_del(batch_client, config, sha1):
@@ -2729,14 +2764,15 @@ def action_cert_del(batch_client, config, sha1):
     batch.del_certificate_from_account(batch_client, config, sha1)
 
 
-def action_pool_listskus(batch_client):
-    # type: (batchsc.BatchServiceClient) -> None
+def action_pool_listskus(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool Listskus
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
+    :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
-    batch.list_node_agent_skus(batch_client)
+    batch.list_node_agent_skus(batch_client, config)
 
 
 def action_pool_add(
@@ -2781,14 +2817,15 @@ def action_pool_add(
     )
 
 
-def action_pool_list(batch_client):
-    # type: (batchsc.BatchServiceClient) -> None
+def action_pool_list(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
     """Action: Pool List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
+    :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
-    batch.list_pools(batch_client)
+    batch.list_pools(batch_client, config)
 
 
 def action_pool_delete(
@@ -3343,20 +3380,26 @@ def action_jobs_add(
         recreate, tail)
 
 
-def action_jobs_list(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_jobs_list(batch_client, config, jobid, jobscheduleid):
+    # type: (batchsc.BatchServiceClient, dict, str, str) -> None
     """Action: Jobs List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param str jobid: job id
+    :param str jobscheduleid: job schedule id
     """
     _check_batch_client(batch_client)
-    batch.list_jobs(batch_client, config)
+    if util.is_not_empty(jobid):
+        batch.get_job_or_job_schedule(
+            batch_client, config, jobid, jobscheduleid)
+    else:
+        batch.list_jobs(batch_client, config)
 
 
 def action_jobs_tasks_list(
-        batch_client, config, all, jobid, poll_until_tasks_complete):
-    # type: (batchsc.BatchServiceClient, dict, bool, str, bool) -> None
+        batch_client, config, all, jobid, poll_until_tasks_complete, taskid):
+    # type: (batchsc.BatchServiceClient, dict, bool, str, bool, str) -> None
     """Action: Jobs Tasks List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -3364,13 +3407,20 @@ def action_jobs_tasks_list(
     :param bool all: all jobs
     :param str jobid: job id
     :param bool poll_until_tasks_complete: poll until tasks complete
+    :param str taskid: task id
     """
     _check_batch_client(batch_client)
     if all and jobid is not None:
         raise ValueError('cannot specify both --all and --jobid')
+    if settings.raw(config) and poll_until_tasks_complete:
+        raise ValueError(
+            'cannot specify --poll_until_tasks_complete and --raw')
     while True:
-        all_complete = batch.list_tasks(
-            batch_client, config, all=all, jobid=jobid)
+        if util.is_not_empty(taskid):
+            all_complete = batch.get_task(batch_client, config, jobid, taskid)
+        else:
+            all_complete = batch.list_tasks(
+                batch_client, config, all=all, jobid=jobid)
         if not poll_until_tasks_complete or all_complete:
             break
         time.sleep(5)
