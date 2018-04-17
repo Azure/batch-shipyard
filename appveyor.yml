@@ -66,17 +66,26 @@ after_test:
     if ($env:APPVEYOR_REPO_TAG -eq "true") {
       $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_TAG_NAME + "-cli-win-amd64.exe"
       $env:UPLOAD_PATH="releases/" + $env:APPVEYOR_REPO_TAG_NAME
+      $env:BUILDVER_DOTTED = $env:APPVEYOR_REPO_TAG
     }
     else {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" -Or $env:APPVEYOR_REPO_BRANCH -eq "develop") {
         $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_BRANCH + "-" + $env:APPVEYOR_BUILD_NUMBER + "-cli-win-amd64.exe"
         $env:UPLOAD_PATH="builds/" + $env:APPVEYOR_REPO_BRANCH
+        $env:BUILDVER_DOTTED = [string]::Format("0.0.0.{0}",$env:APPVEYOR_BUILD_NUMBER)
       }
       else {
         Write-Host "Invalid tag or branch $env:APPVEYOR_REPO_BRANCH to build binary"
         return
       }
     }
+
+    $bvt0,$bvt1,$bvt2,$bvt3 = $env:BUILDVER_DOTTED.split('.')
+
+    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$bvt3)
+
+    $env:BRANCH_GITSHA1 = [string]::Format("{0}@{1}",$env:APPVEYOR_REPO_BRANCH,$env:APPVEYOR_REPO_COMMIT.Substring(0,7))
+
 - IF "%BATCH_SHIPYARD_CLI_ARITFACT%"=="" (
     echo "Batch Shipyard CLI artifact not defined"
   ) ELSE (
@@ -86,7 +95,11 @@ after_test:
     pip install pyinstaller &&
     pip install --upgrade -r requirements.txt &&
     pip install --upgrade --no-deps -r req_nodeps.txt &&
-    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py &&
+    sed -i -e "s/{BUILDVER_TUPLE}/%BUILDVER_TUPLE%/g" docker\\windows\\file_version_info.txt &&
+    sed -i -e "s/{BUILDVER_DOTTED}/%BUILDVER_DOTTED%/g" docker\\windows\\file_version_info.txt &&
+    sed -i -e "s/{BRANCH_GITSHA1}/%BRANCH_GITSHA1%/g" docker\\windows\\file_version_info.txt &&
+    sed -i -e "s/{EXE}/%BATCH_SHIPYARD_CLI_ARITFACT%/g" docker\\windows\\file_version_info.txt &&
+    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py &&
     pyi\\Scripts\\deactivate.bat &&
     appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" &&
     pip install --upgrade blobxfer &&
