@@ -40,6 +40,7 @@ import azure.mgmt.batch
 import azure.mgmt.compute
 import azure.mgmt.network
 import azure.mgmt.resource
+import azure.mgmt.storage
 import azure.storage.blob as azureblob
 # local imports
 from . import aad
@@ -131,6 +132,35 @@ def _create_network_client(
         credentials, subscription_id, base_url=endpoint)
 
 
+def _create_storage_mgmt_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
+    # type: (CliContext, object, str) ->
+    #        azure.mgmt.storage.StorageManagementClient
+    """Create storage management client
+    :param CliContext ctx: Cli Context
+    :param object credentials: credentials object
+    :param str subscription_id: subscription id
+    :param str endpoint: endpoint
+    :rtype: azure.mgmt.storage.StorageManagementClient
+    :return: storage management client
+    """
+    storage_aad = None
+    if credentials is None:
+        storage_aad = settings.credentials_storage_aad(ctx.config)
+        credentials = aad.create_aad_credentials(ctx, storage_aad)
+    if util.is_none_or_empty(subscription_id):
+        try:
+            subid = storage_aad.subscription_id
+        except Exception:
+            subid = settings.credentials_management(
+                ctx.config).aad.subscription_id
+        subscription_id = ctx.subscription_id or subid
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or storage_aad.endpoint
+    return azure.mgmt.storage.StorageManagementClient(
+        credentials, subscription_id, base_url=endpoint)
+
+
 def _create_batch_mgmt_client(
         ctx, credentials=None, subscription_id=None, endpoint=None):
     # type: (CliContext, object, str, str) ->
@@ -160,14 +190,15 @@ def _create_batch_mgmt_client(
     return batch_mgmt_client
 
 
-def create_arm_clients(ctx, batch_clients=False):
+def create_all_clients(ctx, batch_clients=False):
     # type: (CliContext, bool) ->
     #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient,
+    #              azure.mgmt.storage.StorageManagementClient,
     #              azure.mgmt.batch.BatchManagementClient,
     #              azure.batch.batch_service_client.BatchServiceClient]
-    """Create resource, compute and network clients
+    """Create all arm clients and batch service client
     :param CliContext ctx: Cli Context
     :param bool batch_clients: create batch clients
     :rtype: tuple
@@ -175,6 +206,7 @@ def create_arm_clients(ctx, batch_clients=False):
         azure.mgmt.resource.resources.ResourceManagementClient,
         azure.mgmt.compute.ComputeManagementClient,
         azure.mgmt.network.NetworkManagementClient,
+        azure.mgmt.storage.StorageManagementClient,
         azure.mgmt.batch.BatchManagementClient,
         azure.batch.batch_service_client.BatchServiceClient)
     """
@@ -186,6 +218,7 @@ def create_arm_clients(ctx, batch_clients=False):
         resource_client = None
         compute_client = None
         network_client = None
+        storage_mgmt_client = None
     else:
         # subscription_id must be of type 'str' due to python management
         # library type checking, but can be read as 'unicode' from json
@@ -208,6 +241,11 @@ def create_arm_clients(ctx, batch_clients=False):
             endpoint=endpoint)
         network_client.config.add_user_agent(
             'batch-shipyard/{}'.format(__version__))
+        storage_mgmt_client = _create_storage_mgmt_client(
+            ctx, credentials=credentials, subscription_id=subscription_id,
+            endpoint=endpoint)
+        storage_mgmt_client.config.add_user_agent(
+            'batch-shipyard/{}'.format(__version__))
     if batch_clients:
         try:
             if credentials is None:
@@ -225,8 +263,8 @@ def create_arm_clients(ctx, batch_clients=False):
         batch_mgmt_client = None
         batch_client = None
     return (
-        resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client
+        resource_client, compute_client, network_client, storage_mgmt_client,
+        batch_mgmt_client, batch_client
     )
 
 

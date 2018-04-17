@@ -37,7 +37,7 @@ pool configuration file. The template is:
   virtual_network:
     arm_subnet_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/virtualNetworks/<virtual_network_name>/subnets/<subnet_name>
     name: myvnet
-    resource_group: vnet-in-another-rg
+    resource_group: resource-group-of-vnet
     create_nonexistant: false
     address_space: 10.0.0.0/16
     subnet:

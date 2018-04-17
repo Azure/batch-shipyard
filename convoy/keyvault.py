@@ -224,7 +224,7 @@ def parse_secret_ids(client, config):
             raise ValueError(
                 'storage account key retrieved for secret id {} is '
                 'invalid'.format(secid))
-        settings.set_credentials_storage_account_key(config, ssel, sakey)
+        settings.set_credentials_storage_account(config, ssel, sakey)
     # docker registry passwords
     for reg in settings.credentials_iterate_registry_servers(config, True):
         secid = settings.credentials_registry_password_secret_id(

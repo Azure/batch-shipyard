@@ -149,6 +149,37 @@ def get_storageaccount_endpoint():
     return _STORAGEACCOUNTEP
 
 
+def populate_storage_account_keys_from_aad(storage_mgmt_client, config):
+    # type: (azure.mgmt.storage.StorageManagementClient, dict) -> None
+    """Fetch secrets with secret ids in config from keyvault
+    :param azure.mgmt.storage.StorageManagementClient storage_mgmt_client:
+        storage client
+    :param dict config: configuration dict
+    """
+    modified = False
+    if storage_mgmt_client is None:
+        return modified
+    # iterate all storage accounts, if storage account does not have
+    # a storage account key, then lookup via aad
+    for ssel in settings.iterate_storage_credentials(config):
+        sc = settings.credentials_storage(config, ssel)
+        if util.is_none_or_empty(sc.account_key):
+            if util.is_none_or_empty(sc.resource_group):
+                raise ValueError(
+                    ('resource_group is invalid for storage account {} to '
+                     'be retrieved by aad').format(sc.account))
+            keys = storage_mgmt_client.storage_accounts.list_keys(
+                sc.resource_group, sc.account)
+            props = storage_mgmt_client.storage_accounts.get_properties(
+                sc.resource_group, sc.account)
+            ep = '.'.join(
+                props.primary_endpoints.blob.rstrip('/').split('.')[2:])
+            settings.set_credentials_storage_account(
+                config, ssel, keys.keys[0].value, ep)
+            modified = True
+    return modified
+
+
 def generate_blob_container_uri(storage_settings, container):
     # type: (StorageCredentialsSettings, str) -> str
     """Create a uri to a blob container

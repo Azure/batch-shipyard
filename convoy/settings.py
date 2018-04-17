@@ -229,7 +229,7 @@ BatchCredentialsSettings = collections.namedtuple(
 )
 StorageCredentialsSettings = collections.namedtuple(
     'StorageCredentialsSettings', [
-        'account', 'account_key', 'endpoint',
+        'account', 'account_key', 'endpoint', 'resource_group',
     ]
 )
 BatchShipyardSettings = collections.namedtuple(
@@ -1458,6 +1458,33 @@ def set_credentials_batch_account_key(config, bakey):
     config['credentials']['batch']['account_key'] = bakey
 
 
+def credentials_storage_aad(config):
+    # type: (dict) -> AADSettings
+    """Get storage AAD credentials
+    :param dict config: configuration object
+    :rtype: AADSettings
+    :return: storage aad settings
+    """
+    if 'aad' in config['credentials']['storage']:
+        return _aad_credentials(
+            config['credentials'],
+            'storage',
+            default_endpoint='https://management.azure.com/',
+            default_token_cache_file=(
+                '.batch_shipyard_aad_storage_token.json'
+            ),
+        )
+    else:
+        return _aad_credentials(
+            config['credentials'],
+            'management',
+            default_endpoint='https://management.azure.com/',
+            default_token_cache_file=(
+                '.batch_shipyard_aad_storage_token.json'
+            ),
+        )
+
+
 def credentials_storage(config, ssel):
     # type: (dict, str) -> StorageCredentialsSettings
     """Get specific storage credentials
@@ -1473,16 +1500,12 @@ def credentials_storage(config, ssel):
             ('Could not find storage account alias {} in credentials:storage '
              'configuration. Please ensure the storage account alias '
              'exists.').format(ssel))
-    try:
-        ep = conf['endpoint']
-        if util.is_none_or_empty(ep):
-            raise KeyError()
-    except KeyError:
-        ep = 'core.windows.net'
     return StorageCredentialsSettings(
         account=conf['account'],
-        account_key=conf['account_key'],
-        endpoint=ep,
+        account_key=_kv_read_checked(conf, 'account_key'),
+        endpoint=_kv_read_checked(
+            conf, 'endpoint', default='core.windows.net'),
+        resource_group=_kv_read_checked(conf, 'resource_group'),
     )
 
 
@@ -1494,6 +1517,8 @@ def iterate_storage_credentials(config):
     :return: storage selector link
     """
     for conf in config['credentials']['storage']:
+        if conf == 'aad':
+            continue
         yield conf
 
 
@@ -1515,14 +1540,17 @@ def credentials_storage_account_key_secret_id(config, ssel):
     return secid
 
 
-def set_credentials_storage_account_key(config, ssel, sakey):
-    # type: (dict, str, str) -> None
-    """Set Storage account key
+def set_credentials_storage_account(config, ssel, sakey, ep=None):
+    # type: (dict, str, str, str) -> None
+    """Set Storage account key and endpoint
     :param dict config: configuration object
     :param str ssel: storage selector link
     :param str sakey: storage account key
+    :param str ep: endpoint
     """
     config['credentials']['storage'][ssel]['account_key'] = sakey
+    if util.is_not_empty(ep):
+        config['credentials']['storage'][ssel]['endpoint'] = ep
 
 
 def docker_registry_login(config, server):

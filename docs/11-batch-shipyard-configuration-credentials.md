@@ -35,6 +35,19 @@ credentials:
     account_service_url: https://<batch_account_name>.<region>.batch.azure.com/
     resource_group: resource-group-of-batch-account
   storage:
+    aad:
+      authority_url: https://login.microsoftonline.com
+      endpoint: https://batch.core.windows.net/
+      directory_id: 01234567-89ab-cdef-0123-456789abcdef
+      application_id: 01234567-89ab-cdef-0123-456789abcdef
+      auth_key: 01234...
+      rsa_private_key_pem: some/path/privatekey.pem
+      x509_cert_sha1_thumbprint: 01234...
+      user: aad_username
+      password: aad_user_password
+      token_cache:
+        enabled: true
+        filename: some/path/token.cache
     mystorageaccount:
       account: storage_account_name
       account_key: 01234...
@@ -100,13 +113,13 @@ reviewing the options below.
 ### Azure Active Directory: `aad`
 `aad` can be specified at the "global" level, which would apply to all
 resources that can be accessed through Azure Active Directory: `batch`,
-`keyvault` and `management`. `aad` should only be specified at the "global"
-level if a common set of credentials are permitted to access all three
-resources. The `aad` property can also be specified within each individual
-credential section for `batch`, `keyvault` and `management`. Any `aad`
-properties specified within a credential section will override any "global"
-`aad` setting. Note that certain properties such as `endpoint` and
-`token_cache` are not available at the "global" level.
+`storage`, `keyvault` and `management`. `aad` should only be specified at
+the "global" level if a common set of credentials are permitted to access
+all three resources. The `aad` property can also be specified within each
+individual credential section for `batch`, `keyvault` and `management`.
+Any `aad` properties specified within a credential section will override
+any "global" `aad` setting. Note that certain properties such as `endpoint`
+and `token_cache` are not available at the "global" level.
 
 The `aad` property contains members for Azure Active Directory credentials.
 This section may not be needed or applicable for every credential section.
@@ -186,11 +199,27 @@ different Azure Storage account credentials under the `storage` property. This
 may be needed for more flexible configuration in other configuration files. In
 the example above, we only have one storage account defined which is aliased
 by the property name `mystorageaccount`. The alias (or storage account link
-name) can be the same as the storage account name itself.
-    * (optional) `account_key_keyvault_secret_id` property can be used to
-      reference an Azure KeyVault secret id. Batch Shipyard will contact the
-      specified KeyVault and replace the `account_key` value as returned by
-      Azure KeyVault.
+name) can be the same as the storage account name itself. Note that it is
+possible to not specify an `account_key` directly through the use of `aad`
+or `account_key_keyvault_secret_id`.
+    * (optional) `aad` AAD authentication parameters for Azure Storage.
+    * (required, at least 1) `<account-name-link>` is an arbitrary account
+      name link. This does not necessarily need to be the name of the storage
+      account but the link name to be referred in other configuration files.
+      This link name cannot be named `aad`.
+        * (required) `account` is the storage account name
+        * (required unless `aad` or `account_key_keyvault_secret_id` is
+          specified) `account_key` is the storage account key
+        * (optional) `account_key_keyvault_secret_id` property can be used to
+          reference an Azure KeyVault secret id. Batch Shipyard will contact
+          the specified KeyVault and replace the `account_key` value as
+          returned by Azure KeyVault.
+        * (optional) `endpoint` is the storage endpoint to use. The default
+          if not specified is `core.windows.net` which is the Public Azure
+          default.
+        * (required if `aad` is specified) `resource_group` is the resource
+          group of the storage account. This is required if `account_key`
+          is not specified and `aad` is used instead.
 
 ### Docker and Singularity Registries: `docker_registry` and `singularity_registry`
 * (optional) `docker_registry` or `singularity_registry` property defines

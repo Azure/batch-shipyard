@@ -72,6 +72,7 @@ class CliContext(object):
         self.resource_client = None
         self.compute_client = None
         self.network_client = None
+        self.storage_mgmt_client = None
         # aad/keyvault options
         self.keyvault_uri = None
         self.keyvault_credentials_secret_id = None
@@ -116,7 +117,11 @@ class CliContext(object):
         self._init_config(
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.resource_client, self.compute_client, self.network_client, \
-            _, _ = convoy.clients.create_arm_clients(self)
+            self.storage_mgmt_client, _, _ = \
+            convoy.clients.create_all_clients(self)
+        # inject storage account keys if via aad
+        convoy.fleet.fetch_storage_account_keys_from_aad(
+            self.storage_mgmt_client, self.config, fs_storage=True)
         self.blob_client, _ = convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
             skip_global_config=False, skip_pool_config=True)
@@ -157,8 +162,12 @@ class CliContext(object):
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
         self.resource_client, self.compute_client, self.network_client, \
-            self.batch_mgmt_client, self.batch_client = \
-            convoy.clients.create_arm_clients(self, batch_clients=True)
+            self.storage_mgmt_client, self.batch_mgmt_client, \
+            self.batch_client = \
+            convoy.clients.create_all_clients(self, batch_clients=True)
+        # inject storage account keys if via aad
+        convoy.fleet.fetch_storage_account_keys_from_aad(
+            self.storage_mgmt_client, self.config, fs_storage=False)
         self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
@@ -174,6 +183,11 @@ class CliContext(object):
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
+        # inject storage account keys if via aad
+        _, _, _, self.storage_mgmt_client, _, _ = \
+            convoy.clients.create_all_clients(self)
+        convoy.fleet.fetch_storage_account_keys_from_aad(
+            self.storage_mgmt_client, self.config, fs_storage=False)
         self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize(
@@ -225,6 +239,8 @@ class CliContext(object):
         del self.aad_endpoint
         del self.keyvault_credentials_secret_id
         del self.subscription_id
+        # free clients that won't be used
+        del self.storage_mgmt_client
 
     def _read_config_file(self, config_file):
         # type: (CliContext, pathlib.Path) -> None

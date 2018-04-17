@@ -240,6 +240,20 @@ def fetch_secrets_from_keyvault(keyvault_client, config):
         keyvault.parse_secret_ids(keyvault_client, config)
 
 
+def fetch_storage_account_keys_from_aad(
+        storage_mgmt_client, config, fs_storage):
+    # type: (azure.mgmt.storage.StorageManagementClient, dict, bool) -> None
+    """Fetch secrets with secret ids in config from keyvault
+    :param azure.mgmt.storage.StorageManagementClient storage_mgmt_client:
+        storage client
+    :param dict config: configuration dict
+    :param bool fs_storage: adjust for fs context
+    """
+    if storage.populate_storage_account_keys_from_aad(
+            storage_mgmt_client, config):
+        populate_global_settings(config, fs_storage)
+
+
 def _setup_nvidia_driver_package(blob_client, config, vm_size):
     # type: (azure.storage.blob.BlockBlobService, dict, str) -> pathlib.Path
     """Set up the nvidia driver package
@@ -726,7 +740,7 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
             'version': pool_settings.vm_configuration.version,
         }, 'batch.node.windows amd64')
     # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus(config)
+    node_agent_skus = batch_client.account.list_node_agent_skus()
     skus_to_use = [
         (nas, image_ref) for nas in node_agent_skus
         for image_ref in sorted(
