@@ -548,7 +548,7 @@ def _create_virtual_machine(
                 ImageReference(
                     publisher='Canonical',
                     offer='UbuntuServer',
-                    sku='16.04-LTS',
+                    sku='18.04-DAILY-LTS',  # TODO move to stable after release
                     version='latest',
                 ),
                 data_disks=data_disks,

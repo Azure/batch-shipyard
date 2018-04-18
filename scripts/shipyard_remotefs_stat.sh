@@ -82,7 +82,7 @@ if [ "$server_type" == "nfs" ]; then
     netstat -tn | grep :2049
 elif [ "$server_type" == "glusterfs" ]; then
     echo "glusterfs service status:"
-    systemctl --no-pager status glusterfs-server
+    systemctl --no-pager status glusterd
     echo ""
     gluster volume info all
     echo ""

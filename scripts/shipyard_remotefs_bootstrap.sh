@@ -62,11 +62,11 @@ setup_nfs() {
         set +f
         systemctl reload nfs-kernel-server.service
     fi
-    if ! systemctl status nfs-kernel-server.service; then
+    if ! systemctl --no-pager status nfs-kernel-server.service; then
         set -e
         # attempt to start
         systemctl start nfs-kernel-server.service
-        systemctl status nfs-kernel-server.service
+        systemctl --no-pager status nfs-kernel-server.service
     fi
     set -e
     exportfs -v
@@ -424,24 +424,14 @@ EOF
     apt-get update
     if [ "$server_type" == "nfs" ]; then
         apt-get install -y --no-install-recommends nfs-kernel-server nfs4-acl-tools
-        # patch buggy nfs-mountd.service unit file
-        # https://bugs.launchpad.net/ubuntu/+source/nfs-utils/+bug/1590799
-        set +e
-        if grep "^After=network.target local-fs.target" /lib/systemd/system/nfs-mountd.service; then
-            set -e
-            sed -i -e "s/^After=network.target local-fs.target/After=rpcbind.target/g" /lib/systemd/system/nfs-mountd.service
-        fi
-        set -e
-        # reload unit files
-        systemctl daemon-reload
         # enable and start nfs server
         systemctl enable nfs-kernel-server.service
         # start service if not started
         set +e
-        if ! systemctl status nfs-kernel-server.service; then
+        if ! systemctl --no-pager status nfs-kernel-server.service; then
             set -e
             systemctl start nfs-kernel-server.service
-            systemctl status nfs-kernel-server.service
+            systemctl --no-pager status nfs-kernel-server.service
         fi
         set -e
     elif [ "$server_type" == "glusterfs" ]; then
@@ -452,15 +442,27 @@ EOF
         iptables -A INPUT -p tcp --destination-port 24007:24008 -j REJECT
         iptables -A INPUT -p tcp --destination-port 49152:49215 -j REJECT
         # install glusterfs server
+        set +e
         apt-get install -y -q --no-install-recommends glusterfs-server
+        rc=$?
+        set -e
+        # handle buggy install due to glustereventsd
+        # https://bugs.launchpad.net/ubuntu/+source/glusterfs/+bug/1712748
+        # TODO remove this workaround when this is fixed
+        if [ $rc -eq 100 ]; then
+            apt-get -y -f install
+        else
+            echo "glusterfs-server installation failed with rc=$rc"
+            exit $rc
+        fi
         # enable gluster service
-        systemctl enable glusterfs-server
+        systemctl enable glusterd
         # start service if not started
         set +e
-        if ! systemctl status glusterfs-server; then
+        if ! systemctl --no-pager status glusterd; then
             set -e
-            systemctl start glusterfs-server
-            systemctl status glusterfs-server
+            systemctl start glusterd
+            systemctl --no-pager status glusterd
         fi
         set -e
         iptables -L INPUT
@@ -810,14 +812,12 @@ cat >> /etc/samba/smb.conf << EOF
   browseable = yes
 EOF
         fi
+        # add auto-restart
+        sed -i "/^\\[Service\\]/aRestart=yes\\nRestartSec=2" /lib/systemd/system/smbd.service
         # reload unit files
         systemctl daemon-reload
-        # add fix to attempt samba service restarts in case of failures.
-        # note that this will get overwritten if the systemd-sysv-generator
-        # is re-run (e.g., systemctl daemon-reload).
-        sed -i -e "s/^Restart=no/Restart=yes/g" /run/systemd/generator.late/smbd.service
-        sed -i "/^Restart=yes/a RestartSec=2" /run/systemd/generator.late/smbd.service
         # restart samba service
         systemctl restart smbd.service
+        systemctl --no-pager status smbd.service
     fi
 fi
