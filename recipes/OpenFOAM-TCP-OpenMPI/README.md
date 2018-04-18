@@ -2,7 +2,7 @@
 This recipe shows how to run [OpenFOAM](http://www.openfoam.org/)
 on Linux using OpenMPI over TCP in an Azure Batch compute pool.
 Execution of this distributed workload requires the use of
-[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
+[multi-instance tasks](../../docs/80-batch-shipyard-multi-instance-tasks.md).
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for

@@ -2,7 +2,7 @@
 This recipe shows how to run [OpenFOAM](http://www.openfoam.org/)
 on Linux using Intel MPI over Infiniband/RDMA Azure VM instances in an Azure
 Batch compute pool. Execution of this distributed workload requires the use of
-[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md).
+[multi-instance tasks](../../docs/80-batch-shipyard-multi-instance-tasks.md).
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for
@@ -10,13 +10,13 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` should be a CPU-only RDMA-enabled instance:
-`STANDARD_A8`, `STANDARD_A9`, `STANDARD_H16R`, `STANDARD_H16MR`
+* `vm_size` should be a CPU-only
+[RDMA-enabled instance](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc).
+* `vm_configuration` is the VM configuration. Please select an appropriate
+`platform_image` with IB/RDMA as
+[supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic` or `SUSE`
-* `offer` should be `CentOS-HPC` for `OpenLogic` or `SLES-HPC` for `SUSE`
-* `sku` should be `7.1` for `CentOS-HPC` or `12-SP1` for `SLES-HPC`
 
 ### Global Configuration
 The global configuration should set the following properties:

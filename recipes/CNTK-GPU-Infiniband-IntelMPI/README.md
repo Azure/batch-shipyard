@@ -8,12 +8,13 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` must be an RDMA-enabled GPU vm size, e.g., `STANDARD_NC24R`
+* `vm_size` must be a
+[GPU RDMA-enabled instance](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu).
+* `vm_configuration` is the VM configuration. Please select an appropriate
+`platform_image` with GPU+IB/RDMA as
+[supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `OpenLogic`
-* `offer` should be `CentOS-HPC`
-* `sku` should be `7.3`
 
 ### Global Configuration
 The global configuration should set the following properties:

@@ -11,17 +11,13 @@ this recipe.
 The pool configuration should enable the following properties if on multiple
 GPUs:
 * `vm_size` must be a GPU enabled VM size if using GPUs. Because TensorFlow
-is a GPU-accelerated compute application, you should choose an `ND`, `NC` or
-`NCv2` VM instance size if utilizing GPUs. If not using GPUs, any other
-appropriate CPU based VM size can be selected.
-* `vm_configuration` is the VM configuration
-  * `platform_image` specifies to use a platform image
-    * `publisher` should be `Canonical` or `OpenLogic` if using GPUs. Other
-      supported publishers can be used if not.
-    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
-      if using GPUs. Other supported offers can be used if not.
-    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS if using
-      GPUs. Other supported skus can be used if not.
+is a GPU-accelerated compute application, you should choose a GPU compute
+accelerated VM instance size. If not using GPUs, any other appropriate
+CPU-based VM size can be selected.
+* `vm_configuration` is the VM configuration. Please select an appropriate
+`platform_image` with GPU as
+[supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
+If not using GPUs, you can select any appropriate platform image.
 
 If on multiple CPUs:
 * `max_tasks_per_node` must be set to 1 or omitted

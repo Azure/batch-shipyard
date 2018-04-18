@@ -5,7 +5,7 @@ on Linux using the
 (as opposed to pure MPI) over TCP/IP-connected machines in an Azure Batch
 compute pool. Regardless of the underlying parallel/distributed programming
 paradigm, execution of this distributed workload requires the use of
-[multi-instance tasks](../docs/80-batch-shipyard-multi-instance-tasks.md)
+[multi-instance tasks](../../docs/80-batch-shipyard-multi-instance-tasks.md)
 when run across multiple nodes.
 
 ## Configuration

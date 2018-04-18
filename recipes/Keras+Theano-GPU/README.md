@@ -10,13 +10,11 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `vm_size` must be a GPU enabled VM size. Because Keras is a GPU-accelerated
-compute application, you should choose an `ND`, `NC` or `NCv2` VM instance
-size.
-* `vm_configuration` is the VM configuration
-  * `platform_image` specifies to use a platform image
-    * `publisher` should be `Canonical` or `OpenLogic`
-    * `offer` should be `UbuntuServer` for Canonical or `CentOS` for OpenLogic
-    * `sku` should be `16.04-LTS` for Ubuntu or `7.3` for CentOS
+compute application, you should choose a GPU compute accelerated VM
+instance size.
+* `vm_configuration` is the VM configuration. Please select an appropriate
+`platform_image` with GPU as
+[supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 
 ### Global Configuration
 The global configuration should set the following properties:
