@@ -67,27 +67,28 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '384.111/NVIDIA-Linux-x86_64-384.111.run'
+            '390.46/NVIDIA-Linux-x86_64-390.46.run'
         ),
         'sha256': (
-            'bd8af7654ccb224c37e74c8e81477a42f63fa9f2360b1b1ec6ae00b03ae21054'
+            'fa8231f43e7780da56422eedd8532ebb274b13f1328cccb934c5cc01f8927f58'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '390.30/NVIDIA-Linux-x86_64-390.30.run'
+            '390.46/NVIDIA-Linux-x86_64-390.46.run'
         ),
         'sha256': (
-            'ca4cb41a3c472a86b9c31784f07c6d2186539b12d2cdffd11c2152013b687e83'
+            'fa8231f43e7780da56422eedd8532ebb274b13f1328cccb934c5cc01f8927f58'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
     'viz_cc52': {
+        # currently 390.42
         'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
         'sha256': (
-            'ca3fd5f5e9156ad3d983b2032bde3c009dca73400f2753f9b475825f4670a854'
+            'de5bc9e5fc3683a231e5ae31ad6b148e54bf093f0f2186c21bb3f42b34985cf4'
         ),
         'target': 'nvidia-driver-grid.run'
     },

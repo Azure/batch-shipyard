@@ -470,6 +470,7 @@ install_nvidia_software() {
         exit 1
     fi
     # blacklist nouveau from being loaded if rebooted
+    if [ "$DISTRIB_ID" == "ubuntu" ]; then
 cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
 blacklist nouveau
 blacklist lbm-nouveau
@@ -477,17 +478,29 @@ options nouveau modeset=0
 alias nouveau off
 alias lbm-nouveau off
 EOF
+    elif [[ $DISTRIB_ID == centos* ]]; then
+cat >> /etc/modprobe.d/blacklist.conf << EOF
+blacklist nouveau
+blacklist lbm-nouveau
+options nouveau modeset=0
+alias nouveau off
+alias lbm-nouveau off
+EOF
+    dracut /boot/initramfs-"$(uname -r)".img "$(uname -r)" --force
+    fi
     # get development essentials for nvidia driver
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         install_packages build-essential
     elif [[ $DISTRIB_ID == centos* ]]; then
         local kernel_devel_package
+        local centos_ver
         kernel_devel_package="kernel-devel-$(uname -r)"
-        if [[ $DISTRIB_ID == "centos-hpc" ]] || [[ "$sku" == "7.4" ]]; then
-            install_packages "${kernel_devel_package}"
-        elif [ "$sku" == "7.3" ]; then
+        centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
+        if [[ "$centos_ver" == 7.3.* ]]; then
             download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/"${kernel_devel_package}".rpm
             install_local_packages "${kernel_devel_package}".rpm
+        elif [[ $DISTRIB_ID == "centos-hpc" ]] || [[ "$centos_ver" == 7.* ]]; then
+            install_packages "${kernel_devel_package}"
         else
             log ERROR "CentOS $DISTRIB_RELEASE not supported for GPU"
             exit 1
@@ -1050,8 +1063,8 @@ cat > $envfile << EOF
 PYTHONASYNCIODEBUG=1
 prefix=$prefix
 ipaddress=$ipaddress
-offer=$offer
-sku=$sku
+offer=$DISTRIB_ID
+sku=$DISTRIB_RELEASE
 npstart=$npstart
 drpstart=$drpstart
 p2p=$p2p
@@ -1087,7 +1100,7 @@ EOF
         # add timings
         if [ ! -z ${SHIPYARD_TIMING+x} ]; then
             # backfill node prep start
-            ./perf.py nodeprep start "$prefix" --ts "$npstart" --message "offer=$offer,sku=$sku"
+            ./perf.py nodeprep start "$prefix" --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
             # mark node prep finished
             ./perf.py nodeprep end "$prefix"
             # mark start cascade
