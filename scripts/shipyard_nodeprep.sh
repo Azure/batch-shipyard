@@ -388,6 +388,11 @@ check_for_nvidia_driver_on_custom_or_native() {
     fi
 }
 
+enable_nvidia_persistence_mode() {
+    nvidia-persistenced --user root
+    nvidia-smi -pm 1
+}
+
 check_for_nvidia_on_custom_or_native() {
     log INFO "Checking for Nvidia Hardware"
     # first check for card
@@ -404,8 +409,7 @@ check_for_nvidia_on_custom_or_native() {
         check_for_nvidia_driver_on_custom_or_native
         # prevent kernel upgrades from breaking driver
         blacklist_kernel_upgrade
-        # enable persistence mode
-        nvidia-smi -pm 1
+        enable_nvidia_persistence_mode
         nvidia-smi
     fi
 }
@@ -425,6 +429,7 @@ ensure_nvidia_driver_installed() {
         install_nvidia_software
     else
         log INFO "Nvidia driver detected"
+        enable_nvidia_persistence_mode
         nvidia-smi
     fi
 }
@@ -505,8 +510,7 @@ EOF
         echo "IgnoreSP=TRUE" >> /etc/nvidia/gridd.conf
     fi
     # enable persistence daemon (and mode)
-    nvidia-persistenced --user root
-    nvidia-smi -pm 1
+    enable_nvidia_persistence_mode
     # install nvidia-docker
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         add_repo https://nvidia.github.io/nvidia-docker/gpgkey
