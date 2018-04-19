@@ -66,13 +66,13 @@ after_test:
     if ($env:APPVEYOR_REPO_TAG -eq "true") {
       $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_TAG_NAME + "-cli-win-amd64.exe"
       $env:UPLOAD_PATH="releases/" + $env:APPVEYOR_REPO_TAG_NAME
-      $env:BUILDVER_DOTTED = $env:APPVEYOR_REPO_TAG
+      $env:BUILDVER_DOTTED = $env:APPVEYOR_REPO_TAG_NAME
     }
     else {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" -Or $env:APPVEYOR_REPO_BRANCH -eq "develop") {
         $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_BRANCH + "-" + $env:APPVEYOR_BUILD_NUMBER + "-cli-win-amd64.exe"
         $env:UPLOAD_PATH="builds/" + $env:APPVEYOR_REPO_BRANCH
-        $env:BUILDVER_DOTTED = [string]::Format("0.0.0.{0}",$env:APPVEYOR_BUILD_NUMBER)
+        $env:BUILDVER_DOTTED = [string]::Format("0.0.{0}",$env:APPVEYOR_BUILD_NUMBER)
       }
       else {
         Write-Host "Invalid tag or branch $env:APPVEYOR_REPO_BRANCH to build binary"
@@ -80,9 +80,9 @@ after_test:
       }
     }
 
-    $bvt0,$bvt1,$bvt2,$bvt3 = $env:BUILDVER_DOTTED.split('.')
+    $bvt0,$bvt1,$bvt2 = $env:BUILDVER_DOTTED.split('.')
 
-    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$bvt3)
+    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, 0)",$bvt0,$bvt1,$bvt2)
 
     $env:BRANCH_GITSHA1 = [string]::Format("{0}@{1}",$env:APPVEYOR_REPO_BRANCH,$env:APPVEYOR_REPO_COMMIT.Substring(0,7))
 
