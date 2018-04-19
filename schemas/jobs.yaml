@@ -200,7 +200,7 @@ mapping:
                           zip:
                             type: seq
                             sequence:
-                              - type: str
+                              - type: any
                       random:
                         type: map
                         mapping:
