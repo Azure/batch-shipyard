@@ -31,10 +31,12 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
+import concurrent.futures
 import datetime
 import fnmatch
 import getpass
 import logging
+import multiprocessing
 import os
 try:
     import pathlib2 as pathlib
@@ -63,6 +65,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
+_MAX_EXECUTOR_WORKERS = min((multiprocessing.cpu_count() * 4, 32))
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _TASKMAP_PICKLE_FILE = 'taskmap.pickle'
@@ -902,10 +905,14 @@ def add_rdp_user(batch_client, config, nodes=None):
         nodes = batch_client.compute_node.list(pool.id)
     expiry = datetime.datetime.utcnow() + datetime.timedelta(
         pool.rdp.expiry_days)
-    for node in nodes:
-        _add_admin_user_to_compute_node(
-            batch_client, pool, node, pool.rdp.username, None, password,
-            expiry=expiry)
+    nodes = list(nodes)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+        for node in nodes:
+            executor.submit(
+                _add_admin_user_to_compute_node,
+                batch_client, pool, node, pool.rdp.username, None, password,
+                expiry=expiry)
 
 
 def add_ssh_user(batch_client, config, nodes=None):
@@ -946,24 +953,30 @@ def add_ssh_user(batch_client, config, nodes=None):
         nodes = batch_client.compute_node.list(pool.id)
     expiry = datetime.datetime.utcnow() + datetime.timedelta(
         pool.ssh.expiry_days)
-    for node in nodes:
-        _add_admin_user_to_compute_node(
-            batch_client, pool, node, pool.ssh.username, ssh_pub_key_data,
-            None, expiry=expiry)
+    nodes = list(nodes)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+        for node in nodes:
+            executor.submit(
+                _add_admin_user_to_compute_node,
+                batch_client, pool, node, pool.ssh.username, ssh_pub_key_data,
+                None, expiry=expiry)
     # generate tunnel script if requested
-    generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes)
+    generate_ssh_tunnel_script(batch_client, config, ssh_priv_key, nodes=nodes)
 
 
-def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
-    # type: (batch.BatchServiceClient, PoolSettings, str,
+def generate_ssh_tunnel_script(
+        batch_client, config, ssh_priv_key, nodes=None, rls=None):
+    # type: (batch.BatchServiceClient, dict, str,
     #        List[batchmodels.ComputeNode]) -> None
     """Generate SSH tunneling script
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
-    :param PoolSettings pool: pool settings
+    :param dict config: configuration dict
     :param str ssh_priv_key: path to ssh private key
     :param list nodes: list of nodes
     """
+    pool = settings.pool_settings(config)
     if not pool.ssh.generate_docker_tunnel_script:
         return
     if util.on_windows():
@@ -974,8 +987,11 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             'cannot generate tunnel script for windows pool {}'.format(
                 pool.id))
         return
-    if nodes is None or len(list(nodes)) != pool.vm_count:
-        nodes = batch_client.compute_node.list(pool.id)
+    if rls is None:
+        if nodes is None or len(list(nodes)) != pool.vm_count:
+            nodes = batch_client.compute_node.list(pool.id)
+        rls = get_remote_login_settings(
+            batch_client, config, nodes=nodes, suppress_output=True)
     if ssh_priv_key is None:
         ssh_priv_key = pathlib.Path(
             pool.ssh.generated_file_export_path,
@@ -1006,12 +1022,12 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
         fd.write('declare -A ips\n')
         fd.write('declare -A ports\n')
         i = 0
-        for node in nodes:
-            rls = batch_client.compute_node.get_remote_login_settings(
-                pool.id, node.id)
-            fd.write('nodes[{}]={}\n'.format(i, node.id))
-            fd.write('ips[{}]={}\n'.format(i, rls.remote_login_ip_address))
-            fd.write('ports[{}]={}\n'.format(i, rls.remote_login_port))
+        for node_id in rls:
+            fd.write('nodes[{}]={}\n'.format(i, node_id))
+            fd.write('ips[{}]={}\n'.format(
+                i, rls[node_id].remote_login_ip_address))
+            fd.write('ports[{}]={}\n'.format(
+                i, rls[node_id].remote_login_port))
             i += 1
         fd.write(
             'if [ -z $1 ]; then echo must specify node cardinal; exit 1; '
@@ -1031,6 +1047,25 @@ def generate_ssh_tunnel_script(batch_client, pool, ssh_priv_key, nodes):
             'option: -H :\n')
     os.chmod(str(tunnelscript), 0o755)
     logger.info('ssh tunnel script generated: {}'.format(tunnelscript))
+
+
+def _del_remote_user(batch_client, pool_id, node_id, username):
+    # type: (batch.BatchServiceClient, str, str, str) -> None
+    """Delete a remote user on a node
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str pool_id: pool id
+    :param str node_id: node id
+    :param str username: user name
+    """
+    try:
+        batch_client.compute_node.delete_user(
+            pool_id, node_id, username)
+        logger.debug('deleted remote user {} from node {}'.format(
+            username, node_id))
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'The node user does not exist' not in ex.message.value:
+            raise
 
 
 def del_rdp_user(batch_client, config, nodes=None):
@@ -1059,15 +1094,13 @@ def del_rdp_user(batch_client, config, nodes=None):
     # get node list if not provided
     if nodes is None:
         nodes = batch_client.compute_node.list(pool.id)
-    for node in nodes:
-        try:
-            batch_client.compute_node.delete_user(
-                pool.id, node.id, pool.rdp.username)
-            logger.debug('deleted user {} from node {}'.format(
-                pool.rdp.username, node.id))
-        except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The node user does not exist' not in ex.message.value:
-                raise
+    nodes = list(nodes)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+        for node in nodes:
+            executor.submit(
+                _del_remote_user, batch_client, pool.id, node.id,
+                pool.rdp.username)
 
 
 def del_ssh_user(batch_client, config, nodes=None):
@@ -1096,15 +1129,13 @@ def del_ssh_user(batch_client, config, nodes=None):
     # get node list if not provided
     if nodes is None:
         nodes = batch_client.compute_node.list(pool.id)
-    for node in nodes:
-        try:
-            batch_client.compute_node.delete_user(
-                pool.id, node.id, pool.ssh.username)
-            logger.debug('deleted user {} from node {}'.format(
-                pool.ssh.username, node.id))
-        except batchmodels.batch_error.BatchErrorException as ex:
-            if 'The node user does not exist' not in ex.message.value:
-                raise
+    nodes = list(nodes)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+        for node in nodes:
+            executor.submit(
+                _del_remote_user, batch_client, pool.id, node.id,
+                pool.ssh.username)
 
 
 def list_pools(batch_client, config):
@@ -1588,6 +1619,7 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
     :param list node_ids: list of node ids to reboot
     """
     pool_id = settings.pool_id(config)
+    nodes_to_reboot = []
     if all_start_task_failed:
         nodes = list(
             batch_client.compute_node.list(
@@ -1601,7 +1633,7 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
                     config, 'reboot node {} from {} pool'.format(
                         node.id, pool_id)):
                 continue
-            _reboot_node(batch_client, pool_id, node.id, False)
+            nodes_to_reboot.append(node.id)
     else:
         if util.is_none_or_empty(node_ids):
             raise ValueError('node ids to reboot is empty or invalid')
@@ -1610,7 +1642,15 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
                     config, 'reboot node {} from {} pool'.format(
                         node_id, pool_id)):
                 continue
-            _reboot_node(batch_client, pool_id, node_id, False)
+            nodes_to_reboot.append(node.id)
+    if util.is_none_or_empty(nodes_to_reboot):
+        return
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min((
+                len(nodes_to_reboot), _MAX_EXECUTOR_WORKERS))) as executor:
+        for node_id in nodes_to_reboot:
+            executor.submit(
+                _reboot_node, batch_client, pool_id, node_id, False)
 
 
 def del_nodes(
@@ -2040,6 +2080,32 @@ def enable_jobs(batch_client, config, jobid=None, jobscheduleid=None):
             logger.info('{} {} enabled'.format(text, job_id))
 
 
+def _wait_for_task_deletion(batch_client, job_id, task):
+    # type: (azure.batch.batch_service_client.BatchServiceClient,
+    #        str, str) -> None
+    """Wait for task deletion
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job id of task to terminate
+    :param str task: task id to delete
+    """
+    try:
+        logger.debug(
+            'waiting for task {} in job {} to delete'.format(task, job_id))
+        while True:
+            batch_client.task.get(
+                job_id, task,
+                task_get_options=batchmodels.TaskGetOptions(select='id')
+            )
+            time.sleep(1)
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'The specified task does not exist' in ex.message.value:
+            logger.info('task {} in job {} does not exist'.format(
+                task, job_id))
+        else:
+            raise
+
+
 def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        str, str, bool) -> None
@@ -2073,14 +2139,22 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
             ]
         else:
             tasks = [taskid]
+        tasks_to_delete = []
         for task in tasks:
             if not util.confirm_action(
                     config, 'delete {} task in job {}'.format(
                         task, job_id)):
                 nocheck[job_id].add(task)
                 continue
-            logger.info('Deleting task: {}'.format(task))
-            batch_client.task.delete(job_id, task)
+            tasks_to_delete.append(task)
+        if len(tasks_to_delete) == 0:
+            continue
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min((
+                    len(tasks_to_delete), _MAX_EXECUTOR_WORKERS))) as executor:
+            for task in tasks_to_delete:
+                logger.info('Deleting task: {}'.format(task))
+                executor.submit(batch_client.task.delete, job_id, task)
     if wait:
         for job in jobs:
             job_id = settings.job_id(job)
@@ -2094,30 +2168,19 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
                 ]
             else:
                 tasks = [taskid]
-            for task in tasks:
-                try:
-                    if task in nocheck[job_id]:
-                        continue
-                except KeyError:
-                    pass
-                try:
-                    logger.debug(
-                        'waiting for task {} in job {} to terminate'.format(
-                            task, job_id))
-                    while True:
-                        batch_client.task.get(
-                            job_id, task,
-                            task_get_options=batchmodels.TaskGetOptions(
-                                select='id')
-                        )
-                        time.sleep(1)
-                except batchmodels.batch_error.BatchErrorException as ex:
-                    if 'The specified task does not exist' in ex.message.value:
-                        logger.info('task {} in job {} does not exist'.format(
-                            task, job_id))
-                        continue
-                    else:
-                        raise
+            if len(tasks) == 0:
+                continue
+            with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=min((
+                        len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
+                for task in tasks:
+                    try:
+                        if task in nocheck[job_id]:
+                            continue
+                    except KeyError:
+                        pass
+                executor.submit(
+                    _wait_for_task_deletion, batch_client, job_id, task)
 
 
 def clean_mi_jobs(batch_client, config):
@@ -2492,6 +2555,85 @@ def _send_docker_kill_signal(
             logger.error('docker kill failed with return code: {}'.format(rc))
 
 
+def _terminate_task(
+        batch_client, config, ssh_username, ssh_private_key, native, force,
+        job_id, task, nocheck):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        str, str, bool, bool, str, str, dict) -> None
+    """Terminate a task, do not call directly
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str ssh_username: ssh username
+    :param str ssh_private_key: ssh private key
+    :param bool native: native mode
+    :param bool force: force task docker kill signal regardless of state
+    :param str jobid: job id of task to terminate
+    :param str task: task id to terminate
+    :param dict nocheck: nocheck dict
+    """
+    _task = batch_client.task.get(job_id, task)
+    # if completed, skip
+    if (_task.state == batchmodels.TaskState.completed and
+            (not force or native)):
+        logger.debug(
+            'Skipping termination of completed task {} on '
+            'job {}'.format(task, job_id))
+        nocheck[job_id].add(task)
+        return
+    if not util.confirm_action(
+            config, 'terminate {} task in job {}'.format(
+                task, job_id)):
+        nocheck[job_id].add(task)
+        return
+    logger.info('Terminating task: {}'.format(task))
+    # directly send docker kill signal if running
+    if (not native and
+            (_task.state == batchmodels.TaskState.running or force)):
+        # check if task is a docker task
+        if ('docker run' in _task.command_line or
+                'docker exec' in _task.command_line):
+            if (_task.multi_instance_settings is not None and
+                    _task.multi_instance_settings.
+                    number_of_instances > 1):
+                task_is_mi = True
+            else:
+                task_is_mi = False
+            _send_docker_kill_signal(
+                batch_client, config, ssh_username,
+                ssh_private_key, _task.node_info.pool_id,
+                _task.node_info.node_id, job_id, task, task_is_mi)
+        else:
+            batch_client.task.terminate(job_id, task)
+    else:
+        batch_client.task.terminate(job_id, task)
+
+
+def _wait_for_task_completion(batch_client, job_id, task):
+    # type: (azure.batch.batch_service_client.BatchServiceClient,
+    #        str, str) -> None
+    """Wait for task completion
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job id of task to terminate
+    :param str task: task id to terminate
+    """
+    try:
+        logger.debug(
+            'waiting for task {} in job {} to terminate'.format(task, job_id))
+        while True:
+            _task = batch_client.task.get(
+                job_id, task,
+                task_get_options=batchmodels.TaskGetOptions(select='state')
+            )
+            if _task.state == batchmodels.TaskState.completed:
+                break
+            time.sleep(1)
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'The specified task does not exist' not in ex.message.value:
+            raise
+
+
 def terminate_tasks(
         batch_client, config, jobid=None, taskid=None, wait=False,
         force=False):
@@ -2506,6 +2648,7 @@ def terminate_tasks(
     :param bool wait: wait for task to terminate
     :param bool force: force task docker kill signal regardless of state
     """
+    pool = None
     native = settings.is_native_docker_pool(config)
     # get ssh login settings for non-native pools
     if not native:
@@ -2532,42 +2675,15 @@ def terminate_tasks(
             ]
         else:
             tasks = [taskid]
-        for task in tasks:
-            _task = batch_client.task.get(job_id, task)
-            # if completed, skip
-            if (_task.state == batchmodels.TaskState.completed and
-                    (not force or native)):
-                logger.debug(
-                    'Skipping termination of completed task {} on '
-                    'job {}'.format(task, job_id))
-                nocheck[job_id].add(task)
-                continue
-            if not util.confirm_action(
-                    config, 'terminate {} task in job {}'.format(
-                        task, job_id)):
-                nocheck[job_id].add(task)
-                continue
-            logger.info('Terminating task: {}'.format(task))
-            # directly send docker kill signal if running
-            if (not native and
-                    (_task.state == batchmodels.TaskState.running or force)):
-                # check if task is a docker task
-                if ('docker run' in _task.command_line or
-                        'docker exec' in _task.command_line):
-                    if (_task.multi_instance_settings is not None and
-                            _task.multi_instance_settings.
-                            number_of_instances > 1):
-                        task_is_mi = True
-                    else:
-                        task_is_mi = False
-                    _send_docker_kill_signal(
-                        batch_client, config, pool.ssh.username,
-                        ssh_private_key, _task.node_info.pool_id,
-                        _task.node_info.node_id, job_id, task, task_is_mi)
-                else:
-                    batch_client.task.terminate(job_id, task)
-            else:
-                batch_client.task.terminate(job_id, task)
+        if len(tasks) == 0:
+            continue
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min((
+                    len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
+            for task in tasks:
+                executor.submit(
+                    _terminate_task, batch_client, config, pool.ssh.username,
+                    ssh_private_key, native, force, job_id, task, nocheck)
     if wait:
         for job in jobs:
             job_id = settings.job_id(job)
@@ -2582,29 +2698,19 @@ def terminate_tasks(
                 ]
             else:
                 tasks = [taskid]
-            for task in tasks:
-                try:
-                    if task in nocheck[job_id]:
-                        continue
-                except KeyError:
-                    pass
-                try:
-                    logger.debug(
-                        'waiting for task {} in job {} to terminate'.format(
-                            task, job_id))
-                    while True:
-                        _task = batch_client.task.get(
-                            job_id, task,
-                            task_get_options=batchmodels.TaskGetOptions(
-                                select='state')
-                        )
-                        if _task.state == batchmodels.TaskState.completed:
-                            break
-                        time.sleep(1)
-                except batchmodels.batch_error.BatchErrorException as ex:
-                    if ('The specified task does not exist'
-                            not in ex.message.value):
-                        raise
+            if len(tasks) == 0:
+                continue
+            with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=min((
+                        len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
+                for task in tasks:
+                    try:
+                        if task in nocheck[job_id]:
+                            continue
+                    except KeyError:
+                        pass
+                    executor.submit(
+                        _wait_for_task_completion, batch_client, job_id, task)
 
 
 def list_nodes(batch_client, config, pool_id=None, nodes=None):
@@ -2696,34 +2802,55 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
         logger.info(os.linesep.join(log))
 
 
-def get_remote_login_settings(batch_client, config, nodes=None):
-    # type: (batch.BatchServiceClient, dict, List[str]) -> dict
+def get_remote_login_settings(
+        batch_client, config, nodes=None, suppress_output=False):
+    # type: (batch.BatchServiceClient, dict, List[str], bool) -> dict
     """Get remote login settings
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param list nodes: list of nodes
+    :param bool suppress_output: suppress output
     :rtype: dict
     :return: dict of node id -> remote login settings
     """
     pool_id = settings.pool_id(config)
     if nodes is None:
-        nodes = batch_client.compute_node.list(pool_id)
-    ret = {}
-    raw = []
-    for node in nodes:
-        rls = batch_client.compute_node.get_remote_login_settings(
-            pool_id, node.id)
-        ret[node.id] = rls
-        if settings.raw(config):
+        nodes = batch_client.compute_node.list(
+            pool_id,
+            compute_node_list_options=batchmodels.ComputeNodeListOptions(
+                select='id')
+        )
+    if settings.raw(config):
+        raw = []
+        for node in nodes:
             raw.append(util.print_raw_output(
-                batch_client.compute_node.get_remote_login_settings, pool_id,
-                node.id, return_json=True))
-        else:
-            logger.info('node {}: ip {} port {}'.format(
-                node.id, rls.remote_login_ip_address, rls.remote_login_port))
-    if util.is_not_empty(raw):
+                batch_client.compute_node.get_remote_login_settings,
+                pool_id, node.id, return_json=True))
         util.print_raw_json(raw)
+        return None
+    ret = {}
+    nodes = list(nodes)
+    if len(nodes) > 0:
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min((
+                    len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+            futures = {}
+            for node in nodes:
+                futures[node.id] = executor.submit(
+                    batch_client.compute_node.get_remote_login_settings,
+                    pool_id, node.id)
+            for node_id in futures:
+                ret[node_id] = futures[node_id].result()
+        if util.on_python2():
+            ret = collections.OrderedDict(sorted(ret.iteritems()))
+        else:
+            ret = collections.OrderedDict(sorted(ret.items()))
+        if not suppress_output:
+            for node_id in ret:
+                logger.info('node {}: ip {} port {}'.format(
+                    node_id, ret[node_id].remote_login_ip_address,
+                    ret[node_id].remote_login_port))
     return ret
 
 
@@ -2936,6 +3063,23 @@ def stream_file_and_wait_for_task(
             fd.close()
 
 
+def _get_task_file(batch_client, job_id, task_id, filename, fp):
+    # type: (batch.BatchServiceClient, dict, str, str, str,
+    #        pathlib.Path) -> None
+    """Get a files from a task
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job id
+    :param str task_id: task id
+    :param str filename: file name
+    :param pathlib.Path fp: file path
+    """
+    stream = batch_client.file.get_from_task(job_id, task_id, filename)
+    with fp.open('wb') as f:
+        for fdata in stream:
+            f.write(fdata)
+
+
 def get_file_via_task(batch_client, config, filespec=None):
     # type: (batch.BatchServiceClient, dict, str) -> None
     """Get a file task style
@@ -2987,10 +3131,7 @@ def get_file_via_task(batch_client, config, filespec=None):
         raise RuntimeError('file already exists: {}'.format(file))
     logger.debug('attempting to retrieve file {} from job={} task={}'.format(
         file, job_id, task_id))
-    stream = batch_client.file.get_from_task(job_id, task_id, file)
-    with fp.open('wb') as f:
-        for fdata in stream:
-            f.write(fdata)
+    _get_task_file(batch_client, job_id, task_id, file, fp)
     logger.debug('file {} retrieved from job={} task={} bytes={}'.format(
         file, job_id, task_id, fp.stat().st_size))
 
@@ -3038,23 +3179,27 @@ def get_all_files_via_task(batch_client, config, filespec=None):
                 break
     # iterate through all files in task and download them
     logger.debug('downloading files to {}/{}'.format(job_id, task_id))
-    files = batch_client.file.list_from_task(job_id, task_id, recursive=True)
+    files = list(batch_client.file.list_from_task(
+        job_id, task_id, recursive=True))
     i = 0
-    dirs_created = set('.')
-    for file in files:
-        if file.is_directory:
-            continue
-        if incl is not None and not fnmatch.fnmatch(file.name, incl):
-            continue
-        fp = pathlib.Path(job_id, task_id, file.name)
-        if str(fp.parent) not in dirs_created:
-            fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-            dirs_created.add(str(fp.parent))
-        stream = batch_client.file.get_from_task(job_id, task_id, file.name)
-        with fp.open('wb') as f:
-            for fdata in stream:
-                f.write(fdata)
-        i += 1
+    if len(files) > 0:
+        dirs_created = set('.')
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min((
+                    len(files), _MAX_EXECUTOR_WORKERS))) as executor:
+            for file in files:
+                if file.is_directory:
+                    continue
+                if incl is not None and not fnmatch.fnmatch(file.name, incl):
+                    continue
+                fp = pathlib.Path(job_id, task_id, file.name)
+                if str(fp.parent) not in dirs_created:
+                    fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+                    dirs_created.add(str(fp.parent))
+                executor.submit(
+                    _get_task_file, batch_client, job_id, task_id,
+                    file.name, fp)
+                i += 1
     if i == 0:
         logger.error('no files found for task {} job {} include={}'.format(
             task_id, job_id, incl if incl is not None else ''))
@@ -3062,6 +3207,24 @@ def get_all_files_via_task(batch_client, config, filespec=None):
         logger.info(
             'all task files retrieved from job={} task={} include={}'.format(
                 job_id, task_id, incl if incl is not None else ''))
+
+
+def _get_node_file(batch_client, pool_id, node_id, filename, fp):
+    # type: (batch.BatchServiceClient, dict, str, str, str,
+    #        pathlib.Path) -> None
+    """Get a file from the node
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str pool_id: pool id
+    :param str node_id: node id
+    :param str filename: file name
+    :param pathlib.Path fp: file path
+    """
+    stream = batch_client.file.get_from_compute_node(
+        pool_id, node_id, filename)
+    with fp.open('wb') as f:
+        for fdata in stream:
+            f.write(fdata)
 
 
 def get_all_files_via_node(batch_client, config, filespec=None):
@@ -3087,25 +3250,27 @@ def get_all_files_via_node(batch_client, config, filespec=None):
         incl = None
     pool_id = settings.pool_id(config)
     logger.debug('downloading files to {}/{}'.format(pool_id, node_id))
-    files = batch_client.file.list_from_compute_node(
-        pool_id, node_id, recursive=True)
+    files = list(batch_client.file.list_from_compute_node(
+        pool_id, node_id, recursive=True))
     i = 0
-    dirs_created = set('.')
-    for file in files:
-        if file.is_directory:
-            continue
-        if incl is not None and not fnmatch.fnmatch(file.name, incl):
-            continue
-        fp = pathlib.Path(pool_id, node_id, file.name)
-        if str(fp.parent) not in dirs_created:
-            fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-            dirs_created.add(str(fp.parent))
-        stream = batch_client.file.get_from_compute_node(
-            pool_id, node_id, file.name)
-        with fp.open('wb') as f:
-            for fdata in stream:
-                f.write(fdata)
-        i += 1
+    if len(files) > 0:
+        dirs_created = set('.')
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min((
+                    len(files), _MAX_EXECUTOR_WORKERS))) as executor:
+            for file in files:
+                if file.is_directory:
+                    continue
+                if incl is not None and not fnmatch.fnmatch(file.name, incl):
+                    continue
+                fp = pathlib.Path(pool_id, node_id, file.name)
+                if str(fp.parent) not in dirs_created:
+                    fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+                    dirs_created.add(str(fp.parent))
+                executor.submit(
+                    _get_node_file, batch_client, pool_id, node_id,
+                    file.name, fp)
+                i += 1
     if i == 0:
         logger.error('no files found for pool {} node {} include={}'.format(
             pool_id, node_id, incl if incl is not None else ''))
@@ -3147,10 +3312,7 @@ def get_file_via_node(batch_client, config, filespec=None):
         raise RuntimeError('file already exists: {}'.format(file))
     logger.debug('attempting to retrieve file {} from pool={} node={}'.format(
         file, pool_id, node_id))
-    stream = batch_client.file.get_from_compute_node(pool_id, node_id, file)
-    with fp.open('wb') as f:
-        for fdata in stream:
-            f.write(fdata)
+    _get_node_file(batch_client, pool_id, node_id, file, fp)
     logger.debug('file {} retrieved from pool={} node={} bytes={}'.format(
         file, pool_id, node_id, fp.stat().st_size))
 
@@ -3696,7 +3858,7 @@ def _generate_next_generic_task_id(
     delimiter = prefix if util.is_not_empty(prefix) else ' '
     # get filtered, sorted list of generic docker task ids
     try:
-        if util.is_none_or_empty(tasklist):
+        if tasklist is None:
             tasklist = batch_client.task.list(
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
@@ -3728,6 +3890,62 @@ def _generate_next_generic_task_id(
     return tasklist, id
 
 
+def _submit_task_sub_collection(
+        batch_client, job_id, start, end, slice, all_tasks, task_map):
+    # type: (batch.BatchServiceClient, str, int, int, int, list, dict) -> None
+    """Submits a sub-collection of tasks, do not call directly
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job to add to
+    :param int start: start offset, includsive
+    :param int end: end offset, exclusive
+    :param int slice: slice width
+    :param list all_tasks: list of all task ids
+    :param dict task_map: task collection map to add
+    """
+    chunk = all_tasks[start:end]
+    logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
+        len(chunk), start, end - 1, job_id))
+    try:
+        results = batch_client.task.add_collection(job_id, chunk)
+    except batchmodels.BatchErrorException as e:
+        if e.error.code == 'RequestBodyTooLarge':
+            # collection contents are too large, reduce and retry
+            if slice == 1:
+                raise
+            slice = slice >> 1
+            if slice < 1:
+                slice = 1
+            logger.error(
+                ('task collection slice was too big, retrying with '
+                 'slice={}').format(slice))
+    else:
+        # go through result and retry just failed tasks
+        while True:
+            retry = []
+            for result in results.value:
+                if result.status == batchmodels.TaskAddStatus.client_error:
+                    de = [
+                        '{}: {}'.format(x.key, x.value)
+                        for x in result.error.values
+                    ]
+                    logger.error(
+                        ('skipping retry of adding task {} as it '
+                         'returned a client error (code={} message={} {}) '
+                         'for job {}').format(
+                             result.task_id, result.error.code,
+                             result.error.message, ' '.join(de), job_id))
+                elif (result.status ==
+                      batchmodels.TaskAddStatus.server_error):
+                    retry.append(task_map[result.task_id])
+            if len(retry) > 0:
+                logger.debug('retrying adding {} tasks to job {}'.format(
+                    len(retry), job_id))
+                results = batch_client.task.add_collection(job_id, retry)
+            else:
+                break
+
+
 def _add_task_collection(batch_client, job_id, task_map):
     # type: (batch.BatchServiceClient, str, dict) -> None
     """Add a collection of tasks to a job
@@ -3737,58 +3955,16 @@ def _add_task_collection(batch_client, job_id, task_map):
     :param dict task_map: task collection map to add
     """
     all_tasks = list(task_map.values())
-    start = 0
     slice = 100  # can only submit up to 100 tasks at a time
-    while True:
-        end = start + slice
-        if end > len(all_tasks):
-            end = len(all_tasks)
-        chunk = all_tasks[start:end]
-        logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
-            len(chunk), start, end - 1, job_id))
-        try:
-            results = batch_client.task.add_collection(job_id, chunk)
-        except batchmodels.BatchErrorException as e:
-            if e.error.code == 'RequestBodyTooLarge':
-                # collection contents are too large, reduce and retry
-                if slice == 1:
-                    raise
-                slice = slice >> 1
-                if slice < 1:
-                    slice = 1
-                logger.error(
-                    ('task collection slice was too big, retrying with '
-                     'slice={}').format(slice))
-                continue
-        else:
-            # go through result and retry just failed tasks
-            while True:
-                retry = []
-                for result in results.value:
-                    if result.status == batchmodels.TaskAddStatus.client_error:
-                        de = [
-                            '{}: {}'.format(x.key, x.value)
-                            for x in result.error.values
-                        ]
-                        logger.error(
-                            ('skipping retry of adding task {} as it '
-                             'returned a client error (code={} message={} {}) '
-                             'for job {}').format(
-                                 result.task_id, result.error.code,
-                                 result.error.message, ' '.join(de), job_id))
-                    elif (result.status ==
-                          batchmodels.TaskAddStatus.server_error):
-                        retry.append(task_map[result.task_id])
-                if len(retry) > 0:
-                    logger.debug('retrying adding {} tasks to job {}'.format(
-                        len(retry), job_id))
-                    results = batch_client.task.add_collection(job_id, retry)
-                else:
-                    break
-        if end == len(all_tasks):
-            break
-        start += slice
-        slice = 100
+    with (concurrent.futures.ThreadPoolExecutor(
+            max_workers=_MAX_EXECUTOR_WORKERS)) as executor:
+        for start in range(0, len(all_tasks), slice):
+            end = start + slice
+            if end > len(all_tasks):
+                end = len(all_tasks)
+            executor.submit(
+                _submit_task_sub_collection, batch_client, job_id, start, end,
+                slice, all_tasks, task_map)
     logger.info('submitted all {} tasks to job {}'.format(
         len(task_map), job_id))
 

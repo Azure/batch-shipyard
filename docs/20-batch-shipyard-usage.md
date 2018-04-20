@@ -646,6 +646,8 @@ pool. This command may require a valid SSH user.
     * `--nodeid` is the node id to delete
 * `nodes grls` will retrieve all of the remote login settings for every node
 in the specified pool
+    * `--no-generate-tunnel-script` will disable generating an SSH tunnel
+      script even if enabled in the pool configuration
 * `nodes list` will list all nodes in the specified pool
 * `nodes prune` will prune unused Docker data. This command requires a
 provisioned SSH user.

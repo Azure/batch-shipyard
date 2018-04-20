@@ -1505,15 +1505,19 @@ def nodes(ctx):
 
 
 @nodes.command('grls')
+@click.option(
+    '--no-generate-tunnel-script', is_flag=True,
+    help='Disable generating an SSH tunnel script')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def nodes_grls(ctx):
+def nodes_grls(ctx, no_generate_tunnel_script):
     """Get remote login settings for all nodes in pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_nodes_grls(ctx.batch_client, ctx.config)
+    convoy.fleet.action_pool_nodes_grls(
+        ctx.batch_client, ctx.config, no_generate_tunnel_script)
 
 
 @nodes.command('list')

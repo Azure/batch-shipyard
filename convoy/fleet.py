@@ -1511,16 +1511,18 @@ def _add_pool(
             if pool_settings.transfer_files_on_pool_creation:
                 if rls is None:
                     rls = batch.get_remote_login_settings(
-                        batch_client, config, nodes)
+                        batch_client, config, nodes=nodes,
+                        suppress_output=True)
                 data.ingress_data(
                     batch_client, compute_client, network_client, config,
                     rls=rls, kind='shared',
                     total_vm_count=pool_current_vm_count)
             # log remote login settings
             if rls is None:
-                if pool_current_vm_count <= 16:
+                if pool_current_vm_count <= 100:
                     batch.get_remote_login_settings(
-                        batch_client, config, nodes)
+                        batch_client, config, nodes=nodes,
+                        suppress_output=False)
                 else:
                     logger.info(
                         'Not listing remote login settings due to VM count. '
@@ -2969,9 +2971,9 @@ def action_pool_resize(batch_client, blob_client, config, wait):
             new_nodes = [node for node in nodes if node.id not in old_nodes]
             # create admin user on each new node if requested
             batch.add_ssh_user(batch_client, config, nodes=new_nodes)
-            # log remote login settings for new ndoes
+            # log remote login settings for new nodes
             batch.get_remote_login_settings(
-                batch_client, config, nodes=new_nodes)
+                batch_client, config, nodes=new_nodes, suppress_output=False)
             del new_nodes
         else:
             logger.warning('ssh user was not added as --wait was not given')
@@ -3004,17 +3006,21 @@ def action_pool_resize(batch_client, blob_client, config, wait):
             cmdline=cmdline)
 
 
-def action_pool_nodes_grls(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_pool_nodes_grls(
+        batch_client, config, no_generate_tunnel_script):
+    # type: (batchsc.BatchServiceClient, dict, bool) -> None
     """Action: Pool Nodes Grls
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool no_generate_tunnel_script: disable generating tunnel script
     """
     _check_batch_client(batch_client)
-    batch.get_remote_login_settings(batch_client, config)
-    batch.generate_ssh_tunnel_script(
-        batch_client, settings.pool_settings(config), None, None)
+    rls = batch.get_remote_login_settings(
+        batch_client, config, nodes=None, suppress_output=False)
+    if not no_generate_tunnel_script:
+        batch.generate_ssh_tunnel_script(
+            batch_client, config, None, nodes=None, rls=rls)
 
 
 def action_pool_nodes_list(batch_client, config):
@@ -3822,7 +3828,7 @@ def action_data_ingress(
             del pool
             # ensure there are remote login settings
             rls = batch.get_remote_login_settings(
-                batch_client, config, nodes=None)
+                batch_client, config, nodes=None, suppress_output=True)
             # ensure nodes are at least idle/running for shared ingress
             kind = 'all'
             if not batch.check_pool_nodes_runnable(batch_client, config):
