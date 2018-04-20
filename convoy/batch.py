@@ -100,6 +100,16 @@ NodeStateCountCollection = collections.namedtuple(
 )
 
 
+def _max_workers(iterable):
+    # type: (list) -> int
+    """Get max number of workers for executor given an iterable
+    :param list iterable: an iterable
+    :rtype: int
+    :return: number of workers for executor
+    """
+    return min((len(iterable), _MAX_EXECUTOR_WORKERS))
+
+
 def get_batch_account(
         batch_mgmt_client, config, account_name=None, resource_group=None):
     # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) ->
@@ -450,14 +460,19 @@ def del_certificate_from_account(batch_client, config, sha1):
         pfx = crypto.get_encryption_pfx_settings(config)
         sha1 = [pfx.sha1]
     bc = settings.credentials_batch(config)
+    certs_to_del = []
     for tp in sha1:
         if not util.confirm_action(
                 config, 'delete certificate {} from account {}'.format(
                     tp, bc.account)):
-            return
-        batch_client.certificate.delete('sha1', tp)
-        logger.info('certificate {} deleted from account {}'.format(
-            tp, bc.account))
+            continue
+        certs_to_del.append(tp)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=_max_workers(certs_to_del)) as executor:
+        for tp in certs_to_del:
+            executor.submit(batch_client.certificate.delete, 'sha1', tp)
+    logger.info('certificates {} deleted from account {}'.format(
+        certs_to_del, bc.account))
 
 
 def _reboot_node(batch_client, pool_id, node_id, wait):
@@ -907,7 +922,7 @@ def add_rdp_user(batch_client, config, nodes=None):
         pool.rdp.expiry_days)
     nodes = list(nodes)
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+            max_workers=_max_workers(nodes)) as executor:
         for node in nodes:
             executor.submit(
                 _add_admin_user_to_compute_node,
@@ -955,7 +970,7 @@ def add_ssh_user(batch_client, config, nodes=None):
         pool.ssh.expiry_days)
     nodes = list(nodes)
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+            max_workers=_max_workers(nodes)) as executor:
         for node in nodes:
             executor.submit(
                 _add_admin_user_to_compute_node,
@@ -1096,7 +1111,7 @@ def del_rdp_user(batch_client, config, nodes=None):
         nodes = batch_client.compute_node.list(pool.id)
     nodes = list(nodes)
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+            max_workers=_max_workers(nodes)) as executor:
         for node in nodes:
             executor.submit(
                 _del_remote_user, batch_client, pool.id, node.id,
@@ -1131,7 +1146,7 @@ def del_ssh_user(batch_client, config, nodes=None):
         nodes = batch_client.compute_node.list(pool.id)
     nodes = list(nodes)
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min((len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+            max_workers=_max_workers(nodes)) as executor:
         for node in nodes:
             executor.submit(
                 _del_remote_user, batch_client, pool.id, node.id,
@@ -1646,8 +1661,7 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
     if util.is_none_or_empty(nodes_to_reboot):
         return
     with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min((
-                len(nodes_to_reboot), _MAX_EXECUTOR_WORKERS))) as executor:
+            max_workers=_max_workers(nodes_to_reboot)) as executor:
         for node_id in nodes_to_reboot:
             executor.submit(
                 _reboot_node, batch_client, pool_id, node_id, False)
@@ -2150,8 +2164,7 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
         if len(tasks_to_delete) == 0:
             continue
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min((
-                    len(tasks_to_delete), _MAX_EXECUTOR_WORKERS))) as executor:
+                max_workers=_max_workers(tasks_to_delete)) as executor:
             for task in tasks_to_delete:
                 logger.info('Deleting task: {}'.format(task))
                 executor.submit(batch_client.task.delete, job_id, task)
@@ -2171,8 +2184,7 @@ def del_tasks(batch_client, config, jobid=None, taskid=None, wait=False):
             if len(tasks) == 0:
                 continue
             with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=min((
-                        len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
+                    max_workers=_max_workers(tasks)) as executor:
                 for task in tasks:
                     try:
                         if task in nocheck[job_id]:
@@ -2581,11 +2593,6 @@ def _terminate_task(
             'job {}'.format(task, job_id))
         nocheck[job_id].add(task)
         return
-    if not util.confirm_action(
-            config, 'terminate {} task in job {}'.format(
-                task, job_id)):
-        nocheck[job_id].add(task)
-        return
     logger.info('Terminating task: {}'.format(task))
     # directly send docker kill signal if running
     if (not native and
@@ -2675,12 +2682,19 @@ def terminate_tasks(
             ]
         else:
             tasks = [taskid]
-        if len(tasks) == 0:
+        tasks_to_term = []
+        for task in tasks:
+            if not util.confirm_action(
+                    config, 'terminate {} task in job {}'.format(
+                        task, job_id)):
+                nocheck[job_id].add(task)
+                continue
+            tasks_to_term.append(task)
+        if len(tasks_to_term) == 0:
             continue
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min((
-                    len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
-            for task in tasks:
+                max_workers=_max_workers(tasks_to_term)) as executor:
+            for task in tasks_to_term:
                 executor.submit(
                     _terminate_task, batch_client, config, pool.ssh.username,
                     ssh_private_key, native, force, job_id, task, nocheck)
@@ -2701,8 +2715,7 @@ def terminate_tasks(
             if len(tasks) == 0:
                 continue
             with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=min((
-                        len(tasks), _MAX_EXECUTOR_WORKERS))) as executor:
+                    max_workers=_max_workers(tasks)) as executor:
                 for task in tasks:
                     try:
                         if task in nocheck[job_id]:
@@ -2833,8 +2846,7 @@ def get_remote_login_settings(
     nodes = list(nodes)
     if len(nodes) > 0:
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min((
-                    len(nodes), _MAX_EXECUTOR_WORKERS))) as executor:
+                max_workers=_max_workers(nodes)) as executor:
             futures = {}
             for node in nodes:
                 futures[node.id] = executor.submit(
@@ -3185,8 +3197,7 @@ def get_all_files_via_task(batch_client, config, filespec=None):
     if len(files) > 0:
         dirs_created = set('.')
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min((
-                    len(files), _MAX_EXECUTOR_WORKERS))) as executor:
+                max_workers=_max_workers(files)) as executor:
             for file in files:
                 if file.is_directory:
                     continue
@@ -3256,8 +3267,7 @@ def get_all_files_via_node(batch_client, config, filespec=None):
     if len(files) > 0:
         dirs_created = set('.')
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min((
-                    len(files), _MAX_EXECUTOR_WORKERS))) as executor:
+                max_workers=_max_workers(files)) as executor:
             for file in files:
                 if file.is_directory:
                     continue
@@ -3956,8 +3966,8 @@ def _add_task_collection(batch_client, job_id, task_map):
     """
     all_tasks = list(task_map.values())
     slice = 100  # can only submit up to 100 tasks at a time
-    with (concurrent.futures.ThreadPoolExecutor(
-            max_workers=_MAX_EXECUTOR_WORKERS)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=_MAX_EXECUTOR_WORKERS) as executor:
         for start in range(0, len(all_tasks), slice):
             end = start + slice
             if end > len(all_tasks):
