@@ -80,6 +80,9 @@ job_specifications:
         - start: 0
           step: 1
           stop: 10
+        product_iterables:
+        - abc
+        - '012'
         zip:
         - ab
         - '01'

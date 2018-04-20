@@ -36,13 +36,14 @@ Now we'll dive into each type of task factory available in Batch Shipyard.
 
 #### Task Factory Quick Navigation
 1. [Parametric Sweep: Product](#ps-product)
-2. [Parametric Sweep: Combinations](#ps-combinations)
-3. [Parametric Sweep: Permutations](#ps-permutations)
-4. [Parametric Sweep: Zip](#ps-zip)
-5. [Random](#random)
-6. [Repeat](#repeat)
-7. [File](#file)
-8. [Custom](#custom)
+2. [Parametric Sweep: Product Iterables](#ps-product-iterables)
+3. [Parametric Sweep: Combinations](#ps-combinations)
+4. [Parametric Sweep: Permutations](#ps-permutations)
+5. [Parametric Sweep: Zip](#ps-zip)
+6. [Random](#random)
+7. [Repeat](#repeat)
+8. [File](#file)
+9. [Custom](#custom)
 
 ## Parametric (Parameter) Sweep
 A `parametric_sweep` will generate parameters to apply to the `command`
@@ -136,6 +137,67 @@ would generate 9 tasks (i.e., `3 * 3` sets of parameters):
 
 You can nest an arbitrary number of parameter sets within the `product`
 array.
+
+### <a name="ps-product-iterables"></a>Product Iterables
+A `product_iterables` `parametric_sweep` can perform nested or unnested
+parameter generation similar to `product` but can operate on arbitrary
+list or string iterables. For example, if you need to generate a sweep of
+input of the strings `abc`, `def`, `ghi` with an inner nest of `1`, `2`, `3`,
+you would specify this as:
+
+```yaml
+task_factory:
+  parametric_sweep:
+    product_iterables:
+    -
+      - abc
+      - def
+      - ghi
+    -
+      - '1'
+      - '2'
+      - '3'
+command: /bin/bash -c "echo {0}; sleep {1}"
+```
+
+As shown above, the associated `command` requires either `{}` or `{0}`
+Python-style string formatting to specify where to substitute the generated
+argument value within the `command` string.
+
+This `task_factory` example specified above would create 9
+(i.e., 3 * 3 sets of parameters) tasks:
+
+```
+  Task 0:
+  /bin/bash -c "echo abc; sleep 1"
+
+  Task 1:
+  /bin/bash -c "echo abc; sleep 2"
+
+  Task 2:
+  /bin/bash -c "echo abc; sleep 3"
+
+  Task 3:
+  /bin/bash -c "echo def; sleep 1"
+
+  Task 4:
+  /bin/bash -c "echo def; sleep 2"
+
+  Task 5:
+  /bin/bash -c "echo def; sleep 3"
+
+  Task 6:
+  /bin/bash -c "echo ghi; sleep 1"
+
+  Task 7:
+  /bin/bash -c "echo ghi; sleep 2"
+
+  Task 8:
+  /bin/bash -c "echo ghi; sleep 3"
+```
+
+You can nest an arbitrary number of parameter sets within the
+`product_iterables` array, even mixing strings and lists of strings.
 
 ### <a name="ps-combinations"></a>Combinations
 The `combinations` `parametric_sweep` generates `length` subsequences of
@@ -234,6 +296,8 @@ would generate 3 tasks:
   Task 2:
   /bin/bash -c "echo c; echo 2; echo f"
 ```
+
+`zip` supports mixing strings and list of strings for each iterable.
 
 ## <a name="random"></a>Random
 A `random` task factory will generate random values for the `command` up to

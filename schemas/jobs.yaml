@@ -197,10 +197,20 @@ mapping:
                                   step:
                                     type: int
                                     required: true
+                          product_iterables:
+                            type: seq
+                            sequence:
+                              - type: str
+                              - type: seq
+                                sequence:
+                                - type: str
                           zip:
                             type: seq
                             sequence:
-                              - type: any
+                              - type: str
+                              - type: seq
+                                sequence:
+                                - type: str
                       random:
                         type: map
                         mapping:

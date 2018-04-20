@@ -86,6 +86,9 @@ job_specifications:
         - start: 0
           step: 1
           stop: 10
+        product_iterables:
+        - abc
+        - '012'
         zip:
         - ab
         - '01'
@@ -487,6 +490,8 @@ Singularity image to use for this task
           `0` to `9` are provided as arguments to the `command` property.
           If another set of `start`, `stop`, `step` properties are
           specified, then these are nested within the prior set.
+        * (optional) `product_iterables` is similar to `product` but will
+          use iterables to generate the parameters.
         * (optional) `combinations` generates `length` subsequences of
           parameters from the `iterable`. Combinations are emitted in
           lexicographic sort order.

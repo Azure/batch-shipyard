@@ -409,6 +409,15 @@ def generate_task(task, storage_settings):
                 taskcopy.pop('task_factory')
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
+        elif 'product_iterables' in sweep:
+            product = []
+            for chain in sweep['product_iterables']:
+                product.append(chain)
+            for arg in itertools.product(*product):
+                taskcopy = copy.deepcopy(task)
+                taskcopy.pop('task_factory')
+                taskcopy['command'] = taskcopy['command'].format(*arg)
+                yield taskcopy
         elif 'combinations' in sweep:
             iterable = sweep['combinations']['iterable']
             try:
