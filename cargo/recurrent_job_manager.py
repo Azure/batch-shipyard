@@ -26,8 +26,10 @@
 
 # stdlib imports
 import argparse
+import concurrent.futures
 import logging
 import logging.handlers
+import multiprocessing
 import os
 import pickle
 import time
@@ -41,6 +43,7 @@ logger = logging.getLogger(__name__)
 # global defines
 _AAD_TOKEN_TYPE = 'Bearer'
 _TASKMAP_PICKLE_FILE = 'taskmap.pickle'
+_MAX_EXECUTOR_WORKERS = min((multiprocessing.cpu_count() * 4, 32))
 
 
 def _setup_logger() -> None:
@@ -111,6 +114,62 @@ def _create_credentials():
     return batch_client
 
 
+def _submit_task_sub_collection(
+        batch_client, job_id, start, end, slice, all_tasks, task_map):
+    # type: (batch.BatchServiceClient, str, int, int, int, list, dict) -> None
+    """Submits a sub-collection of tasks, do not call directly
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job to add to
+    :param int start: start offset, includsive
+    :param int end: end offset, exclusive
+    :param int slice: slice width
+    :param list all_tasks: list of all task ids
+    :param dict task_map: task collection map to add
+    """
+    chunk = all_tasks[start:end]
+    logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
+        len(chunk), start, end - 1, job_id))
+    try:
+        results = batch_client.task.add_collection(job_id, chunk)
+    except batchmodels.BatchErrorException as e:
+        if e.error.code == 'RequestBodyTooLarge':
+            # collection contents are too large, reduce and retry
+            if slice == 1:
+                raise
+            slice = slice >> 1
+            if slice < 1:
+                slice = 1
+            logger.error(
+                ('task collection slice was too big, retrying with '
+                 'slice={}').format(slice))
+    else:
+        # go through result and retry just failed tasks
+        while True:
+            retry = []
+            for result in results.value:
+                if result.status == batchmodels.TaskAddStatus.client_error:
+                    de = [
+                        '{}: {}'.format(x.key, x.value)
+                        for x in result.error.values
+                    ]
+                    logger.error(
+                        ('skipping retry of adding task {} as it '
+                         'returned a client error (code={} message={} {}) '
+                         'for job {}').format(
+                             result.task_id, result.error.code,
+                             result.error.message, ' '.join(de), job_id))
+                elif (result.status ==
+                      batchmodels.TaskAddStatus.server_error):
+                    retry.append(task_map[result.task_id])
+            if len(retry) > 0:
+                logger.debug('retrying adding {} tasks to job {}'.format(
+                    len(retry), job_id))
+                results = batch_client.task.add_collection(job_id, retry)
+            else:
+                break
+
+
 def _add_task_collection(batch_client, job_id, task_map):
     # type: (batch.BatchServiceClient, str, dict) -> None
     """Add a collection of tasks to a job
@@ -120,54 +179,16 @@ def _add_task_collection(batch_client, job_id, task_map):
     :param dict task_map: task collection map to add
     """
     all_tasks = list(task_map.values())
-    start = 0
     slice = 100  # can only submit up to 100 tasks at a time
-    while True:
-        end = start + slice
-        if end > len(all_tasks):
-            end = len(all_tasks)
-        chunk = all_tasks[start:end]
-        logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
-            len(chunk), start, end - 1, job_id))
-        try:
-            results = batch_client.task.add_collection(job_id, chunk)
-        except batchmodels.BatchErrorException as e:
-            if e.error.code == 'RequestBodyTooLarge':
-                # collection contents are too large, reduce and retry
-                if slice == 1:
-                    raise
-                slice = slice >> 1
-                if slice < 1:
-                    slice = 1
-                logger.error(
-                    ('task collection slice was too big, retrying with '
-                     'slice={}').format(slice))
-                continue
-        else:
-            # go through result and retry just failed tasks
-            while True:
-                retry = []
-                for result in results.value:
-                    if result.status == batchmodels.TaskAddStatus.client_error:
-                        logger.error(
-                            ('skipping retry of adding task {} as it '
-                             'returned a client error (code={} message={}) '
-                             'for job {}').format(
-                                 result.task_id, result.error.code,
-                                 result.error.message, job_id))
-                    elif (result.status ==
-                          batchmodels.TaskAddStatus.server_error):
-                        retry.append(task_map[result.task_id])
-                if len(retry) > 0:
-                    logger.debug('retrying adding {} tasks to job {}'.format(
-                        len(retry), job_id))
-                    results = batch_client.task.add_collection(job_id, retry)
-                else:
-                    break
-        if end == len(all_tasks):
-            break
-        start += slice
-        slice = 100
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=_MAX_EXECUTOR_WORKERS) as executor:
+        for start in range(0, len(all_tasks), slice):
+            end = start + slice
+            if end > len(all_tasks):
+                end = len(all_tasks)
+            executor.submit(
+                _submit_task_sub_collection, batch_client, job_id, start, end,
+                slice, all_tasks, task_map)
     logger.info('submitted all {} tasks to job {}'.format(
         len(task_map), job_id))
 
