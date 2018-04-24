@@ -3076,7 +3076,7 @@ def stream_file_and_wait_for_task(
 
 
 def _get_task_file(batch_client, job_id, task_id, filename, fp):
-    # type: (batch.BatchServiceClient, dict, str, str, str,
+    # type: (batch.BatchServiceClient, str, str, str,
     #        pathlib.Path) -> None
     """Get a files from a task
     :param batch_client: The batch client to use.

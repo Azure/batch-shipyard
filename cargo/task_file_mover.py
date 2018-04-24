@@ -26,9 +26,11 @@
 
 # stdlib imports
 import argparse
+import concurrent.futures
 import fnmatch
 import logging
 import logging.handlers
+import multiprocessing
 import os
 import pathlib
 # non-stdlib imports
@@ -37,6 +39,7 @@ import azure.batch.batch_service_client as batch
 
 # create logger
 logger = logging.getLogger(__name__)
+_MAX_EXECUTOR_WORKERS = min((multiprocessing.cpu_count() * 4, 32))
 
 
 def _setup_logger() -> None:
@@ -64,6 +67,23 @@ def _create_credentials():
     return batch_client
 
 
+def _get_task_file(batch_client, job_id, task_id, filename, fp):
+    # type: (batch.BatchServiceClient, str, str, str,
+    #        pathlib.Path) -> None
+    """Get a files from a task
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str job_id: job id
+    :param str task_id: task id
+    :param str filename: file name
+    :param pathlib.Path fp: file path
+    """
+    stream = batch_client.file.get_from_task(job_id, task_id, filename)
+    with fp.open('wb') as f:
+        for fdata in stream:
+            f.write(fdata)
+
+
 def get_all_files_via_task(batch_client, job_id, task_id, incl, excl, dst):
     # type: (batch.BatchServiceClient, str, str, list, list, str) -> None
     """Get all files from a task
@@ -77,31 +97,36 @@ def get_all_files_via_task(batch_client, job_id, task_id, incl, excl, dst):
         excl = excl.split(';')
     # iterate through all files in task and download them
     logger.debug('downloading files to {}'.format(dst))
-    files = batch_client.file.list_from_task(job_id, task_id, recursive=True)
+    files = list(batch_client.file.list_from_task(
+        job_id, task_id, recursive=True))
     i = 0
-    dirs_created = set('.')
-    for file in files:
-        if file.is_directory:
-            continue
-        if excl is not None:
-            inc = not any([fnmatch.fnmatch(file.name, x) for x in excl])
-        else:
-            inc = True
-        if incl is not None:
-            inc = any([fnmatch.fnmatch(file.name, x) for x in incl])
-        if not inc:
-            logger.debug('skipping file {} due to filters'.format(
-                file.name))
-            continue
-        fp = pathlib.Path(dst, file.name)
-        if str(fp.parent) not in dirs_created:
-            fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-            dirs_created.add(str(fp.parent))
-        stream = batch_client.file.get_from_task(job_id, task_id, file.name)
-        with fp.open('wb') as f:
-            for data in stream:
-                f.write(data)
-        i += 1
+    if len(files) > 0:
+        dirs_created = set('.')
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(
+                    (len(files), _MAX_EXECUTOR_WORKERS))) as executor:
+            for file in files:
+                if file.is_directory:
+                    continue
+                if excl is not None:
+                    inc = not any(
+                        [fnmatch.fnmatch(file.name, x) for x in excl])
+                else:
+                    inc = True
+                if incl is not None:
+                    inc = any([fnmatch.fnmatch(file.name, x) for x in incl])
+                if not inc:
+                    logger.debug('skipping file {} due to filters'.format(
+                        file.name))
+                    continue
+                fp = pathlib.Path(dst, file.name)
+                if str(fp.parent) not in dirs_created:
+                    fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+                    dirs_created.add(str(fp.parent))
+                executor.submit(
+                    _get_task_file, batch_client, job_id, task_id,
+                    file.name, fp)
+                i += 1
     if i == 0:
         logger.error(
             'no files found for task {} job {} include={} exclude={}'.format(
