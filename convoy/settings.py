@@ -3181,6 +3181,16 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
     del tdv
     # binding order matters for Singularity
     bindparm = '-v' if util.is_not_empty(docker_image) else '-B'
+    # get working dir default
+    def_wd = _kv_read_checked(
+        conf, 'default_working_dir',
+        default=_kv_read_checked(jobspec, 'default_working_dir')
+    )
+    if util.is_none_or_empty(def_wd) or def_wd == 'batch':
+        if is_windows:
+            def_wd = '%AZ_BATCH_TASK_WORKING_DIR%'
+        else:
+            def_wd = '$AZ_BATCH_TASK_WORKING_DIR'
     # bind root dir and set working dir
     if not native:
         # mount batch root dir
@@ -3193,16 +3203,14 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 '{} $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR'.format(
                     bindparm))
         # set working directory if not already set
-        if util.is_not_empty(docker_image):
-            if not any((x.startswith('-w ') or x.startswith('--workdir '))
-                       for x in run_opts):
-                if is_windows:
-                    run_opts.append('-w %AZ_BATCH_TASK_WORKING_DIR%')
-                else:
-                    run_opts.append('-w $AZ_BATCH_TASK_WORKING_DIR')
-        else:
-            if not any(x.startswith('--pwd ') for x in run_opts):
-                run_opts.append('--pwd $AZ_BATCH_TASK_WORKING_DIR')
+        if def_wd != 'container':
+            if util.is_not_empty(docker_image):
+                if not any((x.startswith('-w ') or x.startswith('--workdir '))
+                           for x in run_opts):
+                    run_opts.append('-w {}'.format(def_wd))
+            else:
+                if not any(x.startswith('--pwd ') for x in run_opts):
+                    run_opts.append('--pwd {}'.format(def_wd))
     if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:

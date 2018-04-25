@@ -152,6 +152,9 @@ mapping:
                           - type: str
                       blobxfer_extra_options:
                         type: str
+          default_working_dir:
+            type: str
+            enum: ['batch', 'container']
           tasks:
             type: seq
             sequence:
@@ -471,6 +474,9 @@ mapping:
                                   - type: str
                               blobxfer_extra_options:
                                 type: str
+                  default_working_dir:
+                    type: str
+                    enum: ['batch', 'container']
                   remove_container_after_exit:
                     type: bool
                   shm_size:

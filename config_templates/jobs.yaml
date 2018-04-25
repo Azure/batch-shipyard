@@ -59,6 +59,7 @@ job_specifications:
       include:
       - jobdata*.bin
       blobxfer_extra_options: null
+  default_working_dir: batch
   tasks:
   - id: null
     docker_image: busybox
@@ -190,6 +191,7 @@ job_specifications:
         include:
         - 'out*.dat'
         blobxfer_extra_options: null
+    default_working_dir: batch
     remove_container_after_exit: true
     shm_size: 256m
     additional_docker_run_options: []

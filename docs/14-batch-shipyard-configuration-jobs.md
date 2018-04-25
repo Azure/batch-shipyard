@@ -2,6 +2,19 @@
 This page contains in-depth details on how to configure the jobs
 configuration file for Batch Shipyard.
 
+## Considerations
+- By default, containers are executed with the working directory set to the
+Azure Batch task working directory (or `$AZ_BATCH_TASK_WORKING_DIR`). This
+default is set such that all files written to this path (or any child paths)
+are persisted to the host. This behavior can be changed through the options
+`default_working_dir` or to explicitly set the working dir with the
+container runtime respective switch to `additional_docker_run_options`
+or `additional_singularity_options`.
+- Container logs are automatically captured to `stdout.txt` and `stderr.txt`
+within the `$AZ_BATCH_TASK_DIR`. You can egress these logs using the
+`data files task` command (e.g.,
+`data files task --filespec myjobid,mytaskid,stdout.txt`).
+
 ## Schema
 The jobs schema is as follows:
 
@@ -67,6 +80,7 @@ job_specifications:
       include:
       - jobdata*.bin
       blobxfer_extra_options: null
+  default_working_dir: batch
   tasks:
   - id: null
     docker_image: busybox
@@ -196,6 +210,7 @@ job_specifications:
         include:
         - 'out*.dat'
         blobxfer_extra_options: null
+    default_working_dir: batch
     remove_container_after_exit: true
     shm_size: 256m
     additional_docker_run_options: []
@@ -456,6 +471,17 @@ transferred again. This object currently supports `azure_batch` and
         * (optional) `exclude` property defines optional exclude filters.
         * (optional) `blobxfer_extra_options` are any extra options to pass to
           `blobxfer`.
+* (optional) `default_working_dir` defines the default working directory
+when the container executes. Valid values for this property are `batch` and
+`container`. If `batch` is selected, the working directory for the container
+execution is set to the Azure Batch task working directory, or
+`$AZ_BATCH_TASK_WORKING_DIR`. If `container` is selected, the working
+directory for the container execution is not explicitly set. The default is
+`batch` if not specified. If you wish to specify a different working
+directory, you can pass the appropriate working directory parameter to the
+container runtime through either `additional_docker_run_options` or
+`additional_singularity_options`. A working directory option specified within
+that property takes precedence over this option.
 
 The required `tasks` property is an array of tasks to add to the job:
 
