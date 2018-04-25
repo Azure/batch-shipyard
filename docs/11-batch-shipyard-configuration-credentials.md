@@ -240,8 +240,11 @@ Azure Container Registry or private repositories on Docker Hub.
     * (optional) `myserver-myorg.azurecr.io` is an example property that
       defines a private container registry to connect to. This is an example to
       connect to the [Azure Container Registry service](https://azure.microsoft.com/services/container-registry/).
-      The private registry defined here should be defined as the `server`
-      property in the `docker_registry`:`private` property in the global
+      The private registry defined here should be included as a server prefix
+      of an image for `global_resources`:`docker_images`,
+      `global_resources`:`singularity_images`,
+      `global_resources`:`additional_registries`:`docker`,
+      `global_resources`:`additional_registries`:`singularity` in the global
       configuration.
       * (optional) `username` username to log in to this registry
       * (optional) `password` password associated with this username

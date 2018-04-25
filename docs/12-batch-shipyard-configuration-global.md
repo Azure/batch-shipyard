@@ -196,7 +196,11 @@ replication options:
 required container images, volume configuration and data ingress information.
 This property is required.
     * (optional) `additional_registries` specifies any additional registry
-      login information to load on to the pool:
+      login information to load on to the pool, as specified in the
+      credentials configuration. Do not specify any registries here that are
+      already part of either `docker_images` or `singularity_images` below.
+      This option is mainly for accessing container registries that do not
+      have associated images with them to preload on to the pool.
       * (optional) `docker` specifies a list of Docker registries to load.
         If these require login credentials, they must be specified in the
         credentials configuration file.
