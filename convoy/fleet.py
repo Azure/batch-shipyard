@@ -2108,9 +2108,10 @@ def _adjust_settings_for_pool_creation(config):
     # oracle linux is not supported due to UEKR4 requirement
     if publisher == 'canonical':
         if offer == 'ubuntuserver':
-            if sku.startswith('14.04'):
+            if sku == '16.04-lts':
                 allowed = True
-            elif sku.startswith('16.04'):
+                shipyard_container_required = False
+            elif sku == '18.04-lts':
                 allowed = True
                 shipyard_container_required = False
     elif publisher == 'credativ':
@@ -2127,10 +2128,7 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
     elif publisher == 'suse':
         if offer.startswith('sles'):
-            if sku >= '12-sp1':
-                allowed = True
-        elif offer == 'opensuse-leap':
-            if sku >= '42':
+            if sku >= '12-sp2':
                 allowed = True
     elif publisher == 'microsoftwindowsserver':
         if offer == 'windowsserver':

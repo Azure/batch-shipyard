@@ -446,15 +446,16 @@ EOF
         apt-get install -y -q --no-install-recommends glusterfs-server
         rc=$?
         set -e
-        # handle buggy install due to glustereventsd
+        # workaround for install failures due to glustereventsd
         # https://bugs.launchpad.net/ubuntu/+source/glusterfs/+bug/1712748
         # TODO remove this workaround when this is fixed
         if [ $rc -eq 100 ]; then
             apt-get -y -f install
-        else
+        elif [ $rc -ne 0 ]; then
             echo "glusterfs-server installation failed with rc=$rc"
             exit $rc
         fi
+        systemctl --no-pager status glustereventsd
         # enable gluster service
         systemctl enable glusterd
         # start service if not started

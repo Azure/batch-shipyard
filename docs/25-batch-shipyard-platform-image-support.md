@@ -28,12 +28,11 @@ SLES is not supported at this time.
 
 | Publisher | Offer        | Sku         | GPU | IB/RDMA |
 |-----------|--------------|-------------|:---:|:-------:|
-| Canonical | UbuntuServer | 14.04.5-LTS |     |         |
 | Canonical | UbuntuServer | 16.04-LTS   |  X  |  X (1)  |
 
-**(1)** IB/RDMA for 16.04-LTS is only supported with a custom image. Please
-see the [packer](../contrib/packer/ubuntu-16.04-GPU+IB) scripts and consult
-the [custom image guide](63-batch-shipyard-custom-images.md) for information
+**(1)** IB/RDMA for Ubuntu is only supported with a custom image. Please
+see the [packer](../contrib/packer) scripts and consult the
+[custom image guide](63-batch-shipyard-custom-images.md) for information
 on how to create a compliant custom image.
 
 ### Windows
