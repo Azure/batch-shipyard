@@ -548,7 +548,7 @@ def _create_virtual_machine(
                 ImageReference(
                     publisher='Canonical',
                     offer='UbuntuServer',
-                    sku='18.04-DAILY-LTS',  # TODO move to stable after release
+                    sku='18.04-LTS',
                     version='latest',
                 ),
                 data_disks=data_disks,
@@ -571,6 +571,17 @@ def _create_virtual_machine(
                     ssh=compute_client.virtual_machines.models.
                     SshConfiguration(
                         public_keys=[ssh_pub_key],
+                    ),
+                ),
+            ),
+            diagnostics_profile=compute_client.virtual_machines.models.
+            DiagnosticsProfile(
+                boot_diagnostics=compute_client.virtual_machines.models.
+                BootDiagnostics(
+                    enabled=True,
+                    storage_uri='https://{}.blob.{}'.format(
+                        storage.get_storageaccount(),
+                        storage.get_storageaccount_endpoint(),
                     ),
                 ),
             ),
@@ -1789,6 +1800,8 @@ def delete_storage_cluster(
                     compute_client, network_client, rfs, vm)
             resources[i] = {
                 'vm': vm.name,
+                'arm_id': vm.id,
+                'id': vm.vm_id,
                 'as': None,
                 'nic': nic,
                 'pip': pip,
@@ -1939,6 +1952,16 @@ def delete_storage_cluster(
             compute_client, rfs.storage_cluster.resource_group, as_name)
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()
+    # delete boot diagnostics storage containers
+    for key in resources:
+        try:
+            vm_name = resources[key]['vm']
+            vm_id = resources[key]['id']
+        except KeyError:
+            pass
+        else:
+            storage.delete_storage_containers_remotefs_boot_diagnostics(
+                blob_client, vm_name, vm_id)
     # delete storage container
     storage.delete_storage_containers_remotefs(blob_client)
     # wait for all async ops to complete

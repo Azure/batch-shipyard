@@ -33,6 +33,7 @@ from builtins import (  # noqa
 import datetime
 import hashlib
 import logging
+import re
 # non-stdlib imports
 import azure.common
 import azure.cosmosdb.table as azuretable
@@ -618,7 +619,27 @@ def delete_storage_containers_remotefs(blob_client):
     """
     contname = _STORAGE_CONTAINERS['blob_remotefs']
     logger.info('deleting container: {}'.format(contname))
-    blob_client.delete_container(contname)
+    try:
+        blob_client.delete_container(contname)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(contname))
+
+
+def delete_storage_containers_remotefs_boot_diagnostics(
+        blob_client, vm_name, vm_id):
+    # type: (azureblob.BlockBlobService, str, str) -> None
+    """Delete storage containers used for remotefs bootdiagnostics
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str vm_name: vm name
+    :param str vm_id: vm id
+    """
+    contname = 'bootdiagnostics-{}-{}'.format(
+        re.sub('[\W_]+', '', vm_name)[0:9], vm_id)
+    logger.info('deleting container: {}'.format(contname))
+    try:
+        blob_client.delete_container(contname)
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('container not found: {}'.format(contname))
 
 
 def cleanup_with_del_pool(blob_client, table_client, config, pool_id=None):
