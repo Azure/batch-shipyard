@@ -110,6 +110,16 @@ pool_specification:
   additional_node_prep_commands:
     pre: []
     post: []
+  prometheus:
+    node_exporter:
+      enabled: false
+      port: 9100
+      options: []
+    cadvisor:
+      enabled: false
+      port: 8080
+      options:
+      - -docker_only
 ```
 
 The `pool_specification` property has the following members:
@@ -450,6 +460,35 @@ the driver for the `vm_size` specified.
     * (optional) `post` is an array of additional commands to execute on the
       compute node host as part of node preparation which occur after the
       Batch Shipyard node preparation steps.
+* (optional) `prometheus` properties are to control if collectors for metrics
+to export to [Prometheus](https://prometheus.io/) monitoring are enabled.
+Note that all exporters do not have their ports mapped (NAT) on the load
+balancer pool. This means that the Prometheus instance itself must reside
+on, or peered with, the virtual network that the compute nodes are in. This
+ensures that external parties cannot scrape exporter metrics from compute
+node instances.
+    * (optional) `node_exporter` contains options for the
+      [Node Exporter](https://github.com/prometheus/node_exporter) metrics
+      exporter.
+        * (optional) `enabled` property enables or disables this exporter.
+          Default is `false`.
+        * (optional) `port` is the port for Prometheus to connect to scrape.
+          This is the internal port on the compute node.
+        * (optional) `options` is a list of options to pass to the
+          node exporter instance running on all nodes. The following
+          collectors are force disabled, in addition to others disabled by
+          default: textfile, mdadm, wifi, xfs, zfs. The infiniband collector
+          is enabled if on an IB/RDMA instance, automatically. The nfs
+          collector is enabled if mounting an NFS RemoteFS storage cluster,
+          automatically.
+    * (optional) `cadvisor` contains options for the
+      [cAdvisor](https://github.com/google/cadvisor) metrics exporter.
+        * (optional) `enabled` property enables or disables this exporter.
+          Default is `false`.
+        * (optional) `port` is the port for Prometheus to connect to scrape.
+          This is the internal port on the compute node.
+        * (optional) `options` is a list of options to pass to the
+          cAdvisor instance running on all nodes.
 
 ## Full template
 A full template of a credentials file can be found

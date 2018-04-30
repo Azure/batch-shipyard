@@ -1165,6 +1165,76 @@ block_for_container_images() {
     fi
 }
 
+install_and_start_node_exporter() {
+    if [ -z "${PROM_NODE_EXPORTER_PORT}" ]; then
+        log INFO "Prometheus node exporter disabled."
+        return
+    else
+        log DEBUG "Installing Prometheus node exporter"
+    fi
+    # install
+    tar zxvpf node_exporter.tar.gz
+    mv node_exporter-*.linux-amd64/node_exporter .
+    rm -rf node_exporter-*.linux-amd64 node_exporter.tar.gz
+    chmod +x node_exporter
+    # start
+    local ib
+    local nfs
+    ib="--no-collector.infiniband"
+    nfs="--no-collector.nfs"
+    if [ -e /dev/infiniband/uverbs0 ]; then
+        ib="--collector.infiniband"
+    fi
+    if [ ! -z "$sc_args" ]; then
+        for sc_arg in "${sc_args[@]}"; do
+            IFS=':' read -ra sc <<< "$sc_arg"
+            if [ "${sc[0]}" == "nfs" ]; then
+                nfs="--collector.nfs"
+                break
+            fi
+        done
+    fi
+    local pneo
+    if [ ! -z "${PROM_NODE_EXPORTER_OPTIONS}" ]; then
+        IFS=',' read -ra pneo <<< "$PROM_NODE_EXPORTER_OPTIONS"
+    else
+        pneo=
+    fi
+    "${AZ_BATCH_TASK_WORKING_DIR}"/node_exporter \
+        "$ib" "$nfs" \
+        --no-collector.textfile \
+        --no-collector.mdadm \
+        --no-collector.wifi \
+        --no-collector.xfs \
+        --no-collector.zfs \
+        --web.listen-address=":${PROM_NODE_EXPORTER_PORT}" \
+        --collector.filesystem.ignored-mount-points="${USER_MOUNTPOINT}/docker" \
+        "${pneo[@]}" &
+    log INFO "Prometheus node exporter enabled."
+}
+
+install_and_start_cadvisor() {
+    if [ -z "${PROM_CADVISOR_PORT}" ]; then
+        log INFO "Prometheus cAdvisor disabled."
+        return
+    else
+        log INFO "Installing Prometheus cAdvisor"
+    fi
+    # install
+    chmod +x cadvisor
+    # start
+    local pcao
+    if [ ! -z "${PROM_CADVISOR_OPTIONS}" ]; then
+        IFS=',' read -ra pcao <<< "$PROM_CADVISOR_OPTIONS"
+    else
+        pcao=
+    fi
+    "${AZ_BATCH_TASK_WORKING_DIR}"/cadvisor \
+        -port "${PROM_CADVISOR_PORT}" \
+        "${pcao[@]}" &
+    log INFO "Prometheus cAdvisor enabled."
+}
+
 log INFO "Prep start"
 echo "Configuration:"
 echo "--------------"
@@ -1176,6 +1246,7 @@ echo "Blobxfer version: $blobxferversion"
 echo "Singularity version: $SINGULARITY_VERSION"
 echo "User mountpoint: $USER_MOUNTPOINT"
 echo "Mount path: $MOUNTS_PATH"
+echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
 echo "Network optimization: $networkopt"
 echo "Encryption cert thumbprint: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
@@ -1246,6 +1317,9 @@ if [ -f "$cascadefailed" ]; then
     log ERROR "$cascadefailed file exists, assuming cascade failure during node prep"
     exit 1
 elif [ -f "$nodeprepfinished" ]; then
+    # start prometheus collectors
+    install_and_start_node_exporter
+    install_and_start_cadvisor
     # mount any storage clusters
     if [ ! -z "$sc_args" ]; then
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
@@ -1290,6 +1364,10 @@ set -e
 
 # set sudoers to not require tty
 sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
+
+# install prometheus collectors
+install_and_start_node_exporter
+install_and_start_cadvisor
 
 # install docker host engine on non-native
 if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then

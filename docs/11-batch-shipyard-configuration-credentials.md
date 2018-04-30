@@ -19,7 +19,7 @@ credentials:
   batch:
     aad:
       authority_url: https://login.microsoftonline.com
-      endpoint: https://batch.core.windows.net/
+      endpoint: https://management.azure.com/
       directory_id: 01234567-89ab-cdef-0123-456789abcdef
       application_id: 01234567-89ab-cdef-0123-456789abcdef
       auth_key: 01234...
@@ -53,6 +53,7 @@ credentials:
       account_key: 01234...
       account_key_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
       endpoint: core.windows.net
+      resource_group: resource-group-of-storage-account
   docker_registry:
     hub:
       username: hub_username

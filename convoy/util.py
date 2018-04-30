@@ -42,12 +42,14 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
+import platform
+import socket
+import struct
 import subprocess
 try:
     from os import scandir as scandir
 except ImportError:
     from scandir import scandir as scandir
-import platform
 import sys
 import time
 # function remaps
@@ -594,3 +596,29 @@ def subprocess_wait_multi(procs1, procs2):
                 if procs2[i].poll() is not None:
                     return procs2, i, procs2[i].returncode
         time.sleep(0.1)
+
+
+def ip_from_address_prefix(cidr, start_offset=None, max=None):
+    # type: (str) -> str
+    """Generator for ip addresses from CIDR notation
+    :param str cidr: CIDR
+    :param int start_offset: starting offset
+    :param int max: max number of addresses to generate
+    :rtype: str
+    :return: next IP address
+    """
+    tmp = cidr.split('/')
+    if len(tmp) != 2:
+        raise ValueError('CIDR notation {} is invalid'.format(cidr))
+    addr = struct.unpack('>L', socket.inet_aton(tmp[0]))[0]
+    mask = int(tmp[1])
+    if start_offset is None:
+        start_offset = 0
+    first = (addr & (~0 << (32 - mask))) + start_offset
+    last = addr | ((1 << (32 - mask)) - 1)
+    if max is not None:
+        diff = last - first
+        if diff > max:
+            last = first + max - 1
+    for i in range(first, last + 1):
+        yield socket.inet_ntoa(struct.pack('>L', i))

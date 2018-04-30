@@ -102,3 +102,13 @@ pool_specification:
   additional_node_prep_commands:
     pre: []
     post: []
+  prometheus:
+    node_exporter:
+      enabled: false
+      port: 9100
+      options: []
+    cadvisor:
+      enabled: false
+      port: 8080
+      options:
+      - -docker_only

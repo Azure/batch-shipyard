@@ -1,0 +1,45 @@
+version: "3.5"
+
+volumes:
+  prometheus-storage:
+  grafana-storage:
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.2.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-storage:/prometheus
+      - /var/batch-shipyard/prometheus:/conf
+  #  links:
+  #    - nodeexporter
+  #  entrypoint: /bin/prometheus
+    command:
+      - "--config.file=/conf/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention=1000h"
+      - "--web.enable-lifecycle"
+
+  grafana:
+    image: grafana/grafana:5.1.3
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    links:
+      - prometheus
+    volumes:
+      - grafana-storage:/var/lib/grafana
+  #    - /var/batch-shipayrd/grafana/datasources:/etc/grafana/datasources
+  #    - /var/batch-shipyard/grafana/dashboards:/etc/grafana/dashboards
+  #    - /var/batch-shipyard/grafana/setup.sh:/setup.sh
+  #  entrypoint: /setup.sh
+    environment:
+  #    - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+  #    - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false

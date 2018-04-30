@@ -36,6 +36,7 @@ import azure.batch.batch_auth as batchauth
 import azure.batch.batch_service_client as batchsc
 import azure.cosmosdb.table as azuretable
 import azure.keyvault
+import azure.mgmt.authorization
 import azure.mgmt.batch
 import azure.mgmt.compute
 import azure.mgmt.network
@@ -64,6 +65,34 @@ def _modify_client_for_retry_and_user_agent(client):
     client.config.retry_policy.max_backoff = 8
     client.config.retry_policy.retries = 20
     client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
+
+
+def _create_authorization_client(
+        ctx, credentials=None, subscription_id=None, endpoint=None):
+    # type: (CliContext, object, str, str) ->
+    #        azure.mgmt.authorization.AuthorizationManagementClient
+    """Create authorization management client
+    :param CliContext ctx: Cli Context
+    :param object credentials: credentials object
+    :param str subscription_id: subscription id
+    :param str endpoint: endpoint
+    :rtype: azure.mgmt.authorization.AuthorizationManagementClient
+    :return: authorization management client
+    """
+    mgmt_aad = None
+    if credentials is None:
+        mgmt_aad = settings.credentials_management(ctx.config).aad
+        credentials = aad.create_aad_credentials(ctx, mgmt_aad)
+    if util.is_none_or_empty(subscription_id):
+        if mgmt_aad is None:
+            mgmt_aad = settings.credentials_management(ctx.config).aad
+        subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
+    if endpoint is None:
+        endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
+    client = azure.mgmt.authorization.AuthorizationManagementClient(
+        credentials, subscription_id, base_url=endpoint)
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_resource_client(
@@ -211,7 +240,8 @@ def _create_batch_mgmt_client(
 
 def create_all_clients(ctx, batch_clients=False):
     # type: (CliContext, bool) ->
-    #        Tuple[azure.mgmt.resource.resources.ResourceManagementClient,
+    #        Tuple[azure.mgmt.authorization.AuthorizationManagementClient,
+    #              azure.mgmt.resource.resources.ResourceManagementClient,
     #              azure.mgmt.compute.ComputeManagementClient,
     #              azure.mgmt.network.NetworkManagementClient,
     #              azure.mgmt.storage.StorageManagementClient,
@@ -222,6 +252,7 @@ def create_all_clients(ctx, batch_clients=False):
     :param bool batch_clients: create batch clients
     :rtype: tuple
     :return: (
+        azure.mgmt.authorization.AuthorizationManagementClient,
         azure.mgmt.resource.resources.ResourceManagementClient,
         azure.mgmt.compute.ComputeManagementClient,
         azure.mgmt.network.NetworkManagementClient,
@@ -234,6 +265,7 @@ def create_all_clients(ctx, batch_clients=False):
     endpoint = ctx.aad_endpoint or mgmt.aad.endpoint
     if util.is_none_or_empty(subscription_id):
         credentials = None
+        auth_client = None
         resource_client = None
         compute_client = None
         network_client = None
@@ -245,6 +277,9 @@ def create_all_clients(ctx, batch_clients=False):
         # create add credential object
         credentials = aad.create_aad_credentials(ctx, mgmt.aad)
         # create clients
+        auth_client = _create_authorization_client(
+            ctx, credentials=credentials, subscription_id=subscription_id,
+            endpoint=endpoint)
         resource_client = _create_resource_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
@@ -274,8 +309,8 @@ def create_all_clients(ctx, batch_clients=False):
         batch_mgmt_client = None
         batch_client = None
     return (
-        resource_client, compute_client, network_client, storage_mgmt_client,
-        batch_mgmt_client, batch_client
+        auth_client, resource_client, compute_client, network_client,
+        storage_mgmt_client, batch_mgmt_client, batch_client
     )
 
 

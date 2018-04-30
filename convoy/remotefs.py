@@ -38,10 +38,7 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
-import socket
-import struct
 # non-stdlib imports
-import azure.mgmt.network.models as networkmodels
 import msrestazure.azure_exceptions
 # local imports
 from . import crypto
@@ -77,7 +74,7 @@ def _create_managed_disk(compute_client, rfs, disk_name):
         resource_group_name=rfs.managed_disks.resource_group,
         disk_name=disk_name,
         disk=compute_client.disks.models.Disk(
-            location=rfs.location,
+            location=rfs.managed_disks.location,
             creation_data=compute_client.disks.models.CreationData(
                 create_option=compute_client.disks.models.
                 DiskCreateOption.empty,
@@ -106,7 +103,8 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
     rfs = settings.remotefs_settings(config)
     # create resource group if it doesn't exist
     resource.create_resource_group(
-        resource_client, rfs.managed_disks.resource_group, rfs.location)
+        resource_client, rfs.managed_disks.resource_group,
+        rfs.managed_disks.location)
     # iterate disks and create disks if they don't exist
     existing_disk_sizes = set()
     async_ops = {}
@@ -170,9 +168,11 @@ def delete_managed_disks(
     :return: dictionary of disk names -> async ops if wait is False,
         otherwise None
     """
-    # retrieve remotefs settings
-    rfs = settings.remotefs_settings(config)
-    resource_group = resource_group or rfs.managed_disks.resource_group
+    # retrieve remotefs settings if necessary
+    rfs = None
+    if resource_group is None:
+        rfs = settings.remotefs_settings(config)
+        resource_group = rfs.managed_disks.resource_group
     # delete rg if specified
     if delete_resource_group:
         if (not confirm_override and not util.confirm_action(
@@ -197,6 +197,8 @@ def delete_managed_disks(
         ]
     else:
         if util.is_none_or_empty(name):
+            if rfs is None:
+                rfs = settings.remotefs_settings(config)
             disks = rfs.managed_disks.disk_names
         else:
             if isinstance(name, list):
@@ -268,325 +270,6 @@ def list_disks(
             ('no managed disks found in resource group {} '
              '[restrict_scope={}]').format(resource_group, restrict_scope))
     return ret
-
-
-def ip_from_address_prefix(cidr, start_offset=None, max=None):
-    # type: (str) -> str
-    """Generator for ip addresses from CIDR notation
-    :param str cidr: CIDR
-    :param int start_offset: starting offset
-    :param int max: max number of addresses to generate
-    :rtype: str
-    :return: next IP address
-    """
-    tmp = cidr.split('/')
-    if len(tmp) != 2:
-        raise ValueError('CIDR notation {} is invalid'.format(cidr))
-    addr = struct.unpack('>L', socket.inet_aton(tmp[0]))[0]
-    mask = int(tmp[1])
-    if start_offset is None:
-        start_offset = 0
-    first = (addr & (~0 << (32 - mask))) + start_offset
-    last = addr | ((1 << (32 - mask)) - 1)
-    if max is not None:
-        diff = last - first
-        if diff > max:
-            last = first + max - 1
-    for i in range(first, last + 1):
-        yield socket.inet_ntoa(struct.pack('>L', i))
-
-
-def _create_network_security_group(network_client, rfs):
-    # type: (azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Create a network security group
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    nsg_name = settings.generate_network_security_group_name(
-        rfs.storage_cluster)
-    # check and fail if nsg exists
-    try:
-        network_client.network_security_groups.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            network_security_group_name=nsg_name,
-        )
-        raise RuntimeError('network security group {} exists'.format(nsg_name))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    # create security rules as found in settings
-    priority = 100
-    security_rules = []
-    for nsi in rfs.storage_cluster.network_security.inbound:
-        i = 0
-        ir = rfs.storage_cluster.network_security.inbound[nsi]
-        for sap in ir.source_address_prefix:
-            proto = ir.protocol.lower()
-            if proto == 'tcp':
-                proto = networkmodels.SecurityRuleProtocol.tcp
-            elif proto == 'udp':
-                proto = networkmodels.SecurityRuleProtocol.udp
-            elif proto == '*':
-                proto = networkmodels.SecurityRuleProtocol.asterisk
-            else:
-                raise ValueError('Unknown protocol {} for rule {}'.format(
-                    proto, nsi))
-            security_rules.append(networkmodels.SecurityRule(
-                name=settings.generate_network_security_inbound_rule_name(
-                    nsi, i),
-                description=settings.
-                generate_network_security_inbound_rule_description(nsi, i),
-                protocol=proto,
-                source_port_range='*',
-                destination_port_range=str(ir.destination_port_range),
-                source_address_prefix=sap,
-                destination_address_prefix='*',
-                access=networkmodels.SecurityRuleAccess.allow,
-                priority=priority,
-                direction=networkmodels.SecurityRuleDirection.inbound)
-            )
-            priority += 1
-            i += 1
-    if len(security_rules) == 0:
-        logger.warning(
-            'no security rules to apply, not creating a network '
-            'security group')
-        return None
-    logger.debug('creating network security group: {}'.format(nsg_name))
-    return network_client.network_security_groups.create_or_update(
-        resource_group_name=rfs.storage_cluster.resource_group,
-        network_security_group_name=nsg_name,
-        parameters=networkmodels.NetworkSecurityGroup(
-            location=rfs.location,
-            security_rules=security_rules,
-        ),
-    )
-
-
-def _create_public_ip(network_client, rfs, offset):
-    # type: (azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings, networkmodels.Subnet, int) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Create a public IP
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :param int offset: public ip number
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: msrestazure.azure_operation.AzureOperationPoller
-    """
-    pip_name = settings.generate_public_ip_name(rfs.storage_cluster, offset)
-    # check and fail if pip exists
-    try:
-        network_client.public_ip_addresses.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            public_ip_address_name=pip_name,
-        )
-        raise RuntimeError('public ip {} exists'.format(pip_name))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    hostname = settings.generate_hostname(rfs.storage_cluster, offset)
-    logger.debug('creating public ip: {} with label: {}'.format(
-        pip_name, hostname))
-    return network_client.public_ip_addresses.create_or_update(
-        resource_group_name=rfs.storage_cluster.resource_group,
-        public_ip_address_name=pip_name,
-        parameters=networkmodels.PublicIPAddress(
-            location=rfs.location,
-            idle_timeout_in_minutes=30,
-            dns_settings=networkmodels.PublicIPAddressDnsSettings(
-                domain_name_label=hostname,
-            ),
-            public_ip_allocation_method=(
-                networkmodels.IPAllocationMethod.static if
-                rfs.storage_cluster.public_ip.static else
-                networkmodels.IPAllocationMethod.dynamic
-            ),
-            public_ip_address_version=networkmodels.IPVersion.ipv4,
-        ),
-    )
-
-
-def _create_network_interface(
-        network_client, rfs, subnet, nsg, private_ips, pips, offset):
-    # type: (azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings, networkmodels.Subnet,
-    #        networkmodels.NetworkSecurityGroup, List[str], dict, int) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Create a network interface
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :param networkmodels.Subnet subnet: virtual network subnet
-    :param networkmodels.NetworkSecurityGroup nsg: network security group
-    :param list private_ips: list of static private ips
-    :param dict pips: public ip map
-    :param int offset: network interface number
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: msrestazure.azure_operation.AzureOperationPoller
-    """
-    nic_name = settings.generate_network_interface_name(
-        rfs.storage_cluster, offset)
-    # check and fail if nic exists
-    try:
-        network_client.network_interfaces.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            network_interface_name=nic_name,
-        )
-        raise RuntimeError('network interface {} exists'.format(nic_name))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    if util.is_none_or_empty(pips):
-        pip = None
-        logger.debug('not assigning public ip to network interface {}'.format(
-            nic_name))
-    else:
-        pip = pips[offset]
-        logger.debug('assigning public ip {} to network interface {}'.format(
-            pip.name, nic_name))
-    # create network ip config
-    if private_ips is None:
-        network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
-            name=rfs.storage_cluster.hostname_prefix,
-            subnet=subnet,
-            public_ip_address=pip,
-        )
-    else:
-        network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
-            name=rfs.storage_cluster.hostname_prefix,
-            subnet=subnet,
-            public_ip_address=pip,
-            private_ip_address=private_ips[offset],
-            private_ip_allocation_method=networkmodels.
-            IPAllocationMethod.static,
-            private_ip_address_version=networkmodels.IPVersion.ipv4,
-
-        )
-    logger.debug('creating network interface: {}'.format(nic_name))
-    return network_client.network_interfaces.create_or_update(
-        resource_group_name=rfs.storage_cluster.resource_group,
-        network_interface_name=nic_name,
-        parameters=networkmodels.NetworkInterface(
-            location=rfs.location,
-            network_security_group=nsg,
-            ip_configurations=[network_ip_config],
-            enable_accelerated_networking=rfs.storage_cluster.
-            accelerated_networking,
-        ),
-    )
-
-
-def _create_virtual_machine(
-        compute_client, rfs, availset, nics, disks, ssh_pub_key, offset):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.RemoteFsSettings, computemodels.AvailabilitySet,
-    #        dict, dict, computemodels.SshPublicKey, int) ->
-    #        Tuple[int, msrestazure.azure_operation.AzureOperationPoller]
-    """Create a virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :param computemodels.AvailabilitySet availset: availability set
-    :param dict nics: network interface map
-    :param dict disks: data disk map
-    :param computemodels.SshPublicKey ssh_pub_key: SSH public key
-    :param int offset: vm number
-    :rtype: tuple
-    :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
-    """
-    vm_name = settings.generate_virtual_machine_name(
-        rfs.storage_cluster, offset)
-    # construct data disks array
-    lun = 0
-    data_disks = []
-    for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
-        data_disks.append(
-            compute_client.disks.models.DataDisk(
-                lun=lun,
-                name=diskname,
-                create_option=compute_client.disks.models.
-                DiskCreateOptionTypes.attach,
-                managed_disk=compute_client.disks.models.ManagedDiskParameters(
-                    id=disks[diskname][0],
-                ),
-            )
-        )
-        lun += 1
-    # sub resource availbility set
-    if availset is not None:
-        availset = compute_client.virtual_machines.models.SubResource(
-            id=availset.id,
-        )
-    # create vm
-    logger.debug('creating virtual machine: {}'.format(vm_name))
-    return compute_client.virtual_machines.create_or_update(
-        resource_group_name=rfs.storage_cluster.resource_group,
-        vm_name=vm_name,
-        parameters=compute_client.virtual_machines.models.VirtualMachine(
-            location=rfs.location,
-            hardware_profile=compute_client.virtual_machines.models.
-            HardwareProfile(
-                vm_size=rfs.storage_cluster.vm_size,
-            ),
-            availability_set=availset,
-            storage_profile=compute_client.virtual_machines.models.
-            StorageProfile(
-                image_reference=compute_client.virtual_machines.models.
-                ImageReference(
-                    publisher='Canonical',
-                    offer='UbuntuServer',
-                    sku='18.04-LTS',
-                    version='latest',
-                ),
-                data_disks=data_disks,
-            ),
-            network_profile=compute_client.virtual_machines.models.
-            NetworkProfile(
-                network_interfaces=[
-                    compute_client.virtual_machines.models.
-                    NetworkInterfaceReference(
-                        id=nics[offset].id,
-                    ),
-                ],
-            ),
-            os_profile=compute_client.virtual_machines.models.OSProfile(
-                computer_name=vm_name,
-                admin_username=rfs.storage_cluster.ssh.username,
-                linux_configuration=compute_client.virtual_machines.models.
-                LinuxConfiguration(
-                    disable_password_authentication=True,
-                    ssh=compute_client.virtual_machines.models.
-                    SshConfiguration(
-                        public_keys=[ssh_pub_key],
-                    ),
-                ),
-            ),
-            diagnostics_profile=compute_client.virtual_machines.models.
-            DiagnosticsProfile(
-                boot_diagnostics=compute_client.virtual_machines.models.
-                BootDiagnostics(
-                    enabled=True,
-                    storage_uri='https://{}.blob.{}'.format(
-                        storage.get_storageaccount(),
-                        storage.get_storageaccount_endpoint(),
-                    ),
-                ),
-            ),
-        ),
-    )
 
 
 def _create_virtual_machine_extension(
@@ -707,7 +390,7 @@ def _create_virtual_machine_extension(
         vm_extension_name=vm_ext_name,
         extension_parameters=compute_client.virtual_machine_extensions.models.
         VirtualMachineExtension(
-            location=rfs.location,
+            location=rfs.storage_cluster.location,
             publisher='Microsoft.Azure.Extensions',
             virtual_machine_extension_type='CustomScript',
             type_handler_version='2.0',
@@ -757,7 +440,7 @@ def _create_availability_set(compute_client, rfs):
         availability_set_name=as_name,
         # user maximums ud, fd from settings due to region variability
         parameters=compute_client.virtual_machines.models.AvailabilitySet(
-            location=rfs.location,
+            location=rfs.storage_cluster.location,
             platform_update_domain_count=20,
             platform_fault_domain_count=rfs.storage_cluster.fault_domains,
             sku=compute_client.virtual_machines.models.Sku(
@@ -794,7 +477,8 @@ def create_storage_cluster(
     rfs = settings.remotefs_settings(config, sc_id)
     # create resource group if it doesn't exist
     resource.create_resource_group(
-        resource_client, rfs.storage_cluster.resource_group, rfs.location)
+        resource_client, rfs.storage_cluster.resource_group,
+        rfs.storage_cluster.location)
     # check if cluster already exists
     logger.debug('checking if storage cluster {} exists'.format(sc_id))
     # construct disk map
@@ -841,14 +525,16 @@ def create_storage_cluster(
             config, 'create storage cluster {}'.format(sc_id)):
         return
     # create storage container
-    storage.create_storage_containers_remotefs(blob_client)
+    storage.create_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # upload scripts to blob storage for customscript vm extension
-    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
+    blob_urls = storage.upload_for_nonbatch(
+        blob_client, remotefs_files, 'remotefs')
     # async operation dictionary
     async_ops = {}
     # create nsg
     async_ops['nsg'] = resource.AsyncOperation(functools.partial(
-        _create_network_security_group, network_client, rfs))
+        resource.create_network_security_group, network_client,
+        rfs.storage_cluster))
     # create static private ip block
     if rfs.storage_cluster.file_server.type == 'nfs':
         private_ips = None
@@ -856,7 +542,7 @@ def create_storage_cluster(
     else:
         # follow Azure numbering scheme: start offset at 4
         private_ips = [
-            x for x in ip_from_address_prefix(
+            x for x in util.ip_from_address_prefix(
                 rfs.storage_cluster.virtual_network.subnet_address_prefix,
                 start_offset=4,
                 max=rfs.storage_cluster.vm_count)
@@ -866,7 +552,8 @@ def create_storage_cluster(
     # create virtual network and subnet if specified
     vnet, subnet = resource.create_virtual_network_and_subnet(
         resource_client, network_client,
-        rfs.storage_cluster.virtual_network.resource_group, rfs.location,
+        rfs.storage_cluster.virtual_network.resource_group,
+        rfs.storage_cluster.location,
         rfs.storage_cluster.virtual_network)
     # create public ips
     pips = None
@@ -874,7 +561,8 @@ def create_storage_cluster(
         async_ops['pips'] = {}
         for i in range(rfs.storage_cluster.vm_count):
             async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
-                _create_public_ip, network_client, rfs, i))
+                resource.create_public_ip, network_client,
+                rfs.storage_cluster, i))
         logger.debug('waiting for public ips to be created')
         pips = {}
         for offset in async_ops['pips']:
@@ -895,8 +583,8 @@ def create_storage_cluster(
     async_ops['nics'] = {}
     for i in range(rfs.storage_cluster.vm_count):
         async_ops['nics'][i] = resource.AsyncOperation(functools.partial(
-            _create_network_interface, network_client, rfs, subnet, nsg,
-            private_ips, pips, i))
+            resource.create_network_interface, network_client,
+            rfs.storage_cluster, subnet, nsg, private_ips, pips, i))
     # create availability set if vm_count > 1, this call is not async
     availset = _create_availability_set(compute_client, rfs)
     # wait for nics to be created
@@ -936,8 +624,8 @@ def create_storage_cluster(
     async_ops['vms'] = {}
     for i in range(rfs.storage_cluster.vm_count):
         async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
-            _create_virtual_machine, compute_client, rfs, availset, nics,
-            disk_map, ssh_pub_key, i))
+            resource.create_virtual_machine, compute_client,
+            rfs.storage_cluster, availset, nics, disk_map, ssh_pub_key, i))
     # wait for vms to be created
     logger.info(
         'waiting for {} virtual machines to be created'.format(
@@ -1053,8 +741,8 @@ def resize_storage_cluster(
         # get vnet, subnet, nsg names
         if vnet_name is None or subnet_name is None or nsg_name is None:
             _, _, subnet_name, vnet_name, nsg_name = \
-                _get_resource_names_from_virtual_machine(
-                    compute_client, network_client, rfs, vm)
+                resource.get_resource_names_from_virtual_machine(
+                    compute_client, network_client, rfs.storage_cluster, vm)
         # add vm to map
         pe_vms[i] = entry
     # check early return conditions
@@ -1086,12 +774,13 @@ def resize_storage_cluster(
             config, 'resize storage cluster {}'.format(sc_id)):
         return False
     # re-create storage container in case it got deleted
-    storage.create_storage_containers_remotefs(blob_client)
+    storage.create_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # upload scripts to blob storage for customscript vm extension
-    blob_urls = storage.upload_for_remotefs(blob_client, remotefs_files)
+    blob_urls = storage.upload_for_nonbatch(
+        blob_client, remotefs_files, 'remotefs')
     # create static private ip block, start offset at 4
     private_ips = [
-        x for x in ip_from_address_prefix(
+        x for x in util.ip_from_address_prefix(
             rfs.storage_cluster.virtual_network.subnet_address_prefix,
             start_offset=4,
             max=rfs.storage_cluster.vm_count)
@@ -1103,7 +792,8 @@ def resize_storage_cluster(
         async_ops['pips'] = {}
         for i in new_vms:
             async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
-                _create_public_ip, network_client, rfs, i))
+                resource.create_public_ip, network_client,
+                rfs.storage_cluster, i))
     else:
         logger.info('public ip is disabled for storage cluster: {}'.format(
             sc_id))
@@ -1144,8 +834,8 @@ def resize_storage_cluster(
     async_ops['nics'] = {}
     for i in new_vms:
         async_ops['nics'][i] = resource.AsyncOperation(functools.partial(
-            _create_network_interface, network_client, rfs, subnet, nsg,
-            private_ips, pips, i))
+            resource.create_network_interface, network_client,
+            rfs.storage_cluster, subnet, nsg, private_ips, pips, i))
     # get availability set
     availset = compute_client.availability_sets.get(
         resource_group_name=rfs.storage_cluster.resource_group,
@@ -1193,8 +883,8 @@ def resize_storage_cluster(
     async_ops['vms'] = {}
     for i in new_vms:
         async_ops['vms'][i] = resource.AsyncOperation(functools.partial(
-            _create_virtual_machine, compute_client, rfs, availset, nics,
-            disk_map, ssh_pub_key, i))
+            resource.create_virtual_machine, compute_client,
+            rfs.storage_cluster, availset, nics, disk_map, ssh_pub_key, i))
     # gather all new private ips
     new_private_ips = {}
     for offset in nics:
@@ -1513,87 +1203,6 @@ def expand_storage_cluster(
     return succeeded
 
 
-def _get_resource_names_from_virtual_machine(
-        compute_client, network_client, rfs, vm, nic=None, pip=None):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        azure.mgmt.network.NetworkManagementClient,
-    #        settings.RemoteFsSettings, computemodels.VirtualMachine,
-    #        networkmodels.NetworkInterface, networkmodels.PublicIPAddress) ->
-    #        Tuple[str, str, str, str, str]
-    """Get resource names from a virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param rfs settings.RemoteFsSettings: remote fs settings
-    :param vm computemodels.VirtualMachine: vm
-    :param networkmodels.NetworkInterface nic: network interface
-    :param networkmodels.PublicIPAddress pip: public ip
-    :rtype: tuple
-    :return: (nic_name, pip_name, subnet_name, vnet_name, nsg_name)
-    """
-    # get nic
-    if nic is None:
-        nic_id = vm.network_profile.network_interfaces[0].id
-        tmp = nic_id.split('/')
-        if tmp[-2] != 'networkInterfaces':
-            raise RuntimeError('could not parse network interface id')
-        nic_name = tmp[-1]
-        nic = network_client.network_interfaces.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            network_interface_name=nic_name,
-        )
-    else:
-        nic_name = nic.name
-    # get public ip
-    if pip is None:
-        if nic.ip_configurations[0].public_ip_address is not None:
-            pip_id = nic.ip_configurations[0].public_ip_address.id
-            tmp = pip_id.split('/')
-            if tmp[-2] != 'publicIPAddresses':
-                raise RuntimeError('could not parse public ip address id')
-            pip_name = tmp[-1]
-        else:
-            pip_name = None
-    else:
-        pip_name = pip.name
-    # get subnet and vnet
-    subnet_id = nic.ip_configurations[0].subnet.id
-    tmp = subnet_id.split('/')
-    if tmp[-2] != 'subnets' and tmp[-4] != 'virtualNetworks':
-        raise RuntimeError('could not parse subnet id')
-    subnet_name = tmp[-1]
-    vnet_name = tmp[-3]
-    # get nsg
-    if nic.network_security_group is not None:
-        nsg_id = nic.network_security_group.id
-        tmp = nsg_id.split('/')
-        if tmp[-2] != 'networkSecurityGroups':
-            raise RuntimeError('could not parse network security group id')
-        nsg_name = tmp[-1]
-    else:
-        nsg_name = None
-    return (nic_name, pip_name, subnet_name, vnet_name, nsg_name)
-
-
-def _delete_virtual_machine(compute_client, rg_name, vm_name):
-    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param str rg_name: resource group name
-    :param str vm_name: vm name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting virtual machine {}'.format(vm_name))
-    return compute_client.virtual_machines.delete(
-        resource_group_name=rg_name,
-        vm_name=vm_name,
-    )
-
-
 def _delete_availability_set(compute_client, rg_name, as_name):
     # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
     #        msrestazure.azure_operation.AzureOperationPoller
@@ -1609,99 +1218,6 @@ def _delete_availability_set(compute_client, rg_name, as_name):
     return compute_client.availability_sets.delete(
         resource_group_name=rg_name,
         availability_set_name=as_name,
-    )
-
-
-def _delete_network_interface(network_client, rg_name, nic_name):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a network interface
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param str rg_name: resource group name
-    :param str nic_name: network interface name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting network interface {}'.format(nic_name))
-    return network_client.network_interfaces.delete(
-        resource_group_name=rg_name,
-        network_interface_name=nic_name,
-    )
-
-
-def _delete_network_security_group(network_client, rg_name, nsg_name):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a network security group
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param str rg_name: resource group name
-    :param str nsg_name: network security group name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting network security group {}'.format(nsg_name))
-    return network_client.network_security_groups.delete(
-        resource_group_name=rg_name,
-        network_security_group_name=nsg_name,
-    )
-
-
-def _delete_public_ip(network_client, rg_name, pip_name):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a public ip
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param str rg_name: resource group name
-    :param str pip_name: public ip name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting public ip {}'.format(pip_name))
-    return network_client.public_ip_addresses.delete(
-        resource_group_name=rg_name,
-        public_ip_address_name=pip_name,
-    )
-
-
-def _delete_subnet(network_client, rg_name, vnet_name, subnet_name):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a subnet
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param str rg_name: resource group name
-    :param str vnet_name: virtual network name
-    :param str subnet_name: subnet name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting subnet {} on virtual network {}'.format(
-        subnet_name, vnet_name))
-    return network_client.subnets.delete(
-        resource_group_name=rg_name,
-        virtual_network_name=vnet_name,
-        subnet_name=subnet_name,
-    )
-
-
-def _delete_virtual_network(network_client, rg_name, vnet_name):
-    # type: (azure.mgmt.network.NetworkManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete a virtual network
-    :param azure.mgmt.network.NetworkManagementClient network_client:
-        network client
-    :param str rg_name: resource group name
-    :param str vnet_name: virtual network name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting virtual network {}'.format(vnet_name))
-    return network_client.virtual_networks.delete(
-        resource_group_name=rg_name,
-        virtual_network_name=vnet_name,
     )
 
 
@@ -1796,8 +1312,8 @@ def delete_storage_cluster(
         else:
             # get resources connected to vm
             nic, pip, subnet, vnet, nsg = \
-                _get_resource_names_from_virtual_machine(
-                    compute_client, network_client, rfs, vm)
+                resource.get_resource_names_from_virtual_machine(
+                    compute_client, network_client, rfs.storage_cluster, vm)
             resources[i] = {
                 'vm': vm.name,
                 'arm_id': vm.id,
@@ -1835,7 +1351,7 @@ def delete_storage_cluster(
     for key in resources:
         vm_name = resources[key]['vm']
         async_ops['vms'][vm_name] = resource.AsyncOperation(functools.partial(
-            _delete_virtual_machine, compute_client,
+            resource.delete_virtual_machine, compute_client,
             rfs.storage_cluster.resource_group, vm_name), retry_conflict=True)
     logger.info(
         'waiting for {} virtual machines to delete'.format(
@@ -1849,7 +1365,7 @@ def delete_storage_cluster(
         nic_name = resources[key]['nic']
         async_ops['nics'][nic_name] = resource.AsyncOperation(
             functools.partial(
-                _delete_network_interface, network_client,
+                resource.delete_network_interface, network_client,
                 rfs.storage_cluster.resource_group, nic_name),
             retry_conflict=True
         )
@@ -1888,7 +1404,7 @@ def delete_storage_cluster(
             continue
         deleted.add(nsg_name)
         async_ops['nsg'][nsg_name] = resource.AsyncOperation(functools.partial(
-            _delete_network_security_group, network_client,
+            resource.delete_network_security_group, network_client,
             rfs.storage_cluster.resource_group, nsg_name), retry_conflict=True)
     deleted.clear()
     # delete public ips
@@ -1899,7 +1415,7 @@ def delete_storage_cluster(
             continue
         async_ops['pips'][pip_name] = resource.AsyncOperation(
             functools.partial(
-                _delete_public_ip, network_client,
+                resource.delete_public_ip, network_client,
                 rfs.storage_cluster.resource_group, pip_name),
             retry_conflict=True
         )
@@ -1918,8 +1434,9 @@ def delete_storage_cluster(
         deleted.add(subnet_name)
         async_ops['subnets'][subnet_name] = resource.AsyncOperation(
             functools.partial(
-                _delete_subnet, network_client,
-                rfs.storage_cluster.resource_group, vnet_name, subnet_name),
+                resource.delete_subnet, network_client,
+                rfs.storage_cluster.virtual_network.resource_group,
+                vnet_name, subnet_name),
             retry_conflict=True
         )
     logger.debug('waiting for {} subnets to delete'.format(
@@ -1937,8 +1454,8 @@ def delete_storage_cluster(
         deleted.add(vnet_name)
         async_ops['vnets'][vnet_name] = resource.AsyncOperation(
             functools.partial(
-                _delete_virtual_network, network_client,
-                rfs.storage_cluster.resource_group, vnet_name),
+                resource.delete_virtual_network, network_client,
+                rfs.storage_cluster.virtual_network.resource_group, vnet_name),
             retry_conflict=True
         )
     deleted.clear()
@@ -1960,10 +1477,10 @@ def delete_storage_cluster(
         except KeyError:
             pass
         else:
-            storage.delete_storage_containers_remotefs_boot_diagnostics(
+            storage.delete_storage_containers_boot_diagnostics(
                 blob_client, vm_name, vm_id)
     # delete storage container
-    storage.delete_storage_containers_remotefs(blob_client)
+    storage.delete_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')
@@ -2201,8 +1718,10 @@ def stat_storage_cluster(
         nic, pip = resource.get_nic_and_pip_from_virtual_machine(
             network_client, rfs.storage_cluster.resource_group, vm)
         # get resource names (pass cached data to prevent another lookup)
-        _, _, subnet, vnet, nsg = _get_resource_names_from_virtual_machine(
-            compute_client, network_client, rfs, vm, nic=nic, pip=pip)
+        _, _, subnet, vnet, nsg = \
+            resource.get_resource_names_from_virtual_machine(
+                compute_client, network_client, rfs.storage_cluster, vm,
+                nic=nic, pip=pip)
         # stat data disks
         disks = {}
         total_size_gb = 0

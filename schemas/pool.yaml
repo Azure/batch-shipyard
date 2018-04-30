@@ -285,3 +285,28 @@ mapping:
           post:
             sequence:
               - type: str
+      prometheus:
+        type: map
+        mapping:
+          node_exporter:
+            type: map
+            mapping:
+              enabled:
+                type: bool
+              port:
+                type: int
+              options:
+                type: seq
+                sequence:
+                - type: str
+          cadvisor:
+            type: map
+            mapping:
+              enabled:
+                type: bool
+              port:
+                type: int
+              options:
+                type: seq
+                sequence:
+                - type: str

@@ -30,11 +30,12 @@ see the jobs doc for more information. (#190)
 - Greatly improve throughput speed of many commands that internally iterated
 sequences of actions (#188)
 - RemoteFS clusters provisioned using Ubuntu 18.04-LTS (#161, #185)
-- Update Nvidia NC drivers. All NC-series Azure VMs now have support for
-CUDA 9.1.
-- Update Nvidia NV driver
+- Update Nvidia NC driver to 390.46. All NC-series Azure VMs in Batch Shipyard
+now have support for CUDA 9.1.
+- Update Nvidia NV driver to 390.42.
 - Singularity updated to 2.5.0
 - blobxfer updated to 1.2.0
+- Docker CE updated to 18.03.1
 - Update dependencies to latest
 - Unify nodeprep scripts (#176)
 - Integrate shellcheck (#177)

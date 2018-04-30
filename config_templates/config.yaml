@@ -126,3 +126,31 @@ global_resources:
       include:
       - '*.bin'
       path: /another/local/path/dir
+monitoring:
+  prometheus:
+    location: <Azure region, e.g., eastus>
+    resource_group: my-prom-server-rg
+    hostname_prefix: prom
+    ssh:
+      username: shipyard
+      ssh_public_key: /path/to/rsa/publickey.pub
+      ssh_public_key_data: ssh-rsa ...
+      ssh_private_key: /path/to/rsa/privatekey
+      generated_file_export_path: null
+    public_ip:
+      enabled: true
+      static: false
+    virtual_network:
+      name: myvnet
+      resource_group: my-vnet-resource-group
+      existing_ok: false
+      address_space: 10.0.0.0/16
+      subnet:
+        name: my-server-subnet
+        address_prefix: 10.0.0.0/24
+    network_security:
+      ssh:
+      - '*'
+    vm_size: STANDARD_D2_V2
+    accelerated_networking: false
+

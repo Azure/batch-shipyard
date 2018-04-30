@@ -111,17 +111,21 @@ def _max_workers(iterable):
 
 
 def get_batch_account(
-        batch_mgmt_client, config, account_name=None, resource_group=None):
-    # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) ->
-    #        azure.mgmt.batch.models.BatchAccount
+        batch_mgmt_client, config, account_name=None, resource_group=None,
+        raw_override=False, get_keys=False):
+    # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str, bool) ->
+    #        Tuple[azure.mgmt.batch.models.BatchAccount,
+    #              azure.mgmt.batch.models.BatchAccountKeys]
     """Get Batch account properties from ARM
     :param azure.mgmt.batch.BatchManagementClient batch_mgmt_client:
         batch management client
     :param dict config: configuration dict
     :param str account_name: account name
     :param str resource_group: resource group of Batch account
-    :rtype: azure.mgmt.batch.models.BatchAccount
-    :return: Batch account
+    :param bool raw_override: override raw setting
+    :rtype: Tuple[azure.mgmt.batch.models.BatchAccount,
+        azure.mgmt.batch.models.BatchAccountKeys]
+    :return: tuple of batch account, account keys
     """
     if batch_mgmt_client is None:
         raise RuntimeError(
@@ -138,16 +142,21 @@ def get_batch_account(
             raise ValueError(
                 ('Please specify the resource_group in credentials '
                  'associated with the Batch account {}'.format(bc.account)))
-    if settings.raw(config):
+    if not raw_override and settings.raw(config):
         util.print_raw_output(
             batch_mgmt_client.batch_account.get,
             resource_group_name=resource_group,
             account_name=account_name)
         return
+    keys = None
+    if get_keys:
+        keys = batch_mgmt_client.batch_account.get_keys(
+            resource_group_name=resource_group,
+            account_name=account_name)
     return batch_mgmt_client.batch_account.get(
         resource_group_name=resource_group,
         account_name=account_name,
-    )
+    ), keys
 
 
 def _generate_batch_account_log_entry(ba):
@@ -193,7 +202,7 @@ def log_batch_account_info(
     :param str account_name: account name
     :param str resource_group: resource group of Batch account
     """
-    ba = get_batch_account(
+    ba, _ = get_batch_account(
         batch_mgmt_client, config, account_name=account_name,
         resource_group=resource_group)
     if settings.raw(config):

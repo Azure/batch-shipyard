@@ -174,6 +174,12 @@ PoolAutopoolSettings = collections.namedtuple(
         'keep_alive',
     ]
 )
+PrometheusSettings = collections.namedtuple(
+    'PrometheusSettings', [
+        'ne_enabled', 'ne_port', 'ne_options', 'ca_enabled', 'ca_port',
+        'ca_options',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
@@ -184,7 +190,7 @@ PoolSettings = collections.namedtuple(
         'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
         'additional_node_prep_commands_post', 'virtual_network',
         'autoscale', 'node_fill_type', 'remote_access_control',
-        'certificates',
+        'certificates', 'prometheus',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -323,7 +329,7 @@ ResourceFileSettings = collections.namedtuple(
 )
 ManagedDisksSettings = collections.namedtuple(
     'ManagedDisksSettings', [
-        'resource_group', 'premium', 'disk_size_gb', 'disk_names',
+        'location', 'resource_group', 'premium', 'disk_size_gb', 'disk_names',
     ]
 )
 VirtualNetworkSettings = collections.namedtuple(
@@ -378,7 +384,14 @@ StorageClusterSettings = collections.namedtuple(
 )
 RemoteFsSettings = collections.namedtuple(
     'RemoteFsSettings', [
-        'location', 'managed_disks', 'storage_cluster',
+        'managed_disks', 'storage_cluster',
+    ]
+)
+MonitoringVmSettings = collections.namedtuple(
+    'MonitoringVmSettings', [
+        'resource_group', 'virtual_network', 'network_security',
+        'vm_size', 'public_ip', 'hostname_prefix', 'ssh',
+        'accelerated_networking',
     ]
 )
 CustomMountFstabSettings = collections.namedtuple(
@@ -386,6 +399,45 @@ CustomMountFstabSettings = collections.namedtuple(
         'fs_spec', 'fs_vfstype', 'fs_mntops', 'fs_freq', 'fs_passno',
     ]
 )
+
+
+class VmResource(object):
+    def __init__(
+            self, location, resource_group, hostname_prefix, vm_size,
+            public_ip, virtual_network, network_security, ssh,
+            accelerated_networking):
+        # type: (VmResource, str, str, str, str, PublicIpSettings,
+        #        VirtualNetworkSettings, NetworkSecuritySettings, SshSettings,
+        #        bool) -> None
+        self.location = location
+        self.resource_group = resource_group
+        self.hostname_prefix = hostname_prefix
+        self.vm_size = vm_size
+        self.public_ip = public_ip
+        self.virtual_network = virtual_network
+        self.network_security = network_security
+        self.ssh = ssh
+        self.accelerated_networking = accelerated_networking
+
+
+class StorageClusterSettings(VmResource):
+    def __init__(
+            self, id, file_server, vm_count, fault_domains, vm_disk_map,
+            location, resource_group, hostname_prefix, vm_size,
+            public_ip, virtual_network, network_security, ssh,
+            accelerated_networking):
+        # type: (StorageClusterSettings, str, FileServerSettings, int, int,
+        #        Dict, str, str, str, str, PublicIpSettings,
+        #        VirtualNetworkSettings, NetworkSecuritySettings, SshSettings,
+        #        bool) -> None
+        super(StorageClusterSettings, self).__init__(
+            location, resource_group, hostname_prefix, vm_size, public_ip,
+            virtual_network, network_security, ssh, accelerated_networking)
+        self.id = id
+        self.file_server = file_server
+        self.vm_count = vm_count
+        self.fault_domains = fault_domains
+        self.vm_disk_map = vm_disk_map
 
 
 def _kv_read_checked(conf, key, default=None):
@@ -928,6 +980,26 @@ def is_pool_autoscale_enabled(config, pas=None):
     return util.is_not_empty(pas.formula) or pas.scenario is not None
 
 
+def prometheus_settings(config):
+    # type: (dict) -> PrometheusSettings
+    """Get Prometheus Settings
+    :param dict config: configuration object
+    :rtype: PrometheusSettings
+    :return Prometheus settings from specification
+    """
+    conf = _kv_read_checked(config, 'prometheus', default={})
+    ne_conf = _kv_read_checked(conf, 'node_exporter', default={})
+    ca_conf = _kv_read_checked(conf, 'cadvisor', default={})
+    return PrometheusSettings(
+        ne_enabled=_kv_read(ne_conf, 'enabled', default=False),
+        ne_port=_kv_read(ne_conf, 'port', default=9100),
+        ne_options=_kv_read_checked(ne_conf, 'options'),
+        ca_enabled=_kv_read(ca_conf, 'enabled', default=False),
+        ca_port=_kv_read(ca_conf, 'port', default=8080),
+        ca_options=_kv_read_checked(ca_conf, 'options'),
+    )
+
+
 def pool_settings(config):
     # type: (dict) -> PoolSettings
     """Get Pool settings
@@ -1119,6 +1191,7 @@ def pool_settings(config):
         node_fill_type=_kv_read_checked(conf, 'node_fill_type'),
         remote_access_control=rac,
         certificates=certs,
+        prometheus=prometheus_settings(conf),
     )
 
 
@@ -1254,6 +1327,29 @@ def raw_credentials(config, omit_keyvault):
     return conf
 
 
+def determine_cloud_type_from_aad(config):
+    # type: (dict) -> str
+    """Determine cloud type from aad settings
+    :param dict config: configuration object
+    :rtype: str
+    :return: cloud type string
+    """
+    auth_url = credentials_management(
+        config).aad.authority_url.rstrip('/').lower()
+    if auth_url.endswith('.com'):
+        cloud_type = 'public'
+    elif auth_url.endswith('.cn'):
+        cloud_type = 'china'
+    elif auth_url.endswith('.de'):
+        cloud_type = 'germany'
+    elif auth_url.endswith('.us'):
+        cloud_type = 'usgov'
+    else:
+        raise ValueError('unknown sovereign cloud authority url: {}'.format(
+            auth_url))
+    return cloud_type
+
+
 def _aad_credentials(
         conf, service, default_endpoint=None, default_token_cache_file=None):
     # type: (dict, str) -> AADSettings
@@ -1301,7 +1397,9 @@ def _aad_credentials(
         )
         aad_authority_url = (
             _kv_read_checked(service_aad, 'authority_url') or
-            _kv_read_checked(super_aad, 'authority_url')
+            _kv_read_checked(
+                super_aad, 'authority_url',
+                default='https://login.microsoftonline.com')
         )
         aad_endpoint = _kv_read_checked(
             service_aad, 'endpoint', default=default_endpoint)
@@ -3777,6 +3875,7 @@ def remotefs_settings(config, sc_id=None):
     md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
     md_disk_names = _kv_read_checked(md_conf, 'disk_names')
     md = ManagedDisksSettings(
+        location=location,
         resource_group=md_rg,
         premium=md_premium,
         disk_size_gb=md_disk_size_gb,
@@ -3784,7 +3883,6 @@ def remotefs_settings(config, sc_id=None):
     )
     if util.is_none_or_empty(sc_id):
         return RemoteFsSettings(
-            location=location,
             managed_disks=md,
             storage_cluster=None,
         )
@@ -3796,7 +3894,7 @@ def remotefs_settings(config, sc_id=None):
             ('Storage cluster {} is not defined in the given fs '
              'configuration file').format(sc_id))
     sc_rg = _kv_read_checked(sc_conf, 'resource_group', resource_group)
-    if util.is_none_or_empty(md_rg):
+    if util.is_none_or_empty(sc_rg):
         raise ValueError('invalid resource_group in remote_fs')
     sc_vm_count = _kv_read(sc_conf, 'vm_count', 1)
     sc_vm_size = _kv_read_checked(sc_conf, 'vm_size')
@@ -3946,8 +4044,8 @@ def remotefs_settings(config, sc_id=None):
             ('Number of entries in vm_disk_map {} inconsistent with '
              'vm_count {}').format(len(disk_map), sc_vm_count))
     return RemoteFsSettings(
-        location=location,
         managed_disks=ManagedDisksSettings(
+            location=location,
             resource_group=md_rg,
             premium=md_premium,
             disk_size_gb=md_disk_size_gb,
@@ -3955,6 +4053,7 @@ def remotefs_settings(config, sc_id=None):
         ),
         storage_cluster=StorageClusterSettings(
             id=sc_id,
+            location=location,
             resource_group=sc_rg,
             virtual_network=virtual_network_settings(
                 sc_conf,
@@ -3990,60 +4089,193 @@ def remotefs_settings(config, sc_id=None):
     )
 
 
-def generate_availability_set_name(sc):
-    # type: (StorageClusterSettings) -> str
+def monitoring_settings(config):
+    # type: (dict) -> VmResource
+    """Get monitoring settings
+    :param dict config: configuration dict
+    :rtype: VmResource
+    :return: VM resource settings
+    """
+    # general settings
+    try:
+        conf = config['monitoring']['prometheus']
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError(
+            'monitoring:batch settings are invalid or missing from global '
+            'configuration')
+    location = conf['location']
+    if util.is_none_or_empty(location):
+        raise ValueError('invalid location in monitoring:batch')
+    # monitoring vm settings
+    rg = _kv_read_checked(conf, 'resource_group')
+    if util.is_none_or_empty(rg):
+        raise ValueError('invalid resource_group in monitoring:batch')
+    vm_size = _kv_read_checked(conf, 'vm_size')
+    hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    accel_net = _kv_read(conf, 'accelerated_networking', False)
+    # public ip settings
+    pip_conf = _kv_read_checked(conf, 'public_ip', {})
+    pip_enabled = _kv_read(pip_conf, 'enabled', True)
+    pip_static = _kv_read(pip_conf, 'static', False)
+    # sc network security settings
+    ns_conf = conf['network_security']
+    ns_inbound = {
+        'ssh': InboundNetworkSecurityRule(
+            destination_port_range='22',
+            source_address_prefix=_kv_read_checked(ns_conf, 'ssh', ['*']),
+            protocol='tcp',
+        ),
+    }
+    if not isinstance(ns_inbound['ssh'].source_address_prefix, list):
+        raise ValueError('expected list for ssh network security rule')
+    if 'custom_inbound_rules' in ns_conf:
+        # reserve keywords (current and expected possible future support)
+        _reserved = frozenset([
+            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs',
+            'beegfs', 'cephfs',
+        ])
+        for key in ns_conf['custom_inbound_rules']:
+            # ensure key is not reserved
+            if key.lower() in _reserved:
+                raise ValueError(
+                    ('custom inbound rule of name {} conflicts with a '
+                     'reserved name {}').format(key, _reserved))
+            ns_inbound[key] = InboundNetworkSecurityRule(
+                destination_port_range=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'destination_port_range'),
+                source_address_prefix=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'source_address_prefix'),
+                protocol=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key], 'protocol'),
+            )
+            if not isinstance(ns_inbound[key].source_address_prefix, list):
+                raise ValueError(
+                    'expected list for network security rule {} '
+                    'source_address_prefix'.format(key))
+    # ssh settings
+    ssh_conf = conf['ssh']
+    ssh_username = _kv_read_checked(ssh_conf, 'username')
+    ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    if util.is_not_empty(ssh_public_key):
+        ssh_public_key = pathlib.Path(ssh_public_key)
+    ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
+    ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
+    if (ssh_public_key is not None and
+            util.is_not_empty(ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (ssh_public_key is None and
+            util.is_none_or_empty(ssh_public_key_data) and
+            ssh_private_key is not None):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
+    ssh_gen_file_path = _kv_read_checked(
+        ssh_conf, 'generated_file_export_path', '.')
+    return VmResource(
+        location=location,
+        resource_group=rg,
+        hostname_prefix=hostname_prefix,
+        virtual_network=virtual_network_settings(
+            conf,
+            default_resource_group=rg,
+            default_existing_ok=False,
+            default_create_nonexistant=True,
+        ),
+        network_security=NetworkSecuritySettings(
+            inbound=ns_inbound,
+        ),
+        vm_size=vm_size,
+        accelerated_networking=accel_net,
+        public_ip=PublicIpSettings(
+            enabled=pip_enabled,
+            static=pip_static,
+        ),
+        ssh=SSHSettings(
+            username=ssh_username,
+            expiry_days=9999,
+            ssh_public_key=ssh_public_key,
+            ssh_public_key_data=ssh_public_key_data,
+            ssh_private_key=ssh_private_key,
+            generate_docker_tunnel_script=False,
+            generated_file_export_path=ssh_gen_file_path,
+            hpn_server_swap=False,
+        ),
+    )
+
+
+def generate_availability_set_name(vr):
+    # type: (VmResource) -> str
     """Generate an availabilty set name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
     :rtype: str
     :return: availability set name
     """
-    return '{}-as'.format(sc.hostname_prefix)
+    return '{}-as'.format(vr.hostname_prefix)
 
 
-def generate_virtual_machine_name(sc, i):
-    # type: (StorageClusterSettings) -> str
+def generate_virtual_machine_name(vr, i):
+    # type: (VmResource, int) -> str
     """Generate a virtual machine name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
+    :param int i: resource number
     :rtype: str
     :return: vm name
     """
-    return '{}-vm{}'.format(sc.hostname_prefix, str(i).zfill(3))
+    return '{}-vm{}'.format(vr.hostname_prefix, str(i).zfill(3))
 
 
 def get_offset_from_virtual_machine_name(vm_name):
-    # type: (StorageClusterSettings) -> int
+    # type: (str) -> int
     """Gets the virtual machine offset given a vm name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param str vm_name: vm name
     :rtype: int
     :return: vm offset
     """
     return int(vm_name.split('-vm')[-1])
 
 
-def generate_virtual_machine_extension_name(sc, i):
-    # type: (StorageClusterSettings) -> str
+def generate_virtual_machine_extension_name(vr, i):
+    # type: (VmResource, int) -> str
     """Generate a virtual machine extension name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
+    :param int i: resource number
     :rtype: str
     :return: vm extension name
     """
-    return '{}-vmext{}'.format(sc.hostname_prefix, str(i).zfill(3))
+    return '{}-vmext{}'.format(vr.hostname_prefix, str(i).zfill(3))
 
 
-def generate_network_security_group_name(sc):
-    # type: (StorageClusterSettings) -> str
+def generate_virtual_machine_msi_extension_name(vr, i):
+    # type: (VmResource, int) -> str
+    """Generate a virtual machine msi extension name
+    :param VmResource vr: vm resource
+    :param int i: resource number
+    :rtype: str
+    :return: vm extension msi name
+    """
+    return '{}-vmextmsi{}'.format(vr.hostname_prefix, str(i).zfill(3))
+
+
+def generate_network_security_group_name(vr):
+    # type: (VmResource) -> str
     """Generate a network security group name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
     :rtype: str
     :return: nsg name
     """
-    return '{}-nsg'.format(sc.hostname_prefix)
+    return '{}-nsg'.format(vr.hostname_prefix)
 
 
 def generate_network_security_inbound_rule_name(rule_name, i):
-    # type: (StorageClusterSettings) -> str
+    # type: (str, int) -> str
     """Generate a network security inbound rule name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param str rule_name: rule name
+    :parm int i: rule number
     :rtype: str
     :return: inbound rule name
     """
@@ -4051,43 +4283,47 @@ def generate_network_security_inbound_rule_name(rule_name, i):
 
 
 def generate_network_security_inbound_rule_description(rule_name, i):
-    # type: (StorageClusterSettings) -> str
+    # type: (str, int) -> str
     """Generate a network security inbound rule description
-    :param StorageClusterSettings sc: storage cluster settings
+    :param str rule_name: rule name
+    :parm int i: rule number
     :rtype: str
     :return: inbound description
     """
     return '{} inbound ({})'.format(rule_name, str(i).zfill(3))
 
 
-def generate_public_ip_name(sc, i):
-    # type: (StorageClusterSettings) -> str
+def generate_public_ip_name(vr, i):
+    # type: (VmResource, int) -> str
     """Generate a public ip name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
+    :parm int i: pip number
     :rtype: str
     :return: public ip name
     """
-    return '{}-pip{}'.format(sc.hostname_prefix, str(i).zfill(3))
+    return '{}-pip{}'.format(vr.hostname_prefix, str(i).zfill(3))
 
 
-def generate_hostname(sc, i):
-    # type: (StorageClusterSettings) -> str
+def generate_hostname(vr, i):
+    # type: (VmResource, int) -> str
     """Generate a hostname (dns label prefix)
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
+    :parm int i: hostname number
     :rtype: str
     :return: hostname
     """
-    return '{}{}'.format(sc.hostname_prefix, str(i).zfill(3))
+    return '{}{}'.format(vr.hostname_prefix, str(i).zfill(3))
 
 
-def generate_network_interface_name(sc, i):
-    # type: (StorageClusterSettings) -> str
+def generate_network_interface_name(vr, i):
+    # type: (VmResource, int) -> str
     """Generate a network inetrface name
-    :param StorageClusterSettings sc: storage cluster settings
+    :param VmResource vr: vm resource
+    :parm int i: network interface number
     :rtype: str
     :return: network interface name
     """
-    return '{}-ni{}'.format(sc.hostname_prefix, str(i).zfill(3))
+    return '{}-ni{}'.format(vr.hostname_prefix, str(i).zfill(3))
 
 
 def get_file_server_glusterfs_volume_name(sc):

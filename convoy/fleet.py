@@ -47,6 +47,7 @@ from . import autoscale
 from . import batch
 from . import crypto
 from . import data
+from . import heimdall
 from . import keyvault
 from . import misc
 from . import remotefs
@@ -96,6 +97,28 @@ _NVIDIA_DRIVER = {
         'http://www.nvidia.com/content/DriverDownload-March2009'
         '/licence.php?lang=us'
     ),
+}
+_PROMETHEUS = {
+    'node_exporter': {
+        'url': (
+            'https://github.com/prometheus/node_exporter/releases/download/v'
+            '0.15.2/node_exporter-0.15.2.linux-amd64.tar.gz'
+        ),
+        'sha256': (
+            '1ce667467e442d1f7fbfa7de29a8ffc3a7a0c84d24d7c695cc88b29e0752df37'
+        ),
+        'target': 'node_exporter.tar.gz'
+    },
+    'cadvisor': {
+        'url': (
+            'https://github.com/google/cadvisor/releases/download/v'
+            '0.27.4/cadvisor'
+        ),
+        'sha256': (
+            '378df92f532166251fa3f116beea26ca6364e45e3d6a63ea78b7627ea54bd303'
+        ),
+        'target': 'cadvisor'
+    },
 }
 _CASCADE_FILE = (
     'cascade.py',
@@ -164,6 +187,10 @@ _REMOTEFSSTAT_FILE = (
 _ALL_REMOTEFS_FILES = [
     _REMOTEFSPREP_FILE, _REMOTEFSADDBRICK_FILE, _REMOTEFSSTAT_FILE,
 ]
+_MONITORINGPREP_FILE = (
+    'shipyard_monitoring_bootstrap.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_monitoring_bootstrap.sh')
+)
 
 
 def initialize_globals(verbose):
@@ -255,10 +282,28 @@ def fetch_storage_account_keys_from_aad(
         populate_global_settings(config, fs_storage)
 
 
-def _setup_nvidia_driver_package(blob_client, config, vm_size):
-    # type: (azure.storage.blob.BlockBlobService, dict, str) -> pathlib.Path
+def _download_file(desc, pkg, dldict):
+    # type: (str, pathlib.Path, dict) -> None
+    """Download a file and check sha256
+    :param str desc: description
+    :param pathlib.Path pkg: package
+    :param dict dldict: download dict
+    """
+    logger.debug('downloading {} to {}'.format(desc, dldict['target']))
+    response = requests.get(dldict['url'], stream=True)
+    with pkg.open('wb') as f:
+        for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
+            if chunk:
+                f.write(chunk)
+    logger.debug('wrote {} bytes to {}'.format(pkg.stat().st_size, pkg))
+    # check sha256
+    if util.compute_sha256_for_file(pkg, False) != dldict['sha256']:
+        raise RuntimeError('sha256 mismatch for {}'.format(pkg))
+
+
+def _setup_nvidia_driver_package(config, vm_size):
+    # type: (dict, str) -> pathlib.Path
     """Set up the nvidia driver package
-    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param str vm_size: vm size
     :rtype: pathlib.Path
@@ -282,19 +327,32 @@ def _setup_nvidia_driver_package(blob_client, config, vm_size):
         else:
             logger.info('NVIDIA Software License accepted')
         # download driver
-        logger.debug('downloading NVIDIA driver to {}'.format(
-            _NVIDIA_DRIVER[gpu_type]['target']))
-        response = requests.get(_NVIDIA_DRIVER[gpu_type]['url'], stream=True)
-        with pkg.open('wb') as f:
-            for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-        logger.debug('wrote {} bytes to {}'.format(pkg.stat().st_size, pkg))
-        # check sha256
-        if (util.compute_sha256_for_file(pkg, False) !=
-                _NVIDIA_DRIVER[gpu_type]['sha256']):
-            raise RuntimeError('sha256 mismatch for {}'.format(pkg))
+        _download_file('NVIDIA driver', pkg, _NVIDIA_DRIVER[gpu_type])
     return pkg
+
+
+def _setup_prometheus_monitoring_tools(pool_settings):
+    # type: settings.PoolSettings -> Tuple[pathlib.Path, pathlib.Path]
+    """Setup the prometheus monitoring tools
+    :param settings.PoolSettings pool_settings: pool settings
+    :rtype: tuple
+    :return: tuple of ne_pkg, ca_pkg
+    """
+    ne_pkg = _RESOURCES_PATH / _PROMETHEUS['node_exporter']['target']
+    ca_pkg = _RESOURCES_PATH / _PROMETHEUS['cadvisor']['target']
+    if pool_settings.prometheus.ne_enabled:
+        if (not ne_pkg.exists() or
+                util.compute_sha256_for_file(ne_pkg, False) !=
+                _PROMETHEUS['node_exporter']['sha256']):
+            _download_file(
+                'Prometheus Node Exporter', ne_pkg,
+                _PROMETHEUS['node_exporter'])
+    if pool_settings.prometheus.ca_enabled:
+        if (not ca_pkg.exists() or
+                util.compute_sha256_for_file(ca_pkg, False) !=
+                _PROMETHEUS['cadvisor']['sha256']):
+            _download_file('cAdvisor', ca_pkg, _PROMETHEUS['cadvisor'])
+    return ne_pkg, ca_pkg
 
 
 def _generate_azure_mount_script_name(
@@ -489,7 +547,7 @@ def _create_storage_cluster_mount_args(
     """
     fstab_mount = None
     sc_arg = None
-    ba = batch.get_batch_account(batch_mgmt_client, config)
+    ba, _ = batch.get_batch_account(batch_mgmt_client, config)
     # check for vnet/subnet presence
     if util.is_none_or_empty(subnet_id):
         raise RuntimeError(
@@ -898,7 +956,7 @@ def _construct_pool_object(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService, dict) -> None
     """Construct a pool add parameter object for create pool along with
     uploading resource files
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -1062,7 +1120,7 @@ def _construct_pool_object(
             util.is_none_or_empty(custom_image_na)):
         if pool_settings.gpu_driver is None:
             gpu_driver = _setup_nvidia_driver_package(
-                blob_client, config, pool_settings.vm_size)
+                config, pool_settings.vm_size)
             _rflist.append((gpu_driver.name, gpu_driver))
         else:
             gpu_type = settings.get_gpu_type_from_vm_size(
@@ -1073,6 +1131,15 @@ def _construct_pool_object(
             gpu_driver.name)
     else:
         gpu_env = None
+    # prometheus settings
+    if (not is_windows and
+            (pool_settings.prometheus.ne_enabled or
+             pool_settings.prometheus.ca_enabled)):
+        ne_pkg, ca_pkg = _setup_prometheus_monitoring_tools(pool_settings)
+        if pool_settings.prometheus.ne_enabled:
+            _rflist.append((ne_pkg.name, ne_pkg))
+        if pool_settings.prometheus.ca_enabled:
+            _rflist.append((ca_pkg.name, ca_pkg))
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
@@ -1370,8 +1437,9 @@ def _construct_pool_object(
                 block_for_gr,
             )
         )
-    # singularity env vars
+    # Linux-only settings
     if not is_windows:
+        # singularity env vars
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SINGULARITY_TMPDIR',
@@ -1384,6 +1452,35 @@ def _construct_pool_object(
                 settings.get_singularity_cachedir(config)
             )
         )
+        # prometheus env vars
+        if pool_settings.prometheus.ne_enabled:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    'PROM_NODE_EXPORTER_PORT',
+                    pool_settings.prometheus.ne_port
+                )
+            )
+            if util.is_not_empty(pool_settings.prometheus.ne_options):
+                pool.start_task.environment_settings.append(
+                    batchmodels.EnvironmentSetting(
+                        'PROM_NODE_EXPORTER_OPTIONS',
+                        ','.join(pool_settings.prometheus.ne_options)
+                    )
+                )
+        if pool_settings.prometheus.ca_enabled:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    'PROM_CADVISOR_PORT',
+                    pool_settings.prometheus.ca_port
+                )
+            )
+            if util.is_not_empty(pool_settings.prometheus.ca_options):
+                pool.start_task.environment_settings.append(
+                    batchmodels.EnvironmentSetting(
+                        'PROM_CADVISOR_OPTIONS',
+                        ','.join(pool_settings.prometheus.ca_options)
+                    )
+                )
     return (pool_settings, gluster_on_compute, pool)
 
 
@@ -1395,7 +1492,7 @@ def _construct_auto_pool_specification(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService, dict) -> None
     """Construct an auto pool specification
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1446,7 +1543,7 @@ def _add_pool(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService, dict) -> None
     """Add a Batch pool to account
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1535,8 +1632,8 @@ def _add_pool(
 
 def _setup_glusterfs(
         batch_client, blob_client, config, nodes, shell_script, cmdline=None):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
-    #        List[batchmodels.ComputeNode], str, str) -> None
+    # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
+    #        dict, List[batchmodels.ComputeNode], str, str) -> None
     """Setup glusterfs via multi-instance task
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -2311,10 +2408,11 @@ def _adjust_settings_for_pool_creation(config):
         logger.warning(
             'override attempt recovery on unusable due to custom image')
         settings.set_attempt_recovery_on_unusable(config, False)
-    # TODO temporarily disable credential encryption with windows
-    if is_windows and settings.batch_shipyard_encryption_enabled(config):
+    # currently prometheus monitoring is only available on Linux nodes
+    if (is_windows and
+            (pool.prometheus.ne_enabled or pool.prometheus.ca_enabled)):
         raise ValueError(
-            'cannot enable credential encryption with windows pools')
+            'Prometheus monitoring is only available for Linux nodes')
 
 
 def _check_settings_for_auto_pool(config):
@@ -2798,8 +2896,8 @@ def action_pool_add(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, azuretable.TableService,
-    #        dict) -> None
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -2846,8 +2944,8 @@ def action_pool_list(batch_client, config):
 def action_pool_delete(
         batch_client, blob_client, table_client, config, pool_id=None,
         wait=False):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azuretable.TableService, dict, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict, str, bool) -> None
     """Action: Pool Delete
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -2883,7 +2981,7 @@ def action_pool_delete(
 
 
 def action_pool_resize(batch_client, blob_client, config, wait):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
+    # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
     #        dict, bool) -> None
     """Resize pool that may contain glusterfs
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
@@ -3214,8 +3312,8 @@ def action_pool_nodes_reboot(
 
 def action_diag_logs_upload(
         batch_client, blob_client, config, cardinal, nodeid, wait):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
-    #        int, str, bool) -> None
+    # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
+    #        dict, int, str, bool) -> None
     """Action: Diag Logs Upload
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -3337,7 +3435,8 @@ def action_jobs_add(
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azureblob.BlockBlobService, azuretable.TableService,
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService,
     #        azure.keyvault.KeyVaultClient, dict, bool, str) -> None
     """Action: Jobs Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -3490,8 +3589,8 @@ def action_jobs_tasks_del(batch_client, config, jobid, taskid, wait):
 def action_jobs_del_or_term(
         batch_client, blob_client, table_client, config, delete, all_jobs,
         all_jobschedules, jobid, jobscheduleid, termtasks, wait):
-    # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService,
-    #        azuretable.TableService, dict, bool, bool, str, str,
+    # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict, bool, bool, str, str,
     #        bool, bool) -> None
     """Action: Jobs Del or Term
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
@@ -3682,8 +3781,8 @@ def action_jobs_stats(batch_client, config, job_id):
 
 def action_storage_del(
         blob_client, table_client, config, clear_tables, poolid):
-    # type: (azureblob.BlockBlobService, azuretable.TableService,
-    #        dict, bool, str) -> None
+    # type: (azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict, bool, str) -> None
     """Action: Storage Del
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
@@ -3703,8 +3802,8 @@ def action_storage_del(
 
 
 def action_storage_clear(blob_client, table_client, config, poolid):
-    # type: (azureblob.BlockBlobService, azuretable.TableService, dict,
-    #        str) -> None
+    # type: (azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict, str) -> None
     """Action: Storage Clear
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
@@ -3874,3 +3973,126 @@ def action_misc_tensorboard(
                 'cannot specify a task to tunnel Tensorboard to without the '
                 'corresponding job id')
     misc.tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image)
+
+
+def action_monitor_create(
+        auth_client, resource_client, compute_client, network_client,
+        blob_client, table_client, config):
+    # type: (azure.mgmt.authorization.AuthorizationManagementClient,
+    #        azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict) -> None
+    """Action: Monitor Create
+    :param azure.mgmt.authorization.AuthorizationManagementClient auth_client:
+        auth client
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
+    # ensure aad creds are populated
+    mgmt_aad = settings.credentials_management(config)
+    if (util.is_none_or_empty(mgmt_aad.subscription_id) or
+            util.is_none_or_empty(mgmt_aad.aad.authority_url)):
+        raise ValueError('management aad credentials are invalid')
+    heimdall.create_monitoring_resource(
+        auth_client, resource_client, compute_client, network_client,
+        blob_client, table_client, config, _MONITORINGPREP_FILE)
+
+
+def action_monitor_add(table_client, config, poolid):
+    # type: (azure.cosmosdb.table.TableService, dict, List[str]) -> None
+    """Action: Monitor Add
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param list poolid: list of pool ids to monitor
+    """
+    # ensure that we are operating in AAD mode for batch
+    if util.is_not_empty(poolid):
+        bc = settings.credentials_batch(config)
+        _check_for_batch_aad(bc, 'add pool monitors')
+    storage.add_resources_to_monitor(table_client, config, poolid)
+
+
+def action_monitor_remove(table_client, config, all, poolid):
+    # type: (azure.cosmosdb.table.TableService, dict, bool, List[str]) -> None
+    """Action: Monitor Remove
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param bool all: all resource monitors
+    :param list poolid: list of pool ids to remove from monitoring
+    """
+    # ensure that we are operating in AAD mode for batch
+    if not all and util.is_not_empty(poolid):
+        bc = settings.credentials_batch(config)
+        _check_for_batch_aad(bc, 'remove pool monitors')
+    storage.remove_resources_from_monitoring(table_client, config, all, poolid)
+
+
+def action_monitor_ssh(
+        compute_client, network_client, config, tty, command):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict,
+    #        bool, tuple) -> None
+    """Action: Monitor Ssh
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command
+    """
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
+    heimdall.ssh_monitoring_resource(
+        compute_client, network_client, config, tty, command)
+
+
+def action_monitor_destroy(
+        resource_client, compute_client, network_client, blob_client,
+        table_client, config, delete_all_resources, delete_virtual_network,
+        generate_from_prefix, wait):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService, dict, bool, bool,
+    #        bool, bool) -> None
+    """Action: Monitor Destroy
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param bool delete_all_resources: delete all resources
+    :param bool delete_virtual_network: delete virtual network
+    :param bool generate_from_prefix: generate resources from hostname prefix
+    :param bool wait: wait for deletion to complete
+    """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
+    if (generate_from_prefix and
+            (delete_all_resources or delete_virtual_network)):
+        raise ValueError(
+            'Cannot specify generate_from_prefix and a delete_* option')
+    heimdall.delete_monitoring_resource(
+        resource_client, compute_client, network_client, blob_client,
+        table_client, config, delete_virtual_network=delete_virtual_network,
+        delete_resource_group=delete_all_resources,
+        generate_from_prefix=generate_from_prefix, wait=wait)
