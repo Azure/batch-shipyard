@@ -3,12 +3,12 @@
 FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
-ENV SINGULARITY_VERSION=2.4.5
+ENV SINGULARITY_VERSION=2.5.0
 
 RUN apk update \
     && apk add --update --no-cache \
         curl file build-base autoconf automake libtool linux-headers \
-        tar gzip bash python squashfs-tools \
+        tar gzip bash python squashfs-tools libarchive-dev \
     && cd /tmp \
     && curl -fSsL https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
     && cd singularity-${SINGULARITY_VERSION} \

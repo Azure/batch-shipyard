@@ -4,7 +4,7 @@ FROM centos:7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.4.5
+ENV SINGULARITY_VERSION=2.5.0
 
 RUN yum groupinstall -y \
         "Development Tools" \
@@ -12,6 +12,7 @@ RUN yum groupinstall -y \
         curl \
         python \
         file \
+        libarchive-devel \
     && yum clean all
 
 RUN curl -fSsL https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \

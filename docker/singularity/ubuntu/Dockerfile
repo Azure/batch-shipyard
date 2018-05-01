@@ -4,7 +4,7 @@ FROM ubuntu:16.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.4.5
+ENV SINGULARITY_VERSION=2.5.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         python \
         file \
+        libarchive-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
