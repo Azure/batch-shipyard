@@ -566,6 +566,8 @@ EOF
         sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' "${SYSTEMD_PATH}"/docker.service
         systemctl daemon-reload
         systemctl start docker.service
+    else
+        systemctl restart docker.service
     fi
     systemctl --no-pager status docker.service
     nvidia-docker version

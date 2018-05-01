@@ -54,6 +54,18 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
+def _modify_client_for_retry_and_user_agent(client):
+    # type: (Any) -> None
+    """Extend retry policy of clients and add user agent string
+    :param Any client: a client object
+    """
+    if client is None:
+        return
+    client.config.retry_policy.max_backoff = 8
+    client.config.retry_policy.retries = 20
+    client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
+
+
 def _create_resource_client(
         ctx, credentials=None, subscription_id=None, endpoint=None):
     # type: (CliContext, object, str, str) ->
@@ -76,8 +88,10 @@ def _create_resource_client(
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
     if endpoint is None:
         endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
-    return azure.mgmt.resource.resources.ResourceManagementClient(
+    client = azure.mgmt.resource.resources.ResourceManagementClient(
         credentials, subscription_id, base_url=endpoint)
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_compute_client(
@@ -102,8 +116,10 @@ def _create_compute_client(
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
     if endpoint is None:
         endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
-    return azure.mgmt.compute.ComputeManagementClient(
+    client = azure.mgmt.compute.ComputeManagementClient(
         credentials, subscription_id, base_url=endpoint)
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_network_client(
@@ -128,8 +144,10 @@ def _create_network_client(
         subscription_id = ctx.subscription_id or mgmt_aad.subscription_id
     if endpoint is None:
         endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
-    return azure.mgmt.network.NetworkManagementClient(
+    client = azure.mgmt.network.NetworkManagementClient(
         credentials, subscription_id, base_url=endpoint)
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_storage_mgmt_client(
@@ -157,8 +175,10 @@ def _create_storage_mgmt_client(
         subscription_id = ctx.subscription_id or subid
     if endpoint is None:
         endpoint = ctx.aad_endpoint or storage_aad.endpoint
-    return azure.mgmt.storage.StorageManagementClient(
+    client = azure.mgmt.storage.StorageManagementClient(
         credentials, subscription_id, base_url=endpoint)
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_batch_mgmt_client(
@@ -185,8 +205,7 @@ def _create_batch_mgmt_client(
         endpoint = ctx.aad_endpoint or mgmt_aad.endpoint
     batch_mgmt_client = azure.mgmt.batch.BatchManagementClient(
         credentials, subscription_id, base_url=endpoint)
-    batch_mgmt_client.config.add_user_agent(
-        'batch-shipyard/{}'.format(__version__))
+    _modify_client_for_retry_and_user_agent(batch_mgmt_client)
     return batch_mgmt_client
 
 
@@ -229,23 +248,15 @@ def create_all_clients(ctx, batch_clients=False):
         resource_client = _create_resource_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
-        resource_client.config.add_user_agent(
-            'batch-shipyard/{}'.format(__version__))
         compute_client = _create_compute_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
-        compute_client.config.add_user_agent(
-            'batch-shipyard/{}'.format(__version__))
         network_client = _create_network_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
-        network_client.config.add_user_agent(
-            'batch-shipyard/{}'.format(__version__))
         storage_mgmt_client = _create_storage_mgmt_client(
             ctx, credentials=credentials, subscription_id=subscription_id,
             endpoint=endpoint)
-        storage_mgmt_client.config.add_user_agent(
-            'batch-shipyard/{}'.format(__version__))
     if batch_clients:
         try:
             if credentials is None:
@@ -278,9 +289,11 @@ def create_keyvault_client(ctx):
     kv = settings.credentials_keyvault(ctx.config)
     if util.is_none_or_empty(ctx.keyvault_uri or kv.keyvault_uri):
         return None
-    return azure.keyvault.KeyVaultClient(
+    client = azure.keyvault.KeyVaultClient(
         aad.create_aad_credentials(ctx, kv.aad)
     )
+    _modify_client_for_retry_and_user_agent(client)
+    return client
 
 
 def _create_batch_service_client(ctx):
@@ -300,7 +313,7 @@ def _create_batch_service_client(ctx):
             bc.account, bc.account_key)
     batch_client = batchsc.BatchServiceClient(
         credentials, base_url=bc.account_service_url)
-    batch_client.config.add_user_agent('batch-shipyard/{}'.format(__version__))
+    _modify_client_for_retry_and_user_agent(batch_client)
     return batch_client
 
 
