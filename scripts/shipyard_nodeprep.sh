@@ -5,11 +5,19 @@
 set -e
 set -o pipefail
 
-# consts
-DOCKER_VERSION_DEBIAN=18.03.0~ce-0~
-DOCKER_VERSION_CENTOS=18.03.0.ce-1.el7.centos
-DOCKER_VERSION_SLES=17.09.1_ce-257.3
+# version consts
+DOCKER_CE_VERSION_DEBIAN=18.03.1
+DOCKER_CE_VERSION_CENTOS=18.03.1
+DOCKER_CE_VERSION_SLES=17.09.1
+NVIDIA_DOCKER_VERSION=2.0.3
 SINGULARITY_VERSION=2.4.5
+
+# consts
+DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce-0~"
+DOCKER_CE_PACKAGE_CENTOS="docker-ce-${DOCKER_CE_VERSION_CENTOS}.ce-1.el7.centos"
+DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
+NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
+NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 
 log() {
@@ -533,28 +541,44 @@ EOF
         add_repo https://nvidia.github.io/nvidia-docker/centos7/x86_64/nvidia-docker.repo
     fi
     refresh_package_index
-    install_packages nvidia-docker2
+    if [ "$DISTRIB_ID" == "ubuntu" ]; then
+        install_packages "$NVIDIA_DOCKER_PACKAGE_UBUNTU"
+    elif [[ $DISTRIB_ID == centos* ]]; then
+        install_packages "$NVIDIA_DOCKER_PACKAGE_CENTOS"
+    fi
     # merge daemon configs if necessary
     set +e
-    grep \"graph\" /etc/docker/daemon.json
+    grep \"data-root\" /etc/docker/daemon.json
     local rc=$?
     set -e
     if [ $rc -ne 0 ]; then
-        log DEBUG "Graph root not detected in Docker daemon.json"
+        systemctl stop docker.service
+        log DEBUG "data-root not detected in Docker daemon.json"
         if [ "$DISTRIB_ID" == "ubuntu" ]; then
             python -c "import json;a=json.load(open('/etc/docker/daemon.json.dpkg-old'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
             rm -f /etc/docker/daemon.json.dpkg-old
         elif [[ $DISTRIB_ID == centos* ]]; then
-            echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+            echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
             python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
             rm -f /etc/docker/daemon.json.merge
         fi
+        # ensure no options are specified after dockerd
+        sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' "${SYSTEMD_PATH}"/docker.service
+        systemctl daemon-reload
+        systemctl start docker.service
     fi
-    pkill -SIGHUP dockerd
+    systemctl --no-pager status docker.service
     nvidia-docker version
+    set +e
     local rootdir
     rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
-    log DEBUG "Graph root: $rootdir"
+    if echo "$rootdir" | grep "$USER_MOUNTPOINT" > /dev/null; then
+        log DEBUG "Docker root dir: $rootdir"
+    else
+        log ERROR "Docker root dir $rootdir not within $USER_MOUNTPOINT"
+        exit 1
+    fi
+    set -e
     nvidia-smi
 }
 
@@ -815,13 +839,13 @@ check_docker_root_dir() {
     local rootdir
     rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
     set -e
-    log DEBUG "Graph root: $rootdir"
+    log DEBUG "Docker root dir: $rootdir"
     if [ -z "$rootdir" ]; then
-        log ERROR "Could not determine docker graph root"
+        log ERROR "Could not determine docker root dir"
     elif [[ "$rootdir" == ${USER_MOUNTPOINT}/* ]]; then
-        log INFO "Docker root is within ephemeral temp disk"
+        log INFO "Docker root dir is within ephemeral temp disk"
     else
-        log WARNING "Docker graph root is on the OS disk. Performance may be impacted."
+        log WARNING "Docker root dir is on the OS disk. Performance may be impacted."
     fi
 }
 
@@ -835,18 +859,18 @@ install_docker_host_engine() {
     if [ "$PACKAGER" == "apt" ]; then
         local repo=https://download.docker.com/linux/"${DISTRIB_ID}"
         local gpgkey="${repo}"/gpg
-        local dockerversion="docker-ce=${DOCKER_VERSION_DEBIAN}${DISTRIB_ID}"
+        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}"
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
         local repo=https://download.docker.com/linux/centos/docker-ce.repo
-        local dockerversion="docker-ce-${DOCKER_VERSION_CENTOS}"
+        local dockerversion="${DOCKER_CE_PACKAGE_CENTOS}"
         local prereq_pkgs="yum-utils device-mapper-persistent-data lvm2"
     elif [ "$PACKAGER" == "zypper" ]; then
         if [[ "$DISTRIB_RELEASE" == 12-sp3* ]]; then
             local repodir=SLE_12_SP3
         fi
         local repo="http://download.opensuse.org/repositories/Virtualization:containers/${repodir}/Virtualization:containers.repo"
-        local dockerversion="docker-${DOCKER_VERSION_SLES}"
+        local dockerversion="${DOCKER_CE_PACKAGE_SLES}"
     fi
     # refresh package index
     refresh_package_index
@@ -872,9 +896,9 @@ install_docker_host_engine() {
     rm -rf /var/lib/docker
     mkdir -p /etc/docker
     if [ "$PACKAGER" == "apt" ]; then
-        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
     else
-        echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
     fi
     # ensure no options are specified after dockerd
     sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' "${SYSTEMD_PATH}"/docker.service

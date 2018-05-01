@@ -56,7 +56,7 @@ EOF
     yum-config-manager --add-repo https://nvidia.github.io/nvidia-docker/centos7/x86_64/nvidia-docker.repo
     yum makecache -y fast
     yum install -y nvidia-docker2
-    pkill -SIGHUP dockerd
+    systemctl restart docker.service
     nvidia-docker version
 fi
 set -e
@@ -65,7 +65,7 @@ set -e
 systemctl stop docker.service
 rm -rf /var/lib/docker
 mkdir -p /etc/docker
-echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
 python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
 rm -f /etc/docker/daemon.json.merge
 sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service

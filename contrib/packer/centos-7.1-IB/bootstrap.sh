@@ -51,7 +51,7 @@ yum install -y yum-utils device-mapper-persistent-data lvm2 docker-ce-${dockerve
 systemctl stop docker.service
 rm -rf /var/lib/docker
 mkdir -p /etc/docker
-echo "{ \"graph\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
 sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' /lib/systemd/system/docker.service
 systemctl daemon-reload
 # do not auto-enable docker to start due to temp disk issues

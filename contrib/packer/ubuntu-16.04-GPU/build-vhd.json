@@ -9,7 +9,7 @@
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
-    "docker_version": "18.03.0~ce-0~ubuntu",
+    "docker_version": "18.03.1~ce-0~ubuntu",
     "nvdriver": "NVIDIA-Linux-x86_64-384.111.run",
     "bootstrap": "bootstrap.sh"
   },
