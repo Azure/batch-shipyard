@@ -19,7 +19,7 @@ before_install:
   - PATH="/tmp/shellcheck-latest:$PATH"
 
 install:
-  - travis_retry pip install --upgrade pip==9.0.3
+  - travis_retry pip install --upgrade pip
   - travis_retry pip install -r requirements.txt
   - travis_retry pip install --no-deps -r req_nodeps.txt
   - travis_retry pip install flake8

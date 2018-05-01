@@ -51,6 +51,9 @@ DEPENDENCIES=(
     ruamel.yaml
     https://bitbucket.org/ruamel/yaml
     https://bitbucket.org/ruamel/yaml/raw/8d3f84d78aff534cbc881fa509ade31a5edc451d/LICENSE
+    singularity
+    https://github.com/singularityware/singularity
+    https://github.com/singularityware/singularity/raw/master/LICENSE.md
 )
 DEPLEN=${#DEPENDENCIES[@]}
 
