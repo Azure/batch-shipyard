@@ -1,4 +1,0 @@
-Host 10.*
-  Port 23
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
