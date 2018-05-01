@@ -1,138 +1,61 @@
-[![Build Status](https://travis-ci.org/Azure/batch-shipyard.svg?branch=master)](https://travis-ci.org/Azure/batch-shipyard)
-[![Build status](https://ci.appveyor.com/api/projects/status/3a0j0gww57o6nkpw/branch/master?svg=true)](https://ci.appveyor.com/project/alfpark/batch-shipyard)
-[![Docker Pulls](https://img.shields.io/docker/pulls/alfpark/batch-shipyard.svg)](https://hub.docker.com/r/alfpark/batch-shipyard)
-[![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:latest-cli.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
+# MADL-CPU-IntelMPI
+This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL)on CPUs across
+Azure VMs via Intel MPI.
 
-# Batch Shipyard
-[Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute container-based batch processing and HPC workloads on
-[Azure Batch](https://azure.microsoft.com/services/batch/) compute
-pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
-[Singularity](http://singularity.lbl.gov/) containers! No experience with the
-[Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
-your containers with easy-to-understand configuration files. All Azure
-regions are supported, including non-public Azure regions.
+## Configuration
+Please see refer to this [set of sample configuration files](./config) for
+this recipe.
 
-Additionally, Batch Shipyard provides the ability to provision and manage
-entire [standalone remote file systems (storage clusters)](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
-in Azure, independent of any integrated Azure Batch functionality.
+### Pool Configuration
+The pool configuration should enable the following properties:
+* `vm_size` should be a CPU-only instance.  It does not have to be powerful.
+* `inter_node_communication_enabled` must be set to `true`
+* `max_tasks_per_node` must be set to 1 or omitted
+* `publisher` should be `Canonical` 
+* `offer` should be `UbuntuServer`
+* `sku` should be `7.3`
 
-## Major Features
-* Automated [Docker Host Engine](https://www.docker.com) and
-[Singularity](http://singularity.lbl.gov/) installations tuned for
-Azure Batch compute nodes
-* Automated deployment of required Docker and/or Singularity images to
-compute nodes
-* Accelerated Docker and Singularity image deployment at scale to compute
-pools consisting of a large number of VMs via private peer-to-peer
-distribution of container images among the compute nodes
-* Mixed mode support for Docker and Singularity: run your Docker and
-Singularity containers within the same job, side-by-side or even concurrently
-* Comprehensive data movement support: move data easily between locally
-accessible storage systems, remote filesystems, Azure Blob or File Storage,
-and compute nodes
-* Support for Docker Registries including
-[Azure Container Registry](https://azure.microsoft.com/services/container-registry/)
-and other Internet-accessible public and private registries
-* Support for the [Singularity Hub](https://singularity-hub.org/) Container
-Registry
-* Support for serverless execution binding with
-[Azure Functions](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
-* [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
-with integration to auto-link these filesystems to compute nodes with
-support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and
-[GlusterFS](https://www.gluster.org/) distributed network file system
-* Automatic shared data volume support for linking to Remote Filesystems as
-provisioned by Batch Shipyard, [Azure File](https://azure.microsoft.com/services/storage/files/)
-via SMB, [Azure Blob](https://azure.microsoft.com/services/storage/blobs/)
-via [blobfuse](https://github.com/Azure/azure-storage-fuse),
-[GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
-(which can act as a distributed local file system/cache), and custom Linux
-mount support (fstab)
-* Seamless integration with Azure Batch job, task and file concepts along with
-full pass-through of the
-[Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
-to containers executed on compute nodes
-* Support for [Low Priority Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
-* Support for simple, scenario-based [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/)
-and autopool to dynamically scale and control computing resources on-demand
-* Support for [Task Factories](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)
-with the ability to generate tasks based on parametric (parameter) sweeps,
-randomized input, file enumeration, replication, and custom Python code-based
-generators
-* Support for deploying Batch compute nodes into a specified
-[Virtual Network](http://batch-shipyard.readthedocs.io/en/latest/64-batch-shipyard-byovnet/)
-* Transparent support for GPU-accelerated container applications on both
-[Docker](https://github.com/NVIDIA/nvidia-docker) and Singularity
-on [Azure N-Series VM instances](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
-* Support for multi-instance tasks to accommodate MPI and multi-node cluster
-applications packaged as Docker or Singularity containers on compute pools
-with automatic job completion and task termination
-* Transparent assist for running Docker and Singularity containers utilizing
-Infiniband/RDMA for MPI on HPC low-latency Azure VM instances including
-[A-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
-[H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
-and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
-* Support for [Azure Batch task dependencies](https://azure.microsoft.com/documentation/articles/batch-task-dependencies/)
-allowing complex processing pipelines and DAGs
-* Support for merge or final task specification that automatically depends
-on all other tasks within the job
-* Support for job schedules and recurrences for automatic execution of
-tasks at set intervals
-* Support for live job and job schedule migration between pools
-* Automatic setup of SSH or RDP users to all nodes in the compute pool and
-optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
-* Support for credential management through
-[Azure KeyVault](https://azure.microsoft.com/services/key-vault/)
-* Support for [custom host images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/)
-* Support for [Windows Containers](https://docs.microsoft.com/virtualization/windowscontainers/about/)
-on compliant Windows compute node pools with the ability to activate
-[Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
-if applicable
+### Global Configuration
+The global configuration should set the following properties:
+* `docker_images` array must have a reference to a valid MADL
+Docker image that can be run with Intel MPI. Images denoted with `cpu` and
+`intelmpi` tags found in [msmadl/symsgd.0.0.1](https://hub.docker.com/r/msmadl/symsgd.0.0.1/)
+are compatible with Azure VMs. 
 
-## Installation
-### Azure Cloud Shell
-Batch Shipyard is integrated directly into
-[Azure Cloud Shell](https://docs.microsoft.com/azure/cloud-shell/overview)
-and you can execute any Batch Shipyard workload using your web browser or
-the Microsoft Azure [Android](https://play.google.com/store/apps/details?id=com.microsoft.azure&hl=en)
-and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
-app.
+### MPI Jobs Configuration (MultiNode)
+The jobs configuration should set the following properties within the `tasks`
+array which should have a task definition containing:
+* `docker_image` should be the name of the Docker image for this container invocation.
+For this example, this should be
+`msmadl/symsgd.0.0.1`.
+Please note that the `docker_images` in the Global Configuration should match
+this image name.
+* `command` should contain the command to pass to the Docker run invocation.
+For this example, we will run MADL training example in the `msmadl/symsgd.0.0.1` Docker image. The
+application `command` to run would be:
+`"/parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f /parasail/rcv1- -t 1 -n 47237 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models/"`
+  * [`run_parasail.sh`](docker/run_parasail.sh.sh) has these parameters
+    * `-w` the MADL superSGD directory
+    * `-l` learning rate
+    * `-k` approximation rank constant
+    * `-m` model combiner convergence threshold
+    * `-e` total epochs
+    * `-r` rounds per epoch
+    * `-f` training file prefix
+    * `-t` number of threads
+    * `-n` number of features
+    * `-g` log global models every this many epochs
+    * `-d` log global models to this directory at the host"
+* training data should be deployed to each VM under the parasail working directory in a folder with this name 'rcv1-00000'
+* `multi_instance` property must be defined
+  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
+    `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
+    `pool_current_low_priority`
+  * `coordination_command` should be unset or `null`.
+  * `resource_files` should be unset or the array can be empty
 
-Simply request a Cloud Shell session and type `shipyard` to invoke the CLI;
-no installation is required. Try Batch Shipyard now from your browser:
-[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
+## Dockerfile and supplementary files
+Supplementary files can be found [here](./docker).
 
-### Local Installation
-Please see [the installation guide](http://batch-shipyard.readthedocs.io/en/latest/01-batch-shipyard-installation/)
-for more information regarding the various local installation options and
-requirements.
-
-## Documentation and Recipes
-Please refer to the
-[Batch Shipyard Documentation on Read the Docs](http://batch-shipyard.readthedocs.io/).
-
-Visit the
-[Batch Shipyard Recipes](https://github.com/Azure/batch-shipyard/blob/master/recipes)
-section for various sample container workloads using Azure Batch and Batch
-Shipyard.
-
-## Batch Shipyard Compute Node Host OS Support
-Batch Shipyard is currently compatible with most Azure Batch supported
-[Marketplace Linux VMs](https://docs.microsoft.com/azure/virtual-machines/linux/endorsed-distros),
-[compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/),
-and native Azure Batch
-[Windows Server with Containers](https://azuremarketplace.microsoft.com/marketplace/apps/Microsoft.WindowsServer?tab=Overview)
-VMs. Please see the
-[platform image support](http://batch-shipyard.readthedocs.io/en/latest/25-batch-shipyard-platform-image-support/)
-documentation for more information specific to Batch Shipyard support of
-compute node host operating systems.
-
-## Change Log
-Please see the
-[Change Log](http://batch-shipyard.readthedocs.io/en/latest/CHANGELOG/)
-for project history.
-
-* * *
-Please see this project's [Code of Conduct](CODE_OF_CONDUCT.md) and
-[Contributing](CONTRIBUTING.md) guidelines.
+You must agree to the following licenses prior to use:
+* [MADL License](link to license)
