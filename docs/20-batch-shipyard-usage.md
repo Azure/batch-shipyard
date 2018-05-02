@@ -110,7 +110,27 @@ These options must be specified after the command and sub-command. These are:
 
 * `-y` or `--yes` is to assume yes for all confirmation prompts
 * `--raw` will output JSON to stdout for the command result. Only a subset
-of commands support this option.
+of commands support this option. Note many of the supported commands are
+returning raw JSON body results from the Batch API server, thus the output
+may change/break if the underlying service version changes. It is important
+to pin the Batch Shipyard release to a specific version if using this feature.
+The following commands support this option:
+    * `account info`
+    * `account quota`
+    * `cert list`
+    * `jobs list`
+    * `jobs tasks list`
+    * `pool autoscale evaluate`
+    * `pool autoscale lastexec`
+    * `pool images list`
+    * `pool images update`
+    * `pool list`
+    * `pool listskus`
+    * `pool nodes grls`
+    * `pool nodes list`
+    * `pool nodes ps`
+    * `pool nodes prune`
+    * `pool nodes zap`
 * `--show-config` will output the merged configuration prior to execution
 * `-v` or `--verbose` is for verbose output
 * `--configdir path` can be used instead of the individual config switches
