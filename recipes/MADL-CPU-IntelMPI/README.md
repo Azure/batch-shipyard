@@ -34,7 +34,7 @@ this image name.
 For this example, we will run MADL training example in the `msmadl/symsgd:0.0.1` Docker image. The
 application `command` to run would be:
 `"/parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f /parasail/rcv1- -t 1 -n 47237 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models/"`
-  * [`run_parasail.sh`](docker/run_parasail.sh.sh) has these parameters
+  * [`run_parasail.sh`](docker/run_parasail.sh) has these parameters
     * `-w` the MADL superSGD directory
     * `-l` learning rate
     * `-k` approximation rank constant
