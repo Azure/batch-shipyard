@@ -1,5 +1,5 @@
 # MADL-CPU-IntelMPI
-This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL)on CPUs across
+This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL) on CPUs across
 Azure VMs via Intel MPI.
 
 ## Configuration
@@ -19,7 +19,7 @@ The pool configuration should enable the following properties:
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid MADL
 Docker image that can be run with Intel MPI. Images denoted with `cpu` and
-`intelmpi` tags found in [msmadl/symsgd:0.0.1](https://hub.docker.com/r/msmadl/symsgd:0.0.1/)
+`intelmpi` tags found in [msmadl/symsgd:0.0.1](https://hub.docker.com/r/msmadl/symsgd/)
 are compatible with Azure VMs. 
 
 ### MPI Jobs Configuration (MultiNode)
@@ -34,7 +34,7 @@ this image name.
 For this example, we will run MADL training example in the `msmadl/symsgd:0.0.1` Docker image. The
 application `command` to run would be:
 `"/parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f /parasail/rcv1- -t 1 -n 47237 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models/"`
-  * [`run_parasail.sh`](docker/run_parasail.sh.sh) has these parameters
+  * [`run_parasail.sh`](docker/run_parasail.sh) has these parameters
     * `-w` the MADL superSGD directory
     * `-l` learning rate
     * `-k` approximation rank constant
@@ -48,8 +48,7 @@ application `command` to run would be:
     * `-d` log global models to this directory at the host"
 * training data should be deployed to each VM under the parasail working directory in a folder with this name 'rcv1-00000'
 * `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
-    `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
+  * `num_instances` should be set to `pool_current_dedicated`, or
     `pool_current_low_priority`
   * `coordination_command` should be unset or `null`.
   * `resource_files` should be unset or the array can be empty
