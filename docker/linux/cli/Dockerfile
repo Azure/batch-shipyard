@@ -10,7 +10,7 @@ RUN apk update \
     && apk add --update --no-cache \
         musl build-base python3 python3-dev libressl-dev libffi-dev \
         ca-certificates libressl openssh-client rsync git bash \
-    && git clone -b $GIT_BRANCH --single-branch --depth 5 https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
+    && git clone -b $GIT_BRANCH --single-branch https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
     && cd /opt/batch-shipyard \
     && git checkout $GIT_COMMIT \
     && rm -rf .git \

@@ -12,7 +12,7 @@ ARG GIT_BRANCH
 ARG GIT_COMMIT
 
 WORKDIR C:\\batch-shipyard
-RUN git clone -b $Env:GIT_BRANCH --single-branch --depth 5 https://github.com/Azure/batch-shipyard.git C:\batch-shipyard ; \
+RUN git clone -b $Env:GIT_BRANCH --single-branch https://github.com/Azure/batch-shipyard.git C:\batch-shipyard ; \
     git checkout $Env:GIT_COMMIT ; \
     pip install --no-cache-dir -r requirements.txt ; \
     pip install --no-cache-dir --no-deps -r req_nodeps.txt ; \
