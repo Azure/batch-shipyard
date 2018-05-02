@@ -16,7 +16,7 @@ export I_MPI_DAPL_PROVIDER=ofa-v2-ib0
 export I_MPI_DYNAMIC_CONNECTION=0
 export I_MPI_PROCESS_MANAGER=hydra
 
-# create output directory
+# output directory
 mkdir $AZ_BATCH_TASK_WORKING_DIR/models
 
 echo "set variables"
