@@ -48,8 +48,7 @@ application `command` to run would be:
     * `-d` log global models to this directory at the host"
 * training data should be deployed to each VM under the parasail working directory in a folder with this name 'rcv1-00000'
 * `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
-    `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
+  * `num_instances` should be set to `pool_current_dedicated`, or
     `pool_current_low_priority`
   * `coordination_command` should be unset or `null`.
   * `resource_files` should be unset or the array can be empty
