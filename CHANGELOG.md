@@ -2,13 +2,49 @@
 
 ## [Unreleased]
 
+## [3.5.0b1] - 2018-05-02
+### Added
+- Output to JSON for a subset of commands via `--raw` commmand line switch.
+JSON output is directed to stdout. Please see the usage doc for which commands
+are supported and important information regarding output stability. (#177)
+- Allow AAD on the `storage` section in the credentials configuration.
+Please see the credential doc for more information. (#179)
+- Boot diagnostics are now enabled for all VMs provisioned for RemoteFS
+clusters. This also enables serial console support in the portal. (#193)
+- `product_iterables` task factory support. Please see the task factory
+doc for more information. (#187)
+- `default_working_dir` option as the job and task-level to set the
+default working directory when a container executes as a task. Please
+see the jobs doc for more information. (#190)
+- `--no-generate-tunnel-script` option to `pool nodes grls`
+
 ### Changed
-- Integrate shellcheck
-- Singularity updated to 2.4.5
+- Greatly improve throughput speed of many commands that internally iterated
+sequences of actions (#188)
+- RemoteFS clusters provisioned using Ubuntu 18.04-LTS (#161, #185)
+- Update Nvidia NC drivers. All NC-series Azure VMs now have support for
+CUDA 9.1.
+- Update Nvidia NV driver
+- Singularity updated to 2.5.0
+- blobxfer updated to 1.2.0
 - Update dependencies to latest
+- Unify nodeprep scripts (#176)
+- Integrate shellcheck (#177)
+- Extend retry policy for all clients
+- Add Windows file version info and icon to CLI binary
 
 ### Fixed
 - Kernel unattended upgrades causes GPU jobs to fail on reboot (#174)
+- Task submission speed regression when using task factory or large task
+arrays with unnamed tasks (#183)
+- Fix determinism in cardinality of results from `pool nodes grls`
+- Env var export for tasks without env vars
+- Ensure Nvidia persistence mode on reboots
+- Pin nvidia-docker2 installations
+- Site extension broken install issues (and fallback manual recovery)
+
+### Removed
+- Ubuntu 14.04 host support (#164)
 
 ## [3.4.0] - 2018-03-26
 ### Added
@@ -1225,7 +1261,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.4.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...HEAD
+[3.5.0b1]: https://github.com/Azure/batch-shipyard/compare/3.4.0...3.5.0b1
 [3.4.0]: https://github.com/Azure/batch-shipyard/compare/3.3.0...3.4.0
 [3.3.0]: https://github.com/Azure/batch-shipyard/compare/3.2.0...3.3.0
 [3.2.0]: https://github.com/Azure/batch-shipyard/compare/3.1.0...3.2.0
