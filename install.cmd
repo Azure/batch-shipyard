@@ -56,8 +56,8 @@ IF %ANACONDA% EQU 1 (
 ) ELSE (
 	echo Performing install for Python.
 	pip install --upgrade virtualenv
-	IF %ERRORLEVEL% NEQ 0 (
-		echo "pip install failed"
+	IF ERRORLEVEL 1 (
+		echo "pip install virtualenv failed"
 		exit /b 1
 	)
 	virtualenv -p %PYTHON% %VENVNAME%

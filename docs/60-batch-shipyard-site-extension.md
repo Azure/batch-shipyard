@@ -42,6 +42,7 @@ site extension nuget page can be found
 ![60-site-extension-step2-2.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-2.png)
 
 You should select the latest version of Python 3.X x64 that is available.
+You may have to search for it using the search box under the `Gallery` tab.
 Click the `+` icon to install this site extension to your Azure Function App
 environment.
 
@@ -49,8 +50,9 @@ environment.
 
 ### Step 3: Install Batch Shipyard Site Extension
 After Python 3.X x64 installs successfully, find the `Batch Shipyard`
-site extension in the same `Gallery` area. Click the `+` icon to install the
-Batch Shipyard site extension to your Azure Function app environment.
+site extension in the same `Gallery` area. You may have to search for it
+using the search box under the `Gallery` tab. Click the `+` icon to install
+the Batch Shipyard site extension to your Azure Function app environment.
 
 ![60-site-extension-step3-0.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step3-0.png)
 

@@ -12,7 +12,7 @@ popd
 
 REM ensure git is in path
 where git.exe
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     echo "git not found"
     exit /b 1
 )
@@ -32,14 +32,21 @@ IF EXIST "%CLONEDIR%" (
     pushd "%CLONEDIR%"
     git fetch --tags
     git checkout %SHIPYARDVER%
-    IF %ERRORLEVEL% NEQ 0 (
-        echo "Could not git fetch to tag %SHIPYARDVER% at %CLONEDIR%"
-        exit /b 1
+    IF ERRORLEVEL 1 (
+        REM fallback to git clone
+        echo "Could not git fetch and checkout to tag %SHIPYARDVER% at %CLONEDIR%"
+        cd ..
+        rd /s /q "%CLONEDIR%"
+        git clone --single-branch --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
+        IF ERRORLEVEL 1 (
+            echo "Could not git clone to tag %SHIPYARDVER% at %CLONEDIR%"
+            exit /b 1
+        )
     )
     popd
 ) ELSE (
-    git clone --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
-    IF %ERRORLEVEL% NEQ 0 (
+    git clone --single-branch --branch %SHIPYARDVER% "https://github.com/Azure/batch-shipyard.git" "%CLONEDIR%"
+    IF ERRORLEVEL 1 (
         echo "Could not git clone to tag %SHIPYARDVER% at %CLONEDIR%"
         exit /b 1
     )
@@ -53,18 +60,18 @@ type shipyard.cmd>> "%CLONEDIR%\shipyard.cmd"
 REM install requirements
 pushd "%CLONEDIR%"
 "%PYTHON%" -m pip install --upgrade appdirs packaging six
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     echo "pip install pre-requisites failed"
     exit /b 1
 )
 "%PYTHON%" -m pip uninstall -y azure-storage
 "%PYTHON%" -m pip install --upgrade -r requirements.txt
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     echo "pip install requirements.txt failed"
     exit /b 1
 )
 "%PYTHON%" -m pip install --upgrade --no-deps -r req_nodeps.txt
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     echo "pip install req_nodeps.txt failed"
     exit /b 1
 )
@@ -80,3 +87,5 @@ IF NOT EXIST "%FUTURIZE%" (
 pushd "%PYTHONHOME%\Lib\site-packages\isodate"
 "%FUTURIZE%" -0 -w -n .
 popd
+
+echo "Batch Shipyard site extension install completed."

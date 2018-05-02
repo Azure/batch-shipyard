@@ -47,13 +47,29 @@ test_script:
   )
 
 after_test:
-- echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH%
+- ps: >-
+    if ($env:APPVEYOR_REPO_TAG -eq "true") {
+      $env:APPVEYOR_REPO_TAG_NAME -match "^([\d\.])+"
+      $env:BUILDVER_DOTTED = $matches[0]
+      if ($env:APPVEYOR_REPO_TAG_NAME -match "([a-z]+\d+)") {
+        $env:NUGET_PACKAGE_VERSION = $env:BUILDVER_DOTTED + "-" + $matches[1]
+      }
+      else {
+        $env:NUGET_PACKAGE_VERSION = $env:BUILDVER_DOTTED
+      }
+    }
+    else {
+      $env:NUGET_PACKAGE_VERSION = $null
+      $env:BUILDVER_DOTTED = "0.0.0"
+    }
+
+- echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH% nugetpkg %NUGET_PACKAGE_VERSION%
 - IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
   set UPLOAD_NUGET=1&
   echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
-  nuget pack site-extension\\BatchShipyard.nuspec -Version %APPVEYOR_REPO_TAG_NAME% &
+  nuget pack site-extension\\BatchShipyard.nuspec -Version %NUGET_PACKAGE_VERSION% &
   7z l BatchShipyard.*.nupkg &
-  appveyor PushArtifact BatchShipyard.%APPVEYOR_REPO_TAG_NAME%.nupkg || set UPLOAD_NUGET=0)
+  appveyor PushArtifact BatchShipyard.%NUGET_PACKAGE_VERSION%.nupkg || set UPLOAD_NUGET=0)
 - ps: >-
     if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
       Write-Host "Build is from a PR, not creating binary"
@@ -66,13 +82,11 @@ after_test:
     if ($env:APPVEYOR_REPO_TAG -eq "true") {
       $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_TAG_NAME + "-cli-win-amd64.exe"
       $env:UPLOAD_PATH="releases/" + $env:APPVEYOR_REPO_TAG_NAME
-      $env:BUILDVER_DOTTED = $env:APPVEYOR_REPO_TAG_NAME
     }
     else {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" -Or $env:APPVEYOR_REPO_BRANCH -eq "develop") {
         $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_BRANCH + "-" + $env:APPVEYOR_BUILD_NUMBER + "-cli-win-amd64.exe"
         $env:UPLOAD_PATH="builds/" + $env:APPVEYOR_REPO_BRANCH
-        $env:BUILDVER_DOTTED = [string]::Format("0.0.{0}",$env:APPVEYOR_BUILD_NUMBER)
       }
       else {
         Write-Host "Invalid tag or branch $env:APPVEYOR_REPO_BRANCH to build binary"
@@ -82,7 +96,7 @@ after_test:
 
     $bvt0,$bvt1,$bvt2 = $env:BUILDVER_DOTTED.split('.')
 
-    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, 0)",$bvt0,$bvt1,$bvt2)
+    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$env:APPVEYOR_BUILD_NUMBER)
 
     $env:BRANCH_GITSHA1 = [string]::Format("{0}@{1}",$env:APPVEYOR_REPO_BRANCH,$env:APPVEYOR_REPO_COMMIT.Substring(0,7))
 
