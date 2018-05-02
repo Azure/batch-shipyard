@@ -1,10 +1,10 @@
-#Dockerfile for MDL (Microsoft Distributed Learners)
+# Dockerfile for MDL (Microsoft Distributed Learners)
 
 FROM ubuntu:16.04
 MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <https://github.com/Azure/batch-shipyard>
 ENV DEBIAN_FRONTEND=noninteractive
 
-#install base system
+# install base system
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		build-essential \
 		apt-utils \
@@ -37,7 +37,7 @@ RUN mkdir -p /root/.ssh && \
     chmod 700 /root/.ssh && \
     cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys		
 
-#set environment variables
+# set environment variables
 ENV COMPILERVARS_ARCHITECTURE=intel64 \
     INTEL_MPI_PATH=/opt/intel/compilers_and_libraries/linux/mpi
 
@@ -56,16 +56,16 @@ RUN cd /tmp && \
     ./install.sh -s silent.cfg && \
     cd .. && rm -rf *
 
-# Create training folders and copy data
+# create training folders and copy data
 RUN mkdir /parasail/rcv1-00000
 RUN mkdir /parasail/rcv1-test-00000
 COPY rcv1-00000 /parasail/rcv1-00000
 COPY rcv1-test-00000 /parasail/rcv1-test-00000
 
-#Copy MADL binary and mpirun helper script to working directory
+# copy MADL binary and mpirun helper script to working directory
 COPY supersgd /parasail
 COPY run_parasail.sh /parasail
 
-#make sshd listen on 23 and run by default
+# make sshd listen on 23 and run by default
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
