@@ -1,0 +1,9 @@
+job_specifications:
+- id: madljob
+  auto_complete: true
+  shm_size: 256m
+  tasks:
+  - docker_image: msmadl/symsgd:0.0.1
+    multi_instance:
+      num_instances: pool_current_dedicated
+    command: /parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f /parasail/rcv1- -t 1 -n 47237 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models/
