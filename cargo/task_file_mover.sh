@@ -38,5 +38,6 @@ for spec in "$@"; do
     fi
     # ingress data from batch task
     export SHIPYARD_BATCH_ENV=$SHIPYARD_BATCH_ENV
-    python3 /opt/batch-shipyard/task_file_mover.py "$jobid" "$taskid" "$include" "$exclude" "$dest"
+    # shellcheck disable=SC2086
+    python3 /opt/batch-shipyard/task_file_mover.py "$jobid" "$taskid" ${include} ${exclude} ${dest}
 done

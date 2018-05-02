@@ -29,7 +29,9 @@ Select your function app and then select `Platform features` on the right.
 
 ![60-site-extension-step2-0.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-0.png)
 
-In the next blade, select `Advanced tools (Kudu)`.
+In the next blade, select `Advanced tools (Kudu)`. Do not use the
+`Extensions` option as the amount of time given for an extension to
+install through this method is too short.
 
 ![60-site-extension-step2-1.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step2-1.png)
 

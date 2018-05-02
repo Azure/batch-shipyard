@@ -13,6 +13,10 @@ environment:
     PYTHON_ARCH: "64"
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     PYTHON: "C:\\Python36-x64"
+    PYTHON_VERSION: "3.5"
+    PYTHON_ARCH: "64"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    PYTHON: "C:\\Python36-x64"
     PYTHON_VERSION: "3.6"
     PYTHON_ARCH: "64"
   BLOBXFER_STORAGE_ACCOUNT_KEY:
@@ -124,8 +128,8 @@ after_test:
       Write-Host "Build is from a PR, not creating a Docker image for cargo"
       return
     }
-    if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating a Docker image for cargo"
+    if (!($env:PYTHON_VERSION -eq "3.5")) {
+      Write-Host "Python environment is not 3.5, not creating a Docker image for cargo"
       return
     }
 
@@ -160,8 +164,8 @@ after_test:
       Write-Host "Build is from a PR, not creating a Docker image for CLI"
       return
     }
-    if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating a Docker image for CLI"
+    if (!($env:PYTHON_VERSION -eq "3.5")) {
+      Write-Host "Python environment is not 3.5, not creating a Docker image for CLI"
       return
     }
 
