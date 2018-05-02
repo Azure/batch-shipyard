@@ -1,5 +1,5 @@
 # MADL-CPU-IntelMPI
-This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL)on CPUs across
+This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL) on CPUs across
 Azure VMs via Intel MPI.
 
 ## Configuration
