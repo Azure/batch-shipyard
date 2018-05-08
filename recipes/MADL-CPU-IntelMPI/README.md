@@ -18,7 +18,7 @@ The pool configuration should enable the following properties:
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid MADL
-Docker image that can be run with OpenMPI. Images denoted with `0.0.2` tag found in [msmadl/symsgd:0.0.2](https://hub.docker.com/r/msmadl/symsgd/)
+Docker image that can be run with OpenMPI. The image denoted with `0.0.2` tag found in [msmadl/symsgd:0.0.2](https://hub.docker.com/r/msmadl/symsgd/)
 is compatible with Azure Batch Shipyard VMs. 
 
 ### MPI Jobs Configuration (MultiNode)
