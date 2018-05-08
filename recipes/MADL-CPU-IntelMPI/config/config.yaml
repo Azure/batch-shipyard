@@ -2,4 +2,4 @@ batch_shipyard:
   storage_account_settings: mystorageaccount
 global_resources:
   docker_images:
-  - msmadl/symsgd:0.0.2
+  - msmadl/symsgd:0.0.1
