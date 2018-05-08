@@ -1,6 +1,6 @@
 # MADL-CPU-OpenMPI
 This recipe shows how to run Microsoft Azure Distributed Linear Learner (MADL) on CPUs across
-Azure VMs via Intel MPI.
+Azure VMs via Open MPI.
 
 ## Configuration
 Please see refer to this [set of sample configuration files](./config) for
