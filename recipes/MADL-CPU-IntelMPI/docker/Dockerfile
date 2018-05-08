@@ -8,7 +8,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		build-essential \
 		apt-utils \
-		wget \
         	openssh-client \
         	openssh-server \
         	iproute2 \
