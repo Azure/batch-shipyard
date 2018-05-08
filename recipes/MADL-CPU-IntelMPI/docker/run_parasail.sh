@@ -7,15 +7,6 @@ nodes=${#HOSTS[@]}
 echo num nodes: $nodes
 echo "hosts: ${HOSTS[@]}"
 
-# intel mpi vars
-source /opt/intel/bin/compilervars.sh intel64
-source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
-export I_MPI_FABRICS=tcp
-export I_MPI_MIC=enable
-export I_MPI_DAPL_PROVIDER=ofa-v2-ib0
-export I_MPI_DYNAMIC_CONNECTION=0
-export I_MPI_PROCESS_MANAGER=hydra
-
 # output directory
 mkdir $AZ_BATCH_TASK_WORKING_DIR/models
 
@@ -26,7 +17,6 @@ l=
 k=
 mc=
 e=
-
 r=
 f=
 t=
@@ -93,6 +83,6 @@ shift $((OPTIND-1))
 echo "end set variables"
 
 echo "start mpi execute job"
-mpiexec.hydra -np $nodes $w -l $l -k $k -mc $mc -e $e -r $r -f $f -t $t -n $n -gl $gl -glDir $glDir
+mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 -np $nodes $w -l $l -k $k -mc $mc -e $e -r $r -f $f -t $t -n $n -gl $gl -glDir $glDir
 echo "end mpi job"
 
