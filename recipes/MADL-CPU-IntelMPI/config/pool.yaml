@@ -8,5 +8,5 @@ pool_specification:
   vm_count:
     dedicated: 3
     low_priority: 0
-  vm_size: STANDARD_D1_V2
+  vm_size: STANDARD_D2_V2
   inter_node_communication_enabled: true
