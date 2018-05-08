@@ -55,6 +55,7 @@ RUN mkdir /parasail/rcv1-test-00000
 COPY rcv1-00000 /parasail/rcv1-00000
 COPY rcv1-test-00000 /parasail/rcv1-test-00000
 
+# the supersgd  binary is not included in this deployment.
 COPY supersgd /parasail
 COPY run_parasail.sh /parasail
 
