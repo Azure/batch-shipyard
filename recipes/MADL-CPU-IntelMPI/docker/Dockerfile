@@ -12,19 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         	openssh-client \
         	openssh-server \
         	iproute2 \
-		git \
 		gcc \
-		make \
 		emacs \
 		iotop \
 		gfortran \
 		libopenblas-dev \
 		libatlas-base-dev \
 		liblapacke-dev \
-		python-dev \
-		python-numpy \
-		python-pip \
-		python-mpi4py \
 		cpio \
 		openmpi-bin \
 		openmpi-common \
