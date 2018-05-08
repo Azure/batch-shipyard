@@ -23,7 +23,6 @@ t=
 n=
 gl=
 glDir=
-
 while getopts "h?w:l:k:m:e:r:f:t:n:g:d:" opt; do
     case "$opt" in
         h|\?)
