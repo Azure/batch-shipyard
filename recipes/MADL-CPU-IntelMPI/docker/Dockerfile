@@ -61,3 +61,4 @@ COPY run_parasail.sh /parasail
 #make sshd listen on 23 and run by default
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
+
