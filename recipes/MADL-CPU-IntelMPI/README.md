@@ -18,7 +18,7 @@ The pool configuration should enable the following properties:
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid MADL
-Docker image that can be run with OpenMPI. The image denoted with `0.0.2` tag found in [msmadl/symsgd:0.0.2](https://hub.docker.com/r/msmadl/symsgd/)
+Docker image that can be run with OpenMPI. The image denoted with `0.0.1` tag found in [msmadl/symsgd:0.0.1](https://hub.docker.com/r/msmadl/symsgd/)
 is compatible with Azure Batch Shipyard VMs. 
 
 ### MPI Jobs Configuration (MultiNode)
@@ -26,11 +26,11 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this should be
-`msmadl/symsgd:0.0.2`.
+`msmadl/symsgd:0.0.1`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
 * `command` should contain the command to pass to the Docker run invocation.
-For this example, we will run MADL training example in the `msmadl/symsgd:0.0.2` Docker image. The
+For this example, we will run MADL training example in the `msmadl/symsgd:0.0.1` Docker image. The
 application `command` to run would be:
 `"/parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f /parasail/rcv1- -t 1 -n 47237 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models/"`
   * [`run_parasail.sh`](docker/run_parasail.sh) has these parameters
