@@ -84,3 +84,4 @@ echo "end set variables"
 echo "start mpi execute job"
 mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 -np $nodes $w -l $l -k $k -mc $mc -e $e -r $r -f $f -t $t -n $n -gl $gl -glDir $glDir
 echo "end mpi job"
+
