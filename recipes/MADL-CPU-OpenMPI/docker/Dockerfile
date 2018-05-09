@@ -8,9 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		build-essential \
 		apt-utils \
-        openssh-client \
-        openssh-server \
-        iproute2 \
+        	openssh-client \
+        	openssh-server \
+        	iproute2 \
 		gcc \
 		emacs \
 		iotop \
@@ -47,7 +47,7 @@ COPY rcv1-00000 /parasail/rcv1-00000
 COPY rcv1-test-00000 /parasail/rcv1-test-00000
 
 # the supersgd is not included in this deployment
-COPY supersgd /parasail
+# COPY supersgd /parasail
 COPY run_parasail.sh /parasail
 
 #make sshd listen on 23 and run by default
