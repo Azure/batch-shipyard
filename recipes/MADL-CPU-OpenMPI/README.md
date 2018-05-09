@@ -13,7 +13,7 @@ The pool configuration should enable the following properties:
 * `max_tasks_per_node` must be set to 1 or omitted
 * `publisher` should be `Canonical` 
 * `offer` should be `UbuntuServer`
-* `sku` should be `7.3`
+* `sku` could be '7.1' or `7.3`
 
 ### Global Configuration
 The global configuration should set the following properties:
