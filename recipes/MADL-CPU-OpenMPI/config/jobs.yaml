@@ -1,5 +1,5 @@
 job_specifications:
-- id: madljob
+- id: madlmpi-job
   auto_complete: true
   tasks:
   - docker_image: msmadl/symsgd:0.0.1
