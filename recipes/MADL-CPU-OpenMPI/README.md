@@ -8,7 +8,7 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` should be a CPU-only instance, 'STANDARD_D2_V2'.
+* `vm_size` should be a CPU-only instance.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 * `publisher` should be `Canonical` 
