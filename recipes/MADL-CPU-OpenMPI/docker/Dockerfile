@@ -41,10 +41,10 @@ RUN mkdir -p /root/.ssh && \
 WORKDIR /parasail	
 
 # Create training and testing directories
-RUN mkdir /parasail/rcv1-00000
-RUN mkdir /parasail/rcv1-test-00000
-COPY rcv1-00000 /parasail/rcv1-00000
-COPY rcv1-test-00000 /parasail/rcv1-test-00000
+RUN mkdir /parasail/rcv1-00000 && \
+    mkdir /parasail/rcv1-test-00000
+COPY rcv1-00000 /parasail/rcv1-00000 && \
+     rcv1-test-00000 /parasail/rcv1-test-00000
 
 # the supersgd is not included in this deployment
 # COPY supersgd /parasail
