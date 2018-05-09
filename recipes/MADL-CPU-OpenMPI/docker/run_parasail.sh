@@ -7,20 +7,6 @@ nodes=${#HOSTS[@]}
 echo num nodes: $nodes
 echo "hosts: ${HOSTS[@]}"
 
-# source Intel compiler and mpi vars script
-#source /opt/intel/bin/compilervars.sh intel64
-#source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
-
-	
-#export I_MPI_FABRICS=tcp
-#export I_MPI_MIC=enable
-#export I_MPI_HYDRA_DEBUG=1
-#export I_MPI_DEBUG=1
-#export I_MPI_DAPL_PROVIDER=ofa-v2-ib0
-#export I_MPI_DYNAMIC_CONNECTION=0
-#export I_MPI_HYDRA_BOOTSTRAP=ssh
-#export I_MPI_PROCESS_MANAGER=hydra
-
 #Create training, testing, and output directories
 mkdir $AZ_BATCH_TASK_WORKING_DIR/models
 
@@ -93,7 +79,6 @@ while getopts "h?w:l:k:m:e:r:f:t:n:g:d:" opt; do
 done
 shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
-
 echo "end set variables"
 
 echo "start mpi execute job"
