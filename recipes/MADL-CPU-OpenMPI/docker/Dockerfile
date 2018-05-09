@@ -1,0 +1,56 @@
+#Dockerfile for MDL (Microsoft Distributed Learners)
+
+FROM ubuntu:16.04
+MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <https://github.com/Azure/batch-shipyard>
+ENV DEBIAN_FRONTEND=noninteractive
+
+#install base system
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		build-essential \
+		apt-utils \
+        openssh-client \
+        openssh-server \
+        iproute2 \
+		gcc \
+		emacs \
+		iotop \
+		gfortran \
+		libopenblas-dev \
+		libatlas-base-dev \
+		liblapacke-dev \
+		cpio \
+		openmpi-bin \
+		openmpi-common \
+		libopenmpi-dev && \
+		apt-get clean && \
+		rm -rf /var/lib/apt/lists/* 
+
+# configure ssh server and keys
+RUN mkdir -p /root/.ssh && \
+    echo "Host *\n\tPort 23\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile /dev/null" > /root/.ssh/config && \
+    mkdir /var/run/sshd && \
+    ssh-keygen -A && \
+    sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd && \
+    ssh-keygen -f /root/.ssh/id_rsa -t rsa -N '' && \
+    chmod 600 /root/.ssh/config && \
+    chmod 700 /root/.ssh && \
+    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys	
+
+#set parasail dir	
+WORKDIR /parasail	
+
+# Create training and testing directories
+RUN mkdir /parasail/rcv1-00000
+RUN mkdir /parasail/rcv1-test-00000
+COPY rcv1-00000 /parasail/rcv1-00000
+COPY rcv1-test-00000 /parasail/rcv1-test-00000
+
+# the supersgd is not included in this deployment
+COPY supersgd /parasail
+COPY run_parasail.sh /parasail
+
+#make sshd listen on 23 and run by default
+EXPOSE 23
+CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
+
