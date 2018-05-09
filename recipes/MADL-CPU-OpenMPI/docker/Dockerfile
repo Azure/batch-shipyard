@@ -1,7 +1,7 @@
 #Dockerfile for MDL (Microsoft Distributed Learners)
 
 FROM ubuntu:16.04
-MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <https://github.com/Azure/batch-shipyard>
+MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <SymSGD project landing page>
 ENV DEBIAN_FRONTEND=noninteractive
 
 #install base system
