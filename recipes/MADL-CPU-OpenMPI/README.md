@@ -11,9 +11,6 @@ The pool configuration should enable the following properties:
 * `vm_size` should be a CPU-only non RDMA instance.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
-* `publisher` should be `Canonical` 
-* `offer` should be `UbuntuServer`
-* `sku` could be `7.1` or `7.3`
 
 ### Global Configuration
 The global configuration should set the following properties:
