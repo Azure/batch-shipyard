@@ -37,14 +37,16 @@ RUN mkdir -p /root/.ssh && \
     chmod 700 /root/.ssh && \
     cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys	
 
-#set parasail dir	
+# set parasail dir	
 WORKDIR /parasail	
 
-# Create training and testing directories
+# create training and testing directories
 RUN mkdir /parasail/rcv1-00000 && \
     mkdir /parasail/rcv1-test-00000
-COPY rcv1-00000 /parasail/rcv1-00000 && \
-     rcv1-test-00000 /parasail/rcv1-test-00000
+    
+# copy training and testing data
+COPY rcv1-00000 /parasail/rcv1-00000
+COPY rcv1-test-00000 /parasail/rcv1-test-00000
 
 # the supersgd is not included in this deployment
 # COPY supersgd /parasail
