@@ -1414,15 +1414,21 @@ def credentials_batch(config):
         account = account_service_url.split('/')[-1]
     else:
         account = tmp[0].split('/')[-1]
-    return BatchCredentialsSettings(
-        aad=_aad_credentials(
-            config['credentials'],
-            'batch',
-            default_endpoint='https://batch.core.windows.net/',
-            default_token_cache_file=(
-                '.batch_shipyard_aad_batch_token.json'
-            ),
+    aad = _aad_credentials(
+        config['credentials'],
+        'batch',
+        default_endpoint='https://batch.core.windows.net/',
+        default_token_cache_file=(
+            '.batch_shipyard_aad_batch_token.json'
         ),
+    )
+    if util.is_not_empty(account_key) and util.is_not_empty(aad.directory_id):
+        raise ValueError(
+            'Both account_key and aad settings specified for batch '
+            'credentials. If using Azure Active Directory, then do not '
+            'specify an account_key.')
+    return BatchCredentialsSettings(
+        aad=aad,
         account=account,
         account_key=account_key,
         account_service_url=conf['account_service_url'],

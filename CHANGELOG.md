@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **Breaking Change:** You can no longer specify both an `account_key`
+and `aad` with the `batch` section of the credentials config. The prior
+behavior was that `account_key` would take precedence over `aad`. Now
+these options are mutually exclusive. This will now break configurations
+that specified `aad` at the global level while having a shared `account_key`
+at the `batch` level. (#197)
+
 ## [3.5.0b1] - 2018-05-02
 ### Added
 - Output to JSON for a subset of commands via `--raw` commmand line switch.

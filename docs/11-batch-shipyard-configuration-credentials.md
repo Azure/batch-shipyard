@@ -115,7 +115,7 @@ reviewing the options below.
 resources that can be accessed through Azure Active Directory: `batch`,
 `storage`, `keyvault` and `management`. `aad` should only be specified at
 the "global" level if a common set of credentials are permitted to access
-all three resources. The `aad` property can also be specified within each
+all four resources. The `aad` property can also be specified within each
 individual credential section for `batch`, `keyvault` and `management`.
 Any `aad` properties specified within a credential section will override
 any "global" `aad` setting. Note that certain properties such as `endpoint`
@@ -185,8 +185,8 @@ the Azure CLI.
       not specified) `resource_group` is the resource group containing the
       Batch account.
     * (required unless `aad` is specified) `account_key` is the shared
-      key. This is required for non-AAD logins. This option takes precendence
-      over the `aad` property if specified.
+      key. This is required for non-AAD logins. You cannot specify both
+      this option and `aad` at the same time.
     * (optional) `account_key_keyvault_secret_id` property can be used to
       reference an Azure KeyVault secret id. Batch Shipyard will contact the
       specified KeyVault and replace the `account_key` value as returned by
@@ -257,7 +257,7 @@ Azure Container Registry or private repositories on Docker Hub.
 * (optional) The `management` property defines the required members for
 accessing Azure Resources (ARM) with Azure Active Directory credentials. This
 is required with `fs` filesystem actions and pools that need to be created
-with a virtual network specification (thus UserSubscription Batch accounts).
+with a `virtual_network` specification.
     * (required) `subscription_id` is the subscription id to interact with.
     * (required) `aad` AAD authentication parameters for ARM.
 
@@ -314,7 +314,7 @@ credentials:
   storage:
     mystorageaccount:
       account: # insert your account name
-      account_key: # insert your account key
+      account_key: # insert your account key or omit if accessing via aad
       endpoint: core.usgovcloudapi.net
   # other credentials settings
 ```
