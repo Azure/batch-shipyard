@@ -46,8 +46,10 @@ pool configuration file. The template is:
 ```
 
 If you specify an `arm_subnet_id`, then all other options within
-the `virtual_network` property are ignored. **Your Batch account
-must reside within the same subscription and region as the Virtual Network.**
+the `virtual_network` property are ignored. Ensure that the `arm_subnet_id`
+includes the subnet postfix of the virtual network resource id. **Your Batch
+account must reside within the same subscription and region as the Virtual
+Network.**
 
 If you do not specify an `arm_subnet_id`, then you will need to specify
 the individual components of the Virtual Network and Subnet in the other

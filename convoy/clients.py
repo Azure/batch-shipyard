@@ -340,7 +340,8 @@ def _create_batch_service_client(ctx):
     """
     bc = settings.credentials_batch(ctx.config)
     if util.is_none_or_empty(bc.account_key):
-        logger.debug('batch account key not specified, using aad auth')
+        if settings.verbose(ctx.config):
+            logger.debug('using aad auth as batch account key not specified')
         batch_aad = settings.credentials_batch(ctx.config).aad
         credentials = aad.create_aad_credentials(ctx, batch_aad)
     else:

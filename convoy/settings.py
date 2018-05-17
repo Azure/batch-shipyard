@@ -1444,12 +1444,13 @@ def credentials_keyvault(config):
     :return: Key Vault settings
     """
     try:
-        conf = config['credentials']['keyvault']
+        creds = config['credentials']
     except (KeyError, TypeError):
-        conf = {}
+        creds = {}
+    conf = _kv_read_checked(creds, 'keyvault', default={})
     return KeyVaultCredentialsSettings(
         aad=_aad_credentials(
-            config['credentials'],
+            creds,
             'keyvault',
             default_endpoint='https://vault.azure.net',
             default_token_cache_file=(
@@ -1470,12 +1471,13 @@ def credentials_management(config):
     :return: Management settings
     """
     try:
-        conf = config['credentials']['management']
+        creds = config['credentials']
     except (KeyError, TypeError):
-        conf = {}
+        creds = {}
+    conf = _kv_read_checked(creds, 'management', default={})
     return ManagementCredentialsSettings(
         aad=_aad_credentials(
-            config['credentials'],
+            creds,
             'management',
             default_endpoint='https://management.azure.com/',
             default_token_cache_file=(
@@ -1493,15 +1495,21 @@ def credentials_batch(config):
     :rtype: BatchCredentialsSettings
     :return: batch creds
     """
-    conf = config['credentials']['batch']
+    try:
+        creds = config['credentials']
+    except (KeyError, TypeError):
+        raise ValueError('credentials not specified')
+    conf = _kv_read_checked(creds, 'batch')
+    if conf is None:
+        raise ValueError('batch credentials not specified or invalid')
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
     resource_group = _kv_read_checked(conf, 'resource_group')
-    test_cluster = _kv_read(conf, 'test_cluster', False)
+    test_cluster = _kv_read(conf, 'test_cluster', default=False)
     # get subscription id from management section
     try:
         subscription_id = _kv_read_checked(
-            config['credentials']['management'], 'subscription_id')
+            creds['management'], 'subscription_id')
     except (KeyError, TypeError):
         subscription_id = None
     # parse location from url
@@ -1513,7 +1521,7 @@ def credentials_batch(config):
     else:
         account = tmp[0].split('/')[-1]
     aad = _aad_credentials(
-        config['credentials'],
+        creds,
         'batch',
         default_endpoint='https://batch.core.windows.net/',
         default_token_cache_file=(

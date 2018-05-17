@@ -101,6 +101,18 @@ class CliContext(object):
             conf = pathlib.Path(conf)
         return conf
 
+    def _init_keyvault_client(self):
+        # type: (CliContext) -> None
+        """Initialize keyvault client and check for valid creds
+        :param CliContext self: this
+        """
+        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        if self.keyvault_client is None and 'credentials' not in self.config:
+            raise RuntimeError(
+                'Are you missing your configuration files, pointing to '
+                'the wrong configdir location, or missing keyvault '
+                'configuration/arguments?')
+
     def initialize_for_fs(self):
         # type: (CliContext) -> None
         """Initialize context for fs commands
@@ -108,13 +120,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        try:
-            self.keyvault_client = convoy.clients.create_keyvault_client(self)
-        except KeyError:
-            logger.error(
-                'Are you missing your configuration files or pointing to '
-                'the wrong location?')
-            raise
+        self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         _, self.resource_client, self.compute_client, self.network_client, \
@@ -134,13 +140,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        try:
-            self.keyvault_client = convoy.clients.create_keyvault_client(self)
-        except KeyError:
-            logger.error(
-                'Are you missing your configuration files or pointing to '
-                'the wrong location?')
-            raise
+        self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=True, fs_storage=True)
         self.auth_client, self.resource_client, self.compute_client, \
@@ -161,13 +161,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        try:
-            self.keyvault_client = convoy.clients.create_keyvault_client(self)
-        except KeyError:
-            logger.error(
-                'Are you missing your configuration files or pointing to '
-                'the wrong location?')
-            raise
+        self._init_keyvault_client()
         self._init_config(
             skip_global_config=True, skip_pool_config=True, fs_storage=False)
         self._cleanup_after_initialize(
@@ -180,13 +174,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        try:
-            self.keyvault_client = convoy.clients.create_keyvault_client(self)
-        except KeyError:
-            logger.error(
-                'Are you missing your configuration files or pointing to '
-                'the wrong location?')
-            raise
+        self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
         _, self.resource_client, self.compute_client, self.network_client, \
@@ -208,7 +196,7 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
-        self.keyvault_client = convoy.clients.create_keyvault_client(self)
+        self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=False, fs_storage=False)
         # inject storage account keys if via aad
@@ -881,6 +869,7 @@ def cluster(ctx):
 @cluster.command('add')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_add(ctx, storage_cluster_id):
@@ -894,6 +883,7 @@ def fs_cluster_add(ctx, storage_cluster_id):
 @cluster.command('resize')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_resize(ctx, storage_cluster_id):
@@ -911,6 +901,7 @@ def fs_cluster_resize(ctx, storage_cluster_id):
     help='Do not rebalance filesystem, if applicable')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_expand(ctx, storage_cluster_id, no_rebalance):
@@ -937,6 +928,7 @@ def fs_cluster_expand(ctx, storage_cluster_id, no_rebalance):
     '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_del(
@@ -956,6 +948,7 @@ def fs_cluster_del(
     '--no-wait', is_flag=True, help='Do not wait for suspension to complete')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_suspend(ctx, storage_cluster_id, no_wait):
@@ -970,6 +963,7 @@ def fs_cluster_suspend(ctx, storage_cluster_id, no_wait):
     '--no-wait', is_flag=True, help='Do not wait for restart to complete')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_start(ctx, storage_cluster_id, no_wait):
@@ -988,6 +982,7 @@ def fs_cluster_start(ctx, storage_cluster_id, no_wait):
     help='Output /etc/hosts compatible name resolution for GlusterFS clusters')
 @common_options
 @fs_cluster_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
@@ -1010,6 +1005,7 @@ def fs_cluster_status(ctx, storage_cluster_id, detail, hosts):
 @common_options
 @fs_cluster_options
 @click.argument('command', nargs=-1)
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_cluster_ssh(ctx, storage_cluster_id, cardinal, hostname, tty, command):
@@ -1031,6 +1027,7 @@ def disks(ctx):
 @disks.command('add')
 @common_options
 @fs_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_disks_add(ctx):
@@ -1056,6 +1053,7 @@ def fs_disks_add(ctx):
     help='Do not wait for disk deletion to complete')
 @common_options
 @fs_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_disks_del(
@@ -1076,6 +1074,7 @@ def fs_disks_del(
     help='List disks present only in configuration if they exist')
 @common_options
 @fs_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def fs_disks_list(ctx, resource_group, restrict_scope):
@@ -1100,6 +1099,7 @@ def storage(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def storage_del(ctx, clear_tables, poolid):
     """Delete Azure Storage containers used by Batch Shipyard"""
@@ -1114,6 +1114,7 @@ def storage_del(ctx, clear_tables, poolid):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def storage_clear(ctx, poolid):
     """Clear Azure Storage containers used by Batch Shipyard"""
@@ -1145,6 +1146,7 @@ def sas(ctx):
 @common_options
 @batch_options
 @keyvault_options
+@aad_options
 @pass_cli_context
 def sas_create(ctx, create, delete, file, read, write, storage_account, path):
     """Create an object-level SAS key"""
@@ -2107,6 +2109,7 @@ def monitor(ctx):
 @monitor.command('create')
 @common_options
 @monitor_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def monitor_create(ctx):
@@ -2122,6 +2125,7 @@ def monitor_create(ctx):
     '--poolid', multiple=True, help='Add a pool to monitor')
 @common_options
 @monitor_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def monitor_add(ctx, poolid):
@@ -2137,6 +2141,7 @@ def monitor_add(ctx, poolid):
     '--poolid', multiple=True, help='Remove a pool from monitoring')
 @common_options
 @monitor_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def monitor_remove(ctx, all, poolid):
@@ -2152,6 +2157,7 @@ def monitor_remove(ctx, all, poolid):
 @common_options
 @monitor_options
 @click.argument('command', nargs=-1)
+@keyvault_options
 @aad_options
 @pass_cli_context
 def monitor_ssh(ctx, tty, command):
@@ -2175,6 +2181,7 @@ def monitor_ssh(ctx, tty, command):
     '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
 @common_options
 @monitor_options
+@keyvault_options
 @aad_options
 @pass_cli_context
 def monitor_destroy(

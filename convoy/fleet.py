@@ -835,11 +835,17 @@ def _explode_arm_subnet_id(arm_subnet_id):
     :return: subid, rg, provider, vnet, subnet
     """
     tmp = arm_subnet_id.split('/')
-    subid = tmp[2]
-    rg = tmp[4]
-    provider = tmp[6]
-    vnet = tmp[8]
-    subnet = tmp[10]
+    try:
+        subid = tmp[2]
+        rg = tmp[4]
+        provider = tmp[6]
+        vnet = tmp[8]
+        subnet = tmp[10]
+    except IndexError:
+        raise ValueError(
+            'Error parsing arm_subnet_id. Make sure the virtual network '
+            'resource id is correct and is postfixed with the '
+            '/subnets/<subnet_id> portion.')
     return subid, rg, provider, vnet, subnet
 
 
