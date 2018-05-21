@@ -644,7 +644,30 @@ def gpu_configuration_check(config, vm_size=None):
     elif publisher == 'openlogic':
         if offer == 'centos-hpc' and sku >= '7.3':
             return True
-        elif offer == 'centos' and sku == '7.3':
+        elif offer == 'centos' and sku >= '7.3':
+            return True
+    return False
+
+
+def is_lis_install_required(config, vm_size=None):
+    # type: (dict, str) -> bool
+    """Check if the pool requires installing LIS
+    :param dict config: configuration dict
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if pool requires lis install
+    """
+    # LIS is linux only
+    if is_windows_pool(config):
+        return False
+    if util.is_none_or_empty(vm_size):
+        vm_size = pool_settings(config).vm_size
+    # currently lis is only required for GPU pool setup for certain distros
+    if is_gpu_pool(vm_size):
+        publisher = pool_publisher(config, lower=True)
+        offer = pool_offer(config, lower=True)
+        sku = pool_sku(config, lower=True)
+        if publisher == 'openlogic' and offer == 'centos' and sku > '7.3':
             return True
     return False
 

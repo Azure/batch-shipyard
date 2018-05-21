@@ -19,6 +19,12 @@ DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
 NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
 NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
+VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
+
+# status file consts
+lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
+nodeprepfinished=${VOLATILE_PATH}/.batch_shipyard_node_prep_finished
+cascadefailed=${VOLATILE_PATH}/.batch_shipyard_cascade_failed
 
 log() {
     local level=$1
@@ -76,6 +82,7 @@ encrypted=
 hpnssh=0
 gluster_on_compute=0
 gpu=
+lis=
 networkopt=0
 native_mode=0
 p2p=
@@ -85,7 +92,7 @@ sc_args=
 shipyardversion=
 
 # process command line options
-while getopts "h?abcde:fg:m:np:s:tuv:wx:" opt; do
+while getopts "h?abcde:fg:l:m:np:s:tuv:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -97,6 +104,7 @@ while getopts "h?abcde:fg:m:np:s:tuv:wx:" opt; do
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
+            echo "-l [lis pkg] LIS package install"
             echo "-m [type:scid] mount storage cluster"
             echo "-n native mode"
             echo "-p [prefix] storage container prefix"
@@ -129,6 +137,9 @@ while getopts "h?abcde:fg:m:np:s:tuv:wx:" opt; do
             ;;
         g)
             gpu=$OPTARG
+            ;;
+        l)
+            lis=$OPTARG
             ;;
         m)
             IFS=',' read -ra sc_args <<< "${OPTARG,,}"
@@ -179,7 +190,7 @@ fi
 
 save_startup_to_volatile() {
     set +e
-    touch "${AZ_BATCH_NODE_ROOT_DIR}"/volatile/startup/.save
+    touch "${VOLATILE_PATH}"/startup/.save
     set -e
 }
 
@@ -456,6 +467,27 @@ check_for_nvidia_card() {
     fi
 }
 
+install_lis() {
+    if [ -z "$lis" ]; then
+        log INFO "LIS installation not required"
+        return
+    fi
+    if [ -f "$lisinstalled" ]; then
+        log INFO "Assuming LIS installed with file presence"
+        return
+    fi
+    # lis install is controlled by variable presence driven from fleet
+    log DEBUG "Installing LIS"
+    tar zxpf "$lis"
+    pushd LISISO
+    ./install.sh
+    popd
+    touch "$lisinstalled"
+    rm -rf LISISO "$lis"
+    log INFO "LIS installed, rebooting"
+    reboot
+}
+
 install_nvidia_software() {
     log INFO "Installing Nvidia Software"
     # check for nvidia card
@@ -506,6 +538,9 @@ EOF
         centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
         if [[ "$centos_ver" == 7.3.* ]]; then
             download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/"${kernel_devel_package}".rpm
+            install_local_packages "${kernel_devel_package}".rpm
+        elif [[ "$centos_ver" == 7.4.* ]]; then
+            download_file http://mirror.centos.org/centos/7.4.1708/updates/x86_64/Packages/"${kernel_devel_package}".rpm
             install_local_packages "${kernel_devel_package}".rpm
         elif [[ $DISTRIB_ID == "centos-hpc" ]] || [[ "$centos_ver" == 7.* ]]; then
             install_packages "${kernel_devel_package}"
@@ -1251,6 +1286,7 @@ echo "Network optimization: $networkopt"
 echo "Encryption cert thumbprint: $encrypted"
 echo "Storage cluster mount: ${sc_args[*]}"
 echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
+echo "Install LIS: $lis"
 echo "GPU: $gpu"
 echo "Azure Blob: $azureblob"
 echo "Azure File: $azurefile"
@@ -1277,12 +1313,11 @@ check_for_buggy_ntfs_mount
 # save startup stderr/stdout
 save_startup_to_volatile
 
+# install LIS if required first (lspci won't work on certain distros without it)
+install_lis
+
 # create shared mount points
 mkdir -p "$MOUNTS_PATH"
-
-# set node prep status files
-nodeprepfinished=$AZ_BATCH_NODE_SHARED_DIR/.node_prep_finished
-cascadefailed=$AZ_BATCH_NODE_SHARED_DIR/.cascade_failed
 
 # decrypt encrypted creds
 if [ ! -z "$encrypted" ]; then

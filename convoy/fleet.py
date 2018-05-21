@@ -68,26 +68,31 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '390.46/NVIDIA-Linux-x86_64-390.46.run'
+            '396.26/NVIDIA-Linux-x86_64-396.26-diagnostic.run'
         ),
         'sha256': (
-            'fa8231f43e7780da56422eedd8532ebb274b13f1328cccb934c5cc01f8927f58'
+            '1575fc9b5b328bd93f78f6c914a29520172f17500d02700ce3cd650ac5c70a05'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '390.46/NVIDIA-Linux-x86_64-390.46.run'
+            '396.26/NVIDIA-Linux-x86_64-396.26-diagnostic.run'
         ),
         'sha256': (
-            'fa8231f43e7780da56422eedd8532ebb274b13f1328cccb934c5cc01f8927f58'
+            '1575fc9b5b328bd93f78f6c914a29520172f17500d02700ce3cd650ac5c70a05'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
     'viz_cc52': {
-        # currently 390.42
-        'url': 'https://go.microsoft.com/fwlink/?linkid=849941',
+        # https://go.microsoft.com/fwlink/?linkid=849941
+        'url': (
+            'https://gpudrivers.file.core.windows.net/nvinstance/Linux/'
+            'NVIDIA-Linux-x86_64-390.42-grid.run?st=2018-04-03T01%3A34%3A00Z&'
+            'se=2019-04-04T01%3A34%3A00Z&sp=rl&sv=2017-04-17&sr=s&'
+            'sig=l3%2FQLZdtT5NL6BQTSOL5KsW%2FiKJK1Ly5iIi2PXpoaDU%3D'
+        ),
         'sha256': (
             'de5bc9e5fc3683a231e5ae31ad6b148e54bf093f0f2186c21bb3f42b34985cf4'
         ),
@@ -97,6 +102,19 @@ _NVIDIA_DRIVER = {
         'http://www.nvidia.com/content/DriverDownload-March2009'
         '/licence.php?lang=us'
     ),
+}
+_LIS_PACKAGE = {
+    # https://aka.ms/lis
+    'url': (
+        'http://download.microsoft.com/download/6/8/F/'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.4-2.tar.gz'
+    ),
+    'sha256': (
+        'cf9d6a850af4441abb7de6996b60a03b5141191d27cfebdd0330131b9b102e0f'
+    ),
+    'target': 'lis.tar.gz',
+    'intermediate': 'lis_compact.tar',
+    'target_compact': 'lis_compact.tar.gz'
 }
 _PROMETHEUS = {
     'node_exporter': {
@@ -329,6 +347,44 @@ def _setup_nvidia_driver_package(config, vm_size):
         # download driver
         _download_file('NVIDIA driver', pkg, _NVIDIA_DRIVER[gpu_type])
     return pkg
+
+
+def _setup_lis_package(config, vm_size):
+    # type: (dict, str) -> pathlib.Path
+    """Set up the LIS package
+    :param dict config: configuration dict
+    :param str vm_size: vm size
+    :rtype: pathlib.Path
+    :return: package path
+    """
+    # check to see if lis is required first
+    if not settings.is_lis_install_required(config, vm_size=vm_size):
+        return None
+    pkg = _RESOURCES_PATH / _LIS_PACKAGE['target']
+    compact_pkg = _RESOURCES_PATH / _LIS_PACKAGE['target_compact']
+    # check to see if package is downloaded
+    if (not compact_pkg.exists() or not pkg.exists() or
+            util.compute_sha256_for_file(pkg, False) !=
+            _LIS_PACKAGE['sha256']):
+        _download_file('LIS package', pkg, _LIS_PACKAGE)
+        logger.debug('compacting LIS package')
+        util.subprocess_with_output(
+            'gunzip -f -k {}'.format(pkg), shell=True, suppress_output=True)
+        tmp = pkg.parent / pkg.stem
+        inter = pkg.parent / _LIS_PACKAGE['intermediate']
+        tmp.replace(inter)
+        util.subprocess_with_output(
+            ('tar vf {} --wildcards --delete LISISO/Oracle* '
+             '--delete LISISO/RHEL* --delete LISISO/CentOS5* '
+             '--delete LISISO/CentOS6* --delete LISISO/CentOS70* '
+             '--delete LISISO/CentOS71* --delete LISISO/CentOS72* '
+             '--delete LISISO/CentOS73* ').format(inter),
+            shell=True, suppress_output=True)
+        util.subprocess_with_output(
+            'gzip -f {}'.format(inter), shell=True, suppress_output=True)
+        logger.debug('LIS package compacted: {} => {} bytes'.format(
+            compact_pkg, compact_pkg.stat().st_size))
+    return compact_pkg
 
 
 def _setup_prometheus_monitoring_tools(pool_settings):
@@ -1121,6 +1177,14 @@ def _construct_pool_object(
         _rflist.append(
             ('azurefile-mount.{}'.format('cmd' if is_windows else 'sh'), afms)
         )
+    # lis settings
+    if (not is_windows and not native and
+            util.is_none_or_empty(custom_image_na)):
+        lis_pkg = _setup_lis_package(config, pool_settings.vm_size)
+        if lis_pkg is not None:
+            _rflist.append((lis_pkg.name, lis_pkg))
+    else:
+        lis_pkg = None
     # gpu settings
     if (not native and settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):
@@ -1226,7 +1290,8 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            '{npf}{a}{b}{c}{d}{e}{f}{g}{m}{n}{p}{s}{t}{u}{v}{w}{x}'.format(
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{lis}{m}{n}{p}{s}{t}{u}'
+             '{v}{w}{x}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1235,6 +1300,8 @@ def _construct_pool_object(
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
                 g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+                lis=' -l {}'.format(
+                    lis_pkg.name) if lis_pkg is not None else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
                     sc_args) else '',
                 n=' -n' if native else '',

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Support for GPUs on CentOS 7.4 (#199)
+
 ### Changed
 - **Breaking Change:** You can no longer specify both an `account_key`
 and `aad` with the `batch` section of the credentials config. The prior
@@ -9,6 +12,10 @@ behavior was that `account_key` would take precedence over `aad`. Now
 these options are mutually exclusive. This will now break configurations
 that specified `aad` at the global level while having a shared `account_key`
 at the `batch` level. (#197)
+- Update NC driver to 396.26 supporting CUDA 9.2
+
+### Fixed
+- Errant credentials check for configuration from commandline
 
 ## [3.5.0b1] - 2018-05-02
 ### Added
@@ -30,8 +37,7 @@ see the jobs doc for more information. (#190)
 - Greatly improve throughput speed of many commands that internally iterated
 sequences of actions (#188)
 - RemoteFS clusters provisioned using Ubuntu 18.04-LTS (#161, #185)
-- Update Nvidia NC driver to 390.46. All NC-series Azure VMs in Batch Shipyard
-now have support for CUDA 9.1.
+- Update Nvidia NC driver to 390.46 supporting CUDA 9.1
 - Update Nvidia NV driver to 390.42.
 - Singularity updated to 2.5.0
 - blobxfer updated to 1.2.0

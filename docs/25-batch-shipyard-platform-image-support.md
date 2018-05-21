@@ -9,7 +9,7 @@ of Marketplace images supported by the core Azure Batch service.
 | Publisher | Offer      | Sku | GPU | IB/RDMA |
 |-----------|------------|-----|:---:|:-------:|
 | OpenLogic | CentOS     | 7.3 |  X  |         |
-| OpenLogic | CentOS     | 7.4 |     |         |
+| OpenLogic | CentOS     | 7.4 |  X  |         |
 | OpenLogic | CentOS-HPC | 7.1 |     |    X    |
 | OpenLogic | CentOS-HPC | 7.3 |  X  |    X    |
 
