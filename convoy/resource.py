@@ -451,6 +451,95 @@ def create_network_security_group(network_client, vm_resource):
     )
 
 
+def add_inbound_network_security_rule(
+        network_client, vm_resource, rule_name, inbound_rule):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.VmResource, str, settings.InboundNetworkSecurityRule) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Add an inbound network security rule to an existing nsg
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.VmResource vm_resource: VM Resource
+    :param str rule_name: rule name
+    :param settings.InboundNetworkSecurityRule inbound_rule: inbound rule
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    nsg_name = settings.generate_network_security_group_name(vm_resource)
+    # check and fail if nsg exists
+    highest_prio = 0
+    try:
+        rules = network_client.security_rules.list(
+            resource_group_name=vm_resource.resource_group,
+            network_security_group_name=nsg_name
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
+    for rule in rules:
+        if rule.name == rule_name:
+            raise RuntimeError(
+                'security rule {} for nsg {} exists'.format(
+                    rule_name, nsg_name))
+        if rule.priority < 65000 and rule.priority > highest_prio:
+            highest_prio = rule.priority
+    proto = inbound_rule.protocol.lower()
+    if proto == 'tcp':
+        proto = networkmodels.SecurityRuleProtocol.tcp
+    elif proto == 'udp':
+        proto = networkmodels.SecurityRuleProtocol.udp
+    elif proto == '*':
+        proto = networkmodels.SecurityRuleProtocol.asterisk
+    else:
+        raise ValueError('Unknown protocol {} for rule {}'.format(
+            proto, rule_name))
+    rule = networkmodels.SecurityRule(
+        name=settings.generate_network_security_inbound_rule_name(
+            rule_name, 0),
+        description=settings.
+        generate_network_security_inbound_rule_description(rule_name, 0),
+        protocol=proto,
+        source_port_range='*',
+        destination_port_range=str(inbound_rule.destination_port_range),
+        source_address_prefix=inbound_rule.source_address_prefix,
+        destination_address_prefix='*',
+        access=networkmodels.SecurityRuleAccess.allow,
+        priority=highest_prio + 1,
+        direction=networkmodels.SecurityRuleDirection.inbound
+    )
+    return network_client.security_rules.create_or_update(
+        resource_group_name=vm_resource.resource_group,
+        network_security_group_name=nsg_name,
+        security_rule_name=rule.name,
+        security_rule_parameters=rule,
+    )
+
+
+def remove_inbound_network_security_rule(
+        network_client, vm_resource, rule_name):
+    # type: (azure.mgmt.network.NetworkManagementClient,
+    #        settings.VmResource, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete an inbound network security rule to an existing nsg
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.VmResource vm_resource: VM Resource
+    :param str rule_name: rule name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    nsg_name = settings.generate_network_security_group_name(vm_resource)
+    return network_client.security_rules.delete(
+        resource_group_name=vm_resource.resource_group,
+        network_security_group_name=nsg_name,
+        security_rule_name=settings.
+        generate_network_security_inbound_rule_name(
+            rule_name, 0),
+    )
+
+
 def create_public_ip(network_client, vm_resource, offset):
     # type: (azure.mgmt.network.NetworkManagementClient,
     #        settings.VmResource, int) ->

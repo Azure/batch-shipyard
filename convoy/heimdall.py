@@ -95,10 +95,10 @@ def _create_msi_virtual_machine_extension(
 
 def _create_virtual_machine_extension(
         compute_client, config, vm_resource, bootstrap_file, blob_urls,
-        vm_name, private_ips, offset, verbose=False):
+        vm_name, private_ips, fqdn, offset, verbose=False):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.VmResource , str, List[str], str, List[str],
-    #        int) -> msrestazure.azure_operation.AzureOperationPoller
+    #        settings.VmResource, str, List[str], str, List[str], str,
+    #        int, bool) -> msrestazure.azure_operation.AzureOperationPoller
     """Create a virtual machine extension
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -107,6 +107,7 @@ def _create_virtual_machine_extension(
     :param list blob_urls: blob urls
     :param str vm_name: vm name
     :param list private_ips: list of static private ips
+    :param str fqdn: fqdn if public ip available
     :param int offset: vm number
     :param bool verbose: verbose logging
     :rtype: msrestazure.azure_operation.AzureOperationPoller
@@ -118,10 +119,16 @@ def _create_virtual_machine_extension(
     # try to get storage account resource group
     ssel = settings.batch_shipyard_settings(config).storage_account_settings
     rg = settings.credentials_storage(config, ssel).resource_group
+    # get services config
+    servconf = settings.monitoring_services_settings(config)
     # construct bootstrap command
-    cmd = './{bsf}{a}{s}{v}'.format(
+    cmd = './{bsf}{a}{d}{f}{le}{p}{s}{v}'.format(
         bsf=bootstrap_file[0],
         a=' -a {}'.format(settings.determine_cloud_type_from_aad(config)),
+        d=' -d {}'.format(fqdn) if util.is_not_empty(fqdn) else '',
+        f=' -f' if servconf.lets_encrypt_staging else '',
+        le=' -l' if servconf.lets_encrypt_enabled else '',
+        p=' -p {}'.format(servconf.resource_polling_interval),
         s=' -s {}:{}:{}'.format(
             storage.get_storageaccount(),
             storage.get_storage_table_monitoring(),
@@ -157,14 +164,16 @@ def _create_virtual_machine_extension(
 
 def create_monitoring_resource(
         auth_client, resource_client, compute_client, network_client,
-        blob_client, table_client, config, bootstrap_file):
+        blob_client, table_client, config, resources_path, bootstrap_file,
+        monitoring_files):
     # type: (azure.mgmt.authorization.AuthorizationManagementClient,
     #        azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
-    #        dict, str, Tuple[str, pathlib.Path]) -> None
+    #        dict, str, pathlib.Path, Tuple[str, pathlib.Path],
+    #        List[Tuple[str, pathlib.Path]]) -> None
     """Create a monitoring resource
     :param azure.mgmt.authorization.AuthorizationManagementClient auth_client:
         auth client
@@ -177,7 +186,10 @@ def create_monitoring_resource(
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
+    :param pathlib.Path: resources path
     :param Tuple[str, pathlib.Path] bootstrap_file: customscript bootstrap file
+    :param List[Tuple[str, pathlib.Path]] monitoring_files:
+        configurable monitoring files
     """
     ms = settings.monitoring_settings(config)
     # get subscription id for msi
@@ -204,12 +216,80 @@ def create_monitoring_resource(
     # confirm before proceeding
     if not util.confirm_action(config, 'create monitoring resource'):
         return
+    # check for conflicting options
+    servconf = settings.monitoring_services_settings(config)
+    if servconf.lets_encrypt_enabled and not ms.public_ip.enabled:
+        raise ValueError(
+            'cannot create a monitoring resource without a public ip and '
+            'lets encrypt enabled')
     # create storage container
     storage.create_storage_containers_nonbatch(
         blob_client, table_client, 'monitoring')
+    # configure yaml files and write to resources
+    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
+        with monitoring_files['compose'][1].open('r') as f:
+            compdata = f.read()
+    else:
+        with monitoring_files['compose-nonginx'][1].open('r') as f:
+            compdata = f.read()
+    with monitoring_files['prometheus'][1].open('r') as f:
+        promdata = f.read()
+    with monitoring_files['nginx'][1].open('r') as f:
+        nginxdata = f.read()
+    compdata = compdata.replace(
+        '{GRAFANA_ADMIN_USER}', servconf.grafana.admin_user).replace(
+            '{GRAFANA_ADMIN_PASSWORD}', servconf.grafana.admin_password)
+    if servconf.prometheus.port is not None:
+        if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
+            compdata = compdata.replace(
+                '{PROMETHEUS_PORT}', '- "{p}:{p}"'.format(
+                    p=servconf.prometheus.port))
+            nginxdata = nginxdata.replace(
+                '{PROMETHEUS_PORT}', servconf.prometheus.port)
+        else:
+            compdata = compdata.replace(
+                '{PROMETHEUS_PORT}', servconf.prometheus.port)
+    else:
+        if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
+            compdata = compdata.replace('{PROMETHEUS_PORT}', '')
+            nginxdata = nginxdata.replace('{PROMETHEUS_PORT}', '9090')
+        else:
+            compdata = compdata.replace('{PROMETHEUS_PORT}', '9090')
+    promdata = promdata.replace(
+        '{PROMETHEUS_SCRAPE_INTERVAL}', servconf.prometheus.scrape_interval)
+    compyml = resources_path / monitoring_files['compose'][0]
+    promyml = resources_path / monitoring_files['prometheus'][0]
+    nginxconf = resources_path / monitoring_files['nginx'][0]
+    with compyml.open('wt') as f:
+        f.write(compdata)
+    with promyml.open('wt') as f:
+        f.write(promdata)
+    with nginxconf.open('wt') as f:
+        f.write(nginxdata)
+    del compdata
+    del promdata
+    del nginxdata
+    monitoring_files = [
+        bootstrap_file,
+        (monitoring_files['compose'][0], compyml),
+        (monitoring_files['prometheus'][0], promyml),
+        (monitoring_files['nginx'][0], nginxconf),
+    ]
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_nonbatch(
-        blob_client, [bootstrap_file], 'monitoring')
+        blob_client, monitoring_files, 'monitoring')
+    try:
+        compyml.unlink()
+    except OSError:
+        pass
+    try:
+        promyml.unlink()
+    except OSError:
+        pass
+    try:
+        nginxconf.unlink()
+    except OSError:
+        pass
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -294,8 +374,6 @@ def create_monitoring_resource(
     for offset in async_ops['vms']:
         vms[offset] = async_ops['vms'][offset].result()
     logger.debug('{} virtual machines created'.format(len(vms)))
-    # wait for all vms to be created before installing extensions to prevent
-    # variability in wait times and timeouts during customscript
     # create role assignment for msi
     sub_scope = '/subscriptions/{}/'.format(sub_id)
     cont_role = None
@@ -313,6 +391,30 @@ def create_monitoring_resource(
     )
     if settings.verbose(config):
         logger.debug('role assignment: {}'.format(role_assign))
+    # get ip info for vm
+    if util.is_none_or_empty(pips):
+        fqdn = None
+        ipinfo = 'private_ip_address={}'.format(
+            nics[offset].ip_configurations[0].private_ip_address)
+    else:
+        # refresh public ip for vm
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=ms.resource_group,
+            public_ip_address_name=pips[offset].name,
+        )
+        fqdn = pip.dns_settings.fqdn
+        ipinfo = 'fqdn={} public_ip_address={}'.format(fqdn, pip.ip_address)
+        # temporary enable port 80 for ACME challenge if fqdn is present
+        if servconf.lets_encrypt_enabled:
+            isr = settings.InboundNetworkSecurityRule(
+                destination_port_range='80',
+                source_address_prefix='*',
+                protocol='tcp',
+            )
+            logger.debug('creating temporary port 80 rule for ACME challenge')
+            async_ops['port80'] = resource.AsyncOperation(functools.partial(
+                resource.add_inbound_network_security_rule, network_client, ms,
+                'acme80', isr))
     # install msi vm extension
     async_ops['vmext'] = {}
     async_ops['vmext'][0] = resource.AsyncOperation(
@@ -324,28 +426,19 @@ def create_monitoring_resource(
     logger.debug('waiting for virtual machine msi extensions to be created')
     for offset in async_ops['vmext']:
         async_ops['vmext'][offset].result()
+    # ensure port 80 rule is ready
+    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
+        async_ops['port80'].result()
     # install vm extension
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
             _create_virtual_machine_extension, compute_client, config, ms,
             bootstrap_file, blob_urls, vms[0].name,
-            private_ips, 0, settings.verbose(config)),
+            private_ips, fqdn, 0, settings.verbose(config)),
         max_retries=0,
     )
     logger.debug('waiting for virtual machine extensions to be created')
     for offset in async_ops['vmext']:
-        # get ip info for vm
-        if util.is_none_or_empty(pips):
-            ipinfo = 'private_ip_address={}'.format(
-                nics[offset].ip_configurations[0].private_ip_address)
-        else:
-            # refresh public ip for vm
-            pip = network_client.public_ip_addresses.get(
-                resource_group_name=ms.resource_group,
-                public_ip_address_name=pips[offset].name,
-            )
-            ipinfo = 'fqdn={} public_ip_address={}'.format(
-                pip.dns_settings.fqdn, pip.ip_address)
         # get vm extension result
         vm_ext = async_ops['vmext'][offset].result()
         vm = vms[offset]
@@ -354,6 +447,13 @@ def create_monitoring_resource(
              'vm_size={} {}]').format(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 vm.hardware_profile.vm_size, ipinfo))
+    # disable port 80 for ACME challenge
+    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
+        logger.debug('removing temporary port 80 rule for ACME challenge')
+        async_ops['port80'] = resource.AsyncOperation(functools.partial(
+            resource.remove_inbound_network_security_rule, network_client, ms,
+            'acme80'))
+        async_ops['port80'].result()
 
 
 def delete_monitoring_resource(
@@ -455,6 +555,9 @@ def delete_monitoring_resource(
     if settings.verbose(config):
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
+    # delete storage container
+    storage.delete_storage_containers_nonbatch(
+        blob_client, table_client, 'monitoring')
     # create async op holder
     async_ops = {}
     # delete vms
@@ -569,9 +672,6 @@ def delete_monitoring_resource(
         else:
             storage.delete_storage_containers_boot_diagnostics(
                 blob_client, vm_name, vm_id)
-    # delete storage container
-    storage.delete_storage_containers_nonbatch(
-        blob_client, table_client, 'monitoring')
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')

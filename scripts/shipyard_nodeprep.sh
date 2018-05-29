@@ -704,7 +704,7 @@ singularity_setup() {
     if [[ "$DISTRIB_ID" == "ubuntu" ]] && [[ $DISTRIB_RELEASE == 16.04* ]]; then
         offer=ubuntu
         sku=16.04
-    elif ( [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]] ) && [[ $DISTRIB_RELEASE == 7* ]]; then
+    elif { [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]]; } && [[ $DISTRIB_RELEASE == 7* ]]; then
         offer=centos
         sku=7
     fi
@@ -1415,7 +1415,7 @@ if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
 fi
 
 # install gpu related items
-if [ ! -z "$gpu" ] && ( [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "centos" ] ); then
+if [ ! -z "$gpu" ] && { [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "centos" ]; }; then
     if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
         install_nvidia_software
     fi

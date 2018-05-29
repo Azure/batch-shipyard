@@ -13,6 +13,7 @@ these options are mutually exclusive. This will now break configurations
 that specified `aad` at the global level while having a shared `account_key`
 at the `batch` level. (#197)
 - Update NC driver to 396.26 supporting CUDA 9.2
+- blobxfer updated to 1.2.1
 
 ### Fixed
 - Errant credentials check for configuration from commandline

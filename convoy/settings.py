@@ -387,6 +387,22 @@ RemoteFsSettings = collections.namedtuple(
         'managed_disks', 'storage_cluster',
     ]
 )
+PrometheusMonitoringSettings = collections.namedtuple(
+    'PrometheusMonitoringSettings', [
+        'port', 'scrape_interval',
+    ]
+)
+GrafanaMonitoringSettings = collections.namedtuple(
+    'GrafanaMonitoringSettings', [
+        'admin_user', 'admin_password',
+    ]
+)
+MonitoringServicesSettings = collections.namedtuple(
+    'MonitoringServicesSettings', [
+        'resource_polling_interval', 'lets_encrypt_enabled',
+        'lets_encrypt_staging', 'prometheus', 'grafana',
+    ]
+)
 MonitoringVmSettings = collections.namedtuple(
     'MonitoringVmSettings', [
         'resource_group', 'virtual_network', 'network_security',
@@ -4120,6 +4136,68 @@ def remotefs_settings(config, sc_id=None):
     )
 
 
+def monitoring_prometheus_settings(config):
+    # type: (dict) -> PrometheusMonitoringSettings
+    """Get prometheus monitoring settings
+    :param dict config: configuration dict
+    :rtype: PrometheusMonitoringSettings
+    :return: Prometheus monitoring settings
+    """
+    try:
+        conf = config['monitoring']['services']['prometheus']
+    except KeyError:
+        conf = {}
+        port = None
+    else:
+        port = str(_kv_read(conf, 'port', default=9090))
+    return PrometheusMonitoringSettings(
+        port=port,
+        scrape_interval=_kv_read_checked(
+            conf, 'scrape_interval', default='10s'),
+    )
+
+
+def monitoring_grafana_settings(config):
+    # type: (dict) -> GrafanaMonitoringSettings
+    """Get grafana monitoring settings
+    :param dict config: configuration dict
+    :rtype: GrafanaMonitoringSettings
+    :return: Grafana monitoring settings
+    """
+    try:
+        conf = config['monitoring']['services']['grafana']
+    except KeyError:
+        conf = {}
+    admin = _kv_read_checked(conf, 'admin', default={})
+    return GrafanaMonitoringSettings(
+        admin_user=_kv_read_checked(admin, 'user', default='admin'),
+        admin_password=_kv_read_checked(admin, 'password', default='admin'),
+    )
+
+
+def monitoring_services_settings(config):
+    # type: (dict) -> MonitoringServicesSettings
+    """Get services monitoring settings
+    :param dict config: configuration dict
+    :rtype: MonitoringServicesSettings
+    :return: Services monitoring settings
+    """
+    try:
+        conf = config['monitoring']['services']
+    except KeyError:
+        conf = {}
+    le = _kv_read_checked(conf, 'lets_encrypt', default={})
+    return MonitoringServicesSettings(
+        resource_polling_interval=str(_kv_read(
+            conf, 'resource_polling_interval', 15)),
+        lets_encrypt_enabled=_kv_read(le, 'enabled', default=True),
+        lets_encrypt_staging=_kv_read(
+            le, 'use_staging_environment', default=False),
+        prometheus=monitoring_prometheus_settings(config),
+        grafana=monitoring_grafana_settings(config),
+    )
+
+
 def monitoring_settings(config):
     # type: (dict) -> VmResource
     """Get monitoring settings
@@ -4129,12 +4207,12 @@ def monitoring_settings(config):
     """
     # general settings
     try:
-        conf = config['monitoring']['prometheus']
+        conf = config['monitoring']
         if util.is_none_or_empty(conf):
             raise KeyError
     except KeyError:
         raise ValueError(
-            'monitoring:batch settings are invalid or missing from global '
+            'monitoring settings are invalid or missing from global '
             'configuration')
     location = conf['location']
     if util.is_none_or_empty(location):
@@ -4161,6 +4239,27 @@ def monitoring_settings(config):
     }
     if not isinstance(ns_inbound['ssh'].source_address_prefix, list):
         raise ValueError('expected list for ssh network security rule')
+    if 'grafana' in ns_conf:
+        ns_inbound['grafana'] = InboundNetworkSecurityRule(
+            # grafana is reverse proxied through nginx on the HTTPS port
+            destination_port_range='443' if pip_enabled else '3000',
+            source_address_prefix=_kv_read_checked(ns_conf, 'grafana'),
+            protocol='tcp',
+        )
+        if not isinstance(ns_inbound['grafana'].source_address_prefix, list):
+            raise ValueError('expected list for grafana network security rule')
+    if 'prometheus' in ns_conf:
+        promconf = monitoring_prometheus_settings(config)
+        if promconf.port is not None:
+            ns_inbound['prometheus'] = InboundNetworkSecurityRule(
+                destination_port_range=promconf.port,
+                source_address_prefix=_kv_read_checked(ns_conf, 'prometheus'),
+                protocol='tcp',
+            )
+            if not isinstance(
+                    ns_inbound['prometheus'].source_address_prefix, list):
+                raise ValueError(
+                    'expected list for prometheus network security rule')
     if 'custom_inbound_rules' in ns_conf:
         # reserve keywords (current and expected possible future support)
         _reserved = frozenset([

@@ -89,12 +89,12 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
-    _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitoring'
+    _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
-    _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitoring'
+    _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'

@@ -120,10 +120,10 @@ _PROMETHEUS = {
     'node_exporter': {
         'url': (
             'https://github.com/prometheus/node_exporter/releases/download/v'
-            '0.15.2/node_exporter-0.15.2.linux-amd64.tar.gz'
+            '0.16.0/node_exporter-0.16.0.linux-amd64.tar.gz'
         ),
         'sha256': (
-            '1ce667467e442d1f7fbfa7de29a8ffc3a7a0c84d24d7c695cc88b29e0752df37'
+            'e92a601a5ef4f77cce967266b488a978711dabc527a720bea26505cba426c029'
         ),
         'target': 'node_exporter.tar.gz'
     },
@@ -209,6 +209,28 @@ _MONITORINGPREP_FILE = (
     'shipyard_monitoring_bootstrap.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_monitoring_bootstrap.sh')
 )
+_MONITORINGSERVICES_FILE = (
+    'docker-compose.yml',
+    pathlib.Path(_ROOT_PATH, 'picket/docker-compose.yml')
+)
+_MONITORINGSERVICESNONGINX_FILE = (
+    'docker-compose-nonginx.yml',
+    pathlib.Path(_ROOT_PATH, 'picket/docker-compose-nonginx.yml')
+)
+_MONITORINGPROMCONF_FILE = (
+    'prometheus.yml',
+    pathlib.Path(_ROOT_PATH, 'picket/prometheus.yml')
+)
+_MONITORINGNGINXCONF_FILE = (
+    'nginx.conf',
+    pathlib.Path(_ROOT_PATH, 'picket/nginx.conf')
+)
+_CONFIGURABLE_MONITORING_FILES = {
+    'compose': _MONITORINGSERVICES_FILE,
+    'compose-nonginx': _MONITORINGSERVICESNONGINX_FILE,
+    'prometheus': _MONITORINGPROMCONF_FILE,
+    'nginx': _MONITORINGNGINXCONF_FILE,
+}
 
 
 def initialize_globals(verbose):
@@ -4080,7 +4102,8 @@ def action_monitor_create(
         raise ValueError('management aad credentials are invalid')
     heimdall.create_monitoring_resource(
         auth_client, resource_client, compute_client, network_client,
-        blob_client, table_client, config, _MONITORINGPREP_FILE)
+        blob_client, table_client, config, _RESOURCES_PATH,
+        _MONITORINGPREP_FILE, _CONFIGURABLE_MONITORING_FILES)
 
 
 def action_monitor_add(table_client, config, poolid):

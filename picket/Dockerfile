@@ -4,7 +4,7 @@ FROM alpine:3.7
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # copy in files
-COPY picket.py picket.sh requirements.txt /opt/batch-shipyard/
+COPY picket.py requirements.txt /opt/batch-shipyard/
 
 # add base packages and python dependencies
 RUN apk update \
@@ -20,3 +20,6 @@ RUN apk update \
 
 # pre-compile files
 RUN python3 -m compileall -f /opt/batch-shipyard
+
+# set entrypoint
+ENTRYPOINT ["python3", "/opt/batch-shipyard/picket.py"]

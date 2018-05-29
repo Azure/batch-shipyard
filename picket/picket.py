@@ -27,6 +27,7 @@
 # stdlib imports
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import logging.handlers
@@ -269,7 +270,7 @@ def _construct_batch_monitoring_list(
     logger.debug('pool {} state={} ne_port={} ca_port={}'.format(
         pool.id, pool.state, ne_port, ca_port))
     # get node list
-    ipaddrlist = []
+    nodelist = []
     try:
         nodes = batch_client.compute_node.list(
             poolid,
@@ -281,21 +282,23 @@ def _construct_batch_monitoring_list(
             logger.debug('compute node {} state={} ipaddress={}'.format(
                 node.id, node.state.value, node.ip_address))
             if node.state in _VALID_NODE_STATES:
-                ipaddrlist.append(node.ip_address)
+                nodelist.append(node)
     except batchmodels.BatchErrorException as e:
         logger.error(e.message)
         return None
-    if is_none_or_empty(ipaddrlist):
+    if is_none_or_empty(nodelist):
         logger.info('no viable nodes found in pool: {}'.format(poolid))
         return None
-    logger.info('monitoring ip address list for pool {}: {}'.format(
-        poolid, ipaddrlist))
+    logger.info('monitoring {} nodes for pool {}: {}'.format(
+        len(nodelist), poolid))
     # construct prometheus targets
     targets = []
     if ne_port is not None:
         targets.append(
             {
-                'targets': ['{}:{}'.format(x, ne_port) for x in ipaddrlist],
+                'targets': [
+                    '{}:{}'.format(x.ipAddress, ne_port) for x in nodelist
+                ],
                 'labels': {
                     'env': 'BatchPool',
                     'collector': 'NodeExporter',
@@ -306,7 +309,9 @@ def _construct_batch_monitoring_list(
     if ca_port is not None:
         targets.append(
             {
-                'targets': ['{}:{}'.format(x, ca_port) for x in ipaddrlist],
+                'targets': [
+                    '{}:{}'.format(x.ipAddress, ca_port) for x in nodelist
+                ],
                 'labels': {
                     'env': 'BatchPool',
                     'collector': 'cAdvisor',
@@ -321,13 +326,16 @@ def _construct_pool_monitoring_targets(
         cloud: msrestazure.azure_cloud.Cloud,
         table_client: azure.cosmosdb.table.TableService,
         table_name: str,
-        pool_targets_file: pathlib.Path
-) -> None:
+        pool_targets_file: pathlib.Path,
+        last_hash: bytes
+) -> bytes:
     """Read table for pool monitoring
     :param cloud: cloud object
     :param table_client: table client
     :param table_name: table name
     :param pool_targets_file: prom pool targets
+    :param last_hash: last SHA256 digest of pool targets
+    :returned: hashed target dict
     """
     targets = []
     entities = table_client.query_entities(
@@ -342,12 +350,26 @@ def _construct_pool_monitoring_targets(
         pt = _construct_batch_monitoring_list(client, poolid)
         if is_not_empty(pt):
             targets.extend(pt)
+    ret = None
     if is_none_or_empty(targets):
-        return
-    logger.debug('prometheus targets for pools: {}'.format(targets))
-    with pool_targets_file.open('w') as f:
-        if is_not_empty(targets):
-            json.dump(targets, f, indent=4, ensure_ascii=False)
+        logger.debug('no prometheus targets for pools found')
+        try:
+            pool_targets_file.unlink()
+        except OSError:
+            pass
+    else:
+        output = json.dumps(
+            targets, ensure_ascii=False, sort_keys=True).encode('utf8')
+        sha = hashlib.sha256()
+        sha.update(output)
+        ret = sha.digest()
+        if ret != last_hash:
+            logger.debug('prometheus targets for pools: {}'.format(targets))
+            with pool_targets_file.open('wb') as f:
+                f.write(output)
+        else:
+            logger.debug('prometheus targets for pools unchanged')
+    return ret
 
 
 async def poll_for_monitoring_changes(
@@ -362,14 +384,17 @@ async def poll_for_monitoring_changes(
     :param cloud: cloud object
     :param table_client: table client
     """
+    polling_interval = config.get('polling_interval', 10)
     table_name = config['storage']['table_name']
     prom_var_dir = config['prometheus_var_dir']
     pool_targets_file = pathlib.Path(prom_var_dir) / 'batch_pools.json'
-    logger.debug('polling table: {}'.format(table_name))
+    logger.debug('polling table {} every {} sec'.format(
+        table_name, polling_interval))
+    last_pool_hash = None
     while True:
-        _construct_pool_monitoring_targets(
-            cloud, table_client, table_name, pool_targets_file)
-        await asyncio.sleep(5)
+        last_pool_hash = _construct_pool_monitoring_targets(
+            cloud, table_client, table_name, pool_targets_file, last_pool_hash)
+        await asyncio.sleep(polling_interval)
 
 
 def main() -> None:
