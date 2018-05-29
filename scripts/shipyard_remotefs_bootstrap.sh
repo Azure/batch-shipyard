@@ -6,6 +6,7 @@ set -o pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # constants
+GLUSTER_VERSION=4.0
 gluster_brick_mountpath=/gluster/brick
 gluster_brick_location=$gluster_brick_mountpath/brick0
 ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
@@ -441,22 +442,12 @@ EOF
         # until all local disk setup has been completed.
         iptables -A INPUT -p tcp --destination-port 24007:24008 -j REJECT
         iptables -A INPUT -p tcp --destination-port 49152:49215 -j REJECT
-        # install glusterfs server
-        set +e
+        # install glusterfs server from ppa
+        add-apt-repository ppa:gluster/glusterfs-${GLUSTER_VERSION}
+        apt-get update
         apt-get install -y -q --no-install-recommends glusterfs-server
-        rc=$?
-        set -e
-        # workaround for install failures due to glustereventsd
-        # https://bugs.launchpad.net/ubuntu/+source/glusterfs/+bug/1712748
-        # TODO remove this workaround when this is fixed
-        if [ $rc -eq 100 ]; then
-            apt-get -y -f install
-        elif [ $rc -ne 0 ]; then
-            echo "glusterfs-server installation failed with rc=$rc"
-            exit $rc
-        fi
-        systemctl --no-pager status glustereventsd
         # enable gluster service
+        systemctl --no-pager status glustereventsd
         systemctl enable glusterd
         # start service if not started
         set +e
@@ -466,6 +457,7 @@ EOF
             systemctl --no-pager status glusterd
         fi
         set -e
+        # list iptables filtering rules
         iptables -L INPUT
     else
         echo "server_type $server_type not supported."

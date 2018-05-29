@@ -1344,6 +1344,8 @@ def delete_storage_cluster(
     if settings.verbose(config):
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
+    # delete storage container
+    storage.delete_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # create async op holder
     async_ops = {}
     # delete vms
@@ -1479,8 +1481,6 @@ def delete_storage_cluster(
         else:
             storage.delete_storage_containers_boot_diagnostics(
                 blob_client, vm_name, vm_id)
-    # delete storage container
-    storage.delete_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # wait for all async ops to complete
     if wait:
         logger.debug('waiting for network security groups to delete')

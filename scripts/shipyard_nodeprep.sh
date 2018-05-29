@@ -11,6 +11,8 @@ DOCKER_CE_VERSION_CENTOS=18.03.1
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_DOCKER_VERSION=2.0.3
 SINGULARITY_VERSION=2.5.0
+GLUSTER_VERSION_DEBIAN=4.0
+GLUSTER_VERSION_CENTOS=40
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce-0~"
@@ -962,23 +964,22 @@ check_for_glusterfs_on_compute() {
 install_glusterfs_on_compute() {
     local gfsstart="systemctl start glusterd"
     local gfsenable="systemctl enable glusterd"
-    if [ "$PACKAGER" == "apt" ]; then
-        if [[ "$DISTRIB_RELEASE" == 16.04* ]] || [[ "$DISTRIB_RELEASE" == 8* ]]; then
-            gfsstart="systemctl start glusterfs-server"
-            gfsenable="systemctl enable glusterfs-server"
-        fi
-    elif [ "$PACKAGER" == "zypper" ]; then
+    if [ "$PACKAGER" == "zypper" ]; then
         if [[ "$DISTRIB_RELEASE" == 12-sp3* ]]; then
             local repodir=SLE_12_SP3
         fi
         local repo="http://download.opensuse.org/repositories/filesystems/${repodir}/filesystems.repo"
     fi
     if [ "$PACKAGER" == "apt" ]; then
+        if [ "$DISTRIB_ID" == "debian" ]; then
+            add_repo "http://download.gluster.org/pub/gluster/glusterfs/${GLUSTER_VERSION_DEBIAN}/rsa.pub"
+        else
+            add-apt-repository ppa:gluster/glusterfs-${GLUSTER_VERSION_DEBIAN}
+        fi
         install_packages glusterfs-server
     elif [ "$PACKAGER" == "yum" ]; then
-        install_packages epel-release centos-release-gluster38
-        sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-        install_packages --enablerepo=centos-gluster38,epel glusterfs-server
+        yum install centos-release-gluster${GLUSTER_VERSION_CENTOS}
+        install_packages glusterfs-server acl
     elif [ "$PACKAGER" == "zypper" ]; then
         add_repo "$repo"
         "$PACKAGER" -n --gpg-auto-import-keys ref
@@ -1046,11 +1047,15 @@ install_storage_cluster_dependencies() {
             fi
         elif [ "$server_type" == "glusterfs" ]; then
             if [ "$PACKAGER" == "apt" ]; then
+                if [ "$DISTRIB_ID" == "debian" ]; then
+                    add_repo "http://download.gluster.org/pub/gluster/glusterfs/${GLUSTER_VERSION_DEBIAN}/rsa.pub"
+                else
+                    add-apt-repository ppa:gluster/glusterfs-${GLUSTER_VERSION_DEBIAN}
+                fi
                 install_packages glusterfs-client acl
             elif [ "$PACKAGER" == "yum" ] ; then
-                install_packages epel-release centos-release-gluster38
-                sed -i -e "s/enabled=1/enabled=0/g" /etc/yum.repos.d/CentOS-Gluster-3.8.repo
-                install_packages --enablerepo=centos-gluster38,epel glusterfs-server acl
+                yum install centos-release-gluster${GLUSTER_VERSION_CENTOS}
+                install_packages glusterfs-server acl
             elif [ "$PACKAGER" == "zypper" ]; then
                 add_repo "$repo"
                 "$PACKAGER" -n --gpg-auto-import-keys ref
@@ -1073,7 +1078,7 @@ install_cascade_dependencies() {
     install_packages build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
     pip3 install --no-cache-dir --upgrade pip
     pip3 install --no-cache-dir --upgrade wheel setuptools
-    pip3 install --no-cache-dir azure-cosmosdb-table==1.0.2 azure-storage-blob==1.1.0
+    pip3 install --no-cache-dir azure-cosmosdb-table==1.0.3 azure-storage-blob==1.1.0
     # install cascade dependencies
     if [ $p2penabled -eq 1 ]; then
         install_packages python3-libtorrent pigz
