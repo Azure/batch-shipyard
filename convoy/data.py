@@ -313,6 +313,7 @@ def _process_storage_output_data(config, native, is_windows, output_data):
         container = settings.data_container_from_remote_path(
             xfer, rp=remote_path)
         eo = settings.data_blobxfer_extra_options(xfer)
+        create_blob_container = settings.create_blob_container(xfer)
         if native and util.is_not_empty(eo):
             raise ValueError(
                 'native container pool does not support '
@@ -330,7 +331,8 @@ def _process_storage_output_data(config, native, is_windows, output_data):
         else:
             # create saskey for container with rwdl perm
             saskey = storage.create_blob_container_saskey(
-                storage_settings, container, 'egress', create_container=True)
+                storage_settings, container, 'egress',
+                create_container=create_blob_container)
         includes = settings.data_include(xfer)
         excludes = settings.data_exclude(xfer)
         # convert include/excludes into extra options

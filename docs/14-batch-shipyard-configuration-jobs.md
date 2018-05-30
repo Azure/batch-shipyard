@@ -205,6 +205,7 @@ job_specifications:
         remote_path: output/dir
         local_path: null
         is_file_share: false
+        create_blob_container: true
         exclude:
         - '*.tmp'
         include:
@@ -714,6 +715,12 @@ applied to the task running the application command.
           specified, then `source` is defaulted to `$AZ_BATCH_TASK_DIR`.
         * (optional) `is_file_share` denotes if the `remote_path` is on a
           file share. This defaults to `false`.
+        * (optional) `create_blob_container: true` denotes if you should attept
+          to create the ouput container in the blob storage, this can have serious 
+          performance implication in the creation of multiple taks, 
+          so if you are auto generating a large number of tasks create the 
+          output container before the generation of the tasks and set this to `false`.
+          This defaults to `true`
         * (optional) `include` property defines optional include filters.
         * (optional) `exclude` property defines optional exclude filters.
         * (optional) `blobxfer_extra_options` are any extra options to pass to

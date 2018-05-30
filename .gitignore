@@ -88,6 +88,10 @@ celerybeat-schedule
 # Rope project settings
 .ropeproject
 
+# Vs files
+.vs
+.vscode
+
 # project specific ignores
 shipyard
 shipyard.cmd
@@ -99,3 +103,5 @@ resources/azurefile-dockervolumedriver.env
 resources/docker-registry-v2.tar.gz
 resources/nvidia-docker.*
 resources/nvidia-driver*.run
+
+
