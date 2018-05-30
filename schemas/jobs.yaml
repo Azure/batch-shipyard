@@ -141,7 +141,7 @@ mapping:
                       local_path:
                         type: str
                       is_file_share:
-                        type: bool
+                        type: bool                      
                       exclude:
                         type: seq
                         sequence:
@@ -311,7 +311,7 @@ mapping:
                                 type: str
                                 required: true
                               is_file_share:
-                                type: bool
+                                type: bool                              
                               exclude:
                                 type: seq
                                 sequence:
@@ -463,6 +463,8 @@ mapping:
                               local_path:
                                 type: str
                               is_file_share:
+                                type: bool
+                              create_blob_container:
                                 type: bool
                               exclude:
                                 type: seq

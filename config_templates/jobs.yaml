@@ -186,6 +186,7 @@ job_specifications:
         remote_path: output/dir
         local_path: null
         is_file_share: false
+        create_blob_container: true
         exclude:
         - '*.tmp'
         include:
