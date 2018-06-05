@@ -25,6 +25,7 @@ server_options=
 premium_storage=0
 raid_level=-1
 mount_options=
+ne_opts=
 
 # functions
 wait_for_device() {
@@ -310,8 +311,55 @@ setup_glusterfs() {
     fi
 }
 
+install_and_start_node_exporter() {
+    if [ -z "${ne_opts}" ]; then
+        echo "Prometheus node exporter disabled."
+        return
+    else
+        echo "Installing Prometheus node exporter"
+    fi
+    # install
+    tar zxvpf node_exporter.tar.gz
+    cp node_exporter-*.linux-amd64/node_exporter .
+    rm -rf node_exporter-*.linux-amd64
+    chmod +x node_exporter
+    mv node_exporter /usr/sbin
+    # configure
+    local nfs
+    nfs="--no-collector.nfs"
+    if [ "${server_type}" == "nfs" ]; then
+        nfs="--collector.nfs --collector.mountstats"
+    fi
+    local ne_port
+    local pneo
+    IFS=',' read -ra pneo <<< "$ne_opts"
+    ne_port=${pneo[0]}
+    pneo=("${pneo[@]:1}")
+cat << EOF > /etc/node_exporter.conf
+OPTIONS="$nfs --no-collector.textfile --no-collector.wifi --no-collector.xfs --no-collector.zfs --web.listen-address=\":${ne_port}\" ${pneo[@]}"
+EOF
+cat << 'EOF' > /etc/systemd/system/node-exporter.service
+[Unit]
+Description=Node Exporter
+
+[Service]
+Restart=always
+EnvironmentFile=/etc/node_exporter.conf
+ExecStart=/usr/sbin/node_exporter $OPTIONS
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    # start
+    systemctl daemon-reload
+    systemctl start node-exporter
+    systemctl enable node-exporter
+    systemctl --no-pager status node-exporter
+    echo "Prometheus node exporter enabled."
+}
+
 # begin processing
-while getopts "h?abc:d:f:i:m:no:pr:s:t:" opt; do
+while getopts "h?abc:d:e:f:i:m:no:pr:s:t:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_remotefs_bootstrap.sh parameters"
@@ -320,6 +368,7 @@ while getopts "h?abc:d:f:i:m:no:pr:s:t:" opt; do
             echo "-b rebalance filesystem on resize"
             echo "-c [share_name:username:password:uid:gid:ro:create_mask:directory_mask] samba options"
             echo "-d [hostname/dns label prefix] hostname prefix"
+            echo "-e [node exporter port and opts] ne_port,opts"
             echo "-f [filesystem] filesystem"
             echo "-i [peer IPs] peer IPs"
             echo "-m [mountpoint] mountpoint"
@@ -343,6 +392,9 @@ while getopts "h?abc:d:f:i:m:no:pr:s:t:" opt; do
             ;;
         d)
             hostname_prefix=${OPTARG,,}
+            ;;
+        e)
+            ne_opts=$OPTARG
             ;;
         f)
             filesystem=${OPTARG,,}
@@ -392,6 +444,10 @@ echo "  Server options: $server_options"
 echo "  Hostname prefix: $hostname_prefix"
 echo "  Peer IPs: $peer_ips"
 echo "  IP address of VM: $ipaddress"
+echo "  Node exporter: $ne_opts"
+
+# start prometheus collectors
+install_and_start_node_exporter
 
 # first start prep
 if [ $attach_disks -eq 0 ]; then

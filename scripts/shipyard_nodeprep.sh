@@ -1220,16 +1220,17 @@ install_and_start_node_exporter() {
     # start
     local ib
     local nfs
-    ib="--no-collector.infiniband"
     nfs="--no-collector.nfs"
     if [ -e /dev/infiniband/uverbs0 ]; then
         ib="--collector.infiniband"
+    else
+        ib="--no-collector.infiniband"
     fi
     if [ ! -z "$sc_args" ]; then
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             if [ "${sc[0]}" == "nfs" ]; then
-                nfs="--collector.nfs"
+                nfs="--collector.nfs --collector.mountstats"
                 break
             fi
         done
@@ -1240,8 +1241,9 @@ install_and_start_node_exporter() {
     else
         pneo=
     fi
+    # shellcheck disable=SC2086
     "${AZ_BATCH_TASK_WORKING_DIR}"/node_exporter \
-        "$ib" "$nfs" \
+        "$ib" $nfs \
         --no-collector.textfile \
         --no-collector.mdadm \
         --no-collector.wifi \
@@ -1261,6 +1263,7 @@ install_and_start_cadvisor() {
         log INFO "Installing Prometheus cAdvisor"
     fi
     # install
+    gunzip -f cadvisor.gz
     chmod +x cadvisor
     # start
     local pcao

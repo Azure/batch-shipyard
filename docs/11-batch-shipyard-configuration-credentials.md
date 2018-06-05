@@ -297,6 +297,8 @@ below for your region:
 Here is an example skeleton for connecting to Azure Government with AAD:
 
 ```yaml
+# Access to resources through AAD only. Service principal specified at
+# "global" level has access to all sub-resources.
 credentials:
   aad:
     authority_url: https://login.microsoftonline.us
@@ -306,7 +308,7 @@ credentials:
   batch:
     aad:
       endpoint: https://batch.core.usgovcloudapi.net/
-    account_service_url: # insert your account service url/endpoint
+    account_service_url: https://<batch_account_name>.<region>.batch.usgovcloudapi.net
     resource_group: # insert your batch account resource group
   management:
     aad:
@@ -315,13 +317,26 @@ credentials:
   storage:
     mystorageaccount:
       account: # insert your account name
-      account_key: # insert your account key or omit if accessing via aad
       endpoint: core.usgovcloudapi.net
   # other credentials settings
 ```
 
-If you are using shared key auth, you would remove all `aad` settings and
-add your `batch`:`account_key` instead.
+Here is an example skeleton for connecting to Azure Government with shared
+keys. Note that this restricts the available actions Batch Shipyard can take:
+
+```yaml
+# Access to resources through shared keys
+credentials:
+  batch:
+    account_service_url: https://<batch_account_name>.<region>.batch.usgovcloudapi.net
+    account_key: # insert your batch account key
+  storage:
+    mystorageaccount:
+      account: # insert your account name
+      account_key: # insert your account key
+      endpoint: core.usgovcloudapi.net
+  # other credentials settings
+```
 
 ## Full template
 A full template of a credentials file can be found

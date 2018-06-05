@@ -94,3 +94,8 @@ remote_fs:
           - p10-disk1b
           filesystem: btrfs
           raid_level: 0
+      prometheus:
+        node_exporter:
+          enabled: false
+          port: 9100
+          options: []

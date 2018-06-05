@@ -9,43 +9,25 @@ networks:
     driver: bridge
 
 services:
-  picket:
-    image: alfpark/batch-shipyard:{BATCH_SHIPYARD_VERSION}-picket
-    container_name: picket
+  heimdall:
+    image: alfpark/batch-shipyard:{BATCH_SHIPYARD_VERSION}-heimdall
+    container_name: heimdall
     restart: unless-stopped
     networks:
       - backend
     volumes:
       - /var/batch-shipyard/prometheus:/var/batch-shipyard/prometheus
-      - /var/batch-shipyard/picket.json:/etc/picket.json
+      - /var/batch-shipyard/heimdall.json:/etc/heimdall.json
     command:
       - --conf
-      - /etc/picket.json
-
-  nginx:
-    image: nginx:mainline-alpine
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "443:443"
-      {PROMETHEUS_PORT}
-    networks:
-      - backend
-    links:
-      - grafana
-      - prometheus
-    volumes:
-      - /var/batch-shipyard/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-      - /var/batch-shipyard/letsencrypt/html:/usr/share/nginx/html
-      - /var/batch-shipyard/nginx/dhparam/dhparam-2048.pem:/etc/ssl/certs/dhparam-2048.pem
-      - /var/batch-shipyard/letsencrypt/etc/{LE_CERT_DIR}:/etc/letsencrypt/live
+      - /etc/heimdall.json
 
   prometheus:
     image: prom/prometheus:v2.2.1
     container_name: prometheus
     restart: unless-stopped
     ports:
-      - "9090"
+      - "{PROMETHEUS_PORT}:9090"
     volumes:
       - prometheus-storage:/prometheus
       - /var/batch-shipyard/prometheus:/conf
@@ -76,4 +58,3 @@ services:
       - GF_SECURITY_ADMIN_USER={GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD={GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
-      {GF_SERVER_DOMAIN}

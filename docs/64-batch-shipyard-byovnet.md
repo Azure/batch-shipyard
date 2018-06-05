@@ -102,11 +102,15 @@ originating from the Azure Batch service will be dropped by the Network
 Security Group Azure Batch deploys on each compute node network interface.
 
 If you wish to apply additional inbound security rules for the remote access
-port (i.e., `SSH`), then you can create an another `Inbound Security Rule`
-with the destination port range to be `22` and protocol of `TCP`. The source
-IP address space can be whatever your situation requires. You can even
-create a deny rule for this port if you do not want to expose this port and
-do not want to configure a software firewall.
+port (i.e., `SSH`), then you can create either utilize the
+`remote_access_control` property in the pool configuration file or manually
+add another `Inbound Security Rule` with the destination port range to be `22`
+and protocol of `TCP` for SSH or a destination port range of `3389` and
+protocol of `TCP` for RDP access. The source IP address space can be whatever
+your situation requires. You can even create a deny rule (either
+automatically through `remote_access_control` in the pool configuration or
+manually) for this port if you do not want to expose this port and do not
+want to configure a software firewall.
 
 **Note:** Batch compute nodes must be able to communicate with Azure Storage
 servers. If you are restricting outbound network traffic through the Network

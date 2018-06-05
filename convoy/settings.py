@@ -375,13 +375,6 @@ PublicIpSettings = collections.namedtuple(
         'enabled', 'static',
     ]
 )
-StorageClusterSettings = collections.namedtuple(
-    'StorageClusterSettings', [
-        'id', 'resource_group', 'virtual_network', 'network_security',
-        'file_server', 'vm_count', 'vm_size', 'fault_domains', 'public_ip',
-        'hostname_prefix', 'ssh', 'vm_disk_map', 'accelerated_networking',
-    ]
-)
 RemoteFsSettings = collections.namedtuple(
     'RemoteFsSettings', [
         'managed_disks', 'storage_cluster',
@@ -394,7 +387,7 @@ PrometheusMonitoringSettings = collections.namedtuple(
 )
 GrafanaMonitoringSettings = collections.namedtuple(
     'GrafanaMonitoringSettings', [
-        'admin_user', 'admin_password',
+        'admin_user', 'admin_password', 'additional_dashboards',
     ]
 )
 MonitoringServicesSettings = collections.namedtuple(
@@ -441,11 +434,11 @@ class StorageClusterSettings(VmResource):
             self, id, file_server, vm_count, fault_domains, vm_disk_map,
             location, resource_group, hostname_prefix, vm_size,
             public_ip, virtual_network, network_security, ssh,
-            accelerated_networking):
+            accelerated_networking, prometheus):
         # type: (StorageClusterSettings, str, FileServerSettings, int, int,
         #        Dict, str, str, str, str, PublicIpSettings,
         #        VirtualNetworkSettings, NetworkSecuritySettings, SshSettings,
-        #        bool) -> None
+        #        bool, PrometheusSettings) -> None
         super(StorageClusterSettings, self).__init__(
             location, resource_group, hostname_prefix, vm_size, public_ip,
             virtual_network, network_security, ssh, accelerated_networking)
@@ -454,6 +447,7 @@ class StorageClusterSettings(VmResource):
         self.vm_count = vm_count
         self.fault_domains = fault_domains
         self.vm_disk_map = vm_disk_map
+        self.prometheus = prometheus
 
 
 def _kv_read_checked(conf, key, default=None):
@@ -4132,6 +4126,7 @@ def remotefs_settings(config, sc_id=None):
                 hpn_server_swap=False,
             ),
             vm_disk_map=disk_map,
+            prometheus=prometheus_settings(sc_conf),
         ),
     )
 
@@ -4172,6 +4167,7 @@ def monitoring_grafana_settings(config):
     return GrafanaMonitoringSettings(
         admin_user=_kv_read_checked(admin, 'user', default='admin'),
         admin_password=_kv_read_checked(admin, 'password', default='admin'),
+        additional_dashboards=_kv_read_checked(conf, 'additional_dashboards'),
     )
 
 
@@ -4192,7 +4188,7 @@ def monitoring_services_settings(config):
             conf, 'resource_polling_interval', 15)),
         lets_encrypt_enabled=_kv_read(le, 'enabled', default=True),
         lets_encrypt_staging=_kv_read(
-            le, 'use_staging_environment', default=False),
+            le, 'use_staging_environment', default=True),
         prometheus=monitoring_prometheus_settings(config),
         grafana=monitoring_grafana_settings(config),
     )
@@ -4248,9 +4244,13 @@ def monitoring_settings(config):
         )
         if not isinstance(ns_inbound['grafana'].source_address_prefix, list):
             raise ValueError('expected list for grafana network security rule')
-    if 'prometheus' in ns_conf:
-        promconf = monitoring_prometheus_settings(config)
-        if promconf.port is not None:
+    promconf = monitoring_prometheus_settings(config)
+    if promconf.port is not None:
+        if 'prometheus' not in ns_conf:
+            raise ValueError(
+                'prometheus port specified, but no network security '
+                'rule exists')
+        else:
             ns_inbound['prometheus'] = InboundNetworkSecurityRule(
                 destination_port_range=promconf.port,
                 source_address_prefix=_kv_read_checked(ns_conf, 'prometheus'),

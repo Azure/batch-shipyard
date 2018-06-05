@@ -150,6 +150,8 @@ monitoring:
   network_security:
     ssh:
     - '*'
+    grafana:
+    - '*'
   vm_size: STANDARD_D2_V2
   accelerated_networking: false
   services:
@@ -164,3 +166,4 @@ monitoring:
       admin:
         user: admin
         password: admin
+      additional_dashboards: []

@@ -2122,16 +2122,31 @@ def monitor_create(ctx):
 
 @monitor.command('add')
 @click.option(
-    '--poolid', multiple=True, help='Add a pool to monitor')
+    '--poolid', multiple=True, help='Add pool to monitor')
+@click.option(
+    '--remote-fs', multiple=True, help='Add RemoteFS cluster to monitor')
 @common_options
 @monitor_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def monitor_add(ctx, poolid):
+def monitor_add(ctx, poolid, remote_fs):
     """Add a resource to monitor"""
     ctx.initialize_for_monitor()
-    convoy.fleet.action_monitor_add(ctx.table_client, ctx.config, poolid)
+    convoy.fleet.action_monitor_add(
+        ctx.table_client, ctx.config, poolid, remote_fs)
+
+
+@monitor.command('list')
+@common_options
+@monitor_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def monitor_list(ctx):
+    """List all monitored resources"""
+    ctx.initialize_for_monitor()
+    convoy.fleet.action_monitor_list(ctx.table_client, ctx.config)
 
 
 @monitor.command('remove')
@@ -2139,16 +2154,19 @@ def monitor_add(ctx, poolid):
     '--all', is_flag=True, help='Remove all resources from monitoring')
 @click.option(
     '--poolid', multiple=True, help='Remove a pool from monitoring')
+@click.option(
+    '--remote-fs', multiple=True,
+    help='Remove RemoteFS cluster from monitoring')
 @common_options
 @monitor_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def monitor_remove(ctx, all, poolid):
+def monitor_remove(ctx, all, poolid, remote_fs):
     """Remove a resource from monitoring"""
     ctx.initialize_for_monitor()
     convoy.fleet.action_monitor_remove(
-        ctx.table_client, ctx.config, all, poolid)
+        ctx.table_client, ctx.config, all, poolid, remote_fs)
 
 
 @monitor.command('ssh')

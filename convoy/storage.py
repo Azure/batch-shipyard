@@ -32,6 +32,7 @@ from builtins import (  # noqa
 # stdlib imports
 import datetime
 import hashlib
+import json
 import logging
 import re
 # non-stdlib imports
@@ -66,6 +67,8 @@ _STORAGE_CONTAINERS = {
     # TODO remove following in future release
     'table_registry': None,
 }
+_MONITOR_BATCHPOOL_PK = 'BatchPool'
+_MONITOR_REMOTEFS_PK = 'RemoteFS'
 
 
 def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
@@ -406,60 +409,157 @@ def populate_global_resource_blobs(blob_client, table_client, config):
         blob_client, table_client, config, pk, dr, 'singularity_images')
 
 
-def add_resources_to_monitor(table_client, config, pools):
-    # type: (azuretable.TableService, dict, List[str]) -> None
+def add_resources_to_monitor(table_client, config, pools, fsmap):
+    # type: (azuretable.TableService, dict, List[str], dict) -> None
     """Populate resources to monitor
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param list pools: pools to monitor
+    :param dict fsmap: fs clusters to monitor
     """
-    bc = settings.credentials_batch(config)
-    for poolid in pools:
-        entity = {
-            'PartitionKey': 'BatchPool',
-            'RowKey': '{}${}'.format(bc.account, poolid),
-            'BatchServiceUrl': bc.account_service_url,
-            'AadEndpoint': bc.aad.endpoint,
-            'AadAuthorityUrl': bc.aad.authority_url,
-        }
-        if settings.verbose(config):
-            logger.debug('inserting pool monitor resource entity: {}'.format(
-                entity))
-        try:
-            table_client.insert_entity(
-                _STORAGE_CONTAINERS['table_monitoring'], entity)
-        except azure.common.AzureConflictHttpError:
-            logger.error('monitoring for pool {} already exists'.format(
-                poolid))
+    if util.is_not_empty(pools):
+        bc = settings.credentials_batch(config)
+        for poolid in pools:
+            entity = {
+                'PartitionKey': _MONITOR_BATCHPOOL_PK,
+                'RowKey': '{}${}'.format(bc.account, poolid),
+                'BatchServiceUrl': bc.account_service_url,
+                'AadEndpoint': bc.aad.endpoint,
+                'AadAuthorityUrl': bc.aad.authority_url,
+            }
+            if settings.verbose(config):
+                logger.debug(
+                    'inserting pool monitor resource entity: {}'.format(
+                        entity))
+            try:
+                table_client.insert_entity(
+                    _STORAGE_CONTAINERS['table_monitoring'], entity)
+            except azure.common.AzureConflictHttpError:
+                logger.error('monitoring for pool {} already exists'.format(
+                    poolid))
+            else:
+                logger.debug('resource monitor added for pool {}'.format(
+                    poolid))
+    if util.is_not_empty(fsmap):
+        for sc_id in fsmap:
+            fs = fsmap[sc_id]
+            entity = {
+                'PartitionKey': _MONITOR_REMOTEFS_PK,
+                'RowKey': sc_id,
+                'Type': fs['type'],
+                'ResourceGroup': fs['rg'],
+                'NodeExporterPort': fs['ne_port'],
+                'VMs': json.dumps(fs['vms'], ensure_ascii=False),
+            }
+            if fs['type'] == 'glusterfs':
+                entity['AvailabilitySet'] = fs['as']
+            if settings.verbose(config):
+                logger.debug(
+                    'inserting RemoteFS monitor resource entity: {}'.format(
+                        entity))
+            try:
+                table_client.insert_entity(
+                    _STORAGE_CONTAINERS['table_monitoring'], entity)
+            except azure.common.AzureConflictHttpError:
+                logger.error(
+                    'monitoring for remotefs {} already exists'.format(sc_id))
+            else:
+                logger.debug('resource monitor added for remotefs {}'.format(
+                    sc_id))
+
+
+def list_monitored_resources(table_client, config):
+    # type: (azuretable.TableService, dict) -> None
+    """List monitored resources
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
+    # list batch pools monitored
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_monitoring'],
+            filter='PartitionKey eq \'{}\''.format(_MONITOR_BATCHPOOL_PK))
+    except azure.common.AzureMissingResourceHttpError:
+        logger.error(
+            'cannot list monitored Batch pools as monitoring table does '
+            'not exist')
+    else:
+        pools = ['batch pools monitored:']
+        for ent in entities:
+            ba, poolid = ent['RowKey'].split('$')
+            pools.append('* pool id: {} (account: {})'.format(
+                poolid, ba))
+        if len(pools) == 1:
+            logger.info('no Batch pools monitored')
         else:
-            logger.debug('resource monitor added for pool {}'.format(poolid))
+            logger.info('{}'.format('\n'.join(pools)))
+        del pools
+    # list remotefs monitored
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_monitoring'],
+            filter='PartitionKey eq \'{}\''.format(_MONITOR_REMOTEFS_PK))
+    except azure.common.AzureMissingResourceHttpError:
+        logger.error(
+            'cannot list monitored RemoteFS clusters as monitoring table does '
+            'not exist')
+    else:
+        fs = ['RemoteFS clusters monitored:']
+        for ent in entities:
+            sc_id = ent['RowKey']
+            fs.append('* storage cluster id: {}'.format(sc_id))
+            fs.append('  * type: {}'.format(ent['Type']))
+            fs.append('  * resource group: {}'.format(ent['ResourceGroup']))
+        if len(fs) == 1:
+            logger.info('no RemoteFS clusters monitored')
+        else:
+            logger.info('{}'.format('\n'.join(fs)))
 
 
-def remove_resources_from_monitoring(table_client, config, all, pools):
-    # type: (azuretable.TableService, dict, bool, List[str]) -> None
+def remove_resources_from_monitoring(
+        table_client, config, all, pools, fsclusters):
+    # type: (azuretable.TableService, dict, bool, List[str], List[str]) -> None
     """Remove resources from monitoring
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool all: all resource monitors
-    :param list pools: pools to monitor
+    :param list pools: pools to remove from monitoring
+    :param list fsclusters: fs clusters to remove from monitoring
     """
     if all:
         _clear_table(
             table_client, _STORAGE_CONTAINERS['table_monitoring'], config,
-            pool_id=None, pk='BatchPool')
+            pool_id=None, pk=_MONITOR_BATCHPOOL_PK)
         return
-    bc = settings.credentials_batch(config)
-    for poolid in pools:
-        try:
-            table_client.delete_entity(
-                _STORAGE_CONTAINERS['table_monitoring'],
-                partition_key='BatchPool',
-                row_key='{}${}'.format(bc.account, poolid)
-            )
-        except azure.common.AzureMissingResourceHttpError:
-            logger.error('pool {} is not monitored'.format(poolid))
-        else:
-            logger.debug('resource monitor removed for pool {}'.format(poolid))
+    if len(pools) > 0:
+        bc = settings.credentials_batch(config)
+        for poolid in pools:
+            try:
+                table_client.delete_entity(
+                    _STORAGE_CONTAINERS['table_monitoring'],
+                    partition_key=_MONITOR_BATCHPOOL_PK,
+                    row_key='{}${}'.format(bc.account, poolid)
+                )
+            except azure.common.AzureMissingResourceHttpError:
+                logger.error('pool {} is not monitored'.format(poolid))
+            else:
+                logger.debug('resource monitor removed for pool {}'.format(
+                    poolid))
+    if len(fsclusters) > 0:
+        for sc_id in fsclusters:
+            try:
+                table_client.delete_entity(
+                    _STORAGE_CONTAINERS['table_monitoring'],
+                    partition_key=_MONITOR_REMOTEFS_PK,
+                    row_key=sc_id
+                )
+            except azure.common.AzureMissingResourceHttpError:
+                logger.error('RemoteFS cluster {} is not monitored'.format(
+                    sc_id))
+            else:
+                logger.debug(
+                    'resource monitor removed for RemoteFS cluster {}'.format(
+                        sc_id))
 
 
 def _check_file_and_upload(blob_client, file, container):

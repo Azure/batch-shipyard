@@ -12,7 +12,7 @@ DOCKER_CE_VERSION_DEBIAN=18.05.0
 # TODO switch version back to stable
 DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
 SHIPYARD_VAR_DIR=/var/batch-shipyard
-SHIPYARD_CONF_FILE=${SHIPYARD_VAR_DIR}/picket.json
+SHIPYARD_CONF_FILE=${SHIPYARD_VAR_DIR}/heimdall.json
 PROMETHEUS_VAR_DIR=${SHIPYARD_VAR_DIR}/prometheus
 GRAFANA_PROVISIONING_DIR=${SHIPYARD_VAR_DIR}/grafana/provisioning
 NGINX_VAR_DIR=${SHIPYARD_VAR_DIR}/nginx
@@ -132,6 +132,24 @@ check_for_buggy_ntfs_mount() {
     fi
 }
 
+download_file_as() {
+    log INFO "Downloading: $1 as $2"
+    local retries=10
+    set +e
+    while [ $retries -gt 0 ]; do
+        if curl -fSsL "$1" -o "$2"; then
+            break
+        fi
+        retries=$((retries-1))
+        if [ $retries -eq 0 ]; then
+            log ERROR "Could not download: $1"
+            exit 1
+        fi
+        sleep 1
+    done
+    set -e
+}
+
 add_repo() {
     local url=$1
     set +e
@@ -217,7 +235,7 @@ install_packages() {
     set -e
 }
 
-create_batch_shipyard_picket_config() {
+create_batch_shipyard_heimdall_config() {
     mkdir -p ${SHIPYARD_VAR_DIR}
     chmod 755 ${SHIPYARD_VAR_DIR}
 cat > ${SHIPYARD_CONF_FILE} << EOF
@@ -233,7 +251,7 @@ cat > ${SHIPYARD_CONF_FILE} << EOF
     "polling_interval": $polling_interval
 }
 EOF
-    log INFO "Batch Shipyard picket config created"
+    log INFO "Batch Shipyard heimdall config created"
 }
 
 install_docker_host_engine() {
@@ -457,6 +475,17 @@ configure_prometheus_grafana() {
     cp prometheus.yml ${PROMETHEUS_VAR_DIR}
     mkdir -p ${GRAFANA_PROVISIONING_DIR}/datasources
     mkdir -p ${GRAFANA_PROVISIONING_DIR}/dashboards
+    chmod 644 batch_shipyard_dashboard.json
+    cp batch_shipyard_dashboard.json ${GRAFANA_PROVISIONING_DIR}/dashboards
+    # download any additional dashboards
+    if [ -f additional_dashboards.txt ]; then
+        readarray -t dbarr <<< "$(<additional_dashboards.txt)"
+        for dbpair in "${dbarr[@]}"; do
+            IFS=',' read -ra dbent <<< "${dbpair}"
+            download_file_as "${dbent[1]}" "${GRAFANA_PROVISIONING_DIR}/dashboards/${dbent[0]}"
+            chmod 644 "${GRAFANA_PROVISIONING_DIR}/dashboards/${dbent[0]}"
+        done
+    fi
 cat << EOF > ${GRAFANA_PROVISIONING_DIR}/datasources/prometheus.yml
 apiVersion: 1
 
@@ -510,7 +539,7 @@ check_for_buggy_ntfs_mount
 sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 
 # write batch shipyard config
-create_batch_shipyard_picket_config
+create_batch_shipyard_heimdall_config
 
 # install docker host engine and docker compose
 install_docker_host_engine

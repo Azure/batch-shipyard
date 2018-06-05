@@ -324,3 +324,9 @@ mapping:
                   password:
                     type: str
                     required: true
+              additional_dashboards:
+                type: map
+                mapping:
+                  regex;([a-zA-Z0-9]+\.json):
+                    type: str
+                    required: true

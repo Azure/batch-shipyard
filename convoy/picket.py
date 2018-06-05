@@ -271,10 +271,19 @@ def create_monitoring_resource(
     del nginxdata
     monitoring_files = [
         bootstrap_file,
+        monitoring_files['dashboard'],
         (monitoring_files['compose'][0], compyml),
         (monitoring_files['prometheus'][0], promyml),
         (monitoring_files['nginx'][0], nginxconf),
     ]
+    add_dash = None
+    if util.is_not_empty(servconf.grafana.additional_dashboards):
+        add_dash = resources_path / 'additional_dashboards.txt'
+        with add_dash.open('wt') as f:
+            for key in servconf.grafana.additional_dashboards:
+                f.write('{},{}\n'.format(
+                    key, servconf.grafana.additional_dashboards[key]))
+        monitoring_files.append((add_dash.name, add_dash))
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_nonbatch(
         blob_client, monitoring_files, 'monitoring')
@@ -290,6 +299,11 @@ def create_monitoring_resource(
         nginxconf.unlink()
     except OSError:
         pass
+    if add_dash is not None:
+        try:
+            add_dash.unlink()
+        except OSError:
+            pass
     # async operation dictionary
     async_ops = {}
     # create nsg
@@ -309,7 +323,7 @@ def create_monitoring_resource(
         async_ops['pips'] = {}
         async_ops['pips'][0] = resource.AsyncOperation(functools.partial(
             resource.create_public_ip, network_client, ms, 0))
-        logger.debug('waiting for public ips to be created')
+        logger.debug('waiting for public ips to provision')
         pips = {}
         for offset in async_ops['pips']:
             pip = async_ops['pips'][offset].result()
@@ -322,7 +336,7 @@ def create_monitoring_resource(
     else:
         logger.info('public ip is disabled for monitoring resource')
     # get nsg
-    logger.debug('waiting for network security group to be created')
+    logger.debug('waiting for network security group to provision')
     nsg = async_ops['nsg'].result()
     # create nics
     async_ops['nics'] = {}
@@ -330,7 +344,7 @@ def create_monitoring_resource(
         resource.create_network_interface, network_client, ms, subnet, nsg,
         private_ips, pips, 0))
     # wait for nics to be created
-    logger.debug('waiting for network interfaces to be created')
+    logger.debug('waiting for network interfaces to provision')
     nics = {}
     for offset in async_ops['nics']:
         nic = async_ops['nics'][offset].result()
@@ -368,19 +382,22 @@ def create_monitoring_resource(
         None, ssh_pub_key, 0, enable_msi=True))
     # wait for vms to be created
     logger.info(
-        'waiting for {} virtual machines to be created'.format(
+        'waiting for {} virtual machines to provision'.format(
             len(async_ops['vms'])))
     vms = {}
     for offset in async_ops['vms']:
         vms[offset] = async_ops['vms'][offset].result()
     logger.debug('{} virtual machines created'.format(len(vms)))
-    # create role assignment for msi
+    # create role assignments for msi identity
+    logger.debug('assigning roles to msi identity')
     sub_scope = '/subscriptions/{}/'.format(sub_id)
     cont_role = None
     for role in auth_client.role_definitions.list(
-            sub_scope, filter='roleName eq \'Contributor\''):
+            sub_scope, filter='roleName eq \'Reader\''):
         cont_role = role.id
         break
+    if cont_role is None:
+        raise RuntimeError('Role Id not found for Reader')
     role_assign = auth_client.role_assignments.create(
         scope=sub_scope,
         role_assignment_name=uuid.uuid4(),
@@ -390,7 +407,25 @@ def create_monitoring_resource(
         ),
     )
     if settings.verbose(config):
-        logger.debug('role assignment: {}'.format(role_assign))
+        logger.debug('reader role assignment: {}'.format(role_assign))
+    cont_role = None
+    for role in auth_client.role_definitions.list(
+            sub_scope, filter='roleName eq \'Reader and Data Access\''):
+        cont_role = role.id
+        break
+    if cont_role is None:
+        raise RuntimeError('Role Id not found for Reader and Data Access')
+    role_assign = auth_client.role_assignments.create(
+        scope=sub_scope,
+        role_assignment_name=uuid.uuid4(),
+        parameters=authmodels.RoleAssignmentCreateParameters(
+            role_definition_id=cont_role,
+            principal_id=vms[0].identity.principal_id
+        ),
+    )
+    if settings.verbose(config):
+        logger.debug('reader and data access role assignment: {}'.format(
+            role_assign))
     # get ip info for vm
     if util.is_none_or_empty(pips):
         fqdn = None
@@ -423,7 +458,7 @@ def create_monitoring_resource(
             vms[0].name, 0, settings.verbose(config)),
         max_retries=0,
     )
-    logger.debug('waiting for virtual machine msi extensions to be created')
+    logger.debug('waiting for virtual machine msi extensions to provision')
     for offset in async_ops['vmext']:
         async_ops['vmext'][offset].result()
     # ensure port 80 rule is ready
@@ -437,7 +472,7 @@ def create_monitoring_resource(
             private_ips, fqdn, 0, settings.verbose(config)),
         max_retries=0,
     )
-    logger.debug('waiting for virtual machine extensions to be created')
+    logger.debug('waiting for virtual machine extensions to provision')
     for offset in async_ops['vmext']:
         # get vm extension result
         vm_ext = async_ops['vmext'][offset].result()
@@ -454,6 +489,26 @@ def create_monitoring_resource(
             resource.remove_inbound_network_security_rule, network_client, ms,
             'acme80'))
         async_ops['port80'].result()
+    # output connection info
+    if ms.public_ip.enabled:
+        logger.info(
+            ('To connect to Grafana, open a web browser and go '
+             'to https://{}').format(fqdn))
+        if servconf.prometheus.port is not None:
+            logger.info(
+                ('To connect to Prometheus, open a web browser and go '
+                 'to https://{}:{}').format(fqdn, servconf.prometheus.port))
+    else:
+        logger.info(
+            ('To connect to Grafana, open a web browser and go '
+             'to http://{} within the virtual network').format(
+                 nics[offset].ip_configurations[0].private_ip_address))
+        if servconf.prometheus.port is not None:
+            logger.info(
+                ('To connect to Prometheus, open a web browser and go '
+                 'to http://{}:{} within the virtual network').format(
+                     nics[offset].ip_configurations[0].private_ip_address,
+                     servconf.prometheus.port))
 
 
 def delete_monitoring_resource(

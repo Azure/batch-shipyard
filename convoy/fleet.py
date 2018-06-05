@@ -47,9 +47,9 @@ from . import autoscale
 from . import batch
 from . import crypto
 from . import data
-from . import heimdall
 from . import keyvault
 from . import misc
+from . import picket
 from . import remotefs
 from . import resource
 from . import settings
@@ -135,7 +135,8 @@ _PROMETHEUS = {
         'sha256': (
             '378df92f532166251fa3f116beea26ca6364e45e3d6a63ea78b7627ea54bd303'
         ),
-        'target': 'cadvisor'
+        'target': 'cadvisor',
+        'target_compact': 'cadvisor.gz'
     },
 }
 _CASCADE_FILE = (
@@ -211,25 +212,30 @@ _MONITORINGPREP_FILE = (
 )
 _MONITORINGSERVICES_FILE = (
     'docker-compose.yml',
-    pathlib.Path(_ROOT_PATH, 'picket/docker-compose.yml')
+    pathlib.Path(_ROOT_PATH, 'heimdall/docker-compose.yml')
 )
 _MONITORINGSERVICESNONGINX_FILE = (
     'docker-compose-nonginx.yml',
-    pathlib.Path(_ROOT_PATH, 'picket/docker-compose-nonginx.yml')
+    pathlib.Path(_ROOT_PATH, 'heimdall/docker-compose-nonginx.yml')
 )
 _MONITORINGPROMCONF_FILE = (
     'prometheus.yml',
-    pathlib.Path(_ROOT_PATH, 'picket/prometheus.yml')
+    pathlib.Path(_ROOT_PATH, 'heimdall/prometheus.yml')
 )
 _MONITORINGNGINXCONF_FILE = (
     'nginx.conf',
-    pathlib.Path(_ROOT_PATH, 'picket/nginx.conf')
+    pathlib.Path(_ROOT_PATH, 'heimdall/nginx.conf')
+)
+_MONITORINGGRAFANADASHBOARD_FILE = (
+    'batch_shipyard_dashboard.json',
+    pathlib.Path(_ROOT_PATH, 'heimdall/batch_shipyard_dashboard.json')
 )
 _CONFIGURABLE_MONITORING_FILES = {
     'compose': _MONITORINGSERVICES_FILE,
     'compose-nonginx': _MONITORINGSERVICESNONGINX_FILE,
     'prometheus': _MONITORINGPROMCONF_FILE,
     'nginx': _MONITORINGNGINXCONF_FILE,
+    'dashboard': _MONITORINGGRAFANADASHBOARD_FILE,
 }
 
 
@@ -409,6 +415,21 @@ def _setup_lis_package(config, vm_size):
     return compact_pkg
 
 
+def setup_prometheus_node_exporter():
+    # type: (None) -> pathlib.Path
+    """Setup node exporter package
+    :return ne package
+    """
+    ne_pkg = _RESOURCES_PATH / _PROMETHEUS['node_exporter']['target']
+    if (not ne_pkg.exists() or
+            util.compute_sha256_for_file(ne_pkg, False) !=
+            _PROMETHEUS['node_exporter']['sha256']):
+        _download_file(
+            'Prometheus Node Exporter', ne_pkg,
+            _PROMETHEUS['node_exporter'])
+    return ne_pkg
+
+
 def _setup_prometheus_monitoring_tools(pool_settings):
     # type: settings.PoolSettings -> Tuple[pathlib.Path, pathlib.Path]
     """Setup the prometheus monitoring tools
@@ -416,21 +437,26 @@ def _setup_prometheus_monitoring_tools(pool_settings):
     :rtype: tuple
     :return: tuple of ne_pkg, ca_pkg
     """
-    ne_pkg = _RESOURCES_PATH / _PROMETHEUS['node_exporter']['target']
-    ca_pkg = _RESOURCES_PATH / _PROMETHEUS['cadvisor']['target']
+    ne_pkg = None
+    ca_pkg_compact = None
     if pool_settings.prometheus.ne_enabled:
-        if (not ne_pkg.exists() or
-                util.compute_sha256_for_file(ne_pkg, False) !=
-                _PROMETHEUS['node_exporter']['sha256']):
-            _download_file(
-                'Prometheus Node Exporter', ne_pkg,
-                _PROMETHEUS['node_exporter'])
+        ne_pkg = setup_prometheus_node_exporter()
     if pool_settings.prometheus.ca_enabled:
-        if (not ca_pkg.exists() or
+        ca_pkg = _RESOURCES_PATH / _PROMETHEUS['cadvisor']['target']
+        ca_pkg_compact = (
+            _RESOURCES_PATH / _PROMETHEUS['cadvisor']['target_compact']
+        )
+        if (not ca_pkg.exists() or not ca_pkg_compact.exists() or
                 util.compute_sha256_for_file(ca_pkg, False) !=
                 _PROMETHEUS['cadvisor']['sha256']):
             _download_file('cAdvisor', ca_pkg, _PROMETHEUS['cadvisor'])
-    return ne_pkg, ca_pkg
+            logger.debug('compacting cAdvisor package')
+            util.subprocess_with_output(
+                'gzip -f -k {}'.format(ca_pkg), shell=True,
+                suppress_output=True)
+        logger.debug('cAdvisor package compacted: {} => {} bytes'.format(
+            ca_pkg_compact, ca_pkg_compact.stat().st_size))
+    return ne_pkg, ca_pkg_compact
 
 
 def _generate_azure_mount_script_name(
@@ -2691,6 +2717,11 @@ def action_fs_cluster_add(
     _check_compute_client(compute_client)
     _check_network_client(network_client)
     storage.set_storage_remotefs_container(storage_cluster_id)
+    rfs = settings.remotefs_settings(config, storage_cluster_id)
+    # add node exporter if enabled
+    if rfs.storage_cluster.prometheus.ne_enabled:
+        ne_pkg = setup_prometheus_node_exporter()
+        _ALL_REMOTEFS_FILES.append((ne_pkg.name, ne_pkg))
     remotefs.create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
         storage_cluster_id, _REMOTEFSPREP_FILE[0], _ALL_REMOTEFS_FILES)
@@ -4100,39 +4131,81 @@ def action_monitor_create(
     if (util.is_none_or_empty(mgmt_aad.subscription_id) or
             util.is_none_or_empty(mgmt_aad.aad.authority_url)):
         raise ValueError('management aad credentials are invalid')
-    heimdall.create_monitoring_resource(
+    picket.create_monitoring_resource(
         auth_client, resource_client, compute_client, network_client,
         blob_client, table_client, config, _RESOURCES_PATH,
         _MONITORINGPREP_FILE, _CONFIGURABLE_MONITORING_FILES)
 
 
-def action_monitor_add(table_client, config, poolid):
-    # type: (azure.cosmosdb.table.TableService, dict, List[str]) -> None
+def action_monitor_add(table_client, config, poolid, fscluster):
+    # type: (azure.cosmosdb.table.TableService, dict, List[str],
+    #        List[str]) -> None
     """Action: Monitor Add
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param list poolid: list of pool ids to monitor
+    :param list fscluster: list of fs clusters to monitor
     """
+    if util.is_none_or_empty(poolid) and util.is_none_or_empty(fscluster):
+        logger.error('no resources specified')
+        return
     # ensure that we are operating in AAD mode for batch
     if util.is_not_empty(poolid):
         bc = settings.credentials_batch(config)
         _check_for_batch_aad(bc, 'add pool monitors')
-    storage.add_resources_to_monitor(table_client, config, poolid)
+    fsmap = None
+    if util.is_not_empty(fscluster):
+        fsmap = {}
+        for sc_id in fscluster:
+            rfs = settings.remotefs_settings(config, sc_id)
+            sc = rfs.storage_cluster
+            vms = []
+            if sc.file_server.type == 'nfs':
+                vm_name = settings.generate_virtual_machine_name(sc, 0)
+                vms.append(vm_name)
+            elif sc.file_server.type == 'glusterfs':
+                for i in range(sc.vm_count):
+                    vm_name = settings.generate_virtual_machine_name(sc, i)
+                    vms.append(vm_name)
+            fsmap[sc_id] = {
+                'type': sc.file_server.type,
+                'rg': sc.resource_group,
+                'ne_port': sc.prometheus.ne_port,
+                'as': settings.generate_availability_set_name(sc),
+                'vms': vms,
+            }
+    storage.add_resources_to_monitor(table_client, config, poolid, fsmap)
 
 
-def action_monitor_remove(table_client, config, all, poolid):
-    # type: (azure.cosmosdb.table.TableService, dict, bool, List[str]) -> None
+def action_monitor_list(table_client, config):
+    # type: (azure.cosmosdb.table.TableService, dict) -> None
+    """Action: Monitor List
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    """
+    storage.list_monitored_resources(table_client, config)
+
+
+def action_monitor_remove(table_client, config, all, poolid, fscluster):
+    # type: (azure.cosmosdb.table.TableService, dict, bool, List[str],
+    #        List[str]) -> None
     """Action: Monitor Remove
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool all: all resource monitors
     :param list poolid: list of pool ids to remove from monitoring
+    :param list fscluster: list of fs clusters to monitor
     """
     # ensure that we are operating in AAD mode for batch
     if not all and util.is_not_empty(poolid):
         bc = settings.credentials_batch(config)
         _check_for_batch_aad(bc, 'remove pool monitors')
-    storage.remove_resources_from_monitoring(table_client, config, all, poolid)
+    storage.remove_resources_from_monitoring(
+        table_client, config, all, poolid, fscluster)
 
 
 def action_monitor_ssh(
@@ -4151,7 +4224,7 @@ def action_monitor_ssh(
     """
     _check_compute_client(compute_client)
     _check_network_client(network_client)
-    heimdall.ssh_monitoring_resource(
+    picket.ssh_monitoring_resource(
         compute_client, network_client, config, tty, command)
 
 
@@ -4187,7 +4260,7 @@ def action_monitor_destroy(
             (delete_all_resources or delete_virtual_network)):
         raise ValueError(
             'Cannot specify generate_from_prefix and a delete_* option')
-    heimdall.delete_monitoring_resource(
+    picket.delete_monitoring_resource(
         resource_client, compute_client, network_client, blob_client,
         table_client, config, delete_virtual_network=delete_virtual_network,
         delete_resource_group=delete_all_resources,

@@ -137,7 +137,7 @@ def create_managed_disks(resource_client, compute_client, config, wait=True):
     # may not get acknowledged...
     if wait:
         if len(async_ops) > 0:
-            logger.debug('waiting for all {} disks to be created'.format(
+            logger.debug('waiting for all {} disks to provision'.format(
                 len(async_ops)))
         for disk_name in async_ops:
             disk = async_ops[disk_name].result()
@@ -363,10 +363,17 @@ def _create_virtual_machine_extension(
     else:
         smb = None
     # construct bootstrap command
-    cmd = './{bsf} {c}{d}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
+    if rfs.storage_cluster.prometheus.ne_enabled:
+        promopt = ' -e \'{},{}\''.format(
+            rfs.storage_cluster.prometheus.ne_port,
+            ','.join(rfs.storage_cluster.prometheus.ne_options))
+    else:
+        promopt = ''
+    cmd = './{bsf} {c}{d}{e}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
         bsf=bootstrap_file,
         c=' -c \'{}\''.format(smb) if util.is_not_empty(smb) else '',
         d=' -d {}'.format(rfs.storage_cluster.hostname_prefix),
+        e=promopt,
         f=' -f {}'.format(rfs.storage_cluster.vm_disk_map[offset].filesystem),
         i=' -i {}'.format(
             ','.join(private_ips)) if util.is_not_empty(private_ips) else '',
@@ -563,7 +570,7 @@ def create_storage_cluster(
             async_ops['pips'][i] = resource.AsyncOperation(functools.partial(
                 resource.create_public_ip, network_client,
                 rfs.storage_cluster, i))
-        logger.debug('waiting for public ips to be created')
+        logger.debug('waiting for public ips to provision')
         pips = {}
         for offset in async_ops['pips']:
             pip = async_ops['pips'][offset].result()
@@ -577,7 +584,7 @@ def create_storage_cluster(
         logger.info('public ip is disabled for storage cluster: {}'.format(
             sc_id))
     # get nsg
-    logger.debug('waiting for network security group to be created')
+    logger.debug('waiting for network security group to provision')
     nsg = async_ops['nsg'].result()
     # create nics
     async_ops['nics'] = {}
@@ -588,7 +595,7 @@ def create_storage_cluster(
     # create availability set if vm_count > 1, this call is not async
     availset = _create_availability_set(compute_client, rfs)
     # wait for nics to be created
-    logger.debug('waiting for network interfaces to be created')
+    logger.debug('waiting for network interfaces to provision')
     nics = {}
     for offset in async_ops['nics']:
         nic = async_ops['nics'][offset].result()
@@ -628,7 +635,7 @@ def create_storage_cluster(
             rfs.storage_cluster, availset, nics, disk_map, ssh_pub_key, i))
     # wait for vms to be created
     logger.info(
-        'waiting for {} virtual machines to be created'.format(
+        'waiting for {} virtual machines to provision'.format(
             len(async_ops['vms'])))
     vms = {}
     for offset in async_ops['vms']:
@@ -646,7 +653,7 @@ def create_storage_cluster(
                 private_ips, i, settings.verbose(config)),
             max_retries=0,
         )
-    logger.debug('waiting for virtual machine extensions to be created')
+    logger.debug('waiting for virtual machine extensions to provision')
     for offset in async_ops['vmext']:
         # get ip info for vm
         if util.is_none_or_empty(pips):
@@ -819,7 +826,7 @@ def resize_storage_cluster(
     # wait for public ips
     pips = None
     if 'pips' in async_ops:
-        logger.debug('waiting for public ips to be created')
+        logger.debug('waiting for public ips to provision')
         pips = {}
         for offset in async_ops['pips']:
             pip = async_ops['pips'][offset].result()
@@ -843,7 +850,7 @@ def resize_storage_cluster(
             rfs.storage_cluster),
     )
     # wait for nics to be created
-    logger.debug('waiting for network interfaces to be created')
+    logger.debug('waiting for network interfaces to provision')
     for offset in async_ops['nics']:
         nic = async_ops['nics'][offset].result()
         logger.info(
@@ -894,7 +901,7 @@ def resize_storage_cluster(
         logger.debug('new private ips: {}'.format(new_private_ips))
     # wait for vms to be created
     logger.info(
-        'waiting for {} virtual machines to be created'.format(
+        'waiting for {} virtual machines to provision'.format(
             len(async_ops['vms'])))
     vm_hostnames = []
     vms = {}
@@ -960,7 +967,7 @@ def resize_storage_cluster(
     del stdout
     del stderr
     # wait for new vms to finish custom script extension processing
-    logger.debug('waiting for virtual machine extensions to be created')
+    logger.debug('waiting for virtual machine extensions to provision')
     for offset in async_ops['vmext']:
         # get ip info for vm
         if util.is_none_or_empty(pips):
