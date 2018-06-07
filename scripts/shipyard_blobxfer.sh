@@ -50,8 +50,9 @@ for spec in "$@"; do
     fi
 
     # execute blobxfer
+    # shellcheck disable=SC2086
     docker run --rm -t -v "$wd":"$wd" -w "$wd" alfpark/blobxfer:"$bxver" \
         "$action" --storage-account "$sa" --sas "$saskey" --endpoint "$ep" \
         --remote-path "$remote_path" --local-path "$local_path" \
-        --no-progress-bar "$eo"
+        --no-progress-bar ${eo}
 done
