@@ -9,7 +9,7 @@ shift
 USER_MOUNTPOINT=/mnt/resource
 
 # install LIS
-curl -fSsL http://download.microsoft.com/download/6/8/F/68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.3-5.tar.gz | tar -zxvpf -
+curl -fSsL https://aka.ms/lis | tar -zxvpf -
 cd LISISO
 ./install.sh
 cd ..
@@ -46,7 +46,7 @@ alias nouveau off
 alias lbm-nouveau off
 EOF
     kernel_devel_package="kernel-devel-$(uname -r)"
-    curl -fSsLO http://vault.centos.org/7.3.1611/updates/x86_64/Packages/${kernel_devel_package}.rpm
+    curl -fSsLO http://vault.centos.org/7.4.1708/updates/x86_64/Packages/${kernel_devel_package}.rpm
     rpm -Uvh ${kernel_devel_package}.rpm
     yum install -y gcc binutils make
     # install driver

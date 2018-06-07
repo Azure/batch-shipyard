@@ -107,10 +107,10 @@ _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
-        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.4-2.tar.gz'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5.tar.gz'
     ),
     'sha256': (
-        'cf9d6a850af4441abb7de6996b60a03b5141191d27cfebdd0330131b9b102e0f'
+        '90d802ef27bf1977444d60b2473bd0c3cb9188735a2bceaa6d8c955f60811d40'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
@@ -882,10 +882,11 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # TODO special exception for CentOS HPC 7.1 and normal 7.3
+    # TODO special exception for CentOS HPC 7.1, 7.3 and normal 7.3, 7.4
     if publisher == 'openlogic':
-        if ((offer == 'centos-hpc' and sku == '7.1') or
-                (offer == 'centos' and sku == '7.3')):
+        if ((offer == 'centos-hpc' and
+                (sku == '7.1' or sku == '7.3')) or
+                (offer == 'centos' and (sku == '7.3' or sku == '7.4'))):
             return ({
                 'publisher': publisher,
                 'offer': offer,

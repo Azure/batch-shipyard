@@ -1,16 +1,14 @@
 {
   "variables": {
+    "image_name": "",
     "resource_group": "",
-    "storage_account": "",
-    "container_name": "",
-    "vhd_prefix": "",
     "location": "",
     "subscription_id": "",
     "directory_id": "",
     "application_id": "",
     "auth_key": "",
     "docker_version": "18.03.1.ce-1.el7.centos",
-    "nvdriver": "NVIDIA-Linux-x86_64-384.111.run",
+    "nvdriver": "NVIDIA-Linux-x86_64-396.26.run",
     "bootstrap": "bootstrap.sh"
   },
   "builders": [
@@ -22,15 +20,13 @@
           "client_id": "{{user `application_id`}}",
           "client_secret": "{{user `auth_key`}}",
 
-          "resource_group_name": "{{user `resource_group`}}",
-          "storage_account": "{{user `storage_account`}}",
-          "capture_container_name": "{{user `container_name`}}",
-          "capture_name_prefix": "{{user `vhd_prefix`}}",
+          "managed_image_name": "{{user `image_name`}}",
+          "managed_image_resource_group_name": "{{user `resource_group`}}",
 
           "os_type": "Linux",
           "image_publisher": "OpenLogic",
           "image_offer": "CentOS",
-          "image_sku": "7.3",
+          "image_sku": "7.4",
 
           "location": "{{user `location`}}",
           "vm_size": "STANDARD_NC6"

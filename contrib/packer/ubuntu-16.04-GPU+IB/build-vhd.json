@@ -10,7 +10,7 @@
     "application_id": "",
     "auth_key": "",
     "docker_version": "18.03.1~ce-0~ubuntu",
-    "nvdriver": "NVIDIA-Linux-x86_64-384.111.run",
+    "nvdriver": "NVIDIA-Linux-x86_64-396.26.run",
     "intel_mpi_rt": "l_mpi-rt_2017.3.196.tgz",
     "bootstrap": "bootstrap.sh"
   },

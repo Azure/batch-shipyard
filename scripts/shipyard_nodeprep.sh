@@ -504,7 +504,7 @@ install_nvidia_software() {
     set -e
     # purge nouveau off system
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
-        apt-get --purge remove xserver-xorg-video-nouveau xserver-xorg-video-nouveau-hwe-16.04
+        apt-get --purge remove xserver-xorg-video-nouveau "xserver-xorg-video-nouveau-hwe-${DISTRIB_RELEASE}"
     elif [[ $DISTRIB_ID == centos* ]]; then
         yum erase -y xorg-x11-drv-nouveau
     else
@@ -535,21 +535,23 @@ EOF
         install_packages build-essential
     elif [[ $DISTRIB_ID == centos* ]]; then
         local kernel_devel_package
-        local centos_ver
         kernel_devel_package="kernel-devel-$(uname -r)"
-        centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
-        if [[ "$centos_ver" == 7.3.* ]]; then
-            download_file http://vault.centos.org/7.3.1611/updates/x86_64/Packages/"${kernel_devel_package}".rpm
-            install_local_packages "${kernel_devel_package}".rpm
-        elif [[ "$centos_ver" == 7.4.* ]]; then
-            download_file http://mirror.centos.org/centos/7.4.1708/updates/x86_64/Packages/"${kernel_devel_package}".rpm
-            install_local_packages "${kernel_devel_package}".rpm
-        elif [[ $DISTRIB_ID == "centos-hpc" ]] || [[ "$centos_ver" == 7.* ]]; then
-            install_packages "${kernel_devel_package}"
-        else
-            log ERROR "CentOS $DISTRIB_RELEASE not supported for GPU"
-            exit 1
+        set +e
+        if ! yum list installed "${kernel_devel_package}"; then
+            set -e
+            local centos_ver
+            centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
+            if [ -e /dev/infiniband/uverbs0 ]; then
+                # HPC distros have pinned repos
+                install_packages "${kernel_devel_package}"
+            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]]; then
+                download_file http://vault.centos.org/"${centos_ver}"/updates/x86_64/Packages/"${kernel_devel_package}".rpm
+                install_local_packages "${kernel_devel_package}".rpm
+            else
+                install_packages "${kernel_devel_package}"
+            fi
         fi
+        set -e
         install_packages gcc binutils make
     fi
     # get additional dependency if NV-series VMs
@@ -572,10 +574,10 @@ EOF
     # install nvidia-docker
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         add_repo https://nvidia.github.io/nvidia-docker/gpgkey
-        curl -fSsL https://nvidia.github.io/nvidia-docker/ubuntu16.04/amd64/nvidia-docker.list | \
+        curl -fSsL "https://nvidia.github.io/nvidia-docker/ubuntu${DISTRIB_RELEASE}/amd64/nvidia-docker.list" | \
             tee /etc/apt/sources.list.d/nvidia-docker.list
     elif [[ $DISTRIB_ID == centos* ]]; then
-        add_repo https://nvidia.github.io/nvidia-docker/centos7/x86_64/nvidia-docker.repo
+        add_repo "https://nvidia.github.io/nvidia-docker/centos${DISTRIB_RELEASE}/x86_64/nvidia-docker.repo"
     fi
     refresh_package_index
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
