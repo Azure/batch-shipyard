@@ -1023,13 +1023,17 @@ def prometheus_settings(config):
     conf = _kv_read_checked(config, 'prometheus', default={})
     ne_conf = _kv_read_checked(conf, 'node_exporter', default={})
     ca_conf = _kv_read_checked(conf, 'cadvisor', default={})
+    ca_options = _kv_read_checked(ca_conf, 'options')
+    # do not allow docker_only, which interferes with metric gathering
+    if util.is_not_empty(ca_options) and '-docker_only' in ca_options:
+        ca_options.remove('-docker_only')
     return PrometheusSettings(
         ne_enabled=_kv_read(ne_conf, 'enabled', default=False),
         ne_port=_kv_read(ne_conf, 'port', default=9100),
         ne_options=_kv_read_checked(ne_conf, 'options'),
         ca_enabled=_kv_read(ca_conf, 'enabled', default=False),
         ca_port=_kv_read(ca_conf, 'port', default=8080),
-        ca_options=_kv_read_checked(ca_conf, 'options'),
+        ca_options=ca_options,
     )
 
 

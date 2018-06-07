@@ -110,5 +110,4 @@ pool_specification:
     cadvisor:
       enabled: false
       port: 8080
-      options:
-      - -docker_only
+      options: []
