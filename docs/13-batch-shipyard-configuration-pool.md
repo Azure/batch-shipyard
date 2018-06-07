@@ -29,19 +29,29 @@ pool_specification:
   resize_timeout: 00:20:00
   node_fill_type: pack
   autoscale:
-    evaluation_interval: 00:05:00
+    evaluation_interval: 00:15:00
     scenario:
       name: active_tasks
       maximum_vm_count:
         dedicated: 16
         low_priority: 8
+      maximum_vm_increment_per_evaluation:
+        dedicated: 4
+        low_priority: -1
       node_deallocation_option: taskcompletion
       sample_lookback_interval: 00:10:00
       required_sample_percentage: 70
       bias_last_sample: true
       bias_node_type: low_priority
       rebalance_preemption_percentage: 50
-    formula: ''
+      time_ranges:
+        weekdays:
+          start: 1
+          end: 5
+        work_hours:
+          start: 8
+          end: 17
+    formula: null
   inter_node_communication_enabled: true
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false
@@ -217,7 +227,9 @@ each node type for `scenario` based autoscale.
       timedelta with a string representation of "d.HH:mm:ss". "HH:mm:ss" is
       required, but "d" is optional, if specified. If not specified, the
       default is 15 minutes. The smallest value that can be specified is 5
-      minutes.
+      minutes. Use caution when specifying a small `evaluation_interval`
+      values which can cause pool resizing errors and instability with
+      volatile target counts.
     * (optional) `scenario` is a pre-set autoscale scenario where a formula
       will be generated with the parameters specified within this property.
         * (required) `name` is the autoscale scenario name to apply. Valid
@@ -234,6 +246,14 @@ each node type for `scenario` based autoscale.
               nodes that can be allocated.
             * (optional) `low_priority` is the maximum number of low priority
               compute nodes that can be allocated.
+        * (optional) `maximum_vm_increment_per_evaluation` is the maximum
+          amount of VMs to increase per evaluation. Specifying a non-positive
+          value (i.e., less than or equal to `0`) for either of the following
+          properties will result in effectively no increment limit.
+            * (optional) `dedicated` is the maximum increase in VMs per
+              evaluation.
+            * (optional) `low_priority` is the maximum increase in VMs per
+              evaluation.
         * (optional) `node_deallocation_option` is the node deallocation option
           to apply. When a pool is resized down and a node is selected for
           removal, what action is performed for the running task is specified
@@ -264,6 +284,20 @@ each node type for `scenario` based autoscale.
           count reaches the indicated threshold percentage of the total
           current dedicated and low priority nodes. The default is `null`
           or no rebalancing is performed.
+        * (optional) `time_ranges` defines the time ranges for the day-of-week
+          based scenarios.
+            * (optional) `weekdays` defines the days of the week which should
+              be considered weekdays, where `1` = Monday.
+                * (optional) `start` defines the inclusive start weekday day
+                  of the week as an integer. The default is `1`.
+                * (optional) `end` defines the inclusive end weekday day
+                  of the week as an integer. The default is `5`.
+            * (optional) `work_hours` defines the hours of the day in the
+              work day with a range from `0` to `23`, inclusive.
+                * (optional) `start` defines the inclusive start hour of
+                  the work day as an integer. The default is `8`.
+                * (optional) `end` defines the inclusive end hour of
+                  the work day as an integer. The default is `17`.
     * (optional) `formula` is a custom autoscale formula to apply to the pool.
       If both `formula` and `scenario` are specified, then `formula` is used.
 * (optional) `inter_node_communication_enabled` designates if this pool is set

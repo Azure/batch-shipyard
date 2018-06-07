@@ -44,6 +44,12 @@ AutoscaleMinMax = collections.namedtuple(
         'min_target_low_priority',
         'max_target_dedicated',
         'max_target_low_priority',
+        'max_inc_dedicated',
+        'max_inc_low_priority',
+        'weekday_start',
+        'weekday_end',
+        'workhour_start',
+        'workhour_end',
     ]
 )
 
@@ -142,19 +148,28 @@ def _formula_tasks(pool):
             'redistVMs = rebalance ? min(preemptcount, remainingVMs) : 0',
             'dedicatedVMs = min(maxTargetDedicated, '
             'dedicatedVMs + redistVMs + minTargetDedicated)',
+            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
+            'dedicatedVMs)',
             'remainingVMs = max(0, reqVMs - dedicatedVMs)',
             'lowPriVMs = min(maxTargetLowPriority, '
             'remainingVMs + minTargetLowPriority)',
+            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
+            'lowPriVMs)',
             '$TargetDedicatedNodes = dedicatedVMs',
             '$TargetLowPriorityNodes = lowPriVMs',
         ]
     elif pool.autoscale.scenario.bias_node_type == 'dedicated':
         target_vms = [
             'dedicatedVMs = min(maxTargetDedicated, reqVMs)',
+            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
+            'dedicatedVMs)',
             'remainingVMs = max(0, reqVMs - dedicatedVMs)',
-            '$TargetDedicatedNodes = dedicatedVMs',
-            '$TargetLowPriorityNodes = min(maxTargetLowPriority, '
+            'lowPriVMs = min(maxTargetLowPriority, '
             'remainingVMs + minTargetLowPriority)',
+            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
+            'lowPriVMs)',
+            '$TargetDedicatedNodes = dedicatedVMs',
+            '$TargetLowPriorityNodes = lowPriVMs',
         ]
     elif pool.autoscale.scenario.bias_node_type == 'low_priority':
         target_vms = [
@@ -163,10 +178,15 @@ def _formula_tasks(pool):
             'redistVMs = rebalance ? min(preemptcount, remainingVMs) : 0',
             'lowPriVMs = max(minTargetLowPriority, '
             'reqVMs - redistVMs + minTargetLowPriority)',
+            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
+            'lowPriVMs)',
             'remainingVMs = max(0, reqVMs - lowPriVMs)',
-            '$TargetLowPriorityNodes = lowPriVMs',
-            '$TargetDedicatedNodes = min(maxTargetDedicated, '
+            'dedicatedVMs = min(maxTargetDedicated, '
             'remainingVMs + minTargetDedicated)',
+            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
+            'dedicatedVMs)',
+            '$TargetLowPriorityNodes = lowPriVMs',
+            '$TargetDedicatedNodes = dedicatedVMs',
         ]
     else:
         raise ValueError(
@@ -179,6 +199,8 @@ def _formula_tasks(pool):
         'minTargetLowPriority = {}'.format(minmax.min_target_low_priority),
         'maxTargetDedicated = {}'.format(minmax.max_target_dedicated),
         'maxTargetLowPriority = {}'.format(minmax.max_target_low_priority),
+        'maxIncDedicated = {}'.format(minmax.max_inc_dedicated),
+        'maxIncLowPriority = {}'.format(minmax.max_inc_low_priority),
         req_vms,
         target_vms,
         '$NodeDeallocationOption = {}'.format(
@@ -198,16 +220,20 @@ def _formula_day_of_week(pool):
     if pool.autoscale.scenario.name == 'workday':
         target_vms = [
             'now = time()',
-            'isWorkHours = now.hour >= 8 && now.hour < 18',
-            'isWeekday = now.weekday >= 1 && now.weekday <= 5',
+            'isWorkHours = now.hour >= workhourStart && '
+            'now.hour <= workhourEnd',
+            'isWeekday = now.weekday >= weekdayStart && '
+            'now.weekday <= weekdayEnd',
             'isPeakTime = isWeekday && isWorkHours',
         ]
     elif (pool.autoscale.scenario.name ==
           'workday_with_offpeak_max_low_priority'):
         target_vms = [
             'now = time()',
-            'isWorkHours = now.hour >= 8 && now.hour < 18',
-            'isWeekday = now.weekday >= 1 && now.weekday <= 5',
+            'isWorkHours = now.hour >= workhourStart && '
+            'now.hour <= workhourEnd',
+            'isWeekday = now.weekday >= weekdayStart && '
+            'now.weekday <= weekdayEnd',
             'isPeakTime = isWeekday && isWorkHours',
             '$TargetLowPriorityNodes = maxTargetLowPriority',
         ]
@@ -220,12 +246,14 @@ def _formula_day_of_week(pool):
     elif pool.autoscale.scenario.name == 'weekday':
         target_vms = [
             'now = time()',
-            'isPeakTime = now.weekday >= 1 && now.weekday <= 5',
+            'isPeakTime = now.weekday >= weekdayStart && '
+            'now.weekday <= weekdayEnd',
         ]
     elif pool.autoscale.scenario.name == 'weekend':
         target_vms = [
             'now = time()',
-            'isPeakTime = now.weekday >= 6 && now.weekday <= 7',
+            'isPeakTime = now.weekday < weekdayStart && '
+            'now.weekday > weekdayEnd',
         ]
     else:
         raise ValueError('autoscale scenario name invalid: {}'.format(
@@ -259,6 +287,10 @@ def _formula_day_of_week(pool):
         'minTargetLowPriority = {}'.format(minmax.min_target_low_priority),
         'maxTargetDedicated = {}'.format(minmax.max_target_dedicated),
         'maxTargetLowPriority = {}'.format(minmax.max_target_low_priority),
+        'weekdayStart = {}'.format(minmax.weekday_start),
+        'weekdayEnd = {}'.format(minmax.weekday_end),
+        'workhourStart = {}'.format(minmax.workhour_start),
+        'workhourEnd = {}'.format(minmax.workhour_end),
         target_vms,
         '$NodeDeallocationOption = {}'.format(
             pool.autoscale.scenario.node_deallocation_option),
@@ -291,12 +323,29 @@ def _get_minmax(pool):
         raise ValueError(
             'min target low priority {} > max target low priority {}'.format(
                 min_target_low_priority, max_target_low_priority))
+    max_inc_dedicated = (
+        pool.autoscale.scenario.maximum_vm_increment_per_evaluation.dedicated
+    )
+    max_inc_low_priority = (
+        pool.autoscale.scenario.
+        maximum_vm_increment_per_evaluation.low_priority
+    )
+    if max_inc_dedicated <= 0:
+        max_inc_dedicated = _UNBOUND_MAX_NODES
+    if max_inc_low_priority <= 0:
+        max_inc_low_priority = _UNBOUND_MAX_NODES
     return AutoscaleMinMax(
         max_tasks_per_node=pool.max_tasks_per_node,
         min_target_dedicated=min_target_dedicated,
         min_target_low_priority=min_target_low_priority,
         max_target_dedicated=max_target_dedicated,
         max_target_low_priority=max_target_low_priority,
+        max_inc_dedicated=max_inc_dedicated,
+        max_inc_low_priority=max_inc_low_priority,
+        weekday_start=pool.autoscale.scenario.weekday_start,
+        weekday_end=pool.autoscale.scenario.weekday_end,
+        workhour_start=pool.autoscale.scenario.workhour_start,
+        workhour_end=pool.autoscale.scenario.workhour_end,
     )
 
 

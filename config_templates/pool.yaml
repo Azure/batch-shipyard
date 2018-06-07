@@ -21,19 +21,29 @@ pool_specification:
   resize_timeout: 00:20:00
   node_fill_type: pack
   autoscale:
-    evaluation_interval: 00:05:00
+    evaluation_interval: 00:15:00
     scenario:
       name: active_tasks
       maximum_vm_count:
         dedicated: 16
         low_priority: 8
+      maximum_vm_increment_per_evaluation:
+        dedicated: 4
+        low_priority: -1
       node_deallocation_option: taskcompletion
       sample_lookback_interval: 00:10:00
       required_sample_percentage: 70
       bias_last_sample: true
       bias_node_type: low_priority
       rebalance_preemption_percentage: 50
-    formula: ''
+      time_ranges:
+        weekdays:
+          start: 1
+          end: 5
+        work_hours:
+          start: 8
+          end: 17
+    formula: null
   inter_node_communication_enabled: true
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false

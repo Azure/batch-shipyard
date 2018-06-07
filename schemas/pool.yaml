@@ -81,17 +81,21 @@ mapping:
               name:
                 type: str
                 required: true
+                enum: ['active_tasks', 'pending_tasks', 'workday', 'workday_with_offpeak_max_low_priority', 'weekday', 'weekend']
               maximum_vm_count:
                 type: map
                 mapping:
                   dedicated:
                     type: int
-                    range:
-                      min: 0
                   low_priority:
                     type: int
-                    range:
-                      min: 0
+              maximum_vm_increment_per_evaluation:
+                type: map
+                mapping:
+                  dedicated:
+                    type: int
+                  low_priority:
+                    type: int
               node_deallocation_option:
                 type: str
                 enum: ['requeue', 'retaineddata', 'taskcompletion', 'terminate']
@@ -112,6 +116,39 @@ mapping:
                 range:
                   min: 0
                   max: 100
+              time_ranges:
+                type: map
+                mapping:
+                  weekdays:
+                    type: map
+                    mapping:
+                      start:
+                        type: int
+                        required: true
+                        range:
+                          min: 0
+                          max: 6
+                      end:
+                        type: int
+                        required: true
+                        range:
+                          min: 0
+                          max: 6
+                  work_hours:
+                    type: map
+                    mapping:
+                      start:
+                        type: int
+                        required: true
+                        range:
+                          min: 0
+                          max: 23
+                      end:
+                        type: int
+                        required: true
+                        range:
+                          min: 0
+                          max: 23
           formula:
             type: str
       inter_node_communication_enabled:

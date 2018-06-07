@@ -153,12 +153,17 @@ PoolAutoscaleScenarioSettings = collections.namedtuple(
     'PoolAutoscaleScenarioSettings', [
         'name',
         'maximum_vm_count',
+        'maximum_vm_increment_per_evaluation',
         'node_deallocation_option',
         'sample_lookback_interval',
         'required_sample_percentage',
         'rebalance_preemption_percentage',
         'bias_last_sample',
         'bias_node_type',
+        'weekday_start',
+        'weekday_end',
+        'workhour_start',
+        'workhour_end',
     ]
 )
 PoolAutoscaleSettings = collections.namedtuple(
@@ -965,6 +970,8 @@ def pool_autoscale_settings(config):
         mvc = _kv_read_checked(scenconf, 'maximum_vm_count')
         if mvc is None:
             raise ValueError('maximum_vm_count must be specified')
+        mvipe = _kv_read_checked(
+            scenconf, 'maximum_vm_increment_per_evaluation', default={})
         ndo = _kv_read_checked(
             scenconf, 'node_deallocation_option', 'taskcompletion')
         if (ndo is not None and
@@ -977,9 +984,14 @@ def pool_autoscale_settings(config):
             sli = util.convert_string_to_timedelta(sli)
         else:
             sli = datetime.timedelta(minutes=10)
+        tr = _kv_read_checked(scenconf, 'time_ranges', default={})
+        trweekday = _kv_read_checked(tr, 'weekdays', default={})
+        trworkhour = _kv_read_checked(tr, 'work_hours', default={})
         scenario = PoolAutoscaleScenarioSettings(
             name=_kv_read_checked(scenconf, 'name').lower(),
             maximum_vm_count=_pool_vm_count(config, conf=mvc),
+            maximum_vm_increment_per_evaluation=_pool_vm_count(
+                config, conf=mvipe),
             node_deallocation_option=ndo,
             sample_lookback_interval=sli,
             required_sample_percentage=_kv_read(
@@ -990,6 +1002,10 @@ def pool_autoscale_settings(config):
                 scenconf, 'bias_last_sample', True),
             bias_node_type=_kv_read_checked(
                 scenconf, 'bias_node_type', 'auto').lower(),
+            weekday_start=_kv_read(trweekday, 'start', default=1),
+            weekday_end=_kv_read(trweekday, 'end', default=5),
+            workhour_start=_kv_read(trworkhour, 'start', default=8),
+            workhour_end=_kv_read(trworkhour, 'end', default=17),
         )
     else:
         scenario = None

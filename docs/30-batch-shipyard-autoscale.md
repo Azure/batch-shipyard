@@ -47,10 +47,9 @@ words, "tasks with satisified dependencies awaiting node assignment".
 pending tasks for the pool. Tasks categorized under this metric are
 tasks in active state with satisifed dependencies and running
 tasks, in other words, "tasks pending completion".
-* `workday` will autoscale the pool according to Monday-Friday workdays.
+* `workday` will autoscale the pool according to the workdays specified.
 * `workday_with_offpeak_max_low_priority` will autoscale the pool according
-to Monday-Friday workdays and for off work time, use maximum number of
-low priority nodes.
+to workdays and for off work time, use maximum number of low priority nodes.
 * `weekday` will autoscale the pool if it is a weekday.
 * `weekend` will autoscale the pool if it is a weekend.
 
@@ -69,7 +68,9 @@ pool to resize down to zero nodes.
 Additionally, there are options that can modify and fine-tune these scenarios
 as needed:
 
-* `node_deallocation_option` which specify when a node is targeted for
+* `maximum_vm_increment_per_evaluation` sets limits on the maximum amount
+of dedicated or low priority VMs to increase after an evaluation.
+* `node_deallocation_option` which specifies when a node is targeted for
 deallocation but has a running task, what should be the action applied to
 the task: `requeue`, `terminate`, `taskcompletion`, and `retaineddata`.
 Please see [this doc](https://docs.microsoft.com/azure/batch/batch-automatic-scaling#variables)
@@ -93,11 +94,14 @@ favor either `dedicated` or `low_priority`. This applies to all scenarios.
 for dedicated nodes when the pre-empted node count reaches the indicated
 threshold percentage of the total current dedicated and low priority nodes.
 This applies only to `active_tasks` and `pending_tasks` scenarios.
+* `time_ranges` allows specification of which days of the week should be
+considered weekdays and which hours should be considered as part of working
+hours. These options only apply to the day-of-the-week based scenarios.
 
 An example autoscale specification in the pool configuration may be:
 ```yaml
   autoscale:
-    evaluation_interval: 00:05:00
+    evaluation_interval: 00:10:00
     scenario:
       name: active_tasks
       maximum_vm_count:
@@ -106,15 +110,16 @@ An example autoscale specification in the pool configuration may be:
 ```
 
 This example would apply the `active_tasks` scenario to the associated
-pool with an evaluation interval of every 5 minutes. This means that the
+pool with an evaluation interval of every 10  minutes. This means that the
 autoscale formula is evaluated by the service and can have updates applied
-every 5 minutes. Note that having a small evaluation interval may result
-in undesirable behavior of the pool being resized constantly (or even
-resize failures if the prior resize is still ongoing when the autoscale
-evaluation happens again and results in a different target node count).
-The `active_tasks` scenario also includes a `maximum_vm_count` to ensure that
-the autoscale formula does not result in target node counts that exceed
-16 dedicated and 8 low priority nodes.
+every 10  minutes. Note that having a small evaluation interval may result
+in undesirable behavior of the pool being resized constantly. This can result
+in pool stability issues including resize failures if the prior resize is
+still ongoing when the autoscale evaluation happens again and results in
+a different target node count. For this example, the `active_tasks` scenario
+also includes a `maximum_vm_count` to ensure that the autoscale formula
+does not result in target node counts that exceed 16 dedicated and 8 low
+priority nodes.
 
 ### Formula-based Autoscaling
 Formula-based autoscaling allows users with expertise in creating autoscale
