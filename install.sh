@@ -10,10 +10,10 @@ set -o pipefail
 PYTHON=python3
 PIP=pip3
 SUDO=sudo
-VENV_NAME=
+VENV_NAME=.shipyard
 
 # process options
-while getopts "h?23ce:" opt; do
+while getopts "h?23ce:u" opt; do
     case "$opt" in
         h|\?)
             echo "install.sh parameters"
@@ -22,6 +22,7 @@ while getopts "h?23ce:" opt; do
             echo "-3 install for Python 3.4+ [default]"
             echo "-c install for Cloud Shell (via Dockerfile)"
             echo "-e [environment name] install to a virtual environment"
+            echo "-u force install into user python environment instead of a virtual enviornment"
             echo ""
             exit 1
             ;;
@@ -41,6 +42,9 @@ while getopts "h?23ce:" opt; do
             ;;
         e)
             VENV_NAME=$OPTARG
+            ;;
+        u)
+            VENV_NAME=
             ;;
     esac
 done
@@ -116,6 +120,9 @@ if [ ! -z "$VENV_NAME" ]; then
             INSTALL_VENV_BIN=1
         fi
     fi
+    echo "Installing into virtualenv: $VENV_NAME"
+else
+    echo "Installing into user environment instead of virtualenv"
 fi
 
 # try to get /etc/lsb-release
@@ -248,7 +255,8 @@ if [ ! -z "$VENV_NAME" ]; then
             "${HOME}"/.local/bin/virtualenv -p $PYTHON "$VENV_NAME"
         fi
         source "${VENV_NAME}"/bin/activate
-        $PIP install --upgrade pip setuptools
+        $PYTHON -m pip install --upgrade pip
+        $PIP install --upgrade setuptools
         set +e
         $PIP uninstall -y azure-storage
         set -e
@@ -276,7 +284,7 @@ if [ ! -z "$VENV_NAME" ]; then
         source deactivate "$VENV_NAME"
     fi
 else
-    $SUDO $PIP install --upgrade pip
+    $PYTHON -m pip install --upgrade --user pip
     $PIP install --upgrade --user setuptools
     set +e
     $PIP uninstall -y azure-storage

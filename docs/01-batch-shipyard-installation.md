@@ -71,33 +71,33 @@ regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
 Please ensure that your target Python distribution is 2.7 or 3.4+. It is
-recommended to install Batch Shipyard on Python 3.5 or later. Although Python
-3.5+ is recommended, if you cannot easily install Python 3.5+ on
+recommended to install Batch Shipyard on Python 3.4 or later. Although Python
+3.4+ is recommended, if you cannot easily install Python 3.4+ on
 your system but Python 2.7 is available, then please use that version of
 Python to avoid installation hassles with a Python interpreter.
 
 The `install.sh` script supports isolated installation through a virtual
 environment so that other system-wide or user python dependencies are left
-unmodified. To perform this style of installation, which is recommended,
-specify the virtual environment to create with the `-e` parameter. This option
-also does not require modifying your shell rc file for advanced data movement
-capability provided by Batch Shipyard. Note that the default installation
-targets `python3`; you can use the `-2` argument to install for `python`
-(Python 2.7).
+unmodified. To perform this style of installation, which is recommended
+and the default, simply invoke the `install.sh` script without parameters.
+If you would like to specify the virtual environment to use, use the
+`-e` parameter. If you don't want to use a virtual environment and instead
+would like to install into your user environment, specify the `-u` option.
+Using this option will require modifying your shell rc file for advanced
+data movement capability provided by Batch Shipyard. Note that the default
+installation targets `python3`; you can use the `-2` argument to install
+for `python` (Python 2.7).
 
 The recommended installation method with a virtual environment:
 ```shell
-# Ensure you are not root
+# Ensure you are NOT root
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
-./install.sh -e shipyard.venv
-# Or install for Python 2.7 in the virtual environment "shipyard.venv"
-./install.sh -2 -e shipyard.venv
-# Or to install for Anaconda Python3 in the environment "shipyard.venv". Note
-# that for Anaconda installations, the -e parameter is required
-./install.sh -e shipyard.venv
+# Install for Python 3.4+ (recommended) in the virtual environment ".shipyard"
+./install.sh
+# Or install for Python 2.7 (not recommended) in the virtual environment ".shipyard"
+./install.sh -2
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -121,10 +121,10 @@ Alternatively, install directly into your "user" environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+ (recommended) in the virtual environment "shipyard"
-./install.sh
+# Install for Python 3.4+
+./install.sh -u
 # Or install for Python 2.7
-./install.sh -2
+./install.sh -2 -u
 # Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
@@ -186,10 +186,10 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+ (recommended) in the virtual environment "shipyard.venv"
-./install.sh -e shipyard.venv
-# Or to install for Python 2.7 in the virtual environment "shipyard.venv"
-./install.sh -2 -e shipyard.venv
+# Install for Python 3.4+ (recommended) in the virtual environment ".shipyard"
+./install.sh
+# Or to install for Python 2.7 in the virtual environment ".shipyard"
+./install.sh -2
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -222,7 +222,7 @@ found in your `%PATH%`. For example:
 ```shell
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install Batch Shipyard into the virtual environment named shipyard.venv
+# Install Batch Shipyard into the virtual environment named "shipyard.venv"
 install.cmd shipyard.venv
 ```
 
@@ -288,8 +288,8 @@ follows:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python3 in the virtual environment "shipyard.venv"
-./install.sh -e shipyard.venv
+# Install for Python3 in the virtual environment ".shipyard"
+./install.sh
 ```
 
 A helper script named `shipyard` will be generated with a successful

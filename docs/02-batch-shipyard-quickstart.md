@@ -1,9 +1,17 @@
 # Batch Shipyard Quickstart
+Choose your speed:
+
+1. [Notebooks](#notebooks)
+2. [Normal Quickstart](#normal)
+3. [Ludicrous Speed Quickstart](#ludicrous)
+
+## <a name="notebooks"></a>Notebooks
 If you are interested in executing Deep Learning workloads on Batch Shipyard
 and want to jump in without having to install anything, you can utilize the
 [Deep Learning Jupyter Notebooks](https://github.com/Azure/batch-shipyard/blob/master/contrib/notebooks/deep_learning)
 on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
 
+## <a name="normal"></a>Normal Quickstart
 If you would like to use Batch Shipyard from the command line, this quickstart
 doc will provide step-by-step instructions. Although Batch Shipyard
 supports various types of workloads, for the following quickstart example,
@@ -81,6 +89,42 @@ remove them with the following commands:
 # after you are done interacting with jobs/tasks/pool
 ../shipyard jobs del --wait
 ../shipyard pool del
+```
+
+## <a name="ludicrous"></a>Ludicrous Speed Quickstart
+Pre-jump checklist:
+
+* Fresh Linux machine with network access
+* `git` is installed
+* Comfortable with Linux commandline
+* Have an active Azure subscription
+* Understand how to use the Azure Portal
+
+Spin up FTL drives:
+
+1. [Create Batch account](https://portal.azure.com/#create/Microsoft.BatchAccount) if you do not have one
+2. [Retrieve the Batch account key and service URL](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Batch%2FbatchAccounts)
+3. [Create Storage account](https://portal.azure.com/#create/Microsoft.StorageAccount-ARM) if you do not have one
+4. [Retrieve the Storage account key](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Storage%2FStorageAccounts)
+
+Execute jump:
+```shell
+git clone https://github.com/Azure/batch-shipyard.git
+cd batch-shipyard
+./install.sh
+nano recipes/TensorFlow-CPU/config/credentials.yaml
+# edit required properties in file and save
+export SHIPYARD_CONFIGDIR=recipes/TensorFlow-CPU/config
+./shipyard pool add
+./shipyard jobs add --tail stdout.txt
+```
+
+Jump complete:
+```shell
+# clean up
+./shipyard jobs del -y --wait
+./shipyard pool del -y
+unset SHIPYARD_CONFIGDIR
 ```
 
 ## Step-by-step Tutorial
