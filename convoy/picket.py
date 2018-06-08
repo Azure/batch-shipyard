@@ -820,3 +820,73 @@ def ssh_monitoring_resource(
         compute_client, network_client, config)
     crypto.connect_or_exec_ssh_command(
         ip, port, ssh_priv_key, username, tty=tty, command=command)
+
+
+def suspend_monitoring_resource(compute_client, config, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Suspend a monitoring resource
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for suspension to complete
+    """
+    ms = settings.monitoring_settings(config)
+    vm_name = settings.generate_virtual_machine_name(ms, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=ms.resource_group,
+            vm_name=vm_name,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            logger.error('virtual machine {} not found'.format(vm_name))
+            return
+        else:
+            raise
+    if not util.confirm_action(
+            config, 'suspend monitoring resource {}'.format(vm.name)):
+        return
+    # deallocate vm
+    async_op = resource.AsyncOperation(functools.partial(
+        resource.deallocate_virtual_machine, compute_client,
+        ms.resource_group, vm.name), retry_conflict=True)
+    if wait:
+        logger.info('waiting for virtual machine {} to deallocate'.format(
+            vm.name))
+        async_op.result()
+        logger.info('virtual machine {} deallocated'.format(vm.name))
+
+
+def start_monitoring_resource(compute_client, config, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Starts a suspended monitoring resource
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for restart to complete
+    """
+    ms = settings.monitoring_settings(config)
+    vm_name = settings.generate_virtual_machine_name(ms, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=ms.resource_group,
+            vm_name=vm_name,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            logger.error('virtual machine {} not found'.format(vm_name))
+            return
+        else:
+            raise
+    if not util.confirm_action(
+            config, 'start suspended monitoring resource {}'.format(vm.name)):
+        return
+    # start vm
+    async_op = resource.AsyncOperation(functools.partial(
+        resource.start_virtual_machine, compute_client,
+        ms.resource_group, vm.name))
+    if wait:
+        logger.info('waiting for virtual machine {} to start'.format(
+            vm.name))
+        async_op.result()
+        logger.info('virtual machine {} started'.format(vm.name))

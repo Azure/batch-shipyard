@@ -2186,6 +2186,36 @@ def monitor_ssh(ctx, tty, command):
         ctx.compute_client, ctx.network_client, ctx.config, tty, command)
 
 
+@monitor.command('suspend')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for suspension to complete')
+@common_options
+@monitor_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def monitor_suspend(ctx, no_wait):
+    """Suspend a monitoring resource"""
+    ctx.initialize_for_monitor()
+    convoy.fleet.action_monitor_suspend(
+        ctx.compute_client, ctx.config, not no_wait)
+
+
+@monitor.command('start')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for restart to complete')
+@common_options
+@monitor_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def monitor_start(ctx, no_wait):
+    """Starts a previously suspended monitoring resource"""
+    ctx.initialize_for_monitor()
+    convoy.fleet.action_monitor_start(
+        ctx.compute_client, ctx.config, not no_wait)
+
+
 @monitor.command('destroy')
 @click.option(
     '--delete-resource-group', is_flag=True,

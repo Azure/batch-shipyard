@@ -4229,6 +4229,30 @@ def action_monitor_ssh(
         compute_client, network_client, config, tty, command)
 
 
+def action_monitor_suspend(compute_client, config, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Monitor Suspend
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for suspension to complete
+    """
+    _check_compute_client(compute_client)
+    picket.suspend_monitoring_resource(compute_client, config, wait)
+
+
+def action_monitor_start(compute_client, config, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool) -> None
+    """Action: Monitor Start
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool wait: wait for restart to complete
+    """
+    _check_compute_client(compute_client)
+    picket.start_monitoring_resource(compute_client, config, wait)
+
+
 def action_monitor_destroy(
         resource_client, compute_client, network_client, blob_client,
         table_client, config, delete_all_resources, delete_virtual_network,

@@ -1517,42 +1517,6 @@ def delete_storage_cluster(
             logger.info('{} managed data disks deleted'.format(count))
 
 
-def _deallocate_virtual_machine(compute_client, rg_name, vm_name):
-    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Deallocate a virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param str rg_name: resource group name
-    :param str vm_name: vm name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deallocating virtual machine {}'.format(vm_name))
-    return compute_client.virtual_machines.deallocate(
-        resource_group_name=rg_name,
-        vm_name=vm_name,
-    )
-
-
-def _start_virtual_machine(compute_client, rg_name, vm_name):
-    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Start a deallocated virtual machine
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param str rg_name: resource group name
-    :param str vm_name: vm name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('starting virtual machine {}'.format(vm_name))
-    return compute_client.virtual_machines.start(
-        resource_group_name=rg_name,
-        vm_name=vm_name,
-    )
-
-
 def suspend_storage_cluster(compute_client, config, sc_id, wait=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str,
     #        bool) -> None
@@ -1601,7 +1565,7 @@ def suspend_storage_cluster(compute_client, config, sc_id, wait=False):
     async_ops = {}
     for vm in vms:
         async_ops[vm.name] = resource.AsyncOperation(functools.partial(
-            _deallocate_virtual_machine, compute_client,
+            resource.deallocate_virtual_machine, compute_client,
             rfs.storage_cluster.resource_group, vm.name), retry_conflict=True)
     if wait:
         logger.info(
@@ -1653,7 +1617,7 @@ def start_storage_cluster(compute_client, config, sc_id, wait=False):
     async_ops = {}
     for vm in vms:
         async_ops[vm.name] = resource.AsyncOperation(functools.partial(
-            _start_virtual_machine, compute_client,
+            resource.start_virtual_machine, compute_client,
             rfs.storage_cluster.resource_group, vm.name))
     if wait:
         logger.info(
