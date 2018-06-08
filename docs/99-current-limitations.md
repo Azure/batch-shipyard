@@ -63,3 +63,7 @@ underlying VM and host drivers.
 * Adding tasks to the same job across multiple, concurrent Batch Shipyard
 invocations may result in failure if task ids for these jobs are
 auto-generated.
+
+### Monitoring Limitations
+* Only Linux Batch pools and RemoteFS clusters can be monitored. Windows
+Batch pools are not supported.

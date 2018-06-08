@@ -65,6 +65,13 @@ to fit the desired number of target dedicated and low priority compute nodes.
 Note that this calculation does not consider autoscale where the number of
 nodes can exceed the specified targets.
 
+### Forced Tunneling and User-Defined Routes
+If you are redirecting Internet-bound traffic from the subnet back to
+on-premises, then you may have to add
+[user-defined routes](https://docs.microsoft.com/azure/virtual-network/virtual-networks-udr-overview)
+to that subnet. Please follow the instructions at this
+[document](https://docs.microsoft.com/azure/batch/batch-virtual-network#user-defined-routes-for-forced-tunneling).
+
 ## Network Security
 Azure provides a resource called a Network Security Group that allows you
 to define security rules to restrict inbound and outbound network traffic

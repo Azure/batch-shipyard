@@ -94,8 +94,8 @@ remove them with the following commands:
 ## <a name="ludicrous"></a>Ludicrous Speed Quickstart
 Pre-jump checklist:
 
-* Fresh Linux machine with network access
-* `git` is installed
+* Linux, Mac or WSL machine with network access
+* `git` and Python3 is installed
 * Comfortable with Linux commandline
 * Have an active Azure subscription
 * Understand how to use the Azure Portal
@@ -112,9 +112,9 @@ Execute jump:
 git clone https://github.com/Azure/batch-shipyard.git
 cd batch-shipyard
 ./install.sh
-nano recipes/TensorFlow-CPU/config/credentials.yaml
-# edit required properties in file and save
 export SHIPYARD_CONFIGDIR=recipes/TensorFlow-CPU/config
+nano $SHIPYARD_CONFIGDIR/credentials.yaml
+# edit required properties in file and save
 ./shipyard pool add
 ./shipyard jobs add --tail stdout.txt
 ```

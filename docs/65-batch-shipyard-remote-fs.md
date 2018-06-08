@@ -69,7 +69,7 @@ fault domains of the GlusterFS servers
 * Automatic volume mounting of remote filesystems into a Docker container
 executed through Batch Shipyard
 
-## Overview and Mental Model
+## Mental Model
 A Batch Shipyard provisioned remote filesystem is built on top of different
 resources in Azure. These resources are from networking, storage and
 compute. To more readily explain the concepts that form a Batch Shipyard
@@ -173,10 +173,6 @@ Please see [this page](15-batch-shipyard-configuration-fs.md) for a full
 explanation of each remote filesystem and storage cluster configuration
 option. Please see [this page](20-batch-shipyard-usage.md) for documentation
 on `fs` command usage.
-
-You can find information regarding User Subscription Batch accounts and how
-to create them at this
-[blog post](https://docs.microsoft.com/azure/batch/batch-account-create-portal#user-subscription-mode).
 
 ## Sample Recipes
 Sample recipes for RemoteFS storage clusters of NFS and GlusterFS types can

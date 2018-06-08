@@ -19,6 +19,10 @@ Batch Shipyard jobs and tasks configuration
 Batch Shipyard remote filesystem configuration. This configuration is
 entirely optional unless using the remote filesystem capabilities of
 Batch Shipyard.
+6. [Monitoring](16-batch-shipyard-configuration-monitor.md) -
+Batch Shipyard resource monitoring configuration. This configuration is
+entirely optional unless using the resource monitoring capabilities of
+Batch Shipyard.
 
 Note that all potential properties are described here and that specifying
 all such properties may result in invalid configuration as some properties

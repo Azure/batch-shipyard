@@ -18,6 +18,7 @@ pages:
   - Pool: 13-batch-shipyard-configuration-pool.md
   - Jobs: 14-batch-shipyard-configuration-jobs.md
   - RemoteFS: 15-batch-shipyard-configuration-fs.md
+  - Monitoring: 16-batch-shipyard-configuration-monitor.md
 - CLI Commands and Usage: 20-batch-shipyard-usage.md
 - Platform Image support: 25-batch-shipyard-platform-image-support.md
 - In-Depth Feature Guides:
@@ -27,6 +28,7 @@ pages:
   - Custom Images for Host Compute Nodes: 63-batch-shipyard-custom-images.md
   - Virtual Networks: 64-batch-shipyard-byovnet.md
   - Remote Filesystems: 65-batch-shipyard-remote-fs.md
+  - Resource Monitoring: 66-batch-shipyard-resource-monitoring.md
   - Data Movement: 70-batch-shipyard-data-movement.md
   - Azure KeyVault for Credential Management: 74-batch-shipyard-azure-keyvault.md
   - Credential Encryption: 75-batch-shipyard-credential-encryption.md

@@ -256,3 +256,13 @@ def parse_secret_ids(client, config):
                 'invalid'.format(secid))
         settings.set_credentials_registry_password(
             config, reg, False, password)
+    # monitioring passwords
+    secid = settings.credentials_grafana_admin_password_secret_id(config)
+    if secid is not None:
+        logger.debug('fetching Grafana admin password from keyvault')
+        password = get_secret(client, secid)
+        if util.is_none_or_empty(password):
+            raise ValueError(
+                'Grafana admin password retrieved for secret id {} is '
+                'invalid'.format(secid))
+        settings.set_credentials_grafana_admin_password(config, password)

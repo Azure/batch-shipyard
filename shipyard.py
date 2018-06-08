@@ -61,8 +61,11 @@ class CliContext(object):
         self.yes = False
         self.raw = None
         self.config = None
+        self.conf_config = None
+        self.conf_pool = None
         self.conf_jobs = None
         self.conf_fs = None
+        self.conf_monitor = None
         # clients
         self.batch_mgmt_client = None
         self.batch_client = None
@@ -122,7 +125,8 @@ class CliContext(object):
         self._set_global_cli_options()
         self._init_keyvault_client()
         self._init_config(
-            skip_global_config=False, skip_pool_config=True, fs_storage=True)
+            skip_global_config=False, skip_pool_config=True,
+            skip_monitor_config=True, fs_storage=True)
         _, self.resource_client, self.compute_client, self.network_client, \
             self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
@@ -130,8 +134,7 @@ class CliContext(object):
         convoy.fleet.fetch_storage_account_keys_from_aad(
             self.storage_mgmt_client, self.config, fs_storage=True)
         self.blob_client, _ = convoy.clients.create_storage_clients()
-        self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=True)
+        self._cleanup_after_initialize()
 
     def initialize_for_monitor(self):
         # type: (CliContext) -> None
@@ -142,7 +145,8 @@ class CliContext(object):
         self._set_global_cli_options()
         self._init_keyvault_client()
         self._init_config(
-            skip_global_config=False, skip_pool_config=True, fs_storage=True)
+            skip_global_config=False, skip_pool_config=True,
+            skip_monitor_config=False, fs_storage=True)
         self.auth_client, self.resource_client, self.compute_client, \
             self.network_client, self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
@@ -151,8 +155,7 @@ class CliContext(object):
             self.storage_mgmt_client, self.config, fs_storage=True)
         self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
-        self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=True)
+        self._cleanup_after_initialize()
 
     def initialize_for_keyvault(self):
         # type: (CliContext) -> None
@@ -163,9 +166,9 @@ class CliContext(object):
         self._set_global_cli_options()
         self._init_keyvault_client()
         self._init_config(
-            skip_global_config=True, skip_pool_config=True, fs_storage=False)
-        self._cleanup_after_initialize(
-            skip_global_config=True, skip_pool_config=True)
+            skip_global_config=True, skip_pool_config=True,
+            skip_monitor_config=True, fs_storage=False)
+        self._cleanup_after_initialize()
 
     def initialize_for_batch(self):
         # type: (CliContext) -> None
@@ -176,7 +179,8 @@ class CliContext(object):
         self._set_global_cli_options()
         self._init_keyvault_client()
         self._init_config(
-            skip_global_config=False, skip_pool_config=False, fs_storage=False)
+            skip_global_config=False, skip_pool_config=False,
+            skip_monitor_config=True, fs_storage=False)
         _, self.resource_client, self.compute_client, self.network_client, \
             self.storage_mgmt_client, self.batch_mgmt_client, \
             self.batch_client = \
@@ -186,8 +190,7 @@ class CliContext(object):
             self.storage_mgmt_client, self.config, fs_storage=False)
         self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
-        self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=False)
+        self._cleanup_after_initialize()
 
     def initialize_for_storage(self):
         # type: (CliContext) -> None
@@ -198,7 +201,8 @@ class CliContext(object):
         self._set_global_cli_options()
         self._init_keyvault_client()
         self._init_config(
-            skip_global_config=False, skip_pool_config=False, fs_storage=False)
+            skip_global_config=False, skip_pool_config=False,
+            skip_monitor_config=True, fs_storage=False)
         # inject storage account keys if via aad
         _, _, _, _, self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
@@ -206,8 +210,7 @@ class CliContext(object):
             self.storage_mgmt_client, self.config, fs_storage=False)
         self.blob_client, self.table_client = \
             convoy.clients.create_storage_clients()
-        self._cleanup_after_initialize(
-            skip_global_config=False, skip_pool_config=False)
+        self._cleanup_after_initialize()
 
     def _set_global_cli_options(self):
         # type: (CliContext) -> None
@@ -224,22 +227,18 @@ class CliContext(object):
         if self.verbose:
             convoy.util.set_verbose_logger_handlers()
 
-    def _cleanup_after_initialize(
-            self, skip_global_config, skip_pool_config):
+    def _cleanup_after_initialize(self):
         # type: (CliContext) -> None
         """Cleanup after initialize_for_* funcs
         :param CliContext self: this
-        :param bool skip_global_config: skip global config
-        :param bool skip_pool_config: skip pool config
         """
         # free conf objects
         del self.conf_credentials
         del self.conf_fs
-        if not skip_global_config:
-            del self.conf_config
-        if not skip_pool_config:
-            del self.conf_pool
-            del self.conf_jobs
+        del self.conf_config
+        del self.conf_pool
+        del self.conf_jobs
+        del self.conf_monitor
         # free cli options
         del self.verbose
         del self.yes
@@ -312,12 +311,13 @@ class CliContext(object):
 
     def _init_config(
             self, skip_global_config=False, skip_pool_config=False,
-            fs_storage=False):
-        # type: (CliContext, bool, bool, bool) -> None
+            skip_monitor_config=True, fs_storage=False):
+        # type: (CliContext, bool, bool, bool, bool) -> None
         """Initializes configuration of the context
         :param CliContext self: this
         :param bool skip_global_config: skip global config
         :param bool skip_pool_config: skip pool config
+        :param bool skip_monitor_config: skip monitoring config
         :param bool fs_storage: adjust storage settings for fs
         """
         # reset config
@@ -357,6 +357,16 @@ class CliContext(object):
         self.conf_fs = CliContext.ensure_pathlib_conf(self.conf_fs)
         convoy.validator.validate_config(
             convoy.validator.ConfigType.RemoteFS, self.conf_fs)
+        # set/validate monitoring config
+        if not skip_monitor_config:
+            self.conf_monitor = self._form_conf_path(
+                self.conf_monitor, 'monitor')
+            if self.conf_monitor is None:
+                raise ValueError('monitor conf file was not specified')
+            self.conf_monitor = CliContext.ensure_pathlib_conf(
+                self.conf_monitor)
+            convoy.validator.validate_config(
+                convoy.validator.ConfigType.Monitor, self.conf_monitor)
         # fetch credentials from keyvault, if conf file is missing
         kvcreds = None
         if self.conf_credentials is None or not self.conf_credentials.exists():
@@ -405,6 +415,8 @@ class CliContext(object):
                 self.conf_jobs = CliContext.ensure_pathlib_conf(self.conf_jobs)
                 if self.conf_jobs.exists():
                     self._read_config_file(self.conf_jobs)
+        if not skip_monitor_config:
+            self._read_config_file(self.conf_monitor)
         # adjust settings
         convoy.fleet.initialize_globals(convoy.settings.verbose(self.config))
         if not skip_global_config:
@@ -728,6 +740,19 @@ def fs_option(f):
         callback=callback)(f)
 
 
+def monitor_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.conf_monitor = value
+        return value
+    return click.option(
+        '--monitor',
+        expose_value=False,
+        envvar='SHIPYARD_MONITOR_CONF',
+        help='Resource monitoring config file',
+        callback=callback)(f)
+
+
 def _storage_cluster_id_argument(f):
     def callback(ctx, param, value):
         return value
@@ -787,6 +812,7 @@ def fs_cluster_options(f):
 
 
 def monitor_options(f):
+    f = monitor_option(f)
     f = _azure_subscription_id_option(f)
     return f
 

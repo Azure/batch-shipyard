@@ -57,6 +57,7 @@ class ConfigType(enum.Enum):
     Pool = 3,
     Jobs = 4,
     RemoteFS = 5,
+    Monitor = 6,
 
 
 # global defines
@@ -81,6 +82,10 @@ _SCHEMAS = {
     ConfigType.RemoteFS: {
         'name': 'RemoteFS',
         'schema': pathlib.Path(_ROOT_PATH, 'schemas/fs.yaml'),
+    },
+    ConfigType.Monitor: {
+        'name': 'Monitor',
+        'schema': pathlib.Path(_ROOT_PATH, 'schemas/monitor.yaml'),
     },
 }
 

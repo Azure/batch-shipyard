@@ -128,8 +128,7 @@ pool_specification:
     cadvisor:
       enabled: false
       port: 8080
-      options:
-      - -docker_only
+      options: []
 ```
 
 The `pool_specification` property has the following members:

@@ -99,6 +99,12 @@ credentials:
         filename: some/path/token.cache
     credentials_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
     uri: https://<vault_name>.vault.azure.net/
+  monitoring:
+    grafana:
+      admin:
+        username: grafana_username
+        password: grafana_user_password
+        password_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
 ```
 
 ## Details
@@ -231,13 +237,15 @@ public repositories on Docker Hub or Singularity Hub. However, this is
 required if pulling from authenticated private registries such as a secured
 Azure Container Registry or private repositories on Docker Hub.
     * (optional) `hub` defines the login property to Docker Hub. This is only
-    required for private repos on Docker Hub.
-    * (optional) `username` username to log in to Docker Hub
-    * (optional) `password` password associated with the username
-    * (optional) `password_keyvault_secret_id` property can be used to
-      reference an Azure KeyVault secret id. Batch Shipyard will contact the
-      specified KeyVault and replace the `password` value as returned by
-      Azure KeyVault.
+      required for private repos on Docker Hub.
+        * (required) `username` username to log in to Docker Hub
+        * (required unless `password_keyvault_secret_id` is specified)
+          `password` password associated with the username
+        * (required unless `password` is specified)
+          `password_keyvault_secret_id` property can be used to
+          reference an Azure KeyVault secret id. Batch Shipyard will contact
+          the specified KeyVault and replace the `password` value as returned
+          by Azure KeyVault.
     * (optional) `myserver-myorg.azurecr.io` is an example property that
       defines a private container registry to connect to. This is an example to
       connect to the [Azure Container Registry service](https://azure.microsoft.com/services/container-registry/).
@@ -247,12 +255,14 @@ Azure Container Registry or private repositories on Docker Hub.
       `global_resources`:`additional_registries`:`docker`,
       `global_resources`:`additional_registries`:`singularity` in the global
       configuration.
-      * (optional) `username` username to log in to this registry
-      * (optional) `password` password associated with this username
-      * (optional) `password_keyvault_secret_id` property can be used to
-        reference an Azure KeyVault secret id. Batch Shipyard will contact the
-        specified KeyVault and replace the `password` value as returned by
-        Azure KeyVault.
+        * (required) `username` username to log in to this registry
+        * (required unless `password_keyvault_secret_id` is specified)
+          `password` password associated with the username
+        * (required unless `password` is specified)
+          `password_keyvault_secret_id` property can be used to
+          reference an Azure KeyVault secret id. Batch Shipyard will contact
+          the specified KeyVault and replace the `password` value as returned
+          by Azure KeyVault.
 
 ### Management: `management`
 * (optional) The `management` property defines the required members for
@@ -283,6 +293,19 @@ Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)
 for more information regarding `*_keyvault_secret_id` properties and how
 they are used for credential management with Azure KeyVault.
+
+### Resource Monitoring: `monitoring`
+* (optional) `grafana` configures the Grafana login for the resource
+monitoring virtual machine
+    * (required) `admin` is the administrator login
+        * (required) `username` is the administrator login username
+        * (required unless `password_keyvault_secret_id` is specified)
+          `password` is the administrator login password
+        * (required unless `password` is specified)
+          `password_keyvault_secret_id` property can be used to
+          reference an Azure KeyVault secret id. Batch Shipyard will contact
+          the specified KeyVault and replace the `password` value as returned
+          by Azure KeyVault.
 
 ## <a name="non-public"></a>Non-Public Azure Regions
 To connect to non-public Azure regions, you will need to ensure that your

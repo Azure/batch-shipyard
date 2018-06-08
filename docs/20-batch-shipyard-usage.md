@@ -20,9 +20,9 @@ you can invoke as:
 shipyard.cmd
 ```
 
-If you installed manually (i.e., did not use the installer scripts), then
-you will need to invoke the Python interpreter and pass the script as an
-argument. For example:
+If you installed manually (i.e., took the non-recommended installation path
+and did not use the installer scripts), then you will need to invoke the
+Python interpreter and pass the script as an argument. For example:
 ```
 python3 shipyard.py
 ```
@@ -55,6 +55,8 @@ shipyard <command> <subcommand> <options>
 For instance:
 ```shell
 shipyard pool add --configdir config
+# or equivalent in Linux for this particular command
+SHIPYARD_CONFIGDIR=config shipyard pool add
 ```
 Would create a pool on the Batch account as specified in the config files
 found in the `config` directory. Please note that `<options>` must be
@@ -90,6 +92,7 @@ These options must be specified after the command and sub-command. These are:
   --fs TEXT                       RemoteFS config file
   --pool TEXT                     Pool config file
   --jobs TEXT                     Jobs config file
+  --monitor TEXT                  Resource monitoring config file
   --subscription-id TEXT          Azure Subscription ID
   --keyvault-uri TEXT             Azure KeyVault URI
   --keyvault-credentials-secret-id TEXT
@@ -148,6 +151,8 @@ current working directory (i.e., `.`).
     * `--jobs path/to/jobs.yaml` is required for job-related actions.
     * `--fs path/to/fs.yaml` is required for fs-related actions and some pool
       actions.
+    * `--monitor path/to/monitor.yaml` is required for resource monitoring
+      actions.
 * `--subscription-id` is the Azure Subscription Id associated with the
 Batch account or Remote file system resources. This is only required for
 creating pools with a virtual network specification or with `fs` commands.
@@ -183,6 +188,7 @@ instead:
 * `SHIPYARD_POOL_CONF` in lieu of `--pool`
 * `SHIPYARD_JOBS_CONF` in lieu of `--jobs`
 * `SHIPYARD_FS_CONF` in lieu of `--fs`
+* `SHIPYARD_MONITOR_CONF` in lieu of `--monitor`
 * `SHIPYARD_SUBSCRIPTION_ID` in lieu of `--subscription-id`
 * `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
 * `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
@@ -198,8 +204,7 @@ instead:
 * `SHIPYARD_AAD_CERT_THUMBPRINT` in lieu of `--aad-cert-thumbprint`
 
 ## Commands
-`shipyard` (and `shipyard.py`) script contains the following top-level
-commands:
+`shipyard` has the following top-level commands:
 ```
   account   Batch account actions
   cert      Certificate actions
@@ -209,6 +214,7 @@ commands:
   jobs      Jobs actions
   keyvault  KeyVault actions
   misc      Miscellaneous actions
+  monitor   Monitoring actions
   pool      Pool actions
   storage   Storage actions
 ```
@@ -384,8 +390,8 @@ storage cluster to perform actions against.
       its subnets
     * `--generate-from-prefix` will attempt to generate all resource names
       using conventions used. This is helpful when there was an issue with
-      cluster deletion and the original virtual machine(s) resources can no
-      longer by enumerated. Note that OS disks and data disks cannot be
+      cluster creation/deletion and the original virtual machine(s) resources
+      cannot be enumerated. Note that OS disks and data disks cannot be
       deleted with this option. Please use `fs disks del` to delete disks
       that may have been used in the storage cluster.
     * `--no-wait` does not wait for deletion completion. It is not recommended
@@ -579,6 +585,55 @@ or has run the specified task
       image as stock TensorFlow images. If not specified, Batch Shipyard will
       attempt to find a suitable TensorFlow image from Docker images in the
       global resource list or will acquire one on demand for this command.
+
+## `monitor` Command
+The `monitor` command has the following sub-commands:
+```
+  add      Add a resource to monitor
+  create   Create a monitoring resource
+  destroy  Destroy a monitoring resource
+  list     List all monitored resources
+  remove   Remove a resource from monitoring
+  ssh      Interactively login via SSH to monitoring...
+  start    Starts a previously suspended monitoring...
+  suspend  Suspend a monitoring resource
+```
+
+* `add` will add a resource to monitor to an existing monitoring VM
+    * `--poolid` will add the specified Batch pool to monitor
+    * `--remote-fs` will add the specified RemoteFS cluster to monitor
+* `create` will create a monitoring resource VM
+* `destroy` will destroy a monitoring resource VM
+    * `--delete-resource-group` will delete the entire resource group that
+      contains the monitoring resource. Please take care when using this
+      option as any resource in the resoure group is deleted which may be
+      other resources that are not Batch Shipyard related.
+    * `--delete-virtual-network` will delete the virtual network and all of
+      its subnets
+    * `--generate-from-prefix` will attempt to generate all resource names
+      using conventions used. This is helpful when there was an issue with
+      monitoring creation/deletion and the original virtual machine resources
+      cannot be enumerated. Note that OS disks cannot be deleted with this
+      option. Please use an alternate means (i.e., the Azure Portal) to
+      delete disks that may have been used by the monitoring VM.
+    * `--no-wait` does not wait for deletion completion. It is not recommended
+      to use this parameter.
+* `list` will list all monitored resources
+* `remove` will remove a resource to monitor to an existing monitoring VM
+    * `--all` will remove all resources that are currently monitored
+    * `--poolid` will remove the specified Batch pool to monitor
+    * `--remote-fs` will remove the specified RemoteFS cluster to monitor
+* `ssh` will interactively log into a compute node via SSH.
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--tty` allocates a pseudo-terminal
+* `start` will start a previously suspended monitoring VM
+    * `--no-wait` does not wait for the restart to complete. It is not
+      recommended to use this parameter.
+* `suspend` suspends a monitoring VM
+    * `--no-wait` does not wait for the suspension to complete. It is not
+      recommended to use this parameter.
 
 ## `pool` Command
 The `pool` command has the following sub-commands:

@@ -102,6 +102,11 @@ remote_fs:
           - p10-disk1b
           filesystem: btrfs
           raid_level: 0
+      prometheus:
+        node_exporter:
+          enabled: false
+          port: 9100
+          options: []
 ```
 
 ## Details
@@ -370,13 +375,32 @@ The number of entries in this map must match the `vm_count`.
           to expand the number of disks in the array in the future, you must
           use `btrfs` as the filesystem. At least two disks per virtual
           machine are required for RAID-0.
+* (optional) `prometheus` properties are to control if collectors for metrics
+to export to [Prometheus](https://prometheus.io/) monitoring are enabled.
+Note that all exporters do not have their ports exposed to the internet by
+default. This means that the Prometheus instance itself must reside
+on, or peered with, the virtual network that the storage cluster is in. This
+ensures that external parties cannot scrape exporter metrics from storage
+cluster VMs.
+    * (optional) `node_exporter` contains options for the
+      [Node Exporter](https://github.com/prometheus/node_exporter) metrics
+      exporter.
+        * (optional) `enabled` property enables or disables this exporter.
+          Default is `false`.
+        * (optional) `port` is the port for Prometheus to connect to scrape.
+          This is the internal port on the storage cluster VM.
+        * (optional) `options` is a list of options to pass to the
+          node exporter instance running on all nodes. The following
+          collectors are force disabled, in addition to others disabled by
+          default: textfile, wifi, xfs, zfs. The nfs collector is enabled if
+          the file server is NFS, automatically.
 
 ## Remote Filesystems with Batch Shipyard Guide
 Please see the [full guide](65-batch-shipyard-remote-fs.md) for information
 on how this feature works in Batch Shipyard.
 
 ## Full template
-A full template of a credentials file can be found
+A full template of a RemoteFS configuration file can be found
 [here](https://github.com/Azure/batch-shipyard/tree/master/config_templates).
 Note that these templates cannot be used as-is and must be modified to fit
 your scenario.

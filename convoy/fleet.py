@@ -4152,7 +4152,7 @@ def action_monitor_add(table_client, config, poolid, fscluster):
     :param list fscluster: list of fs clusters to monitor
     """
     if util.is_none_or_empty(poolid) and util.is_none_or_empty(fscluster):
-        logger.error('no resources specified')
+        logger.error('no monitoring resources specified to add')
         return
     # ensure that we are operating in AAD mode for batch
     if util.is_not_empty(poolid):
@@ -4205,6 +4205,14 @@ def action_monitor_remove(table_client, config, all, poolid, fscluster):
     if not all and util.is_not_empty(poolid):
         bc = settings.credentials_batch(config)
         _check_for_batch_aad(bc, 'remove pool monitors')
+    if (not all and util.is_none_or_empty(poolid) and
+            util.is_none_or_empty(fscluster)):
+        logger.error('no monitoring resources specified to remove')
+        return
+    if all and (util.is_not_empty(poolid) or util.is_not_empty(fscluster)):
+        raise ValueError(
+            'cannot specify --all with specific monitoring resources to '
+            'remove')
     storage.remove_resources_from_monitoring(
         table_client, config, all, poolid, fscluster)
 

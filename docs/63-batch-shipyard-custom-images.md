@@ -242,3 +242,8 @@ following:
       `batch.node.ubuntu 16.04` as the `node_agent` value. You can view a
       complete list of supported node agent sku ids with the `pool listskus`
       command.
+
+### ARM Image Retention Requirements
+Ensure that the ARM image exists for the lifetimes of any pool referencing
+the custom image. Failure to do so can result in pool allocation failures
+and/or resize failures.

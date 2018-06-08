@@ -4164,12 +4164,39 @@ def monitoring_prometheus_settings(config):
         conf = {}
         port = None
     else:
-        port = str(_kv_read(conf, 'port', default=9090))
+        port = str(_kv_read(conf, 'port'))
     return PrometheusMonitoringSettings(
         port=port,
         scrape_interval=_kv_read_checked(
             conf, 'scrape_interval', default='10s'),
     )
+
+
+def credentials_grafana_admin_password_secret_id(config):
+    # type: (dict) -> str
+    """Get Grafana admin password KeyVault Secret Id
+    :param dict config: configuration object
+    :rtype: str
+    :return: keyvault secret id
+    """
+    try:
+        secid = config[
+            'credentials']['monitoring']['grafana']['admin'][
+                'password_keyvault_secret_id']
+        if util.is_none_or_empty(secid):
+            raise KeyError()
+    except KeyError:
+        return None
+    return secid
+
+
+def set_credentials_grafana_admin_password(config, pw):
+    # type: (dict, str) -> None
+    """Set Grafana admin password
+    :param dict config: configuration object
+    :param str pw: password
+    """
+    config['credentials']['monitoring']['grafana']['admin']['password'] = pw
 
 
 def monitoring_grafana_settings(config):
@@ -4183,10 +4210,20 @@ def monitoring_grafana_settings(config):
         conf = config['monitoring']['services']['grafana']
     except KeyError:
         conf = {}
-    admin = _kv_read_checked(conf, 'admin', default={})
+    try:
+        gaconf = config['credentials']['monitoring']['grafana']
+    except KeyError:
+        gaconf = {}
+    admin = _kv_read_checked(gaconf, 'admin', default={})
+    admin_user = _kv_read_checked(admin, 'username')
+    if util.is_none_or_empty(admin_user):
+        raise ValueError('Grafana admin user is invalid')
+    admin_password = _kv_read_checked(admin, 'password')
+    if util.is_none_or_empty(admin_password):
+        raise ValueError('Grafana admin password is invalid')
     return GrafanaMonitoringSettings(
-        admin_user=_kv_read_checked(admin, 'user', default='admin'),
-        admin_password=_kv_read_checked(admin, 'password', default='admin'),
+        admin_user=admin_user,
+        admin_password=admin_password,
         additional_dashboards=_kv_read_checked(conf, 'additional_dashboards'),
     )
 
