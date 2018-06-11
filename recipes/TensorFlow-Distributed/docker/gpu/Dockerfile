@@ -1,6 +1,6 @@
 # Dockerfile for TensorFlow-GPU-Distributed for use with Batch Shipyard on Azure Batch
 
-FROM gcr.io/tensorflow/tensorflow:1.2.1-gpu
+FROM tensorflow/tensorflow:1.2.1-gpu
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 COPY ssh_config /root/.ssh/config

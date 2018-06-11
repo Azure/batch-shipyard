@@ -17,7 +17,7 @@ Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow Docker
 image that can execute on CPUs. The official Google TensorFlow image
-[gcr.io/tensorflow/tensorflow](https://www.tensorflow.org/install/install_linux#InstallingDocker)
+[tensorflow/tensorflow](https://www.tensorflow.org/install/install_linux#InstallingDocker)
 can work with this recipe.
 
 ### Jobs Configuration
@@ -26,7 +26,7 @@ array to run the
 [MNIST convolutional example](https://github.com/tensorflow/models/tree/master/tutorials/image/mnist).
 This array should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation,
-e.g., `gcr.io/tensorflow/tensorflow`
+e.g., `tensorflow/tensorflow`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:
   * `file_path` is the local file path which should be set to

@@ -26,7 +26,7 @@ The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid TensorFlow GPU-enabled
 Docker image. The official Google
 [TensorFlow GPU Docker images](https://www.tensorflow.org/install/install_linux#gpu_support)
-can be used for this recipe (e.g., gcr.io/tensorflow/tensorflow:latest-gpu)
+can be used for this recipe (e.g., tensorflow/tensorflow:latest-gpu)
 
 #### Singularity-based
 The global configuration should set the following properties:
@@ -44,7 +44,7 @@ array to run the
 This array should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container
 invocation that matches the global configuration Docker image,
-e.g., `gcr.io/tensorflow/tensorflow:latest-gpu`
+e.g., `tensorflow/tensorflow:latest-gpu`
 * `resource_files` array should be populated if you want Azure Batch to handle
 the download of the training file from the web endpoint:
   * `file_path` is the local file path which should be set to

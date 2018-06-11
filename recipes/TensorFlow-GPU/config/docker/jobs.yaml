@@ -1,7 +1,7 @@
 job_specifications:
 - id: tensorflowjob
   tasks:
-  - docker_image: gcr.io/tensorflow/tensorflow:latest-gpu
+  - docker_image: tensorflow/tensorflow:latest-gpu
     resource_files:
     - blob_source: https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py
       file_path: convolutional.py
