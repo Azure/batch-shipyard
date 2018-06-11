@@ -4,13 +4,13 @@
     <id>BatchShipyard</id>
     <version>0.0.0</version>
     <title>Batch Shipyard</title>
-    <authors>Fred Park</authors>
+    <authors>Microsoft</authors>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <description>Execute containerized jobs on Azure Batch via Batch Shipyard. Requires Python.</description>
     <iconUrl>https://azurecomcdn.azureedge.net/cvt-4c210654e280636c85b81aae4511f99613c7de5d03801bf44dc15fe823371003/images/page/services/batch/we-take-care-of-scale.png</iconUrl>
     <projectUrl>https://github.com/Azure/batch-shipyard</projectUrl>
     <licenseUrl>https://github.com/Azure/batch-shipyard/blob/master/LICENSE</licenseUrl>
-    <copyright>Microsoft</copyright>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
     <releaseNotes>https://github.com/Azure/batch-shipyard/blob/master/CHANGELOG.md</releaseNotes>
     <tags>AzureSiteExtension azure batch shipyard containers docker singularity parallel distributed jobs hpc python</tags>
     <packageTypes>

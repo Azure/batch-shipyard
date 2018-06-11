@@ -7,9 +7,10 @@
 <img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.png" alt="dashboard" width="1024" />
 
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute container-based batch processing and HPC workloads on
-[Azure Batch](https://azure.microsoft.com/services/batch/) compute
-pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
+provision, execute, and monitor container-based batch processing and HPC
+workloads on
+[Azure Batch](https://azure.microsoft.com/services/batch/). Batch Shipyard
+supports both [Docker](https://www.docker.com) and
 [Singularity](http://singularity.lbl.gov/) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your containers with easy-to-understand configuration files. All Azure

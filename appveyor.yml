@@ -198,7 +198,7 @@ after_test:
 deploy:
 - provider: NuGet
   api_key:
-    secure: 96ugMCJGT1hnOc+UyTqsjTgh8FgN3VgmdKGgG8EGfLYEMlPAnls1pIe2e3s0BGGh
+    secure: Bl6flZ+gBJZ3aYPTKERDcnMOsNgbLs/MG/gj6XsCC9I9E/erIw0ffpWJ+WSQrWiX
   skip_symbols: true
   artifact: /.*\.nupkg/
   on:

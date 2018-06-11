@@ -2,8 +2,19 @@
 
 ## [Unreleased]
 
+## [3.5.0b2] - 2018-06-12
 ### Added
+- Support for Prometheus monitoring and Grafana visualization (#205). Please
+see the monitoring doc and
+[guide](https://github.com/Azure/batch-shipyard/blob/master/docs/66-batch-shipyard-resource-monitoring.md)
+for more information.
+- Support for specifying a maximum increment per autoscale evaluation and
+the ability to define weekdays and workhours (#210)
+- Support for native container support Marketplace platform images. Please
+see the platform image support doc for more information. (#204)
+- Allow configuration to enable SSH users to access Docker daemon (#206)
 - Support for GPUs on CentOS 7.4 (#199)
+- Support for CentOS-HPC 7.4 (#184)
 
 ### Changed
 - **Breaking Change:** You can no longer specify both an `account_key`
@@ -12,11 +23,18 @@ behavior was that `account_key` would take precedence over `aad`. Now
 these options are mutually exclusive. This will now break configurations
 that specified `aad` at the global level while having a shared `account_key`
 at the `batch` level. (#197)
+- **Breaking Change:** `install.sh` now installs into a virtual env by
+default. Use the `-u` switch to retain the old (non-recommended)
+default behavior. (#200)
+- GlusterFS for RemoteFS and gluster on compute updated to 4.0.
 - Update NC driver to 396.26 supporting CUDA 9.2
 - blobxfer updated to 1.2.1
 
 ### Fixed
-- Errant credentials check for configuration from commandline
+- Errant credentials check for configuration from commandline which affected
+config load from KeyVault
+- Blobxfer extra options regression
+- Cache container/file share creations for data egress (#211)
 
 ## [3.5.0b1] - 2018-05-02
 ### Added
@@ -1277,7 +1295,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...HEAD
+[3.5.0b2]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...3.5.0b2
 [3.5.0b1]: https://github.com/Azure/batch-shipyard/compare/3.4.0...3.5.0b1
 [3.4.0]: https://github.com/Azure/batch-shipyard/compare/3.3.0...3.4.0
 [3.3.0]: https://github.com/Azure/batch-shipyard/compare/3.2.0...3.3.0
