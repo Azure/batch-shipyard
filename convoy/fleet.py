@@ -103,6 +103,19 @@ _NVIDIA_DRIVER = {
         '/licence.php?lang=us'
     ),
 }
+_INTEL_MPI_RT_PACKAGE = {
+    'url': (
+        'http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/9279/'
+        'l_mpi-rt_p_5.1.3.223.tgz'
+    ),
+    'sha256': (
+        '91c5f7575c6b5fbf493c07a255c39ae91e15cd75b26ee90355fa27e0e1b4f22e'
+    ),
+    'target': 'intel_mpi_rt.tar.gz',
+    'license': (
+        'https://software.intel.com/license/intel-simplified-software-license'
+    )
+}
 _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
@@ -377,6 +390,40 @@ def _setup_nvidia_driver_package(config, vm_size):
     return pkg
 
 
+def _setup_intel_mpi_rt_package(config, pool_settings):
+    # type: (dict, settings.PoolSettings) -> pathlib.Path
+    """Set up the intel mpi runtime package
+    :param dict config: configuration dict
+    :param settings.PoolSettings pool_settings: pool settings
+    :rtype: pathlib.Path
+    :return: package path
+    """
+    # only for native ubuntu rdma
+    if (not settings.is_rdma_pool(pool_settings.vm_size) or
+            not pool_settings.vm_configuration.offer ==
+            'ubuntu-server-container-rdma'):
+        return None
+    pkg = _RESOURCES_PATH / _INTEL_MPI_RT_PACKAGE['target']
+    # check to see if package is downloaded
+    if (not pkg.exists() or
+            util.compute_sha256_for_file(pkg, False) !=
+            _INTEL_MPI_RT_PACKAGE['sha256']):
+        # display license link
+        if not util.confirm_action(
+                config,
+                msg=('agreement with Intel Simplified Software License @ '
+                     '{}').format(_INTEL_MPI_RT_PACKAGE['license']),
+                allow_auto=True):
+            raise RuntimeError(
+                'Cannot proceed with deployment due to non-agreement with '
+                'license for Intel MPI Runtime')
+        else:
+            logger.info('Intel Simplified Software License accepted')
+        # download package
+        _download_file('Intel MPI Runtime', pkg, _INTEL_MPI_RT_PACKAGE)
+    return pkg
+
+
 def _setup_lis_package(config, vm_size):
     # type: (dict, str) -> pathlib.Path
     """Set up the LIS package
@@ -454,8 +501,8 @@ def _setup_prometheus_monitoring_tools(pool_settings):
             util.subprocess_with_output(
                 'gzip -f -k {}'.format(ca_pkg), shell=True,
                 suppress_output=True)
-        logger.debug('cAdvisor package compacted: {} => {} bytes'.format(
-            ca_pkg_compact, ca_pkg_compact.stat().st_size))
+            logger.debug('cAdvisor package compacted: {} => {} bytes'.format(
+                ca_pkg_compact, ca_pkg_compact.stat().st_size))
     return ne_pkg, ca_pkg_compact
 
 
@@ -1234,6 +1281,14 @@ def _construct_pool_object(
             _rflist.append((lis_pkg.name, lis_pkg))
     else:
         lis_pkg = None
+    # intel mpi rt settings
+    if (not is_windows and native and
+            util.is_none_or_empty(custom_image_na)):
+        intel_mpi_rt_pkg = _setup_intel_mpi_rt_package(config, pool_settings)
+        if intel_mpi_rt_pkg is not None:
+            _rflist.append((intel_mpi_rt_pkg.name, intel_mpi_rt_pkg))
+    else:
+        intel_mpi_rt_pkg = None
     # gpu settings
     if (not native and settings.is_gpu_pool(pool_settings.vm_size) and
             util.is_none_or_empty(custom_image_na)):
@@ -2324,8 +2379,16 @@ def _adjust_settings_for_pool_creation(config):
     # enforce publisher/offer/sku restrictions
     allowed = False
     shipyard_container_required = True
-    # oracle linux is not supported due to UEKR4 requirement
-    if publisher == 'canonical':
+    if publisher == 'microsoft-azure-batch':
+        if offer == 'centos-container':
+            allowed = True
+        elif offer == 'centos-container-rdma':
+            allowed = True
+        elif offer == 'ubuntu-server-container':
+            allowed = True
+        elif offer == 'ubuntu-server-container-rdma':
+            allowed = True
+    elif publisher == 'canonical':
         if offer == 'ubuntuserver':
             if sku == '16.04-lts':
                 allowed = True
@@ -2340,14 +2403,6 @@ def _adjust_settings_for_pool_creation(config):
     elif publisher == 'openlogic':
         if offer.startswith('centos'):
             if sku >= '7':
-                allowed = True
-    elif publisher == 'redhat':
-        if offer == 'rhel':
-            if sku >= '7':
-                allowed = True
-    elif publisher == 'suse':
-        if offer.startswith('sles'):
-            if sku >= '12-sp2':
                 allowed = True
     elif publisher == 'microsoftwindowsserver':
         if offer == 'windowsserver':
@@ -2367,7 +2422,9 @@ def _adjust_settings_for_pool_creation(config):
                  publisher, offer, sku, pool.vm_size))
     # ensure HPC offers are matched with RDMA sizes
     if (not is_windows and (
-            (offer == 'centos-hpc' or offer == 'sles-hpc') and
+            (offer == 'centos-hpc' or offer == 'sles-hpc' or
+             offer == 'centos-container-rdma' or
+             offer == 'ubuntu-server-container-rdma') and
             not settings.is_rdma_pool(pool.vm_size))):
         raise ValueError(
             ('cannot allocate an HPC VM config of publisher={} offer={} '
@@ -2485,13 +2542,9 @@ def _adjust_settings_for_pool_creation(config):
                     raise ValueError(
                         'azure blob mounting is not supported on native '
                         'container pools')
-                if offer == 'ubuntuserver':
-                    if sku < '16.04-lts':
-                        raise ValueError(
-                            ('azure blob mounting is not supported '
-                             'on publisher={} offer={} sku={}').format(
-                                 publisher, offer, sku))
-                elif not offer.startswith('centos'):
+                if ((offer == 'ubuntuserver' and sku < '16.04-lts') or
+                        not offer.startswith('centos') or
+                        publisher != 'microsoft-azure-batch'):
                     raise ValueError(
                         ('azure blob mounting is not supported '
                          'on publisher={} offer={} sku={}').format(

@@ -1091,13 +1091,34 @@ install_cascade_dependencies() {
 install_intel_mpi() {
     if [ -e /dev/infiniband/uverbs0 ]; then
         log INFO "IB device found"
-        if [[ "$DISTRIB_ID" == sles* ]]; then
+        if [ ! -d /opt/intel/compilers_and_libraries/linux/mpi ]; then
             log DEBUG "Installing Intel MPI"
-            install_packages lsb
-            install_local_packages /opt/intelMPI/intel_mpi_packages/*.rpm
-            mkdir -p /opt/intel/compilers_and_libraries/linux
-            ln -sf /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
+            if [[ "$DISTRIB_ID" == sles* ]]; then
+                install_packages lsb
+                install_local_packages /opt/intelMPI/intel_mpi_packages/*.rpm
+                mkdir -p /opt/intel/compilers_and_libraries/linux
+                ln -sf /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
+            else
+                pushd "$AZ_BATCH_TASK_WORKING_DIR"
+                mkdir tmp
+                cd tmp
+                tar zxpf ../intel_mpi_rt.tar.gz
+                cd l_mpi-rt*
+                sed -i -e 's/^ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' silent.cfg
+                sed -i -e 's,^PSET_INSTALL_DIR=.*,PSET_INSTALL_DIR=/opt/intel,g' silent.cfg
+                ./install.sh -s silent.cfg
+                cd ../..
+                rm -rf tmp
+                popd
+            fi
             log INFO "Intel MPI installed"
+        fi
+        # check for intel mpi
+        if [ -f /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh ]; then
+            log INFO "Intel MPI found"
+        else
+            log ERROR "Intel MPI not found"
+            exit 1
         fi
     else
         log INFO "IB device not found"
@@ -1215,7 +1236,7 @@ install_and_start_node_exporter() {
         log DEBUG "Installing Prometheus node exporter"
     fi
     # install
-    tar zxvpf node_exporter.tar.gz
+    tar zxpf node_exporter.tar.gz
     mv node_exporter-*.linux-amd64/node_exporter .
     rm -rf node_exporter-*.linux-amd64 node_exporter.tar.gz
     chmod +x node_exporter
@@ -1450,7 +1471,7 @@ if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
 fi
 
 # install intel mpi if available
-if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
+if [ $custom_image -eq 0 ]; then
     install_intel_mpi
 fi
 

@@ -62,8 +62,11 @@ factors that Batch Shipyard has no control over.
 that the pool works under native Docker mode where the compute nodes
 understand how to launch and execute Docker containers. Please understand
 that only a subset of `platform_image` combinations are compatible with
-`native` mode. Compliant [custom images](63-batch-shipyard-custom-images.md)
-are compatible with `native` mode.
+`native` mode. You can refer to the
+[Batch Shipyard Platform Image support doc](25-batch-shipyard-platform-image-support.md)
+for more information. Compliant
+[custom images](63-batch-shipyard-custom-images.md) are compatible with
+`native` mode.
 
 Advantages of `native` mode are:
 
@@ -71,9 +74,11 @@ Advantages of `native` mode are:
 perform actions such as terminating tasks where tasks are still running or
 deleting jobs with running tasks in cases where normal Batch task termination
 fails to properly end the Docker container processes.
+* Direct execution of container tasks by the Batch node agent itself which
+lends to cleaner container execution lifecycle management.
 * Multi-instance task execution (e.g., MPI job) is cleaner. You can execute
 multiple multi-instance tasks per job. If your workload is predominantly
-multi-instance, then it is recommended to use `native` mode.
+multi-instance, then it is strongly recommended to use `native` mode.
 
 Disadvantages of `native` mode are:
 

@@ -55,7 +55,7 @@ _TENSORBOARD_DOCKER_IMAGE = (
     '/usr/local/lib/python2.7/dist-packages/tensorboard/main.py',
     6006
 )
-_GPU_CUDA9_INSTANCES = frozenset((
+_GPU_CC37_INSTANCES = frozenset((
     'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
 ))
 _GPU_COMPUTE_INSTANCES = frozenset((
@@ -620,7 +620,7 @@ def get_gpu_type_from_vm_size(vm_size):
     :return: type of gpu and compute capability
     """
     if is_gpu_compute_pool(vm_size):
-        if vm_size.lower() in _GPU_CUDA9_INSTANCES:
+        if vm_size.lower() in _GPU_CC37_INSTANCES:
             return 'compute_cc37'
         else:
             return 'compute_cc6-7'
@@ -640,7 +640,7 @@ def gpu_configuration_check(config, vm_size=None):
     """
     # if this is not a gpu sku, always allow
     if util.is_none_or_empty(vm_size):
-        vm_size = pool_settings(config).vm_size
+        vm_size = _pool_vm_size(config)
     if not is_gpu_pool(vm_size):
         return True
     # always allow gpu with custom images
@@ -676,7 +676,7 @@ def is_lis_install_required(config, vm_size=None):
     if is_windows_pool(config):
         return False
     if util.is_none_or_empty(vm_size):
-        vm_size = pool_settings(config).vm_size
+        vm_size = _pool_vm_size(config)
     # currently lis is only required for GPU pool setup for certain distros
     if is_gpu_pool(vm_size):
         publisher = pool_publisher(config, lower=True)
@@ -842,6 +842,16 @@ def _pool_vm_count(config, conf=None):
     )
 
 
+def _pool_vm_size(config):
+    # type: (dict) -> str
+    """Get Pool VM size
+    :param dict config: configuration object
+    :rtype: str
+    :return: Pool VM Size
+    """
+    return config['pool_specification']['vm_size'].lower()
+
+
 def pool_vm_configuration(config, key):
     # type: (dict, str) -> dict
     """Get Pool VM configuration
@@ -888,6 +898,16 @@ def _populate_pool_vm_configuration(config):
                 native=True,
                 license_type=_kv_read_checked(conf, 'license_type'),
             )
+        elif publisher == 'microsoft-azure-batch':
+            # auto convert linux native if detected
+            vm_config = PoolVmPlatformImageSettings(
+                publisher=publisher,
+                offer=offer,
+                sku=sku,
+                version=_kv_read_checked(conf, 'version', default='latest'),
+                native=True,
+                license_type=None,
+            )
         else:
             vm_config = PoolVmPlatformImageSettings(
                 publisher=publisher,
@@ -897,38 +917,48 @@ def _populate_pool_vm_configuration(config):
                 native=False,
                 license_type=None,
             )
-        # TODO re-enable this when platform support is available
         # auto convert vm config to native if specified
-        if False:  # _kv_read(conf, 'native', default=False):
+        if not vm_config.native and _kv_read(conf, 'native', default=False):
             if (vm_config.publisher == 'canonical' and
                     vm_config.offer == 'ubuntuserver' and
                     vm_config.sku == '16.04-lts'):
-                vm_config = PoolVmPlatformImageSettings(
-                    publisher='microsoft-azure-batch',
-                    offer='ubuntu-server-container-preview',
-                    sku='16-04-lts',
-                    version='latest',
-                    native=True,
-                    license_type=None,
-                )
+                vm_size = _pool_vm_size(config)
+                if is_rdma_pool(vm_size):
+                    vm_config = PoolVmPlatformImageSettings(
+                        publisher='microsoft-azure-batch',
+                        offer='ubuntu-server-container-rdma',
+                        sku='16-04-lts',
+                        version='latest',
+                        native=True,
+                        license_type=None,
+                    )
+                else:
+                    vm_config = PoolVmPlatformImageSettings(
+                        publisher='microsoft-azure-batch',
+                        offer='ubuntu-server-container',
+                        sku='16-04-lts',
+                        version='latest',
+                        native=True,
+                        license_type=None,
+                    )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos' and
-                  vm_config.sku == '7.3'):
+                  vm_config.sku == '7.4'):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
-                    offer='centos-container-preview',
-                    sku='7-3',
+                    offer='centos-container',
+                    sku='7-4',
                     version='latest',
                     native=True,
                     license_type=None,
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos-hpc' and
-                  vm_config.sku == '7.3'):
+                  vm_config.sku == '7.4'):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
-                    offer='centos-container-rdma-preview',
-                    sku='7-3',
+                    offer='centos-container-rdma',
+                    sku='7-4',
                     version='latest',
                     native=True,
                     license_type=None,
@@ -1205,7 +1235,7 @@ def pool_settings(config):
         ))
     return PoolSettings(
         id=conf['id'],
-        vm_size=conf['vm_size'].lower(),  # normalize
+        vm_size=_pool_vm_size(config),
         vm_count=_pool_vm_count(config),
         resize_timeout=resize_timeout,
         max_tasks_per_node=max_tasks_per_node,
@@ -3617,12 +3647,22 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 except ValueError:
                     pass
             # only centos-hpc and sles-hpc are supported for infiniband
-            if ((publisher == 'openlogic' and offer == 'centos-hpc') or
+            if (((publisher == 'openlogic' and offer == 'centos-hpc') or
+                 (publisher == 'microsoft-azure-batch' and
+                  offer == 'centos-container-rdma')) or
                     (is_custom_image and
                      node_agent.startswith('batch.node.centos'))):
                 run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(bindparm))
                 run_opts.append(
                     '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(bindparm))
+            elif ((publisher == 'microsoft-azure-batch' and
+                   offer == 'ubuntu-server-container-rdma') or
+                  (is_custom_image and
+                   node_agent.startswith('batch.node.ubuntu'))):
+                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                    bindparm))
+                run_opts.append(
+                    '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(bindparm))
             elif ((publisher == 'suse' and offer == 'sles-hpc') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.opensuse'))):

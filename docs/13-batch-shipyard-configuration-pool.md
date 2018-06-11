@@ -136,7 +136,10 @@ The `pool_specification` property has the following members:
 * (required) `id` is the compute pool ID.
 * (required) `vm_configuration` specifies the image configuration for the
 VM. Either `platform_image` or `custom_image` must be specified. You cannot
-specify both. If using a custom image, please see the
+specify both. Please see the
+[Batch Shipyard Platform Image support doc](25-batch-shipyard-platform-image-support.md)
+for more information on which Marketplace images are supported. If using a
+custom image, please see the
 [Custom Image Guide](63-batch-shipyard-custom-images.md) first.
     * (required for platform image) `platform_image` defines the Marketplace
       platform image to use:
@@ -150,15 +153,17 @@ specify both. If using a custom image, please see the
           `latest`.
         * (optional) `native` will convert the platform image to use native
           Docker container support for Azure Batch, if possible. This can
-          potentially lead to faster compute node provisioning and better
-          task management (such as job and task termination while tasks are
-          running), in exchange for some other features that are not available
-          in this mode such as task-level data ingress or task-level data
-          egress that is not bound for Azure Storage Blobs. If there is
-          no `native` conversion equivalent for the specified `publisher`,
-          `offer`, `sku` then no conversion is performed and this option will
-          be force disabled. Note that `native` mode is not compatible with
-          Singularity conatiners. The default is `false`.
+          provide better task management (such as job and task termination
+          while tasks are running) and potentially lead to faster compute
+          node provisioning (although not guaranteed), in exchange for some
+          features that are not available in this mode such Singularity
+          containers, task-level data ingress or task-level data
+          egress that is not bound for Azure Storage Blobs, among others.
+          If there is no `native` conversion equivalent for the specified
+          `publisher`, `offer`, `sku` then no conversion is performed and
+          this option will be force disabled. Note that `native` mode is
+          not compatible with Singularity containers. The default is `false`.
+          Please see the [FAQ](97-faq.md) for more information.
         * (optional) `license_type` specifies the type of on-premises license
           to be used when deploying the operating system. This activates the
           [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
