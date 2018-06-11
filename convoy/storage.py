@@ -44,10 +44,14 @@ import azure.storage.file as azurefile
 from . import settings
 from . import util
 
+# TODO refactor as class
+
 # create logger
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
+_MONITOR_BATCHPOOL_PK = 'BatchPool'
+_MONITOR_REMOTEFS_PK = 'RemoteFS'
 _DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
@@ -67,8 +71,7 @@ _STORAGE_CONTAINERS = {
     # TODO remove following in future release
     'table_registry': None,
 }
-_MONITOR_BATCHPOOL_PK = 'BatchPool'
-_MONITOR_REMOTEFS_PK = 'RemoteFS'
+_CONTAINERS_CREATED = set()
 
 
 def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
@@ -224,12 +227,17 @@ def create_blob_container_saskey(
     :rtype: str
     :return: saskey
     """
+    global _CONTAINERS_CREATED
     blob_client = azureblob.BlockBlobService(
         account_name=storage_settings.account,
         account_key=storage_settings.account_key,
         endpoint_suffix=storage_settings.endpoint)
     if create_container:
-        blob_client.create_container(container, fail_on_exist=False)
+        key = 'blob:{}:{}:{}'.format(
+            storage_settings.account, storage_settings.endpoint, container)
+        if key not in _CONTAINERS_CREATED:
+            blob_client.create_container(container, fail_on_exist=False)
+            _CONTAINERS_CREATED.add(key)
     if kind == 'ingress':
         perm = azureblob.ContainerPermissions(read=True, list=True)
     elif kind == 'egress':
@@ -260,7 +268,11 @@ def create_file_share_saskey(
         account_key=storage_settings.account_key,
         endpoint_suffix=storage_settings.endpoint)
     if create_share:
-        file_client.create_share(file_share, fail_on_exist=False)
+        key = 'file:{}:{}:{}'.format(
+            storage_settings.account, storage_settings.endpoint, file_share)
+        if key not in _CONTAINERS_CREATED:
+            file_client.create_share(file_share, fail_on_exist=False)
+            _CONTAINERS_CREATED.add(key)
     if kind == 'ingress':
         perm = azurefile.SharePermissions(read=True, list=True)
     elif kind == 'egress':
