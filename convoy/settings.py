@@ -203,6 +203,7 @@ SSHSettings = collections.namedtuple(
         'username', 'expiry_days', 'ssh_public_key', 'ssh_public_key_data',
         'ssh_private_key', 'generate_docker_tunnel_script',
         'generated_file_export_path', 'hpn_server_swap',
+        'allow_docker_access',
     ]
 )
 RDPSettings = collections.namedtuple(
@@ -421,7 +422,7 @@ class VmResource(object):
             public_ip, virtual_network, network_security, ssh,
             accelerated_networking):
         # type: (VmResource, str, str, str, str, PublicIpSettings,
-        #        VirtualNetworkSettings, NetworkSecuritySettings, SshSettings,
+        #        VirtualNetworkSettings, NetworkSecuritySettings, SSHSettings,
         #        bool) -> None
         self.location = location
         self.resource_group = resource_group
@@ -442,7 +443,7 @@ class StorageClusterSettings(VmResource):
             accelerated_networking, prometheus):
         # type: (StorageClusterSettings, str, FileServerSettings, int, int,
         #        Dict, str, str, str, str, PublicIpSettings,
-        #        VirtualNetworkSettings, NetworkSecuritySettings, SshSettings,
+        #        VirtualNetworkSettings, NetworkSecuritySettings, SSHSettings,
         #        bool, PrometheusSettings) -> None
         super(StorageClusterSettings, self).__init__(
             location, resource_group, hostname_prefix, vm_size, public_ip,
@@ -1150,6 +1151,7 @@ def pool_settings(config):
         ssh_gen_docker_tunnel = None
         ssh_gen_file_path = '.'
         ssh_hpn = None
+        ssh_ada = None
     else:
         ssh_expiry_days = _kv_read(sshconf, 'expiry_days', 30)
         if ssh_expiry_days <= 0:
@@ -1176,6 +1178,7 @@ def pool_settings(config):
         ssh_gen_file_path = _kv_read_checked(
             sshconf, 'generated_file_export_path', '.')
         ssh_hpn = _kv_read(sshconf, 'hpn_server_swap', False)
+        ssh_ada = _kv_read(sshconf, 'allow_docker_access', False)
     # rdp settings
     try:
         rdpconf = conf['rdp']
@@ -1256,6 +1259,7 @@ def pool_settings(config):
             generate_docker_tunnel_script=ssh_gen_docker_tunnel,
             generated_file_export_path=ssh_gen_file_path,
             hpn_server_swap=ssh_hpn,
+            allow_docker_access=ssh_ada,
         ),
         rdp=RDPSettings(
             username=rdp_username,
@@ -4184,6 +4188,7 @@ def remotefs_settings(config, sc_id=None):
                 generate_docker_tunnel_script=False,
                 generated_file_export_path=sc_ssh_gen_file_path,
                 hpn_server_swap=False,
+                allow_docker_access=False,
             ),
             vm_disk_map=disk_map,
             prometheus=prometheus_settings(sc_conf),
@@ -4431,6 +4436,7 @@ def monitoring_settings(config):
             generate_docker_tunnel_script=False,
             generated_file_export_path=ssh_gen_file_path,
             hpn_server_swap=False,
+            allow_docker_access=False,
         ),
     )
 

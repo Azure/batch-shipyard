@@ -247,6 +247,8 @@ mapping:
             type: str
           hpn_server_swap:
             type: bool
+          allow_docker_access:
+            type: bool
       rdp:
         type: map
         mapping:

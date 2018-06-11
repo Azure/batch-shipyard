@@ -81,6 +81,7 @@ pool_specification:
     generate_docker_tunnel_script: true
     generated_file_export_path:
     hpn_server_swap: false
+    allow_docker_access: false
   rdp:
     username: shipyard
     password: null

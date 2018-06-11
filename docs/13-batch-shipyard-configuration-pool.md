@@ -89,6 +89,7 @@ pool_specification:
     generate_docker_tunnel_script: true
     generated_file_export_path:
     hpn_server_swap: false
+    allow_docker_access: false
   rdp:
     username: shipyard
     password: null
@@ -445,6 +446,8 @@ is ignored for Windows-based pools.
       [HPN patches](https://www.psc.edu/index.php/using-joomla/extensions/templates/atomic/636-hpn-ssh)
       to be swapped with the standard distribution OpenSSH server. This is not
       supported on all Linux distributions and may be force disabled.
+    * (optional) `allow_docker_access` allows this SSH user access to the
+      Docker daemon. The default is `false`.
 * (optional) `rdp` is the property for creating a user to accomodate RDP login
 sessions to compute nodes. If this property is absent, then an RDP user is not
 created with pool creation. This property is ignored for Linux-based pools.

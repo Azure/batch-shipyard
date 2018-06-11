@@ -80,6 +80,7 @@ blobxferversion=latest
 block=
 cascadecontainer=0
 custom_image=0
+docker_group=
 encrypted=
 hpnssh=0
 gluster_on_compute=0
@@ -94,7 +95,7 @@ sc_args=
 shipyardversion=
 
 # process command line options
-while getopts "h?abcde:fg:l:m:np:s:tuv:wx:" opt; do
+while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -110,6 +111,7 @@ while getopts "h?abcde:fg:l:m:np:s:tuv:wx:" opt; do
             echo "-m [type:scid] mount storage cluster"
             echo "-n native mode"
             echo "-p [prefix] storage container prefix"
+            echo "-r enable azure batch docker group"
             echo "-s [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
             echo "-t optimize network TCP settings"
             echo "-u custom image"
@@ -151,6 +153,9 @@ while getopts "h?abcde:fg:l:m:np:s:tuv:wx:" opt; do
             ;;
         p)
             prefix="--prefix $OPTARG"
+            ;;
+        r)
+            docker_group="\"group\": \"_azbatchsudogrp\","
             ;;
         s)
             p2p=${OPTARG,,}
@@ -597,7 +602,7 @@ EOF
             python -c "import json;a=json.load(open('/etc/docker/daemon.json.dpkg-old'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
             rm -f /etc/docker/daemon.json.dpkg-old
         elif [[ $DISTRIB_ID == centos* ]]; then
-            echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
+            echo "{ $docker_group \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json.merge
             python -c "import json;a=json.load(open('/etc/docker/daemon.json.merge'));b=json.load(open('/etc/docker/daemon.json'));a.update(b);f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
             rm -f /etc/docker/daemon.json.merge
         fi
@@ -937,9 +942,9 @@ install_docker_host_engine() {
     rm -rf /var/lib/docker
     mkdir -p /etc/docker
     if [ "$PACKAGER" == "apt" ]; then
-        echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        echo "{ $docker_group \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"fd://\", \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
     else
-        echo "{ \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
+        echo "{ $docker_group \"data-root\": \"$USER_MOUNTPOINT/docker\", \"hosts\": [ \"unix:///var/run/docker.sock\", \"tcp://127.0.0.1:2375\" ] }" > /etc/docker/daemon.json
     fi
     # ensure no options are specified after dockerd
     sed -i 's|^ExecStart=/usr/bin/dockerd.*|ExecStart=/usr/bin/dockerd|' "${SYSTEMD_PATH}"/docker.service
@@ -1323,6 +1328,7 @@ echo "Azure Blob: $azureblob"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
+echo "Enable Azure Batch group for Docker access: $docker_group"
 echo "Cascade via container: $cascadecontainer"
 echo "P2P: $p2penabled"
 echo "Block on images: $block"

@@ -1394,7 +1394,7 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            ('{npf}{a}{b}{c}{d}{e}{f}{g}{lis}{m}{n}{p}{s}{t}{u}'
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{lis}{m}{n}{p}{r}{s}{t}{u}'
              '{v}{w}{x}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
@@ -1411,6 +1411,7 @@ def _construct_pool_object(
                 n=' -n' if native else '',
                 p=' -p {}'.format(bs.storage_entity_prefix) if (
                     bs.storage_entity_prefix) else '',
+                r=' -r' if pool_settings.ssh.allow_docker_access else '',
                 s=' -s {}'.format(torrentflags),
                 t=' -t' if settings.can_tune_tcp(
                     pool_settings.vm_size) else '',
