@@ -548,23 +548,20 @@ def _setup_azureblob_mounts(blob_client, config, bc):
                 settings.azure_storage_account_settings(sdv, svkey))
             cont = settings.azure_blob_container_name(sdv, svkey)
             hmp = settings.azure_blob_host_mount_path(sa.account, cont)
+            sas = storage.create_blob_container_saskey(
+                sa, cont, 'egress', create_container=True)
             tmpmp = '{}/blobfuse-tmp/{}-{}'.format(tmpmount, sa.account, cont)
             cmds.append('mkdir -p {}'.format(hmp))
             cmds.append('chmod 0770 {}'.format(hmp))
             cmds.append('mkdir -p {}'.format(tmpmp))
             cmds.append('chown _azbatch:_azbatchgrp {}'.format(tmpmp))
             cmds.append('chmod 0770 {}'.format(tmpmp))
-            conn = 'azblob-{}-{}.cfg'.format(sa.account, cont)
-            cmds.append('cat > {} << EOF'.format(conn))
-            cmds.append('accountName {}'.format(sa.account))
-            cmds.append('accountKey {}'.format(sa.account_key))
-            cmds.append('containerName {}'.format(cont))
-            cmds.append('EOF')
+            cmds.append('export AZURE_STORAGE_ACCOUNT="{}"'.format(sa.account))
+            cmds.append('export AZURE_STORAGE_SAS_TOKEN="{}"'.format(sas))
             cmd = (
-                'blobfuse {hmp} --tmp-path={tmpmp} -o attr_timeout=240 '
-                '-o entry_timeout=240 -o negative_timeout=120 -o allow_other '
-                '--config-file={conn}'
-            ).format(hmp=hmp, tmpmp=tmpmp, conn=conn)
+                'blobfuse {hmp} --container-name={cont} '
+                '--tmp-path={tmpmp} -o allow_other'
+            ).format(hmp=hmp, cont=cont, tmpmp=tmpmp)
             # add any additional mount options
             mo = settings.shared_data_volume_mount_options(sdv, svkey)
             if util.is_not_empty(mo):
@@ -574,6 +571,12 @@ def _setup_azureblob_mounts(blob_client, config, bc):
                         continue
                     opts.append(opt)
                 cmd = '{} {}'.format(cmd, ' '.join(opts))
+            if '-o attr_timeout=' not in cmd:
+                cmd = '{} -o attr_timeout=240'.format(cmd)
+            if '-o entry_timeout=' not in cmd:
+                cmd = '{} -o entry_timeout=240'.format(cmd)
+            if '-o negative_timeout=' not in cmd:
+                cmd = '{} -o negative_timeout=120'.format(cmd)
             cmds.append(cmd)
     # create file share mount command script
     if util.is_none_or_empty(cmds):
@@ -2539,17 +2542,6 @@ def _adjust_settings_for_pool_creation(config):
                 if is_windows:
                     raise ValueError(
                         'azure blob mounting is not supported on windows')
-                if native:
-                    raise ValueError(
-                        'azure blob mounting is not supported on native '
-                        'container pools')
-                if ((offer == 'ubuntuserver' and sku < '16.04-lts') or
-                        not offer.startswith('centos') or
-                        publisher != 'microsoft-azure-batch'):
-                    raise ValueError(
-                        ('azure blob mounting is not supported '
-                         'on publisher={} offer={} sku={}').format(
-                             publisher, offer, sku))
             elif settings.is_shared_data_volume_custom_linux_mount(
                     sdv, sdvkey):
                 if is_windows:
@@ -3210,6 +3202,8 @@ def action_pool_resize(batch_client, blob_client, config, wait):
                          'an existing ssh public key cannot be found').format(
                              pool.id))
                     create_ssh_user = False
+            else:
+                create_ssh_user = True
     # check if this is a glusterfs-enabled pool
     gluster_present = False
     voltype = None

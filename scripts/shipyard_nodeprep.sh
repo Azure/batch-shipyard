@@ -246,13 +246,19 @@ EOF
     fi
 }
 
-download_file() {
-    log INFO "Downloading: $1"
+download_file_as() {
+    log INFO "Downloading: $1 as $2"
     local retries=10
     set +e
     while [ $retries -gt 0 ]; do
-        if curl -fSsLO "$1"; then
-            break
+        if [ "$DISTRIB_ID" == "debian" ]; then
+            if wget -O "$2" "$1"; then
+                break
+            fi
+        else
+            if curl -fSsL -o "$2" "$1"; then
+                break
+            fi
         fi
         retries=$((retries-1))
         if [ $retries -eq 0 ]; then
@@ -550,8 +556,10 @@ EOF
                 # HPC distros have pinned repos
                 install_packages "${kernel_devel_package}"
             elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]]; then
-                download_file http://vault.centos.org/"${centos_ver}"/updates/x86_64/Packages/"${kernel_devel_package}".rpm
-                install_local_packages "${kernel_devel_package}".rpm
+                local pkg
+                pkg="${kernel_devel_package}.rpm"
+                download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
+                install_local_packages "$pkg"
             else
                 install_packages "${kernel_devel_package}"
             fi
@@ -630,40 +638,45 @@ EOF
 
 mount_azurefile_share() {
     log INFO "Mounting Azure File Shares"
-    chmod +x azurefile-mount.sh
-    ./azurefile-mount.sh
     chmod 700 azurefile-mount.sh
     chown root:root azurefile-mount.sh
+    ./azurefile-mount.sh
+    rm azurefile-mount.sh
 }
 
 mount_azureblob_container() {
     log INFO "Mounting Azure Blob Containers"
-    if [[ "$DISTRIB_ID" == "ubuntu" ]] && [[ $DISTRIB_RELEASE == 16.04* ]]; then
-        debfile=packages-microsoft-prod.deb
-        if [ ! -f ${debfile} ]; then
-            download_file https://packages.microsoft.com/config/ubuntu/16.04/${debfile}
-            install_local_packages ${debfile}
-            refresh_package_index
-            install_packages blobfuse
+    chmod 700 azureblob-mount.sh
+    chown root:root azureblob-mount.sh
+    local mspkg
+    if [ "$PACKAGER" == "apt" ]; then
+        mspkg=packages-microsoft-prod.deb
+        if [ "$DISTRIB_ID" == "ubuntu" ]; then
+            download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+        elif [ "$DISTRIB_ID" == "debian" ]; then
+            install_packages apt-transport-https
+            if [ "$DISTRIB_RELEASE" == "8" ]; then
+                download_file_as "https://packages.microsoft.com/config/ubuntu/14.04/${mspkg}" "$mspkg"
+            elif [ "$DISTRIB_RELEASE" == "9" ]; then
+                download_file_as "https://packages.microsoft.com/config/ubuntu/16.04/${mspkg}" "$mspkg"
+            fi
         fi
-    elif [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]]; then
-        rpmfile=packages-microsoft-prod.rpm
-        if [ ! -f ${rpmfile} ]; then
-            download_file https://packages.microsoft.com/config/rhel/7/${rpmfile}
-            install_local_packages ${rpmfile}
-            refresh_package_index
-            install_packages blobfuse
-        fi
-    else
+    elif [ "$PACKAGER" == "yum" ]; then
+        mspkg=packages-microsoft-prod.rpm
+        download_file_as "https://packages.microsoft.com/config/rhel/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+    elif [ "$PACKAGER" == "zypper" ]; then
+        mspkg=packages-microsoft-prod.rpm
+        download_file_as "https://packages.microsoft.com/config/sles/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+    fi
+    if [ ! -f ${mspkg} ]; then
         echo "ERROR: unsupported distribution for Azure blob: $DISTRIB_ID $DISTRIB_RELEASE"
         exit 1
     fi
-    chmod +x azureblob-mount.sh
+    install_local_packages ${mspkg}
+    refresh_package_index
+    install_packages blobfuse
     ./azureblob-mount.sh
-    chmod 700 azureblob-mount.sh
-    chown root:root azureblob-mount.sh
-    chmod 600 ./*.cfg
-    chown root:root ./*.cfg
+    rm azureblob-mount.sh
 }
 
 docker_pull_image() {

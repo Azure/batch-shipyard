@@ -422,7 +422,7 @@ Batch Shipyard. These volumes have the following properties:
 * (required) `storage_account_settings` is a link to the alias of the storage
 account specified that holds this Azure File Share.
 * (required) `azure_blob_container_name` is the name of the container on Azure
-Blob storage. Note that the Azure Blob container must exist.
+Blob storage. If the Azure Blob container does not exist, it is created.
 * (required) `container_path` is the path in the container to mount.
 * (optional) `mount_options` are the mount and FUSE options to pass to the
 blobfuse mount command. Please see the
