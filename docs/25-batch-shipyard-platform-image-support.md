@@ -44,7 +44,7 @@ SLES is not supported at this time.
 |-----------------------|------------------------------|-------------|:---:|:-------:|:-----------:|:--------------:|
 | Canonical             | UbuntuServer                 | 16.04-LTS   |  X  |  X (1)  |             |      X (2)     |
 | microsoft-azure-batch | ubuntu-server-container      | 16-04-lts   |  X  |         |      X      |                |
-| microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |    X    |      X      |                |
+| microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |  X (3)  |      X      |                |
 
 ### Windows
 
@@ -59,3 +59,5 @@ see the [packer](../contrib/packer) scripts and consult the
 [custom image guide](63-batch-shipyard-custom-images.md) for information
 on how to create a compliant custom image.
 2. Native conversion of this platform image will enable IB/RDMA automatically.
+3. The Intel MPI runtime is not present by default on this image, however,
+it is automatically installed through Batch Shipyard.

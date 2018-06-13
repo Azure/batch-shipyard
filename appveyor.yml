@@ -68,12 +68,6 @@ after_test:
     }
 
 - echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH% nugetpkg %NUGET_PACKAGE_VERSION%
-- IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
-  set UPLOAD_NUGET=1&
-  echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
-  nuget pack site-extension\\BatchShipyard.nuspec -Version %NUGET_PACKAGE_VERSION% &
-  7z l BatchShipyard.*.nupkg &
-  appveyor PushArtifact BatchShipyard.%NUGET_PACKAGE_VERSION%.nupkg || set UPLOAD_NUGET=0)
 - ps: >-
     if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
       Write-Host "Build is from a PR, not creating binary"
@@ -195,12 +189,34 @@ after_test:
 
     popd
 
+- IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
+  set UPLOAD_NUGET=1&
+  echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
+  nuget pack site-extension\\BatchShipyard.nuspec -Version %NUGET_PACKAGE_VERSION% &
+  7z l BatchShipyard.*.nupkg &
+  appveyor PushArtifact BatchShipyard.%NUGET_PACKAGE_VERSION%.nupkg || set UPLOAD_NUGET=0&
+  blobxfer upload --remote-path %UPLOAD_PATH% --local-path . --include BatchShipyard.*.nupkg --file-md5 --overwrite)
+
 deploy:
-- provider: NuGet
-  api_key:
-    secure: Bl6flZ+gBJZ3aYPTKERDcnMOsNgbLs/MG/gj6XsCC9I9E/erIw0ffpWJ+WSQrWiX
-  skip_symbols: true
+# TODO remove NuGet package generation and migrate to VSTS
+#- provider: NuGet
+#  api_key:
+#    secure: Bl6flZ+gBJZ3aYPTKERDcnMOsNgbLs/MG/gj6XsCC9I9E/erIw0ffpWJ+WSQrWiX
+#  skip_symbols: true
+#  artifact: /.*\.nupkg/
+#  on:
+#    appveyor_repo_tag: true
+#    PYTHON_VERSION: "3.6"
+#    UPLOAD_NUGET: "1"
+- provider: GitHub
+  tag: $(APPVEYOR_REPO_TAG_NAME)
+  description: 'Batch Shipyard release'
+  auth_token:
+    secure: +f4N6Qsv3HvJyii0Bs+8qBx3YS7+7FJUWbFSiAdEIUDubFQnNkJgFnBw0Ew2SLkv
   artifact: /.*\.nupkg/
+  draft: true
+  prerelease: true
+  force_update: true
   on:
     appveyor_repo_tag: true
     PYTHON_VERSION: "3.6"

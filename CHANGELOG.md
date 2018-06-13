@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [3.5.0b3] - 2018-06-13
+### Changed
+- All supported platform images support blobfuse, including native mode
+
+### Fixed
+- blobfuse check preventing valid pool provisioning (#213)
+- Pool resize not adding SSH users if keys are specified
+
 ## [3.5.0b2] - 2018-06-12
 ### Added
 - Support for Prometheus monitoring and Grafana visualization (#205). Please
@@ -1295,7 +1303,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...HEAD
+[3.5.0b3]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...3.5.0b3
 [3.5.0b2]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...3.5.0b2
 [3.5.0b1]: https://github.com/Azure/batch-shipyard/compare/3.4.0...3.5.0b1
 [3.4.0]: https://github.com/Azure/batch-shipyard/compare/3.3.0...3.4.0
