@@ -16,8 +16,8 @@ factors that Batch Shipyard has no control over.
     * If it appears to be a Batch Shipyard issue, you can open an
       [issue](https://github.com/Azure/batch-shipyard/issues).
     * If it appears to be an Azure Batch issue, then please create a
-      support ticket in the Azure Portal, or post your question
-      [here](https://social.msdn.microsoft.com/Forums/azure/en-US/home?forum=azurebatch).
+      support ticket in the Azure Portal, or open an issue
+      [here](https://github.com/Azure/Batch/issues).
 
 #### I don't have enough core (or other) quota. How do I increase it?
 * Please see this [page](https://docs.microsoft.com/azure/batch/batch-quota-limit).

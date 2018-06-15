@@ -129,10 +129,11 @@ encapsulates this functionality by either querying the Azure Batch service
 or Azure Resource Manager endpoints for the requested resources to monitor.
 No sensitive credentials are passed to the resource monitoring virtual
 machine. Instead, Batch Shipyard Heimdall uses Azure MSI to authenticate
-with Azure Active Directory with least user privilege (LUP) to enumerate the
-specified resources to monitor. This information is then used to populate
-Prometheus service discovery. Once the Prometheus server begins to scrape
-metrics, then this data is available for visualization in Grafana.
+with Azure Active Directory using a service principal with least privilege
+to enumerate the specified resources to monitor. This information is then
+used to populate Prometheus service discovery. Once the Prometheus server
+begins to scrape metrics, then this data is available for visualization
+in Grafana.
 
 ## Configuration
 In order to enable resource monitoring, there are a few configuration changes

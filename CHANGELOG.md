@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Updated blobxfer to 1.3.0
+- Updated dependencies
+
 ## [3.5.0b3] - 2018-06-13
 ### Changed
 - All supported platform images support blobfuse, including native mode

@@ -26,7 +26,7 @@ environment:
   DOCKER_USERNAME:
     secure: S8n3Geq7JUkN7ZQKXo8CLg==
   DOCKER_PASSWORD:
-    secure: BcI2Fs6IJeTfPq8cAD4KEQ==
+    secure: PFjy27XjnoH8YI46VpXUi13ZJLa8G6EJ6YzR9P3ualY=
   DOCKER_IMAGE_TAG_PREFIX: "alfpark/batch-shipyard:"
 
 init:

@@ -1110,7 +1110,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Containers Core Usage (1m avg)",
+          "title": "Container Core Usage (1m avg)",
           "tooltip": {
             "msResolution": true,
             "shared": true,
