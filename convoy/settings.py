@@ -1586,9 +1586,8 @@ def credentials_batch(config):
         creds = config['credentials']
     except (KeyError, TypeError):
         raise ValueError('credentials not specified')
-    conf = _kv_read_checked(creds, 'batch')
-    if conf is None:
-        raise ValueError('batch credentials not specified or invalid')
+    # allow conf to not exist due to later keyvault load
+    conf = _kv_read_checked(creds, 'batch', default={})
     account_key = _kv_read_checked(conf, 'account_key')
     account_service_url = conf['account_service_url']
     resource_group = _kv_read_checked(conf, 'resource_group')
