@@ -104,17 +104,39 @@ class CliContext(object):
             conf = pathlib.Path(conf)
         return conf
 
+    def _ensure_credentials_section(self, section):
+        # type: (CliContext, str) -> None
+        """Ensure a credentials section exists
+        :param CliContext self: this
+        :param str section: section name
+        """
+        fail = True
+        # if credentials doesn't exist at all then section won't exist
+        if 'credentials' not in self.config:
+            # set section to credentials if empty (checking for base)
+            if convoy.util.is_none_or_empty(section):
+                section = 'credentials'
+        elif (convoy.util.is_none_or_empty(section) or
+              section in self.config['credentials']):
+            # else the credentials section does exist, so the base
+            # check is ok if section is not specified, else check if
+            # the section exists
+            fail = False
+        if fail:
+            raise RuntimeError(
+                ('"{}" configuration is missing or keyvault client is '
+                 'invalid. Are you missing your configuration files, '
+                 'pointing to the wrong configdir location, or missing '
+                 'keyvault configuration/arguments?').format(section))
+
     def _init_keyvault_client(self):
         # type: (CliContext) -> None
         """Initialize keyvault client and check for valid creds
         :param CliContext self: this
         """
         self.keyvault_client = convoy.clients.create_keyvault_client(self)
-        if self.keyvault_client is None and 'credentials' not in self.config:
-            raise RuntimeError(
-                'Are you missing your configuration files, pointing to '
-                'the wrong configdir location, or missing keyvault '
-                'configuration/arguments?')
+        if self.keyvault_client is None:
+            self._ensure_credentials_section(None)
 
     def initialize_for_fs(self):
         # type: (CliContext) -> None
@@ -123,10 +145,14 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for remote fs actions')
         self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=True,
             skip_monitor_config=True, fs_storage=True)
+        self._ensure_credentials_section('storage')
+        self._ensure_credentials_section('remote_fs')
         _, self.resource_client, self.compute_client, self.network_client, \
             self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
@@ -143,10 +169,14 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for monitoring actions')
         self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=True,
             skip_monitor_config=False, fs_storage=True)
+        self._ensure_credentials_section('storage')
+        self._ensure_credentials_section('monitoring')
         self.auth_client, self.resource_client, self.compute_client, \
             self.network_client, self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
@@ -164,10 +194,15 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for keyvault actions')
         self._init_keyvault_client()
         self._init_config(
             skip_global_config=True, skip_pool_config=True,
             skip_monitor_config=True, fs_storage=False)
+        # do not perform keyvault credentials section check as all
+        # options can be specified off the cli, validity of the keyvault
+        # client will be checked later
         self._cleanup_after_initialize()
 
     def initialize_for_batch(self):
@@ -177,10 +212,14 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for batch actions')
         self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=False,
             skip_monitor_config=True, fs_storage=False)
+        self._ensure_credentials_section('storage')
+        self._ensure_credentials_section('batch')
         _, self.resource_client, self.compute_client, self.network_client, \
             self.storage_mgmt_client, self.batch_mgmt_client, \
             self.batch_client = \
@@ -199,10 +238,13 @@ class CliContext(object):
         """
         self._read_credentials_config()
         self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for storage actions')
         self._init_keyvault_client()
         self._init_config(
             skip_global_config=False, skip_pool_config=False,
             skip_monitor_config=True, fs_storage=False)
+        self._ensure_credentials_section('storage')
         # inject storage account keys if via aad
         _, _, _, _, self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)
