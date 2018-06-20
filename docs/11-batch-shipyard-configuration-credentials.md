@@ -151,34 +151,44 @@ environment variable instead. For example, if you do not want to store the
 Authentication independent settings:
 
 * (optional) `authority_url` is the AAD authority URL. If this is not
-specified, then this defaults to the Azure Public cloud AAD authority.
+specified, then this defaults to the Azure Public cloud AAD authority. It is
+recommended to omit this setting if using public Azure.
 * (optional) `endpoint` is the AAD endpoint for the associated resource. If
 not specified, these default to the Azure Public cloud endpoints for the
-respective resource.
+respective resource. It is recommended to omit this setting if using public
+Azure. **Please be mindful when manually entering these resource endpoints.
+Subtle typos such as missing a trailing slash can lead to authentication
+errors.**
 * (required) `directory_id` AAD directory (tenant) id
-* (optional) `application_id` AAD application (client) id
 
-Service principal authentication key settings:
+Service principal authentication key settings (the following settings are
+required for this type of authentication):
 
-* (optional) `auth_key` Service Principal authentication key
+* (required) `application_id` AAD application (client) id
+* (required) `auth_key` Service Principal authentication key
 
-Certificate-based asymmetric key authentication settings:
+Certificate-based asymmetric key authentication settings (the following
+settings are required for this type of authentication):
 
-* (optional) `rsa_private_key_pem` path to RSA private key PEM file if using
+* (required) `application_id` AAD application (client) id
+* (required) `rsa_private_key_pem` path to RSA private key PEM file if using
 Certificate-based authentication
-* (optional) `x509_cert_sha1_thumbprint` thumbprint of the X.509
+* (required) `x509_cert_sha1_thumbprint` thumbprint of the X.509
 certificate for use with Certificate-based authentication
 
-Username authentication settings:
+Username authentication settings (some of the following settings are
+required for this type of authentication):
 
-* (optional) `user` AAD username
+* (required) `user` AAD username
 * (optional) `password` AAD password associated with the user if using
 username and password authentication. You can omit this property if you
 want to resort to interactive multi-factor authentication.
 * (optional) `token_cache` defines token cache properties for multi-factor
 device code auth only. Tokens are not cached for other auth mechanisms.
     * (optional) `enabled` enables the token cache for device code auth
-    * (optional) `filename` specifies the file path to cache the signed token
+    * (optional) `filename` specifies the file path to cache the signed token.
+      This cannot be specified at the global level as signed tokens are
+      scoped per resource endpoint.
 
 ### Batch: `batch`
 * (required) The `batch` property defines the Azure Batch account. Members

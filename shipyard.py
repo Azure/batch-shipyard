@@ -863,7 +863,7 @@ def monitor_options(f):
 @click.version_option(version=convoy.__version__)
 @click.pass_context
 def cli(ctx):
-    """Batch Shipyard: Provision and execute container workloads on
+    """Batch Shipyard: Provision, execute and monitor container workloads on
     Azure Batch"""
     pass
 

@@ -1491,7 +1491,7 @@ def _aad_credentials(
         aad_endpoint = _kv_read_checked(
             service_aad, 'endpoint', default=default_endpoint)
         token_cache = _kv_read_checked(service_aad, 'token_cache', default={})
-        if _kv_read(token_cache, 'eanbled', default=True):
+        if _kv_read(token_cache, 'enabled', default=True):
             token_cache_file = _kv_read_checked(
                 token_cache, 'filename', default=default_token_cache_file)
         else:
