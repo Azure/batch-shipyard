@@ -59,6 +59,8 @@ after_success:
                  pyinstaller -F -n $BATCH_SHIPYARD_CLI_ARTIFACT -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
                  deactivate"
       chmod +x bin/$BATCH_SHIPYARD_CLI_ARTIFACT
+      sha256sum bin/$BATCH_SHIPYARD_CLI_ARTIFACT | cut -d' ' -f1 > bin/${BATCH_SHIPYARD_CLI_ARTIFACT}.sha256
+      cat bin/${BATCH_SHIPYARD_CLI_ARTIFACT}.sha256
       travis_retry pip install --upgrade blobxfer
       blobxfer upload --remote-path $UPLOAD_PATH --local-path bin/${BATCH_SHIPYARD_CLI_ARTIFACT} --strip-components 1 --file-md5 --overwrite
     fi
@@ -72,6 +74,8 @@ deploy:
     draft: true
     overwrite: true
     tag_name: $TRAVIS_TAG
-    file: bin/${BATCH_SHIPYARD_CLI_ARTIFACT}
+    file:
+      - bin/${BATCH_SHIPYARD_CLI_ARTIFACT}
+      - bin/${BATCH_SHIPYARD_CLI_ARTIFACT}.sha256
     api_key:
       secure: Mz2sWn3YAr4tenO1NflOR6QJ9xiy4bjQvnFl9HzZ4zifxrjwLyN/Nbms6X2l8lq7+HTIDOn4Nw8DsE60Upq7yG0UEkwv0BJJtl2qzPnWGOAymykjnTP5Vl5MlCcqEVtUmWL+Wl7WMid10eJLdxSo7TUHp/AW/NShJuKj4rqQsdOtWBpWHuE2rBVTYeuPpUVku74rGH813erxgX/BPzcSjWcloha3Zp25jglJQ4sjqtGrmdts3hXYI1/6oEvdnmFn2xePRMfrEhJxkHkGhqEukkehi4QMnxQubcv9Y9ETQTROf0QjtTeJ+h/HsK2wY5VdI4dcqe3b0/F0m5sZ2Z0PThzBoi/ga18OKeU8P/w1xWk2+DtvG9jGZ8yjbnfRLxOfEg8KNF8Y6B6KntkJWpoNBlIdDU9jOndnvdAjFu90KMmgerz53FtLw5DmZQxIUjoryRrFQMjnvR2dbaP8QF2LlbdlSPDXcGSlO4zVh9BxXFQJgJ9PYA9AQnVii32o1RL5+CelV59AKaheybtk2pqUVvF1mz+prPVbsIJOPo97YpaAfuNprqVvE8kfE9t5W7aOhMuqM+bS4LpENzqDsPIro2cJ2FROtFmB9Ts1YTt6P0UK0XY+m2v3URWjw8v7U4IqGPeNMdQUC6wEJgNxPH1Ko+T1ZMhQ9y94FWO2at0wF3Q=

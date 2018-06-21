@@ -12,10 +12,6 @@ environment:
     PYTHON_VERSION: "2.7"
     PYTHON_ARCH: "64"
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-    PYTHON: "C:\\Python35-x64"
-    PYTHON_VERSION: "3.5"
-    PYTHON_ARCH: "64"
-  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     PYTHON: "C:\\Python36-x64"
     PYTHON_VERSION: "3.6"
     PYTHON_ARCH: "64"
@@ -30,6 +26,7 @@ environment:
   DOCKER_IMAGE_TAG_PREFIX: "alfpark/batch-shipyard:"
 
 init:
+- choco install checksum
 - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
 
 install:
@@ -113,7 +110,10 @@ after_test:
     sed -i -e "s/{EXE}/%BATCH_SHIPYARD_CLI_ARITFACT%/g" docker\\windows\\file_version_info.txt &&
     pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py &&
     pyi\\Scripts\\deactivate.bat &&
+    checksum "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" -t=sha256 > "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
+    cat "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
     appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" &&
+    appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
     pip install --upgrade blobxfer &&
     blobxfer upload --remote-path %UPLOAD_PATH% --local-path bin\\%BATCH_SHIPYARD_CLI_ARITFACT% --strip-components 1 --file-md5 --overwrite
   )
@@ -122,8 +122,8 @@ after_test:
       Write-Host "Build is from a PR, not creating a Docker image for cargo"
       return
     }
-    if (!($env:PYTHON_VERSION -eq "3.5")) {
-      Write-Host "Python environment is not 3.5, not creating a Docker image for cargo"
+    if (!($env:PYTHON_VERSION -eq "3.6")) {
+      Write-Host "Python environment is not 3.6, not creating a Docker image for cargo"
       return
     }
 
@@ -158,8 +158,8 @@ after_test:
       Write-Host "Build is from a PR, not creating a Docker image for CLI"
       return
     }
-    if (!($env:PYTHON_VERSION -eq "3.5")) {
-      Write-Host "Python environment is not 3.5, not creating a Docker image for CLI"
+    if (!($env:PYTHON_VERSION -eq "3.6")) {
+      Write-Host "Python environment is not 3.6, not creating a Docker image for CLI"
       return
     }
 
@@ -226,7 +226,7 @@ deploy:
   description: 'Batch Shipyard release'
   auth_token:
     secure: +f4N6Qsv3HvJyii0Bs+8qBx3YS7+7FJUWbFSiAdEIUDubFQnNkJgFnBw0Ew2SLkv
-  artifact: /.*\.exe/
+  artifact: /.*\.exe/,/.*\.exe.sha256/
   draft: true
   prerelease: true
   force_update: true
