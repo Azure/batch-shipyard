@@ -15,7 +15,8 @@ GLUSTER_VERSION_DEBIAN=4.0
 GLUSTER_VERSION_CENTOS=40
 
 # consts
-DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce-0~"
+DOCKER_CE_PACKAGE_DEBIAN_OLD="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce-0~"
+DOCKER_CE_PACKAGE_DEBIAN_NEW="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
 DOCKER_CE_PACKAGE_CENTOS="docker-ce-${DOCKER_CE_VERSION_CENTOS}.ce-1.el7.centos"
 DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
 NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
@@ -721,9 +722,12 @@ singularity_setup() {
     local offer
     local sku
     singularity_basedir="${USER_MOUNTPOINT}"/singularity
-    if [[ "$DISTRIB_ID" == "ubuntu" ]] && [[ $DISTRIB_RELEASE == 16.04* ]]; then
-        offer=ubuntu
-        sku=16.04
+    if [ "$DISTRIB_ID" == "ubuntu" ]; then
+        # TODO add 18.04 support
+        if [ "$DISTRIB_RELEASE" == "16.04" ]; then
+            offer="$DISTRIB_ID"
+            sku="$DISTRIB_RELEASE"
+        fi
     elif { [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]]; } && [[ $DISTRIB_RELEASE == 7* ]]; then
         offer=centos
         sku=7
@@ -918,7 +922,12 @@ install_docker_host_engine() {
     if [ "$PACKAGER" == "apt" ]; then
         local repo=https://download.docker.com/linux/"${DISTRIB_ID}"
         local gpgkey="${repo}"/gpg
-        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}"
+        local dockerversion
+        if [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
+            dockerversion="${DOCKER_CE_PACKAGE_DEBIAN_NEW}${DISTRIB_ID}"
+        else
+            dockerversion="${DOCKER_CE_PACKAGE_DEBIAN_OLD}${DISTRIB_ID}"
+        fi
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
         local repo=https://download.docker.com/linux/centos/docker-ce.repo
@@ -1277,11 +1286,7 @@ install_and_start_node_exporter() {
         done
     fi
     local pneo
-    if [ ! -z "${PROM_NODE_EXPORTER_OPTIONS}" ]; then
-        IFS=',' read -ra pneo <<< "$PROM_NODE_EXPORTER_OPTIONS"
-    else
-        pneo=
-    fi
+    IFS=',' read -ra pneo <<< "$PROM_NODE_EXPORTER_OPTIONS"
     # shellcheck disable=SC2086
     "${AZ_BATCH_TASK_WORKING_DIR}"/node_exporter \
         "$ib" $nfs \

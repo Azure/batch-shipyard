@@ -13,7 +13,7 @@ RUN apk update \
     && git clone -b $GIT_BRANCH --single-branch https://github.com/Azure/batch-shipyard.git /opt/batch-shipyard \
     && cd /opt/batch-shipyard \
     && git checkout $GIT_COMMIT \
-    && rm -rf .git \
+    && rm -rf .git .github \
     && rm -f .git* .travis.yml *.yml install* \
     && pip3 install --no-cache-dir -r requirements.txt \
     && pip3 install --no-cache-dir --no-deps -r req_nodeps.txt \
