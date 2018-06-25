@@ -1,24 +1,16 @@
-#Dockerfile for MDL (Microsoft Distributed Learners)
+#Dockerfile for MADL (Microsoft Distributed Learners)
 
 FROM ubuntu:16.04
-MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <SymSGD project landing page>
+MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana <https://github.com/Azure/batch-shipyard>
 ENV DEBIAN_FRONTEND=noninteractive
 
 #install base system
 RUN apt-get update && apt-get install -y --no-install-recommends \
-		build-essential \
-		apt-utils \
-        	openssh-client \
-        	openssh-server \
-        	iproute2 \
-		gcc \
-		emacs \
-		iotop \
-		gfortran \
+        openssh-client \
+        openssh-server \
 		libopenblas-dev \
 		libatlas-base-dev \
 		liblapacke-dev \
-		cpio \
 		openmpi-bin \
 		openmpi-common \
 		libopenmpi-dev && \
@@ -38,21 +30,15 @@ RUN mkdir -p /root/.ssh && \
     cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys	
 
 # set parasail dir	
-WORKDIR /parasail	
-
-# create training and testing directories
-RUN mkdir /parasail/rcv1-00000 && \
-    mkdir /parasail/rcv1-test-00000
-    
-# copy training and testing data
-COPY rcv1-00000 /parasail/rcv1-00000
-COPY rcv1-test-00000 /parasail/rcv1-test-00000
+WORKDIR /parasail
 
 # the supersgd is not included in this deployment
-# COPY supersgd /parasail
+COPY supersgd /parasail
 COPY run_parasail.sh /parasail
+
+# remove romio314 bits
+RUN rm -rf /usr/lib/openmpi/lib/openmpi/mca_io_romio.so
 
 #make sshd listen on 23 and run by default
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
-
