@@ -3,3 +3,11 @@ batch_shipyard:
 global_resources:
   docker_images:
   - msmadl/symsgd:0.0.1
+  volumes:
+    shared_data_volumes:
+      azureblob_vol:
+        volume_driver: azureblob
+        storage_account_settings: mystorageaccount
+        azure_blob_container_name: <blob container name>
+        container_path: $AZ_BATCH_NODE_SHARED_DIR/azblob
+        bind_options: rw
