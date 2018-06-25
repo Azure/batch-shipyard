@@ -7,7 +7,7 @@ nodes=${#HOSTS[@]}
 echo num nodes: $nodes
 echo "hosts: ${HOSTS[@]}"
 
-#Create training, testing, and output directories
+# create output directories
 mkdir $AZ_BATCH_TASK_WORKING_DIR/models
 
 echo "set variables"
@@ -20,10 +20,10 @@ e=
 r=
 f=
 t=
-n=
 gl=
 glDir=
-while getopts "h?w:l:k:m:e:r:f:t:n:g:d:" opt; do
+bd=
+while getopts "h?w:l:k:m:e:r:f:t:n:g:d:b:" opt; do
     case "$opt" in
         h|\?)
             echo "run_parasail.sh parameters"
@@ -36,9 +36,9 @@ while getopts "h?w:l:k:m:e:r:f:t:n:g:d:" opt; do
             echo "-r rounds per epoch"
             echo "-f file prefix"
             echo "-t number of threads"
-            echo "-n number of features"
             echo "-gl log global models every this many epochs"
             echo "-glDir log global models to this directory at the host"
+            echo "-bd location for the binary data"
             echo ""
             exit 1
             ;;
@@ -66,14 +66,14 @@ while getopts "h?w:l:k:m:e:r:f:t:n:g:d:" opt; do
         t)
             t=${OPTARG}
             ;;
-        n)
-            n=${OPTARG}
-            ;;
         g)
             gl=${OPTARG}
             ;;
         d)
             glDir=${OPTARG}
+            ;; 
+        b)
+            bd=${OPTARG}
             ;; 
     esac
 done
@@ -82,6 +82,5 @@ shift $((OPTIND-1))
 echo "end set variables"
 
 echo "start mpi execute job"
-mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 -np $nodes $w -l $l -k $k -mc $mc -e $e -r $r -f $f -t $t -n $n -gl $gl -glDir $glDir
+mpirun --allow-run-as-root --mca btl_tcp_if_exclude docker0 -np $nodes $w -l $l -k $k -mc $mc -e $e -r $r -f $f -t $t -gl $gl -glDir $glDir -mem -bd $bd -dl
 echo "end mpi job"
-
