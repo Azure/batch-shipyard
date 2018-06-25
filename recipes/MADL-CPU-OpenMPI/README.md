@@ -55,6 +55,6 @@ A basic python script that can be used to shred and deploy the training data to 
 Supplementary files can be found [here](./docker).
 
 You must agree to the following licenses prior to use:
-* [High Performance ML Algorithms License](https://github.com/saeedmaleki/Distributed-Linear-Learner/blob/master/High%20Performance%20ML%20Algorithms%20-%20Standalone%20(free)%20Use%20Terms%20V2%20(06-06-18).docx)
-* [TPN Ubuntu Container](https://github.com/saeedmaleki/Distributed-Linear-Learner/blob/master/TPN_Ubuntu%20Container_16-04-FINAL.docx)
+* [High Performance ML Algorithms License](https://github.com/saeedmaleki/Distributed-Linear-Learner/blob/master/High%20Performance%20ML%20Algorithms%20-%20Standalone%20(free)%20Use%20Terms%20V2%20(06-06-18).txt)
+* [TPN Ubuntu Container](https://github.com/saeedmaleki/Distributed-Linear-Learner/blob/master/TPN_Ubuntu%20Container_16-04-FINAL.txt)
 * [Microsoft Third Party Notice](https://github.com/saeedmaleki/Distributed-Linear-Learner/blob/master/MicrosoftThirdPartyNotice.txt) 
