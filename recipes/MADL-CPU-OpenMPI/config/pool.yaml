@@ -1,5 +1,5 @@
 pool_specification:
-  id: madlmpi-pool
+  id: <pool id>
   vm_configuration:
     platform_image:
       offer: UbuntuServer
