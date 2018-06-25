@@ -195,7 +195,7 @@ PoolSettings = collections.namedtuple(
         'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
         'additional_node_prep_commands_post', 'virtual_network',
         'autoscale', 'node_fill_type', 'remote_access_control',
-        'certificates', 'prometheus',
+        'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1279,6 +1279,8 @@ def pool_settings(config):
         remote_access_control=rac,
         certificates=certs,
         prometheus=prometheus_settings(conf),
+        upload_diagnostics_logs_on_unusable=_kv_read(
+            conf, 'upload_diagnostics_logs_on_unusable', default=True),
     )
 
 

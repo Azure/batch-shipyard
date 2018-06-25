@@ -157,6 +157,8 @@ mapping:
         type: bool
       attempt_recovery_on_unusable:
         type: bool
+      upload_diagnostics_logs_on_unusable:
+        type: bool
       block_until_all_global_resources_loaded:
         type: bool
       transfer_files_on_pool_creation:

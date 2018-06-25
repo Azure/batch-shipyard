@@ -55,6 +55,7 @@ pool_specification:
   inter_node_communication_enabled: true
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false
+  upload_diagnostics_logs_on_unusable: true
   block_until_all_global_resources_loaded: true
   transfer_files_on_pool_creation: false
   input_data:
@@ -320,6 +321,17 @@ to recover nodes that enter `unusable` state automatically. Note that
 enabling this option can lead to infinite wait on `pool add` or `pool resize`
 with `--wait`. This defaults to `false` and is ignored for `custom_image`
 where the behavior is always `false`.
+* (optional) `upload_diagnostics_logs_on_unusable` allows Batch Shipyard
+to attempt upload of diagnostics logs for nodes that have entered unusable
+state during provisioning to the storage account designated under the
+`batch_shipyard`:`storage_account_settings` global configuration property.
+Note that this typically will only result in one set of logs being uploaded
+even if multiple nodes eventually enter this state. These logs can be
+referenced in conjunction with a support request to provide additional
+insight into why a compute node failed to provision properly. This defaults
+to `true`. Note that by setting this property to `true`, these diagnostics
+logs are not automatically sent to Microsoft and must be included, either
+indirectly via the SAS URL generated or directly, with support requests.
 * (optional) `block_until_all_global_resources_loaded` will block the node
 from entering ready state until all Docker images are loaded. This defaults
 to `true`. This option has no effect on `native` container support pools (the

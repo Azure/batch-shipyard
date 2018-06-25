@@ -1149,7 +1149,7 @@ def fs_disks_list(ctx, resource_group, restrict_scope):
     """List managed disks in resource group"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_list(
-        ctx.compute_client, ctx.config, resource_group, restrict_scope)
+        ctx.compute__client, ctx.config, resource_group, restrict_scope)
 
 
 @cli.group()
@@ -1163,38 +1163,47 @@ def storage(ctx):
 @click.option(
     '--clear-tables', is_flag=True, help='Clear tables instead of deleting')
 @click.option(
-    '--poolid', help='Delete storage containers for the specified pool')
+    '--diagnostics-logs', is_flag=True,
+    help='Delete container used for uploaded diagnostics logs')
+@click.option(
+    '--poolid', multiple=True,
+    help='Delete storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def storage_del(ctx, clear_tables, poolid):
+def storage_del(ctx, clear_tables, diagnostics_logs, poolid):
     """Delete Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_del(
-        ctx.blob_client, ctx.table_client, ctx.config, clear_tables, poolid)
+        ctx.blob_client, ctx.table_client, ctx.config, clear_tables,
+        diagnostics_logs, poolid)
 
 
 @storage.command('clear')
 @click.option(
-    '--poolid', help='Clear storage containers for the specified pool')
+    '--diagnostics-logs', is_flag=True, help='Clear uploaded diagnostics logs')
+@click.option(
+    '--poolid', multiple=True,
+    help='Clear storage containers for the specified pool')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def storage_clear(ctx, poolid):
+def storage_clear(ctx, diagnostics_logs, poolid):
     """Clear Azure Storage containers used by Batch Shipyard"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_clear(
-        ctx.blob_client, ctx.table_client, ctx.config, poolid)
+        ctx.blob_client, ctx.table_client, ctx.config, diagnostics_logs,
+        poolid)
 
 
 @storage.group()
 @pass_cli_context
 def sas(ctx):
-    """SAS key actions"""
+    """SAS token actions"""
     pass
 
 
@@ -1206,6 +1215,8 @@ def sas(ctx):
 @click.option(
     '--file', is_flag=True, help='Create file SAS instead of blob SAS')
 @click.option(
+    '--list', is_flag=True, help='List permission')
+@click.option(
     '--read', is_flag=True, help='Read permission')
 @click.option(
     '--write', is_flag=True, help='Write permission')
@@ -1216,11 +1227,13 @@ def sas(ctx):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def sas_create(ctx, create, delete, file, read, write, storage_account, path):
-    """Create an object-level SAS key"""
+def sas_create(
+        ctx, create, delete, file, list, read, write, storage_account, path):
+    """Create a container- or object-level SAS token"""
     ctx.initialize_for_storage()
     convoy.fleet.action_storage_sas_create(
-        ctx.config, storage_account, path, file, create, read, write, delete)
+        ctx.config, storage_account, path, file, create, list, read, write,
+        delete)
 
 
 @cli.group()
@@ -2122,6 +2135,9 @@ def logs(ctx):
     'service logs from',
     type=int)
 @click.option(
+    '--generate-sas', is_flag=True,
+    help='Generate a read/list SAS token for container')
+@click.option(
     '--nodeid', help='NodeId of compute node in to egress service logs from')
 @click.option(
     '--wait', is_flag=True, help='Wait for log upload to complete')
@@ -2130,11 +2146,12 @@ def logs(ctx):
 @keyvault_options
 @aad_options
 @pass_cli_context
-def diag_logs_upload(ctx, cardinal, nodeid, wait):
+def diag_logs_upload(ctx, cardinal, generate_sas, nodeid, wait):
     """Upload Batch Service Logs from compute node"""
     ctx.initialize_for_batch()
     convoy.fleet.action_diag_logs_upload(
-        ctx.batch_client, ctx.blob_client, ctx.config, cardinal, nodeid, wait)
+        ctx.batch_client, ctx.blob_client, ctx.config, cardinal, nodeid,
+        generate_sas, wait)
 
 
 @cli.group()

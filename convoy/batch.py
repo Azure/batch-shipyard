@@ -546,21 +546,21 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
 
 
 def _block_for_nodes_ready(
-        batch_client, config, stopping_states, end_states, pool_id,
-        reboot_on_failed):
-    # type: (batch.BatchServiceClient, dict,
+        batch_client, blob_client, config, stopping_states, end_states,
+        pool_id):
+    # type: (batch.BatchServiceClient, azure.storage.blob.BlockBlobClient,
+    #        dict, List[batchmodels.ComputeNodeState],
     #        List[batchmodels.ComputeNodeState],
-    #        List[batchmodels.ComputeNodeState], str,
-    #        bool) -> List[batchmodels.ComputeNode]
+    #        str) -> List[batchmodels.ComputeNode]
     """Wait for pool to enter steady state and all nodes to enter stopping
     states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param list stopping_states: list of node states to stop polling
     :param list end_states: list of acceptable end states
     :param str pool_id: pool id
-    :param bool reboot_on_failed: reboot node on failed start state
     :rtype: list
     :return: list of nodes
     """
@@ -615,7 +615,7 @@ def _block_for_nodes_ready(
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
                 for node in nodes)):
             # attempt reboot if enabled for potentially transient errors
-            if reboot_on_failed:
+            if pool_settings.reboot_on_start_task_failed:
                 for node in nodes:
                     if (node.state !=
                             batchmodels.ComputeNodeState.start_task_failed):
@@ -669,6 +669,15 @@ def _block_for_nodes_ready(
         elif (any(node.state == batchmodels.ComputeNodeState.unusable
                   for node in nodes)):
             pool_stats(batch_client, config, pool_id=pool_id)
+            # upload diagnostics logs if specified
+            if pool_settings.upload_diagnostics_logs_on_unusable:
+                for node in nodes:
+                    if node.state == batchmodels.ComputeNodeState.unusable:
+                        egress_service_logs(
+                            batch_client, blob_client, config,
+                            node_id=node.id, generate_sas=True,
+                            wait=pool_settings.attempt_recovery_on_unusable)
+            # attempt recovery if specified
             if pool_settings.attempt_recovery_on_unusable:
                 logger.warning(
                     'Unusable nodes detected, deleting unusable nodes')
@@ -700,7 +709,7 @@ def _block_for_nodes_ready(
         # issue resize if unusable deletion has occurred
         if (unusable_delete and len(nodes) < total_nodes and
                 pool.allocation_state != batchmodels.AllocationState.resizing):
-            resize_pool(batch_client, config, wait=False)
+            resize_pool(batch_client, blob_client, config, wait=False)
             unusable_delete = False
         now = time.time()
         if (now - last) > 20:
@@ -764,12 +773,15 @@ def _node_state_counts(nodes):
     )
 
 
-def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
-    # type: (batch.BatchServiceClient, dict, str,
-    #        List[batchmodels.ComputeNode]) -> List[batchmodels.ComputeNode]
+def wait_for_pool_ready(
+        batch_client, blob_client, config, pool_id, addl_end_states=None):
+    # type: (batch.BatchServiceClient, azure.storage.blob.BlockBlobCLient,
+    #        dict, str, List[batchmodels.ComputeNode]) ->
+    #        List[batchmodels.ComputeNode]
     """Wait for pool to enter steady state and all nodes in end states
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param str pool_id: pool id
     :param list addl_end_states: additional end states
@@ -792,8 +804,8 @@ def wait_for_pool_ready(batch_client, config, pool_id, addl_end_states=None):
     stopping_states = frozenset(base_stopping_states)
     end_states = frozenset(base_end_states)
     nodes = _block_for_nodes_ready(
-        batch_client, config, stopping_states, end_states, pool_id,
-        settings.pool_settings(config).reboot_on_start_task_failed)
+        batch_client, blob_client, config, stopping_states, end_states,
+        pool_id)
     pool_stats(batch_client, config, pool_id=pool_id)
     return nodes
 
@@ -821,12 +833,14 @@ def check_pool_nodes_runnable(batch_client, config):
     return False
 
 
-def create_pool(batch_client, config, pool):
-    # type: (batch.BatchServiceClient, dict, batchmodels.PoolAddParameter) ->
+def create_pool(batch_client, blob_client, config, pool):
+    # type: (batch.BatchServiceClient, azure.storage.blob.BlockBlobService,
+    #        dict, batchmodels.PoolAddParameter) ->
     #        List[batchmodels.ComputeNode]
     """Create pool if not exists
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param batchmodels.PoolAddParameter pool: pool addparameter object
     :rtype: list
@@ -853,7 +867,7 @@ def create_pool(batch_client, config, pool):
         else:
             logger.error('Pool {!r} already exists'.format(pool.id))
     # wait for pool idle
-    return wait_for_pool_ready(batch_client, config, pool.id)
+    return wait_for_pool_ready(batch_client, blob_client, config, pool.id)
 
 
 def _add_admin_user_to_compute_node(
@@ -1265,12 +1279,13 @@ def _check_metadata_mismatch(mdtype, metadata, req_ge=None):
                 break
 
 
-def resize_pool(batch_client, config, wait=False):
-    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
-    #        bool) -> list
+def resize_pool(batch_client, blob_client, config, wait=False):
+    # type: (azure.batch.batch_service_client.BatchServiceClient,
+    #        azure.storage.blob.BlockBlobClient, dict, bool) -> list
     """Resize a pool
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param bool wait: wait for operation to complete
     :rtype: list or None
@@ -1315,7 +1330,7 @@ def resize_pool(batch_client, config, wait=False):
                 else:
                     time.sleep(1)
         return wait_for_pool_ready(
-            batch_client, config, pool.id,
+            batch_client, blob_client, config, pool.id,
             addl_end_states=[batchmodels.ComputeNodeState.running])
 
 
@@ -2793,7 +2808,8 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
                         node.start_task_info.end_time),
                     '    * duration: {}'.format(duration),
                     '    * result: {}'.format(
-                        node.start_task_info.result.value),
+                        node.start_task_info.result.value
+                        if node.start_task_info.result is not None else 'n/a'),
                     '    * exit code: {}'.format(
                         node.start_task_info.exit_code),
                 ])
@@ -2903,9 +2919,9 @@ def get_remote_login_setting_for_node(batch_client, config, cardinal, node_id):
 
 def egress_service_logs(
         batch_client, blob_client, config, cardinal=None, node_id=None,
-        wait=False):
+        generate_sas=False, wait=False):
     # type: (batchsc.BatchServiceClient, azureblob.BlockBlobService, dict,
-    #        int, str, bool) -> None
+    #        int, str, bool, bool) -> None
     """Action: Pool Nodes Logs
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -2913,6 +2929,7 @@ def egress_service_logs(
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
+    :param bool generate_sas: generate sas
     :param bool wait: wait for upload to complete
     """
     pool_id = settings.pool_id(config)
@@ -2929,13 +2946,14 @@ def egress_service_logs(
     node = batch_client.compute_node.get(pool_id, node_id)
     # generate container sas and create container
     bs = settings.batch_shipyard_settings(config)
-    cont = bs.storage_entity_prefix + '-logs'
+    cont = bs.storage_entity_prefix + '-diaglogs'
     storage_settings = settings.credentials_storage(
         config, bs.storage_account_settings)
     sas = storage.create_blob_container_saskey(
         storage_settings, cont, 'egress', create_container=True)
-    url = 'https://{}.blob.{}/{}?{}'.format(
-        storage_settings.account, storage_settings.endpoint, cont, sas)
+    baseurl = 'https://{}.blob.{}/{}'.format(
+        storage_settings.account, storage_settings.endpoint, cont)
+    url = '{}?{}'.format(baseurl, sas)
     logger.info(
         ('egressing Batch service logs from compute node {} on pool {} '
          'to container {} on storage account {} beginning from {}').format(
@@ -2952,27 +2970,38 @@ def egress_service_logs(
     )
     if resp.number_of_files_uploaded > 0:
         logger.info(
-            'initiated upload of {} log files to virtual directory {}'.format(
-                resp.number_of_files_uploaded, resp.virtual_directory_name))
+            'initiated upload of {} log files to {}/{}'.format(
+                resp.number_of_files_uploaded, cont,
+                resp.virtual_directory_name))
+        # wait for upload to complete if specified
+        if wait:
+            # list blobs in vdir until we have the number specified
+            logger.debug(
+                ('waiting for {} log files to be uploaded; this may take '
+                 'some time, please be patient').format(
+                     resp.number_of_files_uploaded))
+            while True:
+                blobs = blob_client.list_blobs(
+                    cont, prefix=resp.virtual_directory_name,
+                    num_results=resp.number_of_files_uploaded)
+                if len(list(blobs)) == resp.number_of_files_uploaded:
+                    logger.info(
+                        ('all {} files uploaded to {}/{} on storage '
+                         'account {}').format(
+                             resp.number_of_files_uploaded, cont,
+                             resp.virtual_directory_name,
+                             storage_settings.account))
+                    break
+                time.sleep(2)
+        if generate_sas:
+            sas = storage.create_saskey(
+                storage_settings, cont, False, create=False, list_perm=True,
+                read=True, write=False, delete=False, expiry_days=60)
+            logger.info(
+                'log location URL to share with support: {}?{}'.format(
+                    baseurl, sas))
     else:
         logger.error('no log files to be uploaded')
-    # wait for upload to complete if specified
-    if wait and resp.number_of_files_uploaded > 0:
-        # list blobs in vdir until we have the number specified
-        logger.debug('waiting for {} log files to be uploaded'.format(
-            resp.number_of_files_uploaded))
-        while True:
-            blobs = blob_client.list_blobs(
-                cont, prefix=resp.virtual_directory_name,
-                num_results=resp.number_of_files_uploaded)
-            if len(list(blobs)) == resp.number_of_files_uploaded:
-                logger.info(
-                    ('all {} files uploaded to container {} on storage '
-                     'account {}').format(
-                         resp.number_of_files_uploaded, cont,
-                         storage_settings.account))
-                break
-            time.sleep(2)
 
 
 def stream_file_and_wait_for_task(

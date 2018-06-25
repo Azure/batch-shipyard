@@ -1749,7 +1749,7 @@ def _add_pool(
             batch_client, compute_client, network_client, config, rls=None,
             kind='storage')
     # create pool
-    nodes = batch.create_pool(batch_client, config, pool)
+    nodes = batch.create_pool(batch_client, blob_client, config, pool)
     _pool = batch_client.pool.get(pool.id)
     pool_current_vm_count = (
         _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
@@ -3234,7 +3234,7 @@ def action_pool_resize(batch_client, blob_client, config, wait):
         for node in batch_client.compute_node.list(pool.id):
             old_nodes[node.id] = node.ip_address
     # resize pool
-    nodes = batch.resize_pool(batch_client, config, wait)
+    nodes = batch.resize_pool(batch_client, blob_client, config, wait)
     # add ssh user to new nodes if present
     if create_ssh_user and (resize_up_d or resize_up_lp):
         if wait:
@@ -3486,9 +3486,10 @@ def action_pool_nodes_reboot(
 
 
 def action_diag_logs_upload(
-        batch_client, blob_client, config, cardinal, nodeid, wait):
+        batch_client, blob_client, config, cardinal, nodeid, generate_sas,
+        wait):
     # type: (batchsc.BatchServiceClient, azure.storage.blob.BlockBlobService,
-    #        dict, int, str, bool) -> None
+    #        dict, int, str, bool, bool) -> None
     """Action: Diag Logs Upload
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -3496,6 +3497,7 @@ def action_diag_logs_upload(
     :param dict config: configuration dict
     :param int cardinal: cardinal node num
     :param str nodeid: node id
+    :param bool generate_sas: generate SAS token
     :param bool wait: wait for upload to complete
     """
     _check_batch_client(batch_client)
@@ -3509,7 +3511,8 @@ def action_diag_logs_upload(
     if cardinal is not None and cardinal < 0:
         raise ValueError('invalid cardinal option value')
     batch.egress_service_logs(
-        batch_client, blob_client, config, cardinal, nodeid, wait)
+        batch_client, blob_client, config, cardinal, nodeid, generate_sas,
+        wait)
 
 
 def action_pool_images_update(
@@ -3955,7 +3958,8 @@ def action_jobs_stats(batch_client, config, job_id):
 
 
 def action_storage_del(
-        blob_client, table_client, config, clear_tables, poolid):
+        blob_client, table_client, config, clear_tables, diagnostics_logs,
+        pools):
     # type: (azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService, dict, bool, str) -> None
     """Action: Storage Del
@@ -3963,51 +3967,61 @@ def action_storage_del(
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param bool clear_tables: clear tables instead of deleting
-    :param str poolid: pool id to target
+    :param str pools: pool ids to target
     """
-    # reset storage settings to target poolid
-    if util.is_not_empty(poolid):
-        populate_global_settings(config, False, pool_id=poolid)
-    if clear_tables:
-        storage.clear_storage_containers(
-            blob_client, table_client, config, tables_only=True,
-            pool_id=poolid)
-    storage.delete_storage_containers(
-        blob_client, table_client, config, skip_tables=clear_tables)
+    if diagnostics_logs:
+        storage.delete_or_clear_diagnostics_logs(blob_client, config, True)
+    for poolid in pools:
+        # reset storage settings to target poolid
+        if util.is_not_empty(poolid):
+            populate_global_settings(config, False, pool_id=poolid)
+        if clear_tables:
+            storage.clear_storage_containers(
+                blob_client, table_client, config, tables_only=True,
+                pool_id=poolid)
+        storage.delete_storage_containers(
+            blob_client, table_client, config, skip_tables=clear_tables)
 
 
-def action_storage_clear(blob_client, table_client, config, poolid):
+def action_storage_clear(
+        blob_client, table_client, config, diagnostics_logs, pools):
     # type: (azure.storage.blob.BlockBlobService,
-    #        azure.cosmosdb.table.TableService, dict, str) -> None
+    #        azure.cosmosdb.table.TableService, dict, bool, List[str]) -> None
     """Action: Storage Clear
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
-    :param str poolid: pool id to target
+    :param list pools: pool ids to target
     """
-    # reset storage settings to target poolid
-    if util.is_not_empty(poolid):
-        populate_global_settings(config, False, pool_id=poolid)
-    storage.clear_storage_containers(
-        blob_client, table_client, config, pool_id=poolid)
+    if diagnostics_logs:
+        storage.delete_or_clear_diagnostics_logs(blob_client, config, False)
+    for poolid in pools:
+        # reset storage settings to target poolid
+        if util.is_not_empty(poolid):
+            populate_global_settings(config, False, pool_id=poolid)
+        storage.clear_storage_containers(
+            blob_client, table_client, config, pool_id=poolid)
 
 
 def action_storage_sas_create(
-        config, storage_account, path, file, create, read, write, delete):
-    # type: (dict, str, str, bool, bool, bool, bool, bool) -> None
+        config, storage_account, path, file, create, list_perm, read, write,
+        delete):
+    # type: (dict, str, str, bool, bool, bool, bool, bool, bool) -> None
     """Action: Storage Sas Create
     :param dict config: configuration dict
     :param str storage_account: storage account
     :param str path: path
     :param bool file: file sas
     :param bool create: create perm
+    :param bool list_perm: list perm
     :param bool read: read perm
     :param bool write: write perm
     :param bool delete: delete perm
     """
     # reset storage settings to target poolid
     creds = settings.credentials_storage(config, storage_account)
-    sas = storage.create_saskey(creds, path, file, create, read, write, delete)
+    sas = storage.create_saskey(
+        creds, path, file, create, list_perm, read, write, delete)
     logger.info('generated SAS URL: https://{}.{}.{}/{}?{}'.format(
         creds.account, 'file' if file else 'blob', creds.endpoint, path, sas))
 

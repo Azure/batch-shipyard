@@ -47,6 +47,7 @@ pool_specification:
   inter_node_communication_enabled: true
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false
+  upload_diagnostics_logs_on_unusable: true
   block_until_all_global_resources_loaded: true
   transfer_files_on_pool_creation: false
   input_data:

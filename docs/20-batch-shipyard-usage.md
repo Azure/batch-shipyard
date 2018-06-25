@@ -771,12 +771,12 @@ The `storage` command has the following sub-commands:
 ```
   clear  Clear Azure Storage containers used by Batch...
   del    Delete Azure Storage containers used by Batch...
-  sas    SAS key actions
+  sas    SAS token actions
 ```
 
 The `storage sas` sub-command has the following sub-sub-commands:
 ```
-  create  Create an object-level SAS key
+  create  Create a container- or object-level SAS key
 ```
 
 * `clear` will clear the Azure Storage containers used by Batch Shipyard
@@ -786,13 +786,16 @@ for metadata purposes
 for metadata purposes
     * `--clear-tables` will clear tables instead of deleting them
     * `--poolid` will target a specific pool id
-* `sas create` will create a SAS key for individual blob or file objects.
+* `sas create` will create a SAS key for containers, file shares, individual
+  blobs or file objects.
     * `STORAGE_ACCOUNT` is the storage account link to target. This link must
       be specified as a credential.
-    * `PATH` is the object path. Container or File shares are invalid paths.
-    * `--create` adds a create permission
+    * `PATH` is the Azure storage path including the container or file
+      share name
+    * `--create` adds a create permission (only applicable to objects)
     * `--delete` adds a delete permission
-    * `--file` creates a file sas rather than a blob sas
+    * `--list` adds a list permission (only applicable to container/file share)
+    * `--file` creates a file SAS rather than a blob SAS
     * `--read` adds a read permission
     * `--write` adds a write permission
 
