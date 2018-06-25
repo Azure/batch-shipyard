@@ -27,7 +27,7 @@ For this example, this should be
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
 * `command` should contain the command to pass to the Docker run invocation.
-For this example, we will run MADL training example in the `msmadl/symsgd:0.0.1` Docker image. The
+For this MADL training example with the `msmadl/symsgd:0.0.1` Docker image. The
 application `command` to run would be:
 `"/parasail/run_parasail.sh -w /parasail/supersgd -l 1e-4 -k 32 -m 1e-2 -e 10 -r 10 -f $AZ_BATCH_NODE_SHARED_DIR/azblob/<container_name from the data shredding configuration file> -t 1 -g 1 -d $AZ_BATCH_TASK_WORKING_DIR/models -b $AZ_BATCH_NODE_SHARED_DIR/azblob/<container_name from the data shredding configuration file>"`
   * [`run_parasail.sh`](docker/run_parasail.sh) has these parameters
@@ -44,8 +44,7 @@ application `command` to run would be:
     * `-b` location for the algorithm's binary"
 	
 * The training data will need to be shredded to match the number of VMs and the thread's count per VM, and then deployed to a mounted Azure blob that the VM docker images have read/write access.  
-We created a basic python script that can be used to shred and deploy the training data to a blob container identified by the user.
-Data shredding files can be found [here](./DataShredding).
+A basic python script that can be used to shred and deploy the training data to a blob container, and other data shredding files can be found [here](./DataShredding).
 * `shared_data_volumes`  should contain the shared data volume with an `azureblob` volume driver as specified in the global configuration file found [here](./config/config.yaml).
 
 * `multi_instance` property must be defined
