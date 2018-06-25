@@ -1,8 +1,8 @@
-# MADL-CPU-OpenMPI
+## MADL-CPU-OpenMPI Data Shredding
 We included a python script that shows how to shred and deploy your training data prior to running an Azure training job.
 Azure VMs via Open MPI.
 
-## Data Shredding Configuration
+### Data Shredding Configuration
 Rename the configuration-template.json to configuration.json.  The configuration should enable the following properties:
 * `node_count` should be set to the number of VMs in the compute pool.
 * `thread_count` thread's count per VM.
