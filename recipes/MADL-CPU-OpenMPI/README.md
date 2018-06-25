@@ -8,7 +8,7 @@ this recipe.
 
 ### Pool Configuration
 The pool configuration should enable the following properties:
-* `vm_size` should be a CPU-only instance, 'STANDARD_D2_V2'.
+* `vm_size` should be a CPU-only instance, for example, 'STANDARD_D2_V2'.
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 
@@ -46,12 +46,11 @@ application `command` to run would be:
 * The training data will need to be shredded to match the number of VMs and the thread's count per VM, and then deployed to a mounted Azure blob that the VM docker images have read/write access.  
 We created a basic python script that can be used to shred and deploy the training data to a blob container identified by the user.
 Data shredding files can be found [here](./DataShredding).
+* 'shared_data_volumes' should contain the shared data volume with an 'azureblob' volume driver as specified in the global configuration file.
 
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`.
-  * `resource_files` should be unset or the array can be empty
 
 ## Dockerfile and supplementary files
 Supplementary files can be found [here](./docker).
