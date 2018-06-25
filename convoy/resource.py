@@ -769,6 +769,42 @@ def create_virtual_machine(
     )
 
 
+def create_msi_virtual_machine_extension(
+        compute_client, vm_resource, vm_name, offset, verbose=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        settings.VmResource, str, int,
+    #        bool) -> msrestazure.azure_operation.AzureOperationPoller
+    """Create a virtual machine extension
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param settings.VmResource vm_resource: VM resource
+    :param str vm_name: vm name
+    :param int offset: vm number
+    :param bool verbose: verbose logging
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: msrestazure.azure_operation.AzureOperationPoller
+    """
+    vm_ext_name = settings.generate_virtual_machine_msi_extension_name(
+        vm_resource, offset)
+    logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
+    return compute_client.virtual_machine_extensions.create_or_update(
+        resource_group_name=vm_resource.resource_group,
+        vm_name=vm_name,
+        vm_extension_name=vm_ext_name,
+        extension_parameters=compute_client.virtual_machine_extensions.models.
+        VirtualMachineExtension(
+            location=vm_resource.location,
+            publisher='Microsoft.ManagedIdentity',
+            virtual_machine_extension_type='ManagedIdentityExtensionForLinux',
+            type_handler_version='1.0',
+            auto_upgrade_minor_version=True,
+            settings={
+                'port': 50342,
+            },
+        ),
+    )
+
+
 def delete_virtual_machine(compute_client, rg_name, vm_name):
     # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
     #        msrestazure.azure_operation.AzureOperationPoller

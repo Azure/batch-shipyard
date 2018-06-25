@@ -57,42 +57,6 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
-def _create_msi_virtual_machine_extension(
-        compute_client, vm_resource, vm_name, offset, verbose=False):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.VmResource, str, int,
-    #        bool) -> msrestazure.azure_operation.AzureOperationPoller
-    """Create a virtual machine extension
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param settings.VmResource vm_resource: VM resource
-    :param str vm_name: vm name
-    :param int offset: vm number
-    :param bool verbose: verbose logging
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: msrestazure.azure_operation.AzureOperationPoller
-    """
-    vm_ext_name = settings.generate_virtual_machine_msi_extension_name(
-        vm_resource, offset)
-    logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
-    return compute_client.virtual_machine_extensions.create_or_update(
-        resource_group_name=vm_resource.resource_group,
-        vm_name=vm_name,
-        vm_extension_name=vm_ext_name,
-        extension_parameters=compute_client.virtual_machine_extensions.models.
-        VirtualMachineExtension(
-            location=vm_resource.location,
-            publisher='Microsoft.ManagedIdentity',
-            virtual_machine_extension_type='ManagedIdentityExtensionForLinux',
-            type_handler_version='1.0',
-            auto_upgrade_minor_version=True,
-            settings={
-                'port': 50342,
-            },
-        ),
-    )
-
-
 def _create_virtual_machine_extension(
         compute_client, config, vm_resource, bootstrap_file, blob_urls,
         vm_name, private_ips, fqdn, offset, verbose=False):
@@ -195,10 +159,7 @@ def create_monitoring_resource(
     # get subscription id for msi
     sub_id = settings.credentials_management(config).subscription_id
     if util.is_none_or_empty(sub_id):
-        raise ValueError('Management subscirption id not specified')
-    # create resource group if it doesn't exist
-    resource.create_resource_group(
-        resource_client, ms.resource_group, ms.location)
+        raise ValueError('Management subscription id not specified')
     # check if cluster already exists
     logger.debug('checking if monitoring resource exists')
     try:
@@ -216,6 +177,9 @@ def create_monitoring_resource(
     # confirm before proceeding
     if not util.confirm_action(config, 'create monitoring resource'):
         return
+    # create resource group if it doesn't exist
+    resource.create_resource_group(
+        resource_client, ms.resource_group, ms.location)
     # check for conflicting options
     servconf = settings.monitoring_services_settings(config)
     if servconf.lets_encrypt_enabled and not ms.public_ip.enabled:
@@ -454,7 +418,7 @@ def create_monitoring_resource(
     async_ops['vmext'] = {}
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
-            _create_msi_virtual_machine_extension, compute_client, ms,
+            resource.create_msi_virtual_machine_extension, compute_client, ms,
             vms[0].name, 0, settings.verbose(config)),
         max_retries=0,
     )
@@ -521,7 +485,7 @@ def delete_monitoring_resource(
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
     #        dict, bool, bool, bool, bool) -> None
-    """Delete a storage cluster
+    """Delete a resource monitor
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -807,7 +771,7 @@ def ssh_monitoring_resource(
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict,
     #        bool, tuple) -> None
-    """SSH to a node in storage cluster
+    """SSH to a node in resource monitor
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:

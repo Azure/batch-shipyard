@@ -49,7 +49,7 @@ from . import crypto
 from . import data
 from . import keyvault
 from . import misc
-from . import picket
+from . import monitor
 from . import remotefs
 from . import resource
 from . import settings
@@ -4180,7 +4180,7 @@ def action_monitor_create(
     if (util.is_none_or_empty(mgmt_aad.subscription_id) or
             util.is_none_or_empty(mgmt_aad.aad.authority_url)):
         raise ValueError('management aad credentials are invalid')
-    picket.create_monitoring_resource(
+    monitor.create_monitoring_resource(
         auth_client, resource_client, compute_client, network_client,
         blob_client, table_client, config, _RESOURCES_PATH,
         _MONITORINGPREP_FILE, _CONFIGURABLE_MONITORING_FILES)
@@ -4281,7 +4281,7 @@ def action_monitor_ssh(
     """
     _check_compute_client(compute_client)
     _check_network_client(network_client)
-    picket.ssh_monitoring_resource(
+    monitor.ssh_monitoring_resource(
         compute_client, network_client, config, tty, command)
 
 
@@ -4294,7 +4294,7 @@ def action_monitor_suspend(compute_client, config, wait):
     :param bool wait: wait for suspension to complete
     """
     _check_compute_client(compute_client)
-    picket.suspend_monitoring_resource(compute_client, config, wait)
+    monitor.suspend_monitoring_resource(compute_client, config, wait)
 
 
 def action_monitor_start(compute_client, config, wait):
@@ -4306,7 +4306,7 @@ def action_monitor_start(compute_client, config, wait):
     :param bool wait: wait for restart to complete
     """
     _check_compute_client(compute_client)
-    picket.start_monitoring_resource(compute_client, config, wait)
+    monitor.start_monitoring_resource(compute_client, config, wait)
 
 
 def action_monitor_destroy(
@@ -4341,7 +4341,7 @@ def action_monitor_destroy(
             (delete_all_resources or delete_virtual_network)):
         raise ValueError(
             'Cannot specify generate_from_prefix and a delete_* option')
-    picket.delete_monitoring_resource(
+    monitor.delete_monitoring_resource(
         resource_client, compute_client, network_client, blob_client,
         table_client, config, delete_virtual_network=delete_virtual_network,
         delete_resource_group=delete_all_resources,

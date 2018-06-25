@@ -140,6 +140,24 @@ In order to enable resource monitoring, there are a few configuration changes
 that must be made to enable this feature. You must enable a resource or
 set of resources to be monitored and then create the monitoring resource.
 
+### Azure Active Directory Authentication Required
+Azure Active Directory authentication is required to enable monitoring.
+Additionally, in order to monitor a Batch pool, that pool must be joined
+to the same virtual network as the monitoring resource VM and thus must
+join a virtual network upon provisioning.
+
+When executing the `monitor create` command, your service principal must
+be at least `Owner` or a
+[custom role](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles)
+that does not prohibit the following action along with the ability to
+create/read/write resources for the subscription:
+
+* `Microsoft.Authorization/*/Write`
+
+This action is required to enable
+[Azure Managed Service Identity](https://docs.microsoft.com/azure/active-directory/managed-service-identity/overview)
+on the resource monitoring VM.
+
 ### Monitored Resource Configuration
 Batch pools and RemoteFS storage clusters can be monitored. Below explains
 the configuration required to enable each.
@@ -206,7 +224,18 @@ configuration. Below is a sample:
 
 ```yaml
 credentials:
-  # ... other settings
+  # management settings required with aad auth
+  management:
+    aad:
+      # valid aad settings (or at the global level)
+    subscription_id: # subscription id required
+  # batch aad settings required if monitoring batch pools
+  batch:
+    aad:
+      # valid aad settings (or at the global level)
+    account_service_url: # valid batch service url
+    resource_group: # batch account resource group
+  # ... other required settings
   monitoring:
     grafana:
       admin:
@@ -218,6 +247,11 @@ Note that you can also use a KeyVault secret id for the `password` or store
 the credentials entirely within KeyVault. Please see the
 [credentials](11-batch-shipyard-configuration-credentials.md) configuration
 guide for more information.
+
+Additionally, Azure Active Directory authentication is required under
+`management` and a valid `subscription_id` must be provided. Additionally,
+if monitoring Batch pools, Batch authentication must be through Azure
+Active Directory for joining a [virtual network](64-batch-shipyard-byovnet.md).
 
 #### Monitor Configuration
 The resource monitor must be configured according to the

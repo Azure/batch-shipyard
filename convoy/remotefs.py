@@ -482,18 +482,20 @@ def create_storage_cluster(
     if util.is_none_or_empty(sc_id):
         raise ValueError('storage cluster id not specified')
     rfs = settings.remotefs_settings(config, sc_id)
-    # create resource group if it doesn't exist
-    resource.create_resource_group(
-        resource_client, rfs.storage_cluster.resource_group,
-        rfs.storage_cluster.location)
     # check if cluster already exists
     logger.debug('checking if storage cluster {} exists'.format(sc_id))
     # construct disk map
     disk_map = {}
-    disk_names = list_disks(compute_client, config, restrict_scope=True)
-    for disk_id, sat in disk_names:
-        disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
-    del disk_names
+    try:
+        disk_names = list_disks(compute_client, config, restrict_scope=True)
+        for disk_id, sat in disk_names:
+            disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
+        del disk_names
+    except msrestazure.azure_exceptions.CloudError as e:
+        logger.error(
+            'could not enumerate required disks for storage cluster {}'.format(
+                sc_id))
+        raise
     # check vms
     for i in range(rfs.storage_cluster.vm_count):
         vm_name = settings.generate_virtual_machine_name(
@@ -531,6 +533,10 @@ def create_storage_cluster(
     if not util.confirm_action(
             config, 'create storage cluster {}'.format(sc_id)):
         return
+    # create resource group if it doesn't exist
+    resource.create_resource_group(
+        resource_client, rfs.storage_cluster.resource_group,
+        rfs.storage_cluster.location)
     # create storage container
     storage.create_storage_containers_nonbatch(blob_client, None, 'remotefs')
     # upload scripts to blob storage for customscript vm extension
