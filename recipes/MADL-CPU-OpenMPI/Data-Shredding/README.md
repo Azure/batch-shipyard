@@ -1,6 +1,5 @@
 ## MADL-CPU-OpenMPI Data Shredding
 This Data Shredding recipe shows how to shred and deploy your training data prior to running a training job on Azure VMs via Open MPI.
-Azure VMs via Open MPI.
 
 ### Data Shredding Configuration
 Rename the configuration-template.json to configuration.json.  The configuration should enable the following properties:
