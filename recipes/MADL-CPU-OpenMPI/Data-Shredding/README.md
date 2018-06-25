@@ -6,7 +6,7 @@ Azure VMs via Open MPI.
 Rename the configuration-template.json to configuration.json.  The configuration should enable the following properties:
 * `node_count` should be set to the number of VMs in the compute pool.
 * `thread_count` thread's count per VM.
-* `training_data_shred_count` we advise to set this number high. This way you only do this step once, and use it for different VMs configuration.
+* `training_data_shred_count` It's  advisable to set this number high. This way you only do this step once, and use it for different VMs configuration.
 * 'dataset_local_directory' A local directory to download and shred the training data according to 'training_data_shred_count'.
 * 'shredded_dataset_Per_Node' A local directory to hold the final data shreds before deploying them to Azure blobs. 
 * 'container_name' container name where the sliced data will be stored.
