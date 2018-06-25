@@ -542,7 +542,8 @@ def create_storage_cluster(
         resource_client, rfs.storage_cluster.resource_group,
         rfs.storage_cluster.location)
     # create storage container
-    storage.create_storage_containers_nonbatch(blob_client, None, 'remotefs')
+    storage.create_storage_containers_nonbatch(
+        blob_client, None, None, 'remotefs')
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_nonbatch(
         blob_client, remotefs_files, 'remotefs')
@@ -791,7 +792,8 @@ def resize_storage_cluster(
             config, 'resize storage cluster {}'.format(sc_id)):
         return False
     # re-create storage container in case it got deleted
-    storage.create_storage_containers_nonbatch(blob_client, None, 'remotefs')
+    storage.create_storage_containers_nonbatch(
+        blob_client, None, None, 'remotefs')
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_nonbatch(
         blob_client, remotefs_files, 'remotefs')
@@ -1368,7 +1370,8 @@ def delete_storage_cluster(
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
     # delete storage container
-    storage.delete_storage_containers_nonbatch(blob_client, None, 'remotefs')
+    storage.delete_storage_containers_nonbatch(
+        blob_client, None, None, 'remotefs')
     # create async op holder
     async_ops = {}
     # delete vms

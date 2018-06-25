@@ -1,0 +1,46 @@
+federation:
+  storage_account_settings: mystorageaccount
+  location: <Azure region, e.g., eastus>
+  resource_group: my-federation-proxy-rg
+  hostname_prefix: fed
+  ssh:
+    username: shipyard
+    ssh_public_key: /path/to/rsa/publickey.pub
+    ssh_public_key_data: ssh-rsa ...
+    ssh_private_key: /path/to/rsa/privatekey
+    generated_file_export_path: null
+  public_ip:
+    enabled: true
+    static: false
+  virtual_network:
+    name: myvnet
+    resource_group: my-vnet-resource-group
+    existing_ok: false
+    address_space: 10.0.0.0/16
+    subnet:
+      name: my-federation-proxy-subnet
+      address_prefix: 10.0.0.0/24
+  network_security:
+    ssh:
+    - '*'
+    custom_inbound_rules:
+      myrule:
+        destination_port_range: 5000-5001
+        protocol: '*'
+        source_address_prefix:
+        - 1.2.3.4
+        - 5.6.7.0/24
+  vm_size: STANDARD_D2_V2
+  accelerated_networking: false
+  proxy_options:
+    polling_interval:
+      federations: 15
+      actions: 5
+    logging:
+      persistence: true
+      level: debug
+      filename: fedproxy.log
+    scheduling:
+      after_success:
+        blackout_interval: 15
+        evaluate_autoscale: true

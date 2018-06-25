@@ -35,6 +35,7 @@ import concurrent.futures
 import datetime
 import fnmatch
 import getpass
+import json
 import logging
 import multiprocessing
 import os
@@ -42,11 +43,10 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
-import pickle
 import ssl
 import sys
-import tempfile
 import time
+import uuid
 # non-stdlib imports
 import azure.batch.models as batchmodels
 import azure.mgmt.batch.models as mgmtbatchmodels
@@ -4033,16 +4033,20 @@ def _submit_task_sub_collection(
                 retry = []
                 for result in results.value:
                     if result.status == batchmodels.TaskAddStatus.client_error:
-                        de = [
-                            '{}: {}'.format(x.key, x.value)
-                            for x in result.error.values
-                        ]
+                        de = None
+                        if result.error.values is not None:
+                            de = [
+                                '{}: {}'.format(x.key, x.value)
+                                for x in result.error.values
+                            ]
                         logger.error(
                             ('skipping retry of adding task {} as it '
                              'returned a client error (code={} message={} {}) '
                              'for job {}').format(
                                  result.task_id, result.error.code,
-                                 result.error.message, ' '.join(de), job_id))
+                                 result.error.message,
+                                 ' '.join(de) if de is not None else '',
+                                 job_id))
                     elif (result.status ==
                           batchmodels.TaskAddStatus.server_error):
                         retry.append(task_map[result.task_id])
@@ -4097,24 +4101,25 @@ def _generate_non_native_env_dump(env_vars, envfile):
 
 
 def _construct_task(
-        batch_client, blob_client, keyvault_client, config, bxfile,
-        bs, native, is_windows, tempdisk, allow_run_on_missing,
+        batch_client, blob_client, keyvault_client, config, federation_id,
+        bxfile, bs, native, is_windows, tempdisk, allow_run_on_missing,
         docker_missing_images, singularity_missing_images, cloud_pool,
         pool, jobspec, job_id, job_env_vars, task_map, existing_tasklist,
         reserved_task_id, lasttaskid, is_merge_task, uses_task_dependencies,
-        on_task_failure, _task):
+        on_task_failure, container_image_refs, _task):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        azure.keyvault.KeyVaultClient, dict, tuple,
+    #        azure.keyvault.KeyVaultClient, dict, str, tuple,
     #        settings.BatchShipyardSettings, bool, bool, str, bool,
     #        list, list, batchmodels.CloudPool, settings.PoolSettings,
     #        dict, str, dict, dict, list, str, str, bool, bool,
-    #        batchmodels.OnTaskFailure, dict) -> str
+    #        batchmodels.OnTaskFailure, set, dict) -> tuple
     """Contruct a Batch task and add it to the task map
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
+    :param str federation_id: federation id
     :param tuple bxfile: blobxfer file
     :param settings.BatchShipyardSettings bs: batch shipyard settings
     :param bool native: native pool
@@ -4134,9 +4139,11 @@ def _construct_task(
     :param bool is_merge_task: is merge task
     :param bool uses_task_dependencies: uses task dependencies
     :param batchmodels.OntaskFailure on_task_failure: on task failure
+    :param set container_image_refs: container image references
     :param dict _task: task spec
     :rtype: tuple
-    :return: (list of committed task ids for job, task id added to task map)
+    :return: (list of committed task ids for job, task id added to task map,
+        instance count for task, has gpu task, has ib task)
     """
     _task_id = settings.task_id(_task)
     if util.is_none_or_empty(_task_id):
@@ -4149,8 +4156,14 @@ def _construct_task(
         settings.set_task_name(_task, '{}-{}'.format(job_id, _task_id))
     del _task_id
     task = settings.task_settings(
-        cloud_pool, config, pool, jobspec, _task)
+        cloud_pool, config, pool, jobspec, _task, federation_id=federation_id)
     is_singularity = util.is_not_empty(task.singularity_image)
+    if util.is_not_empty(federation_id):
+        if is_singularity:
+            container_image_refs.add(task.singularity_image)
+        else:
+            container_image_refs.add(task.docker_image)
+    task_ic = 1
     # retrieve keyvault task env vars
     if util.is_not_empty(
             task.environment_variables_keyvault_secret_id):
@@ -4219,6 +4232,7 @@ def _construct_task(
             coordination_command_line=cc,
             common_resource_files=[],
         )
+        task_ic = task.multi_instance.num_instances
         del cc
         # add common resource files for multi-instance
         if util.is_not_empty(task.multi_instance.resource_files):
@@ -4418,19 +4432,24 @@ def _construct_task(
             'duplicate task id detected: {} for job {}'.format(
                 task.id, job_id))
     task_map[task.id] = batchtask
-    return existing_tasklist, task.id
+    return existing_tasklist, task.id, task_ic, task.gpu, task.infiniband
 
 
 def add_jobs(
-        batch_client, blob_client, keyvault_client, config, autopool, jpfile,
-        bxfile, recreate=False, tail=None):
+        batch_client, blob_client, table_client, queue_client, keyvault_client,
+        config, autopool, jpfile, bxfile, recreate=False, tail=None,
+        federation_id=None):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
+    #        azure.cosmosdb.TableClient, azurequeue.QueueService,
     #        azure.keyvault.KeyVaultClient, dict,
-    #        batchmodels.PoolSpecification, tuple, tuple, bool, str) -> None
+    #        batchmodels.PoolSpecification, tuple, tuple, bool, str,
+    #        str) -> None
     """Add jobs
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_client: queue_client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param batchmodels.PoolSpecification autopool: auto pool specification
@@ -4438,7 +4457,20 @@ def add_jobs(
     :param tuple bxfile: blobxfer file
     :param bool recreate: recreate job if completed
     :param str tail: tail specified file of last job/task added
+    :param str federation_id: federation id
     """
+    # check option compatibility
+    if util.is_not_empty(federation_id):
+        if autopool is not None:
+            raise RuntimeError(
+                'cannot create an auto-pool job within a federation')
+        if recreate:
+            raise RuntimeError(
+                'cannot recreate a job within a federation')
+        if tail is not None:
+            raise RuntimeError(
+                'cannot tail task output for the specified file within '
+                'a federation')
     # get the pool inter-node comm setting
     bs = settings.batch_shipyard_settings(config)
     pool = settings.pool_settings(config)
@@ -4451,7 +4483,7 @@ def add_jobs(
     except batchmodels.batch_error.BatchErrorException as ex:
         if 'The specified pool does not exist' in ex.message.value:
             cloud_pool = None
-            if autopool is None:
+            if autopool is None and util.is_none_or_empty(federation_id):
                 logger.error('{} pool does not exist'.format(pool.id))
                 if not util.confirm_action(
                         config,
@@ -4467,8 +4499,8 @@ def add_jobs(
     singularity_images = settings.global_resources_singularity_images(config)
     lastjob = None
     lasttaskid = None
-    jobschedule = None
     tasksadded = False
+    raw_output = {}
     for jobspec in settings.job_specifications(config):
         job_id = settings.job_id(jobspec)
         lastjob = job_id
@@ -4478,6 +4510,7 @@ def add_jobs(
         # 3. if tasks have dependencies, set it if so
         # 4. if there are multi-instance tasks
         auto_complete = settings.job_auto_complete(jobspec)
+        jobschedule = None
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
@@ -4488,6 +4521,19 @@ def add_jobs(
         allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
         existing_tasklist = None
         has_merge_task = settings.job_has_merge_task(jobspec)
+        max_instance_count_in_job = 0
+        instances_required_in_job = 0
+        # set federation overrides from constraints
+        if util.is_not_empty(federation_id):
+            fed_constraints = settings.job_federation_constraint_settings(
+                jobspec, federation_id)
+            if fed_constraints.pool.native is not None:
+                native = fed_constraints.pool.native
+            if fed_constraints.pool.windows is not None:
+                is_windows = fed_constraints.pool.windows
+            allow_run_on_missing = True
+        else:
+            fed_constraints = None
         for task in settings.job_tasks(config, jobspec):
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
@@ -4559,7 +4605,7 @@ def add_jobs(
             )
         # construct job prep
         jpcmd = []
-        if not native:
+        if not native and util.is_none_or_empty(federation_id):
             if len(docker_missing_images) > 0 and allow_run_on_missing:
                 # we don't want symmetric difference as we just want to
                 # block on pre-loaded images only
@@ -4588,6 +4634,12 @@ def add_jobs(
         # job prep: digest any input_data
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
+            if util.is_not_empty(federation_id):
+                tfm = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+                if tfm in addlcmds:
+                    raise RuntimeError(
+                        'input_data:azure_batch is not supported at the '
+                        'job-level for federations')
             jpcmd.append(addlcmds)
         del addlcmds
         jptask = None
@@ -4687,7 +4739,8 @@ def add_jobs(
                     batchmodels.OnAllTasksComplete.no_action
                 )
             # check pool settings for kill job on completion
-            if kill_job_on_completion:
+            if (kill_job_on_completion and
+                    util.is_none_or_empty(federation_id)):
                 if cloud_pool is not None:
                     total_vms = (
                         cloud_pool.current_dedicated_nodes +
@@ -4800,8 +4853,6 @@ def add_jobs(
                     )
             del jscs
             del jscmdline
-        else:
-            jobschedule = None
         del recurrence
         # create job
         if jobschedule is None:
@@ -4821,9 +4872,15 @@ def add_jobs(
                 ],
                 priority=settings.job_priority(jobspec),
             )
-            logger.info('Adding job {} to pool {}'.format(job_id, pool.id))
             try:
-                batch_client.job.add(job)
+                if util.is_none_or_empty(federation_id):
+                    logger.info('Adding job {} to pool {}'.format(
+                        job_id, pool.id))
+                    batch_client.job.add(job)
+                else:
+                    logger.info(
+                        'deferring adding job {} for federation {}'.format(
+                            job_id, federation_id))
                 if settings.verbose(config) and jptask is not None:
                     logger.debug('Job prep command: {}'.format(
                         jptask.command_line))
@@ -4869,27 +4926,51 @@ def add_jobs(
                                      on_task_failure.value))
                 else:
                     raise
-        del multi_instance
         del mi_docker_container_name
         # add all tasks under job
+        container_image_refs = set()
         task_map = {}
+        has_gpu_task = False
+        has_ib_task = False
         for _task in settings.job_tasks(config, jobspec):
-            existing_tasklist, lasttaskid = _construct_task(
-                batch_client, blob_client, keyvault_client, config, bxfile,
-                bs, native, is_windows, tempdisk, allow_run_on_missing,
-                docker_missing_images, singularity_missing_images, cloud_pool,
-                pool, jobspec, job_id, job_env_vars, task_map,
-                existing_tasklist, reserved_task_id, lasttaskid, False,
-                uses_task_dependencies, on_task_failure, _task)
+            existing_tasklist, lasttaskid, lasttaskic, gpu, ib = \
+                _construct_task(
+                    batch_client, blob_client, keyvault_client, config,
+                    federation_id, bxfile, bs, native, is_windows, tempdisk,
+                    allow_run_on_missing, docker_missing_images,
+                    singularity_missing_images, cloud_pool,
+                    pool, jobspec, job_id, job_env_vars, task_map,
+                    existing_tasklist, reserved_task_id, lasttaskid, False,
+                    uses_task_dependencies, on_task_failure,
+                    container_image_refs, _task
+                )
+            if not has_gpu_task and gpu:
+                has_gpu_task = True
+            if not has_ib_task and ib:
+                has_ib_task = True
+            instances_required_in_job += lasttaskic
+            if lasttaskic > max_instance_count_in_job:
+                max_instance_count_in_job = lasttaskic
+        merge_task_id = None
         if has_merge_task:
             _task = settings.job_merge_task(jobspec)
-            existing_tasklist, merge_task_id = _construct_task(
-                batch_client, blob_client, keyvault_client, config, bxfile,
-                bs, native, is_windows, tempdisk, allow_run_on_missing,
-                docker_missing_images, singularity_missing_images, cloud_pool,
-                pool, jobspec, job_id, job_env_vars, task_map,
-                existing_tasklist, reserved_task_id, lasttaskid, True,
-                uses_task_dependencies, on_task_failure, _task)
+            existing_tasklist, merge_task_id, lasttaskic, gpu, ib = \
+                _construct_task(
+                    batch_client, blob_client, keyvault_client, config,
+                    federation_id, bxfile, bs, native, is_windows, tempdisk,
+                    allow_run_on_missing, docker_missing_images,
+                    singularity_missing_images, cloud_pool,
+                    pool, jobspec, job_id, job_env_vars, task_map,
+                    existing_tasklist, reserved_task_id, lasttaskid, True,
+                    uses_task_dependencies, on_task_failure,
+                    container_image_refs, _task)
+            if not has_gpu_task and gpu:
+                has_gpu_task = True
+            if not has_ib_task and ib:
+                has_ib_task = True
+            instances_required_in_job += lasttaskic
+            if lasttaskic > max_instance_count_in_job:
+                max_instance_count_in_job = lasttaskic
             # set dependencies on merge task
             merge_task = task_map.pop(merge_task_id)
             merge_task.depends_on = batchmodels.TaskDependencies(
@@ -4902,48 +4983,172 @@ def add_jobs(
                      'please limit the the number of tasks').format(job_id))
             # add merge task into map
             task_map[merge_task_id] = merge_task
+        # construct required registries for federation
+        registries = construct_registry_list_for_federation(
+            config, federation_id, fed_constraints, container_image_refs)
+        del container_image_refs
         # submit job schedule if required
         if jobschedule is not None:
-            taskmaploc = '{}jsrf-{}/{}'.format(
-                bs.storage_entity_prefix, job_id, _TASKMAP_PICKLE_FILE)
+            taskmaploc = 'jobschedules/{}/{}'.format(
+                job_id, _TASKMAP_PICKLE_FILE)
             # pickle and upload task map
-            f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
-            fname = f.name
-            try:
-                with open(fname, 'wb') as f:
-                    pickle.dump(task_map, f, protocol=pickle.HIGHEST_PROTOCOL)
-                f.close()
-                sas_urls = storage.upload_resource_files(
-                    blob_client, config, [(taskmaploc, fname)])
-            finally:
-                os.unlink(fname)
-                del f
-                del fname
-            if len(sas_urls) != 1:
-                raise RuntimeError('unexpected number of sas urls')
+            sas_url = storage.pickle_and_upload(
+                blob_client, task_map, taskmaploc, federation_id=federation_id)
             # attach as resource file to jm task
             jobschedule.job_specification.job_manager_task.resource_files.\
                 append(
                     batchmodels.ResourceFile(
                         file_path=_TASKMAP_PICKLE_FILE,
-                        blob_source=next(iter(sas_urls.values())),
+                        blob_source=sas_url,
                         file_mode='0640',
                     )
                 )
             # submit job schedule
-            logger.info('Adding jobschedule {} to pool {}'.format(
-                job_id, pool.id))
-            batch_client.job_schedule.add(jobschedule)
+            if util.is_none_or_empty(federation_id):
+                logger.info('Adding jobschedule {} to pool {}'.format(
+                    job_id, pool.id))
+                try:
+                    batch_client.job_schedule.add(jobschedule)
+                except Exception:
+                    # delete uploaded task map
+                    storage.delete_resource_file(blob_client, taskmaploc)
+                    raise
+            else:
+                if storage.check_if_job_exists_in_federation(
+                        table_client, federation_id, jobschedule.id):
+                    # do not delete uploaded task map as the existing job
+                    # schedule will require it
+                    raise RuntimeError(
+                        'job schedule {} exists in federation id {}'.format(
+                            jobschedule.id, federation_id))
+                kind = 'job_schedule'
+                unique_id = uuid.uuid4()
+                # ensure task dependencies are self-contained
+                if uses_task_dependencies:
+                    try:
+                        task_map = rewrite_task_dependencies_for_federation(
+                            table_client, federation_id, jobschedule.id, kind,
+                            unique_id, task_map, merge_task_id)
+                    except Exception:
+                        # delete uploaded task map
+                        storage.delete_resource_file(
+                            blob_client, taskmaploc,
+                            federation_id=federation_id)
+                        raise
+                    # pickle and re-upload task map
+                    sas_url = storage.pickle_and_upload(
+                        blob_client, task_map, taskmaploc,
+                        federation_id=federation_id)
+                logger.debug(
+                    'submitting job schedule {} for federation {}'.format(
+                        jobschedule.id, federation_id))
+                # encapsulate job schedule/task map info in json
+                queue_data, jsloc = \
+                    generate_info_metadata_for_federation_message(
+                        blob_client, config, unique_id, federation_id,
+                        fed_constraints, registries, kind, jobschedule.id,
+                        jobschedule, native, is_windows, auto_complete,
+                        multi_instance, uses_task_dependencies,
+                        has_gpu_task, has_ib_task, max_instance_count_in_job,
+                        instances_required_in_job, has_merge_task,
+                        merge_task_id, task_map
+                    )
+                # enqueue action to global queue
+                logger.debug('enqueuing action {} to federation {}'.format(
+                    unique_id, federation_id))
+                try:
+                    storage.add_job_to_federation(
+                        table_client, queue_client, config, federation_id,
+                        unique_id, queue_data, kind)
+                except Exception:
+                    # delete uploaded files
+                    storage.delete_resource_file(
+                        blob_client, taskmaploc, federation_id=federation_id)
+                    storage.delete_resource_file(
+                        blob_client, jsloc, federation_id=federation_id)
+                    raise
+                # add to raw output
+                if settings.raw(config):
+                    raw_output[jobschedule.id] = {
+                        'federation': {
+                            'id': federation_id,
+                            'storage': {
+                                'account': storage.get_storageaccount(),
+                                'endpoint':
+                                storage.get_storageaccount_endpoint(),
+                            },
+                        },
+                        'kind': kind,
+                        'action': 'add',
+                        'unique_id': str(unique_id),
+                        'tasks_per_recurrence': len(task_map),
+                    }
         else:
             # add task collection to job
-            _add_task_collection(batch_client, job_id, task_map)
-            # patch job if job autocompletion is needed
-            if auto_complete:
-                batch_client.job.patch(
-                    job_id=job_id,
-                    job_patch_parameter=batchmodels.JobPatchParameter(
-                        on_all_tasks_complete=batchmodels.
-                        OnAllTasksComplete.terminate_job))
+            if util.is_none_or_empty(federation_id):
+                _add_task_collection(batch_client, job_id, task_map)
+                # patch job if job autocompletion is needed
+                if auto_complete:
+                    batch_client.job.patch(
+                        job_id=job_id,
+                        job_patch_parameter=batchmodels.JobPatchParameter(
+                            on_all_tasks_complete=batchmodels.
+                            OnAllTasksComplete.terminate_job))
+            else:
+                if (storage.federation_requires_unique_job_ids(
+                        table_client, federation_id) and
+                        storage.check_if_job_exists_in_federation(
+                            table_client, federation_id, job_id)):
+                    raise RuntimeError(
+                        'job {} exists in federation id {} requiring unique '
+                        'job ids'.format(job_id, federation_id))
+                kind = 'job'
+                unique_id = uuid.uuid4()
+                if uses_task_dependencies:
+                    task_map = rewrite_task_dependencies_for_federation(
+                        table_client, federation_id, job_id, kind, unique_id,
+                        task_map, merge_task_id)
+                logger.debug('submitting job {} for federation {}'.format(
+                    job_id, federation_id))
+                # encapsulate job/task map info in json
+                queue_data, jloc = \
+                    generate_info_metadata_for_federation_message(
+                        blob_client, config, unique_id, federation_id,
+                        fed_constraints, registries, kind, job_id, job,
+                        native, is_windows, auto_complete, multi_instance,
+                        uses_task_dependencies, has_gpu_task,
+                        has_ib_task, max_instance_count_in_job,
+                        instances_required_in_job, has_merge_task,
+                        merge_task_id, task_map
+                    )
+                # enqueue action to global queue
+                logger.debug('enqueuing action {} to federation {}'.format(
+                    unique_id, federation_id))
+                try:
+                    storage.add_job_to_federation(
+                        table_client, queue_client, config, federation_id,
+                        unique_id, queue_data, kind)
+                except Exception:
+                    # delete uploaded files
+                    storage.delete_resource_file(
+                        blob_client, jloc, federation_id=federation_id)
+                    raise
+                # add to raw output
+                if settings.raw(config):
+                    raw_output[job_id] = {
+                        'federation': {
+                            'id': federation_id,
+                            'storage': {
+                                'account': storage.get_storageaccount(),
+                                'endpoint':
+                                storage.get_storageaccount_endpoint(),
+                            },
+                        },
+                        'kind': kind,
+                        'action': 'add',
+                        'unique_id': str(unique_id),
+                        'num_tasks': len(task_map),
+                    }
         tasksadded = True
     # tail file if specified
     if tail:
@@ -4955,3 +5160,216 @@ def add_jobs(
             stream_file_and_wait_for_task(
                 batch_client, config, filespec='{},{},{}'.format(
                     lastjob, lasttaskid, tail), disk=False)
+    # output raw
+    if util.is_not_empty(raw_output):
+        print(json.dumps(raw_output, indent=4, sort_keys=True))
+
+
+def generate_info_metadata_for_federation_message(
+        blob_client, config, unique_id, federation_id, fed_constraints,
+        registries, kind, target, data, native, is_windows, auto_complete,
+        multi_instance, uses_task_dependencies, has_gpu_task, has_ib_task,
+        max_instance_count_in_job, instances_required_in_job, has_merge_task,
+        merge_task_id, task_map):
+    info = {
+        'version': '1',
+        'action': {
+            'method': 'add',
+            'kind': kind,
+        },
+        kind: {
+            'id': target,
+            'data': data,
+            'constraints': {
+                'pool': {
+                    'autoscale': {
+                        'allow': fed_constraints.pool.autoscale_allow,
+                        'exclusive': fed_constraints.pool.autoscale_exclusive,
+                    },
+                    'custom_image_arm_id':
+                    fed_constraints.pool.custom_image_arm_id,
+                    'location': fed_constraints.pool.location,
+                    'low_priority_nodes': {
+                        'allow': fed_constraints.pool.low_priority_nodes_allow,
+                        'exclusive':
+                        fed_constraints.pool.low_priority_nodes_exclusive,
+                    },
+                    'max_active_task_backlog': {
+                        'ratio':
+                        fed_constraints.pool.max_active_task_backlog_ratio,
+                        'autoscale_exempt':
+                        fed_constraints.pool.
+                        max_active_task_backlog_autoscale_exempt,
+                    },
+                    'native': native,
+                    'registries': registries,
+                    'virtual_network_arm_id':
+                    fed_constraints.pool.virtual_network_arm_id,
+                    'windows': is_windows,
+                },
+                'compute_node': {
+                    'vm_size': fed_constraints.compute_node.vm_size,
+                    'cores': {
+                        'amount': fed_constraints.compute_node.cores,
+                        'schedulable_variance':
+                        fed_constraints.compute_node.core_variance,
+                    },
+                    'memory': {
+                        'amount': fed_constraints.compute_node.memory,
+                        'schedulable_variance':
+                        fed_constraints.compute_node.memory_variance,
+                    },
+                    'exclusive': fed_constraints.compute_node.exclusive,
+                    'gpu': has_gpu_task or fed_constraints.compute_node.gpu,
+                    'infiniband': has_ib_task or
+                    fed_constraints.compute_node.infiniband,
+                },
+                'task': {
+                    'auto_complete': auto_complete,
+                    'has_multi_instance': multi_instance,
+                    'has_task_dependencies': uses_task_dependencies,
+                    'instance_counts': {
+                        'max': max_instance_count_in_job,
+                        'total': instances_required_in_job,
+                    },
+                },
+            },
+            'task_naming': {
+                'prefix': settings.autogenerated_task_id_prefix(config),
+                'padding': settings.autogenerated_task_id_zfill(config),
+            },
+        },
+    }
+    if kind == 'jobschedule':
+        info[kind]['constraints']['task'][
+            'tasks_per_recurrence'] = len(task_map)
+    elif kind == 'job':
+        info['task_map'] = task_map
+    if has_merge_task:
+        info[kind]['constraints']['task']['merge_task_id'] = merge_task_id
+    # pickle json and upload
+    loc = 'messages/{}.pickle'.format(unique_id)
+    sas_url = storage.pickle_and_upload(
+        blob_client, info, loc, federation_id=federation_id)
+    # construct queue message
+    info = {
+        'version': '1',
+        'federation_id': federation_id,
+        'target': target,
+        'blob_data': sas_url,
+        'uuid': str(unique_id),
+    }
+    return info, loc
+
+
+def construct_registry_list_for_federation(
+        config, federation_id, fed_constraints, container_image_refs):
+    if util.is_none_or_empty(federation_id):
+        return None
+    regs = settings.docker_registries(config, images=container_image_refs)
+    # find docker hub repos
+    dh_repos = set()
+    for image in container_image_refs:
+        tmp = image.split('/')
+        if len(tmp) > 1:
+            if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
+                continue
+            else:
+                dh_repos.add('dockerhub-{}'.format(tmp[0]))
+    if fed_constraints.pool.container_registries_private_docker_hub:
+        req_regs = list(dh_repos)
+    else:
+        req_regs = []
+    if util.is_not_empty(fed_constraints.pool.container_registries_public):
+        pub_exclude = set(fed_constraints.pool.container_registries_public)
+    else:
+        pub_exclude = set()
+    # filter registries according to constraints
+    for cr in regs:
+        if util.is_none_or_empty(cr.registry_server):
+            continue
+        else:
+            if cr.registry_server not in pub_exclude:
+                req_regs.append('{}-{}'.format(
+                    cr.registry_server, cr.user_name))
+    return req_regs if util.is_not_empty(req_regs) else None
+
+
+def rewrite_task_dependencies_for_federation(
+        table_client, federation_id, job_id, kind, unique_id, task_map,
+        merge_task_id):
+    # perform validation first
+    # 1. no outside dependencies outside of task group
+    # 2. for now, disallow task depends_on_range
+    # TODO task depends_on range support:
+    # - convert depends on range to explicit task depends on
+    # 3. ensure the total length of dependencies for each task is less than
+    # 64k chars
+    ujid_req = storage.federation_requires_unique_job_ids(
+        table_client, federation_id)
+    uid = str(unique_id)[:8]
+    all_tids = list(task_map.keys())
+    task_remap = {}
+    dep_len = 0
+    for tid in task_map:
+        if tid == merge_task_id:
+            continue
+        new_tid = '{}-{}'.format(tid, uid)
+        if not ujid_req and len(new_tid) > 64:
+            raise RuntimeError(
+                'Cannot add unique suffix to task {} in {} {}. Please '
+                'shorten the task id to a maximum of 55 characters.'.format(
+                    tid, kind, job_id))
+        t = task_map[tid]
+        if t.depends_on is not None:
+            if util.is_not_empty(t.depends_on.task_ids):
+                new_dep = []
+                for x in t.depends_on.task_ids:
+                    if x not in all_tids:
+                        raise RuntimeError(
+                            '{} {} contains task dependencies not '
+                            'self-contained in task group bound for '
+                            'federation {}'.format(
+                                kind, job_id, federation_id))
+                    new_dep.append('{}-{}'.format(x, uid))
+                if not ujid_req:
+                    t.depends_on = batchmodels.TaskDependencies(
+                        task_ids=new_dep
+                    )
+                    dep_len += len(''.join(new_dep))
+            if util.is_not_empty(t.depends_on.task_id_ranges):
+                raise RuntimeError(
+                    '{} {} contains task dependency ranges, which are not '
+                    'supported, bound for federation {}'.format(
+                        kind, job_id, federation_id))
+        if not ujid_req:
+            t.id = new_tid
+            task_remap[tid] = t
+    # passed self-containment check, can stop here for unique job id
+    # federations
+    if ujid_req:
+        logger.debug(
+            'federation {} requires unique job ids, not rewriting task '
+            'dependencies for {} {}'.format(federation_id, kind, job_id))
+        return task_map
+    # remap merge task
+    if util.is_not_empty(merge_task_id):
+        new_tid = '{}-{}'.format(merge_task_id, uid)
+        if len(new_tid) > 64:
+            raise RuntimeError(
+                'Cannot add unique suffix to merge task {} in {} {}. Please '
+                'shorten the task id to a maximum of 55 characters.'.format(
+                    tid, kind, job_id))
+        t = task_map[merge_task_id]
+        t.depends_on = batchmodels.TaskDependencies(
+            task_ids=list(task_remap.keys())
+        )
+        t.id = new_tid
+        task_remap[new_tid] = t
+        dep_len += len(new_tid)
+    # check total dependency length
+    if dep_len > 64000:
+        raise RuntimeError(
+            'Total number of dependencies for {} {} exceeds the maximum '
+            'limit.'.format(kind, job_id))
+    return task_remap

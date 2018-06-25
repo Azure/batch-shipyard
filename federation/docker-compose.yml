@@ -1,0 +1,13 @@
+version: "3.5"
+
+services:
+  federation:
+    image: alfpark/batch-shipyard:{BATCH_SHIPYARD_VERSION}-federation
+    container_name: federation
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /var/batch-shipyard:/var/batch-shipyard
+    command:
+      - --conf
+      - /var/batch-shipyard/federation.json

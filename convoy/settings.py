@@ -78,16 +78,9 @@ _GPU_INSTANCES = _GPU_COMPUTE_INSTANCES.union(_GPU_VISUALIZATION_INSTANCES)
 _RDMA_INSTANCES = frozenset((
     # standard_a
     'standard_a8', 'standard_a9',
-    # standard_h
-    'standard_h16r', 'standard_h16mr',
-    # standard_nc
-    'standard_nc24r',
-    # standard_nc_v2
-    'standard_nc24rs_v2',
-    # standard_nc_v3
-    'standard_nc24rs_v3',
-    # standard_nd
-    'standard_nd24rs',
+))
+_RDMA_INSTANCE_SUFFIXES = frozenset((
+    'r', 'rs', 'rs_v2', 'rs_v3',
 ))
 _PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
     'standard_ds', 'standard_gs',
@@ -334,6 +327,32 @@ ResourceFileSettings = collections.namedtuple(
         'file_path', 'blob_source', 'file_mode',
     ]
 )
+CustomMountFstabSettings = collections.namedtuple(
+    'CustomMountFstabSettings', [
+        'fs_spec', 'fs_vfstype', 'fs_mntops', 'fs_freq', 'fs_passno',
+    ]
+)
+FederationPoolConstraintSettings = collections.namedtuple(
+    'FederationPoolConstraintSettings', [
+        'native', 'windows', 'location', 'custom_image_arm_id',
+        'virtual_network_arm_id', 'low_priority_nodes_allow',
+        'low_priority_nodes_exclusive', 'autoscale_allow',
+        'autoscale_exclusive', 'container_registries_private_docker_hub',
+        'container_registries_public', 'max_active_task_backlog_ratio',
+        'max_active_task_backlog_autoscale_exempt',
+    ]
+)
+FederationComputeNodeConstraintSettings = collections.namedtuple(
+    'FederationComputeNodeConstraintSettings', [
+        'vm_size', 'cores', 'core_variance', 'memory', 'memory_variance',
+        'exclusive', 'gpu', 'infiniband',
+    ]
+)
+FederationConstraintSettings = collections.namedtuple(
+    'FederationConstraintSettings', [
+        'pool', 'compute_node',
+    ]
+)
 ManagedDisksSettings = collections.namedtuple(
     'ManagedDisksSettings', [
         'location', 'resource_group', 'premium', 'disk_size_gb', 'disk_names',
@@ -410,9 +429,12 @@ MonitoringVmSettings = collections.namedtuple(
         'accelerated_networking',
     ]
 )
-CustomMountFstabSettings = collections.namedtuple(
-    'CustomMountFstabSettings', [
-        'fs_spec', 'fs_vfstype', 'fs_mntops', 'fs_freq', 'fs_passno',
+FederationProxyOptionsSettings = collections.namedtuple(
+    'FederationProxyOptionsSettings', [
+        'federations_polling_interval', 'actions_polling_interval',
+        'log_persistence', 'log_level', 'log_filename',
+        'scheduling_after_success_blackout_interval',
+        'scheduling_after_success_evaluate_autoscale',
     ]
 )
 
@@ -425,6 +447,8 @@ class VmResource(object):
         # type: (VmResource, str, str, str, str, PublicIpSettings,
         #        VirtualNetworkSettings, NetworkSecuritySettings, SSHSettings,
         #        bool) -> None
+        if location is None or ' ' in location:
+            raise ValueError('invalid location specified')
         self.location = location
         self.resource_group = resource_group
         self.hostname_prefix = hostname_prefix
@@ -725,7 +749,10 @@ def is_rdma_pool(vm_size):
     :rtype: bool
     :return: if rdma is present
     """
-    if vm_size.lower() in _RDMA_INSTANCES:
+    vsl = vm_size.lower()
+    if vsl in _RDMA_INSTANCES:
+        return True
+    elif any(vsl.endswith(x) for x in _RDMA_INSTANCE_SUFFIXES):
         return True
     return False
 
@@ -737,11 +764,10 @@ def is_premium_storage_vm_size(vm_size):
     :rtype: bool
     :return: if vm size is premium storage compatible
     """
-    if any([vm_size.lower().endswith(x)
-            for x in _PREMIUM_STORAGE_INSTANCE_SUFFIXES]):
+    vsl = vm_size.lower()
+    if any(vsl.endswith(x) for x in _PREMIUM_STORAGE_INSTANCE_SUFFIXES):
         return True
-    elif any([vm_size.lower().startswith(x)
-              for x in _PREMIUM_STORAGE_INSTANCE_PREFIXES]):
+    elif any(vsl.startswith(x) for x in _PREMIUM_STORAGE_INSTANCE_PREFIXES):
         return True
     return False
 
@@ -1573,6 +1599,25 @@ def credentials_management(config):
     )
 
 
+def parse_batch_service_url(account_service_url, test_cluster=False):
+    # type: (str, bool) -> Tuple[str, str]
+    """Parse batch service url into account name and location
+    :param str account_service_url: account url
+    :param bool test_cluster: test cluster
+    :rtype: tuple
+    :return: account, location
+    """
+    # parse location from url
+    tmp = account_service_url.split('.')
+    location = tmp[1].lower()
+    # parse account name from url
+    if test_cluster:
+        account = account_service_url.split('/')[-1]
+    else:
+        account = tmp[0].split('/')[-1]
+    return account, location
+
+
 def credentials_batch(config):
     # type: (dict) -> BatchCredentialsSettings
     """Get Batch credentials
@@ -1596,14 +1641,8 @@ def credentials_batch(config):
             creds['management'], 'subscription_id')
     except (KeyError, TypeError):
         subscription_id = None
-    # parse location from url
-    tmp = account_service_url.split('.')
-    location = tmp[1]
-    # parse account name from url
-    if test_cluster:
-        account = account_service_url.split('/')[-1]
-    else:
-        account = tmp[0].split('/')[-1]
+    account, location = parse_batch_service_url(
+        account_service_url, test_cluster=test_cluster)
     aad = _aad_credentials(
         creds,
         'batch',
@@ -1993,26 +2032,28 @@ def batch_shipyard_encryption_public_key_pem(config):
     return pem
 
 
-def docker_registries(config):
-    # type: (dict) -> list
+def docker_registries(config, images=None):
+    # type: (dict, List[str]) -> list
     """Get Docker registries specified
     :param dict config: configuration object
+    :param list images: list of images to base return
     :rtype: list
     :return: list of batchmodels.ContainerRegistry objects
     """
     servers = []
-    # get fallback docker registry
-    bs = batch_shipyard_settings(config)
-    if util.is_not_empty(bs.fallback_registry):
-        servers.append(bs.fallback_registry)
-    # get additional docker registries
-    try:
-        servers.extend(
-            config['global_resources']['additional_registries']['docker'])
-    except KeyError:
-        pass
+    if images is None:
+        # get fallback docker registry
+        bs = batch_shipyard_settings(config)
+        if util.is_not_empty(bs.fallback_registry):
+            servers.append(bs.fallback_registry)
+        # get additional docker registries
+        try:
+            servers.extend(
+                config['global_resources']['additional_registries']['docker'])
+        except KeyError:
+            pass
+        images = global_resources_docker_images(config)
     # parse images for servers
-    images = global_resources_docker_images(config)
     for image in images:
         tmp = image.split('/')
         if len(tmp) > 1:
@@ -2049,21 +2090,24 @@ def docker_registries(config):
     return registries
 
 
-def singularity_registries(config):
-    # type: (dict) -> list
+def singularity_registries(config, images=None):
+    # type: (dict, List[str]) -> list
     """Get Singularity registries specified
     :param dict config: configuration object
+    :param list images: list of images to base return
     :rtype: list
     :return: list of batchmodels.ContainerRegistry objects
     """
     servers = []
-    try:
-        servers.extend(
-            config['global_resources']['additional_registries']['singularity'])
-    except KeyError:
-        pass
+    if images is None:
+        try:
+            servers.extend(
+                config['global_resources']['additional_registries'][
+                    'singularity'])
+        except KeyError:
+            pass
+        images = global_resources_singularity_images(config)
     # parse images for servers
-    images = global_resources_singularity_images(config)
     for image in images:
         tmp = image.split('/')
         if len(tmp) > 1:
@@ -3012,6 +3056,145 @@ def job_allow_run_on_missing(conf):
     return allow
 
 
+def job_federation_constraint_settings(conf, federation_id):
+    # type: (dict, str) -> dict
+    """Gets federation constraints
+    :param dict conf: job configuration object
+    :param str federation_id: federation id
+    :rtype: dict
+    :return: federation constraints
+    """
+    if util.is_none_or_empty(federation_id):
+        return None
+    fc_conf = _kv_read_checked(conf, 'federation_constraints', default={})
+    pool_conf = _kv_read_checked(fc_conf, 'pool', default={})
+    native = _kv_read(pool_conf, 'native')
+    windows = _kv_read(pool_conf, 'windows')
+    if windows and native is not None and not native:
+        raise ValueError(
+            'cannot set constraint windows as true and native as false')
+    pool_location = _kv_read_checked(pool_conf, 'location')
+    if pool_location is not None:
+        if ' ' in pool_location:
+            raise ValueError(
+                'pool:location "{}" is invalid, please ensure proper region '
+                'name and not its display name'.format(pool_location))
+        pool_location = pool_location.lower()
+    pool_custom_image_arm_id = _kv_read_checked(
+        pool_conf, 'custom_image_arm_id')
+    if pool_custom_image_arm_id is not None:
+        pool_custom_image_arm_id = pool_custom_image_arm_id.lower()
+    pool_virtual_network_arm_id = _kv_read_checked(
+        pool_conf, 'virtual_network_arm_id')
+    if pool_virtual_network_arm_id is not None:
+        pool_virtual_network_arm_id = pool_virtual_network_arm_id.lower()
+    pool_lp_conf = _kv_read_checked(
+        pool_conf, 'low_priority_nodes', default={})
+    lp_allow = _kv_read(pool_lp_conf, 'allow', default=True)
+    lp_exclusive = _kv_read(pool_lp_conf, 'exclusive', default=False)
+    if not lp_allow and lp_exclusive:
+        raise ValueError(
+            'cannot set constraint low_priority:allow to false and '
+            'low_priority:exclusive to true')
+    pool_as_conf = _kv_read_checked(
+        pool_conf, 'autoscale', default={})
+    autoscale_allow = _kv_read(pool_as_conf, 'allow', default=True)
+    autoscale_exclusive = _kv_read(pool_as_conf, 'exclusive', default=False)
+    if not autoscale_allow and autoscale_exclusive:
+        raise ValueError(
+            'cannot set constraint autoscale:allow to false and '
+            'autoscale:exclusive to true')
+    pool_reg_conf = _kv_read_checked(
+        pool_conf, 'container_registries', default={})
+    pool_mab_conf = _kv_read_checked(
+        pool_conf, 'max_active_task_backlog', default={})
+    matbr = _kv_read(pool_mab_conf, 'ratio')
+    if matbr is not None:
+        matbr = float(matbr)
+        if matbr < 0:
+            raise ValueError(
+                'cannot set constraint max_active_task_backlog:ratio to '
+                'a negative value')
+    matbae = _kv_read(
+        pool_mab_conf, 'autoscale_exempt', default=True)
+    node_conf = _kv_read_checked(fc_conf, 'compute_node', default={})
+    vm_size = _kv_read_checked(node_conf, 'vm_size')
+    if vm_size is not None:
+        vm_size = vm_size.lower()
+    core_conf = _kv_read_checked(node_conf, 'cores', default={})
+    node_cores = _kv_read(core_conf, 'amount')
+    if util.is_not_empty(vm_size) and node_cores is not None:
+        raise ValueError(
+            'cannot specify both vm_size and cores for compute_node '
+            'constraint')
+    node_core_variance = _kv_read(core_conf, 'schedulable_variance')
+    if node_core_variance is not None:
+        node_core_variance = float(node_core_variance)
+        if node_core_variance < 0:
+            raise ValueError(
+                'cannot specify a negative cores:schedulable_variance')
+    memory_conf = _kv_read(node_conf, 'memory', default={})
+    node_memory = _kv_read_checked(memory_conf, 'amount')
+    if util.is_not_empty(vm_size) and node_memory is not None:
+        raise ValueError(
+            'cannot specify both vm_size and memory for compute_node '
+            'constraint')
+    if node_memory is not None:
+        node_memory = node_memory.lower()
+        if node_memory[-1] not in ('b', 'k', 'm', 'g', 't'):
+            raise ValueError(
+                'federation_constraints:compute_node:memory has invalid '
+                'suffix')
+        if int(node_memory[:-1]) <= 0:
+            raise ValueError(
+                'federation_constraints:compute_node:memory is a '
+                'non-positive value')
+    node_memory_variance = _kv_read(memory_conf, 'schedulable_variance')
+    if node_memory_variance is not None:
+        node_memory_variance = float(node_memory_variance)
+        if node_memory_variance < 0:
+            raise ValueError(
+                'cannot specify a negative memory:schedulable_variance')
+    node_gpu = _kv_read(node_conf, 'gpu')
+    if node_gpu and util.is_not_empty(vm_size) and not is_gpu_pool(vm_size):
+        raise ValueError(
+            'cannot specify gpu=True while vm_size does not have GPUs')
+    node_ib = _kv_read(node_conf, 'infiniband')
+    if node_ib and util.is_not_empty(vm_size) and not is_rdma_pool(vm_size):
+        raise ValueError(
+            'cannot specify infiniband=True while vm_size does not have '
+            'RDMA/IB')
+    return FederationConstraintSettings(
+        pool=FederationPoolConstraintSettings(
+            native=native,
+            windows=windows,
+            location=pool_location,
+            custom_image_arm_id=pool_custom_image_arm_id,
+            virtual_network_arm_id=pool_virtual_network_arm_id,
+            low_priority_nodes_allow=lp_allow,
+            low_priority_nodes_exclusive=lp_exclusive,
+            autoscale_allow=autoscale_allow,
+            autoscale_exclusive=autoscale_exclusive,
+            container_registries_private_docker_hub=_kv_read(
+                pool_reg_conf, 'private_docker_hub', default=False),
+            container_registries_public=_kv_read_checked(
+                pool_reg_conf, 'public'),
+            max_active_task_backlog_ratio=matbr,
+            max_active_task_backlog_autoscale_exempt=matbae,
+        ),
+        compute_node=FederationComputeNodeConstraintSettings(
+            vm_size=vm_size,
+            cores=node_cores,
+            core_variance=node_core_variance,
+            memory=node_memory,
+            memory_variance=node_memory_variance,
+            exclusive=_kv_read(node_conf, 'exclusive', default=False),
+            gpu=node_gpu,
+            infiniband=node_ib,
+        ),
+    )
+
+
 def job_has_merge_task(conf):
     # type: (dict) -> bool
     """Determines if job has a merge task
@@ -3161,15 +3344,17 @@ def set_task_id(conf, id):
     conf['id'] = id
 
 
-def task_settings(cloud_pool, config, poolconf, jobspec, conf):
+def task_settings(
+        cloud_pool, config, poolconf, jobspec, conf, federation_id=None):
     # type: (azure.batch.models.CloudPool, dict, PoolSettings, dict,
-    #        dict) -> TaskSettings
+    #        dict, str) -> TaskSettings
     """Get task settings
     :param azure.batch.models.CloudPool cloud_pool: cloud pool object
     :param dict config: configuration dict
     :param PoolSettings poolconf: pool settings
     :param dict jobspec: job specification
     :param dict conf: task configuration object
+    :param str federation_id: federation id
     :rtype: TaskSettings
     :return: task settings
     """
@@ -3228,6 +3413,20 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
                 image_reference.publisher.lower()
             offer = cloud_pool.virtual_machine_configuration.\
                 image_reference.offer.lower()
+    # get federation job constraint overrides
+    if util.is_not_empty(federation_id):
+        fed_constraints = job_federation_constraint_settings(
+            jobspec, federation_id)
+        if fed_constraints.pool.native is not None:
+            native = fed_constraints.pool.native
+        if fed_constraints.pool.windows is not None:
+            is_windows = fed_constraints.pool.windows
+        is_custom_image = util.is_not_empty(
+            fed_constraints.pool.custom_image_arm_id)
+        if is_multi_instance_task(conf):
+            inter_node_comm = True
+    else:
+        fed_constraints = None
     # get depends on
     try:
         depends_on = conf['depends_on']
@@ -3590,6 +3789,14 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             gpu = False
     # adjust for gpu settings
     if gpu:
+        if util.is_not_empty(federation_id):
+            # ensure that the job-level constraint does not conflict with
+            # job/task level requirements
+            if (fed_constraints.compute_node.gpu is not None and
+                    not fed_constraints.compute_node.gpu):
+                raise ValueError(
+                    'job or task requirement of gpu conflicts with '
+                    'compute_node:gpu federation constraint')
         if not is_gpu_pool(vm_size):
             raise RuntimeError(
                 ('cannot initialize a gpu task on nodes without '
@@ -3615,6 +3822,22 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             infiniband = False
     # adjust for infiniband
     if infiniband:
+        # adjust ib with fed constraints (normalize to a known base config)
+        if util.is_not_empty(federation_id):
+            # ensure that the job-level constraint does not conflict with
+            # job/task level requirements
+            if (fed_constraints.compute_node.infiniband is not None and
+                    not fed_constraints.compute_node.infiniband):
+                raise ValueError(
+                    'job or task requirement of infiniband conflicts with '
+                    'compute_node:infiniband federation constraint')
+            # set publisher and offer (or node agent)
+            if infiniband:
+                if is_custom_image:
+                    node_agent = 'batch.node.centos'
+                else:
+                    publisher = 'openlogic'
+                    offer = 'centos-hpc'
         if not inter_node_comm:
             raise RuntimeError(
                 ('cannot initialize an infiniband task on a '
@@ -3767,6 +3990,11 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
         if not isinstance(num_instances, int):
+            if util.is_not_empty(federation_id):
+                raise ValueError(
+                    'cannot specify a non-integral value "{}" for '
+                    'num_instances for a multi-instance task destined for '
+                    'a federation'.format(num_instances))
             # TODO remove deprecation path
             if (num_instances == 'pool_specification_vm_count_dedicated' or
                     num_instances == 'pool_specification_vm_count'):
@@ -4310,16 +4538,14 @@ def monitoring_settings(config):
         if util.is_none_or_empty(conf):
             raise KeyError
     except KeyError:
-        raise ValueError(
-            'monitoring settings are invalid or missing from global '
-            'configuration')
+        raise ValueError('monitoring settings are invalid')
     location = conf['location']
     if util.is_none_or_empty(location):
-        raise ValueError('invalid location in monitoring:batch')
+        raise ValueError('invalid location in monitoring')
     # monitoring vm settings
     rg = _kv_read_checked(conf, 'resource_group')
     if util.is_none_or_empty(rg):
-        raise ValueError('invalid resource_group in monitoring:batch')
+        raise ValueError('invalid resource_group in monitoring')
     vm_size = _kv_read_checked(conf, 'vm_size')
     hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
     accel_net = _kv_read(conf, 'accelerated_networking', False)
@@ -4364,17 +4590,7 @@ def monitoring_settings(config):
                 raise ValueError(
                     'expected list for prometheus network security rule')
     if 'custom_inbound_rules' in ns_conf:
-        # reserve keywords (current and expected possible future support)
-        _reserved = frozenset([
-            'ssh', 'nfs', 'glusterfs', 'smb', 'cifs', 'samba', 'zfs',
-            'beegfs', 'cephfs',
-        ])
         for key in ns_conf['custom_inbound_rules']:
-            # ensure key is not reserved
-            if key.lower() in _reserved:
-                raise ValueError(
-                    ('custom inbound rule of name {} conflicts with a '
-                     'reserved name {}').format(key, _reserved))
             ns_inbound[key] = InboundNetworkSecurityRule(
                 destination_port_range=_kv_read_checked(
                     ns_conf['custom_inbound_rules'][key],
@@ -4440,6 +4656,185 @@ def monitoring_settings(config):
             allow_docker_access=False,
         ),
     )
+
+
+def federation_proxy_options_settings(config):
+    # type: (dict) -> FederationProxyOptionsSettings
+    """Get federation proxy options settings
+    :param dict config: configuration dict
+    :rtype: FederationProxyOptionsSettings
+    :return: federation proxy options settings
+    """
+    try:
+        conf = config['federation']['proxy_options']
+    except KeyError:
+        conf = {}
+    pi_conf = _kv_read_checked(conf, 'polling_interval', default={})
+    fpi = _kv_read(pi_conf, 'federations', 30)
+    if fpi < 5:
+        raise ValueError(
+            'the polling_interval:federations value can not be less than 5')
+    api = _kv_read(pi_conf, 'actions', 5)
+    if api < 5:
+        raise ValueError(
+            'the polling_interval:actions value can not be less than 5')
+    log_conf = _kv_read_checked(conf, 'logging', default={})
+    sched_conf = _kv_read_checked(conf, 'scheduling', default={})
+    as_conf = _kv_read_checked(sched_conf, 'after_success', default={})
+    sasbi = _kv_read(as_conf, 'blackout_interval', 15)
+    if sasbi < 2:
+        raise ValueError(
+            'the scheduling:after_success:blackout_interval value can not '
+            'be less than 2')
+    return FederationProxyOptionsSettings(
+        federations_polling_interval=str(fpi),
+        actions_polling_interval=str(api),
+        log_persistence=_kv_read(log_conf, 'persistence', True),
+        log_level=_kv_read_checked(log_conf, 'level', 'debug'),
+        log_filename=_kv_read_checked(log_conf, 'filename', 'fedproxy.log'),
+        scheduling_after_success_blackout_interval=sasbi,
+        scheduling_after_success_evaluate_autoscale=_kv_read(
+            as_conf, 'evaluate_autoscale', True),
+    )
+
+
+def federation_settings(config):
+    # type: (dict) -> VmResource
+    """Get federation settings
+    :param dict config: configuration dict
+    :rtype: VmResource
+    :return: VM resource settings
+    """
+    # general settings
+    try:
+        conf = config['federation']
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError('federation settings are invalid or missing')
+    location = conf['location']
+    if util.is_none_or_empty(location):
+        raise ValueError('invalid location in federation')
+    # vm settings
+    rg = _kv_read_checked(conf, 'resource_group')
+    if util.is_none_or_empty(rg):
+        raise ValueError('invalid resource_group in federation')
+    vm_size = _kv_read_checked(conf, 'vm_size')
+    hostname_prefix = _kv_read_checked(conf, 'hostname_prefix')
+    accel_net = _kv_read(conf, 'accelerated_networking', False)
+    # public ip settings
+    pip_conf = _kv_read_checked(conf, 'public_ip', {})
+    pip_enabled = _kv_read(pip_conf, 'enabled', True)
+    pip_static = _kv_read(pip_conf, 'static', False)
+    # sc network security settings
+    ns_conf = conf['network_security']
+    ns_inbound = {
+        'ssh': InboundNetworkSecurityRule(
+            destination_port_range='22',
+            source_address_prefix=_kv_read_checked(ns_conf, 'ssh', ['*']),
+            protocol='tcp',
+        ),
+    }
+    if not isinstance(ns_inbound['ssh'].source_address_prefix, list):
+        raise ValueError('expected list for ssh network security rule')
+    if 'custom_inbound_rules' in ns_conf:
+        for key in ns_conf['custom_inbound_rules']:
+            ns_inbound[key] = InboundNetworkSecurityRule(
+                destination_port_range=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'destination_port_range'),
+                source_address_prefix=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'source_address_prefix'),
+                protocol=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key], 'protocol'),
+            )
+            if not isinstance(ns_inbound[key].source_address_prefix, list):
+                raise ValueError(
+                    'expected list for network security rule {} '
+                    'source_address_prefix'.format(key))
+    # ssh settings
+    ssh_conf = conf['ssh']
+    ssh_username = _kv_read_checked(ssh_conf, 'username')
+    ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    if util.is_not_empty(ssh_public_key):
+        ssh_public_key = pathlib.Path(ssh_public_key)
+    ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
+    ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
+    if (ssh_public_key is not None and
+            util.is_not_empty(ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (ssh_public_key is None and
+            util.is_none_or_empty(ssh_public_key_data) and
+            ssh_private_key is not None):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
+    ssh_gen_file_path = _kv_read_checked(
+        ssh_conf, 'generated_file_export_path', '.')
+    return VmResource(
+        location=location,
+        resource_group=rg,
+        hostname_prefix=hostname_prefix,
+        virtual_network=virtual_network_settings(
+            conf,
+            default_resource_group=rg,
+            default_existing_ok=False,
+            default_create_nonexistant=True,
+        ),
+        network_security=NetworkSecuritySettings(
+            inbound=ns_inbound,
+        ),
+        vm_size=vm_size,
+        accelerated_networking=accel_net,
+        public_ip=PublicIpSettings(
+            enabled=pip_enabled,
+            static=pip_static,
+        ),
+        ssh=SSHSettings(
+            username=ssh_username,
+            expiry_days=9999,
+            ssh_public_key=ssh_public_key,
+            ssh_public_key_data=ssh_public_key_data,
+            ssh_private_key=ssh_private_key,
+            generate_docker_tunnel_script=False,
+            generated_file_export_path=ssh_gen_file_path,
+            hpn_server_swap=False,
+            allow_docker_access=False,
+        ),
+    )
+
+
+def federation_storage_account_settings(config):
+    # type: (dict) ->str
+    """Get federation storage account settings selector
+    :param dict config: configuration dict
+    :rtype: str
+    :return: federation storage settings link
+    """
+    try:
+        conf = config['federation']
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError('federation settings are invalid or missing')
+    ssel = _kv_read_checked(conf, 'storage_account_settings')
+    if util.is_none_or_empty(ssel):
+        raise ValueError(
+            'federation storage_account_settings are invalid or missing')
+    return ssel
+
+
+def federation_credentials_storage(config):
+    # type: (dict) -> StorageCredentialsSettings
+    """Get federation storage account settings
+    :param dict config: configuration dict
+    :rtype: StorageCredentialsSettings
+    :return: federation storage cred settings
+    """
+    return credentials_storage(
+        config, federation_storage_account_settings(config))
 
 
 def generate_availability_set_name(vr):

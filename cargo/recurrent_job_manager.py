@@ -155,16 +155,20 @@ def _submit_task_sub_collection(
                 retry = []
                 for result in results.value:
                     if result.status == batchmodels.TaskAddStatus.client_error:
-                        de = [
-                            '{}: {}'.format(x.key, x.value)
-                            for x in result.error.values
-                        ]
+                        de = None
+                        if result.error.values is not None:
+                            de = [
+                                '{}: {}'.format(x.key, x.value)
+                                for x in result.error.values
+                            ]
                         logger.error(
                             ('skipping retry of adding task {} as it '
                              'returned a client error (code={} message={} {}) '
                              'for job {}').format(
                                  result.task_id, result.error.code,
-                                 result.error.message, ' '.join(de), job_id))
+                                 result.error.message,
+                                 ' '.join(de) if de is not None else '',
+                                 job_id))
                     elif (result.status ==
                           batchmodels.TaskAddStatus.server_error):
                         retry.append(task_map[result.task_id])

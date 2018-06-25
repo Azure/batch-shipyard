@@ -618,6 +618,7 @@ def main() -> None:
     with open(args.conf, 'rb') as f:
         config = json.load(f)
     logger.debug('loaded config: {}'.format(config))
+    del args
     _BATCH_SHIPYARD_VERSION = config['batch_shipyard_version']
     # convert cloud type
     cloud = convert_cloud_type(config['aad_cloud'])

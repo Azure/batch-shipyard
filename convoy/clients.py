@@ -43,6 +43,7 @@ import azure.mgmt.network
 import azure.mgmt.resource
 import azure.mgmt.storage
 import azure.storage.blob as azureblob
+import azure.storage.queue as azurequeue
 # local imports
 from . import aad
 from . import settings
@@ -357,7 +358,7 @@ def create_storage_clients():
     # type: (None) -> tuple
     """Create storage clients
     :rtype: tuple
-    :return: blob_client, table_client
+    :return: blob_client, table_client, queue_client
     """
     account_name = storage.get_storageaccount()
     account_key = storage.get_storageaccount_key()
@@ -372,4 +373,9 @@ def create_storage_clients():
         account_key=account_key,
         endpoint_suffix=endpoint_suffix,
     )
-    return blob_client, table_client
+    queue_client = azurequeue.QueueService(
+        account_name=account_name,
+        account_key=account_key,
+        endpoint_suffix=endpoint_suffix,
+    )
+    return blob_client, table_client, queue_client

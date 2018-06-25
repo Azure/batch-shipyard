@@ -277,7 +277,7 @@ Please see this
 regarding when to choose `native` container support pools.
 
 ### Jobs Configuration Changes
-#### `docker_image` requires instead of `image`
+#### `docker_image` required instead of `image`
 In the tasks array, `docker_image` is now required over `image` for
 disambiguation.
 

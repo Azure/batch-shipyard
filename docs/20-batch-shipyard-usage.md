@@ -116,13 +116,26 @@ These options must be specified after the command and sub-command. These are:
 of commands support this option. Note many of the supported commands are
 returning raw JSON body results from the Batch API server, thus the output
 may change/break if the underlying service version changes. It is important
-to pin the Batch Shipyard release to a specific version if using this feature.
-The following commands support this option:
+to pin the Batch Shipyard release to a specific version if using this feature
+and perform upgrade testing/validation for your scenario and workflow between
+releases. The following commands support this option:
     * `account info`
     * `account quota`
     * `cert list`
+    * `fed create`
+    * `fed destroy`
+    * `fed list`
+    * `fed jobs add`
+    * `fed jobs del`
+    * `fed jobs list`
+    * `fed jobs term`
+    * `fed jobs zap`
+    * `fed pool add`
+    * `fed pool remove`
+    * `fed proxy status`
     * `jobs list`
     * `jobs tasks list`
+    * `monitor status`
     * `pool autoscale evaluate`
     * `pool autoscale lastexec`
     * `pool images list`
@@ -353,6 +366,123 @@ specified Azure storage container.
       the pool to upload from
     * `--nodeid` is the node id to upload from
     * `--wait` will wait until the operation completes
+
+## `fed` Command
+The `fed` command has the following sub-commands:
+```
+  create   Create a federation
+  destroy  Destroy a federation
+  jobs     Federation jobs actions
+  list     List all federations
+  pool     Federation pool actions
+  proxy    Federation proxy actions
+```
+
+The `fed jobs` sub-command has the following sub-sub-commands:
+```
+  add   Add jobs to a federation
+  del   Delete a job or job schedule in a federation
+  list  List jobs or job schedules in a federation
+  term  Terminate a job or job schedule in a...
+  zap   Zap a queued unique id from a federation
+```
+
+The `fed pool` sub-command has the following sub-sub-commands:
+```
+  add     Add a pool to a federation
+  remove  Remove a pool from a federation
+```
+
+The `fed proxy` sub-command has the following sub-sub-commands:
+```
+  create   Create a federation proxy
+  destroy  Destroy a federation proxy
+  ssh      Interactively login via SSH to federation...
+  start    Starts a previously suspended federation...
+  status   Query status of a federation proxy
+  suspend  Suspend a federation proxy
+```
+
+* `create` will create a federation
+    * `FEDERATION_ID` is the federation id name
+    * `--force` force creates the federation even if a federation with a
+      same id exists.
+    * `--no-unique-job-ids` creates a federation without unique job id
+      enforcement.
+* `destroy` will destroy a previously created federation
+    * `FEDERATION_ID` is the federation id name
+* `jobs add` submits jobs/task groups or job schedules to a federation
+    * `FEDERATION_ID` is the federation id name
+* `jobs del` submits an action to delete jobs or job schedules from a
+federation
+    * `FEDERATION_ID` is the federation id name
+    * `--all-jobs` deletes all jobs in the federation
+    * `--all-jobschedules` deletes all job schedules in the federation
+    * `--job-id` deletes a specific job id. This can be specified multiple
+      times.
+    * `--job-schedule-id` deletes a specific job schedule id. This can be
+      specified multiple times.
+* `jobs list` lists jobs or locates a job or job schedule
+    * `FEDERATION_ID` is the federation id name
+    * `--job-id` locates a specific job id
+    * `--job-schedule-id` deletes a specific job schedule id
+* `jobs term` submits an action to terminate jobs or job schedules from a
+federation
+    * `FEDERATION_ID` is the federation id name
+    * `--all-jobs` deletes all jobs in the federation
+    * `--all-jobschedules` deletes all job schedules in the federation
+    * `--force` forces submission of a termination action for a job even
+      if it doesn't exist
+    * `--job-id` deletes a specific job id. This can be specified multiple
+      times.
+    * `--job-schedule-id` deletes a specific job schedule id. This can be
+      specified multiple times.
+* `jobs zap` removes a unique id action from a federation
+    * `FEDERATION_ID` is the federation id name
+    * `--unique-id` is the unique id associated with the action to zap
+* `list` will list federations
+    * `--federation-id` will limit the list to the specified federation id
+* `pool add` will add a pool to a federation
+    * `FEDERATION_ID` is the federation id name
+    * `--batch-service-url` is the batch service url of the pool id to add
+      instead of read from the credentials configuration
+    * `--pool-id` is the pool id to add instead of the pool id read from the
+      pool configuration
+* `pool remove`
+    * `FEDERATION_ID` is the federation id name
+    * `--all` remove all pools from the federation
+    * `--batch-service-url` is the batch service url of the pool id to remove
+      instead of read from the credentials configuration
+    * `--pool-id` is the pool id to remove instead of the pool id read from the
+      pool configuration
+* `proxy create` will create the federation proxy
+* `proxy destroy` will destroy the federation proxy
+    * `--delete-resource-group` will delete the entire resource group that
+      contains the federation proxy. Please take care when using this
+      option as any resource in the resoure group is deleted which may be
+      other resources that are not Batch Shipyard related.
+    * `--delete-virtual-network` will delete the virtual network and all of
+      its subnets
+    * `--generate-from-prefix` will attempt to generate all resource names
+      using conventions used. This is helpful when there was an issue with
+      monitoring creation/deletion and the original virtual machine resources
+      cannot be enumerated. Note that OS disks cannot be deleted with this
+      option. Please use an alternate means (i.e., the Azure Portal) to
+      delete disks.
+    * `--no-wait` does not wait for deletion completion. It is not recommended
+      to use this parameter.
+* `proxy ssh` will interactive log into the federation proxy via SSH
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--tty` allocates a pseudo-terminal
+* `proxy start` will start a previously suspended federation proxy
+    * `--no-wait` does not wait for the restart to complete. It is not
+      recommended to use this parameter.
+* `proxy status` will query status of a federation proxy
+* `proxy suspend` suspends a federation proxy
+    * `--no-wait` does not wait for the suspension to complete. It is not
+      recommended to use this parameter.
 
 ## `fs` Command
 The `fs` command has the following sub-commands which work on two different
@@ -600,6 +730,7 @@ The `monitor` command has the following sub-commands:
   remove   Remove a resource from monitoring
   ssh      Interactively login via SSH to monitoring...
   start    Starts a previously suspended monitoring...
+  status   Query status of a monitoring resource
   suspend  Suspend a monitoring resource
 ```
 
@@ -627,7 +758,7 @@ The `monitor` command has the following sub-commands:
     * `--all` will remove all resources that are currently monitored
     * `--poolid` will remove the specified Batch pool to monitor
     * `--remote-fs` will remove the specified RemoteFS cluster to monitor
-* `ssh` will interactively log into a compute node via SSH.
+* `ssh` will interactively log into the monitoring resource via SSH.
     * `COMMAND` is an optional argument to specify the command to run. If your
       command has switches, preface `COMMAND` with double dash as per POSIX
       convention, e.g., `pool ssh -- sudo docker ps -a`.
@@ -635,6 +766,7 @@ The `monitor` command has the following sub-commands:
 * `start` will start a previously suspended monitoring VM
     * `--no-wait` does not wait for the restart to complete. It is not
       recommended to use this parameter.
+* `status` will query status of a monitoring VM
 * `suspend` suspends a monitoring VM
     * `--no-wait` does not wait for the suspension to complete. It is not
       recommended to use this parameter.

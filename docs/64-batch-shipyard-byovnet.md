@@ -28,6 +28,17 @@ role permission or a
 
 * `Microsoft.Network/virtualNetworks/subnets/join/action`
 
+### Public IP Quota
+For pools that are not internode communication enabled, more than 1 public IP
+and load balancer may be created for the pool. These public IPs are allocated
+in the subscription that has allocated the virtual network. Please ensure
+that proper Public IP quota has been granted for the subscription of the
+virtual network.
+
+Note that enabling internode communication is not recommended unless
+running MPI (multinstance) jobs as this will restrict the upper-bound
+scalability of the pool.
+
 ## `virtual_network` Pool configuration
 To deploy Batch compute nodes into a subnet within a Virtual Network that
 you specify, you will need to define the `virtual_network` property in the
@@ -69,7 +80,7 @@ nodes can exceed the specified targets.
 If you are redirecting Internet-bound traffic from the subnet back to
 on-premises, then you may have to add
 [user-defined routes](https://docs.microsoft.com/azure/virtual-network/virtual-networks-udr-overview)
-to that subnet. Please follow the instructions at this
+to that subnet. Please follow the instructions found in this
 [document](https://docs.microsoft.com/azure/batch/batch-virtual-network#user-defined-routes-for-forced-tunneling).
 
 ## Network Security

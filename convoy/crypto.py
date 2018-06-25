@@ -54,6 +54,7 @@ util.setup_logger(logger)
 _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _REMOTEFS_SSH_KEY_PREFIX = '{}_remotefs'.format(_SSH_KEY_PREFIX)
 _MONITORING_SSH_KEY_PREFIX = '{}_monitoring'.format(_SSH_KEY_PREFIX)
+_FEDERATION_SSH_KEY_PREFIX = '{}_federation'.format(_SSH_KEY_PREFIX)
 # named tuples
 PfxSettings = collections.namedtuple(
     'PfxSettings', [
@@ -87,6 +88,15 @@ def get_monitoring_ssh_key_prefix():
     :return: ssh key prefix for monitoring
     """
     return _MONITORING_SSH_KEY_PREFIX
+
+
+def get_federation_ssh_key_prefix():
+    # type: (None) -> str
+    """Get federation SSH key prefix
+    :rtype: str
+    :return: ssh key prefix for federation proxy
+    """
+    return _FEDERATION_SSH_KEY_PREFIX
 
 
 def generate_rdp_password():

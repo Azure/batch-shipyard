@@ -31,7 +31,13 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import functools
+import json
 import logging
+import os
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 import random
 import time
 # non-stdlib imports
@@ -40,6 +46,7 @@ import azure.mgmt.resource.resources.models as rgmodels
 import msrest.exceptions
 import msrestazure.azure_exceptions
 # local imports
+from . import crypto
 from . import settings
 from . import storage
 from . import util
@@ -934,6 +941,116 @@ def deallocate_virtual_machine(compute_client, rg_name, vm_name):
     )
 
 
+def get_ssh_info(compute_client, network_client, vm_res, nic=None, pip=None):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        settings.VmResource, networkmodes.NetworkInterface,
+    #        networkmodels.PublicIPAddress) ->
+    #        Tuple[pathlib.Path, int, str, str]
+    """Get SSH info to a federation proxy
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.VmResource vm_res: resource
+    :param networkmodels.NetworkInterface nic: network interface
+    :param networkmodels.PublicIPAddress pip: public ip
+    :rtype: tuple
+    :return (ssh private key, port, username, ip)
+    """
+    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=vm_res.resource_group,
+            vm_name=vm_name,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            raise RuntimeError('virtual machine {} not found'.format(vm_name))
+        else:
+            raise
+    # get connection ip
+    if vm_res.public_ip.enabled:
+        # get pip connected to vm
+        if pip is None:
+            _, pip = get_nic_and_pip_from_virtual_machine(
+                network_client, vm_res.resource_group, vm)
+        ip_address = pip.ip_address
+    else:
+        if nic is None:
+            nic, _ = get_nic_and_pip_from_virtual_machine(
+                network_client, vm_res.resource_group, vm)
+        ip_address = nic.ip_configurations[0].private_ip_address
+    # return connection info for vm
+    if vm_res.ssh.ssh_private_key is not None:
+        ssh_priv_key = vm_res.ssh.ssh_private_key
+    else:
+        ssh_priv_key = pathlib.Path(
+            vm_res.ssh.generated_file_export_path,
+            crypto.get_federation_ssh_key_prefix())
+    if not ssh_priv_key.exists():
+        raise RuntimeError('SSH private key file not found at: {}'.format(
+            ssh_priv_key))
+    return ssh_priv_key, 22, vm.os_profile.admin_username, ip_address
+
+
+def ssh_to_virtual_machine_resource(
+        compute_client, network_client, vm_res, tty, command):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        settings.VmResource, bool, tuple) -> None
+    """SSH to a node in federation proxy
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param settings.VmResource vm_res: resource
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command to execute
+    """
+    ssh_priv_key, port, username, ip = get_ssh_info(
+        compute_client, network_client, vm_res)
+    crypto.connect_or_exec_ssh_command(
+        ip, port, ssh_priv_key, username, tty=tty, command=command)
+
+
+def suspend_virtual_machine_resource(
+        compute_client, config, vm_res, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict,
+    #        settings.VmResource, bool) -> None
+    """Suspend a monitoring resource
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param settings.VmResource vm_res: resource
+    :param bool wait: wait for suspension to complete
+    """
+    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=vm_res.resource_group,
+            vm_name=vm_name,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            logger.error('virtual machine {} not found'.format(vm_name))
+            return
+        else:
+            raise
+    if not util.confirm_action(
+            config, 'suspend virtual machine resource {}'.format(vm.name)):
+        return
+    # deallocate vm
+    async_op = AsyncOperation(functools.partial(
+        deallocate_virtual_machine, compute_client,
+        vm_res.resource_group, vm.name), retry_conflict=True)
+    if wait:
+        logger.info('waiting for virtual machine {} to deallocate'.format(
+            vm.name))
+        async_op.result()
+        logger.info('virtual machine {} deallocated'.format(vm.name))
+
+
 def start_virtual_machine(compute_client, rg_name, vm_name):
     # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
     #        msrestazure.azure_operation.AzureOperationPoller
@@ -950,3 +1067,131 @@ def start_virtual_machine(compute_client, rg_name, vm_name):
         resource_group_name=rg_name,
         vm_name=vm_name,
     )
+
+
+def start_virtual_machine_resource(
+        compute_client, config, vm_res, wait=False):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict,
+    #        settings.VmResource, bool) -> None
+    """Starts a suspended virtual machine resource
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param settings.VmResource vm_res: resource
+    :param bool wait: wait for restart to complete
+    """
+    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=vm_res.resource_group,
+            vm_name=vm_name,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            logger.error('virtual machine {} not found'.format(vm_name))
+            return
+        else:
+            raise
+    if not util.confirm_action(
+            config, 'start suspended virtual machine resource {}'.format(
+                vm.name)):
+        return
+    # start vm
+    async_op = AsyncOperation(functools.partial(
+        start_virtual_machine, compute_client,
+        vm_res.resource_group, vm.name))
+    if wait:
+        logger.info('waiting for virtual machine {} to start'.format(
+            vm.name))
+        async_op.result()
+        logger.info('virtual machine {} started'.format(vm.name))
+
+
+def stat_virtual_machine_resource(
+        compute_client, network_client, config, vm_res):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict,
+    #        settings.VmResource) -> None
+    """Retrieve status of a virtual machine resource
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param settings.VmResource vm_res: resource
+    """
+    # retrieve all vms
+    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    try:
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=vm_res.resource_group,
+            vm_name=vm_name,
+            expand=compute_client.virtual_machines.models.
+            InstanceViewTypes.instance_view,
+        )
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            logger.error('virtual machine {} not found'.format(vm_name))
+            return
+        else:
+            raise
+    # fetch vm status
+    vmstatus = {}
+    powerstate = None
+    for status in vm.instance_view.statuses:
+        if status.code.startswith('PowerState'):
+            powerstate = status.code
+    diskstates = []
+    if util.is_not_empty(vm.instance_view.disks):
+        for disk in vm.instance_view.disks:
+            for status in disk.statuses:
+                diskstates.append(status.code)
+    # get nic/pip connected to vm
+    nic, pip = get_nic_and_pip_from_virtual_machine(
+        network_client, vm_res.resource_group, vm)
+    # get resource names (pass cached data to prevent another lookup)
+    _, _, subnet, vnet, nsg = \
+        get_resource_names_from_virtual_machine(
+            compute_client, network_client, vm_res, vm, nic=nic, pip=pip)
+    # stat data disks
+    disks = {}
+    total_size_gb = 0
+    for dd in vm.storage_profile.data_disks:
+        total_size_gb += dd.disk_size_gb
+        disks[dd.name] = {
+            'lun': dd.lun,
+            'caching': str(dd.caching),
+            'disk_size_gb': dd.disk_size_gb,
+            'type': str(dd.managed_disk.storage_account_type),
+        }
+    disks['disk_array_size_gb'] = total_size_gb
+    vmstatus[vm.name] = {
+        'vm_size': vm.hardware_profile.vm_size,
+        'powerstate': powerstate,
+        'provisioning_state': vm.provisioning_state,
+        'availability_set':
+        vm.availability_set.id.split('/')[-1]
+        if vm.availability_set is not None else None,
+        'update_domain/fault_domain': '{}/{}'.format(
+            vm.instance_view.platform_update_domain,
+            vm.instance_view.platform_fault_domain),
+        'fqdn': pip.dns_settings.fqdn if pip is not None else None,
+        'public_ip_address': pip.ip_address if pip is not None else None,
+        'public_ip_allocation':
+        pip.public_ip_allocation_method if pip is not None else None,
+        'private_ip_address': nic.ip_configurations[0].private_ip_address,
+        'private_ip_allocation':
+        nic.ip_configurations[0].private_ip_allocation_method,
+        'admin_username': vm.os_profile.admin_username,
+        'accelerated_networking': nic.enable_accelerated_networking,
+        'virtual_network': vnet,
+        'subnet': subnet,
+        'network_security_group': nsg,
+        'data_disks': disks,
+    }
+    log = '{}'.format(json.dumps(vmstatus, sort_keys=True, indent=4))
+    if settings.raw(config):
+        print(log)
+    else:
+        logger.info('virtual machine resource status:{}{}'.format(
+            os.linesep, log))

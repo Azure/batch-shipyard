@@ -73,26 +73,29 @@ def _create_virtual_machine_extension(
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
+    bs = settings.batch_shipyard_settings(config)
+    fpo = settings.federation_proxy_options_settings(config)
     # construct vm extensions
     vm_ext_name = settings.generate_virtual_machine_extension_name(
         vm_resource, offset)
     # try to get storage account resource group
-    ssel = settings.batch_shipyard_settings(config).storage_account_settings
+    ssel = settings.federation_storage_account_settings(config)
     rg = settings.credentials_storage(config, ssel).resource_group
-    # get services config
-    servconf = settings.monitoring_services_settings(config)
     # construct bootstrap command
-    cmd = './{bsf}{a}{d}{f}{le}{p}{s}{v}'.format(
+    cmd = './{bsf}{a}{log}{p}{r}{s}{v}'.format(
         bsf=bootstrap_file[0],
         a=' -a {}'.format(settings.determine_cloud_type_from_aad(config)),
-        d=' -d {}'.format(fqdn) if util.is_not_empty(fqdn) else '',
-        f=' -f' if servconf.lets_encrypt_staging else '',
-        le=' -l' if servconf.lets_encrypt_enabled else '',
-        p=' -p {}'.format(servconf.resource_polling_interval),
+        log=' -l {}:{}:{}'.format(
+            fpo.log_persistence, fpo.log_level, fpo.log_filename),
+        p=' -p {}:{}'.format(
+            fpo.scheduling_after_success_blackout_interval,
+            fpo.scheduling_after_success_evaluate_autoscale),
+        r=' -r {}:{}'.format(
+            fpo.federations_polling_interval, fpo.actions_polling_interval),
         s=' -s {}:{}:{}'.format(
             storage.get_storageaccount(),
-            storage.get_storage_table_monitoring(),
             rg if util.is_not_empty(rg) else '',
+            bs.storage_entity_prefix
         ),
         v=' -v {}'.format(__version__),
     )
@@ -122,19 +125,20 @@ def _create_virtual_machine_extension(
     )
 
 
-def create_monitoring_resource(
+def create_federation_proxy(
         auth_client, resource_client, compute_client, network_client,
-        blob_client, table_client, config, resources_path, bootstrap_file,
-        monitoring_files):
+        blob_client, table_client, queue_client, config, resources_path,
+        bootstrap_file, federation_files):
     # type: (azure.mgmt.authorization.AuthorizationManagementClient,
     #        azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
-    #        dict, str, pathlib.Path, Tuple[str, pathlib.Path],
+    #        azure.storage.queue.QueueService,
+    #        dict, pathlib.Path, Tuple[str, pathlib.Path],
     #        List[Tuple[str, pathlib.Path]]) -> None
-    """Create a monitoring resource
+    """Create a federation proxy
     :param azure.mgmt.authorization.AuthorizationManagementClient auth_client:
         auth client
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -145,144 +149,76 @@ def create_monitoring_resource(
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_client: queue client
     :param dict config: configuration dict
     :param pathlib.Path: resources path
     :param Tuple[str, pathlib.Path] bootstrap_file: customscript bootstrap file
-    :param List[Tuple[str, pathlib.Path]] monitoring_files:
-        configurable monitoring files
+    :param List[Tuple[str, pathlib.Path]] federation_files: federation files
     """
-    ms = settings.monitoring_settings(config)
+    fs = settings.federation_settings(config)
     # get subscription id for msi
     sub_id = settings.credentials_management(config).subscription_id
     if util.is_none_or_empty(sub_id):
         raise ValueError('Management subscription id not specified')
     # check if cluster already exists
-    logger.debug('checking if monitoring resource exists')
+    logger.debug('checking if federation proxy exists')
     try:
         vm = compute_client.virtual_machines.get(
-            resource_group_name=ms.resource_group,
-            vm_name=settings.generate_virtual_machine_name(ms, 0)
+            resource_group_name=fs.resource_group,
+            vm_name=settings.generate_virtual_machine_name(fs, 0)
         )
         raise RuntimeError(
-            'Existing virtual machine {} found for monitoring'.format(vm.id))
+            'Existing virtual machine {} found for federation proxy'.format(
+                vm.id))
     except msrestazure.azure_exceptions.CloudError as e:
         if e.status_code == 404:
             pass
         else:
             raise
     # confirm before proceeding
-    if not util.confirm_action(config, 'create monitoring resource'):
+    if not util.confirm_action(config, 'create federation proxy'):
         return
     # create resource group if it doesn't exist
     resource.create_resource_group(
-        resource_client, ms.resource_group, ms.location)
-    # check for conflicting options
-    servconf = settings.monitoring_services_settings(config)
-    if servconf.lets_encrypt_enabled and not ms.public_ip.enabled:
-        raise ValueError(
-            'cannot create a monitoring resource without a public ip and '
-            'lets encrypt enabled')
-    # create storage container
+        resource_client, fs.resource_group, fs.location)
+    # create storage containers
     storage.create_storage_containers_nonbatch(
-        blob_client, table_client, None, 'monitoring')
-    # configure yaml files and write to resources
-    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
-        with monitoring_files['compose'][1].open('r') as f:
-            compdata = f.read()
-    else:
-        with monitoring_files['compose-nonginx'][1].open('r') as f:
-            compdata = f.read()
-    with monitoring_files['prometheus'][1].open('r') as f:
-        promdata = f.read()
-    with monitoring_files['nginx'][1].open('r') as f:
-        nginxdata = f.read()
-    compdata = compdata.replace(
-        '{GRAFANA_ADMIN_USER}', servconf.grafana.admin_user).replace(
-            '{GRAFANA_ADMIN_PASSWORD}', servconf.grafana.admin_password)
-    if servconf.prometheus.port is not None:
-        if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
-            compdata = compdata.replace(
-                '{PROMETHEUS_PORT}', '- "{p}:{p}"'.format(
-                    p=servconf.prometheus.port))
-            nginxdata = nginxdata.replace(
-                '{PROMETHEUS_PORT}', servconf.prometheus.port)
-        else:
-            compdata = compdata.replace(
-                '{PROMETHEUS_PORT}', servconf.prometheus.port)
-    else:
-        if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
-            compdata = compdata.replace('{PROMETHEUS_PORT}', '')
-            nginxdata = nginxdata.replace('{PROMETHEUS_PORT}', '9090')
-        else:
-            compdata = compdata.replace('{PROMETHEUS_PORT}', '9090')
-    promdata = promdata.replace(
-        '{PROMETHEUS_SCRAPE_INTERVAL}', servconf.prometheus.scrape_interval)
-    compyml = resources_path / monitoring_files['compose'][0]
-    promyml = resources_path / monitoring_files['prometheus'][0]
-    nginxconf = resources_path / monitoring_files['nginx'][0]
-    with compyml.open('wt') as f:
-        f.write(compdata)
-    with promyml.open('wt') as f:
-        f.write(promdata)
-    with nginxconf.open('wt') as f:
-        f.write(nginxdata)
-    del compdata
-    del promdata
-    del nginxdata
-    monitoring_files = [
-        bootstrap_file,
-        monitoring_files['dashboard'],
-        (monitoring_files['compose'][0], compyml),
-        (monitoring_files['prometheus'][0], promyml),
-        (monitoring_files['nginx'][0], nginxconf),
-    ]
-    add_dash = None
-    if util.is_not_empty(servconf.grafana.additional_dashboards):
-        add_dash = resources_path / 'additional_dashboards.txt'
-        with add_dash.open('wt') as f:
-            for key in servconf.grafana.additional_dashboards:
-                f.write('{},{}\n'.format(
-                    key, servconf.grafana.additional_dashboards[key]))
-        monitoring_files.append((add_dash.name, add_dash))
+        blob_client, table_client, queue_client, 'federation')
+    # create file share for log persistence
+    bs = settings.batch_shipyard_settings(config)
+    storage.create_file_share_saskey(
+        settings.credentials_storage(
+            config,
+            bs.storage_account_settings,
+        ),
+        '{}fedlogs'.format(bs.storage_entity_prefix),
+        'ingress',
+        create_share=True,
+    )
+    # create global lock
+    storage.create_global_lock_blob(blob_client, 'federation')
     # upload scripts to blob storage for customscript vm extension
     blob_urls = storage.upload_for_nonbatch(
-        blob_client, monitoring_files, 'monitoring')
-    try:
-        compyml.unlink()
-    except OSError:
-        pass
-    try:
-        promyml.unlink()
-    except OSError:
-        pass
-    try:
-        nginxconf.unlink()
-    except OSError:
-        pass
-    if add_dash is not None:
-        try:
-            add_dash.unlink()
-        except OSError:
-            pass
+        blob_client, federation_files, 'federation')
     # async operation dictionary
     async_ops = {}
     # create nsg
     async_ops['nsg'] = resource.AsyncOperation(functools.partial(
-        resource.create_network_security_group, network_client, ms))
+        resource.create_network_security_group, network_client, fs))
     # use dynamic ips for private
     private_ips = None
     logger.debug('using dynamic private ip address allocation')
     # create virtual network and subnet if specified
     vnet, subnet = resource.create_virtual_network_and_subnet(
         resource_client, network_client,
-        ms.virtual_network.resource_group, ms.location,
-        ms.virtual_network)
+        fs.virtual_network.resource_group, fs.location,
+        fs.virtual_network)
     # create public ips
     pips = None
-    if ms.public_ip.enabled:
+    if fs.public_ip.enabled:
         async_ops['pips'] = {}
         async_ops['pips'][0] = resource.AsyncOperation(functools.partial(
-            resource.create_public_ip, network_client, ms, 0))
+            resource.create_public_ip, network_client, fs, 0))
         logger.debug('waiting for public ips to provision')
         pips = {}
         for offset in async_ops['pips']:
@@ -301,7 +237,7 @@ def create_monitoring_resource(
     # create nics
     async_ops['nics'] = {}
     async_ops['nics'][0] = resource.AsyncOperation(functools.partial(
-        resource.create_network_interface, network_client, ms, subnet, nsg,
+        resource.create_network_interface, network_client, fs, subnet, nsg,
         private_ips, pips, 0))
     # wait for nics to be created
     logger.debug('waiting for network interfaces to provision')
@@ -319,26 +255,26 @@ def create_monitoring_resource(
                  nic.enable_accelerated_networking))
         nics[offset] = nic
     # read or generate ssh keys
-    if util.is_not_empty(ms.ssh.ssh_public_key_data):
-        key_data = ms.ssh.ssh_public_key_data
+    if util.is_not_empty(fs.ssh.ssh_public_key_data):
+        key_data = fs.ssh.ssh_public_key_data
     else:
         # create universal ssh key for all vms if not specified
-        ssh_pub_key = ms.ssh.ssh_public_key
+        ssh_pub_key = fs.ssh.ssh_public_key
         if ssh_pub_key is None:
             _, ssh_pub_key = crypto.generate_ssh_keypair(
-                ms.ssh.generated_file_export_path,
-                crypto.get_monitoring_ssh_key_prefix())
+                fs.ssh.generated_file_export_path,
+                crypto.get_federation_ssh_key_prefix())
         # read public key data
         with ssh_pub_key.open('rb') as fd:
             key_data = fd.read().decode('utf8')
     ssh_pub_key = compute_client.virtual_machines.models.SshPublicKey(
-        path='/home/{}/.ssh/authorized_keys'.format(ms.ssh.username),
+        path='/home/{}/.ssh/authorized_keys'.format(fs.ssh.username),
         key_data=key_data,
     )
     # create vms
     async_ops['vms'] = {}
     async_ops['vms'][0] = resource.AsyncOperation(functools.partial(
-        resource.create_virtual_machine, compute_client, ms, None, nics,
+        resource.create_virtual_machine, compute_client, fs, None, nics,
         None, ssh_pub_key, 0, enable_msi=True))
     # wait for vms to be created
     logger.info(
@@ -353,7 +289,7 @@ def create_monitoring_resource(
     sub_scope = '/subscriptions/{}/'.format(sub_id)
     cont_role = None
     for role in auth_client.role_definitions.list(
-            sub_scope, filter='roleName eq \'Reader\''):
+            sub_scope, filter='roleName eq \'Contributor\''):
         cont_role = role.id
         break
     if cont_role is None:
@@ -394,40 +330,26 @@ def create_monitoring_resource(
     else:
         # refresh public ip for vm
         pip = network_client.public_ip_addresses.get(
-            resource_group_name=ms.resource_group,
+            resource_group_name=fs.resource_group,
             public_ip_address_name=pips[offset].name,
         )
         fqdn = pip.dns_settings.fqdn
         ipinfo = 'fqdn={} public_ip_address={}'.format(fqdn, pip.ip_address)
-        # temporary enable port 80 for ACME challenge if fqdn is present
-        if servconf.lets_encrypt_enabled:
-            isr = settings.InboundNetworkSecurityRule(
-                destination_port_range='80',
-                source_address_prefix='*',
-                protocol='tcp',
-            )
-            logger.debug('creating temporary port 80 rule for ACME challenge')
-            async_ops['port80'] = resource.AsyncOperation(functools.partial(
-                resource.add_inbound_network_security_rule, network_client, ms,
-                'acme80', isr))
     # install msi vm extension
     async_ops['vmext'] = {}
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
-            resource.create_msi_virtual_machine_extension, compute_client, ms,
+            resource.create_msi_virtual_machine_extension, compute_client, fs,
             vms[0].name, 0, settings.verbose(config)),
         max_retries=0,
     )
     logger.debug('waiting for virtual machine msi extensions to provision')
     for offset in async_ops['vmext']:
         async_ops['vmext'][offset].result()
-    # ensure port 80 rule is ready
-    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
-        async_ops['port80'].result()
     # install vm extension
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
-            _create_virtual_machine_extension, compute_client, config, ms,
+            _create_virtual_machine_extension, compute_client, config, fs,
             bootstrap_file, blob_urls, vms[0].name,
             private_ips, fqdn, 0, settings.verbose(config)),
         max_retries=0,
@@ -442,46 +364,20 @@ def create_monitoring_resource(
              'vm_size={} {}]').format(
                 vm.id, vm.provisioning_state, vm_ext.provisioning_state,
                 vm.hardware_profile.vm_size, ipinfo))
-    # disable port 80 for ACME challenge
-    if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
-        logger.debug('removing temporary port 80 rule for ACME challenge')
-        async_ops['port80'] = resource.AsyncOperation(functools.partial(
-            resource.remove_inbound_network_security_rule, network_client, ms,
-            'acme80'))
-        async_ops['port80'].result()
-    # output connection info
-    if ms.public_ip.enabled:
-        logger.info(
-            ('To connect to Grafana, open a web browser and go '
-             'to https://{}').format(fqdn))
-        if servconf.prometheus.port is not None:
-            logger.info(
-                ('To connect to Prometheus, open a web browser and go '
-                 'to https://{}:{}').format(fqdn, servconf.prometheus.port))
-    else:
-        logger.info(
-            ('To connect to Grafana, open a web browser and go '
-             'to http://{} within the virtual network').format(
-                 nics[offset].ip_configurations[0].private_ip_address))
-        if servconf.prometheus.port is not None:
-            logger.info(
-                ('To connect to Prometheus, open a web browser and go '
-                 'to http://{}:{} within the virtual network').format(
-                     nics[offset].ip_configurations[0].private_ip_address,
-                     servconf.prometheus.port))
 
 
-def delete_monitoring_resource(
+def delete_federation_proxy(
         resource_client, compute_client, network_client, blob_client,
-        table_client, config, delete_virtual_network=False,
+        table_client, queue_client, config, delete_virtual_network=False,
         delete_resource_group=False, generate_from_prefix=False, wait=False):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
+    #        azure.storage.queue.QueueService,
     #        dict, bool, bool, bool, bool) -> None
-    """Delete a resource monitor
+    """Delete a federation proxy
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -490,38 +386,39 @@ def delete_monitoring_resource(
         network client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_client: queue client
     :param dict config: configuration dict
     :param bool delete_virtual_network: delete vnet
     :param bool delete_resource_group: delete resource group
     :param bool generate_from_prefix: generate resources from hostname prefix
     :param bool wait: wait for completion
     """
-    ms = settings.monitoring_settings(config)
+    fs = settings.federation_settings(config)
     # delete rg if specified
     if delete_resource_group:
         if util.confirm_action(
                 config, 'delete resource group {}'.format(
-                    ms.resource_group)):
+                    fs.resource_group)):
             logger.info('deleting resource group {}'.format(
-                ms.resource_group))
+                fs.resource_group))
             async_delete = resource_client.resource_groups.delete(
-                resource_group_name=ms.resource_group)
+                resource_group_name=fs.resource_group)
             if wait:
                 logger.debug('waiting for resource group {} to delete'.format(
-                    ms.resource_group))
+                    fs.resource_group))
                 async_delete.result()
                 logger.info('resource group {} deleted'.format(
-                    ms.resource_group))
+                    fs.resource_group))
         return
-    if not util.confirm_action(config, 'delete monitoring resource'):
+    if not util.confirm_action(config, 'delete federation proxy'):
         return
     # get vms and cache for concurent async ops
     resources = {}
     i = 0
-    vm_name = settings.generate_virtual_machine_name(ms, i)
+    vm_name = settings.generate_virtual_machine_name(fs, i)
     try:
         vm = compute_client.virtual_machines.get(
-            resource_group_name=ms.resource_group,
+            resource_group_name=fs.resource_group,
             vm_name=vm_name,
         )
     except msrestazure.azure_exceptions.CloudError as e:
@@ -533,12 +430,12 @@ def delete_monitoring_resource(
                     'be deleted, please use "fs disks del" to delete '
                     'those resources if desired')
                 resources[i] = {
-                    'vm': settings.generate_virtual_machine_name(ms, i),
+                    'vm': settings.generate_virtual_machine_name(fs, i),
                     'as': None,
-                    'nic': settings.generate_network_interface_name(ms, i),
-                    'pip': settings.generate_public_ip_name(ms, i),
+                    'nic': settings.generate_network_interface_name(fs, i),
+                    'pip': settings.generate_public_ip_name(fs, i),
                     'subnet': None,
-                    'nsg': settings.generate_network_security_group_name(ms),
+                    'nsg': settings.generate_network_security_group_name(fs),
                     'vnet': None,
                     'os_disk': None,
                 }
@@ -548,7 +445,7 @@ def delete_monitoring_resource(
         # get resources connected to vm
         nic, pip, subnet, vnet, nsg = \
             resource.get_resource_names_from_virtual_machine(
-                compute_client, network_client, ms, vm)
+                compute_client, network_client, fs, vm)
         resources[i] = {
             'vm': vm.name,
             'arm_id': vm.id,
@@ -570,9 +467,9 @@ def delete_monitoring_resource(
     if settings.verbose(config):
         logger.debug('deleting the following resources:{}{}'.format(
             os.linesep, json.dumps(resources, sort_keys=True, indent=4)))
-    # delete storage container
+    # delete storage containers, only delete global blob container
     storage.delete_storage_containers_nonbatch(
-        blob_client, table_client, None, 'monitoring')
+        blob_client, None, None, 'federation')
     # create async op holder
     async_ops = {}
     # delete vms
@@ -581,7 +478,7 @@ def delete_monitoring_resource(
         vm_name = resources[key]['vm']
         async_ops['vms'][vm_name] = resource.AsyncOperation(functools.partial(
             resource.delete_virtual_machine, compute_client,
-            ms.resource_group, vm_name), retry_conflict=True)
+            fs.resource_group, vm_name), retry_conflict=True)
     logger.info(
         'waiting for {} virtual machines to delete'.format(
             len(async_ops['vms'])))
@@ -595,7 +492,7 @@ def delete_monitoring_resource(
         async_ops['nics'][nic_name] = resource.AsyncOperation(
             functools.partial(
                 resource.delete_network_interface, network_client,
-                ms.resource_group, nic_name),
+                fs.resource_group, nic_name),
             retry_conflict=True
         )
     # wait for nics to delete
@@ -612,7 +509,7 @@ def delete_monitoring_resource(
             continue
         async_ops['os_disk'].append(remotefs.delete_managed_disks(
             resource_client, compute_client, config, os_disk,
-            resource_group=ms.resource_group, wait=False,
+            resource_group=fs.resource_group, wait=False,
             confirm_override=True))
     # delete nsg
     deleted = set()
@@ -624,7 +521,7 @@ def delete_monitoring_resource(
         deleted.add(nsg_name)
         async_ops['nsg'][nsg_name] = resource.AsyncOperation(functools.partial(
             resource.delete_network_security_group, network_client,
-            ms.resource_group, nsg_name), retry_conflict=True)
+            fs.resource_group, nsg_name), retry_conflict=True)
     deleted.clear()
     # delete public ips
     async_ops['pips'] = {}
@@ -635,7 +532,7 @@ def delete_monitoring_resource(
         async_ops['pips'][pip_name] = resource.AsyncOperation(
             functools.partial(
                 resource.delete_public_ip, network_client,
-                ms.resource_group, pip_name),
+                fs.resource_group, pip_name),
             retry_conflict=True
         )
     logger.debug('waiting for {} public ips to delete'.format(
@@ -654,7 +551,7 @@ def delete_monitoring_resource(
         async_ops['subnets'][subnet_name] = resource.AsyncOperation(
             functools.partial(
                 resource.delete_subnet, network_client,
-                ms.virtual_network.resource_group, vnet_name, subnet_name),
+                fs.virtual_network.resource_group, vnet_name, subnet_name),
             retry_conflict=True
         )
     logger.debug('waiting for {} subnets to delete'.format(
@@ -673,7 +570,7 @@ def delete_monitoring_resource(
         async_ops['vnets'][vnet_name] = resource.AsyncOperation(
             functools.partial(
                 resource.delete_virtual_network, network_client,
-                ms.virtual_network.resource_group, vnet_name),
+                fs.virtual_network.resource_group, vnet_name),
             retry_conflict=True
         )
     deleted.clear()

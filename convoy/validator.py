@@ -58,6 +58,7 @@ class ConfigType(enum.Enum):
     Jobs = 4,
     RemoteFS = 5,
     Monitor = 6,
+    Federation = 7,
 
 
 # global defines
@@ -86,6 +87,10 @@ _SCHEMAS = {
     ConfigType.Monitor: {
         'name': 'Monitor',
         'schema': pathlib.Path(_ROOT_PATH, 'schemas/monitor.yaml'),
+    },
+    ConfigType.Federation: {
+        'name': 'Federation',
+        'schema': pathlib.Path(_ROOT_PATH, 'schemas/federation.yaml'),
     },
 }
 

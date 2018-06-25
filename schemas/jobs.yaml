@@ -155,6 +155,85 @@ mapping:
           default_working_dir:
             type: str
             enum: ['batch', 'container']
+          federation_constraints:
+            type: map
+            mapping:
+              pool:
+                type: map
+                mapping:
+                  autoscale:
+                    type: map
+                    mapping:
+                      allow:
+                        type: bool
+                        required: true
+                      exclusive:
+                        type: bool
+                        required: true
+                  low_priority_nodes:
+                    type: map
+                    mapping:
+                      allow:
+                        type: bool
+                        required: true
+                      exclusive:
+                        type: bool
+                        required: true
+                  native:
+                    type: bool
+                  windows:
+                    type: bool
+                  location:
+                    type: str
+                  container_registries:
+                    type: map
+                    mapping:
+                      private_docker_hub:
+                        type: bool
+                      public:
+                        type: seq
+                        sequence:
+                          - type: str
+                  max_active_task_backlog:
+                    type: map
+                    mapping:
+                      ratio:
+                        type: float
+                        required: true
+                      autoscale_exempt:
+                        type: bool
+                        required: true
+                  custom_image_arm_id:
+                    type: str
+                  virtual_network_arm_id:
+                    type: str
+              compute_node:
+                type: map
+                mapping:
+                  vm_size:
+                    type: str
+                  cores:
+                    type: map
+                    mapping:
+                      amount:
+                        type: int
+                        required: true
+                      schedulable_variance:
+                        type: float
+                  memory:
+                    type: map
+                    mapping:
+                      amount:
+                        type: str
+                        required: true
+                      schedulable_variance:
+                        type: float
+                  exclusive:
+                    type: bool
+                  gpu:
+                    type: bool
+                  infiniband:
+                    type: bool
           tasks:
             type: seq
             sequence:

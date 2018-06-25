@@ -60,6 +60,37 @@ job_specifications:
       - jobdata*.bin
       blobxfer_extra_options: null
   default_working_dir: batch
+  federation_constraints:
+    pool:
+      autoscale:
+        allow: true
+        exclusive: false
+      low_priority_nodes:
+        allow: true
+        exclusive: false
+      native: false
+      windows: false
+      location: eastus
+      container_registries:
+        private_docker_hub: true
+        public:
+        - my.public.registry.io
+      max_active_task_backlog:
+        ratio: null
+        autoscale_exempt: true
+      custom_image_arm_id: null
+      virtual_network_arm_id: null
+    compute_node:
+      vm_size: STANDARD_F1
+      cores:
+        amount: 2
+        schedulable_variance: null
+      memory:
+        amount: 512m
+        schedulable_variance: null
+      exclusive: false
+      gpu: false
+      infiniband: false
   tasks:
   - id: null
     docker_image: busybox

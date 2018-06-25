@@ -34,7 +34,11 @@ import datetime
 import hashlib
 import json
 import logging
+import os
+import pickle
 import re
+import tempfile
+import uuid
 # non-stdlib imports
 import azure.common
 import azure.cosmosdb.table as azuretable
@@ -52,6 +56,10 @@ util.setup_logger(logger)
 # global defines
 _MONITOR_BATCHPOOL_PK = 'BatchPool'
 _MONITOR_REMOTEFS_PK = 'RemoteFS'
+_ALL_FEDERATIONS_PK = '!!FEDERATIONS'
+_FEDERATION_ACTIONS_PREFIX_PK = '!!ACTIONS'
+_MAX_SEQUENCE_ID_PROPERTIES = 15
+_MAX_SEQUENCE_IDS_PER_PROPERTY = 975
 _DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
 _STORAGEACCOUNT = None
 _STORAGEACCOUNTKEY = None
@@ -62,12 +70,17 @@ _STORAGE_CONTAINERS = {
     'blob_torrents': None,
     'blob_remotefs': None,
     'blob_monitoring': None,
+    'blob_federation_global': None,
+    'blob_federation': None,
     'table_dht': None,
     'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
-    'table_monitoring': None,
     'table_perf': None,
+    'table_monitoring': None,
+    'table_federation_global': None,
+    'table_federation_jobs': None,
+    'queue_federation': None,
     # TODO remove following in future release
     'table_registry': None,
 }
@@ -96,12 +109,17 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
     _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitor'
+    _STORAGE_CONTAINERS['blob_federation'] = sep + 'fed'
+    _STORAGE_CONTAINERS['blob_federation_global'] = sep + 'fedglobal'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
-    _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
+    _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitor'
+    _STORAGE_CONTAINERS['table_federation_jobs'] = sep + 'fedjobs'
+    _STORAGE_CONTAINERS['table_federation_global'] = sep + 'fedglobal'
+    _STORAGE_CONTAINERS['queue_federation'] = sep + 'fed'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     # ensure all storage containers are between 3 and 63 chars in length
@@ -563,9 +581,11 @@ def remove_resources_from_monitoring(
     :param list fsclusters: fs clusters to remove from monitoring
     """
     if all:
-        _clear_table(
-            table_client, _STORAGE_CONTAINERS['table_monitoring'], config,
-            pool_id=None, pk=_MONITOR_BATCHPOOL_PK)
+        if util.confirm_action(
+                config, 'remove all resources from monitoring'):
+            _clear_table(
+                table_client, _STORAGE_CONTAINERS['table_monitoring'], config,
+                pool_id=None, pk=_MONITOR_BATCHPOOL_PK)
         return
     if len(pools) > 0:
         bc = settings.credentials_batch(config)
@@ -598,39 +618,1035 @@ def remove_resources_from_monitoring(
                         sc_id))
 
 
-def _check_file_and_upload(blob_client, file, container):
-    # type: (azure.storage.blob.BlockBlobService, tuple, str) -> None
+def hash_string(strdata):
+    """Hash a string
+    :param str strdata: string data to hash
+    :rtype: str
+    :return: hexdigest
+    """
+    return hashlib.sha1(strdata.encode('utf8')).hexdigest()
+
+
+def hash_pool_and_service_url(pool_id, batch_service_url):
+    """Hash a pool and service url
+    :param str pool_id: pool id
+    :param str batch_service_url: batch_service_url
+    :rtype: str
+    :return: hashed pool and service url
+    """
+    return hash_string('{}${}'.format(batch_service_url.rstrip('/'), pool_id))
+
+
+def hash_federation_id(federation_id):
+    """Hash a federation id
+    :param str federation_id: federation id
+    :rtype: str
+    :return: hashed federation id
+    """
+    fedhash = hash_string(federation_id)
+    logger.debug('federation id {} -> {}'.format(federation_id, fedhash))
+    return fedhash
+
+
+def generate_job_id_locator_partition_key(federation_id, job_id):
+    """Hash a job id locator
+    :param str federation_id: federation id
+    :param str job_id: job id
+    :rtype: str
+    :return: hashed fedhash and job id
+    """
+    return '{}${}'.format(hash_string(federation_id), hash_string(job_id))
+
+
+def create_federation_id(
+        blob_client, table_client, queue_client, config, federation_id, force,
+        unique_jobs):
+    # type: (azure.storage.blob.BlockBlobService, azuretable.TableService,
+    #        azure.queue.QueueService, dict, str, bool, bool) -> None
+    """Create storage containers for federation id
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param bool force: force creation
+    :param bool unique_jobs: unique job ids required
+    """
+    fedhash = hash_federation_id(federation_id)
+    # create table entry for federation id
+    entity = {
+        'PartitionKey': _ALL_FEDERATIONS_PK,
+        'RowKey': fedhash,
+        'FederationId': federation_id,
+        'BatchShipyardFederationVersion': 1,
+        'UniqueJobIds': unique_jobs,
+    }
+    logger.debug(
+        'inserting federation {} entity to global table '
+        '(unique_jobs={})'.format(federation_id, unique_jobs))
+    try:
+        table_client.insert_entity(
+            _STORAGE_CONTAINERS['table_federation_global'], entity)
+    except azure.common.AzureConflictHttpError:
+        logger.error('federation id {} already exists'.format(
+            federation_id))
+        if force:
+            if util.confirm_action(
+                    config, 'overwrite existing federation {}; this can '
+                    'result in undefined behavior'.format(federation_id)):
+                table_client.insert_or_replace_entity(
+                    _STORAGE_CONTAINERS['table_federation_global'], entity)
+            else:
+                return
+        else:
+            return
+    # create blob container for federation id
+    contname = '{}-{}'.format(_STORAGE_CONTAINERS['blob_federation'], fedhash)
+    logger.debug('creating container: {}'.format(contname))
+    blob_client.create_container(contname)
+    # create job queue for federation id
+    queuename = '{}-{}'.format(
+        _STORAGE_CONTAINERS['queue_federation'], fedhash)
+    logger.debug('creating queue: {}'.format(queuename))
+    queue_client.create_queue(queuename)
+    if settings.raw(config):
+        rawout = {
+            'federation': {
+                'id': entity['FederationId'],
+                'hash': entity['RowKey'],
+                'batch_shipyard_federation_version':
+                entity['BatchShipyardFederationVersion'],
+                'unique_job_ids': entity['UniqueJobIds'],
+                'storage': {
+                    'account': get_storageaccount(),
+                    'endpoint': get_storageaccount_endpoint(),
+                    'containers': {
+                        'queue': queuename,
+                        'blob': contname,
+                    },
+                },
+            }
+        }
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+
+
+def federation_requires_unique_job_ids(table_client, federation_id):
+    fedhash = hash_federation_id(federation_id)
+    try:
+        entity = table_client.get_entity(
+            _STORAGE_CONTAINERS['table_federation_global'],
+            _ALL_FEDERATIONS_PK, fedhash)
+    except azure.common.AzureMissingResourceHttpError:
+        raise RuntimeError(
+            'federation {} does not exist'.format(federation_id))
+    return entity['UniqueJobIds']
+
+
+def list_federations(table_client, config, federation_ids):
+    # type: (azuretable.TableService, dict, List[str]) -> None
+    """List all federations
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    """
+    log = []
+    if util.is_not_empty(federation_ids):
+        log.append('listing federations: {}'.format(', '.join(federation_ids)))
+        fedhashset = set()
+        fedhashmap = {}
+        for x in federation_ids:
+            fid = x.lower()
+            fhash = hash_federation_id(fid)
+            fedhashmap[fhash] = fid
+            fedhashset.add(fhash)
+    else:
+        log.append('listing all federations:')
+        fedhashset = None
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_global'],
+            filter='PartitionKey eq \'{}\''.format(_ALL_FEDERATIONS_PK))
+    except azure.common.AzureMissingResourceHttpError:
+        logger.error('no federations exist')
+        return
+    if settings.raw(config):
+        rawout = {}
+    for ent in entities:
+        fedhash = ent['RowKey']
+        if fedhashset is not None and fedhash not in fedhashset:
+            continue
+        if settings.raw(config):
+            rawout[ent['FederationId']] = {
+                'hash': fedhash,
+                'batch_shipyard_federation_version':
+                ent['BatchShipyardFederationVersion'],
+                'unique_job_ids': ent['UniqueJobIds'],
+                'pools': {}
+            }
+        else:
+            log.append('* federation id: {}'.format(ent['FederationId']))
+            log.append('  * federation hash: {}'.format(fedhash))
+            log.append('  * batch shipyard federation version: {}'.format(
+                ent['BatchShipyardFederationVersion']))
+            log.append('  * unique job ids: {}'.format(ent['UniqueJobIds']))
+            log.append('  * pools:')
+        # get list of pools associated with federation
+        try:
+            fedents = table_client.query_entities(
+                _STORAGE_CONTAINERS['table_federation_global'],
+                filter='PartitionKey eq \'{}\''.format(fedhash))
+        except azure.common.AzureMissingResourceHttpError:
+            continue
+        numpools = 0
+        for fe in fedents:
+            numpools += 1
+            if settings.raw(config):
+                rawout[ent['FederationId']]['pools'][fe['PoolId']] = {
+                    'batch_account': fe['BatchAccount'],
+                    'location': fe['Location'],
+                    'hash': fe['RowKey'],
+                }
+            else:
+                log.append('    * pool id: {}'.format(fe['PoolId']))
+                log.append('      * batch account: {}'.format(
+                    fe['BatchAccount']))
+                log.append('      * location: {}'.format(fe['Location']))
+                log.append('      * pool hash: {}'.format(fe['RowKey']))
+        if numpools == 0:
+            log.append('    * no pools in federation')
+        # get number of jobs/job schedules for federation
+        _, fejobs = get_all_federation_jobs(table_client, fedhash)
+        fejobs = list(fejobs)
+        fejk = [x['Kind'] for x in fejobs]
+        if settings.raw(config):
+            rawout[ent['FederationId']]['num_jobs'] = fejk.count('job')
+            rawout[ent['FederationId']]['num_job_schedules'] = fejk.count(
+                'job_schedule')
+        else:
+            log.append('  * number of jobs: {}'.format(fejk.count('job')))
+            log.append('  * number of job schedules: {}'.format(
+                fejk.count('job_schedule')))
+    if settings.raw(config):
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+    else:
+        if len(log) > 1:
+            logger.info(os.linesep.join(log))
+        else:
+            logger.error('no federations exist')
+
+
+def batch_delete_entities(table_client, table_name, pk, rks):
+    if util.is_none_or_empty(rks):
+        return
+    i = 0
+    tb = azuretable.TableBatch()
+    for rk in rks:
+        tb.delete_entity(pk, rk)
+        i += 1
+        if i == 100:
+            table_client.commit_batch(table_name, tb)
+            tb = azuretable.TableBatch()
+            i = 0
+    if i > 0:
+        table_client.commit_batch(table_name, tb)
+
+
+def collate_all_location_entities_for_job(table_client, fedhash, entity):
+    loc_pk = '{}${}'.format(fedhash, entity['RowKey'])
+    rks = []
+    try:
+        loc_entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_jobs'],
+            filter='PartitionKey eq \'{}\''.format(loc_pk))
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    else:
+        for loc_entity in loc_entities:
+            rks.append(loc_entity['RowKey'])
+    return loc_pk, rks
+
+
+def get_all_federation_jobs(table_client, fedhash):
+    pk = '{}${}'.format(_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_jobs'],
+            filter='PartitionKey eq \'{}\''.format(pk))
+    except azure.common.AzureMissingResourceHttpError:
+        entities = []
+    return pk, entities
+
+
+def gc_federation_jobs(table_client, config, federation_id, fedhash):
+    # retrieve all job sequence rows for federation
+    pk, entities = get_all_federation_jobs(table_client, fedhash)
+    gc_dict = {
+        pk: []
+    }
+    # process all jobs
+    for entity in entities:
+        # if sequence exists, ask for confirmation
+        if ('Sequence0' in entity and
+                util.is_not_empty(entity['Sequence0']) and
+                not util.confirm_action(
+                    config,
+                    msg=('destroying pending actions for job {} in '
+                         'federation id {}').format(
+                             entity['RowKey'], federation_id))):
+            raise RuntimeError(
+                'Not destroying federation job {} with pending actions '
+                'in federation id {}'.format(
+                    entity['RowKey'], federation_id))
+        gc_dict[pk].append(entity['RowKey'])
+        loc_pk, loc_rks = collate_all_location_entities_for_job(
+            table_client, fedhash, entity)
+        if util.is_not_empty(loc_rks) and not util.confirm_action(
+                config,
+                msg='orphan job {} in federation id {}'.format(
+                    entity['RowKey'], federation_id)):
+            raise RuntimeError(
+                'Not orphaning active/completed federation job '
+                '{} in federation id {}'.format(
+                    entity['RowKey'], federation_id))
+        gc_dict[loc_pk] = loc_rks
+    # batch delete entities
+    for gc_pk in gc_dict:
+        batch_delete_entities(
+            table_client, _STORAGE_CONTAINERS['table_federation_jobs'],
+            gc_pk, gc_dict[gc_pk])
+
+
+def destroy_federation_id(
+        blob_client, table_client, queue_client, config, federation_id):
+    # type: (azure.storage.blob.BlockBlobService, azuretable.TableService,
+    #        azure.queue.QueueService, dict, str) -> None
+    """Remove storage containers for federation id
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    """
+    fedhash = hash_federation_id(federation_id)
+    # delete table entities for federation id
+    logger.debug('deleting all federation {} job entities'.format(
+        federation_id))
+    gc_federation_jobs(table_client, config, federation_id, fedhash)
+    # remove table entry for federation id
+    logger.debug('deleting federation {} entities in global table'.format(
+        federation_id))
+    try:
+        table_client.delete_entity(
+            _STORAGE_CONTAINERS['table_federation_global'],
+            _ALL_FEDERATIONS_PK, fedhash)
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    try:
+        fedentities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_global'],
+            filter='PartitionKey eq \'{}\''.format(fedhash))
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    else:
+        batch_delete_entities(
+            table_client, _STORAGE_CONTAINERS['table_federation_global'],
+            fedhash, [x['RowKey'] for x in fedentities])
+    # delete job queue for federation id
+    queuename = '{}-{}'.format(
+        _STORAGE_CONTAINERS['queue_federation'], fedhash)
+    logger.debug('deleting queue: {}'.format(queuename))
+    queue_client.delete_queue(queuename)
+    # delete blob container for federation id
+    contname = '{}-{}'.format(_STORAGE_CONTAINERS['blob_federation'], fedhash)
+    logger.debug('deleting container: {}'.format(contname))
+    blob_client.delete_container(contname)
+    if settings.raw(config):
+        rawout = {
+            'federation': {
+                'id': federation_id,
+                'hash': fedhash,
+                'storage': {
+                    'account': get_storageaccount(),
+                    'endpoint': get_storageaccount_endpoint(),
+                    'containers': {
+                        'queue': queuename,
+                        'blob': contname,
+                    },
+                },
+            },
+        }
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+
+
+def _check_if_federation_exists(table_client, fedhash):
+    try:
+        table_client.get_entity(
+            _STORAGE_CONTAINERS['table_federation_global'],
+            _ALL_FEDERATIONS_PK, fedhash)
+    except azure.common.AzureMissingResourceHttpError:
+        return False
+    return True
+
+
+def add_pool_to_federation(
+        table_client, config, federation_id, batch_service_url, pools):
+    # type: (azuretable.TableService, dict, str, str, List[str]) -> None
+    """Populate federation with pools
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param str batch_service_url: batch service url to associate
+    :param list pools: pools to monitor
+    """
+    fedhash = hash_federation_id(federation_id)
+    # check if federation exists
+    if not _check_if_federation_exists(table_client, fedhash):
+        logger.error('federation {} does not exist'.format(federation_id))
+        return
+    if util.is_not_empty(batch_service_url):
+        batch_service_url = batch_service_url.rstrip('/')
+        account, location = settings.parse_batch_service_url(
+            batch_service_url)
+    else:
+        bc = settings.credentials_batch(config)
+        batch_service_url = bc.account_service_url.rstrip('/')
+        account, location = settings.parse_batch_service_url(
+            batch_service_url)
+    rawout = {
+        'federation': {
+            'id': federation_id,
+            'hash': fedhash,
+            'storage': {
+                'account': get_storageaccount(),
+                'endpoint': get_storageaccount_endpoint(),
+            },
+        },
+        'pools_added': {}
+    }
+    for poolid in pools:
+        rk = hash_pool_and_service_url(poolid, batch_service_url)
+        entity = {
+            'PartitionKey': fedhash,
+            'RowKey': rk,
+            'FederationId': federation_id,
+            'BatchAccount': account,
+            'PoolId': poolid,
+            'Location': location,
+            'BatchServiceUrl': batch_service_url,
+        }
+        if settings.verbose(config):
+            logger.debug(
+                'inserting pool federation entity: {}'.format(
+                    entity))
+        try:
+            table_client.insert_entity(
+                _STORAGE_CONTAINERS['table_federation_global'], entity)
+        except azure.common.AzureConflictHttpError:
+            logger.error(
+                'federation {} entity for pool {} already exists'.format(
+                    federation_id, poolid))
+        else:
+            logger.debug('federation {} entity added for pool {}'.format(
+                federation_id, poolid))
+            if settings.raw(config):
+                rawout['pools_added'][entity['RowKey']] = {
+                    'pool_id': entity['PoolId'],
+                    'batch_account': entity['BatchAccount'],
+                    'location': entity['Location'],
+                    'batch_service_url': entity['BatchServiceUrl'],
+                }
+    if settings.raw(config) and len(rawout['pools_added']) > 0:
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+
+
+def remove_pool_from_federation(
+        table_client, config, federation_id, all, batch_service_url, pools):
+    # type: (azuretable.TableService, dict, str, bool, str, List[str]) -> None
+    """Remove pools from federation
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param bool all: all pools
+    :param str batch_service_url: batch service url to associate
+    :param list pools: pools to monitor
+    """
+    fedhash = hash_federation_id(federation_id)
+    # check if federation exists
+    if not _check_if_federation_exists(table_client, fedhash):
+        logger.error('federation {} does not exist'.format(federation_id))
+        return
+    rawout = {
+        'federation': {
+            'id': federation_id,
+            'hash': fedhash,
+            'storage': {
+                'account': get_storageaccount(),
+                'endpoint': get_storageaccount_endpoint(),
+            },
+        },
+        'pools_removed': {}
+    }
+    logger.warning(
+        '**WARNING** Removing active pools with jobs/job schedules in a '
+        'federation can lead to orphaned data. It is recommended to delete '
+        'all federation jobs/job schedules associated with the pools '
+        'to be removed prior to removal from the federation!')
+    if all:
+        if util.confirm_action(
+                config, 'remove all pools from federation {}'.format(
+                    federation_id)):
+            if settings.raw(config):
+                try:
+                    entities = table_client.query_entities(
+                        _STORAGE_CONTAINERS['table_federation_global'],
+                        filter='PartitionKey eq \'{}\''.format(fedhash))
+                except azure.common.AzureMissingResourceHttpError:
+                    pass
+                else:
+                    for entity in entities:
+                        rawout['pools_removed'][entity['RowKey']] = {
+                            'hash': entity['PoolId'],
+                            'batch_account': entity['BatchAccount'],
+                            'location': entity['Location'],
+                            'batch_service_url': entity['BatchServiceUrl'],
+                        }
+            _clear_table(
+                table_client, _STORAGE_CONTAINERS['table_federation_global'],
+                config, pool_id=None, pk=fedhash)
+            if settings.raw(config) and len(rawout['pools_removed']) > 0:
+                print(json.dumps(rawout, sort_keys=True, indent=4))
+        return
+    if util.is_not_empty(batch_service_url):
+        account, _ = settings.parse_batch_service_url(batch_service_url)
+    else:
+        bc = settings.credentials_batch(config)
+        batch_service_url = bc.account_service_url
+        account, _ = settings.parse_batch_service_url(batch_service_url)
+    for poolid in pools:
+        if not util.confirm_action(
+                config, 'remove pool {} from federation {}'.format(
+                    poolid, federation_id)):
+            continue
+        try:
+            rk = hash_pool_and_service_url(poolid, batch_service_url)
+            entity = None
+            if settings.raw(config):
+                entity = table_client.get_entity(
+                    _STORAGE_CONTAINERS['table_federation_global'],
+                    partition_key=fedhash,
+                    row_key=rk,
+                )
+            table_client.delete_entity(
+                _STORAGE_CONTAINERS['table_federation_global'],
+                partition_key=fedhash,
+                row_key=rk,
+            )
+        except azure.common.AzureMissingResourceHttpError:
+            logger.error('pool {} is not in federation {}'.format(
+                poolid, federation_id))
+        else:
+            logger.debug('pool {} removed from federation {}'.format(
+                poolid, federation_id))
+            if settings.raw(config):
+                rawout['pools_removed'][entity['RowKey']] = {
+                    'pool_id': entity['PoolId'],
+                    'batch_account': entity['BatchAccount'],
+                    'location': entity['Location'],
+                    'batch_service_url': entity['BatchServiceUrl'],
+                }
+    if settings.raw(config) and len(rawout['pools_removed']) > 0:
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+
+
+def _pack_sequences(ent, unique_id):
+    seq = []
+    for i in range(0, _MAX_SEQUENCE_ID_PROPERTIES):
+        prop = 'Sequence{}'.format(i)
+        if prop in ent and util.is_not_empty(ent[prop]):
+            seq.extend(ent[prop].split(','))
+    seq.append(str(unique_id))
+    if len(seq) > _MAX_SEQUENCE_IDS_PER_PROPERTY * _MAX_SEQUENCE_ID_PROPERTIES:
+        raise RuntimeError(
+            'maximum number of enqueued sequence ids reached, please allow '
+            'job actions to drain')
+    for i in range(0, _MAX_SEQUENCE_ID_PROPERTIES):
+        prop = 'Sequence{}'.format(i)
+        start = i * _MAX_SEQUENCE_IDS_PER_PROPERTY
+        end = start + _MAX_SEQUENCE_IDS_PER_PROPERTY
+        if end > len(seq):
+            end = len(seq)
+        if start < end:
+            ent[prop] = ','.join(seq[start:end])
+        else:
+            ent[prop] = None
+
+
+def _retrieve_and_merge_sequence(
+        table_client, pk, unique_id, kind, target, entity_must_not_exist):
+    rk = hash_string(target)
+    try:
+        ent = table_client.get_entity(
+            _STORAGE_CONTAINERS['table_federation_jobs'], pk, rk)
+        if entity_must_not_exist:
+            raise RuntimeError(
+                '{} {} action entity already exists: rolling back action '
+                'due to unique job id requirement for federation.'.format(
+                    kind, target))
+    except azure.common.AzureMissingResourceHttpError:
+        ent = {
+            'PartitionKey': pk,
+            'RowKey': rk,
+            'Kind': kind,
+            'Id': target,
+        }
+    _pack_sequences(ent, unique_id)
+    return ent
+
+
+def _insert_or_merge_entity_with_etag(table_client, table_name, entity):
+    if 'etag' not in entity:
+        try:
+            table_client.insert_entity(table_name, entity=entity)
+            return True
+        except azure.common.AzureConflictHttpError:
+            pass
+    else:
+        etag = entity['etag']
+        entity.pop('etag')
+        try:
+            table_client.merge_entity(table_name, entity=entity, if_match=etag)
+            return True
+        except azure.common.AzureConflictHttpError:
+            pass
+        except azure.common.AzureHttpError as ex:
+            if ex.status_code != 412:
+                raise
+    return False
+
+
+def check_if_job_exists_in_federation(
+        table_client, federation_id, job_id):
+    pk = generate_job_id_locator_partition_key(federation_id, job_id)
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_jobs'],
+            filter='PartitionKey eq \'{}\''.format(pk))
+        for ent in entities:
+            return True
+    except azure.common.AzureMissingResourceHttpError:
+        pass
+    return False
+
+
+def check_if_job_is_terminated_in_federation(
+        table_client, federation_id, job_id):
+    pk = generate_job_id_locator_partition_key(federation_id, job_id)
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_federation_jobs'],
+            filter='PartitionKey eq \'{}\''.format(pk))
+    except azure.common.AzureMissingResourceHttpError:
+        return False
+    else:
+        for ent in entities:
+            if 'TerminateTimestamp' in ent:
+                return True
+    return False
+
+
+def add_job_to_federation(
+        table_client, queue_client, config, federation_id, unique_id, msg,
+        kind):
+    # type: (azure.cosmosdb.TableService, azure.queue.QueueService, str,
+    #        uuid.UUID, dict, str) -> None
+    """Add a job/job schedule to a federation
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param str federation_id: federation id
+    :param uuid.UUID unique_id: unique id
+    :param dict msg: dict payload
+    :param str kind: kind
+    """
+    requires_unique_job_ids = federation_requires_unique_job_ids(
+        table_client, federation_id)
+    fedhash = hash_federation_id(federation_id)
+    pk = '{}${}'.format(_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+    target = msg['target']
+    # check if job is terminated first
+    if check_if_job_is_terminated_in_federation(
+            table_client, federation_id, target):
+        if requires_unique_job_ids:
+            raise RuntimeError(
+                'cannot add {} {} as federation requires unique job '
+                'ids'.format(kind, target))
+        if not util.confirm_action(
+                config,
+                'adding {} although one or more {}s representing this {} '
+                'in federation {} have been terminated'.format(
+                    target, kind, kind, federation_id)):
+            raise RuntimeError(
+                'aborted adding {} {} to federation {}'.format(
+                    kind, target, federation_id))
+    # upsert unique id to sequence
+    while True:
+        entity = _retrieve_and_merge_sequence(
+            table_client, pk, unique_id, kind, target, requires_unique_job_ids)
+        if _insert_or_merge_entity_with_etag(
+                table_client, _STORAGE_CONTAINERS['table_federation_jobs'],
+                entity):
+            logger.debug(
+                'upserted {} {} sequence uid {} to federation {}'.format(
+                    kind, target, unique_id, federation_id))
+            break
+        else:
+            logger.debug(
+                'conflict upserting {} {} sequence uid {} to '
+                'federation {}'.format(kind, target, unique_id, federation_id))
+    # add queue message
+    msg_data = json.dumps(msg, ensure_ascii=True, sort_keys=True)
+    contname = '{}-{}'.format(
+        _STORAGE_CONTAINERS['queue_federation'], fedhash)
+    queue_client.put_message(contname, msg_data, time_to_live=-1)
+
+
+def list_jobs_in_federation(
+        table_client, config, federation_id, job_id, job_schedule_id):
+    # type: (azure.cosmosdb.TableService, dict, str, str, str) -> None
+    """List jobs in federation
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param str job_id: job id
+    :param str job_schedule_id: job schedule id
+    """
+    fedhash = hash_federation_id(federation_id)
+    if (util.is_none_or_empty(job_id) and
+            util.is_none_or_empty(job_schedule_id)):
+        targets = []
+        logger.debug(
+            'fetching all jobs/job schedules for federation id {}'.format(
+                federation_id))
+        _, entities = get_all_federation_jobs(table_client, fedhash)
+        for entity in entities:
+            targets.append(entity['RowKey'])
+    else:
+        targets = [job_id if util.is_not_empty(job_id) else job_schedule_id]
+    if len(targets) == 0:
+        logger.error(
+            'no jobs/job schedules in federation id {}'.format(federation_id))
+        return
+    if settings.raw(config):
+        log = {}
+    else:
+        log = [
+            'listing jobs/job schedules for federation id {}:'.format(
+                federation_id)
+        ]
+    for targethash in targets:
+        try:
+            entities = table_client.query_entities(
+                _STORAGE_CONTAINERS['table_federation_jobs'],
+                filter='PartitionKey eq \'{}${}\''.format(fedhash, targethash))
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+        kind = None
+        for ent in entities:
+            id = ent['Id']
+            if kind is None:
+                kind = ent['Kind']
+                if settings.raw(config):
+                    log[id] = {
+                        'type': kind,
+                        'hash': targethash,
+                    }
+                else:
+                    log.append('* id: {}'.format(id))
+                    log.append('  * type: {}'.format(kind))
+                    log.append('  * hash: {}'.format(targethash))
+            if 'AdditionTimestamps' in ent:
+                ats = ent['AdditionTimestamps'].split(',')[-10:]
+            else:
+                ats = None
+            if 'UniqueIds' in ent:
+                uids = ent['UniqueIds'].split(',')[-10:]
+            else:
+                uids = None
+            if settings.raw(config):
+                poolid = ent['PoolId']
+                log[id][poolid] = {
+                    'batch_account': ent['BatchAccount'],
+                    'service_url': ent['ServiceUrl'],
+                }
+                log[id][poolid]['ten_most_recent_task_additions'] = ats
+                log[id][poolid]['ten_most_recent_unique_ids_serviced'] = uids
+                log[id][poolid]['terminate_timestamp'] = (
+                    ent['TerminateTimestamp'] if 'TerminateTimestamp' in ent
+                    else None
+                )
+            else:
+                log.append('  * pool id: {}'.format(ent['PoolId']))
+                log.append('    * batch account: {}'.format(
+                    ent['BatchAccount']))
+                log.append('    * service url: {}'.format(ent['ServiceUrl']))
+                log.append('    * ten most recent task addition times:')
+                if len(ats) > 0:
+                    for at in ats:
+                        log.append('      * {}'.format(at))
+                else:
+                    log.append('      * n/a')
+                log.append('    * ten most recent unique ids serviced:')
+                if len(uids) > 0:
+                    for uid in uids:
+                        log.append('      * {}'.format(uid))
+                else:
+                    log.append('      * n/a')
+                log.append('    * termination time: {}'.format(
+                    ent['TerminateTimestamp'] if 'TerminateTimestamp' in ent
+                    else 'n/a'))
+    if settings.raw(config):
+        print(json.dumps(log, sort_keys=True, indent=4))
+    else:
+        if len(log) > 1:
+            logger.info(os.linesep.join(log))
+        else:
+            logger.error(
+                'no jobs/job schedules exist in federation id {}'.format(
+                    federation_id))
+
+
+def pickle_and_upload(blob_client, data, rpath, federation_id=None):
+    # type: (azureblob.BlockBlobService, dict, str, str) -> str
+    """Pickle and upload data to a given remote path
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict data: data to pickle
+    :param str rpath: remote path
+    :param str federation_id: federation id
+    :rtype: str
+    :return: sas url of uploaded pickle
+    """
+    f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
+    fname = f.name
+    try:
+        with open(fname, 'wb') as f:
+            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+        f.close()
+        if util.is_none_or_empty(federation_id):
+            sas_urls = upload_resource_files(blob_client, [(rpath, fname)])
+        else:
+            sas_urls = upload_job_for_federation(
+                blob_client, federation_id, [(rpath, fname)])
+        if len(sas_urls) != 1:
+            raise RuntimeError(
+                'unexpected number of sas urls for pickled upload')
+        return next(iter(sas_urls.values()))
+    finally:
+        try:
+            os.unlink(fname)
+        except OSError:
+            pass
+        del f
+        del fname
+
+
+def delete_or_terminate_job_from_federation(
+        blob_client, table_client, queue_client, config, delete, federation_id,
+        job_id, job_schedule_id, all_jobs, all_jobschedules, force):
+    # type: (azure.storage.blob.BlockBlobService, azure.cosmosdb.TableService,
+    #        azure.queue.QueueService, bool, str, str, str, bool,
+    #        bool, bool) -> None
+    """Delete or terminate a job from a federation
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param bool delete: delete instead of terminate
+    :param str federation_id: federation id
+    :param str job_id: job id
+    :param str job_schedule_id: job schedule id
+    :param bool all_jobs: all jobs
+    :param bool all_jobschedules: all jobschedules
+    :param bool force: force
+    """
+    fedhash = hash_federation_id(federation_id)
+    if all_jobs or all_jobschedules:
+        if all_jobs:
+            kind = 'job'
+        elif all_jobschedules:
+            kind = 'job_schedule'
+        targets = []
+        logger.debug('fetching all {}s for federation id {}'.format(
+            kind, federation_id))
+        pk, entities = get_all_federation_jobs(table_client, fedhash)
+        for entity in entities:
+            if entity['Kind'] == kind:
+                targets.append(entity['RowKey'])
+    else:
+        pk = '{}${}'.format(_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+        kind = 'job' if util.is_not_empty(job_id) else 'job_schedule'
+        targets = job_id if util.is_not_empty(job_id) else job_schedule_id
+    method = 'delete' if delete else 'terminate'
+    if len(targets) == 0:
+        logger.error(
+            'no {}s to {} in federation id {}'.format(
+                kind, method, federation_id))
+        return
+    raw_output = {}
+    for target in targets:
+        # if terminate, check if job exists
+        if not force and method == 'terminate':
+            if not check_if_job_exists_in_federation(
+                    table_client, federation_id, target):
+                logger.warning(
+                    'skipping termination of non-existent job {} in '
+                    'federation {}'.format(target, federation_id))
+                continue
+        if not util.confirm_action(
+                config,
+                msg='{} {} id {} in federation {}'.format(
+                    method, kind, target, federation_id)):
+            return
+        unique_id = uuid.uuid4()
+        rpath = 'messages/{}.pickle'.format(unique_id)
+        # upload message data to blob
+        info = {
+            'version': '1',
+            'action': {
+                'method': method,
+                'kind': kind,
+            },
+            kind: {
+                'id': target,
+            },
+        }
+        sas_url = pickle_and_upload(
+            blob_client, info, rpath, federation_id=federation_id)
+        # upsert unique id to sequence
+        while True:
+            entity = _retrieve_and_merge_sequence(
+                table_client, pk, unique_id, kind, target, False)
+            if _insert_or_merge_entity_with_etag(
+                    table_client, _STORAGE_CONTAINERS['table_federation_jobs'],
+                    entity):
+                logger.debug(
+                    'upserted {} {} sequence uid {} to federation {}'.format(
+                        kind, target, unique_id, federation_id))
+                break
+            else:
+                logger.debug(
+                    'conflict upserting {} {} sequence uid {} to '
+                    'federation {}'.format(
+                        kind, target, unique_id, federation_id))
+        # add queue message
+        msg = {
+            'version': '1',
+            'federation_id': federation_id,
+            'target': target,
+            'blob_data': sas_url,
+            'uuid': str(unique_id),
+        }
+        msg_data = json.dumps(msg, ensure_ascii=True, sort_keys=True)
+        contname = '{}-{}'.format(
+            _STORAGE_CONTAINERS['queue_federation'], fedhash)
+        queue_client.put_message(contname, msg_data, time_to_live=-1)
+        logger.debug('enqueued {} of {} {} for federation {}'.format(
+            method, kind, target, federation_id))
+        if settings.raw(config):
+            raw_output[target] = {
+                'federation': {
+                    'id': federation_id,
+                    'storage': {
+                        'account': get_storageaccount(),
+                        'endpoint': get_storageaccount_endpoint(),
+                    },
+                },
+                'kind': kind,
+                'action': method,
+                'unique_id': str(unique_id),
+            }
+    if util.is_not_empty(raw_output):
+        print(json.dumps(raw_output, indent=4, sort_keys=True))
+
+
+def zap_unique_id_from_federation(
+        blob_client, config, federation_id, unique_id):
+    # type: (azure.storage.blob.BlockBlobService, dict, str, str) -> None
+    """Zap a unique id from a federation
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param str unique_id: unique id
+    """
+    jloc = 'messages/{}.pickle'.format(unique_id)
+    deleted = delete_resource_file(
+        blob_client, jloc, federation_id=federation_id)
+    if deleted and settings.raw(config):
+        rawout = {
+            'federation': {
+                'id': federation_id,
+                'storage': {
+                    'account': get_storageaccount(),
+                    'endpoint': get_storageaccount_endpoint(),
+                },
+            },
+            'unique_id': unique_id,
+        }
+        print(json.dumps(rawout, sort_keys=True, indent=4))
+
+
+def _check_file_and_upload(blob_client, file, key, container=None):
+    # type: (azure.storage.blob.BlockBlobService, tuple, str, str) -> None
     """Upload file to blob storage if necessary
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param tuple file: file to upload
-    :param str container: blob container ref
+    :param str key: blob container key
+    :param str container: absolute container override
     """
     if file[0] is None:
         return
+    contname = container or _STORAGE_CONTAINERS[key]
     upload = True
     # check if blob exists
     try:
-        prop = blob_client.get_blob_properties(
-            _STORAGE_CONTAINERS[container], file[0])
+        prop = blob_client.get_blob_properties(contname, file[0])
         if (prop.properties.content_settings.content_md5 ==
                 util.compute_md5_for_file(file[1], True)):
             logger.debug(
-                'remote file is the same for {}, skipping'.format(
-                    file[0]))
+                'remote file is the same for {}, skipping'.format(file[0]))
             upload = False
     except azure.common.AzureMissingResourceHttpError:
         pass
     if upload:
         logger.info('uploading file {} as {!r}'.format(file[1], file[0]))
-        blob_client.create_blob_from_path(
-            _STORAGE_CONTAINERS[container], file[0], str(file[1]))
+        blob_client.create_blob_from_path(contname, file[0], str(file[1]))
 
 
-def upload_resource_files(blob_client, config, files):
-    # type: (azure.storage.blob.BlockBlobService, dict, List[tuple]) -> dict
+def delete_resource_file(blob_client, blob_name, federation_id=None):
+    # type: (azure.storage.blob.BlockBlobService, str) -> bool
+    """Delete a resource file from blob storage
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str blob_name: blob name
+    :param str federation_id: federation id
+    """
+    if util.is_not_empty(federation_id):
+        fedhash = hash_federation_id(federation_id)
+        container = '{}-{}'.format(
+            _STORAGE_CONTAINERS['blob_federation'], fedhash)
+    else:
+        container = _STORAGE_CONTAINERS['blob_resourcefiles']
+    try:
+        blob_client.delete_blob(container, blob_name)
+        logger.debug('blob {} deleted from container {}'.format(
+            blob_name, container))
+    except azure.common.AzureMissingResourceHttpError:
+        logger.warning('blob {} does not exist in container {}'.format(
+            blob_name, container))
+        return False
+    return True
+
+
+def upload_resource_files(blob_client, files):
+    # type: (azure.storage.blob.BlockBlobService, List[tuple]) -> dict
     """Upload resource files to blob storage
     :param azure.storage.blob.BlockBlobService blob_client: blob client
-    :param dict config: configuration dict
     :param list files: files to upload
     :rtype: dict
     :return: sas url dict
@@ -654,22 +1670,65 @@ def upload_resource_files(blob_client, config, files):
 def upload_for_nonbatch(blob_client, files, kind):
     # type: (azure.storage.blob.BlockBlobService, List[tuple],
     #        str) -> List[str]
-    """Upload files to blob storage for monitoring
+    """Upload files to blob storage for non-batch
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param list files: files to upload
-    :param str kind: kind, "remotefs" or "monitoring"
+    :param str kind: "remotefs", "monitoring" or "federation"
     :rtype: list
     :return: list of file urls
     """
-    kind = 'blob_{}'.format(kind.lower())
+    if kind == 'federation':
+        kind = '{}_global'.format(kind.lower())
+    key = 'blob_{}'.format(kind.lower())
     ret = []
     for file in files:
-        _check_file_and_upload(blob_client, file, kind)
+        _check_file_and_upload(blob_client, file, key)
         ret.append('https://{}.blob.{}/{}/{}'.format(
             _STORAGEACCOUNT, _STORAGEACCOUNTEP,
-            _STORAGE_CONTAINERS[kind], file[0]))
+            _STORAGE_CONTAINERS[key], file[0]))
     return ret
+
+
+def create_global_lock_blob(blob_client, kind):
+    # type: (azure.storage.blob.BlockBlobService, str) -> None
+    """Create a global lock blob
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str kind: "remotefs", "monitoring" or "federation"
+    """
+    if kind == 'federation':
+        kind = '{}_global'.format(kind.lower())
+    key = 'blob_{}'.format(kind.lower())
+    blob_client.create_blob_from_bytes(
+        _STORAGE_CONTAINERS[key], 'global.lock', b'')
+
+
+def upload_job_for_federation(blob_client, federation_id, files):
+    # type: (azure.storage.blob.BlockBlobService, str,
+    #        List[tuple]) -> List[str]
+    """Upload files to blob storage for federation jobs
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param str federation_id: federation id
+    :param list files: files to upload
+    :rtype: list
+    :return: list of file urls
+    """
+    fedhash = hash_federation_id(federation_id)
+    contname = '{}-{}'.format(_STORAGE_CONTAINERS['blob_federation'], fedhash)
+    sas_urls = {}
+    for file in files:
+        _check_file_and_upload(blob_client, file, None, container=contname)
+        sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}?{}'.format(
+            _STORAGEACCOUNT, _STORAGEACCOUNTEP,
+            contname, file[0],
+            blob_client.generate_blob_shared_access_signature(
+                contname, file[0],
+                permission=azureblob.BlobPermissions(read=True, delete=True),
+                expiry=datetime.datetime.utcnow() +
+                datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
+            )
+        )
+    return sas_urls
 
 
 def delete_storage_containers(
@@ -688,10 +1747,13 @@ def delete_storage_containers(
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
         elif key.startswith('blob_'):
-            if (key != 'blob_remotefs' and key != 'blob_monitoring'):
-                logger.debug('deleting container: {}'.format(
-                    _STORAGE_CONTAINERS[key]))
-                blob_client.delete_container(_STORAGE_CONTAINERS[key])
+            if (key == 'blob_remotefs' or key == 'blob_monitoring' or
+                    key == 'blob_federation' or
+                    key == 'blob_federation_global'):
+                continue
+            logger.debug('deleting container: {}'.format(
+                _STORAGE_CONTAINERS[key]))
+            blob_client.delete_container(_STORAGE_CONTAINERS[key])
         elif not skip_tables and key.startswith('table_'):
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
@@ -774,13 +1836,18 @@ def clear_storage_containers(
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if not tables_only and key.startswith('blob_'):
-            if (key != 'blob_remotefs' and key != 'blob_monitoring'):
-                _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
+            if (key == 'blob_remotefs' or key == 'blob_monitoring' or
+                    key == 'blob_federation' or
+                    key == 'blob_federation_global'):
+                continue
+            _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             # TODO remove in a future release: unused registry table
             if key == 'table_registry':
                 continue
-            if key == 'table_monitoring':
+            if (key == 'table_monitoring' or
+                    key == 'table_federation_global' or
+                    key == 'table_federation_jobs'):
                 continue
             try:
                 _clear_table(
@@ -821,7 +1888,9 @@ def create_storage_containers(blob_client, table_client, config):
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
-            if key == 'blob_remotefs' or key == 'blob_monitoring':
+            if (key == 'blob_remotefs' or key == 'blob_monitoring' or
+                    key == 'blob_federation' or
+                    key == 'blob_federation_global'):
                 continue
             logger.info('creating container: {}'.format(
                 _STORAGE_CONTAINERS[key]))
@@ -830,7 +1899,9 @@ def create_storage_containers(blob_client, table_client, config):
             # TODO remove in a future release: unused registry table
             if key == 'table_registry':
                 continue
-            if key == 'table_monitoring':
+            if (key == 'table_monitoring' or
+                    key == 'table_federation_global' or
+                    key == 'table_federation_jobs'):
                 continue
             if key == 'table_perf' and not bs.store_timing_metrics:
                 continue
@@ -838,49 +1909,103 @@ def create_storage_containers(blob_client, table_client, config):
             table_client.create_table(_STORAGE_CONTAINERS[key])
 
 
-def create_storage_containers_nonbatch(blob_client, table_client, kind):
-    # type: (azureblob.BlockBlobService, str) -> None
-    """Create storage containers used for monitoring
+def create_storage_containers_nonbatch(
+        blob_client, table_client, queue_client, kind):
+    # type: (azureblob.BlockBlobService, azuretable.TableService,
+    #        azurequeue.QueueService, str) -> None
+    """Create storage containers used for non-batch actions
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
-    :param str kind: kind, "remotefs" or "monitoring"
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param str kind: kind, "remotefs", "monitoring" or "federation"
     """
-    key = 'blob_{}'.format(kind.lower())
-    contname = _STORAGE_CONTAINERS[key]
-    logger.info('creating container: {}'.format(contname))
-    blob_client.create_container(contname)
-    try:
-        key = 'table_{}'.format(kind.lower())
-        contname = _STORAGE_CONTAINERS[key]
-    except KeyError:
-        pass
+    if kind == 'federation':
+        create_storage_containers_nonbatch(
+            blob_client, table_client, None, 'federation_global')
+        create_storage_containers_nonbatch(
+            None, table_client, None, 'federation_jobs')
     else:
-        logger.info('creating table: {}'.format(contname))
-        table_client.create_table(contname)
+        if blob_client is not None:
+            try:
+                key = 'blob_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.info('creating container: {}'.format(contname))
+                blob_client.create_container(contname)
+        if table_client is not None:
+            try:
+                key = 'table_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.info('creating table: {}'.format(contname))
+                table_client.create_table(contname)
+        if queue_client is not None:
+            try:
+                key = 'queue_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.info('creating queue: {}'.format(contname))
+                queue_client.create_queue(contname)
 
 
-def delete_storage_containers_nonbatch(blob_client, table_client, kind):
-    # type: (azureblob.BlockBlobService, str) -> None
-    """Delete storage containers used for monitoring
+def delete_storage_containers_nonbatch(
+        blob_client, table_client, queue_client, kind):
+    # type: (azureblob.BlockBlobService, azuretable.TableService,
+    #        azurequeue.QueueService, str) -> None
+    """Delete storage containers used for non-batch actions
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
-    :param str kind: kind, "remotefs" or "monitoring"
+    :param azure.storage.queue.QueueService queue_service: queue client
+    :param str kind: kind, "remotefs", "monitoring" or "federation"
     """
-    key = 'blob_{}'.format(kind.lower())
-    contname = _STORAGE_CONTAINERS[key]
-    logger.info('deleting container: {}'.format(contname))
-    try:
-        blob_client.delete_container(contname)
-    except azure.common.AzureMissingResourceHttpError:
-        logger.warning('container not found: {}'.format(contname))
-    try:
-        key = 'table_{}'.format(kind.lower())
-        contname = _STORAGE_CONTAINERS[key]
-    except KeyError:
-        pass
+    if kind == 'federation':
+        delete_storage_containers_nonbatch(
+            blob_client, table_client, queue_client, 'federation_global')
+        delete_storage_containers_nonbatch(
+            None, table_client, None, 'federation_jobs')
     else:
-        logger.debug('deleting table: {}'.format(contname))
-        table_client.delete_table(contname)
+        if blob_client is not None:
+            try:
+                key = 'blob_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.info('deleting container: {}'.format(contname))
+                try:
+                    blob_client.delete_container(contname)
+                except azure.common.AzureMissingResourceHttpError:
+                    logger.warning('container not found: {}'.format(contname))
+        if table_client is not None:
+            try:
+                key = 'table_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.debug('deleting table: {}'.format(contname))
+                try:
+                    table_client.delete_table(contname)
+                except azure.common.AzureMissingResourceHttpError:
+                    logger.warning('table not found: {}'.format(contname))
+        if queue_client is not None:
+            try:
+                key = 'queue_{}'.format(kind.lower())
+                contname = _STORAGE_CONTAINERS[key]
+            except KeyError:
+                pass
+            else:
+                logger.debug('deleting queue: {}'.format(contname))
+                try:
+                    queue_client.delete_queue(contname)
+                except azure.common.AzureMissingResourceHttpError:
+                    logger.warning('queue not found: {}'.format(contname))
 
 
 def delete_storage_containers_boot_diagnostics(

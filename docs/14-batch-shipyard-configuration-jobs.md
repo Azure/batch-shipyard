@@ -81,6 +81,37 @@ job_specifications:
       - jobdata*.bin
       blobxfer_extra_options: null
   default_working_dir: batch
+  federation_constraints:
+    pool:
+      autoscale:
+        allow: true
+        exclusive: false
+      low_priority_nodes:
+        allow: true
+        exclusive: false
+      native: false
+      windows: false
+      location: eastus
+      container_registries:
+        private_docker_hub: true
+        public:
+        - my.public.registry.io
+      max_active_task_backlog:
+        ratio: null
+        autoscale_exempt: true
+      custom_image_arm_id: null
+      virtual_network_arm_id: null
+    compute_node:
+      vm_size: STANDARD_F1
+      cores:
+        amount: 2
+        schedulable_variance: null
+      memory:
+        amount: 512m
+        schedulable_variance: null
+      exclusive: false
+      gpu: false
+      infiniband: false
   tasks:
   - id: null
     docker_image: busybox
@@ -490,6 +521,143 @@ container runtime through either `additional_docker_run_options` or
 that property takes precedence over this option. Note that this option does
 not work in `native` mode currently; `native` mode will always override this
 option to `batch`.
+* (optional) `federation_constraints` defines properties to apply to the job
+and all tasks (i.e., the task group) when submitting the job to a federation.
+Please see the [federation guide](68-batch-shipyard-federation.md) for more
+information and terminology definitions.
+    * (optional) `pool` properties defines pool-level constraints for the
+      job.
+        * (optional) `autoscale` properties define autoscale constraints.
+          `allow` cannot be set to `false` and `exclusive` to `true`.
+            * (required) `allow` specifies if the job is allowed to be
+              scheduled on an autoscale-enabled pool. The default, if not
+              specified, is `true`.
+            * (required) `exclusive` specifies if the job can only be
+              scheduled to an autoscale-enabled pool. The default, if not
+              specified, is `false`.
+        * (optional) `low_priority_nodes` properties define low priority
+          constraints. Both of these properties are enforced on a best-effort
+          basis. `allow` cannot be set to `false` and `exclusive` to `true`.
+            * (required) `allow` specifies if the job is allowed to run on
+              pools with low priority nodes. The default, if not specified,
+              is `true`.
+            * (required) `exclusive` specifies if the job can only be
+              scheduled to pools with low priority nodes.  The default,
+              if not specified, is `false`.
+        * (optional) `native` specifies if the job must be run on native
+          container pools. The default, if not specified, is `null` which
+          adopts the pool settings as submitted with the job.
+        * (optional) `windows` specifies if the job must run on Windows
+          pools. The default, if not specified, is `null` which adopts the
+          pool settings as submitted with the job.
+        * (optional) `location` specifies a specific location constraint.
+          The location must be a proper ARM name and not the "display name".
+          For example, the region "East US" is the display name, while the
+          proper name is `eastus`. To get a listing of ARM region names, they
+          can be queried via the Azure CLI command
+          `az account list-locations -o table`. The default, if not specified,
+          is `null` which does not impose a region constraint.
+        * (optional) `container_registries` defines container registry
+          constraints. All container images specified within each task group
+          for a job must have the corresponding container registry login
+          information loaded for each possible target pool within the
+          federation; the image itself does not need to be pre-loaded on each
+          individual compaute node (but can be pre-loaded to improve task
+          startup times - please see the global configuration doc for more
+          information under `global_resources`).
+            * (optional) `private_docker_hub` specifies if any container image
+              within the task group that reside on Docker Hub require a
+              Docker Hub login. The default, if not specified, is `false` -
+              which means all container images that refer to Docker Hub are
+              public and require no login.
+            * (optional) `public` is a list of registries that do not require
+              a login. If desired, you can create non-Docker Hub repos that
+              do not have logins. You will need to specify any tasks within the
+              group referencing images that do not require logins.
+        * (optional) `max_active_task_backlog` defines the maximum active
+          task backlog constraint.
+            * (optional) `ratio` is the maximum ratio as defined by:
+              `active tasks in pool / available scheduling slots in pool`.
+              Thus, if there are 8 active tasks waiting, with 4 available
+              scheduling slots for a particluar pool, the backlog ratio for
+              this pool would be `2`. Thus if this property was set to `1`,
+              then this particular pool would be skipped as a potential
+              target for the job. The default, if not specified, is `null`
+              or that there is no `ratio` and scheduling of task groups can
+              target any pool with any backlog amount.
+            * (optional) `autoscale_exempt` specifies if autoscale-enabled
+              pools should not be subject to this constraint while in
+              allocation state `steady` and the number of available slots
+              is 0. This is to ensure that autoscale pools would be able to
+              be targetted for jobs even if the pool currently contains no
+              nodes. The default, if not specified, is `true`.
+        * (optional) `custom_image_arm_id` defines the custom image ARM
+          image id that must be used as the pool host OS for this task group
+          to be scheduled.
+        * (optional) `virtual_network_arm_id` defines that a pool must be
+          joined with this specific ARM subnet id to be scheduled with this
+          task group.
+    * (optional) `compute_node` are compute node level specific constraints.
+        * (optional) `vm_size` defines an
+          [Azure Batch supported Azure VM size](https://docs.microsoft.com/azure/batch/batch-pool-vm-sizes)
+          that this task group must be scheduled to. The default, if not
+          specified, is `null` or no restriction. This property is mutually
+          exclusive of `cores` and/or `memory` constraints below.
+        * (optional) `cores` defines scheduling behavior for the number of
+          cores required for each task within the task group. This property
+          is mutually exclusive of the `vm_size` constraint.
+            * (optional) `amount` is the number of cores required for each
+              task in the task group. Azure Batch schedules to scheduling
+              slots and does not schedule to cores. This limitation leads to
+              the next constraint. The default, if not specified, is
+              `null` or no restriction.
+            * (optional) `schedulable_variance` is the maximum
+              "over-provisioned" core capacity allowed for each task which
+              constructs a valid compute node core range target of
+              [amount, amount * (1 + schedulable_variance)]. For example,
+              if `amount` is set to `2` and this property is set to `1` (which
+              is equivalent to 100% of the specified `amount`) then the job's
+              tasks will only target pools with compute nodes with a range of
+              cores [2, 4], inclusive. The default value, if not specified,
+              is `null` which infers no upper-bound limit on the core range.
+              A value of `0` infers exact match required for the specified
+              `amount`.
+        * (optional) `memory` defines scheduling behvior for the amount of
+          memory required for each task within the task group. This property
+          is mutually exclusive of the `vm_size` constraint.
+            * (optional) `amount` is the amount of memory required for each
+              task in the task group. This value should be a string where
+              the amount is followed directly by a suffix `b`, `k`, `m`, `g`,
+              or `t`. Azure Batch schedules to scheduling slots and
+              does not schedule to memory. This limitation leads to
+              the next constraint. The default, if not specified, is
+              `null` or no restriction.
+            * (optional) `schedulable_variance` is the maximum
+              "over-provisioned" memory capacity allowed for each task which
+              constructs a valid compute node memory range target of
+              [amount, amount * (1 + schedulable_variance)]. For example,
+              if `amount` is set to `4096m` and this property is set to `1`
+              (which is equivalent to 100% of the specified `amount`) then
+              the job's tasks will only target pools with compute nodes with
+              a range of memory [4096m, 8192m], inclusive. The default value,
+              if not specified, is `null` which infers no upper-bound limit
+              on the memory range. A value of `0` infers exact match
+              required for the specified `amount`. It is not recommended to
+              set this value to `0` for a `memory` constraint.
+        * (optional) `exclusive` specifies if each task within the task group
+          must not be co-scheduled with other running tasks on compute nodes.
+          Effectively this excludes pools as scheduling targets with the
+          setting `max_tasks_per_node` greater than `1`.
+        * (optional) `gpu` specifies if tasks within the task group should
+          be scheduled on a compute node that has a GPU. Note that specifying
+          this property as `true` does not implicitly create tasks that
+          utilize nvidia-docker. You must, instead, specify the `gpu`
+          property as `true` at the job or task-level.
+        * (optional) `infiniband` specifies if tasks within the task group
+          should be scheduled on a compute node that has a RDMA/IB. Note that
+          specifying this property as `true` does not implicitly create tasks
+          that will enable RDMA/IB settings with Intel MPI. You must, instead,
+          specify the `infiniband` property as `true` at the job or task-level.
 
 The required `tasks` property is an array of tasks to add to the job:
 
@@ -610,7 +778,7 @@ Singularity image to use for this task
 * (optional) `depends_on` is an array of task ids for which this container
 invocation (task) depends on and must run to successful completion prior
 to this task executing. Note that when a `task_factory` is specified, all
-tasks generated by the task factory depend on the listed depenedent tasks.
+tasks generated by the task factory depend on the listed dependent tasks.
 You cannot specify another task factory to depend on, only discrete tasks.
 * (optional) `depends_on_range` is an array with exactly two integral
 elements containing a task `id` range for which this task is dependent
