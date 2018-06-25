@@ -1,5 +1,5 @@
 ## MADL-CPU-OpenMPI Data Shredding
-We included a python script that shows how to shred and deploy your training data prior to running a training job on Azure VMs via Open MPI.
+This Data Shredding recipe shows how to shred and deploy your training data prior to running a training job on Azure VMs via Open MPI.
 Azure VMs via Open MPI.
 
 ### Data Shredding Configuration
