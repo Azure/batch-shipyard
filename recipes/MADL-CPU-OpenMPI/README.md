@@ -46,7 +46,7 @@ application `command` to run would be:
 * The training data will need to be shredded to match the number of VMs and the thread's count per VM, and then deployed to a mounted Azure blob that the VM docker images have read/write access.  
 We created a basic python script that can be used to shred and deploy the training data to a blob container identified by the user.
 Data shredding files can be found [here](./DataShredding).
-* `shared_data_volumes`  should contain the shared data volume with an `azureblob` volume driver as specified in the global configuration file.
+* `shared_data_volumes`  should contain the shared data volume with an `azureblob` volume driver as specified in the global configuration file found [here] (./config/config.yaml
 
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_current_dedicated`, or
