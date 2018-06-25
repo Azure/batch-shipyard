@@ -32,7 +32,8 @@ RUN mkdir -p /root/.ssh && \
 # set parasail dir	
 WORKDIR /parasail
 
-# the supersgd is not included in this deployment
+# to create your own image, first download the supersgd from the link supplied in the read me file, 
+# and the put it in the same dir as this file.
 COPY supersgd /parasail
 COPY run_parasail.sh /parasail
 
