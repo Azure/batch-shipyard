@@ -1,10 +1,10 @@
-# Dockerfile for Singularity on Ubuntu 16.04 for Batch Shipyard
+# Dockerfile for Singularity on Ubuntu 18.04 for Batch Shipyard
 
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.5.0
+ENV SINGULARITY_VERSION=2.5.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \

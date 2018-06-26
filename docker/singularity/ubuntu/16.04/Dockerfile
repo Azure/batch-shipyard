@@ -1,23 +1,24 @@
-# Dockerfile for Singularity on CentOS 7 for Batch Shipyard
+# Dockerfile for Singularity on Ubuntu 16.04 for Batch Shipyard
 
-FROM centos:7
+FROM ubuntu:16.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.5.0
+ENV SINGULARITY_VERSION=2.5.1
 
-RUN yum groupinstall -y \
-        "Development Tools" \
-    && yum install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
         curl \
         python \
         file \
-        libarchive-devel \
-    && yum clean all
+        libarchive-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fSsL https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
     && cd singularity-${SINGULARITY_VERSION} \
-    && ./configure --prefix=/opt/singularity --sysconfdir=/opt/singularity/etc --localstatedir=/mnt/resource \
+    && ./configure --prefix=/opt/singularity --sysconfdir=/opt/singularity/etc --localstatedir=/mnt \
     && make -j4 \
     && make install
 
