@@ -160,6 +160,10 @@ _PERF_FILE = (
     'perf.py',
     pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
 )
+_MIRROR_SYSTEM_IMAGES_FILE = (
+    'replicate_batch_shipyard_images.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/replicate_batch_shipyard_images.sh')
+)
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
@@ -1397,7 +1401,7 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            ('{npf}{a}{b}{c}{d}{e}{f}{g}{lis}{m}{n}{p}{r}{s}{t}{u}'
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
              '{v}{w}{x}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
@@ -1407,11 +1411,15 @@ def _construct_pool_object(
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
                 g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
+                i=' -i {}'.format(misc._SINGULARITY_VERSION),
                 lis=' -l {}'.format(
                     lis_pkg.name) if lis_pkg is not None else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
                     sc_args) else '',
                 n=' -n' if native else '',
+                o=' -o {}'.format(
+                    bs.fallback_registry) if util.is_not_empty(
+                        bs.fallback_registry) else '',
                 p=' -p {}'.format(bs.storage_entity_prefix) if (
                     bs.storage_entity_prefix) else '',
                 r=' -r' if pool_settings.ssh.allow_docker_access else '',
@@ -1764,13 +1772,14 @@ def _add_pool(
              'have been enough available capacity in the region to satisfy '
              'your request. Please inspect the pool for resize errors and '
              'issue pool resize to try again.').format(pool.id))
-    # set up gluster on compute if specified
-    if gluster_on_compute and pool_current_vm_count > 0:
-        _setup_glusterfs(
-            batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
-            cmdline=None)
-    # create admin user on each node if requested
+    # post allocation actions
     if pool_current_vm_count > 0:
+        # set up gluster on compute if specified
+        if gluster_on_compute:
+            _setup_glusterfs(
+                batch_client, blob_client, config, nodes, _GLUSTERPREP_FILE,
+                cmdline=None)
+        # create admin user on each node
         try:
             batch.add_rdp_user(batch_client, config, nodes)
         except Exception as e:
@@ -4162,6 +4171,18 @@ def action_misc_tensorboard(
                 'cannot specify a task to tunnel Tensorboard to without the '
                 'corresponding job id')
     misc.tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image)
+
+
+def action_misc_mirror_images(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """Action: Misc Mirror-images
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    _check_batch_client(batch_client)
+    misc.mirror_batch_shipyard_images(
+        batch_client, config, _MIRROR_SYSTEM_IMAGES_FILE[1])
 
 
 def action_monitor_create(

@@ -248,7 +248,7 @@ BatchShipyardSettings = collections.namedtuple(
     'BatchShipyardSettings', [
         'storage_account_settings', 'storage_entity_prefix',
         'generated_sas_expiry_days', 'use_shipyard_docker_image',
-        'store_timing_metrics',
+        'store_timing_metrics', 'fallback_registry',
     ]
 )
 DataReplicationSettings = collections.namedtuple(
@@ -1868,24 +1868,15 @@ def batch_shipyard_settings(config):
             raise KeyError()
     except KeyError:
         sep = 'shipyard'
-    try:
-        sasexpiry = conf['generated_sas_expiry_days']
-    except KeyError:
-        sasexpiry = None
-    try:
-        use_shipyard_image = conf['use_shipyard_docker_image']
-    except KeyError:
-        use_shipyard_image = True
-    try:
-        store_timing = conf['store_timing_metrics']
-    except KeyError:
-        store_timing = False
     return BatchShipyardSettings(
         storage_account_settings=stlink,
         storage_entity_prefix=sep,
-        generated_sas_expiry_days=sasexpiry,
-        use_shipyard_docker_image=use_shipyard_image,
-        store_timing_metrics=store_timing,
+        generated_sas_expiry_days=_kv_read(conf, 'generated_sas_expiry_days'),
+        use_shipyard_docker_image=_kv_read(
+            conf, 'use_shipyard_docker_image', default=True),
+        store_timing_metrics=_kv_read(
+            conf, 'store_timing_metrics', default=False),
+        fallback_registry=_kv_read_checked(conf, 'fallback_registry'),
     )
 
 
@@ -1996,6 +1987,11 @@ def docker_registries(config):
     :return: list of batchmodels.ContainerRegistry objects
     """
     servers = []
+    # get fallback docker registry
+    bs = batch_shipyard_settings(config)
+    if util.is_not_empty(bs.fallback_registry):
+        servers.append(bs.fallback_registry)
+    # get additional docker registries
     try:
         servers.extend(
             config['global_resources']['additional_registries']['docker'])

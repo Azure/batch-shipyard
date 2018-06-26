@@ -42,14 +42,17 @@ import uuid
 import azure.batch.models as batchmodels
 # local imports
 from . import crypto
+from . import data
 from . import settings
 from . import util
+from .version import __version__
 
 # create logger
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 # global defines
+_SINGULARITY_VERSION = '2.5.1'
 _TENSORBOARD_LOG_ARGS = frozenset((
     '--tensorboard_logdir', '-tensorboard_logdir', '--logdir', '--log_dir',
     '--log-dir',
@@ -58,7 +61,7 @@ _TENSORBOARD_LOG_ARGS = frozenset((
 
 def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
     # type: (batchsc.BatchServiceClient, dict, str, str, str, str) -> None
-    """Action: Misc Tensorboard
+    """Create an SSH tunnel for Tensorboard running on compute nodes
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
@@ -243,3 +246,35 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
             tb_proc.poll()
             if tb_proc.returncode is None:
                 tb_proc.kill()
+
+
+def mirror_batch_shipyard_images(batch_client, config, script):
+    # type: (batchsc.BatchServiceClient, dict, pathlib.Path) -> None
+    """Mirror Batch Shipyard images to a fallback registry
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param pathlib.Path script: script to mirror
+    """
+    bs = settings.batch_shipyard_settings(config)
+    if util.is_none_or_empty(bs.fallback_registry):
+        raise ValueError('fallback registry is not specified')
+    user, pw = settings.docker_registry_login(config, bs.fallback_registry)
+    logging.debug('starting Batch Shipyard system image mirroring process')
+    rc = util.subprocess_with_output(
+        '{script} {b}{r}{s}{u}{x}'.format(
+            script=script,
+            b=' -b {}'.format(__version__),
+            r=' -r {}'.format(bs.fallback_registry),
+            s=' -s {}'.format(_SINGULARITY_VERSION),
+            u=' -u {}'.format(user),
+            x=' -x {}'.format(data._BLOBXFER_VERSION)),
+        shell=True,
+        env={
+            'DOCKER_LOGIN_PASSWORD': pw,
+        },
+    )
+    if rc != 0:
+        logger.error('Batch Shipyard system image mirroring failed')
+    else:
+        logger.info('Batch Shipyard system image mirroring finished')

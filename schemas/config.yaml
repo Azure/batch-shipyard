@@ -38,6 +38,8 @@ mapping:
                 type: str
           public_key_pem:
             type: str
+      fallback_registry:
+        type: str
       store_timing_metrics:
         type: bool
       use_shipyard_docker_image:

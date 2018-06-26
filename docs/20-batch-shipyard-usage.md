@@ -569,9 +569,13 @@ KeyVault. A valid credentials config file must be specified as an option.
 ## `misc` Command
 The `misc` command has the following sub-commands:
 ```
-  tensorboard  Create a tunnel to a Tensorboard instance for...
+  mirror-images  Mirror Batch Shipyard system images to the...
+  tensorboard    Create a tunnel to a Tensorboard instance for...
 ```
 
+* `mirror-images` will mirror Batch Shipyard Docker images to the designated
+`fallback_registry` specified in the global configuration for the version
+of Batch Shipyard that is executed in the command invocation.
 * `tensorboard` will create a tunnel to the compute node that is running
 or has run the specified task
     * `--jobid` specifies the job id to use. If this is not specified, the first

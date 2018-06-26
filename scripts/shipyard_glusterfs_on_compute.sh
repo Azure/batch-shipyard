@@ -37,12 +37,13 @@ if [ "$AZ_BATCH_IS_CURRENT_NODE_MASTER" == "true" ]; then
         sleep 1
     done
     set -e
-    echo "$numpeers joined peering"
+    echo "$numpeers nodes joined peering"
     # delay to wait for peers to connect
     sleep 5
     # create volume
-    echo "creating gv0 ($bricks)"
-    gluster volume create gv0 "$voltype" "$numnodes" transport tcp"$bricks"
+    echo "creating gv0 (voltype: $voltype numnodes: $numnodes bricks:$bricks)"
+    # shellcheck disable=SC2086
+    gluster volume create gv0 "$voltype" "$numnodes" transport tcp${bricks} force
     # modify volume properties: the uid/gid mapping is UNDOCUMENTED behavior
     gluster volume set gv0 storage.owner-uid "$(id -u _azbatch)"
     gluster volume set gv0 storage.owner-gid "$(id -g _azbatch)"
@@ -65,12 +66,12 @@ do
 done
 set -e
 
-# add gv0 to /etc/fstab for auto-mount on reboot
-mountpoint=$AZ_BATCH_NODE_SHARED_DIR/.gluster/gv0
+# add gv0 to /etc/fstab but do not auto-mount due to temp disk issues
+mountpoint=$AZ_BATCH_NODE_ROOT_DIR/mounts/gluster_on_compute/gv0
 mkdir -p "$mountpoint"
 chmod 775 "$mountpoint"
 echo "adding $mountpoint to fstab"
-echo "$ipaddress:/gv0 $mountpoint glusterfs defaults,_netdev 0 0" >> /etc/fstab
+echo "$ipaddress:/gv0 $mountpoint glusterfs _netdev,noauto 0 0" >> /etc/fstab
 
 # mount it
 echo "mounting $mountpoint"

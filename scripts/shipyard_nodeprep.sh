@@ -10,7 +10,6 @@ DOCKER_CE_VERSION_DEBIAN=18.03.1
 DOCKER_CE_VERSION_CENTOS=18.03.1
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_DOCKER_VERSION=2.0.3
-SINGULARITY_VERSION=2.5.0
 GLUSTER_VERSION_DEBIAN=4.0
 GLUSTER_VERSION_CENTOS=40
 
@@ -83,6 +82,7 @@ cascadecontainer=0
 custom_image=0
 docker_group=
 encrypted=
+fallback_registry=
 hpnssh=0
 gluster_on_compute=0
 gpu=
@@ -94,9 +94,10 @@ p2penabled=0
 prefix=
 sc_args=
 shipyardversion=
+singularityversion=
 
 # process command line options
-while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
+while getopts "h?abcde:fg:i:l:m:no:p:rs:tuv:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -108,9 +109,11 @@ while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
+            echo "-i [version] singularity version"
             echo "-l [lis pkg] LIS package install"
             echo "-m [type:scid] mount storage cluster"
             echo "-n native mode"
+            echo "-o [fallback registry] fallback registry"
             echo "-p [prefix] storage container prefix"
             echo "-r enable azure batch docker group"
             echo "-s [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
@@ -118,7 +121,7 @@ while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
             echo "-u custom image"
             echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
-            echo "-x [blobxfer version] blobxfer version"
+            echo "-x [version] blobxfer version"
             echo ""
             exit 1
             ;;
@@ -143,6 +146,9 @@ while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
         g)
             gpu=$OPTARG
             ;;
+        i)
+            singularityversion=$OPTARG
+            ;;
         l)
             lis=$OPTARG
             ;;
@@ -151,6 +157,9 @@ while getopts "h?abcde:fg:l:m:np:rs:tuv:wx:" opt; do
             ;;
         n)
             native_mode=1
+            ;;
+        o)
+            fallback_registry=$OPTARG
             ;;
         p)
             prefix="--prefix $OPTARG"
@@ -680,15 +689,64 @@ mount_azureblob_container() {
     rm azureblob-mount.sh
 }
 
-docker_pull_image() {
-    local image=$1
-    log DEBUG "Pulling Docker Image: $1"
+docker_pull_image_fallback() {
+    local image="${fallback_registry}/${1}"
+    log DEBUG "Pulling Docker Image through fallback registry: $image"
     set +e
-    local retries=60
+    local retries=25
     while [ $retries -gt 0 ]; do
         local pull_out
         pull_out=$(docker pull "$image" 2>&1)
         local rc=$?
+        if [ $rc -eq 0 ]; then
+            echo "$pull_out"
+            break
+        fi
+        # non-zero exit code: check if pull output has toomanyrequests,
+        # connection resets, or image config error
+        local tmr
+        tmr=$(grep -i 'toomanyrequests' <<<"$pull_out")
+        local crbp
+        crbp=$(grep -i 'connection reset by peer' <<<"$pull_out")
+        local epic
+        epic=$(grep -i 'error pulling image configuration' <<<"$pull_out")
+        local erb
+        erb=$(grep -i 'error parsing HTTP 404 response body' <<<"$pull_out")
+        local uhs
+        uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
+        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]]; then
+            log WARNING "will retry: $pull_out"
+        else
+            log ERROR "$pull_out"
+            exit $rc
+        fi
+        retries=$((retries-1))
+        if [ $retries -le 0 ]; then
+            log ERROR "Could not pull docker image through fallback registry: $image"
+            exit $rc
+        fi
+        sleep $((RANDOM % 5 + 1))s
+    done
+    set -e
+    # re-tag image
+    docker tag "$image" "$1"
+    docker rmi "$image"
+}
+
+docker_pull_image() {
+    local image=$1
+    local try_fallback=0
+    if [ ! -z "$fallback_registry" ]; then
+        try_fallback=1
+    fi
+    local rc
+    log DEBUG "Pulling Docker Image: $image (fallback: $try_fallback)"
+    set +e
+    local retries=25
+    while [ $retries -gt 0 ]; do
+        local pull_out
+        pull_out=$(docker pull "$image" 2>&1)
+        rc=$?
         if [ $rc -eq 0 ]; then
             echo "$pull_out"
             break
@@ -701,20 +759,27 @@ docker_pull_image() {
         crbp=$(grep 'connection reset by peer' <<<"$pull_out")
         local epic
         epic=$(grep 'error pulling image configuration' <<<"$pull_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]]; then
+        local erb
+        erb=$(grep -i 'error parsing HTTP 404 response body' <<<"$pull_out")
+        local uhs
+        uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
+        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
-            exit $rc
+            break
         fi
         retries=$((retries-1))
         if [ $retries -le 0 ]; then
             log ERROR "Could not pull docker image: $image"
-            exit $rc
+            break
         fi
         sleep $((RANDOM % 5 + 1))s
     done
     set -e
+    if [ $rc -ne 0 ] && [ $try_fallback -eq 1 ]; then
+        docker_pull_image_fallback "$image"
+    fi
 }
 
 singularity_basedir=
@@ -738,10 +803,10 @@ singularity_setup() {
     fi
     log DEBUG "Setting up Singularity for $offer $sku"
     # fetch docker image for singularity bits
-    local di=alfpark/singularity:${SINGULARITY_VERSION}-${offer}-${sku}
-    docker_pull_image $di
+    local di="alfpark/singularity:${singularityversion}-${offer}-${sku}"
+    docker_pull_image "$di"
     mkdir -p /opt/singularity
-    docker run --rm -v /opt/singularity:/opt/singularity $di \
+    docker run --rm -v /opt/singularity:/opt/singularity "$di" \
         /bin/sh -c 'cp -r /singularity/* /opt/singularity'
     # symlink for global exec
     ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
@@ -773,7 +838,7 @@ singularity_setup() {
     # selftest
     singularity selftest
     # remove docker image
-    docker rmi $di
+    docker rmi "$di"
 }
 
 process_fstab_entry() {
@@ -1007,7 +1072,7 @@ install_glusterfs_on_compute() {
         fi
         install_packages glusterfs-server
     elif [ "$PACKAGER" == "yum" ]; then
-        yum install centos-release-gluster${GLUSTER_VERSION_CENTOS}
+        install_packages centos-release-gluster${GLUSTER_VERSION_CENTOS}
         install_packages glusterfs-server acl
     elif [ "$PACKAGER" == "zypper" ]; then
         add_repo "$repo"
@@ -1083,7 +1148,7 @@ install_storage_cluster_dependencies() {
                 fi
                 install_packages glusterfs-client acl
             elif [ "$PACKAGER" == "yum" ] ; then
-                yum install centos-release-gluster${GLUSTER_VERSION_CENTOS}
+                install_packages centos-release-gluster${GLUSTER_VERSION_CENTOS}
                 install_packages glusterfs-server acl
             elif [ "$PACKAGER" == "zypper" ]; then
                 add_repo "$repo"
@@ -1332,7 +1397,7 @@ echo "Native mode: $native_mode"
 echo "OS Distribution: $DISTRIB_ID $DISTRIB_RELEASE"
 echo "Batch Shipyard version: $shipyardversion"
 echo "Blobxfer version: $blobxferversion"
-echo "Singularity version: $SINGULARITY_VERSION"
+echo "Singularity version: $singularityversion"
 echo "User mountpoint: $USER_MOUNTPOINT"
 echo "Mount path: $MOUNTS_PATH"
 echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
@@ -1347,6 +1412,7 @@ echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
 echo "Enable Azure Batch group for Docker access: $docker_group"
+echo "Fallback registry: $fallback_registry"
 echo "Cascade via container: $cascadecontainer"
 echo "P2P: $p2penabled"
 echo "Block on images: $block"
@@ -1371,20 +1437,20 @@ save_startup_to_volatile
 # install LIS if required first (lspci won't work on certain distros without it)
 install_lis
 
-# create shared mount points
-mkdir -p "$MOUNTS_PATH"
-
-# decrypt encrypted creds
-if [ ! -z "$encrypted" ]; then
-    decrypt_encrypted_credentials
-fi
-
 # set iptables rules
 if [ $p2penabled -eq 1 ]; then
     # disable DHT connection tracking
     iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
     iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
 fi
+
+# decrypt encrypted creds
+if [ ! -z "$encrypted" ]; then
+    decrypt_encrypted_credentials
+fi
+
+# create shared mount points
+mkdir -p "$MOUNTS_PATH"
 
 # custom or native mode should have docker/nvidia installed
 if [ $custom_image -eq 1 ] || [ $native_mode -eq 1 ]; then
@@ -1431,6 +1497,12 @@ elif [ -f "$nodeprepfinished" ]; then
             mount "${parts[1]}"
         done
     fi
+    # mount glusterfs on compute volumes
+    if [ $gluster_on_compute -eq 1 ]; then
+        if [ $custom_image -eq 1 ]; then
+            mount "${MOUNTS_PATH}/gluster_on_compute/gv0"
+        fi
+    fi
     # non-native mode checks
     if [ "$custom_image" -eq 0 ] && [ "$native_mode" -eq 0 ]; then
         # start docker engine
@@ -1463,6 +1535,9 @@ install_and_start_cadvisor
 if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
     install_docker_host_engine
 fi
+
+# login to registry servers (do not specify -e as creds have been decrypted)
+./registry_login.sh
 
 # install gpu related items
 if [ ! -z "$gpu" ] && { [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "centos" ]; }; then
@@ -1502,9 +1577,6 @@ fi
 # retrieve required docker images
 docker_pull_image alfpark/blobxfer:"${blobxferversion}"
 docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cargo
-
-# login to registry servers (do not specify -e as creds have been decrypted)
-./registry_login.sh
 
 # set up singularity
 if [ $native_mode -eq 0 ]; then

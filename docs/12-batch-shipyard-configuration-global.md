@@ -20,6 +20,7 @@ batch_shipyard:
       passphrase: mysupersecretpassword
       sha1_thumbprint: 123456789...
     public_key_pem: encrypt.pem
+  fallback_registry: myregistry.azurecr.io
 data_replication:
   concurrent_source_downloads: null
   peer_to_peer:
@@ -174,6 +175,22 @@ contains the following members:
       `cert create` command, then this file is generated along with the PFX
       file. It is recommended to populate this property with the PEM file path
       such that it does not have to be generated when needed for encryption.
+* (optional) `fallback_registry` is a property that designates a Docker
+registry to use as a fallback for retrieving Batch Shipyard system images
+required to bootstrap each compute node. This is useful to minimize
+occurrences when Docker Hub is experiencing an outage or degradation.
+If this property is populated, then the associated login information for
+this registry server must be specified in the credentials configuration
+under `docker_registry`. Note that this registry must follow naming
+conventions exactly as if on Docker Hub, except images are naturally
+prefixed with the server name. To easily replicate/mirror the requisite
+Batch Shipyard images, please see the command `misc mirror-images`. This
+command should be run for every Batch Shipyard version that you intend to
+use in conjunction with this option.
+
+`data_replication` is an entirely optional section to exert fine-grained
+control of the download and data replication behavior for container images.
+
 * (optional) `data_replication` property is used to configure the internal
 image replication mechanism between compute nodes within a compute pool. The
 `concurrent_source_downloads` property specifies the number of nodes that
@@ -192,6 +209,10 @@ replication options:
     * (optional) `direct_download_seed_bias` property sets the number of
       direct download seeds to prefer per image before switching to
       peer-to-peer transfer.
+
+`global_resources` contains properties for populating each compute node
+with required container images and for data movement directives.
+
 * (required) `global_resources` property contains information regarding
 required container images, volume configuration and data ingress information.
 This property is required.

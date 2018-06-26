@@ -2184,6 +2184,19 @@ def misc_tensorboard(ctx, jobid, taskid, logdir, image):
         ctx.batch_client, ctx.config, jobid, taskid, logdir, image)
 
 
+@misc.command('mirror-images')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def misc_mirror(ctx):
+    """Mirror Batch Shipyard system images to the specified fallback
+    registry"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_misc_mirror_images(ctx.batch_client, ctx.config)
+
+
 @cli.group()
 @pass_cli_context
 def monitor(ctx):

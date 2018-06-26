@@ -12,6 +12,7 @@ batch_shipyard:
       passphrase: mysupersecretpassword
       sha1_thumbprint: 123456789...
     public_key_pem: encrypt.pem
+  fallback_registry: myregistry.azurecr.io
 data_replication:
   concurrent_source_downloads: null
   peer_to_peer:

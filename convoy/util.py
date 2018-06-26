@@ -460,12 +460,14 @@ def compute_md5_for_file(file, as_base64, blocksize=65536):
             return hasher.hexdigest()
 
 
-def subprocess_with_output(cmd, shell=False, cwd=None, suppress_output=False):
-    # type: (str, bool, str, bool) -> int
+def subprocess_with_output(
+        cmd, shell=False, cwd=None, env=None, suppress_output=False):
+    # type: (str, bool, str, dict, bool) -> int
     """Subprocess command and print output
     :param str cmd: command line to execute
     :param bool shell: use shell in Popen
     :param str cwd: current working directory
+    :param dict env: env vars to use
     :param bool suppress_output: suppress output
     :rtype: int
     :return: return code of process
@@ -475,10 +477,10 @@ def subprocess_with_output(cmd, shell=False, cwd=None, suppress_output=False):
         if suppress_output:
             _devnull = open(os.devnull, 'w')
             proc = subprocess.Popen(
-                cmd, shell=shell, cwd=cwd, stdout=_devnull,
+                cmd, shell=shell, cwd=cwd, env=env, stdout=_devnull,
                 stderr=subprocess.STDOUT)
         else:
-            proc = subprocess.Popen(cmd, shell=shell, cwd=cwd)
+            proc = subprocess.Popen(cmd, shell=shell, cwd=cwd, env=env)
         proc.wait()
     finally:
         if _devnull is not None:

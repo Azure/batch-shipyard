@@ -111,6 +111,13 @@ _DIRECTDL_DOWNLOADING = set()
 _GR_DONE = False
 _LAST_DHT_INFO_DUMP = None
 _THREAD_EXCEPTIONS = []
+_DOCKER_PULL_ERRORS = frozenset((
+    'toomanyrequests',
+    'connection reset by peer',
+    'error pulling image configuration',
+    'error parsing http 404 response body',
+    'received unexpected http status',
+))
 
 
 class StandardStreamLogger:
@@ -470,18 +477,13 @@ class ContainerImageSaveThread(threading.Thread):
             with _DIRECTDL_LOCK:
                 _DIRECTDL_DOWNLOADING.remove(self.resource)
 
-    def _check_pull_output_overload(self, stdout: str, stderr: str) -> bool:
+    def _check_pull_output_overload(self, stderr: str) -> bool:
         """Check output for registry overload errors
-        :param str stdout: stdout
         :param str stderr: stderr
         :rtype: bool
         :return: if error appears to be overload from registry
         """
-        if ('toomanyrequests' in stdout or 'toomanyrequests' in stderr or
-                'connection reset by peer' in stderr or
-                'error pulling image configuration' in stderr):
-            return True
-        return False
+        return any([x in stderr for x in _DOCKER_PULL_ERRORS])
 
     def _pull(self, grtype: str, image: str) -> tuple:
         """Container image pull
@@ -524,7 +526,7 @@ class ContainerImageSaveThread(threading.Thread):
                     logger.debug('{} image {} pull stderr: {}'.format(
                         grtype, image, stderr))
                 break
-            elif self._check_pull_output_overload(stdout, stderr):
+            elif self._check_pull_output_overload(stderr.lower()):
                 logger.error(
                     'Too many requests issued to registry server, '
                     'retrying...')
