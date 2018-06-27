@@ -1169,10 +1169,13 @@ install_cascade_dependencies() {
     fi
     log DEBUG "Installing dependencies for cascade on host"
     # install azure storage python dependency
-    install_packages build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-    pip3 install --no-cache-dir --upgrade pip
+    install_packages build-essential libssl-dev libffi-dev libpython3-dev python3-dev
+    download_file_as https://bootstrap.pypa.io/get-pip.py get-pip.py
+    python3 get-pip.py
+    rm -f get-pip.py
     pip3 install --no-cache-dir --upgrade wheel setuptools
-    pip3 install --no-cache-dir azure-cosmosdb-table==1.0.3 azure-storage-blob==1.1.0
+    pip3 install --no-cache-dir \
+        azure-cosmosdb-table==1.0.3 azure-storage-common==1.3.0 azure-storage-blob==1.3.0
     # install cascade dependencies
     if [ $p2penabled -eq 1 ]; then
         install_packages python3-libtorrent pigz
@@ -1281,14 +1284,18 @@ EOF
         # add timings
         if [ ! -z ${SHIPYARD_TIMING+x} ]; then
             # backfill node prep start
-            ./perf.py nodeprep start "$prefix" --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
+            # shellcheck disable=SC2086
+            ./perf.py nodeprep start $prefix --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
             # mark node prep finished
-            ./perf.py nodeprep end "$prefix"
+            # shellcheck disable=SC2086
+            ./perf.py nodeprep end $prefix
             # mark start cascade
-            ./perf.py cascade start "$prefix"
+            # shellcheck disable=SC2086
+            ./perf.py cascade start $prefix
         fi
         log DEBUG "Starting Cascade"
-        PYTHONASYNCIODEBUG=1 ./cascade.py "$p2p" --ipaddress "$ipaddress" "$prefix" &
+        # shellcheck disable=SC2086
+        PYTHONASYNCIODEBUG=1 ./cascade.py "$p2p" --ipaddress "$ipaddress" $prefix &
         cascadepid=$!
     fi
 

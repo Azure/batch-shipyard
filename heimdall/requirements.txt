@@ -4,5 +4,5 @@ azure-mgmt-compute==3.1.0rc3
 azure-mgmt-network==2.0.0rc2
 azure-mgmt-resource==2.0.0rc1
 azure-mgmt-storage==2.0.0rc3
-msrestazure==0.4.32
+msrestazure==0.4.33
 requests==2.19.1

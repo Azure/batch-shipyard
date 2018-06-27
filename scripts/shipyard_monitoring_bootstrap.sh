@@ -449,7 +449,7 @@ docker run --rm \
     -v ${LETSENCRYPT_VAR_DIR}/html:/data/letsencrypt \
     -v ${LETSENCRYPT_VAR_DIR}/var/log:/var/log/letsencrypt \
     certbot/certbot renew \
-    --webroot -weebroot-path=/data/letsencrypt $staging
+    --webroot -webroot-path=/data/letsencrypt $staging
 
 docker kill --signal=HUP nginx
 EOF

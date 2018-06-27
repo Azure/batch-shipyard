@@ -1267,8 +1267,8 @@ def _construct_pool_object(
         _rflist.append(_IMAGE_BLOCK_FILE)
         if not bs.use_shipyard_docker_image:
             _rflist.append(_CASCADE_FILE)
-            if bs.store_timing_metrics:
-                _rflist.append(_PERF_FILE)
+        if bs.store_timing_metrics:
+            _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
         _rflist.append(_HPNSSH_FILE)
     # handle azure mounts
