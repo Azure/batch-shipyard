@@ -105,6 +105,10 @@ This Keras+Theano-GPU recipe contains information on how to Dockerize
 [Theano](http://www.deeplearning.net/software/theano/) backend for use with
 N-Series Azure VMs.
 
+#### [MADL-CPU-OpenMPI](./MADL-CPU-OpenMPI)
+This recipe contains information on how to Dockerize the Microsoft High
+Performance ML Algorithms Learner for use across multiple compute nodes.
+
 #### [MXNet-CPU](./MXNet-CPU)
 This MXNet-CPU recipe contains information on how to Dockerize
 [MXNet](http://mxnet.io/) for use on Azure Batch compute nodes, including
