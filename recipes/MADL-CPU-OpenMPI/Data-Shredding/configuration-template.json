@@ -1,0 +1,18 @@
+{
+  "node_count": <node count>
+  "thread_count": <thread count per node>,
+  "training_data_shred_count": <number of data shreds>,
+  "dataset_local_directory": <local dir for training data>,
+  "shredded_dataset_local_directory": <local dir for sliced data>,
+  "shredded_dataset_Per_Node":<local directory for final shredded data per node>
+  "container_name": <container name where the sliced data will be stored>,
+  "trainind_dataset_name": <name for the dataset.  Used when creating the data blobs,
+  "subscription_id": <azure subscription id>,
+  "secret_key": <password>,
+  "resource_group": <resource group name>,
+  "storage_account": {
+    "name": <storeage account name>,
+    "key": <storage key>
+  },
+  "training_data_container_name": <container name where the training data is hosted>
+}
