@@ -6,10 +6,9 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.05.0
+DOCKER_CE_VERSION_DEBIAN=18.03.1
 
 # consts
-# TODO switch version back to stable
 DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
 SHIPYARD_VAR_DIR=/var/batch-shipyard
 SHIPYARD_CONF_FILE=${SHIPYARD_VAR_DIR}/heimdall.json
@@ -282,8 +281,7 @@ install_docker_host_engine() {
         # add gpgkey for repo
         add_repo "$gpgkey"
         # add repo
-        # TODO switch to stable once ready
-        add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) edge"
+        add-apt-repository "deb [arch=amd64] $repo $(lsb_release -cs) stable"
     else
         add_repo "$repo"
     fi
@@ -311,11 +309,6 @@ setup_docker_compose_systemd() {
     # substitute LE/fqdn vars
     if [ "$letsencrypt" -eq 1 ]; then
         sed -i "s/{GF_SERVER_DOMAIN}/- GF_SERVER_DOMAIN=$fqdn/g" /etc/docker/compose/batch-shipyard-monitoring/docker-compose.yml
-        if [ "$letsencrypt_staging" -eq 1 ]; then
-            sed -i "s/{LE_CERT_DIR}/archive/g" /etc/docker/compose/batch-shipyard-monitoring/docker-compose.yml
-        else
-            sed -i "s/{LE_CERT_DIR}/live/g" /etc/docker/compose/batch-shipyard-monitoring/docker-compose.yml
-        fi
     fi
     # substitute batch shipyard version
     sed -i "s/{BATCH_SHIPYARD_VERSION}/$shipyardversion/g" /etc/docker/compose/batch-shipyard-monitoring/docker-compose.yml
@@ -356,6 +349,20 @@ run_nginx_acme_challenge() {
     fi
     log INFO "Configuring letsencrypt"
     mkdir -p ${LETSENCRYPT_VAR_DIR}/html
+cat << EOF > ${LETSENCRYPT_VAR_DIR}/html/index.html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Temporary Let's Encrypt Challenge Site</title>
+</head>
+<body>
+  <p>LE</p>
+</body>
+</html>
+EOF
+    chmod 775 ${LETSENCRYPT_VAR_DIR}/html
+    chmod 664 ${LETSENCRYPT_VAR_DIR}/html/index.html
     mkdir -p ${NGINX_VAR_DIR}
 cat << EOF > ${NGINX_VAR_DIR}/nginx.conf
 server {
@@ -404,7 +411,9 @@ acquire_letsencrypt_certs() {
         --register-unsafely-without-email --agree-tos --staging
     # execute letsencrypt prod
     if [ "$letsencrypt_staging" -eq 0 ]; then
-        rm -rf ${LETSENCRYPT_VAR_DIR}
+        rm -rf ${LETSENCRYPT_VAR_DIR:?}/etc
+        rm -rf ${LETSENCRYPT_VAR_DIR:?}/var/lib
+        rm -rf ${LETSENCRYPT_VAR_DIR:?}/var/log
         mkdir -p ${LETSENCRYPT_VAR_DIR}/etc
         mkdir -p ${LETSENCRYPT_VAR_DIR}/var/lib
         mkdir -p ${LETSENCRYPT_VAR_DIR}/var/log
@@ -439,7 +448,10 @@ docker run --rm \
     -v ${LETSENCRYPT_VAR_DIR}/var/lib:/var/lib/letsencrypt \
     -v ${LETSENCRYPT_VAR_DIR}/html:/data/letsencrypt \
     -v ${LETSENCRYPT_VAR_DIR}/var/log:/var/log/letsencrypt \
-    certbot/certbot renew $staging
+    certbot/certbot renew \
+    --webroot -weebroot-path=/data/letsencrypt $staging
+
+docker kill --signal=HUP nginx
 EOF
     chmod 755 /etc/cron.daily/certbot-renew
     log INFO "Cert renewal add to crontab"
@@ -456,12 +468,6 @@ configure_nginx_with_certs() {
     cp nginx.conf ${NGINX_VAR_DIR}/
     # substitute fqdn
     sed -i "s/{FQDN}/$fqdn/g" ${NGINX_VAR_DIR}/nginx.conf
-    # substitute le cert suffix
-    if [ "$letsencrypt_staging" -eq 1 ]; then
-        sed -i "s/{LE_CERT_SUFFIX}/1/g" ${NGINX_VAR_DIR}/nginx.conf
-    else
-        sed -i "s/{LE_CERT_SUFFIX}//g" ${NGINX_VAR_DIR}/nginx.conf
-    fi
     # substitute resolver
     resolver=$(grep '^nameserver ' /etc/resolv.conf | cut -d' ' -f 2)
     sed -i "s/{RESOLVER}/$resolver/g" ${NGINX_VAR_DIR}/nginx.conf

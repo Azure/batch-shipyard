@@ -120,10 +120,10 @@ _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
-        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5.tar.gz'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5-1.tar.gz'
     ),
     'sha256': (
-        '90d802ef27bf1977444d60b2473bd0c3cb9188735a2bceaa6d8c955f60811d40'
+        'cedf8b2621ebc81fba4a324f93e14c56e946cb65985e3f51de6a6644a9dc62df'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
