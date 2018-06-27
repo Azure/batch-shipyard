@@ -4121,7 +4121,7 @@ def remotefs_settings(config, sc_id=None):
                 ('All disks {} for vm {} are not specified in '
                  'managed_disks:disk_names ({})').format(
                      disk_array, vmkey, _disk_set))
-        raid_level = _kv_read(vmd_conf[vmkey], 'raid_level', -1)
+        raid_level = _kv_read(vmd_conf[vmkey], 'raid_level', default=-1)
         if len(disk_array) == 1 and raid_level != -1:
             raise ValueError(
                 'Cannot specify a RAID-level with 1 disk in array')
@@ -4131,10 +4131,6 @@ def remotefs_settings(config, sc_id=None):
             if raid_level != 0:
                 raise ValueError('Unsupported RAID level {}'.format(
                     raid_level))
-        filesystem = vmd_conf[vmkey]['filesystem']
-        if filesystem != 'btrfs' and not filesystem.startswith('ext'):
-            raise ValueError('Unsupported filesystem type {}'.format(
-                filesystem))
         disk_map[int(vmkey)] = MappedVmDiskSettings(
             disk_array=disk_array,
             filesystem=vmd_conf[vmkey]['filesystem'],

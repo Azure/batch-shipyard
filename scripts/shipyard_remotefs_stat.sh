@@ -141,6 +141,11 @@ if [ "$raid_level" -ge 0 ]; then
         fi
         echo "mdadm detail:"
         mdadm --detail "${target[0]}"
+        if [ "$filesystem" == "xfs" ]; then
+            echo ""
+            echo "xfs detail:"
+            xfs_info "$mountpath"
+        fi
     fi
 fi
 

@@ -152,7 +152,6 @@ class CliContext(object):
             skip_global_config=False, skip_pool_config=True,
             skip_monitor_config=True, fs_storage=True)
         self._ensure_credentials_section('storage')
-        self._ensure_credentials_section('remote_fs')
         _, self.resource_client, self.compute_client, self.network_client, \
             self.storage_mgmt_client, _, _ = \
             convoy.clients.create_all_clients(self)

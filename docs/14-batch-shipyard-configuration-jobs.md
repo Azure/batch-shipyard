@@ -481,7 +481,9 @@ directory for the container execution is not explicitly set. The default is
 directory, you can pass the appropriate working directory parameter to the
 container runtime through either `additional_docker_run_options` or
 `additional_singularity_options`. A working directory option specified within
-that property takes precedence over this option.
+that property takes precedence over this option. Note that this option does
+not work in `native` mode currently; `native` mode will always override this
+option to `batch`.
 
 The required `tasks` property is an array of tasks to add to the job:
 

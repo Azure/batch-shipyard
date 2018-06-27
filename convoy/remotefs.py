@@ -526,8 +526,8 @@ def create_storage_cluster(
                     not settings.is_premium_storage_vm_size(
                         rfs.storage_cluster.vm_size)):
                 raise RuntimeError(
-                    ('Premium storage requires a DS, DS_V2, FS, GS or LS '
-                     'series vm_size instead of {}'.format(
+                    ('Premium storage requires premium storage capable '
+                     'vm_size instead of {}'.format(
                          rfs.storage_cluster.vm_size)))
     # confirm before proceeding
     if not util.confirm_action(
@@ -1034,13 +1034,12 @@ def expand_storage_cluster(
     # check vms
     vms = {}
     new_disk_count = 0
+    mdadm_expand = False
     for i in range(rfs.storage_cluster.vm_count):
         # check if this vm filesystem supports expanding
         if (rfs.storage_cluster.vm_disk_map[i].filesystem != 'btrfs' and
                 rfs.storage_cluster.vm_disk_map[i].raid_level == 0):
-            raise RuntimeError(
-                'Cannot expand mdadm-based RAID-0 volumes. Please re-create '
-                'your storage cluster with btrfs using new disks.')
+            mdadm_expand = True
         vm_name = settings.generate_virtual_machine_name(
             rfs.storage_cluster, i)
         try:
@@ -1098,6 +1097,13 @@ def expand_storage_cluster(
         logger.error(
             'no new disks detected for storage cluster {}'.format(sc_id))
         return False
+    if mdadm_expand:
+        logger.warning(
+            '**WARNING** cluster expansion is being performed on mdadm-based '
+            'RAID arrays. This feature is experimental and can take an '
+            'extremely long time. Any interruption or unrecoverable '
+            'failure can result in data loss.')
+    del mdadm_expand
     # confirm before proceeding
     if not util.confirm_action(
             config, 'expand storage cluster {}'.format(sc_id)):
@@ -1150,7 +1156,7 @@ def expand_storage_cluster(
         return False
     logger.debug(
         'waiting for disks to attach to virtual machines and expanding '
-        'the gluster volume, this may take a while')
+        'the volume; please be patient as this can take a very long time')
     for offset in async_ops:
         premium, op = async_ops[offset]
         vm = op.result()

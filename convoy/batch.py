@@ -2980,6 +2980,7 @@ def egress_service_logs(
                 ('waiting for {} log files to be uploaded; this may take '
                  'some time, please be patient').format(
                      resp.number_of_files_uploaded))
+            count = 0
             while True:
                 blobs = blob_client.list_blobs(
                     cont, prefix=resp.virtual_directory_name,
@@ -2992,6 +2993,10 @@ def egress_service_logs(
                              resp.virtual_directory_name,
                              storage_settings.account))
                     break
+                count += 1
+                if count > 150:
+                    logger.error('exceeded wait timeout for log egress')
+                    return
                 time.sleep(2)
         if generate_sas:
             sas = storage.create_saskey(

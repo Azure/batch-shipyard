@@ -336,7 +336,7 @@ install_and_start_node_exporter() {
     ne_port=${pneo[0]}
     pneo=("${pneo[@]:1}")
 cat << EOF > /etc/node_exporter.conf
-OPTIONS="$nfs --no-collector.textfile --no-collector.wifi --no-collector.xfs --no-collector.zfs --web.listen-address=\":${ne_port}\" ${pneo[@]}"
+OPTIONS="$nfs --no-collector.textfile --no-collector.wifi --no-collector.zfs --web.listen-address=\":${ne_port}\" ${pneo[@]}"
 EOF
 cat << 'EOF' > /etc/systemd/system/node-exporter.service
 [Unit]
@@ -661,12 +661,32 @@ if [ "$raid_level" -ge 0 ]; then
             btrfs device add "${raid_array[@]}" $mountpath
             raid_resized=1
         else
-            # add new block device first
-            echo "Adding devices ${raid_array[*]} to $target_md"
-            mdadm --add $target_md "${raid_array[@]}"
-            # grow the array
-            echo "Growing array $target_md to a total of $numdisks devices"
-            mdadm --grow --raid-devices="$numdisks" "$target_md"
+            # increase raid rebuild/resync/reshape speed
+            oldmin=$(cat /proc/sys/dev/raid/speed_limit_min)
+            oldmax=$(cat /proc/sys/dev/raid/speed_limit_max)
+            echo 100000 > /proc/sys/dev/raid/speed_limit_min
+            echo 500000 > /proc/sys/dev/raid/speed_limit_max
+            # add new block device and grow
+            echo "Growing array $target_md to a total of $numdisks devices: ${raid_array[*]}"
+            mdadm --grow "$target_md" --raid-devices="$numdisks" --add "${raid_array[@]}"
+            sleep 5
+            mdadm --detail --scan
+            # wait until reshape completes
+            set +e
+            while :
+            do
+                if ! mdadm --detail --scan | grep "spares="; then
+                    break
+                fi
+                sleep 10
+            done
+            # ensure array is back to RAID-0
+            if ! mdadm --detail "$target_md" | grep "Raid Level : raid0"; then
+                mdadm --grow --level 0 "$target_md"
+            fi
+            set -e
+            echo "$oldmin" > /proc/sys/dev/raid/speed_limit_min
+            echo "$oldmax" > /proc/sys/dev/raid/speed_limit_max
             raid_resized=1
         fi
     fi
@@ -675,7 +695,7 @@ if [ "$raid_level" -ge 0 ]; then
         btrfs filesystem show
     else
         cat /proc/mdstat
-        mdadm --detail $target_md
+        mdadm --detail "$target_md"
     fi
     # get uuid of first disk as target uuid if not populated
     if [ -z "$target_uuid" ]; then
@@ -692,9 +712,23 @@ if [ $format_target -eq 1 ]; then
         echo "Target not specified for format"
         exit 1
     fi
+    sleep 5
     echo "Creating filesystem on $target_md"
     if [ "$filesystem" == "btrfs" ]; then
         mkfs.btrfs "$target_md"
+    elif [ "$filesystem" == "xfs" ]; then
+        mdadm --detail --scan
+        set +e
+        # let mkfs.xfs automatically select the appropriate su/sw
+        if ! mkfs.xfs "$target_md"; then
+            # mkfs.xfs can sometimes fail because it can't query the
+            # underlying device, try to re-assemble and retry format
+            set -e
+            mdadm --verbose --assemble "$target_md" "${raid_array[@]}"
+            mdadm --detail --scan
+            mkfs.xfs "$target_md"
+        fi
+        set -e
     elif [[ $filesystem == ext* ]]; then
         mkfs."${filesystem}" -m 0 "$target_md"
     else
@@ -746,7 +780,9 @@ if [ $attach_disks -eq 0 ]; then
                 if [ "$filesystem" == "btrfs" ]; then
                     # also enable ssd optimizations on btrfs
                     mount_options+=",nobarrier,ssd"
-                else
+                elif [ "$filesystem" == "xfs" ]; then
+                    mount_options+=",nobarrier"
+                elif [[ $filesystem == ext* ]]; then
                     mount_options+=",barrier=0"
                 fi
             else
@@ -791,6 +827,8 @@ if [ $raid_resized -eq 1 ]; then
             btrfs filesystem balance $mountpath
             echo "Rebalance of btrfs on $mountpath complete."
         fi
+    elif [ "$filesystem" == "xfs" ]; then
+        xfs_growfs $mountpath
     elif [[ $filesystem == ext* ]]; then
         resize2fs $mountpath
     else

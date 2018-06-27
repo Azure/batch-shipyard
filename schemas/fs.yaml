@@ -204,6 +204,7 @@ mapping:
                           - type: str
                       filesystem:
                         type: str
+                        enum: ['btrfs', 'ext2', 'ext3', 'ext4', 'xfs']
                       raid_level:
                         type: int
               prometheus:

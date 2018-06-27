@@ -365,16 +365,16 @@ The number of entries in this map must match the `vm_count`.
           attach to this instance. These disks must be provisioned before
           creating the storage cluster.
         * (required) `filesystem` is the filesystem to use. Valid values are
-          `btrfs`, `ext4`, `ext3` and `ext2`. `btrfs` is generally stable for
-          RAID-0, with better features and data integrity protection. `btrfs`
-          also allows for RAID-0 expansion and is the only filesystem
-          compatible with the `fs cluster expand` command.
+          `btrfs`, `ext4`, `ext3`, `ext2`, and `xfs`. `btrfs` is generally
+          stable for RAID-0, with many features, data integrity
+          protection and also allows for direct RAID-0 expansion. `xfs`
+          is a high performance, stable and proven option.
         * (optional for single disk, required for multiple disks) `raid_level`
           is the RAID level to apply to the disks in the `disk_array`. The
-          only valid value for multiple disks is `0`. Note that if you wish
-          to expand the number of disks in the array in the future, you must
-          use `btrfs` as the filesystem. At least two disks per virtual
-          machine are required for RAID-0.
+          only valid value for multiple disks is `0`. At least two disks per
+          virtual machine are required for RAID-0. Note that if you wish
+          to expand the number of disks in the array in the future, it is
+          strongly recommended to use `btrfs` as the filesystem.
 * (optional) `prometheus` properties are to control if collectors for metrics
 to export to [Prometheus](https://prometheus.io/) monitoring are enabled.
 Note that all exporters do not have their ports exposed to the internet by
@@ -392,7 +392,7 @@ cluster VMs.
         * (optional) `options` is a list of options to pass to the
           node exporter instance running on all nodes. The following
           collectors are force disabled, in addition to others disabled by
-          default: textfile, wifi, xfs, zfs. The nfs collector is enabled if
+          default: textfile, wifi, zfs. The nfs collector is enabled if
           the file server is NFS, automatically.
 
 ## Remote Filesystems with Batch Shipyard Guide

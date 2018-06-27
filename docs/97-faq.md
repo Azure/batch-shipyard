@@ -83,6 +83,7 @@ multi-instance, then it is strongly recommended to use `native` mode.
 Disadvantages of `native` mode are:
 
 * Singularity containers are not supported.
+* `default_working_dir` in jobs cannot be changed from `batch`.
 * `input_data` of any kind at the task-level is not possible; you must either
 use `resource_files` or build your own solution.
 * `output_data` options are limited and egress to `azure_storage` Azure Files

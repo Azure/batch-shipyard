@@ -7,7 +7,7 @@ for monitoring Batch pools and RemoteFS clusters.
 ## Overview
 For many scenarios, it is often desirable to have visibility into a set of
 machines to gain insights through certain metrics over time. A global
-monitoring resource is valuable to peer into per-machine and aggregate
+monitoring resource is valuable to avail per-machine and aggregate
 metrics for Batch processing workloads as jobs are processed for measurements
 such as CPU, memory and network usage. As Batch Shipyard's execution model
 is based on containers, insights into container behavior is also desirable
@@ -249,7 +249,7 @@ the credentials entirely within KeyVault. Please see the
 guide for more information.
 
 Additionally, Azure Active Directory authentication is required under
-`management` and a valid `subscription_id` must be provided. Additionally,
+`management` and a valid `subscription_id` must be provided. Moreover,
 if monitoring Batch pools, Batch authentication must be through Azure
 Active Directory for joining a [virtual network](64-batch-shipyard-byovnet.md).
 
