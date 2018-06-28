@@ -4358,8 +4358,15 @@ def _construct_task(
                 task.depends_on_range[0], task.depends_on_range[1])]
         else:
             task_id_ranges = None
+        # need to convert depends_on into python list because it is read
+        # from yaml as ruamel.yaml.comments.CommentedSeq. if pickled, this
+        # results in an ModuleNotFoundError when loading.
+        if util.is_not_empty(task.depends_on):
+            task_depends_on = list(task.depends_on)
+        else:
+            task_depends_on = None
         batchtask.depends_on = batchmodels.TaskDependencies(
-            task_ids=task.depends_on,
+            task_ids=task_depends_on,
             task_id_ranges=task_id_ranges,
         )
     # add exit conditions
@@ -4707,6 +4714,7 @@ def add_jobs(
                     )
                 else:
                     jscmd = [
+                        '[ -f .shipyard-jmtask.envlist ] && '
                         'export $(cat .shipyard-jmtask.envlist | xargs)',
                         'env | grep AZ_BATCH_ >> .shipyard-jmtask.envlist',
                     ]

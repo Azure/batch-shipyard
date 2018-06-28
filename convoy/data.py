@@ -238,7 +238,7 @@ def process_input_data(config, bxfile, spec, on_task=False):
             '-e "AZ_BATCH_NODE_STARTUP_DIR='
             '%AZ_BATCH_NODE_STARTUP_DIR%" '
         )
-        tfmcmd = 'C:\\batch-shipyard\\task_file_mover.cmd {{args}}'
+        tfmcmd = 'C:\\batch-shipyard\\task_file_mover.cmd'
         tfmpre = ''
         tfmpost = ''
     else:
@@ -250,7 +250,7 @@ def process_input_data(config, bxfile, spec, on_task=False):
             '-e "AZ_BATCH_NODE_STARTUP_DIR='
             '$AZ_BATCH_NODE_STARTUP_DIR" '
         )
-        tfmcmd = '/opt/batch-shipyard/task_file_mover.sh {{args}}'
+        tfmcmd = '/opt/batch-shipyard/task_file_mover.sh'
         tfmpre = 'set -f; '
         tfmpost = '; set +f'
     ret = []
@@ -276,7 +276,7 @@ def process_input_data(config, bxfile, spec, on_task=False):
                     args = cmds
                 ret.append(
                     ('{tfmpre}docker run --rm -t {tfmbind} {tfmimage} '
-                     '{tfmcmd}{tfmpost}').format(
+                     '{tfmcmd} {args}{tfmpost}').format(
                          tfmpre=tfmpre, tfmbind=tfmbind, tfmimage=tfmimage,
                          tfmcmd=tfmcmd, tfmpost=tfmpost,
                          args=' '.join(args))
