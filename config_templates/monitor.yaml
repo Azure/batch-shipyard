@@ -45,4 +45,4 @@ monitoring:
       port: 9090
       scrape_interval: 10s
     grafana:
-      additional_dashboards: null
+      additional_dashboards: {}

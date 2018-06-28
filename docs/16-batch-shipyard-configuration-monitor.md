@@ -46,7 +46,7 @@ monitoring:
       port: 9090
       scrape_interval: 10s
     grafana:
-      additional_dashboards: null
+      additional_dashboards: {}
 ```
 
 The `monitoring` property has the following members:
@@ -113,7 +113,8 @@ resource monitor.
       be exclusive to the resource monitor and cannot be shared with other
       resources, including Batch compute nodes. Batch compute nodes and storage
       clusters can co-exist on the same virtual network, but should be in
-      separate subnets.
+      separate subnets. It's recommended that the monitor VM be in a separate
+      subnet as well.
         * (required) `name` is the subnet name.
         * (required) `address_prefix` is the subnet address prefix to use for
           allocation of the resource monitor virtual machine to.
@@ -126,7 +127,7 @@ to the resource monitoring virtual machine.
     * (optional) `grafana` rule allows grafana HTTPS (443) server port to be
       exposed to the specified address prefix. Multiple address prefixes
       can be specified.
-    * (optional) `prometheus` rule allows the Prometheus server pot to be
+    * (optional) `prometheus` rule allows the Prometheus server port to be
       exposed to the specified address prefix. Multiple address prefixes
       can be specified.
     * (optional) `custom_inbound_rules` are custom inbound rules for other

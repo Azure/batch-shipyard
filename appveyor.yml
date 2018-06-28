@@ -226,7 +226,7 @@ deploy:
   description: 'Batch Shipyard release'
   auth_token:
     secure: +f4N6Qsv3HvJyii0Bs+8qBx3YS7+7FJUWbFSiAdEIUDubFQnNkJgFnBw0Ew2SLkv
-  artifact: /.*\.exe/,/.*\.exe.sha256/
+  artifact: /.*\.exe.*/
   draft: true
   prerelease: true
   force_update: true

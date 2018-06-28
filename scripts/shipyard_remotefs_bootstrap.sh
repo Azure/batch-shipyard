@@ -6,7 +6,7 @@ set -o pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # constants
-GLUSTER_VERSION=4.0
+GLUSTER_VERSION=4.1
 gluster_brick_mountpath=/gluster/brick
 gluster_brick_location=$gluster_brick_mountpath/brick0
 ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)

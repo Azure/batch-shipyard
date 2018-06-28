@@ -278,10 +278,12 @@ shipyard monitor add --poolid mybatchpool
 ```
 
 After the monitor is added, you can point your web browser at the
-monitoring resource FQDN emitted above. You can remove individual
-resources to monitor with the command `shipyard monitor remove`.
-Once you have no need for your monitoring resource, you can either suspend
-it or remove it altogether.
+monitoring resource FQDN emitted above. Note that there will be a delay
+between `monitor add` and the resource showing up in Grafana.
+
+You can remove individual resources to monitor with the command
+`monitor remove`. Once you have no need for your monitoring resource, you
+can either suspend it or destroy it entirely.
 
 ```shell
 # remove the prior Batch pool monitor

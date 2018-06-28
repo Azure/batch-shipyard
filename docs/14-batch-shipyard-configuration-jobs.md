@@ -448,7 +448,13 @@ to both compute node A and B. However, if `job-1`:`task-3` is then run on
 compute node A after `job-1`:`task-1`, then the `input_data` is not
 transferred again. This object currently supports `azure_batch` and
 `azure_storage` as members.
-    * `azure_batch` contains the following members:
+    * `azure_batch` will transfer data from a compute node that has run the
+      specified task. Note that there is no implied dependency. It is
+      recommended to specify a `depends_on` in order to ensure that the
+      specified task runs before this one (note that `depends_on` requires
+      that the upstream task must exist within the same job). Additionally,
+      the compute node which ran the task must not have been deleted or
+      resized out of the pool.
         * (required) `job_id` the job id of the task
         * (required) `task_id` the id of the task to fetch files from
         * (optional) `include` is an array of include filters
@@ -669,7 +675,13 @@ ingressed for this specific task. This object currently supports
 `azure_batch` and  `azure_storage` as members. Note for multi-instance
 tasks, transfer of `input_data` is only applied to the task running the
 application command.
-    * `azure_batch` contains the following members:
+    * `azure_batch` will transfer data from a compute node that has run the
+      specified task. Note that there is no implied dependency. It is
+      recommended to specify a `depends_on` in order to ensure that the
+      specified task runs before this one (note that `depends_on` requires
+      that the upstream task must exist within the same job). Additionally,
+      the compute node which ran the task must not have been deleted or
+      resized out of the pool.
         * (required) `job_id` the job id of the task
         * (required) `task_id` the id of the task to fetch files from
         * (optional) `include` is an array of include filters

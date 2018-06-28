@@ -1,7 +1,7 @@
 # Dockerfile for Azure/batch-shipyard Cargo (Windows)
 # Adapted from: https://github.com/StefanScherer/dockerfiles-windows/blob/master/python/Dockerfile
 
-FROM python:3.6.5-windowsservercore-ltsc2016
+FROM python:3.6.6-windowsservercore-ltsc2016
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 ENV chocolateyUseWindowsCompression false
@@ -30,8 +30,8 @@ COPY --from=0 /batch-shipyard/cargo /batch-shipyard
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-ENV PYTHON_VERSION 3.6.5
-ENV PYTHON_PIP_VERSION 9.0.3
+ENV PYTHON_VERSION 3.6.6
+ENV PYTHON_PIP_VERSION 10.0.1
 
 RUN $env:PATH = 'C:\Python;C:\Python\Scripts;{0}' -f $env:PATH ; \
     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\' -Name Path -Value $env:PATH ; \

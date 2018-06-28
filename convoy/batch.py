@@ -686,6 +686,8 @@ def _block_for_nodes_ready(
                     suppress_confirm=True)
                 unusable_delete = True
             else:
+                # list nodes to dump exact error
+                list_nodes(batch_client, config, pool_id=pool_id, nodes=nodes)
                 raise RuntimeError(
                     ('Unusable nodes detected in pool {}. You can delete '
                      'unusable nodes with "pool nodes del --all-unusable" '
