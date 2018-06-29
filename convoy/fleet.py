@@ -3303,15 +3303,19 @@ def action_pool_nodes_grls(
             batch_client, config, None, nodes=None, rls=rls)
 
 
-def action_pool_nodes_list(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
+def action_pool_nodes_list(batch_client, config, start_task_failed, unusable):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool) -> None
     """Action: Pool Nodes List
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param dict config: configuration dict
+    :param bool start_task_failed: nodes in start task failed
+    :param bool unusable: nodes in unusable
     """
     _check_batch_client(batch_client)
-    batch.list_nodes(batch_client, config)
+    batch.list_nodes(
+        batch_client, config, start_task_failed=start_task_failed,
+        unusable=unusable)
 
 
 def action_pool_nodes_zap(batch_client, config, remove, stop):

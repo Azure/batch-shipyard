@@ -1636,15 +1636,24 @@ def nodes_grls(ctx, no_generate_tunnel_script):
 
 
 @nodes.command('list')
+@click.option(
+    '--start-task-failed',
+    is_flag=True,
+    help='List nodes in start task failed state')
+@click.option(
+    '--unusable',
+    is_flag=True,
+    help='List nodes in unusable state')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def nodes_list(ctx):
+def nodes_list(ctx, start_task_failed, unusable):
     """List nodes in pool"""
     ctx.initialize_for_batch()
-    convoy.fleet.action_pool_nodes_list(ctx.batch_client, ctx.config)
+    convoy.fleet.action_pool_nodes_list(
+        ctx.batch_client, ctx.config, start_task_failed, unusable)
 
 
 @nodes.command('zap')

@@ -614,6 +614,11 @@ def _block_for_nodes_ready(
         # check if any nodes are in start task failed state
         if (any(node.state == batchmodels.ComputeNodeState.start_task_failed
                 for node in nodes)):
+            # list nodes to dump exact error
+            logger.debug('listing nodes in start task failed state')
+            list_nodes(
+                batch_client, config, pool_id=pool_id, nodes=nodes,
+                start_task_failed=True)
             # attempt reboot if enabled for potentially transient errors
             if pool_settings.reboot_on_start_task_failed:
                 for node in nodes:
@@ -656,7 +661,6 @@ def _block_for_nodes_ready(
                     'Detected start task failure, attempting to retrieve '
                     'files for error diagnosis from nodes')
                 _retrieve_outputs_from_failed_nodes(batch_client, config)
-                pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
                     ('Please inspect both the node status above and '
                      'files found within the {}/<nodes>/startup directory '
@@ -668,7 +672,11 @@ def _block_for_nodes_ready(
         # check if any nodes are in unusable state
         elif (any(node.state == batchmodels.ComputeNodeState.unusable
                   for node in nodes)):
-            pool_stats(batch_client, config, pool_id=pool_id)
+            # list nodes to dump exact error
+            logger.debug('listing nodes in unusable state')
+            list_nodes(
+                batch_client, config, pool_id=pool_id, nodes=nodes,
+                unusable=True)
             # upload diagnostics logs if specified
             if pool_settings.upload_diagnostics_logs_on_unusable:
                 for node in nodes:
@@ -686,8 +694,6 @@ def _block_for_nodes_ready(
                     suppress_confirm=True)
                 unusable_delete = True
             else:
-                # list nodes to dump exact error
-                list_nodes(batch_client, config, pool_id=pool_id, nodes=nodes)
                 raise RuntimeError(
                     ('Unusable nodes detected in pool {}. You can delete '
                      'unusable nodes with "pool nodes del --all-unusable" '
@@ -2752,23 +2758,58 @@ def terminate_tasks(
                         _wait_for_task_completion, batch_client, job_id, task)
 
 
-def list_nodes(batch_client, config, pool_id=None, nodes=None):
-    # type: (batch.BatchServiceClient, dict, str, list) -> None
+def list_nodes(
+        batch_client, config, pool_id=None, nodes=None,
+        start_task_failed=False, unusable=False):
+    # type: (batch.BatchServiceClient, dict, str, list, bool, bool) -> None
     """Get a list of nodes
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param dict config: configuration dict
     :param str pool_id: pool id
     :param list nodes: list of nodes
+    :param bool start_task_failed: nodes in start task failed
+    :param bool unusable: nodes in unusable
     """
     if util.is_none_or_empty(pool_id):
         pool_id = settings.pool_id(config)
     if settings.raw(config):
         util.print_raw_paged_output(batch_client.compute_node.list, pool_id)
         return
-    log = ['compute nodes for pool {}'.format(pool_id)]
+    log = [('compute nodes for pool {} (filters: start_task_failed={} '
+            'unusable={})').format(pool_id, start_task_failed, unusable)]
     if nodes is None:
-        nodes = batch_client.compute_node.list(pool_id)
+        # add filter if specified
+        filters = []
+        if start_task_failed:
+            filters.append('(state eq \'starttaskfailed\')')
+        if unusable:
+            filters.append('(state eq \'unusable\')')
+        nodes = batch_client.compute_node.list(
+            pool_id=pool_id,
+            compute_node_list_options=batchmodels.ComputeNodeListOptions(
+                filter=' or '.join(filters),
+            ) if util.is_not_empty(filters) else None,
+        )
+    else:
+        if start_task_failed and unusable:
+            nodes = [
+                node for node in nodes
+                if node.state ==
+                batchmodels.ComputeNodeState.start_task_failed or
+                node.state == batchmodels.ComputeNodeState.unusable
+            ]
+        elif start_task_failed:
+            nodes = [
+                node for node in nodes
+                if node.state ==
+                batchmodels.ComputeNodeState.start_task_failed
+            ]
+        elif unusable:
+            nodes = [
+                node for node in nodes
+                if node.state == batchmodels.ComputeNodeState.unusable
+            ]
     i = 0
     for node in nodes:
         i += 1
@@ -2837,7 +2878,9 @@ def list_nodes(batch_client, config, pool_id=None, nodes=None):
         ])
         log.extend(entry)
     if i == 0:
-        logger.error('no nodes exist for pool {}'.format(pool_id))
+        logger.error(
+            ('no nodes exist for pool {} (filters: start_task_failed={} '
+             'unusable={})').format(pool_id, start_task_failed, unusable))
     else:
         logger.info(os.linesep.join(log))
 

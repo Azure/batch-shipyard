@@ -728,6 +728,8 @@ in the specified pool
     * `--no-generate-tunnel-script` will disable generating an SSH tunnel
       script even if enabled in the pool configuration
 * `nodes list` will list all nodes in the specified pool
+    * `--start-task-failed` will list nodes in start task failed state
+    * `--unusable` will list nodes in unusable state
 * `nodes prune` will prune unused Docker data. This command requires a
 provisioned SSH user.
     * `--volumes` will also include volumes
