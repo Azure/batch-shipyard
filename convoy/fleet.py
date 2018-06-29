@@ -936,11 +936,11 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # TODO special exception for CentOS HPC 7.1, 7.3 and normal 7.3, 7.4
+    # backward compat for CentOS HPC 7.1, 7.3 and normal 7.4
     if publisher == 'openlogic':
         if ((offer == 'centos-hpc' and
                 (sku == '7.1' or sku == '7.3')) or
-                (offer == 'centos' and (sku == '7.3' or sku == '7.4'))):
+                (offer == 'centos' and sku == '7.4')):
             return ({
                 'publisher': publisher,
                 'offer': offer,
@@ -949,8 +949,7 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
             }, 'batch.node.centos 7')
     # support windows server semi annual
     if (publisher == 'microsoftwindowsserver' and
-            offer == 'windowsserversemiannual' and
-            sku == 'datacenter-core-1709-with-containers-smalldisk'):
+            offer == 'windowsserversemiannual' and 'with-containers' in sku):
         return ({
             'publisher': publisher,
             'offer': offer,
@@ -2422,7 +2421,8 @@ def _adjust_settings_for_pool_creation(config):
             if sku == '2016-datacenter-with-containers':
                 allowed = True
         elif offer == 'windowsserversemiannual':
-            if sku == 'datacenter-core-1709-with-containers-smalldisk':
+            if (sku == 'datacenter-core-1709-with-containers-smalldisk' or
+                    sku == 'datacenter-core-1803-with-containers-smalldisk'):
                 allowed = True
     # check if allowed for gpu (if gpu vm size)
     if allowed:

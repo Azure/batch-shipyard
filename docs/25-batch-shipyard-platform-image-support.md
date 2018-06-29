@@ -21,8 +21,8 @@ container pools.
 |-----------------------|-----------------------|-----|:---:|:-------:|:-----------:|:--------------:|
 | microsoft-azure-batch | centos-container      | 7-4 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |    X    |      X      |                |
-| OpenLogic             | CentOS                | 7.3 |  X  |         |             |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
+| OpenLogic             | CentOS                | 7.5 |  X  |         |             |                |
 | OpenLogic             | CentOS-HPC            | 7.1 |     |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.3 |  X  |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |    X    |             |        X       |
@@ -52,6 +52,7 @@ SLES is not supported at this time.
 |------------------------|-------------------------|------------------------------------------------|:---:|:-------:|:-----------:|:--------------:|
 | MicrosoftWindowsServer | WindowsServer           | 2016-Datacenter-with-Containers                |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1709-with-Containers-smalldisk |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1803-with-Containers-smalldisk |     |         |      X      |                |
 
 ## Notes
 1. IB/RDMA is only supported for this host OS with a custom image. Please

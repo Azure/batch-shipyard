@@ -885,12 +885,7 @@ def _populate_pool_vm_configuration(config):
         offer = conf['offer'].lower()
         sku = str(conf['sku']).lower()
         # auto convert windows native if detected
-        if ((publisher == 'microsoftwindowsserver' and
-             offer == 'windowsserver' and
-             sku == '2016-datacenter-with-containers') or
-                (publisher == 'microsoftwindowsserver' and
-                 offer == 'windowsserversemiannual' and
-                 sku == 'datacenter-core-1709-with-containers-smalldisk')):
+        if publisher == 'microsoftwindowsserver':
             vm_config = PoolVmPlatformImageSettings(
                 publisher=publisher,
                 offer=offer,
