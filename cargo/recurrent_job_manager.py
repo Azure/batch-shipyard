@@ -127,47 +127,57 @@ def _submit_task_sub_collection(
     :param list all_tasks: list of all task ids
     :param dict task_map: task collection map to add
     """
-    chunk = all_tasks[start:end]
-    logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
-        len(chunk), start, end - 1, job_id))
-    try:
-        results = batch_client.task.add_collection(job_id, chunk)
-    except batchmodels.BatchErrorException as e:
-        if e.error.code == 'RequestBodyTooLarge':
-            # collection contents are too large, reduce and retry
-            if slice == 1:
-                raise
-            slice = slice >> 1
-            if slice < 1:
-                slice = 1
-            logger.error(
-                ('task collection slice was too big, retrying with '
-                 'slice={}').format(slice))
-    else:
-        # go through result and retry just failed tasks
-        while True:
-            retry = []
-            for result in results.value:
-                if result.status == batchmodels.TaskAddStatus.client_error:
-                    de = [
-                        '{}: {}'.format(x.key, x.value)
-                        for x in result.error.values
-                    ]
-                    logger.error(
-                        ('skipping retry of adding task {} as it '
-                         'returned a client error (code={} message={} {}) '
-                         'for job {}').format(
-                             result.task_id, result.error.code,
-                             result.error.message, ' '.join(de), job_id))
-                elif (result.status ==
-                      batchmodels.TaskAddStatus.server_error):
-                    retry.append(task_map[result.task_id])
-            if len(retry) > 0:
-                logger.debug('retrying adding {} tasks to job {}'.format(
-                    len(retry), job_id))
-                results = batch_client.task.add_collection(job_id, retry)
-            else:
-                break
+    initial_slice = slice
+    while True:
+        chunk_end = start + slice
+        if chunk_end > end:
+            chunk_end = end
+        chunk = all_tasks[start:chunk_end]
+        logger.debug('submitting {} tasks ({} -> {}) to job {}'.format(
+            len(chunk), start, chunk_end - 1, job_id))
+        try:
+            results = batch_client.task.add_collection(job_id, chunk)
+        except batchmodels.BatchErrorException as e:
+            if e.error.code == 'RequestBodyTooLarge':
+                # collection contents are too large, reduce and retry
+                if slice == 1:
+                    raise
+                slice = slice >> 1
+                if slice < 1:
+                    slice = 1
+                logger.error(
+                    ('task collection slice was too big, retrying with '
+                     'slice={}').format(slice))
+                continue
+        else:
+            # go through result and retry just failed tasks
+            while True:
+                retry = []
+                for result in results.value:
+                    if result.status == batchmodels.TaskAddStatus.client_error:
+                        de = [
+                            '{}: {}'.format(x.key, x.value)
+                            for x in result.error.values
+                        ]
+                        logger.error(
+                            ('skipping retry of adding task {} as it '
+                             'returned a client error (code={} message={} {}) '
+                             'for job {}').format(
+                                 result.task_id, result.error.code,
+                                 result.error.message, ' '.join(de), job_id))
+                    elif (result.status ==
+                          batchmodels.TaskAddStatus.server_error):
+                        retry.append(task_map[result.task_id])
+                if len(retry) > 0:
+                    logger.debug('retrying adding {} tasks to job {}'.format(
+                        len(retry), job_id))
+                    results = batch_client.task.add_collection(job_id, retry)
+                else:
+                    break
+        if chunk_end == end:
+            break
+        start = chunk_end
+        slice = initial_slice
 
 
 def _add_task_collection(batch_client, job_id, task_map):
@@ -188,7 +198,7 @@ def _add_task_collection(batch_client, job_id, task_map):
                 end = len(all_tasks)
             executor.submit(
                 _submit_task_sub_collection, batch_client, job_id, start, end,
-                slice, all_tasks, task_map)
+                end - start, all_tasks, task_map)
     logger.info('submitted all {} tasks to job {}'.format(
         len(task_map), job_id))
 
