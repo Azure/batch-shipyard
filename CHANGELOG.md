@@ -2,31 +2,71 @@
 
 ## [Unreleased]
 
+## [3.5.0] - 2018-06-29
+### Added
+- CentOS 7.5 and Microsoft Windows Server semi-annual
+`datacenter-core-1803-with-containers-smalldisk` host support. Please see
+the platform image support doc for more information.
+- `fallback_registry` to improve robustness during provisioning when Docker
+Hub has an outage or is degraded
+([#215](https://github.com/Azure/batch-shipyard/issues/215), [#217](https://github.com/Azure/batch-shipyard/issues/217))
+    - `misc mirror-images` command to help mirror Batch Shipyard system
+      images to the desigated fallback registry
+- Support for XFS filesystem in storage clusters ([#218](https://github.com/Azure/batch-shipyard/issues/219))
+- Experimental support for disk array RAID expansion for mdadm-based devices
+via `fs cluster expand`
+- Option to auto-upload Batch compute node service logs on unusable ([#216](https://github.com/Azure/batch-shipyard/issues/216))
+- Microsoft Azure Distributed Linear Learner recipe ([#195](https://github.com/Azure/batch-shipyard/pull/195))
+
 ### Changed
-- Updated blobxfer to 1.3.0
+- `pool nodes list` can now filter nodes with start task failed and/or
+unusable states
+- `diag logs upload` command can generate a read only SAS for the target
+container via `--generate-sas`
+- `storage clear` and `storage del` now allow multiple `--poolid` arguments
+along with `--diagnostics-logs` to clear/delete diagnostics logs containers
+- `storage sas create` now allows container and file share level SAS creation
+along with `--list` permission now available as an option
+- Pools failing to allocate with unusable or start task failed nodes will now
+dump a listing of problematic nodes detailing the error
+- Updated RemoteFS storage clusters using GlusterFS and Ubuntu/Debian-based
+GlusterFS-on-compute to 4.1
+- Updated blobxfer to 1.3.1
+- Updated Singularity to 2.5.1
 - Updated dependencies
+
+### Fixed
+- GlusterFS on compute provisioning ([#220](https://github.com/Azure/batch-shipyard/issues/220))
+- Regression in KeyVault credential conf loading ([#214](https://github.com/Azure/batch-shipyard/issues/214))
+- Task file mover command arg left unpopulated ([#29](https://github.com/Azure/batch-shipyard/issues/29))
+- Recurring job manager failing to unpickle tasks with dependencies ([#221](https://github.com/Azure/batch-shipyard/issues/221))
+- Task add regression when collections are too large from individual slices
+
+### Removed
+- CentOS 7.3 host support
 
 ## [3.5.0b3] - 2018-06-13
 ### Changed
 - All supported platform images support blobfuse, including native mode
 
 ### Fixed
-- blobfuse check preventing valid pool provisioning (#213)
+- blobfuse check preventing valid pool provisioning ([#213](https://github.com/Azure/batch-shipyard/issues/213))
 - Pool resize not adding SSH users if keys are specified
 
 ## [3.5.0b2] - 2018-06-12
 ### Added
-- Support for Prometheus monitoring and Grafana visualization (#205). Please
-see the monitoring doc and
+- Support for Prometheus monitoring and Grafana visualization
+([#205](https://github.com/Azure/batch-shipyard/issues/205)). Please see the
+monitoring doc and
 [guide](https://github.com/Azure/batch-shipyard/blob/master/docs/66-batch-shipyard-resource-monitoring.md)
 for more information.
 - Support for specifying a maximum increment per autoscale evaluation and
-the ability to define weekdays and workhours (#210)
+the ability to define weekdays and workhours ([#210](https://github.com/Azure/batch-shipyard/issues/210))
 - Support for native container support Marketplace platform images. Please
-see the platform image support doc for more information. (#204)
-- Allow configuration to enable SSH users to access Docker daemon (#206)
-- Support for GPUs on CentOS 7.4 (#199)
-- Support for CentOS-HPC 7.4 (#184)
+see the platform image support doc for more information. ([#204](https://github.com/Azure/batch-shipyard/issues/204))
+- Allow configuration to enable SSH users to access Docker daemon ([#206](https://github.com/Azure/batch-shipyard/issues/206))
+- Support for GPUs on CentOS 7.4 ([#199](https://github.com/Azure/batch-shipyard/issues/199))
+- Support for CentOS-HPC 7.4 ([#184](https://github.com/Azure/batch-shipyard/issues/184))
 
 ### Changed
 - **Breaking Change:** You can no longer specify both an `account_key`
@@ -34,10 +74,10 @@ and `aad` with the `batch` section of the credentials config. The prior
 behavior was that `account_key` would take precedence over `aad`. Now
 these options are mutually exclusive. This will now break configurations
 that specified `aad` at the global level while having a shared `account_key`
-at the `batch` level. (#197)
+at the `batch` level. ([#197](https://github.com/Azure/batch-shipyard/issues/197))
 - **Breaking Change:** `install.sh` now installs into a virtual env by
 default. Use the `-u` switch to retain the old (non-recommended)
-default behavior. (#200)
+default behavior. ([#200](https://github.com/Azure/batch-shipyard/issues/200))
 - GlusterFS for RemoteFS and gluster on compute updated to 4.0.
 - Update NC driver to 396.26 supporting CUDA 9.2
 - blobxfer updated to 1.2.1
@@ -46,43 +86,44 @@ default behavior. (#200)
 - Errant credentials check for configuration from commandline which affected
 config load from KeyVault
 - Blobxfer extra options regression
-- Cache container/file share creations for data egress (#211)
+- Cache container/file share creations for data egress ([#211](https://github.com/Azure/batch-shipyard/issues/211))
 
 ## [3.5.0b1] - 2018-05-02
 ### Added
 - Output to JSON for a subset of commands via `--raw` commmand line switch.
 JSON output is directed to stdout. Please see the usage doc for which commands
-are supported and important information regarding output stability. (#177)
+are supported and important information regarding output stability. ([#177](https://github.com/Azure/batch-shipyard/issues/177))
 - Allow AAD on the `storage` section in the credentials configuration.
-Please see the credential doc for more information. (#179)
+Please see the credential doc for more information. ([#179](https://github.com/Azure/batch-shipyard/issues/179))
 - Boot diagnostics are now enabled for all VMs provisioned for RemoteFS
-clusters. This also enables serial console support in the portal. (#193)
+clusters. This also enables serial console support in the portal. ([#193](https://github.com/Azure/batch-shipyard/issues/193))
 - `product_iterables` task factory support. Please see the task factory
-doc for more information. (#187)
+doc for more information. ([#187](https://github.com/Azure/batch-shipyard/issues/187))
 - `default_working_dir` option as the job and task-level to set the
 default working directory when a container executes as a task. Please
-see the jobs doc for more information. (#190)
+see the jobs doc for more information. ([#190](https://github.com/Azure/batch-shipyard/issues/190))
 - `--no-generate-tunnel-script` option to `pool nodes grls`
 
 ### Changed
 - Greatly improve throughput speed of many commands that internally iterated
-sequences of actions (#188)
-- RemoteFS clusters provisioned using Ubuntu 18.04-LTS (#161, #185)
+sequences of actions ([#188](https://github.com/Azure/batch-shipyard/issues/188))
+- RemoteFS clusters provisioned using Ubuntu 18.04-LTS
+([#161](https://github.com/Azure/batch-shipyard/issues/161), [#185](https://github.com/Azure/batch-shipyard/issues/185))
 - Update Nvidia NC driver to 390.46 supporting CUDA 9.1
 - Update Nvidia NV driver to 390.42.
 - Singularity updated to 2.5.0
 - blobxfer updated to 1.2.0
 - Docker CE updated to 18.03.1
 - Update dependencies to latest
-- Unify nodeprep scripts (#176)
-- Integrate shellcheck (#177)
+- Unify nodeprep scripts ([#176](https://github.com/Azure/batch-shipyard/issues/176))
+- Integrate shellcheck ([#177](https://github.com/Azure/batch-shipyard/issues/177))
 - Extend retry policy for all clients
 - Add Windows file version info and icon to CLI binary
 
 ### Fixed
-- Kernel unattended upgrades causes GPU jobs to fail on reboot (#174)
+- Kernel unattended upgrades causes GPU jobs to fail on reboot ([#174](https://github.com/Azure/batch-shipyard/issues/174))
 - Task submission speed regression when using task factory or large task
-arrays with unnamed tasks (#183)
+arrays with unnamed tasks ([#183](https://github.com/Azure/batch-shipyard/issues/183))
 - Fix determinism in cardinality of results from `pool nodes grls`
 - Env var export for tasks without env vars
 - Ensure Nvidia persistence mode on reboots
@@ -90,7 +131,7 @@ arrays with unnamed tasks (#183)
 - Site extension broken install issues (and fallback manual recovery)
 
 ### Removed
-- Ubuntu 14.04 host support (#164)
+- Ubuntu 14.04 host support ([#164](https://github.com/Azure/batch-shipyard/issues/164))
 
 ## [3.4.0] - 2018-03-26
 ### Added
@@ -1307,7 +1348,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0...HEAD
+[3.5.0]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...3.5.0
 [3.5.0b3]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...3.5.0b3
 [3.5.0b2]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...3.5.0b2
 [3.5.0b1]: https://github.com/Azure/batch-shipyard/compare/3.4.0...3.5.0b1
