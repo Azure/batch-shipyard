@@ -4,10 +4,13 @@
 [![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:latest-cli.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
 
 # Batch Shipyard
+<img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.png" alt="dashboard" width="1024" />
+
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
-provision and execute container-based batch processing and HPC workloads on
-[Azure Batch](https://azure.microsoft.com/services/batch/) compute
-pools. Batch Shipyard supports both [Docker](https://www.docker.com) and
+provision, execute, and monitor container-based batch processing and HPC
+workloads on
+[Azure Batch](https://azure.microsoft.com/services/batch/). Batch Shipyard
+supports both [Docker](https://www.docker.com) and
 [Singularity](http://singularity.lbl.gov/) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your containers with easy-to-understand configuration files. All Azure
@@ -23,21 +26,17 @@ in Azure, independent of any integrated Azure Batch functionality.
 Azure Batch compute nodes
 * Automated deployment of required Docker and/or Singularity images to
 compute nodes
-* Accelerated Docker and Singularity image deployment at scale to compute
-pools consisting of a large number of VMs via private peer-to-peer
-distribution of container images among the compute nodes
 * Mixed mode support for Docker and Singularity: run your Docker and
 Singularity containers within the same job, side-by-side or even concurrently
 * Comprehensive data movement support: move data easily between locally
 accessible storage systems, remote filesystems, Azure Blob or File Storage,
 and compute nodes
-* Support for Docker Registries including
-[Azure Container Registry](https://azure.microsoft.com/services/container-registry/)
-and other Internet-accessible public and private registries
-* Support for the [Singularity Hub](https://singularity-hub.org/) Container
-Registry
 * Support for serverless execution binding with
 [Azure Functions](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
+* Support for Docker Registries including
+[Azure Container Registry](https://azure.microsoft.com/services/container-registry/),
+other Internet-accessible public and private registries, and support for
+the [Singularity Hub](https://singularity-hub.org/) Container Registry
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
 with integration to auto-link these filesystems to compute nodes with
 support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and
@@ -49,6 +48,10 @@ via [blobfuse](https://github.com/Azure/azure-storage-fuse),
 [GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
 (which can act as a distributed local file system/cache), and custom Linux
 mount support (fstab)
+* Automated, integrated
+[resource monitoring](http://batch-shipyard.readthedocs.io/en/latest/66-batch-shipyard-resource-monitoring/)
+with [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/)
+for Batch pools and RemoteFS storage clusters
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
@@ -89,6 +92,9 @@ optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 on compliant Windows compute node pools with the ability to activate
 [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
 if applicable
+* Accelerated Docker and Singularity image deployment at scale to compute
+pools consisting of a large number of VMs via private peer-to-peer
+distribution of container images among the compute nodes
 
 ## Installation
 ### Azure Cloud Shell
@@ -118,7 +124,7 @@ section for various sample container workloads using Azure Batch and Batch
 Shipyard.
 
 ## Batch Shipyard Compute Node Host OS Support
-Batch Shipyard is currently compatible with most Azure Batch supported
+Batch Shipyard is currently compatible with popular Azure Batch supported
 [Marketplace Linux VMs](https://docs.microsoft.com/azure/virtual-machines/linux/endorsed-distros),
 [compliant Linux custom images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/),
 and native Azure Batch
