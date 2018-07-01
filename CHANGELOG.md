@@ -11,7 +11,7 @@ the platform image support doc for more information.
 Hub has an outage or is degraded
 ([#215](https://github.com/Azure/batch-shipyard/issues/215), [#217](https://github.com/Azure/batch-shipyard/issues/217))
     - `misc mirror-images` command to help mirror Batch Shipyard system
-      images to the desigated fallback registry
+      images to the designated fallback registry
 - Support for XFS filesystem in storage clusters ([#218](https://github.com/Azure/batch-shipyard/issues/219))
 - Experimental support for disk array RAID expansion for mdadm-based devices
 via `fs cluster expand`

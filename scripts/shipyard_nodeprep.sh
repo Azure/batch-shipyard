@@ -754,11 +754,11 @@ docker_pull_image() {
         # non-zero exit code: check if pull output has toomanyrequests,
         # connection resets, or image config error
         local tmr
-        tmr=$(grep 'toomanyrequests' <<<"$pull_out")
+        tmr=$(grep -i 'toomanyrequests' <<<"$pull_out")
         local crbp
-        crbp=$(grep 'connection reset by peer' <<<"$pull_out")
+        crbp=$(grep -i 'connection reset by peer' <<<"$pull_out")
         local epic
-        epic=$(grep 'error pulling image configuration' <<<"$pull_out")
+        epic=$(grep -i 'error pulling image configuration' <<<"$pull_out")
         local erb
         erb=$(grep -i 'error parsing HTTP 404 response body' <<<"$pull_out")
         local uhs
@@ -777,8 +777,13 @@ docker_pull_image() {
         sleep $((RANDOM % 5 + 1))s
     done
     set -e
-    if [ $rc -ne 0 ] && [ $try_fallback -eq 1 ]; then
-        docker_pull_image_fallback "$image"
+    if [ $rc -ne 0 ]; then
+        if [ $try_fallback -eq 1 ]; then
+            docker_pull_image_fallback "$image"
+        else
+            log ERROR "No fallback registry specified, terminating"
+            exit $rc
+        fi
     fi
 }
 
