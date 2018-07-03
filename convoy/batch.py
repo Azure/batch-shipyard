@@ -1218,7 +1218,7 @@ def list_pools(batch_client, config):
                 pool.allocation_state_transition_time),
         ]
         entry.extend(errors)
-        if len(pool.metadata) > 0:
+        if util.is_not_empty(pool.metadata):
             entry.append('  * metadata:')
             for md in pool.metadata:
                 entry.append('    * {}: {}'.format(md.name, md.value))
@@ -1431,10 +1431,11 @@ def pool_stats(batch_client, config, pool_id=None):
         total_running_tasks / runnable_task_slots
     )
     version = 'N/A'
-    for md in pool.metadata:
-        if md.name == settings.get_metadata_version_name():
-            version = md.value
-            break
+    if util.is_not_empty(pool.metadata):
+        for md in pool.metadata:
+            if md.name == settings.get_metadata_version_name():
+                version = md.value
+                break
     log = [
         '* Batch Shipyard version: {}'.format(version),
         '* Total nodes: {}'.format(
@@ -3449,7 +3450,7 @@ def log_job(job):
         '  * duration: {}'.format(duration),
         '  * terminate reason: {}'.format(tr),
     ])
-    if len(job.metadata) > 0:
+    if util.is_not_empty(job.metadata):
         log.append('  * metadata:')
         for md in job.metadata:
             log.append('    * {}: {}'.format(md.name, md.value))
