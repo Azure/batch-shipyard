@@ -364,9 +364,13 @@ def _create_virtual_machine_extension(
         smb = None
     # construct bootstrap command
     if rfs.storage_cluster.prometheus.ne_enabled:
+        if util.is_not_empty(rfs.storage_cluster.prometheus.ne_options):
+            pneo = ','.join(rfs.storage_cluster.prometheus.ne_options)
+        else:
+            pneo = ''
         promopt = ' -e \'{},{}\''.format(
-            rfs.storage_cluster.prometheus.ne_port,
-            ','.join(rfs.storage_cluster.prometheus.ne_options))
+            rfs.storage_cluster.prometheus.ne_port, pneo)
+        del pneo
     else:
         promopt = ''
     cmd = './{bsf} {c}{d}{e}{f}{i}{m}{n}{o}{p}{r}{s}{t}'.format(
