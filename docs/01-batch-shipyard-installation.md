@@ -328,7 +328,7 @@ If using the [alfpark/batch-shipyard-singularity:cli](https://www.singularity-hu
 Singularity image, then all of the required software is bundled in the image
 itself, however, you will need an installation of Singularity on your
 machine. More information on installing Singularity to your local machine
-can be found [here](http://singularity.lbl.gov/).
+can be found [here](https://www.sylabs.io/singularity/).
 
 To install:
 ```shell

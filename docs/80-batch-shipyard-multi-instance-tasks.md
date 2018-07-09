@@ -1,7 +1,7 @@
 # Multi-Instance Tasks and Batch Shipyard
 The focus of this article is to explain how multi-instance tasks work in
 the context of Azure Batch, Containers in both the
-[Docker](https://www.docker.com/) and [Singularity](http://singularity.lbl.gov/)
+[Docker](https://www.docker.com/) and [Singularity](https://www.sylabs.io)
 contexts, and Batch Shipyard.
 
 ## Overview
@@ -30,7 +30,7 @@ Once all of the nodes have been contacted and initialization of the MPI runtime
 is complete across all of the nodes, then the MPI application can execute.
 
 ## Singularity Containers and MPI
-[Singularity](http://singularity.lbl.gov/) containers are built for common
+[Singularity](https://www.sylabs.io) containers are built for common
 HPC scenarios. Thus, executing an MPI application works seamlessly with
 the host - as if you are executing any other program.
 

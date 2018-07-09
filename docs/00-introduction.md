@@ -94,7 +94,7 @@ Further in-depth treatment of Docker can be found
 [here](https://docs.docker.com/engine/understanding-docker/).
 
 ## Singularity
-[Singularity](http://singularity.lbl.gov/) is an implementation of operating
+[Singularity](https://www.sylabs.io) is an implementation of operating
 system-level virtualization similar to Docker, but is tailored for execution
 on shared HPC infrastructure typically found on-premises and supercomputing
 installations. Singularity provides environment encapsulation and does not

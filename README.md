@@ -11,7 +11,7 @@ provision, execute, and monitor container-based batch processing and HPC
 workloads on
 [Azure Batch](https://azure.microsoft.com/services/batch/). Batch Shipyard
 supports both [Docker](https://www.docker.com) and
-[Singularity](http://singularity.lbl.gov/) containers! No experience with the
+[Singularity](https://www.sylabs.io) containers! No experience with the
 [Azure Batch SDK](https://github.com/Azure/azure-batch-samples) is needed; run
 your containers with easy-to-understand configuration files. All Azure
 regions are supported, including non-public Azure regions.
@@ -22,7 +22,7 @@ in Azure, independent of any integrated Azure Batch functionality.
 
 ## Major Features
 * Automated [Docker Host Engine](https://www.docker.com) and
-[Singularity](http://singularity.lbl.gov/) installations tuned for
+[Singularity](https://www.sylabs.io) installations tuned for
 Azure Batch compute nodes
 * Automated deployment of required Docker and/or Singularity images to
 compute nodes
