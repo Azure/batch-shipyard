@@ -68,20 +68,20 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '396.26/NVIDIA-Linux-x86_64-396.26-diagnostic.run'
+            '396.37/NVIDIA-Linux-x86_64-396.37.run'
         ),
         'sha256': (
-            '1575fc9b5b328bd93f78f6c914a29520172f17500d02700ce3cd650ac5c70a05'
+            'cdd8bfb6fb5ba99bfffae4c454d7b278e2039b30c0b3f6889d18179c0f21acbe'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '396.26/NVIDIA-Linux-x86_64-396.26-diagnostic.run'
+            '396.37/NVIDIA-Linux-x86_64-396.37.run'
         ),
         'sha256': (
-            '1575fc9b5b328bd93f78f6c914a29520172f17500d02700ce3cd650ac5c70a05'
+            'cdd8bfb6fb5ba99bfffae4c454d7b278e2039b30c0b3f6889d18179c0f21acbe'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
@@ -89,12 +89,12 @@ _NVIDIA_DRIVER = {
         # https://go.microsoft.com/fwlink/?linkid=849941
         'url': (
             'https://gpudrivers.file.core.windows.net/nvinstance/Linux/'
-            'NVIDIA-Linux-x86_64-390.42-grid.run?st=2018-04-03T01%3A34%3A00Z&'
+            'NVIDIA-Linux-x86_64-390.75-grid.run?st=2018-04-03T01%3A34%3A00Z&'
             'se=2019-04-04T01%3A34%3A00Z&sp=rl&sv=2017-04-17&sr=s&'
             'sig=l3%2FQLZdtT5NL6BQTSOL5KsW%2FiKJK1Ly5iIi2PXpoaDU%3D'
         ),
         'sha256': (
-            'de5bc9e5fc3683a231e5ae31ad6b148e54bf093f0f2186c21bb3f42b34985cf4'
+            '7784d69902b3de5d8ab671897d5ab7d291651fe2efd399f921db86d7dab615b7'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -120,10 +120,10 @@ _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
-        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5-1.tar.gz'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5-2.tar.gz'
     ),
     'sha256': (
-        'cedf8b2621ebc81fba4a324f93e14c56e946cb65985e3f51de6a6644a9dc62df'
+        '4a9c84e2ce1f367481151591302d0dcbf1004e4a3d86f4f818185a15f135504e'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',

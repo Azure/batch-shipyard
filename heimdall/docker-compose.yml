@@ -41,7 +41,7 @@ services:
       - /var/batch-shipyard/letsencrypt/etc:/etc/letsencrypt
 
   prometheus:
-    image: prom/prometheus:v2.3.1
+    image: prom/prometheus:v2.3.2
     container_name: prometheus
     restart: unless-stopped
     ports:
@@ -60,7 +60,7 @@ services:
       - "--web.enable-lifecycle"
 
   grafana:
-    image: grafana/grafana:5.2.0
+    image: grafana/grafana:5.2.1
     container_name: grafana
     restart: unless-stopped
     ports:
