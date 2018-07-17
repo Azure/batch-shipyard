@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [3.5.1] - 2018-07-17
+### Changed
+- Update GlusterFS on Compute on CentOS to 4.1
+- Updated NC/ND Nvidia driver to 396.37
+- Updated NV Nvidia driver to 390.75
+- Updated LIS, Prometheus and Grafana
+- Updated dependencies
+
+### Fixed
+- Properly terminate image pull without fallback on failure
+- Fix pool metadata dump check logic
+- Fix storage cluster provisioning with Node Exporter options
+
 ## [3.5.0] - 2018-06-29
 ### Added
 - CentOS 7.5 and Microsoft Windows Server semi-annual
@@ -1348,7 +1361,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.1...HEAD
+[3.5.1]: https://github.com/Azure/batch-shipyard/compare/3.5.0...3.5.1
 [3.5.0]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...3.5.0
 [3.5.0b3]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...3.5.0b3
 [3.5.0b2]: https://github.com/Azure/batch-shipyard/compare/3.5.0b1...3.5.0b2
