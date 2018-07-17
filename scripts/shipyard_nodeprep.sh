@@ -1180,7 +1180,7 @@ install_cascade_dependencies() {
     rm -f get-pip.py
     pip3 install --no-cache-dir --upgrade wheel setuptools
     pip3 install --no-cache-dir \
-        azure-cosmosdb-table==1.0.3 azure-storage-common==1.3.0 azure-storage-blob==1.3.0
+        azure-cosmosdb-table==1.0.4 azure-storage-blob==1.3.1
     # install cascade dependencies
     if [ $p2penabled -eq 1 ]; then
         install_packages python3-libtorrent pigz
