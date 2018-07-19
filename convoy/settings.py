@@ -976,6 +976,17 @@ def _populate_pool_vm_configuration(config):
                     license_type=None,
                 )
             elif (vm_config.publisher == 'openlogic' and
+                  vm_config.offer == 'centos' and
+                  vm_config.sku == '7.5'):
+                vm_config = PoolVmPlatformImageSettings(
+                    publisher='microsoft-azure-batch',
+                    offer='centos-container',
+                    sku='7-5',
+                    version='latest',
+                    native=True,
+                    license_type=None,
+                )
+            elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer == 'centos-hpc' and
                   vm_config.sku == '7.4'):
                 vm_config = PoolVmPlatformImageSettings(

@@ -20,9 +20,10 @@ container pools.
 | Publisher             | Offer                 | Sku | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------------------|-----------------------|-----|:---:|:-------:|:-----------:|:--------------:|
 | microsoft-azure-batch | centos-container      | 7-4 |  X  |         |      X      |                |
+| microsoft-azure-batch | centos-container      | 7-5 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |    X    |      X      |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
-| OpenLogic             | CentOS                | 7.5 |  X  |         |             |                |
+| OpenLogic             | CentOS                | 7.5 |  X  |         |             |        X       |
 | OpenLogic             | CentOS-HPC            | 7.1 |     |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.3 |  X  |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |    X    |             |        X       |
