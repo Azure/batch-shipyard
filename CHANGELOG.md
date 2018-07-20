@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.5.2] - 2018-07-20
+### Fixed
+- Non-native pool allocation on N-series VMs failing due to unpinned
+dependent package for nvidia-docker2 ([#231](https://github.com/Azure/batch-shipyard/issues/231))
+
 ## [3.5.1] - 2018-07-17
 ### Changed
 - Update GlusterFS on Compute on CentOS to 4.1
@@ -1361,7 +1366,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.2...HEAD
+[3.5.2]: https://github.com/Azure/batch-shipyard/compare/3.5.1...3.5.2
 [3.5.1]: https://github.com/Azure/batch-shipyard/compare/3.5.0...3.5.1
 [3.5.0]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...3.5.0
 [3.5.0b3]: https://github.com/Azure/batch-shipyard/compare/3.5.0b2...3.5.0b3
