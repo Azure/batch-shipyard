@@ -6,6 +6,8 @@ about: Create a report to help us improve
 
 #### Problem Description
 
+#### Batch Shipyard Version
+
 #### Steps to Reproduce
 
 #### Expected Results
