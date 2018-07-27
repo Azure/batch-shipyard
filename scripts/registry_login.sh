@@ -26,10 +26,10 @@ if [ ! -z "$DOCKER_LOGIN_PASSWORD" ]; then
     IFS=',' read -ra users <<< "${DOCKER_LOGIN_USERNAME}"
     IFS=',' read -ra passwords <<< "${DOCKER_LOGIN_PASSWORD}"
     # loop through each server and login
-    nservers=${#servers[@]}
-    if [ "$nservers" -ge 1 ]; then
-        log DEBUG "Logging into $nservers Docker registry servers..."
-        for i in $(seq 0 $((nservers-1))); do
+    nusers=${#users[@]}
+    if [ "$nusers" -ge 1 ]; then
+        log DEBUG "Logging into $nusers Docker registry servers..."
+        for i in $(seq 0 $((nusers-1))); do
             docker login --username "${users[$i]}" --password "${passwords[$i]}" "${servers[$i]}"
         done
         log INFO "Docker registry logins completed."
@@ -45,11 +45,11 @@ if [ ! -z "$SINGULARITY_LOGIN_PASSWORD" ]; then
     IFS=',' read -ra users <<< "${SINGULARITY_LOGIN_USERNAME}"
     IFS=',' read -ra passwords <<< "${SINGULARITY_LOGIN_PASSWORD}"
     # loop through each server and login
-    nservers=${#servers[@]}
-    if [ "$nservers" -ge 1 ]; then
-        log DEBUG "Creating export script into $nservers Singularity registry servers..."
+    nusers=${#users[@]}
+    if [ "$nusers" -ge 1 ]; then
+        log DEBUG "Creating export script into $nusers Singularity registry servers..."
         touch singularity-registry-login
-        for i in $(seq 0 $((nservers-1))); do
+        for i in $(seq 0 $((nusers-1))); do
 cat >> singularity-login << EOF
 SINGULARITY_DOCKER_USERNAME=${users[$i]}
 SINGULARITY_DOCKER_PASSWORD=${passwords[$i]}
