@@ -98,6 +98,9 @@ NodeStateCountCollection = collections.namedtuple(
         'waiting_for_start_task',
     ]
 )
+_ENV_EXCLUDE_LINUX = frozenset((
+    '_', 'HOME', 'HOSTNAME', 'PATH', 'PWD', 'SHLVL', 'USER',
+))
 
 
 def _max_workers(iterable):
@@ -4078,6 +4081,21 @@ def _add_task_collection(batch_client, job_id, task_map):
         len(task_map), job_id))
 
 
+def _generate_non_native_env_dump(env_vars, envfile):
+    # type: (dict, str) -> str
+    """Generate env dump command for non-native tasks
+    :param dict env_vars: env vars
+    :param str envfile: env file
+    """
+    exclude = [
+        '^{}='.format(x) for x in _ENV_EXCLUDE_LINUX if x not in env_vars
+    ]
+    if util.is_not_empty(exclude):
+        return 'env | grep -vE "{}" > {}'.format('|'.join(exclude), envfile)
+    else:
+        return 'env | {}'.format(envfile)
+
+
 def _construct_task(
         batch_client, blob_client, keyvault_client, config, bxfile,
         bs, native, is_windows, tempdisk, allow_run_on_missing,
@@ -4147,50 +4165,28 @@ def _construct_task(
     # merge job and task env vars
     env_vars = util.merge_dict(job_env_vars, task_env_vars)
     del task_env_vars
-    # get and create env var file
-    sas_urls = None
-    if util.is_not_empty(env_vars) or task.infiniband or task.gpu:
-        envfileloc = '{}taskrf-{}/{}{}'.format(
-            bs.storage_entity_prefix, job_id, task.id, task.envfile)
-        f = tempfile.NamedTemporaryFile(mode='wb', delete=False)
-        fname = f.name
-        try:
-            if util.is_not_empty(env_vars):
-                for key in env_vars:
-                    f.write('{}={}\n'.format(
-                        key, env_vars[key]).encode('utf8'))
-            if task.infiniband:
-                ib_env = {
-                    'I_MPI_FABRICS': 'shm:dapl',
-                    'I_MPI_DAPL_PROVIDER': 'ofa-v2-ib0',
-                    'I_MPI_DYNAMIC_CONNECTION': '0',
-                    # create a manpath entry for potentially buggy
-                    # intel mpivars.sh
-                    'MANPATH': '/usr/share/man:/usr/local/man',
-                }
-                for key in ib_env:
-                    f.write('{}={}\n'.format(key, ib_env[key]).encode('utf8'))
-            if task.gpu:
-                gpu_env = {
-                    'CUDA_CACHE_DISABLE': '0',
-                    'CUDA_CACHE_MAXSIZE': '1073741824',
-                    # use absolute path due to non-expansion
-                    'CUDA_CACHE_PATH': (
-                        '{}/batch/tasks/.nv/ComputeCache').format(tempdisk),
-                }
-                for key in gpu_env:
-                    f.write('{}={}\n'.format(key, gpu_env[key]).encode('utf8'))
-            # close and upload env var file
-            f.close()
-            if not native and not is_singularity:
-                sas_urls = storage.upload_resource_files(
-                    blob_client, config, [(envfileloc, fname)])
-        finally:
-            os.unlink(fname)
-            del f
-            del fname
-        if not native and not is_singularity and len(sas_urls) != 1:
-            raise RuntimeError('unexpected number of sas urls')
+    # set ib/gpu env vars
+    if task.infiniband:
+        ib_env = {
+            'I_MPI_FABRICS': 'shm:dapl',
+            'I_MPI_DAPL_PROVIDER': 'ofa-v2-ib0',
+            'I_MPI_DYNAMIC_CONNECTION': '0',
+            # create a manpath entry for potentially buggy
+            # intel mpivars.sh
+            'MANPATH': '/usr/share/man:/usr/local/man',
+        }
+        env_vars = util.merge_dict(env_vars, ib_env)
+        del ib_env
+    if task.gpu:
+        gpu_env = {
+            'CUDA_CACHE_DISABLE': '0',
+            'CUDA_CACHE_MAXSIZE': '1073741824',
+            # use absolute path due to non-expansion
+            'CUDA_CACHE_PATH': '{}/batch/tasks/.nv/ComputeCache'.format(
+                tempdisk),
+        }
+        env_vars = util.merge_dict(env_vars, gpu_env)
+        del gpu_env
     taskenv = []
     # check if this is a multi-instance task
     mis = None
@@ -4203,8 +4199,7 @@ def _construct_task(
                     cc = '; '.join(task.multi_instance.coordination_command)
             else:
                 coordcmd = [
-                    ('[ -f {f} ] && export $(grep -v "^AZ_BATCH_" {f} '
-                     '| xargs)').format(f=task.envfile),
+                    _generate_non_native_env_dump(env_vars, task.envfile),
                 ]
                 coordcmd.extend(task.multi_instance.coordination_command)
                 cc = util.wrap_commands_in_shell(
@@ -4252,14 +4247,12 @@ def _construct_task(
             )
             # singularity command is passed as-is for multi-instance
             task_commands = [
-                ('[ -f {f} ] && export $(grep -v "^AZ_BATCH_" {f} '
-                 '| xargs)').format(f=task.envfile),
+                _generate_non_native_env_dump(env_vars, task.envfile),
                 '{}'.format(' ' + task.command) if task.command else ''
             ]
         else:
             task_commands = [
-                ('[ -f {f} ] && export $(grep -v "^AZ_BATCH_" {f} '
-                 '| xargs)').format(f=task.envfile),
+                _generate_non_native_env_dump(env_vars, task.envfile),
                 '{} {} {} {}'.format(
                     task.docker_exec_cmd,
                     ' '.join(task.docker_exec_options),
@@ -4274,8 +4267,7 @@ def _construct_task(
             ]
         elif is_singularity:
             task_commands = [
-                '[ -f {f} ] && export $(cat {f} | xargs)'.format(
-                    f=task.envfile),
+                _generate_non_native_env_dump(env_vars, task.envfile),
                 'singularity {} {} {}{}'.format(
                     task.singularity_cmd,
                     ' '.join(task.run_options),
@@ -4284,23 +4276,14 @@ def _construct_task(
                 )
             ]
         else:
-            if is_windows:
-                task_commands = [
-                    'set | findstr AZ_BATCH_ >> {}'.format(task.envfile),
-                ]
-            else:
-                task_commands = [
-                    '[ -f {f} ] && export $(cat {f} | xargs)'.format(
-                        f=task.envfile),
-                    'env | grep AZ_BATCH_ >> {}'.format(task.envfile),
-                ]
-            task_commands.append(
+            task_commands = [
+                _generate_non_native_env_dump(env_vars, task.envfile),
                 '{} {} {}{}'.format(
                     task.docker_run_cmd,
                     ' '.join(task.run_options),
                     task.docker_image,
-                    '{}'.format(' ' + task.command) if task.command else '')
-            )
+                    '{}'.format(' ' + task.command) if task.command else ''),
+            ]
     output_files = None
     # get registry login if missing images
     if (not native and allow_run_on_missing and
@@ -4325,34 +4308,22 @@ def _construct_task(
         else:
             task_commands.append(addlcmds)
     del addlcmds
-    # set environment variables for native
-    if native or is_singularity:
-        if util.is_not_empty(env_vars):
-            for key in env_vars:
-                taskenv.append(
-                    batchmodels.EnvironmentSetting(key, env_vars[key])
-                )
-        if task.infiniband:
-            for key in ib_env:
-                taskenv.append(
-                    batchmodels.EnvironmentSetting(key, ib_env[key])
-                )
-            del ib_env
-        # add singularity only vars
-        if is_singularity:
+    # always add env vars in (host) task to be dumped into container
+    # task (if non-native)
+    if util.is_not_empty(env_vars):
+        for key in env_vars:
             taskenv.append(
-                batchmodels.EnvironmentSetting(
-                    'SINGULARITY_CACHEDIR',
-                    settings.get_singularity_cachedir(config)
-                )
+                batchmodels.EnvironmentSetting(key, env_vars[key])
             )
-            if task.gpu:
-                for key in gpu_env:
-                    taskenv.append(
-                        batchmodels.EnvironmentSetting(key, gpu_env[key])
-                    )
-                del gpu_env
     del env_vars
+    # add singularity only vars
+    if is_singularity:
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                'SINGULARITY_CACHEDIR',
+                settings.get_singularity_cachedir(config)
+            )
+        )
     # create task
     if util.is_not_empty(task_commands):
         if native:
@@ -4386,16 +4357,6 @@ def _construct_task(
         batchtask.container_settings = batchmodels.TaskContainerSettings(
             container_run_options=' '.join(task.run_options),
             image_name=task.docker_image)
-    # add envfile
-    if sas_urls is not None:
-        batchtask.resource_files.append(
-            batchmodels.ResourceFile(
-                file_path=str(task.envfile),
-                blob_source=next(iter(sas_urls.values())),
-                file_mode='0640',
-            )
-        )
-        sas_urls = None
     # add additional resource files
     if util.is_not_empty(task.resource_files):
         for rf in task.resource_files:
@@ -4685,6 +4646,16 @@ def add_jobs(
                     pool=autopool,
                 )
             )
+        # get base env vars from job
+        job_env_vars = settings.job_environment_variables(jobspec)
+        _job_env_vars_secid = \
+            settings.job_environment_variables_keyvault_secret_id(jobspec)
+        if util.is_not_empty(_job_env_vars_secid):
+            jevs = keyvault.get_secret(
+                keyvault_client, _job_env_vars_secid, value_is_json=True)
+            job_env_vars = util.merge_dict(job_env_vars, jevs or {})
+            del jevs
+        del _job_env_vars_secid
         # create jobschedule
         recurrence = settings.job_recurrence(jobspec)
         if recurrence is not None:
@@ -4760,33 +4731,25 @@ def add_jobs(
                     image_name=jmimgname)
             else:
                 jscs = None
-                if is_windows:
-                    jscmd = [
-                        'set | findstr AZ_BATCH_ >> .shipyard-jmtask.envlist',
-                    ]
-                    bind = (
-                        '-v %AZ_BATCH_TASK_DIR%:%AZ_BATCH_TASK_DIR% '
-                        '-w %AZ_BATCH_TASK_WORKING_DIR%'
-                    )
-                else:
-                    jscmd = [
-                        '[ -f .shipyard-jmtask.envlist ] && '
-                        'export $(cat .shipyard-jmtask.envlist | xargs)',
-                        'env | grep AZ_BATCH_ >> .shipyard-jmtask.envlist',
-                    ]
-                    bind = (
-                        '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
-                        '-w $AZ_BATCH_TASK_WORKING_DIR'
-                    )
+                envfile = '.shipyard.envlist'
+                jscmd = [
+                    _generate_non_native_env_dump(job_env_vars, envfile),
+                ]
+                bind = (
+                    '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
+                    '-w $AZ_BATCH_TASK_WORKING_DIR'
+                )
                 jscmd.append(
-                    ('docker run --rm --env-file .shipyard-jmtask.envlist '
-                     '{bind} {jmimgname} {jscmdline}').format(
-                         bind=bind, jmimgname=jmimgname, jscmdline=jscmdline)
+                    ('docker run --rm --env-file {envfile} {bind} '
+                     '{jmimgname} {jscmdline}').format(
+                         envfile=envfile, bind=bind, jmimgname=jmimgname,
+                         jscmdline=jscmdline)
                 )
                 jscmdline = util.wrap_commands_in_shell(
                     jscmd, windows=is_windows)
                 del bind
                 del jscmd
+                del envfile
             del jmimgname
             jobschedule = batchmodels.JobScheduleAddParameter(
                 id=job_id,
@@ -4808,6 +4771,7 @@ def add_jobs(
                         id='shipyard-jmtask',
                         command_line=jscmdline,
                         container_settings=jscs,
+                        environment_settings=[],
                         kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
                         run_exclusive=recurrence.job_manager.run_exclusive,
@@ -4828,6 +4792,12 @@ def add_jobs(
                     ],
                 )
             )
+            # populate env vars for jm task
+            for ev in job_env_vars:
+                jobschedule.job_specification.job_manager_task.\
+                    environment_settings.append(
+                        batchmodels.EnvironmentSetting(ev, job_env_vars[ev])
+                    )
             del jscs
             del jscmdline
         else:
@@ -4901,16 +4871,6 @@ def add_jobs(
                     raise
         del multi_instance
         del mi_docker_container_name
-        # get base env vars from job
-        job_env_vars = settings.job_environment_variables(jobspec)
-        _job_env_vars_secid = \
-            settings.job_environment_variables_keyvault_secret_id(jobspec)
-        if util.is_not_empty(_job_env_vars_secid):
-            jevs = keyvault.get_secret(
-                keyvault_client, _job_env_vars_secid, value_is_json=True)
-            job_env_vars = util.merge_dict(job_env_vars, jevs or {})
-            del jevs
-        del _job_env_vars_secid
         # add all tasks under job
         task_map = {}
         for _task in settings.job_tasks(config, jobspec):

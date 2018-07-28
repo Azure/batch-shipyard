@@ -3737,19 +3737,13 @@ def task_settings(cloud_pool, config, poolconf, jobspec, conf):
             else:
                 cc_args = None
         else:
-            if is_windows:
-                envgrep = 'set | findstr AZ_BATCH_ >> {}'.format(envfile)
-            else:
-                envgrep = 'env | grep AZ_BATCH_ >> {}'.format(envfile)
             cc_args = [
-                envgrep,
                 '{} {} {}{}'.format(
                     docker_run_cmd,
                     ' '.join(run_opts),
                     docker_image,
                     coordination_command),
             ]
-            del envgrep
         del coordination_command
         # get num instances
         num_instances = conf['multi_instance']['num_instances']
