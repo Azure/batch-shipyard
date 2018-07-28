@@ -83,6 +83,7 @@ blobxferversion=latest
 block=
 cascadecontainer=0
 custom_image=0
+delay_preload=0
 docker_group=
 encrypted=
 fallback_registry=
@@ -100,7 +101,7 @@ shipyardversion=
 singularityversion=
 
 # process command line options
-while getopts "h?abcde:fg:i:l:m:no:p:rs:tuv:wx:" opt; do
+while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -113,6 +114,7 @@ while getopts "h?abcde:fg:i:l:m:no:p:rs:tuv:wx:" opt; do
             echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
             echo "-i [version] singularity version"
+            echo "-j delay docker image preload"
             echo "-l [lis pkg] LIS package install"
             echo "-m [type:scid] mount storage cluster"
             echo "-n native mode"
@@ -151,6 +153,9 @@ while getopts "h?abcde:fg:i:l:m:no:p:rs:tuv:wx:" opt; do
             ;;
         i)
             singularityversion=$OPTARG
+            ;;
+        j)
+            delay_preload=1
             ;;
         l)
             lis=$OPTARG
@@ -717,7 +722,9 @@ docker_pull_image_fallback() {
         erb=$(grep -i 'error parsing HTTP 404 response body' <<<"$pull_out")
         local uhs
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]]; then
+        local tht
+        tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
+        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]] || [[ ! -z "$tht" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
@@ -766,7 +773,9 @@ docker_pull_image() {
         erb=$(grep -i 'error parsing HTTP 404 response body' <<<"$pull_out")
         local uhs
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]]; then
+        local tht
+        tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
+        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]] || [[ ! -z "$tht" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
@@ -1428,6 +1437,7 @@ echo "GlusterFS on compute: $gluster_on_compute"
 echo "HPN-SSH: $hpnssh"
 echo "Enable Azure Batch group for Docker access: $docker_group"
 echo "Fallback registry: $fallback_registry"
+echo "Docker image preload delay: $delay_preload"
 echo "Cascade via container: $cascadecontainer"
 echo "P2P: $p2penabled"
 echo "Block on images: $block"
@@ -1580,7 +1590,7 @@ if [ ! -z "$sc_args" ]; then
 fi
 
 # install dependencies if not using cascade container
-if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
+if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; }; then
     install_cascade_dependencies
 fi
 
@@ -1611,7 +1621,7 @@ process_custom_fstab
 touch "$nodeprepfinished"
 
 # execute cascade
-if [ $native_mode -eq 0 ]; then
+if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
     spawn_cascade_process
     # block for images if necessary
     block_for_container_images

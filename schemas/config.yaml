@@ -40,6 +40,8 @@ mapping:
             type: str
       fallback_registry:
         type: str
+      delay_docker_image_preload:
+        type: bool
       store_timing_metrics:
         type: bool
       use_shipyard_docker_image:

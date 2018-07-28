@@ -1224,6 +1224,22 @@ def _construct_pool_object(
         pfx = crypto.get_encryption_pfx_settings(config)
         batch.add_certificate_to_account(
             batch_client, config, None, False, False, None)
+    # shipyard settings
+    bs = settings.batch_shipyard_settings(config)
+    # delay docker image preload settings
+    delay_image_preload = False
+    if bs.delay_docker_image_preload:
+        if native:
+            if is_windows:
+                logger.warning(
+                    'cannot delay docker image preload for windows '
+                    'native pools')
+            else:
+                delay_image_preload = True
+        else:
+            logger.debug(
+                'delay docker image preload specified for non-native pools, '
+                'which is the default behavior for these pools')
     # construct block list
     block_for_gr = None
     if pool_settings.block_until_all_global_resources_loaded:
@@ -1243,13 +1259,11 @@ def _construct_pool_object(
             logger.warning(
                 'no Docker and Singularity images specified in global '
                 'resources')
-        if native:
-            # native pools will auto preload
+        # native pools without delay will auto preload
+        if native and not delay_image_preload:
             block_for_gr_docker = ''
         block_for_gr = '{}#{}'.format(
             block_for_gr_docker, block_for_gr_singularity)
-    # shipyard settings
-    bs = settings.batch_shipyard_settings(config)
     # data replication and peer-to-peer settings
     dr = settings.data_replication_settings(config)
     # create torrent flags
@@ -1262,7 +1276,7 @@ def _construct_pool_object(
         _rflist = [_REGISTRY_LOGIN_WINDOWS_FILE, _BLOBXFER_WINDOWS_FILE]
     else:
         _rflist = [_REGISTRY_LOGIN_FILE, _BLOBXFER_FILE]
-    if not native and not is_windows:
+    if (not native or delay_image_preload) and not is_windows:
         _rflist.append(_IMAGE_BLOCK_FILE)
         if not bs.use_shipyard_docker_image:
             _rflist.append(_CASCADE_FILE)
@@ -1354,7 +1368,7 @@ def _construct_pool_object(
         # attach container config
         vmconfig.container_configuration = batchmodels.ContainerConfiguration(
             container_image_names=settings.global_resources_docker_images(
-                config),
+                config) if not delay_image_preload else None,
             container_registries=docker_registries,
         )
     elif util.is_not_empty(custom_image_na):
@@ -1400,7 +1414,7 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
              '{v}{w}{x}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
@@ -1411,6 +1425,7 @@ def _construct_pool_object(
                 f=' -f' if gluster_on_compute else '',
                 g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
                 i=' -i {}'.format(misc._SINGULARITY_VERSION),
+                j=' -j' if delay_image_preload else '',
                 lis=' -l {}'.format(
                     lis_pkg.name) if lis_pkg is not None else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
@@ -1518,7 +1533,7 @@ def _construct_pool_object(
                 file_path=rf,
                 blob_source=sas_urls[rf])
         )
-    if not native:
+    if not native or delay_image_preload:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
                 'SHIPYARD_STORAGE_ENV',
@@ -1530,6 +1545,7 @@ def _construct_pool_object(
                     config)
             )
         )
+    if not native:
         if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
             pool.start_task.resource_files.append(
                 batchmodels.ResourceFile(
@@ -3103,7 +3119,7 @@ def action_pool_add(
     _adjust_settings_for_pool_creation(config)
     storage.create_storage_containers(blob_client, table_client, config)
     storage.clear_storage_containers(blob_client, table_client, config)
-    if not settings.is_native_docker_pool(config):
+    if settings.requires_populate_global_resources_storage(config):
         storage.populate_global_resource_blobs(
             blob_client, table_client, config)
     _add_pool(
@@ -3668,7 +3684,7 @@ def action_jobs_add(
         # create storage containers and clear
         storage.create_storage_containers(blob_client, table_client, config)
         storage.clear_storage_containers(blob_client, table_client, config)
-        if not settings.is_native_docker_pool(config):
+        if settings.requires_populate_global_resources_storage(config):
             storage.populate_global_resource_blobs(
                 blob_client, table_client, config)
         # create autopool specification object

@@ -13,6 +13,7 @@ batch_shipyard:
       sha1_thumbprint: 123456789...
     public_key_pem: encrypt.pem
   fallback_registry: myregistry.azurecr.io
+  delay_docker_image_preload: false
 data_replication:
   concurrent_source_downloads: null
   peer_to_peer:

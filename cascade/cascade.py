@@ -117,6 +117,7 @@ _DOCKER_PULL_ERRORS = frozenset((
     'error pulling image configuration',
     'error parsing http 404 response body',
     'received unexpected http status',
+    'tls handshake timeout',
 ))
 
 

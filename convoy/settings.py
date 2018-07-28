@@ -249,6 +249,7 @@ BatchShipyardSettings = collections.namedtuple(
         'storage_account_settings', 'storage_entity_prefix',
         'generated_sas_expiry_days', 'use_shipyard_docker_image',
         'store_timing_metrics', 'fallback_registry',
+        'delay_docker_image_preload',
     ]
 )
 DataReplicationSettings = collections.namedtuple(
@@ -1872,7 +1873,25 @@ def batch_shipyard_settings(config):
         store_timing_metrics=_kv_read(
             conf, 'store_timing_metrics', default=False),
         fallback_registry=_kv_read_checked(conf, 'fallback_registry'),
+        delay_docker_image_preload=_kv_read(
+            conf, 'delay_docker_image_preload', default=False),
     )
+
+
+def requires_populate_global_resources_storage(config):
+    # type: (dict) -> bool
+    """Requires populating global resources in storage
+    :param dict config: configuration object
+    :rtype: bool
+    :return: if populating gr is required
+    """
+    pool = pool_settings(config)
+    native = is_native_docker_pool(config, vm_config=pool.vm_configuration)
+    if not native:
+        return True
+    bs = batch_shipyard_settings(config)
+    is_windows = is_windows_pool(config, vm_config=pool.vm_configuration)
+    return bs.delay_docker_image_preload and not is_windows
 
 
 def set_use_shipyard_docker_image(config, flag):

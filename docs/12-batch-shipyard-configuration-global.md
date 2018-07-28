@@ -21,6 +21,7 @@ batch_shipyard:
       sha1_thumbprint: 123456789...
     public_key_pem: encrypt.pem
   fallback_registry: myregistry.azurecr.io
+  delay_docker_image_preload: false
 data_replication:
   concurrent_source_downloads: null
   peer_to_peer:
@@ -187,6 +188,14 @@ prefixed with the server name. To easily replicate/mirror the requisite
 Batch Shipyard images, please see the command `misc mirror-images`. This
 command should be run for every Batch Shipyard version that you intend to
 use in conjunction with this option.
+* (optional) `delay_docker_image_preload` controls when to perform Docker
+image preloading for `native` Linux pools only. If this property is set to
+`true` for `native` Linux pools, then Docker images are loaded during the
+node prep phase (i.e., the Azure Batch start task). Advantages to delaying
+preloading to this phase is to decouple potential image preload failures
+with other problems that can cause a node to go in unusable state. This
+option has no effect on non-`native` pools as images are always "delay"
+preloaded. Similarly, this option has no effect on Windows pools.
 
 `data_replication` is an entirely optional section to exert fine-grained
 control of the download and data replication behavior for container images.
