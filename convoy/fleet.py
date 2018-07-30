@@ -1369,7 +1369,8 @@ def _construct_pool_object(
         vmconfig.container_configuration = batchmodels.ContainerConfiguration(
             container_image_names=settings.global_resources_docker_images(
                 config) if not delay_image_preload else None,
-            container_registries=docker_registries,
+            container_registries=docker_registries
+            if not delay_image_preload else None,
         )
     elif util.is_not_empty(custom_image_na):
         # check if AAD is enabled

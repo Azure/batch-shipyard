@@ -81,6 +81,8 @@ try:
 except NameError:
     _AZBATCH_USER = None
 _PARTITION_KEY = None
+_MAX_VMLIST_PROPERTIES = 13
+_MAX_VMLIST_IDS_PER_PROPERTY = 800
 _LR_LOCK_ASYNC = asyncio.Lock()
 _PT_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
@@ -788,7 +790,7 @@ def _merge_service(
         'PartitionKey': _PARTITION_KEY,
         'RowKey': compute_resource_hash(resource),
         'Resource': resource,
-        'VmList': _NODEID,
+        'VmList0': _NODEID,
     }
     logger.debug('merging entity {} to services table'.format(entity))
     try:
@@ -796,23 +798,34 @@ def _merge_service(
             _STORAGE_CONTAINERS['table_images'], entity=entity)
     except azure.common.AzureConflictHttpError:
         while True:
-            existing = table_client.get_entity(
+            entity = table_client.get_entity(
                 _STORAGE_CONTAINERS['table_images'],
                 entity['PartitionKey'], entity['RowKey'])
-            # merge VmList into existing
-            evms = set(existing['VmList'].split(','))
+            # merge VmList into entity
+            evms = []
+            for i in range(0, _MAX_VMLIST_PROPERTIES):
+                prop = 'VmList{}'.format(i)
+                if prop in entity:
+                    evms.extend(entity[prop].split(','))
             if _NODEID in evms:
                 break
-            nvms = set(entity['VmList'].split(','))
-            evms.update(nvms)
-            existing['VmList'] = ','.join(list(evms))
-            etag = existing['etag']
-            existing.pop('etag')
+            evms.append(_NODEID)
+            for i in range(0, _MAX_VMLIST_PROPERTIES):
+                prop = 'VmList{}'.format(i)
+                start = i * _MAX_VMLIST_IDS_PER_PROPERTY
+                end = start + _MAX_VMLIST_IDS_PER_PROPERTY
+                if end > len(evms):
+                    end = len(evms)
+                if start < end:
+                    entity[prop] = ','.join(evms[start:end])
+                else:
+                    entity[prop] = None
+            etag = entity['etag']
+            entity.pop('etag')
             try:
                 table_client.merge_entity(
-                    _STORAGE_CONTAINERS['table_images'], entity=existing,
+                    _STORAGE_CONTAINERS['table_images'], entity=entity,
                     if_match=etag)
-                entity = existing
                 break
             except azure.common.AzureHttpError as ex:
                 if ex.status_code != 412:
@@ -828,9 +841,10 @@ def _merge_service(
             entities = []
         count = 0
         for entity in entities:
-            vms = set(entity['VmList'].split(','))
-            if _NODEID in vms:
-                count += 1
+            for i in range(0, _MAX_VMLIST_PROPERTIES):
+                prop = 'VmList{}'.format(i)
+                if prop in entity and _NODEID in entity[prop]:
+                    count += 1
         if count == nglobalresources:
             _record_perf(
                 'gr-done',
@@ -1125,19 +1139,24 @@ async def download_monitor_async(
 def _get_torrent_num_seeds(
         table_client: azuretable.TableService,
         resource: str) -> int:
-    """Get number of torrent seeders via table
+    """Get number of torrent seeders via table (for first VmList prop)
     :param azuretable.TableService table_client: table client
     :param int nglobalresource: number of global resources
     :rtype: int
     :return: number of seeds
     """
+    numseeds = 0
     try:
         se = table_client.get_entity(
             _STORAGE_CONTAINERS['table_images'],
             _PARTITION_KEY, compute_resource_hash(resource))
-        numseeds = len(se['VmList'].split(','))
     except azure.common.AzureMissingResourceHttpError:
-        numseeds = 0
+        pass
+    else:
+        try:
+            numseeds = len(se['VmList0'].split(','))
+        except KeyError:
+            pass
     return numseeds
 
 
