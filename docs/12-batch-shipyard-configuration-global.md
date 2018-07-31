@@ -193,8 +193,11 @@ image preloading for `native` Linux pools only. If this property is set to
 `true` for `native` Linux pools, then Docker images are loaded during the
 node prep phase (i.e., the Azure Batch start task). Advantages to delaying
 preloading to this phase is to decouple potential image preload failures
-with other problems that can cause a node to go in unusable state. This
-option has no effect on non-`native` pools as images are always "delay"
+with other problems that can cause a node to go in unusable state.
+Additionally, enabling this feature will allow configuration of
+`data_replication` options (see below) for `native` Linux pools, including
+`concurrent_source_downloads` tuning and other peer-to-peer options.
+This option has no effect on non-`native` pools as images are always "delay"
 preloaded. Similarly, this option has no effect on Windows pools.
 
 `data_replication` is an entirely optional section to exert fine-grained

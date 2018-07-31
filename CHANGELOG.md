@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [3.5.3] - 2018-07-31
+### Added
+- Support Docker image preload delay for Linux native container pools.
+Please see the global configuration docs for more information.
+
+### Changed
+- Improve registry login robustness with retries
+
+### Fixed
+- Docker Hub private registry login failures
+- Environment variable issues ([#234](https://github.com/Azure/batch-shipyard/issues/234))
+
 ## [3.5.2] - 2018-07-20
 ### Fixed
 - Non-native pool allocation on N-series VMs failing due to unpinned
@@ -1366,7 +1378,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.2...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.3...HEAD
+[3.5.3]: https://github.com/Azure/batch-shipyard/compare/3.5.2...3.5.3
 [3.5.2]: https://github.com/Azure/batch-shipyard/compare/3.5.1...3.5.2
 [3.5.1]: https://github.com/Azure/batch-shipyard/compare/3.5.0...3.5.1
 [3.5.0]: https://github.com/Azure/batch-shipyard/compare/3.5.0b3...3.5.0

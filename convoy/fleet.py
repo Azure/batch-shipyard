@@ -936,11 +936,11 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # backward compat for CentOS HPC 7.1, 7.3 and normal 7.4
+    # backward compat for CentOS HPC 7.1, 7.3 and normal 7.4, 7.5
     if publisher == 'openlogic':
         if ((offer == 'centos-hpc' and
                 (sku == '7.1' or sku == '7.3')) or
-                (offer == 'centos' and sku == '7.4')):
+                (offer == 'centos' and (sku == '7.4' or sku == '7.5'))):
             return ({
                 'publisher': publisher,
                 'offer': offer,
@@ -2484,7 +2484,7 @@ def _adjust_settings_for_pool_creation(config):
                 'images as global resources')
     # ensure settings p2p/as/internode settings are compatible
     if dr.peer_to_peer.enabled:
-        if native:
+        if native and not bs.delay_docker_image_preload:
             raise ValueError(
                 'cannot enable peer-to-peer and native container pools')
         if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
