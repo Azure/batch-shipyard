@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [3.6.0a1] - 2018-08-06
+### Added
+- Federation support. Please see the
+[federation guide](https://github.com/Azure/batch-shipyard/blob/master/docs/68-batch-shipyard-federation.md)
+for more information.
+- `monitor status` command with `--raw` support
+
+### Changed
+- Updated dependencies
+
 ## [3.5.3] - 2018-07-31
 ### Added
 - Support Docker image preload delay for Linux native container pools.
@@ -1378,7 +1388,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.5.3...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...HEAD
+[3.6.0a1]: https://github.com/Azure/batch-shipyard/compare/3.5.3...3.6.0a1
 [3.5.3]: https://github.com/Azure/batch-shipyard/compare/3.5.2...3.5.3
 [3.5.2]: https://github.com/Azure/batch-shipyard/compare/3.5.1...3.5.2
 [3.5.1]: https://github.com/Azure/batch-shipyard/compare/3.5.0...3.5.1

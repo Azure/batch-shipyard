@@ -1444,6 +1444,7 @@ def pool_stats(batch_client, config, pool_id=None):
         '* Total nodes: {}'.format(
             pool.current_dedicated_nodes + pool.current_low_priority_nodes
         ),
+        '  * VM size: {}'.format(pool.vm_size),
         '  * Dedicated nodes: {0} ({1:.1f}% of target){2}'.format(
             pool.current_dedicated_nodes,
             100 * (
