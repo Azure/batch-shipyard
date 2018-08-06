@@ -8,16 +8,16 @@ In Azure Batch, each pool within a Batch account is considered a logical
 boundary for related work. Thus jobs and job schedules can only target
 a single Batch pool for execution. However, it may be desirable to have
 workloads that span multiple pools as there may be a need for a heterogenous
-mix of compute nodes types, or it may be desirable to be able to manage
-a distribution of pools, logically, together. Moreover, there should be
-no restriction for such a logical grouping to be limited to a single
-Batch account, or even a single region unless data residency, data hydration
-sensitivity or other requirements prohibit such collections.
+mix of compute nodes types, or the ability to manage a distribution of pools,
+logically, as a unified resource. Moreover, there should be no restriction
+for such a logical grouping to be limited to a single Batch account, or
+even a single region unless data residency, data hydration sensitivity
+or other requirements prohibit such collections.
 
 To enable multi-pool collections across any number of Batch accounts and
 regions, Batch Shipyard defines the concept of a federation. Federations are
 collections of pools that can be provisioned as entirely different
-configurations logically organized as a single resource. This enables
+configurations but grouped together as a single resource. This enables
 scenarios such as hybrid VM composition and load balancing workloads by
 routing jobs to regions where specific capabilities may be available and
 necessary. Federations also enable rich constraint matching while maintaining
@@ -26,7 +26,7 @@ capabilities of the underlying pools.
 
 ## Major Features
 * Full suite of federation, federated pool and federated job management
-through the CLI
+commands through the CLI
 * Simple management of federations through user-defined IDs
 * Multi-region support within a single federation
 * Ability to dynamically add and remove pools from federations on-demand
@@ -38,8 +38,7 @@ on-demand suspend and restart
 diagnostics
 * Support for job recurrences (job schedules)
 * FIFO ordering of actions within a job or job schedule
-* Leverages Azure MSI to eliminate credential passing and storage in a backing
-store
+* Leverages Azure MSI to eliminate credential passing and backing to a store
 * Federation proxies can be run in HA mode
 
 ## Mental Model
@@ -147,8 +146,9 @@ for more detailed explanations of each option, including other options not
 shown here.
 
 #### Global Configuration
-Special care should be provided for the global configuration while
-provisioning pools that will take part of a federation. Any task that requires
+Special care should be taken with the
+[global configuration](12-batch-shipyard-configuration-global.md)
+while provisioning pools that will take part of a federation. Any task that requires
 a login for a container registry or a shared data volume must have
 such configuration applied to all pools within the federation.
 
@@ -160,15 +160,16 @@ be defined in the credentials configuration.
 
 If task container images will not be known beforehand, then it is imperative
 that the `global_resources`:`additional_registries` contains a list of all
-container images that reference private registries. The corresponding login
-information for these registries should be present in the credentials
-configuration, including private Docker Hub logins.
+private registry servers required by container images that are referenced by
+any task within a task group. The corresponding login information for these
+registries should be present in the credentials configuration, including
+a private Docker Hub login, if necessary.
 
 Any tasks within task groups referencing `shared_data_volumes` should have
 pools allocated with the proper `shared_data_volumes` before joining the
 federation. Special care must be taken here to ensure that any pools that
 are in different Batch accounts or regions conform to the same naming
-scheme used by tasks in task groups.
+scheme for these volumes used by tasks in task groups.
 
 #### Federated Job Constraints
 Note that none of the `federation_constraints` properties are required. They
@@ -220,7 +221,7 @@ job_specifications:
     # ... other settings
 ```
 
-It is strongly recommended to view the
+It is strongly recommended to review the
 [jobs documentation](14-batch-shipyard-configuration-jobs.md) which contains
 more extensive explanations for each `federation_constraints` property and
 for other general job and task options not shown here.
@@ -240,20 +241,28 @@ specified in the job or corresponding tasks, and if the job should be subject
 to constraints such as `location` or `virtual_network_arm_id`.
 
 #### Federated Pool Configuration
-Pools that comprise the federation should be provisioned with through placed
-into certain options that will affect scheduling of task groups.
+Pools that comprise the federation will have certain
+[configuration options](13-batch-shipyard-configuration-pool.md)
+applied to them that will naturally limit which task groups can target them
+for scheduling within the federation. The following is a non-exhaustive,
+but perhaps the most important, list of pool options that can affect task
+group scheduling.
 
 * `native` under `vm_configuration`:`platform_image` will have a large impact
 on task group placement routing as task groups can only be scheduled on pools
 provisioned as their respective configuration of native or non-native. In
-general, it is recommended to use `native` container pools. Please see
-[this FAQ item](https://github.com/Azure/batch-shipyard/blob/master/docs/97-faq.md#what-is-native-under-pool-platform_image-and-custom_image)
-for more information on native vs non-native container pools.
+general, it is recommended to use `native` container pools; however, native
+container pools may not be appropriate for all situations. Please see
+[this FAQ item](97-faq.md#what-is-native-under-pool-platform_image-and-custom_image)
+for more information on native vs non-native container pools. For maximum
+federated scheduling efficacy, it is recommended to pick native or
+non-native and use the same setting consistently across all pools and all job
+`federation_constraints` within the federation.
 * `arm_image_id` under `vm_configuration`:`custom_image` will allow
 routing of task groups with `custom_image_arm_id` constraints.
 * `vm_size` will be impacted by `compute_node` job constraints.
-* `max_tasks_per_node` will impact available scheduling slots and `exclusive`
-`compute_node` constraint.
+* `max_tasks_per_node` will impact available scheduling slots and the
+`compute_node`:`exclusive` constraint.
 * `autoscale` changes behavior of scheduling across various constraints.
 * `inter_node_communication` enabled pools will allow tasks that contain
 multi-instance tasks.
@@ -264,16 +273,19 @@ multi-instance tasks.
 This is a non-exhaustive list of potential limitations while using
 the federation feature in Batch Shipyard.
 
+* All Batch accounts within a federation must reside under the same
+subscription.
 * All task dependencies must be self-contained within the task group.
 * `depends_on_range` based task dependencies are not allowed, currently.
-* `input_data:azure_batch` has restrictions. At the job-level it is not
+* `input_data`:`azure_batch` has restrictions. At the job-level it is not
 allowed and at the task-level it must be self-contained within the task group.
 No validation is performed at the task-level to ensure self-containment
-of input data from other Batch tasks within the task group.
+of input data from other Batch tasks within the task group. Pool-level
+`input_data`:`azure_batch` is not validated.
 * A maximum of 14625 actions can be actively queued per unique job id.
-Actions processed by the federation proxy do not count towards this limit.
-This limit only applies to federations that allow non-unique job ids for
-job submissions (i.e., `fed jobs add`).
+Actions already processed by the federation proxy do not count towards this
+limit. This limit only applies to federations that allow non-unique job ids
+for job submissions (i.e., `fed jobs add`).
 * Low priority/dedicated compute node constraints are best-effort. If a task
 group is scheduled to a pool with dedicated-only nodes due to a specified
 constraint, but the pool later resizes with low priority nodes, portions of
@@ -307,15 +319,18 @@ allows callers to consume the result of a command invocation in JSON
 format.
 
 Please refer to the [usage documentation](20-batch-shipyard-usage.md) for
-further explanation of each federation command and other options not
-documented here.
+a full listing of federation commands and further explanation of each
+command and options not documented here.
 
 #### Federation Setup
 The following list shows a typical set of steps to setup a federation. Please
 ensure that you've reviewed the prior sections and any relevant configuration
-documentation.
+documentation before proceeding.
 
-1. Construct the `federation.yaml` configuration file.
+1. Construct the `federation.yaml` configuration file and optionally add
+a different `storage` credential section link to store federation metadata
+in a separate region or storage account than that of normal Batch Shipyard
+metadata.
 2. Deploy pools that will comprise the federation. These can be
 autoscale-enabled pools.
 3. Deploy the federation proxy: `fed proxy create`
@@ -349,10 +364,11 @@ Conversly, teardown of a federation would generally follow these steps:
 3. Destroy the federation: `fed destroy <fed-id>`
 
 If you do not need to destroy the federation, but would like to minimze
-the cost of a federation proxy, you can instead suspend the proxy and
-re-start it at a later time through the `fed proxy suspend` and
-`fed proxy start` commands. In that case you would not destroy the
-federation metadata with the `fed destroy <fed-id>` command.
+the cost of a federation proxy when no jobs will be submitted (e.g., off
+work), you can instead suspend the proxy and re-start it at a later time
+through the `fed proxy suspend` and `fed proxy start` commands. In that
+case you would not destroy the federation metadata with the
+`fed destroy <fed-id>` command.
 
 #### Job Lifecycle
 Federation jobs have the following commands available:
@@ -366,20 +382,25 @@ When adding jobs, the specified jobs configuration and pool configuration
 (e.g., pool.yaml) are consumed. If specific `federation_constraints`
 overrides are not specified, then the federation job is created with
 settings as read from the pool configuration file. It is important
-to define job `federation_constraints` if necessary.
+to define job `federation_constraints` to override settings read from
+the pool configuration, if necessary.
 
 To inspect federation jobs and associated task groups, you can typically
 follow this pattern:
 
 1. Locate the job: `fed jobs list <fed-id> --job-id <job-id>`
-2. Use Batch Explorer or Azure Portal to graphically manage. Or you can
-directly use Batch Shipyard commands if you have the correct Batch
-credentials populated targeting the region with the pool listed in the job
-location.
+2. Use location info to interact with job/task groups:
+    * Use Batch Explorer or Azure Portal to graphically manage.
+    * Directly use Batch Shipyard commands if you have the correct Batch
+      account credentials populated targeting the region with the pool
+      listed in the job location.
 
 Sometimes a job/task group is submitted which can "block" other actions for
 the same specified job if an improper constraint or other incorrect
 configuration is specified (this can be particularly acute for non-unique job
 id federations). In this case, it is necessary to remove such problematic
 actions to unblock processing. This can be done with the command:
-`fed jobs zap <fed-id> --unique-id <uid>`.
+`fed jobs zap <fed-id> --unique-id <uid>`. Note that there is no recovery
+after a unique id is removed; the action will need to be re-submitted
+(with the corrected parameters to prevent the blocking behavior which
+required the use of `fed jobs zap` in the first place).

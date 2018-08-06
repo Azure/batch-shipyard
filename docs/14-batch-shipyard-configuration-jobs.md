@@ -646,18 +646,22 @@ information and terminology definitions.
               set this value to `0` for a `memory` constraint.
         * (optional) `exclusive` specifies if each task within the task group
           must not be co-scheduled with other running tasks on compute nodes.
-          Effectively this excludes pools as scheduling targets with the
-          setting `max_tasks_per_node` greater than `1`.
+          Effectively this excludes pools as scheduling targets that have
+          been provisioned with the setting `max_tasks_per_node` greater
+          than `1`.
         * (optional) `gpu` specifies if tasks within the task group should
           be scheduled on a compute node that has a GPU. Note that specifying
           this property as `true` does not implicitly create tasks that
-          utilize nvidia-docker. You must, instead, specify the `gpu`
-          property as `true` at the job or task-level.
+          can utilize the GPU in a containerized context (e.g., nvidia-docker).
+          You must, instead, specify the `gpu` property as `true` at the job
+          or task-level to enable GPU access within a container task.
         * (optional) `infiniband` specifies if tasks within the task group
           should be scheduled on a compute node that has a RDMA/IB. Note that
           specifying this property as `true` does not implicitly create tasks
-          that will enable RDMA/IB settings with Intel MPI. You must, instead,
-          specify the `infiniband` property as `true` at the job or task-level.
+          that can utilize the RDMA/IB device with Intel MPI in a
+          containerized context. You must, instead, specify the `infiniband`
+          property as `true` at the job or task-level to access RDMA/IB
+          within a container task.
 
 The required `tasks` property is an array of tasks to add to the job:
 

@@ -28,15 +28,20 @@ Azure Batch compute nodes
 compute nodes
 * Mixed mode support for Docker and Singularity: run your Docker and
 Singularity containers within the same job, side-by-side or even concurrently
-* Comprehensive data movement support: move data easily between locally
-accessible storage systems, remote filesystems, Azure Blob or File Storage,
-and compute nodes
-* Support for serverless execution binding with
-[Azure Functions](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
-* Support for Docker Registries including
-[Azure Container Registry](https://azure.microsoft.com/services/container-registry/),
-other Internet-accessible public and private registries, and support for
-the [Singularity Hub](https://singularity-hub.org/) Container Registry
+* Comprehensive [data movement](http://batch-shipyard.readthedocs.io/en/latest/70-batch-shipyard-data-movement/)
+support: move data easily between locally accessible storage systems, remote
+filesystems, Azure Blob or File Storage, and compute nodes
+* Support for
+[serverless execution](http://batch-shipyard.readthedocs.io/en/latest/60-batch-shipyard-site-extension/)
+binding with Azure Functions
+* [Federation](http://batch-shipyard.readthedocs.io/en/latest/68-batch-shipyard-federation/)
+support: enables unified, constraint-based scheduling to collections of
+heterogeneous pools, including across multiple Batch accounts and Azure
+regions
+* Automated, integrated
+[resource monitoring](http://batch-shipyard.readthedocs.io/en/latest/66-batch-shipyard-resource-monitoring/)
+with [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/)
+for Batch pools and RemoteFS storage clusters
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
 with integration to auto-link these filesystems to compute nodes with
 support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and
@@ -48,23 +53,12 @@ via [blobfuse](https://github.com/Azure/azure-storage-fuse),
 [GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
 (which can act as a distributed local file system/cache), and custom Linux
 mount support (fstab)
-* Automated, integrated
-[resource monitoring](http://batch-shipyard.readthedocs.io/en/latest/66-batch-shipyard-resource-monitoring/)
-with [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/)
-for Batch pools and RemoteFS storage clusters
-* Seamless integration with Azure Batch job, task and file concepts along with
-full pass-through of the
-[Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
-to containers executed on compute nodes
-* Support for [Low Priority Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 * Support for simple, scenario-based [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/)
 and autopool to dynamically scale and control computing resources on-demand
 * Support for [Task Factories](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)
 with the ability to generate tasks based on parametric (parameter) sweeps,
 randomized input, file enumeration, replication, and custom Python code-based
 generators
-* Support for deploying Batch compute nodes into a specified
-[Virtual Network](http://batch-shipyard.readthedocs.io/en/latest/64-batch-shipyard-byovnet/)
 * Transparent support for GPU-accelerated container applications on both
 [Docker](https://github.com/NVIDIA/nvidia-docker) and Singularity
 on [Azure N-Series VM instances](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
@@ -76,6 +70,10 @@ Infiniband/RDMA for MPI on HPC low-latency Azure VM instances including
 [A-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 [H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
+* Seamless integration with Azure Batch job, task and file concepts along with
+full pass-through of the
+[Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
+to containers executed on compute nodes
 * Support for [Azure Batch task dependencies](https://azure.microsoft.com/documentation/articles/batch-task-dependencies/)
 allowing complex processing pipelines and DAGs
 * Support for merge or final task specification that automatically depends
@@ -83,10 +81,17 @@ on all other tasks within the job
 * Support for job schedules and recurrences for automatic execution of
 tasks at set intervals
 * Support for live job and job schedule migration between pools
-* Automatic setup of SSH or RDP users to all nodes in the compute pool and
-optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 * Support for credential management through
 [Azure KeyVault](https://azure.microsoft.com/services/key-vault/)
+* Support for Docker Registries including
+[Azure Container Registry](https://azure.microsoft.com/services/container-registry/),
+other Internet-accessible public and private registries, and support for
+the [Singularity Hub](https://singularity-hub.org/) Container Registry
+* Support for [Low Priority Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
+* Support for deploying Batch compute nodes into a specified
+[Virtual Network](http://batch-shipyard.readthedocs.io/en/latest/64-batch-shipyard-byovnet/)
+* Automatic setup of SSH or RDP users to all nodes in the compute pool and
+optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 * Support for [custom host images](http://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/)
 * Support for [Windows Containers](https://docs.microsoft.com/virtualization/windowscontainers/about/)
 on compliant Windows compute node pools with the ability to activate

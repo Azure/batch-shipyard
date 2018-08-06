@@ -24,7 +24,7 @@ Batch Shipyard resource monitoring configuration. This configuration is
 entirely optional unless using the resource monitoring capabilities of
 Batch Shipyard.
 7. [Federation](17-batch-shipyard-configuration-federation.md) -
-Batch Shipyard federation configuration. This configuration is entirely
+Batch Shipyard federation proxy configuration. This configuration is entirely
 optional unless using the federation capabilities of Batch Shipyard.
 
 Note that all potential properties are described here and that specifying

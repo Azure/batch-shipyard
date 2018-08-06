@@ -1,6 +1,8 @@
-# Batch Shipyard Federation Configuration
+# Batch Shipyard Federation Proxy Configuration
 This page contains in-depth details on how to configure the federation
-configuration file for Batch Shipyard.
+proxy configuration file for Batch Shipyard. Federated job constraint
+configuration can be found in the
+[jobs configuration](14-batch-shipyard-configuration-jobs.md) documentation.
 
 ## Schema
 The federation schema is as follows:
