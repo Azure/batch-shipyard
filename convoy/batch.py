@@ -2559,13 +2559,11 @@ def _send_docker_kill_signal(
     """
     if util.is_none_or_empty(username):
         raise ValueError(
-            'cannot terminate non-native Docker container without an SSH '
-            'username')
+            'cannot terminate container task via SSH without an SSH username')
     if not ssh_private_key.exists():
         raise RuntimeError(
-            ('cannot terminate non-native Docker container with a '
-             'non-existent SSH private key: {}').format(
-                 ssh_private_key))
+            ('cannot terminate container task via SSH with a '
+             'non-existent SSH private key: {}').format(ssh_private_key))
     targets = [(pool_id, node_id)]
     task_name = None
     # if this task is multi-instance, get all subtasks
@@ -2631,26 +2629,27 @@ def _terminate_task(
         nocheck[job_id].add(task)
         return
     logger.info('Terminating task: {}'.format(task))
-    # directly send docker kill signal if running
-    if (not native and
-            (_task.state == batchmodels.TaskState.running or force)):
-        # check if task is a docker task
-        if ('docker run' in _task.command_line or
-                'docker exec' in _task.command_line):
-            if (_task.multi_instance_settings is not None and
-                    _task.multi_instance_settings.
-                    number_of_instances > 1):
-                task_is_mi = True
-            else:
-                task_is_mi = False
-            _send_docker_kill_signal(
-                batch_client, config, ssh_username,
-                ssh_private_key, _task.node_info.pool_id,
-                _task.node_info.node_id, job_id, task, task_is_mi)
-        else:
-            batch_client.task.terminate(job_id, task)
-    else:
+    if native:
         batch_client.task.terminate(job_id, task)
+    else:
+        # directly send docker kill signal if running
+        if _task.state == batchmodels.TaskState.running or force:
+            # check if task is a docker task
+            if ('docker run' in _task.command_line or
+                    'docker exec' in _task.command_line):
+                if (_task.multi_instance_settings is not None and
+                        _task.multi_instance_settings.number_of_instances > 1):
+                    task_is_mi = True
+                else:
+                    task_is_mi = False
+                _send_docker_kill_signal(
+                    batch_client, config, ssh_username,
+                    ssh_private_key, _task.node_info.pool_id,
+                    _task.node_info.node_id, job_id, task, task_is_mi)
+            else:
+                # non-docker task, so ensure it's not completed
+                if _task.state != batchmodels.TaskState.completed:
+                    batch_client.task.terminate(job_id, task)
 
 
 def _wait_for_task_completion(batch_client, job_id, task):
@@ -2692,16 +2691,19 @@ def terminate_tasks(
     :param bool wait: wait for task to terminate
     :param bool force: force task docker kill signal regardless of state
     """
-    pool = None
     native = settings.is_native_docker_pool(config)
     # get ssh login settings for non-native pools
     if not native:
         pool = settings.pool_settings(config)
+        ssh_username = pool.ssh.username
         ssh_private_key = pool.ssh.ssh_private_key
         if ssh_private_key is None:
             ssh_private_key = pathlib.Path(
                 pool.ssh.generated_file_export_path,
                 crypto.get_ssh_key_prefix())
+    else:
+        ssh_private_key = None
+        ssh_username = None
     if jobid is None:
         jobs = settings.job_specifications(config)
     else:
@@ -2733,7 +2735,7 @@ def terminate_tasks(
                 max_workers=_max_workers(tasks_to_term)) as executor:
             for task in tasks_to_term:
                 executor.submit(
-                    _terminate_task, batch_client, config, pool.ssh.username,
+                    _terminate_task, batch_client, config, ssh_username,
                     ssh_private_key, native, force, job_id, task, nocheck)
     if wait:
         for job in jobs:
