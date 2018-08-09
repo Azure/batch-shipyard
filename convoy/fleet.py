@@ -4753,9 +4753,10 @@ def action_fed_jobs_add(
 
 
 def action_fed_jobs_list(
-        table_client, config, federation_id, jobid, jobscheduleid):
+        table_client, config, federation_id, jobid, jobscheduleid, blocked,
+        queued):
     # type: (azure.cosmosdb.table.TableService,
-    #        dict, str, str, str) -> None
+    #        dict, str, str, str, bool, bool) -> None
     """Action: Fed Jobs List
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
@@ -4764,11 +4765,22 @@ def action_fed_jobs_list(
     :param str federation_id: federation id
     :param str jobid: job id
     :param str jobscheduleid: job schedule id
+    :param bool blocked: blocked actions only
+    :param bool queued: queued actions only
     """
     if jobid is not None and jobscheduleid is not None:
         raise ValueError('cannot specify both --jobid and --jobscheduleid')
-    storage.list_jobs_in_federation(
-        table_client, config, federation_id, jobid, jobscheduleid)
+    if blocked and queued:
+        raise ValueError('cannot specify both --blocked and --queued')
+    if blocked:
+        storage.list_blocked_actions_in_federation(
+            table_client, config, federation_id, jobid, jobscheduleid)
+    elif queued:
+        storage.list_queued_actions_in_federation(
+            table_client, config, federation_id, jobid, jobscheduleid)
+    else:
+        storage.list_active_jobs_in_federation(
+            table_client, config, federation_id, jobid, jobscheduleid)
 
 
 def action_fed_jobs_del_or_term(

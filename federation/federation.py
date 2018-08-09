@@ -933,6 +933,7 @@ class FederationDataHandler():
     _GLOBAL_LOCK_BLOB = 'global.lock'
     _ALL_FEDERATIONS_PK = '!!FEDERATIONS'
     _FEDERATION_ACTIONS_PREFIX_PK = '!!ACTIONS'
+    _BLOCKED_FEDERATION_ACTIONS_PREFIX_PK = '!!ACTIONS.BLOCKED'
     _MAX_SEQUENCE_ID_PROPERTIES = 15
     _MAX_SEQUENCE_IDS_PER_PROPERTY = 975
     _MAX_STR_ENTITY_PROPERTY_LENGTH = 32174
@@ -1328,6 +1329,40 @@ class FederationDataHandler():
                 self.service_proxy.queue_prefix, fedhash)
             self.service_proxy.queue_client.delete_message(
                 queue_name, msg_id, pop_receipt)
+
+    def add_blocked_action_for_job(
+            self,
+            fedhash: str,
+            target: str,
+            unique_id: str,
+            num_tasks: int,
+            reason: str,
+    ) -> None:
+        entity = {
+            'PartitionKey': '{}${}'.format(
+                self._BLOCKED_FEDERATION_ACTIONS_PREFIX_PK, fedhash),
+            'RowKey': hash_string(target),
+            'UniqueId': unique_id,
+            'Id': target,
+            'NumTasks': num_tasks,
+            'Reason': reason,
+        }
+        self.service_proxy.table_client.insert_or_replace_entity(
+            self.service_proxy.table_name_jobs, entity)
+
+    def remove_blocked_action_for_job(
+            self,
+            fedhash: str,
+            target: str
+    ) -> None:
+        pk = '{}${}'.format(
+            self._BLOCKED_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+        rk = hash_string(target)
+        try:
+            self.service_proxy.table_client.delete_entity(
+                self.service_proxy.table_name_jobs, pk, rk)
+        except azure.common.AzureMissingResourceHttpError:
+            pass
 
     def _create_blob_client(self, sa, ep, sas):
         return azure.storage.blob.BlockBlobService(
@@ -2304,6 +2339,14 @@ class Federation():
             logger.error(
                 'no available nodes to schedule uid {} target={} in fed {} '
                 'fed hash {}'.format(unique_id, target, self.id, self.hash))
+            if len(blacklist) == len(self.pools):
+                fdh.add_blocked_action_for_job(
+                    self.hash, target, unique_id, num_tasks,
+                    'Constraint filtering: all pools blacklisted')
+            else:
+                fdh.add_blocked_action_for_job(
+                    self.hash, target, unique_id, num_tasks,
+                    'Constraint filtering: no available pools')
             return None
         # perform greedy matching
         schedule = self._greedy_best_fit_match_for_job(
@@ -2313,6 +2356,9 @@ class Federation():
             logger.warning(
                 'could not match uid {} target={} in fed {} fed hash {} to '
                 'any pool'.format(unique_id, target, self.id, self.hash))
+            fdh.add_blocked_action_for_job(
+                self.hash, target, unique_id, num_tasks,
+                'Pool matching: no available pools or nodes')
         else:
             logger.info(
                 'selected pool id {} hash {} for uid {} target={} in fed {} '
@@ -2766,11 +2812,17 @@ class FederationProcessor():
                 cj = await self.federations[fedhash].create_job(
                     self.bsh, poolrk, job, constraints)
                 if cj:
+                    # remove blocked action if any
+                    self.fdh.remove_blocked_action_for_job(fedhash, job.id)
+                    # track job prior to adding tasks in case task
+                    # addition fails
                     self.federations[fedhash].track_job(
                         self.fdh, poolrk, job.id, False, None)
+                    # schedule tasks
                     self.federations[fedhash].schedule_tasks(
                         self.bsh, self.fdh, poolrk, job.id, constraints,
                         naming, task_map)
+                    # update job tracking
                     self.federations[fedhash].track_job(
                         self.fdh, poolrk, job.id, False, unique_id)
                     break
@@ -2812,6 +2864,10 @@ class FederationProcessor():
                 cj = await self.federations[fedhash].create_job_schedule(
                     self.bsh, poolrk, job_schedule, constraints)
                 if cj:
+                    # remove blocked action if any
+                    self.fdh.remove_blocked_action_for_job(
+                        fedhash, job_schedule.id)
+                    # track job schedule
                     self.federations[fedhash].track_job(
                         self.fdh, poolrk, job_schedule.id, True, unique_id)
                     break
@@ -2993,6 +3049,8 @@ class FederationProcessor():
                 'sequence length is missing or non-positive for uid={} for '
                 'target {} on federation {}'.format(
                     unique_id, target, fedhash))
+            # remove blocked action if any
+            self.fdh.remove_blocked_action_for_job(fedhash, target)
             return result, None
         # if there is a sequence mismatch, then queue is no longer FIFO
         # get the appropriate next sequence id and construct the blob url
@@ -3017,6 +3075,8 @@ class FederationProcessor():
             logger.error(
                 'cannot process queue message for sequence id {} for '
                 'fed {}'.format(unique_id, fedhash))
+            # remove blocked action if any
+            self.fdh.remove_blocked_action_for_job(fedhash, target)
             return False, target
         else:
             job_data = pickle.loads(data, fix_imports=True)

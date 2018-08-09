@@ -58,6 +58,7 @@ _MONITOR_BATCHPOOL_PK = 'BatchPool'
 _MONITOR_REMOTEFS_PK = 'RemoteFS'
 _ALL_FEDERATIONS_PK = '!!FEDERATIONS'
 _FEDERATION_ACTIONS_PREFIX_PK = '!!ACTIONS'
+_BLOCKED_FEDERATION_ACTIONS_PREFIX_PK = '!!ACTIONS.BLOCKED'
 _MAX_SEQUENCE_ID_PROPERTIES = 15
 _MAX_SEQUENCE_IDS_PER_PROPERTY = 975
 _DEFAULT_SAS_EXPIRY_DAYS = 365 * 30
@@ -1309,10 +1310,142 @@ def add_job_to_federation(
     queue_client.put_message(contname, msg_data, time_to_live=-1)
 
 
-def list_jobs_in_federation(
+def list_blocked_actions_in_federation(
         table_client, config, federation_id, job_id, job_schedule_id):
     # type: (azure.cosmosdb.TableService, dict, str, str, str) -> None
-    """List jobs in federation
+    """List blocked actions in federation
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param str job_id: job id
+    :param str job_schedule_id: job schedule id
+    """
+    fedhash = hash_federation_id(federation_id)
+    pk = '{}${}'.format(_BLOCKED_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+    if (util.is_none_or_empty(job_id) and
+            util.is_none_or_empty(job_schedule_id)):
+        logger.debug(
+            'fetching all blocked jobs/job schedules for federation '
+            'id {}'.format(federation_id))
+        try:
+            entities = table_client.query_entities(
+                _STORAGE_CONTAINERS['table_federation_jobs'],
+                filter='PartitionKey eq \'{}\''.format(pk))
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+    else:
+        rk = hash_string(
+            job_id if util.is_not_empty(job_id) else job_schedule_id)
+        try:
+            entities = [table_client.get_entity(
+                _STORAGE_CONTAINERS['table_federation_jobs'], pk, rk)]
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+    if settings.raw(config):
+        log = {}
+    else:
+        log = [
+            'listing blocked jobs/job schedules for federation id {}:'.format(
+                federation_id)
+        ]
+    for entity in entities:
+        id = entity['Id']
+        if settings.raw(config):
+            log[id] = {
+                'hash': entity['RowKey'],
+                'unique_id': entity['UniqueId'],
+                'task_group_size': entity['NumTasks'],
+                'reason': entity['Reason'],
+            }
+        else:
+            log.append('* id: {}'.format(id))
+            log.append('  * hash: {}'.format(entity['RowKey']))
+            log.append('  * unique id: {}'.format(entity['UniqueId']))
+            log.append('  * task group size: {}'.format(entity['NumTasks']))
+            log.append('  * reason: {}'.format(entity['Reason']))
+    if settings.raw(config):
+        print(json.dumps(log, sort_keys=True, indent=4))
+    else:
+        if len(log) > 1:
+            logger.info(os.linesep.join(log))
+        else:
+            logger.debug(
+                'no blocked jobs/job schedules exist in federation '
+                'id {}'.format(federation_id))
+
+
+def list_queued_actions_in_federation(
+        table_client, config, federation_id, job_id, job_schedule_id):
+    # type: (azure.cosmosdb.TableService, dict, str, str, str) -> None
+    """List queued actions in federation
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param dict config: configuration dict
+    :param str federation_id: federation id
+    :param str job_id: job id
+    :param str job_schedule_id: job schedule id
+    """
+    fedhash = hash_federation_id(federation_id)
+    pk = '{}${}'.format(_FEDERATION_ACTIONS_PREFIX_PK, fedhash)
+    if (util.is_none_or_empty(job_id) and
+            util.is_none_or_empty(job_schedule_id)):
+        logger.debug(
+            'fetching all queued jobs/job schedules for federation '
+            'id {}'.format(federation_id))
+        try:
+            entities = table_client.query_entities(
+                _STORAGE_CONTAINERS['table_federation_jobs'],
+                filter='PartitionKey eq \'{}\''.format(pk))
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+    else:
+        rk = hash_string(
+            job_id if util.is_not_empty(job_id) else job_schedule_id)
+        try:
+            entities = [table_client.get_entity(
+                _STORAGE_CONTAINERS['table_federation_jobs'], pk, rk)]
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+    if settings.raw(config):
+        log = {}
+    else:
+        log = [
+            'listing queued jobs/job schedules for federation id {}:'.format(
+                federation_id)
+        ]
+    for entity in entities:
+        if ('Sequence0' not in entity or
+                util.is_none_or_empty(entity['Sequence0'])):
+            continue
+        id = entity['Id']
+        uids = entity['Sequence0'].split(',')[:10]
+        if settings.raw(config):
+            log[id] = {
+                'kind': entity['Kind'],
+                'hash': entity['RowKey'],
+                'first_ten_unique_ids': uids,
+            }
+        else:
+            log.append('* id: {}'.format(id))
+            log.append('  * kind: {}'.format(entity['Kind']))
+            log.append('  * hash: {}'.format(entity['RowKey']))
+            log.append('  * first ten unique ids:')
+            for uid in uids:
+                log.append('    * {}'.format(uid))
+    if settings.raw(config):
+        print(json.dumps(log, sort_keys=True, indent=4))
+    else:
+        if len(log) > 1:
+            logger.info(os.linesep.join(log))
+        else:
+            logger.debug(
+                'no queued jobs/job schedules exist in federation '
+                'id {}'.format(federation_id))
+
+
+def list_active_jobs_in_federation(
+        table_client, config, federation_id, job_id, job_schedule_id):
+    # type: (azure.cosmosdb.TableService, dict, str, str, str) -> None
+    """List active jobs in federation
     :param azure.cosmosdb.table.TableService table_client: table client
     :param dict config: configuration dict
     :param str federation_id: federation id
@@ -1324,8 +1457,8 @@ def list_jobs_in_federation(
             util.is_none_or_empty(job_schedule_id)):
         targets = []
         logger.debug(
-            'fetching all jobs/job schedules for federation id {}'.format(
-                federation_id))
+            'fetching all active jobs/job schedules for federation '
+            'id {}'.format(federation_id))
         _, entities = get_all_federation_jobs(table_client, fedhash)
         for entity in entities:
             targets.append(entity['RowKey'])
@@ -1333,13 +1466,14 @@ def list_jobs_in_federation(
         targets = [job_id if util.is_not_empty(job_id) else job_schedule_id]
     if len(targets) == 0:
         logger.error(
-            'no jobs/job schedules in federation id {}'.format(federation_id))
+            'no active jobs/job schedules in federation id {}'.format(
+                federation_id))
         return
     if settings.raw(config):
         log = {}
     else:
         log = [
-            'listing jobs/job schedules for federation id {}:'.format(
+            'listing active jobs/job schedules for federation id {}:'.format(
                 federation_id)
         ]
     for targethash in targets:
@@ -1410,8 +1544,8 @@ def list_jobs_in_federation(
             logger.info(os.linesep.join(log))
         else:
             logger.error(
-                'no jobs/job schedules exist in federation id {}'.format(
-                    federation_id))
+                'no active jobs/job schedules exist in federation '
+                'id {}'.format(federation_id))
 
 
 def pickle_and_upload(blob_client, data, rpath, federation_id=None):

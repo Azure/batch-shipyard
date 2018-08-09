@@ -2671,7 +2671,7 @@ def jobs(ctx):
 @aad_options
 @pass_cli_context
 def fed_jobs_add(ctx, federation_id):
-    """Add jobs to a federation"""
+    """Add jobs or job schedules to a federation"""
     ctx.initialize_for_federation(init_batch=True)
     convoy.fleet.action_fed_jobs_add(
         ctx.batch_client, ctx.keyvault_client, ctx.blob_client,
@@ -2681,19 +2681,24 @@ def fed_jobs_add(ctx, federation_id):
 @jobs.command('list')
 @click.argument('federation-id')
 @click.option(
+    '--blocked', is_flag=True, help='List blocked actions')
+@click.option(
     '--job-id', help='List the specified job id')
 @click.option(
     '--jobschedule-id', help='List the specified job schedule id')
+@click.option(
+    '--queued', is_flag=True, help='List queued actions')
 @common_options
 @federation_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def fed_jobs_list(ctx, federation_id, job_id, jobschedule_id):
+def fed_jobs_list(ctx, blocked, federation_id, job_id, jobschedule_id, queued):
     """List jobs or job schedules in a federation"""
     ctx.initialize_for_federation()
     convoy.fleet.action_fed_jobs_list(
-        ctx.table_client, ctx.config, federation_id, job_id, jobschedule_id)
+        ctx.table_client, ctx.config, federation_id, job_id, jobschedule_id,
+        blocked, queued)
 
 
 @jobs.command('term')

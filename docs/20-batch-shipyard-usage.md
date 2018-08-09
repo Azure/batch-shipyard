@@ -424,8 +424,10 @@ federation
       specified multiple times.
 * `jobs list` lists jobs or locates a job or job schedule
     * `FEDERATION_ID` is the federation id name
+    * `--blocked` will list blocked actions
     * `--job-id` locates a specific job id
     * `--job-schedule-id` deletes a specific job schedule id
+    * `--queued` will list queued actions
 * `jobs term` submits an action to terminate jobs or job schedules from a
 federation
     * `FEDERATION_ID` is the federation id name

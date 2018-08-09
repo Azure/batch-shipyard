@@ -1,7 +1,7 @@
 # Federations with Batch Shipyard
 The focus of this article is to explain the federation concept in Batch
 Shipyard and effectively deploying your workload across multiple pools that
-may span multiple Azure regions across the world.
+may span multiple Azure regions around the world.
 
 ## Overview
 In Azure Batch, each pool within a Batch account is considered a logical
@@ -64,9 +64,10 @@ order.
 proxy when selecting a target pool to schedule to.
 * Scheduling slot: Each compute node can contain up to max tasks per node
 scheduling slots as specified during pool allocation.
-* Available scheduling slots: the number of compute nodes within a pool that
-can run a task. The formula representing this metric is:
-`(nodes in idle state + nodes in running state) * max_tasks_per_node`.
+* Available scheduling slots: the number of available task scheduling
+slots across all compute nodes within a pool that can run a task. The
+formula representing this metric is:
+`(nodes in idle state + nodes in running state) * max tasks per node`.
 
 ```
                                                                          +-------------+
@@ -109,6 +110,20 @@ can run a task. The formula representing this metric is:
 The following is a brief walkthrough of configuring a Batch Shipyard
 federation and simple usage commands for creating a federation proxy and
 submitting actions against federations.
+
+### Azure Active Directory Authentication Required
+Azure Active Directory authentication is required to create a federation
+proxy. When executing the `fed proxy create` command, your service
+principal must be at least `Owner` or a
+[custom role](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles)
+that does not prohibit the following action along with the ability to
+create/read/write resources for the subscription:
+
+* `Microsoft.Authorization/*/Write`
+
+This action is required to enable
+[Azure Managed Service Identity](https://docs.microsoft.com/azure/active-directory/managed-service-identity/overview)
+on the federation proxy.
 
 ### Configuration
 The configuration for a Batch Shipyard federation is generally composed of
@@ -197,7 +212,7 @@ job_specifications:
         public:
         - # list of public registries that don't require a login for referenced
           # container images for all tasks in task group
-      max_active_task_backlog: # limit scheduling a job with queued backlog of tasks
+      max_active_task_backlog: # limit scheduling a job to pools with queued backlog of tasks
         ratio: # maximum backlog ratio allowed represented as (active tasks / schedulable slots).
         autoscale_exempt: # if autoscale pools are exempt from this ratio requirement if there
                           # are no schedulable slots and their allocation state is steady
@@ -266,7 +281,7 @@ routing of task groups with `custom_image_arm_id` constraints.
 * `autoscale` changes behavior of scheduling across various constraints.
 * `inter_node_communication` enabled pools will allow tasks that contain
 multi-instance tasks.
-* `virtual_network` proeprties will allow routing of task groups with
+* `virtual_network` properties will allow routing of task groups with
 `virtual_network_arm_id` constraints.
 
 ### Limitations
@@ -285,11 +300,12 @@ of input data from other Batch tasks within the task group. Pool-level
 * A maximum of 14625 actions can be actively queued per unique job id.
 Actions already processed by the federation proxy do not count towards this
 limit. This limit only applies to federations that allow non-unique job ids
-for job submissions (i.e., `fed jobs add`).
-* Low priority/dedicated compute node constraints are best-effort. If a task
-group is scheduled to a pool with dedicated-only nodes due to a specified
-constraint, but the pool later resizes with low priority nodes, portions of
-the task group may get scheduled to these nodes.
+for job submissions.
+* Low priority/dedicated compute node constraints are best-effort if
+scheduled to autoscale-enabled pools that have a mixture of dedicated and
+low priority nodes. If a task group is scheduled to a pool with dedicated-only
+nodes due to a specified constraint, but the pool later resizes with low
+priority nodes, portions of the task group may get scheduled to these nodes.
 * Constraints restricting low priority or dedicated execution may be
 subject to the autoscale formula supplied. It is assumed that an autoscale
 formula will scale up/down both low priority and dedicated nodes.
@@ -395,12 +411,28 @@ follow this pattern:
       account credentials populated targeting the region with the pool
       listed in the job location.
 
+Note that listing jobs with the default parameters with
+`fed jobs list <fed-id>` (either with or without scoping the invocation
+to a job or job schedule) will only list active job and job schedules tracked
+by the federation (and have been submitted to Batch). Meaning, if the action
+associated with the job/task group is still enqueued, it will not be listed
+with the command. In order to retrieve actions which are enqueued and have
+not been processed (or are blocked), you can use the `--queued` switch:
+`fed jobs list <fed-id> --job-id <job-id> --queued`. This command will list
+all queued actions for the specified job id.
+
 Sometimes a job/task group is submitted which can "block" other actions for
 the same specified job if an improper constraint or other incorrect
 configuration is specified (this can be particularly acute for non-unique job
-id federations). In this case, it is necessary to remove such problematic
-actions to unblock processing. This can be done with the command:
-`fed jobs zap <fed-id> --unique-id <uid>`. Note that there is no recovery
-after a unique id is removed; the action will need to be re-submitted
-(with the corrected parameters to prevent the blocking behavior which
-required the use of `fed jobs zap` in the first place).
+id federations). You can recover from such issues following these commands:
+
+1. Locate the problematic action (unique id) associated with the job/task
+group submission, if not known already:
+`fed jobs list <fed-id> --job-id <job-id> --blocked`. This command will also
+provide a broad reason on why the action was blocked.
+2. Remove the problematic action (unique id) to unblock processing:
+`fed jobs zap <fed-id> --unique-id <uid>`
+
+Note that there is no recovery after a unique id is removed; the action will
+need to be re-submitted (with the corrected parameters to prevent the
+blocking behavior which required the use of prior actions in the first place).
