@@ -2765,6 +2765,85 @@ def terminate_tasks(
                         _wait_for_task_completion, batch_client, job_id, task)
 
 
+def get_node_counts(batch_client, config, pool_id=None):
+    # type: (batch.BatchServiceClient, dict, str) -> None
+    """Get node state counts
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str pool_id: pool id
+    """
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config)
+    raw = None
+    log = ['node state counts for pool {}'.format(pool_id)]
+    try:
+        if settings.raw(config):
+            raw = util.print_raw_paged_output(
+                batch_client.account.list_pool_node_counts,
+                account_list_pool_node_counts_options=batchmodels.
+                AccountListPoolNodeCountsOptions(
+                    filter='poolId eq \'{}\''.format(pool_id)
+                ),
+                return_json=True
+            )
+            if len(raw) == 1:
+                raw = {
+                    pool_id: raw[0]
+                }
+        else:
+            pc = batch_client.account.list_pool_node_counts(
+                account_list_pool_node_counts_options=batchmodels.
+                AccountListPoolNodeCountsOptions(
+                    filter='poolId eq \'{}\''.format(pool_id)))
+            pc = list(pc)[0]
+    except batchmodels.batch_error.BatchErrorException as ex:
+        if 'pool does not exist' in ex.message.value:
+            logger.error('{} pool does not exist'.format(pool_id))
+        else:
+            raise
+    else:
+        if not settings.raw(config):
+            log.append('* dedicated: ({} total)'.format(pc.dedicated.total))
+            log.append('  * creating: {}'.format(pc.dedicated.creating))
+            log.append('  * idle: {}'.format(pc.dedicated.creating))
+            log.append('  * leaving_pool: {}'.format(
+                pc.dedicated.leaving_pool))
+            log.append('  * offline: {}'.format(pc.dedicated.offline))
+            log.append('  * preempted: {}'.format(pc.dedicated.preempted))
+            log.append('  * rebooting: {}'.format(pc.dedicated.rebooting))
+            log.append('  * reimaging: {}'.format(pc.dedicated.reimaging))
+            log.append('  * running: {}'.format(pc.dedicated.running))
+            log.append('  * start_task_failed: {}'.format(
+                pc.dedicated.start_task_failed))
+            log.append('  * starting: {}'.format(pc.dedicated.starting))
+            log.append('  * unknown: {}'.format(pc.dedicated.unknown))
+            log.append('  * unusable: {}'.format(pc.dedicated.unusable))
+            log.append('  * waiting_for_start_task: {}'.format(
+                pc.dedicated.waiting_for_start_task))
+            log.append('* low priority: ({} total)'.format(
+                pc.low_priority.total))
+            log.append('  * creating: {}'.format(pc.low_priority.creating))
+            log.append('  * idle: {}'.format(pc.low_priority.creating))
+            log.append('  * leaving_pool: {}'.format(
+                pc.low_priority.leaving_pool))
+            log.append('  * offline: {}'.format(pc.low_priority.offline))
+            log.append('  * preempted: {}'.format(pc.low_priority.preempted))
+            log.append('  * rebooting: {}'.format(pc.low_priority.rebooting))
+            log.append('  * reimaging: {}'.format(pc.low_priority.reimaging))
+            log.append('  * running: {}'.format(pc.low_priority.running))
+            log.append('  * start_task_failed: {}'.format(
+                pc.low_priority.start_task_failed))
+            log.append('  * starting: {}'.format(pc.low_priority.starting))
+            log.append('  * unknown: {}'.format(pc.low_priority.unknown))
+            log.append('  * unusable: {}'.format(pc.low_priority.unusable))
+            log.append('  * waiting_for_start_task: {}'.format(
+                pc.low_priority.waiting_for_start_task))
+            logger.info(os.linesep.join(log))
+    if util.is_not_empty(raw):
+        util.print_raw_json(raw)
+
+
 def list_nodes(
         batch_client, config, pool_id=None, nodes=None,
         start_task_failed=False, unusable=False):
@@ -3676,6 +3755,52 @@ def get_task(batch_client, config, jobid, taskid):
     log.extend(log_task(task, jobid))
     logger.info(os.linesep.join(log))
     return task.state == batchmodels.TaskState.completed
+
+
+def get_task_counts(batch_client, config, jobid=None):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
+    #        bool, str, bool) -> bool
+    """Get task counts for specified job
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str jobid: job id to get task counts for
+    """
+    if util.is_none_or_empty(jobid):
+        jobs = settings.job_specifications(config)
+    else:
+        jobs = [{'id': jobid}]
+    raw = {}
+    for job in jobs:
+        jobid = settings.job_id(job)
+        log = ['task counts for job {}'.format(jobid)]
+        try:
+            if settings.raw(config):
+                raw[jobid] = util.print_raw_output(
+                    batch_client.job.get_task_counts,
+                    jobid,
+                    return_json=True
+                )
+            else:
+                tc = batch_client.job.get_task_counts(jobid)
+        except batchmodels.batch_error.BatchErrorException as ex:
+            if 'The specified job does not exist' in ex.message.value:
+                logger.error('{} job does not exist'.format(jobid))
+                continue
+            else:
+                raise
+        else:
+            if not settings.raw(config):
+                log.append('* status: {}'.format(
+                    tc.validation_status.value))
+                log.append('* active: {}'.format(tc.active))
+                log.append('* running: {}'.format(tc.running))
+                log.append('* completed: {}'.format(tc.completed))
+                log.append('  * succeeded: {}'.format(tc.succeeded))
+                log.append('  * failed: {}'.format(tc.failed))
+                logger.info(os.linesep.join(log))
+    if util.is_not_empty(raw):
+        util.print_raw_json(raw)
 
 
 def list_tasks(batch_client, config, all=False, jobid=None):

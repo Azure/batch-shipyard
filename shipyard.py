@@ -1707,6 +1707,20 @@ def nodes_grls(ctx, no_generate_tunnel_script):
         ctx.batch_client, ctx.config, no_generate_tunnel_script)
 
 
+@nodes.command('count')
+@click.option(
+    '--poolid', help='Target specified pool id rather than from configuration')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def nodes_count(ctx, poolid):
+    """Get node counts in pool"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_pool_nodes_count(ctx.batch_client, ctx.config, poolid)
+
+
 @nodes.command('list')
 @click.option(
     '--start-task-failed',
@@ -2049,6 +2063,20 @@ def tasks_list(ctx, all, jobid, poll_until_tasks_complete, taskid):
     convoy.fleet.action_jobs_tasks_list(
         ctx.batch_client, ctx.config, all, jobid,
         poll_until_tasks_complete, taskid)
+
+
+@tasks.command('count')
+@click.option(
+    '--jobid', help='List tasks in the specified job id')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def tasks_count(ctx, jobid):
+    """Get task counts for a job"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_jobs_tasks_count(ctx.batch_client, ctx.config, jobid)
 
 
 @tasks.command('term')

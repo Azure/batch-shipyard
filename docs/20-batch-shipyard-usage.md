@@ -134,6 +134,7 @@ releases. The following commands support this option:
     * `fed pool remove`
     * `fed proxy status`
     * `jobs list`
+    * `jobs tasks count`
     * `jobs tasks list`
     * `monitor status`
     * `pool autoscale evaluate`
@@ -142,6 +143,7 @@ releases. The following commands support this option:
     * `pool images update`
     * `pool list`
     * `pool listskus`
+    * `pool nodes count`
     * `pool nodes grls`
     * `pool nodes list`
     * `pool nodes ps`
@@ -595,9 +597,10 @@ The `jobs` command has the following sub-commands:
 
 The `jobs tasks` sub-command has the following sub-sub-commands:
 ```
-  del   Delete specified tasks in jobs
-  list  List tasks within jobs
-  term  Terminate specified tasks in jobs
+  count  Get task counts for a job
+  del    Delete specified tasks in jobs
+  list   List tasks within jobs
+  term   Terminate specified tasks in jobs
 ```
 
 * `add` will add all jobs and tasks defined in the jobs configuration file
@@ -641,6 +644,8 @@ the new target pool has the Docker images required to run the job.
     * `--terminate` terminate running tasks
     * `--wait` wait for running tasks to complete
 * `stats` will generate a statistics summary of a job or jobs
+    * `--jobid` will query the specified job instead of all jobs
+* `tasks count` will count the task states within a job
     * `--jobid` will query the specified job instead of all jobs
 * `tasks del` will delete tasks within jobs specified in the jobs
 configuration file. Active or running tasks will be terminated first on
@@ -806,6 +811,7 @@ The `pool images` sub-command has the following sub-sub-commands:
 
 The `pool nodes` sub-command has the following sub-sub-commands:
 ```
+  count   Get node counts in pool
   del     Delete a node or nodes from a pool
   grls    Get remote login settings for all nodes in...
   list    List nodes in pool
@@ -851,6 +857,9 @@ pool. This command may require a valid SSH user.
     * `--ssh` will force the update to occur over an SSH side channel rather
       than a Batch job.
 * `list` will list all pools in the Batch account
+* `nodes count` will count the node states within a pool
+    * `--poolid` will query the specified pool instead of the pool from the
+      pool configuration file
 * `nodes del` will delete the specified node from the pool
     * `--all-start-task-failed` will delete all nodes in the start task
       failed state

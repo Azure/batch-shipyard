@@ -3337,6 +3337,18 @@ def action_pool_nodes_grls(
             batch_client, config, None, nodes=None, rls=rls)
 
 
+def action_pool_nodes_count(batch_client, config, poolid):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Pool Nodes Counts
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str poolid: pool id
+    """
+    _check_batch_client(batch_client)
+    batch.get_node_counts(batch_client, config, poolid)
+
+
 def action_pool_nodes_list(batch_client, config, start_task_failed, unusable):
     # type: (batchsc.BatchServiceClient, dict, bool, bool) -> None
     """Action: Pool Nodes List
@@ -3767,6 +3779,18 @@ def action_jobs_tasks_list(
         if not poll_until_tasks_complete or all_complete:
             break
         time.sleep(5)
+
+
+def action_jobs_tasks_count(batch_client, config, jobid):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Jobs Tasks Count
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str jobid: job id
+    """
+    _check_batch_client(batch_client)
+    batch.get_task_counts(batch_client, config, jobid=jobid)
 
 
 def action_jobs_tasks_term(batch_client, config, jobid, taskid, wait, force):
