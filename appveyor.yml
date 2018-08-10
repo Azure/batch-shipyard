@@ -12,21 +12,19 @@ environment:
     PYTHON_VERSION: "2.7"
     PYTHON_ARCH: "64"
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-    PYTHON: "C:\\Python36-x64"
-    PYTHON_VERSION: "3.6"
+    PYTHON: "C:\\Python34-x64"
+    PYTHON_VERSION: "3.4"
     PYTHON_ARCH: "64"
-  BLOBXFER_STORAGE_ACCOUNT_KEY:
-    secure: kc+BqqjCZH3FGmN+4ngtNa8p4p2CR93gTGB9ecXvAZBdeOC3aaQoAV1JSSxXemfYF1I8B8rWM6gp6YyFusqfkpH4KMTZAyI8pTzV9l8dDaKhTBfE21kYlXgsRpV+JUnj
-  BLOBXFER_STORAGE_ACCOUNT:
-    secure: Dlu9Wk8y1Mo4eGjx6cH6ex+35JEB2g7kpsK15bSZeAI=
-  DOCKER_USERNAME:
-    secure: S8n3Geq7JUkN7ZQKXo8CLg==
-  DOCKER_PASSWORD:
-    secure: PFjy27XjnoH8YI46VpXUi13ZJLa8G6EJ6YzR9P3ualY=
-  DOCKER_IMAGE_TAG_PREFIX: "alfpark/batch-shipyard:"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    PYTHON: "C:\\Python35-x64"
+    PYTHON_VERSION: "3.5"
+    PYTHON_ARCH: "64"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    PYTHON: "C:\\Python37-x64"
+    PYTHON_VERSION: "3.7"
+    PYTHON_ARCH: "64"
 
 init:
-- choco install checksum
 - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
 
 install:
@@ -43,193 +41,6 @@ build: off
 
 test_script:
 - flake8 --statistics shipyard.py convoy\\*.py
-- IF "%PYTHON_VERSION%"=="3.6" (
+- IF "%PYTHON_VERSION%"=="3.7" (
   flake8 --statistics cascade\\*.py cargo\\*.py
   )
-
-after_test:
-- ps: >-
-    if ($env:APPVEYOR_REPO_TAG -eq "true") {
-      $env:APPVEYOR_REPO_TAG_NAME -match "^([\d\.])+"
-      $env:BUILDVER_DOTTED = $matches[0]
-      if ($env:APPVEYOR_REPO_TAG_NAME -match "([a-z]+\d+)") {
-        $env:NUGET_PACKAGE_VERSION = $env:BUILDVER_DOTTED + "-" + $matches[1]
-      }
-      else {
-        $env:NUGET_PACKAGE_VERSION = $env:BUILDVER_DOTTED
-      }
-    }
-    else {
-      $env:NUGET_PACKAGE_VERSION = $null
-      $env:BUILDVER_DOTTED = "0.0.0"
-    }
-
-- echo is pr %APPVEYOR_PULL_REQUEST_NUMBER% is commit tag %APPVEYOR_REPO_TAG% name %APPVEYOR_REPO_TAG_NAME% branch %APPVEYOR_REPO_BRANCH% nugetpkg %NUGET_PACKAGE_VERSION%
-- ps: >-
-    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
-      Write-Host "Build is from a PR, not creating binary"
-      return
-    }
-    if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating binary"
-      return
-    }
-    if ($env:APPVEYOR_REPO_TAG -eq "true") {
-      $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_TAG_NAME + "-cli-win-amd64.exe"
-      $env:UPLOAD_PATH="releases/" + $env:APPVEYOR_REPO_TAG_NAME
-    }
-    else {
-      if ($env:APPVEYOR_REPO_BRANCH -eq "master" -Or $env:APPVEYOR_REPO_BRANCH -eq "develop") {
-        $env:BATCH_SHIPYARD_CLI_ARITFACT = "batch-shipyard-" + $env:APPVEYOR_REPO_BRANCH + "-" + $env:APPVEYOR_BUILD_NUMBER + "-cli-win-amd64.exe"
-        $env:UPLOAD_PATH="builds/" + $env:APPVEYOR_REPO_BRANCH
-      }
-      else {
-        Write-Host "Invalid tag or branch $env:APPVEYOR_REPO_BRANCH to build binary"
-        return
-      }
-    }
-
-    $bvt0,$bvt1,$bvt2 = $env:BUILDVER_DOTTED.split('.')
-
-    $env:BUILDVER_TUPLE = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$env:APPVEYOR_BUILD_NUMBER)
-
-    $env:BRANCH_GITSHA1 = [string]::Format("{0}@{1}",$env:APPVEYOR_REPO_BRANCH,$env:APPVEYOR_REPO_COMMIT.Substring(0,7))
-
-- IF "%BATCH_SHIPYARD_CLI_ARITFACT%"=="" (
-    echo "Batch Shipyard CLI artifact not defined"
-  ) ELSE (
-    echo "Batch Shipyard CLI is %BATCH_SHIPYARD_CLI_ARITFACT% upload path %UPLOAD_PATH%" &&
-    virtualenv -p "%PYTHON%\\python.exe" pyi &&
-    pyi\\Scripts\\activate.bat &&
-    pip install pyinstaller &&
-    pip install --upgrade -r requirements.txt &&
-    pip install --upgrade --no-deps -r req_nodeps.txt &&
-    sed -i -e "s/{BUILDVER_TUPLE}/%BUILDVER_TUPLE%/g" docker\\windows\\file_version_info.txt &&
-    sed -i -e "s/{BUILDVER_DOTTED}/%BUILDVER_DOTTED%/g" docker\\windows\\file_version_info.txt &&
-    sed -i -e "s/{BRANCH_GITSHA1}/%BRANCH_GITSHA1%/g" docker\\windows\\file_version_info.txt &&
-    sed -i -e "s/{EXE}/%BATCH_SHIPYARD_CLI_ARITFACT%/g" docker\\windows\\file_version_info.txt &&
-    pyinstaller -F -n "%BATCH_SHIPYARD_CLI_ARITFACT%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py &&
-    pyi\\Scripts\\deactivate.bat &&
-    checksum "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" -t=sha256 > "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
-    cat "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
-    appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%" &&
-    appveyor PushArtifact "bin\\%BATCH_SHIPYARD_CLI_ARITFACT%.sha256" &&
-    pip install --upgrade blobxfer &&
-    blobxfer upload --remote-path %UPLOAD_PATH% --local-path bin\\%BATCH_SHIPYARD_CLI_ARITFACT% --strip-components 1 --file-md5 --overwrite
-  )
-- ps: >-
-    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
-      Write-Host "Build is from a PR, not creating a Docker image for cargo"
-      return
-    }
-    if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating a Docker image for cargo"
-      return
-    }
-
-    $DOCKER_IMAGE_TAG_SUFFIX = $null
-
-    if ($env:APPVEYOR_REPO_TAG -eq "true") {
-      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-cargo-windows'
-    }
-    if ($DOCKER_IMAGE_TAG_SUFFIX -eq $null) {
-      Write-Host "Image tag suffix is null, not creating a Docker image for cargo"
-      return
-    }
-
-    $DOCKER_IMAGE_TAG = $env:DOCKER_IMAGE_TAG_PREFIX + $DOCKER_IMAGE_TAG_SUFFIX
-
-    Write-Host "Creating Docker image for cargo with tag: $DOCKER_IMAGE_TAG"
-
-    docker version
-
-    pushd docker\\windows\\cargo
-
-    docker build --build-arg GIT_BRANCH=$env:APPVEYOR_REPO_BRANCH --build-arg GIT_COMMIT=$env:APPVEYOR_REPO_COMMIT -t $DOCKER_IMAGE_TAG .
-
-    docker login -u="$env:DOCKER_USERNAME" -p="$env:DOCKER_PASSWORD"
-
-    docker push $DOCKER_IMAGE_TAG
-
-    popd
-
-- ps: >-
-    if (!($env:APPVEYOR_PULL_REQUEST_NUMBER -eq $null)) {
-      Write-Host "Build is from a PR, not creating a Docker image for CLI"
-      return
-    }
-    if (!($env:PYTHON_VERSION -eq "3.6")) {
-      Write-Host "Python environment is not 3.6, not creating a Docker image for CLI"
-      return
-    }
-
-    $DOCKER_IMAGE_TAG_SUFFIX = $null
-
-    if ($env:APPVEYOR_REPO_TAG -eq "true") {
-      $DOCKER_IMAGE_TAG_SUFFIX = $env:APPVEYOR_REPO_TAG_NAME + '-cli-windows'
-    }
-    if ($DOCKER_IMAGE_TAG_SUFFIX -eq $null) {
-      Write-Host "Image tag suffix is null, not creating a Docker image for CLI"
-      return
-    }
-
-    $DOCKER_IMAGE_TAG = $env:DOCKER_IMAGE_TAG_PREFIX + $DOCKER_IMAGE_TAG_SUFFIX
-
-    Write-Host "Creating Docker image for CLI with tag: $DOCKER_IMAGE_TAG"
-
-    docker version
-
-    pushd docker\\windows\\cli
-
-    docker build --build-arg GIT_BRANCH=$env:APPVEYOR_REPO_BRANCH --build-arg GIT_COMMIT=$env:APPVEYOR_REPO_COMMIT -t $DOCKER_IMAGE_TAG .
-
-    docker login -u="$env:DOCKER_USERNAME" -p="$env:DOCKER_PASSWORD"
-
-    docker push $DOCKER_IMAGE_TAG
-
-    popd
-
-- IF "%APPVEYOR_REPO_TAG%"=="true" IF "%PYTHON_VERSION%"=="3.6" (
-  set UPLOAD_NUGET=1&
-  echo %APPVEYOR_REPO_TAG_NAME%> site-extension\\version.txt &
-  nuget pack site-extension\\BatchShipyard.nuspec -Version %NUGET_PACKAGE_VERSION% &
-  7z l BatchShipyard.*.nupkg &
-  appveyor PushArtifact BatchShipyard.%NUGET_PACKAGE_VERSION%.nupkg || set UPLOAD_NUGET=0&
-  blobxfer upload --remote-path %UPLOAD_PATH% --local-path . --include BatchShipyard.*.nupkg --file-md5 --overwrite)
-
-deploy:
-# TODO remove NuGet package generation and migrate to VSTS
-#- provider: NuGet
-#  api_key:
-#    secure: Bl6flZ+gBJZ3aYPTKERDcnMOsNgbLs/MG/gj6XsCC9I9E/erIw0ffpWJ+WSQrWiX
-#  skip_symbols: true
-#  artifact: /.*\.nupkg/
-#  on:
-#    appveyor_repo_tag: true
-#    PYTHON_VERSION: "3.6"
-#    UPLOAD_NUGET: "1"
-- provider: GitHub
-  tag: $(APPVEYOR_REPO_TAG_NAME)
-  description: 'Batch Shipyard release'
-  auth_token:
-    secure: +f4N6Qsv3HvJyii0Bs+8qBx3YS7+7FJUWbFSiAdEIUDubFQnNkJgFnBw0Ew2SLkv
-  artifact: /.*\.nupkg/
-  draft: true
-  prerelease: true
-  force_update: true
-  on:
-    appveyor_repo_tag: true
-    PYTHON_VERSION: "3.6"
-    UPLOAD_NUGET: "1"
-- provider: GitHub
-  tag: $(APPVEYOR_REPO_TAG_NAME)
-  description: 'Batch Shipyard release'
-  auth_token:
-    secure: +f4N6Qsv3HvJyii0Bs+8qBx3YS7+7FJUWbFSiAdEIUDubFQnNkJgFnBw0Ew2SLkv
-  artifact: /.*\.exe.*/
-  draft: true
-  prerelease: true
-  force_update: true
-  on:
-    appveyor_repo_tag: true
-    PYTHON_VERSION: "3.6"

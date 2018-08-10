@@ -57,8 +57,9 @@ SLES is not supported at this time.
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1803-with-Containers-smalldisk |     |         |      X      |                |
 
 ## Notes
-1. IB/RDMA is supported for this host OS with a custom image. Please
-see the [packer](../contrib/packer) scripts and consult the
+1. IB/RDMA is supported for this host OS with a custom image unless
+utilizing the native conversion option. Please see the
+[packer](../contrib/packer) scripts and consult the
 [custom image guide](63-batch-shipyard-custom-images.md) for information
 on how to create a compliant custom image.
 2. Native conversion of this platform image will enable IB/RDMA automatically.

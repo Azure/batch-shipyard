@@ -1,0 +1,341 @@
+name: $(SourceBranch)$(Rev:.r)
+
+phases:
+  - phase: Windows
+    queue:
+      name: Hosted VS2017
+      parallel: 1
+      matrix:
+        Python36:
+          python.version: '3.6'
+          PYENV_VERSION: '3.6.6'
+    steps:
+      - task: InstallPython@1
+        inputs:
+          version: 'python==$(PYENV_VERSION)'
+      - powershell: |
+          gci env:* | sort-object name
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --no-deps -r req_nodeps.txt
+          pip install flake8
+          pip list --format=columns --outdated
+        displayName: Fetch Dependencies
+      - powershell: |
+          flake8 --statistics shipyard.py convoy\*.py
+          if ($env:PYTHON_VERSION -eq "3.6") {
+            flake8 --statistics cascade\*.py cargo\*.py heimdall\*.py
+          }
+        displayName: Static Analysis
+      - powershell: |
+          $artifactCli = "batch-shipyard-" + $env:BUILD_SOURCEBRANCHNAME + "-" + $env:BUILD_BUILDID + "-cli-win-amd64.exe"
+          $artifactUploadPath = "builds/" + $env:BUILD_SOURCEBRANCHNAME
+          $buildverDotted = "0.0.0"
+          $bvt0,$bvt1,$bvt2 = $buildverDotted.split('.')
+          $buildverTuple = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$env:BUILD_BUILDID)
+          echo "##vso[task.setvariable variable=BUILDVER_DOTTED;]$buildverDotted"
+          echo "##vso[task.setvariable variable=BUILDVER_TUPLE;]$buildverTuple"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]$artifactCli"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]$artifactUploadPath"
+        displayName: Pre-build Environment (Branch)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.6'))
+      - powershell: |
+          git tag -l --points-at $env:BUILD_SOURCEVERSION | Tee-Object -Variable gitTag
+          $gitTag -match "^([\d\.])+"
+          $buildverDotted = $matches[0]
+          if ($gitTag -match "([a-z]+\d+)") {
+            $nugetPkgVer = $buildverDotted + "-" + $matches[1]
+          } else {
+            $nugetPkgVer = $buildverDotted
+          }
+          $artifactCli = "batch-shipyard-" + $gitTag + "-cli-win-amd64.exe"
+          $artifactUploadPath = "releases/" + $gitTag
+          $bvt0,$bvt1,$bvt2 = $buildverDotted.split('.')
+          $buildverTuple = [string]::Format("({0}, {1}, {2}, {3})",$bvt0,$bvt1,$bvt2,$env:BUILD_BUILDID)
+          echo "##vso[task.setvariable variable=BUILDVER_DOTTED;]$buildverDotted"
+          echo "##vso[task.setvariable variable=BUILDVER_TUPLE;]$buildverTuple"
+          echo "##vso[task.setvariable variable=NUGET_PACKAGE_VERSION;]$nugetPkgVer"
+          echo "##vso[task.setvariable variable=GIT_TAG;]$gitTag"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]$artifactCli"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]$artifactUploadPath"
+        displayName: Pre-build Environment (Tagged Release)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.6'))
+      - powershell: |
+          $artifactCliPath = "bin\\" + $env:ARTIFACT_CLI
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI_PATH;]$artifactCliPath"
+          $branchGitSha1 = [string]::Format("{0}@{1}",$env:BUILD_SOURCEBRANCHNAME,$env:BUILD_SOURCEVERSION.Substring(0,7))
+          echo "$env:ARTIFACT_CLI $env:BUILDVER_TUPLE $branchGitSha1"
+          $fileverInfo = "docker\\windows\\file_version_info.txt"
+          (Get-Content $fileverInfo).replace('{BUILDVER_TUPLE}', $env:BUILDVER_TUPLE) | Set-Content $fileverInfo
+          (Get-Content $fileverInfo).replace('{BUILDVER_DOTTED}', $env:BUILDVER_DOTTED) | Set-Content $fileverInfo
+          (Get-Content $fileverInfo).replace('{BRANCH_GITSHA1}', $branchGitSha1) | Set-Content $fileverInfo
+          (Get-Content $fileverInfo).replace('{EXE}', $env:ARTIFACT_CLI) | Set-Content $fileverInfo
+          pip install virtualenv
+          python -m virtualenv pyi
+        displayName: Pre-build
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - script: |
+          echo "ARTIFACT_CLI=%ARTIFACT_CLI% ARTIFACT_CLI_PATH=%ARTIFACT_CLI_PATH% ARTIFACT_UPLOAD_PATH=%ARTIFACT_UPLOAD_PATH%"
+          call pyi\\Scripts\\activate.bat
+          pip -V
+          pip install --no-cache-dir pyinstaller
+          pip install --upgrade -r requirements.txt
+          pip install --upgrade --no-deps -r req_nodeps.txt
+          pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py
+          blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%ARTIFACT_CLI_PATH%" --strip-components 1 --file-md5 --overwrite
+          call pyi\\Scripts\\deactivate.bat
+        displayName: Build
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - powershell: |
+          Invoke-WebRequest "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile "nuget.exe"
+          $env:GIT_TAG | Out-File site-extension\\version.txt -Force -NoNewline
+          Get-Content -Path site-extension\\version.txt
+          $nugetArtifact = 'BatchShipyard.' + $env:NUGET_PACKAGE_VERSION + '.nupkg'
+          echo "##vso[task.setvariable variable=NUGET_ARTIFACT;]$nugetArtifact"
+          .\\nuget.exe pack site-extension\\BatchShipyard.nuspec -Version $env:NUGET_PACKAGE_VERSION
+          [Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem')
+          $zip = [IO.Compression.ZipFile]::OpenRead($nugetArtifact)
+          foreach($entry in $zip.Entries) {
+            [string]::Format("{0}: {1} -> {2}", $entry.FullName, $entry.Length, $entry.CompressedLength)
+          }
+          $zip.Dispose()
+          move $nugetArtifact bin\\$nugetArtifact
+          dir bin
+        displayName: Nuget Pack
+        condition: and(succeeded(), ne(variables['NUGET_PACKAGE_VERSION'], ''))
+      - powershell: |
+          $versionTag = "bin\\version_tag.txt"
+          $env:GIT_TAG | Out-File $versionTag -Force -NoNewline
+          Get-Content -Path $versionTag
+          copy .vsts\\populate_tag.ps1 bin\\populate_tag.ps1
+          dir bin
+        displayName: Generate Version Tag File
+        condition: and(succeeded(), ne(variables['GIT_TAG'], ''))
+      - task: PublishBuildArtifacts@1
+        inputs:
+          pathtoPublish: bin
+          artifactName: BatchShipyard-Windows
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - powershell: |
+          docker version
+          docker login -u="$(docker.username)" -p="$(docker.password)"
+          $cargoImage = "alfpark/batch-shipyard:" + $env:GIT_TAG + "-cargo-windows"
+          $cliImage = "alfpark/batch-shipyard:" + $env:GIT_TAG + "-cli-windows"
+          pushd docker\\windows\\cargo
+          docker build --build-arg GIT_BRANCH=$env:BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$env:BUILD_SOURCEVERSION -t $cargoImage .
+          docker push $cargoImage
+          popd
+          pushd docker\\windows\\cli
+          docker build --build-arg GIT_BRANCH=$env:BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$env:BUILD_SOURCEVERSION -t $cliImage .
+          docker push $cliImage
+          popd
+        displayName: Docker build
+        condition: and(succeeded(), ne(variables['GIT_TAG'], ''))
+
+  - phase: Linux
+    queue:
+      name: Hosted Linux Preview
+      parallel: 1
+      matrix:
+        Python36:
+          python.version: '3.6'
+          PYENV_VERSION: '3.6.6'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: $(python.version)
+          architecture: x64
+      - script: |
+          set -e
+          set -o pipefail
+          env
+          curl -fSsL https://goo.gl/ZzKHFv | tar -xJvp -C /tmp/
+          echo "##vso[task.prependpath]/tmp/shellcheck-latest"
+          if [[ "$PYENV_VERSION" == 3.* ]]; then
+            which python3
+            python3 --version
+            echo "##vso[task.setvariable variable=PYTHON;]python3"
+            echo "##vso[task.setvariable variable=PIP;]pip3"
+          else
+            which python
+            python --version
+            echo "##vso[task.setvariable variable=PYTHON;]python"
+            echo "##vso[task.setvariable variable=PIP;]pip"
+          fi
+        displayName: Initialize Build
+      - script: |
+          set -e
+          set -o pipefail
+          echo "PATH=$PATH"
+          echo "PYTHON=$PYTHON PIP=$PIP"
+          which shellcheck
+          $PYTHON -m pip install --upgrade pip
+          $PIP install -r requirements.txt
+          $PIP install --no-deps -r req_nodeps.txt
+          $PIP install flake8
+          $PIP list --format=columns --outdated
+        displayName: Fetch Dependencies
+      - script: |
+          set -e
+          set -o pipefail
+          flake8 --statistics shipyard.py convoy/*.py
+          if [[ "$PYENV_VERSION" == 3.6* ]]; then
+            flake8 --statistics cascade/*.py cargo/*.py heimdall/*.py
+          fi
+          shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh
+        displayName: Static Analysis
+      - script: |
+          set -e
+          set -o pipefail
+          ARTIFACT_CLI="batch-shipyard-${BUILD_SOURCEBRANCHNAME}-${BUILD_BUILDID}-cli-linux-x86_64"
+          ARTIFACT_UPLOAD_PATH="builds/${BUILD_SOURCEBRANCHNAME}"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]${ARTIFACT_UPLOAD_PATH}"
+          echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH"
+        displayName: Pre-build Environment (Branch)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.6'))
+      - script: |
+          GIT_TAG=$(git tag -l --points-at $BUILD_SOURCEVERSION)
+          ARTIFACT_CLI="batch-shipyard-${GIT_TAG}-cli-linux-x86_64"
+          ARTIFACT_UPLOAD_PATH="releases/${GIT_TAG}"
+          echo "##vso[task.setvariable variable=GIT_TAG;]${GIT_TAG}"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]${ARTIFACT_UPLOAD_PATH}"
+        displayName: Pre-build Environment (Tagged Release)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.6'))
+      - template: ./pyenv.yml
+      - script: |
+          set -e
+          set -o pipefail
+          echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH GIT_TAG=$GIT_TAG"
+          ARTIFACT_CLI_PATH="bin/${ARTIFACT_CLI}"
+          $PIP install virtualenv
+          $PYTHON -m virtualenv -p $PYTHON pyi
+          /bin/bash -c \
+          "set -e; source pyi/bin/activate; \
+           pip install pyinstaller; \
+           pip install --upgrade -r requirements.txt; \
+           pip install --upgrade --no-deps -r req_nodeps.txt; \
+           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+           deactivate"
+          chmod +x ${ARTIFACT_CLI_PATH}
+          sha256sum ${ARTIFACT_CLI_PATH} | cut -d' ' -f1 > ${ARTIFACT_CLI_PATH}.sha256
+          cat ${ARTIFACT_CLI_PATH}.sha256
+          export BLOBXFER_STORAGE_ACCOUNT=$(blobxfer.storageAccount)
+          export BLOBXFER_STORAGE_ACCOUNT_KEY="$(blobxfer.storageAccountKey)"
+          blobxfer upload --remote-path ${ARTIFACT_UPLOAD_PATH} --local-path ${ARTIFACT_CLI_PATH} --strip-components 1 --file-md5 --file-attributes --overwrite
+        displayName: Build
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - task: PublishBuildArtifacts@1
+        inputs:
+          pathtoPublish: bin
+          artifactName: BatchShipyard-Linux
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+
+  - phase: MacOS
+    queue:
+      name: Hosted macOS Preview
+      parallel: 1
+      matrix:
+        Python36:
+          python.version: '3.6'
+          PYENV_VERSION: '3.6.6'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: $(python.version)
+          architecture: x64
+      - script: |
+          set -e
+          set -o pipefail
+          env
+          if [[ "$PYENV_VERSION" == 3.* ]]; then
+            which python3
+            python3 --version
+            echo "##vso[task.setvariable variable=PYTHON;]python3"
+            echo "##vso[task.setvariable variable=PIP;]pip3"
+          else
+            which python
+            python --version
+            echo "##vso[task.setvariable variable=PYTHON;]python"
+            echo "##vso[task.setvariable variable=PIP;]pip"
+          fi
+        displayName: Initialize Build
+      - script: |
+          set -e
+          set -o pipefail
+          echo "PATH=$PATH"
+          echo "PYTHON=$PYTHON PIP=$PIP"
+          $PYTHON -m pip install --upgrade pip
+          $PIP install -r requirements.txt
+          $PIP install --no-deps -r req_nodeps.txt
+          $PIP install flake8
+          $PIP list --format=columns --outdated
+        displayName: Fetch Dependencies
+      - script: |
+          set -e
+          set -o pipefail
+          flake8 --statistics shipyard.py convoy/*.py
+          if [[ "$PYENV_VERSION" == 3.6* ]]; then
+            flake8 --statistics cascade/*.py cargo/*.py heimdall/*.py
+          fi
+        displayName: Static Analysis
+      - script: |
+          set -e
+          set -o pipefail
+          ARTIFACT_CLI="batch-shipyard-${BUILD_SOURCEBRANCHNAME}-${BUILD_BUILDID}-cli-mac-x86_64"
+          ARTIFACT_UPLOAD_PATH="builds/${BUILD_SOURCEBRANCHNAME}"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]${ARTIFACT_UPLOAD_PATH}"
+          echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH"
+        displayName: Pre-build Environment (Branch)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.6'))
+      - script: |
+          GIT_TAG=$(git tag -l --points-at $BUILD_SOURCEVERSION)
+          ARTIFACT_CLI="batch-shipyard-${GIT_TAG}-cli-mac-x86_64"
+          ARTIFACT_UPLOAD_PATH="releases/${GIT_TAG}"
+          echo "##vso[task.setvariable variable=GIT_TAG;]${GIT_TAG}"
+          echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
+          echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]${ARTIFACT_UPLOAD_PATH}"
+        displayName: Pre-build Environment (Tagged Release)
+        condition: >
+          and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.6'))
+      - template: ./pyenv.yml
+      - script: |
+          set -e
+          set -o pipefail
+          echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH GIT_TAG=$GIT_TAG"
+          ARTIFACT_CLI_PATH="bin/${ARTIFACT_CLI}"
+          $PIP install virtualenv
+          $PYTHON -m virtualenv -p $PYTHON pyi
+          /bin/bash -c \
+          "set -e; source pyi/bin/activate; \
+           pip install pyinstaller; \
+           pip install --upgrade -r requirements.txt; \
+           pip install --upgrade --no-deps -r req_nodeps.txt; \
+           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+           deactivate"
+          chmod +x ${ARTIFACT_CLI_PATH}
+          shasum -a 256 ${ARTIFACT_CLI_PATH} | cut -d' ' -f1 > ${ARTIFACT_CLI_PATH}.sha256
+          cat ${ARTIFACT_CLI_PATH}.sha256
+          export BLOBXFER_STORAGE_ACCOUNT=$(blobxfer.storageAccount)
+          export BLOBXFER_STORAGE_ACCOUNT_KEY="$(blobxfer.storageAccountKey)"
+          blobxfer upload --remote-path ${ARTIFACT_UPLOAD_PATH} --local-path ${ARTIFACT_CLI_PATH} --strip-components 1 --file-md5 --file-attributes --overwrite
+        displayName: Build
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - task: PublishBuildArtifacts@1
+        inputs:
+          pathtoPublish: bin
+          artifactName: BatchShipyard-MacOS
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
