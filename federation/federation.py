@@ -729,9 +729,9 @@ class BatchServiceHandler():
                         filter='startswith(id, \'{}\')'.format(prefix)
                         if is_not_empty(prefix) else None,
                         select='id'))
-                tasklist = list(tasklist)
+                tasklist = [x.id for x in tasklist]
             tasknum = sorted(
-                [int(x.id.split(delimiter)[-1]) for x in tasklist])[-1] + 1
+                [int(x.split(delimiter)[-1]) for x in tasklist])[-1] + 1
         except (batchmodels.batch_error.BatchErrorException, IndexError,
                 TypeError):
             tasknum = 0

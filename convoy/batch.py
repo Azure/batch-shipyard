@@ -4064,9 +4064,10 @@ def _format_generic_task_id(prefix, padding, tasknum):
 
 def _generate_next_generic_task_id(
         batch_client, config, job_id, tasklist=None, reserved=None,
-        task_map=None, last_task_id=None, is_merge_task=False):
+        task_map=None, last_task_id=None, is_merge_task=False,
+        federation_id=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict, str,
-    #        list, str, dict, str, bool) -> Tuple[list, str]
+    #        list, str, dict, str, bool, str) -> Tuple[list, str]
     """Generate the next generic task id
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -4077,6 +4078,7 @@ def _generate_next_generic_task_id(
     :param dict task_map: map of pending tasks to add to the job
     :param str last_task_id: last task id
     :param bool is_merge_task: is merge task
+    :param str federation_id: federation id
     :rtype: tuple
     :return: (list of committed task ids for job, next generic docker task id)
     """
@@ -4088,7 +4090,7 @@ def _generate_next_generic_task_id(
     delimiter = prefix if util.is_not_empty(prefix) else ' '
     # get filtered, sorted list of generic docker task ids
     try:
-        if tasklist is None:
+        if tasklist is None and util.is_none_or_empty(federation_id):
             tasklist = batch_client.task.list(
                 job_id,
                 task_list_options=batchmodels.TaskListOptions(
@@ -4278,7 +4280,8 @@ def _construct_task(
         existing_tasklist, _task_id = _generate_next_generic_task_id(
             batch_client, config, job_id, tasklist=existing_tasklist,
             reserved=reserved_task_id, task_map=task_map,
-            last_task_id=lasttaskid, is_merge_task=is_merge_task)
+            last_task_id=lasttaskid, is_merge_task=is_merge_task,
+            federation_id=federation_id)
         settings.set_task_id(_task, _task_id)
     if util.is_none_or_empty(settings.task_name(_task)):
         settings.set_task_name(_task, '{}-{}'.format(job_id, _task_id))
@@ -4716,7 +4719,8 @@ def add_jobs(
                         existing_tasklist, reserved_task_id = \
                             _generate_next_generic_task_id(
                                 batch_client, config, job_id,
-                                tasklist=existing_tasklist)
+                                tasklist=existing_tasklist,
+                                federation_id=federation_id)
                         settings.set_task_id(task, reserved_task_id)
                         _id = '{}-{}'.format(job_id, reserved_task_id)
                     settings.set_task_name(task, _id)

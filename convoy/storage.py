@@ -588,7 +588,7 @@ def remove_resources_from_monitoring(
                 table_client, _STORAGE_CONTAINERS['table_monitoring'], config,
                 pool_id=None, pk=_MONITOR_BATCHPOOL_PK)
         return
-    if len(pools) > 0:
+    if util.is_not_empty(pools):
         bc = settings.credentials_batch(config)
         for poolid in pools:
             try:
@@ -602,7 +602,7 @@ def remove_resources_from_monitoring(
             else:
                 logger.debug('resource monitor removed for pool {}'.format(
                     poolid))
-    if len(fsclusters) > 0:
+    if util.is_not_empty(fsclusters):
         for sc_id in fsclusters:
             try:
                 table_client.delete_entity(
@@ -1056,7 +1056,7 @@ def add_pool_to_federation(
                     'location': entity['Location'],
                     'batch_service_url': entity['BatchServiceUrl'],
                 }
-    if settings.raw(config) and len(rawout['pools_added']) > 0:
+    if settings.raw(config) and util.is_not_empty(rawout['pools_added']):
         print(json.dumps(rawout, sort_keys=True, indent=4))
 
 
@@ -1114,7 +1114,8 @@ def remove_pool_from_federation(
             _clear_table(
                 table_client, _STORAGE_CONTAINERS['table_federation_global'],
                 config, pool_id=None, pk=fedhash)
-            if settings.raw(config) and len(rawout['pools_removed']) > 0:
+            if (settings.raw(config) and
+                    util.is_not_empty(rawout['pools_removed'])):
                 print(json.dumps(rawout, sort_keys=True, indent=4))
         return
     if util.is_not_empty(batch_service_url):
@@ -1155,7 +1156,7 @@ def remove_pool_from_federation(
                     'location': entity['Location'],
                     'batch_service_url': entity['BatchServiceUrl'],
                 }
-    if settings.raw(config) and len(rawout['pools_removed']) > 0:
+    if settings.raw(config) and util.is_not_empty(rawout['pools_removed']):
         print(json.dumps(rawout, sort_keys=True, indent=4))
 
 
@@ -1523,13 +1524,13 @@ def list_active_jobs_in_federation(
                     ent['BatchAccount']))
                 log.append('    * service url: {}'.format(ent['ServiceUrl']))
                 log.append('    * ten most recent task addition times:')
-                if len(ats) > 0:
+                if util.is_not_empty(ats):
                     for at in ats:
                         log.append('      * {}'.format(at))
                 else:
                     log.append('      * n/a')
                 log.append('    * ten most recent unique ids serviced:')
-                if len(uids) > 0:
+                if util.is_not_empty(uids):
                     for uid in uids:
                         log.append('      * {}'.format(uid))
                 else:
