@@ -2,6 +2,8 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/3a0j0gww57o6nkpw/branch/master?svg=true)](https://ci.appveyor.com/project/alfpark/batch-shipyard)
 [![Docker Pulls](https://img.shields.io/docker/pulls/alfpark/batch-shipyard.svg)](https://hub.docker.com/r/alfpark/batch-shipyard)
 [![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:latest-cli.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
+[![Code Quality: Python](https://img.shields.io/lgtm/grade/python/g/Azure/batch-shipyard.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/Azure/batch-shipyard/context:python)
+[![Total Alerts](https://img.shields.io/lgtm/alerts/g/Azure/batch-shipyard.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/Azure/batch-shipyard/alerts)
 
 # Batch Shipyard
 <img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.png" alt="dashboard" width="1024" />
