@@ -724,7 +724,7 @@ docker_pull_image_fallback() {
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
         local tht
         tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]] || [[ ! -z "$tht" ]]; then
+        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
@@ -746,7 +746,7 @@ docker_pull_image_fallback() {
 docker_pull_image() {
     local image=$1
     local try_fallback=0
-    if [ ! -z "$fallback_registry" ]; then
+    if [ -n "$fallback_registry" ]; then
         try_fallback=1
     fi
     local rc
@@ -775,7 +775,7 @@ docker_pull_image() {
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
         local tht
         tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$epic" ]] || [[ ! -z "$erb" ]] || [[ ! -z "$uhs" ]] || [[ ! -z "$tht" ]]; then
+        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
@@ -893,7 +893,7 @@ process_fstab_entry() {
 }
 
 mount_storage_clusters() {
-    if [ ! -z "$sc_args" ]; then
+    if [ -n "$sc_args" ]; then
         log DEBUG "Mounting storage clusters"
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
@@ -908,7 +908,7 @@ mount_storage_clusters() {
 }
 
 process_storage_clusters() {
-    if [ ! -z "$sc_args" ]; then
+    if [ -n "$sc_args" ]; then
         log DEBUG "Processing storage clusters"
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
@@ -925,7 +925,7 @@ process_storage_clusters() {
 }
 
 mount_custom_fstab() {
-    if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
+    if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Mounting custom mounts via fstab"
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
@@ -939,7 +939,7 @@ mount_custom_fstab() {
 }
 
 process_custom_fstab() {
-    if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
+    if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Processing custom mounts via fstab"
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
@@ -961,7 +961,7 @@ decrypt_encrypted_credentials() {
     rm -f "$pfxfile" "${pfxfile}".pw
     # decrypt creds
     SHIPYARD_STORAGE_ENV=$(echo "$SHIPYARD_STORAGE_ENV" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
-    if [ ! -z ${DOCKER_LOGIN_USERNAME+x} ]; then
+    if [[ -n ${DOCKER_LOGIN_USERNAME+x} ]]; then
         DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
     fi
 }
@@ -1104,7 +1104,7 @@ install_glusterfs_on_compute() {
 
 check_for_storage_cluster_software() {
     local rc
-    if [ ! -z "$sc_args" ]; then
+    if [ -n "$sc_args" ]; then
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             local server_type=${sc[0]}
@@ -1279,7 +1279,7 @@ EOF
         docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cascade
         # set singularity options
         local singularity_binds
-        if [ ! -z $singularity_basedir ]; then
+        if [ -n "$singularity_basedir" ]; then
             singularity_binds="\
                 -v $singularity_basedir:$singularity_basedir \
                 -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
@@ -1299,7 +1299,7 @@ EOF
         cascadepid=$!
     else
         # add timings
-        if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+        if [[ -n ${SHIPYARD_TIMING+x} ]]; then
             # backfill node prep start
             # shellcheck disable=SC2086
             ./perf.py nodeprep start $prefix --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
@@ -1337,7 +1337,7 @@ block_for_container_images() {
     # wait for images via cascade
     "${AZ_BATCH_TASK_WORKING_DIR}"/wait_for_images.sh "$block"
     # clean up cascade env file if block
-    if [ ! -z "$block" ]; then
+    if [ -n "$block" ]; then
         if [ $cascadecontainer -eq 1 ]; then
             rm -f $envfile
         fi
@@ -1365,7 +1365,7 @@ install_and_start_node_exporter() {
     else
         ib="--no-collector.infiniband"
     fi
-    if [ ! -z "$sc_args" ]; then
+    if [ -n "$sc_args" ]; then
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             if [ "${sc[0]}" == "nfs" ]; then
@@ -1402,7 +1402,7 @@ install_and_start_cadvisor() {
     chmod +x cadvisor
     # start
     local pcao
-    if [ ! -z "${PROM_CADVISOR_OPTIONS}" ]; then
+    if [ -n "${PROM_CADVISOR_OPTIONS}" ]; then
         IFS=',' read -ra pcao <<< "$PROM_CADVISOR_OPTIONS"
     else
         pcao=
@@ -1470,7 +1470,7 @@ if [ $p2penabled -eq 1 ]; then
 fi
 
 # decrypt encrypted creds
-if [ ! -z "$encrypted" ]; then
+if [ -n "$encrypted" ]; then
     decrypt_encrypted_credentials
 fi
 
@@ -1502,7 +1502,7 @@ elif [ -f "$nodeprepfinished" ]; then
     install_and_start_node_exporter
     install_and_start_cadvisor
     # mount any storage clusters
-    if [ ! -z "$sc_args" ]; then
+    if [ -n "$sc_args" ]; then
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
         IFS='#' read -ra fstabs <<< "$fstab_mounts"
@@ -1513,7 +1513,7 @@ elif [ -f "$nodeprepfinished" ]; then
         done
     fi
     # mount any custom mounts
-    if [ ! -z "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
+    if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1533,7 +1533,7 @@ elif [ -f "$nodeprepfinished" ]; then
         # start docker engine
         check_for_docker_host_engine
         # ensure nvidia software has been installed
-        if [ ! -z "$gpu" ]; then
+        if [ -n "$gpu" ]; then
             ensure_nvidia_driver_installed
         fi
     fi
@@ -1565,7 +1565,7 @@ fi
 ./registry_login.sh
 
 # install gpu related items
-if [ ! -z "$gpu" ] && { [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "centos" ]; }; then
+if [ -n "$gpu" ] && { [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "centos" ]; }; then
     if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
         install_nvidia_software
     fi
@@ -1581,7 +1581,7 @@ if [ $gluster_on_compute -eq 1 ]; then
 fi
 
 # check or install dependencies for storage cluster mount
-if [ ! -z "$sc_args" ]; then
+if [ -n "$sc_args" ]; then
     if [ $custom_image -eq 1 ]; then
         check_for_storage_cluster_software
     else

@@ -23,16 +23,16 @@ for spec in "$@"; do
     dst=${parts[6]}
 
     include=
-    if [ ! -z "$incl" ]; then
+    if [ -n "$incl" ]; then
         include="--include $incl"
     fi
     exclude=
-    if [ ! -z "$excl" ]; then
+    if [ -n "$excl" ]; then
         exclude="--exclude $excl"
     fi
     # create destination directory
     dest=
-    if [ ! -z "$dst" ]; then
+    if [ -n "$dst" ]; then
         dest="--dst $dst"
         mkdir -p "$dst"
     fi

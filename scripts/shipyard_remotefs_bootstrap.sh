@@ -240,7 +240,7 @@ setup_glusterfs() {
         echo "Starting gluster volume $gluster_volname"
         gluster volume start "$gluster_volname"
         # heal volume if force created with certain volume types
-        if [ ! -z $force ]; then
+        if [ -n "$force" ]; then
             if [[ "$voltype" == replica* ]] || [[ "$voltype" == disperse* ]]; then
                 echo "Checking if gluster volume $gluster_volname needs healing"
                 set +e
@@ -562,7 +562,7 @@ format_target=1
 if [ ${#skipped_part[@]} -eq "$numdisks" ] && [ "$numdisks" -eq 1 ]; then
     target_md=${skipped_part[0]}
     read -r target_uuid target_fs < <(blkid -u filesystem "$target_md" | awk -F "[= ]" '{print $3" "$5}'|tr -d "\"")
-    if [ ! -z "$target_fs" ]; then
+    if [ -n "$target_fs" ]; then
         format_target=0
     fi
 fi
@@ -852,7 +852,7 @@ if [ $attach_disks -eq 0 ]; then
         exit 1
     fi
     # setup samba server if specified
-    if [ ! -z "$samba_options" ]; then
+    if [ -n "$samba_options" ]; then
         # install samba
         apt-get install -y -q --no-install-recommends samba
         # parse options

@@ -52,7 +52,7 @@ shift $((OPTIND-1))
 [ "$1" = "--" ] && shift
 
 # non-cloud shell environment checks
-if [ ! -z $SUDO ]; then
+if [ -n "$SUDO" ]; then
     # check to ensure this is not being run directly as root
     if [ "$(id -u)" -eq 0 ]; then
         echo "Installation cannot be performed as root or via sudo."
@@ -105,7 +105,7 @@ set -e
 
 # perform some virtual env parameter checks
 INSTALL_VENV_BIN=0
-if [ ! -z "$VENV_NAME" ]; then
+if [ -n "$VENV_NAME" ]; then
     # check if virtual env, env is not named shipyard
     if [ "$VENV_NAME" == "shipyard" ]; then
         echo "Virtual environment name cannot be shipyard. Please use a different virtual environment name."
@@ -156,7 +156,7 @@ fi
 echo "Detected OS: $DISTRIB_ID $DISTRIB_RELEASE"
 
 # install requisite packages from distro repo
-if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
+if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
     if [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "debian" ]; then
         $SUDO apt-get update
         if [ $ANACONDA -eq 1 ]; then
@@ -238,10 +238,10 @@ if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
 fi
 
 # create virtual env if required and install required python packages
-if [ ! -z "$VENV_NAME" ]; then
+if [ -n "$VENV_NAME" ]; then
     # install virtual env if required
     if [ $INSTALL_VENV_BIN -eq 1 ]; then
-        if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
+        if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
             $SUDO $PIP install virtualenv
         else
             $PIP install --user virtualenv
@@ -249,7 +249,7 @@ if [ ! -z "$VENV_NAME" ]; then
     fi
     if [ $ANACONDA -eq 0 ]; then
         # create venv if it doesn't exist
-        if [ ! -z $SUDO ] || [ "$(id -u)" -eq 0 ]; then
+        if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
             virtualenv -p $PYTHON "$VENV_NAME"
         else
             "${HOME}"/.local/bin/virtualenv -p $PYTHON "$VENV_NAME"
@@ -313,7 +313,7 @@ fi
 
 EOF
 
-if [ ! -z "$VENV_NAME" ]; then
+if [ -n "$VENV_NAME" ]; then
     if [ $ANACONDA -eq 0 ]; then
 cat >> shipyard << 'EOF'
 source $BATCH_SHIPYARD_ROOT_DIR/$VENV_NAME/bin/activate
@@ -335,7 +335,7 @@ python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
 fi
 
-if [ ! -z "$VENV_NAME" ]; then
+if [ -n "$VENV_NAME" ]; then
     if [ $ANACONDA -eq 0 ]; then
 cat >> shipyard << 'EOF'
 deactivate

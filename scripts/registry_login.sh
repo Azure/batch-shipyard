@@ -34,7 +34,7 @@ docker_login() {
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$login_out")
         local tht
         tht=$(grep -i 'TLS handshake timeout' <<<"$login_out")
-        if [[ ! -z "$tmr" ]] || [[ ! -z "$crbp" ]] || [[ ! -z "$uhs" ]] || [[ ! -z "$tht" ]]; then
+        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]]; then
             log WARNING "will retry: $login_out"
         else
             log ERROR "$login_out"
@@ -52,16 +52,16 @@ docker_login() {
 
 # decrypt passwords if necessary
 if [ "$1" == "-e" ]; then
-    if [ ! -z "$DOCKER_LOGIN_PASSWORD" ]; then
+    if [ -n "$DOCKER_LOGIN_PASSWORD" ]; then
         DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
     fi
-    if [ ! -z "$SINGULARITY_LOGIN_PASSWORD" ]; then
+    if [ -n "$SINGULARITY_LOGIN_PASSWORD" ]; then
         SINGULARITY_LOGIN_PASSWORD=$(echo "$SINGULARITY_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
     fi
 fi
 
 # login to Docker registries
-if [ ! -z "$DOCKER_LOGIN_PASSWORD" ]; then
+if [ -n "$DOCKER_LOGIN_PASSWORD" ]; then
     # parse env vars
     IFS=',' read -ra servers <<< "${DOCKER_LOGIN_SERVER}"
     IFS=',' read -ra users <<< "${DOCKER_LOGIN_USERNAME}"
@@ -80,7 +80,7 @@ else
 fi
 
 # "login" to Singularity registries
-if [ ! -z "$SINGULARITY_LOGIN_PASSWORD" ]; then
+if [ -n "$SINGULARITY_LOGIN_PASSWORD" ]; then
     # parse env vars
     IFS=',' read -ra servers <<< "${SINGULARITY_LOGIN_SERVER}"
     IFS=',' read -ra users <<< "${SINGULARITY_LOGIN_USERNAME}"

@@ -15,7 +15,7 @@ set -o pipefail
 cd /opt/batch-shipyard
 
 # add timing markers
-if [ ! -z ${SHIPYARD_TIMING+x} ]; then
+if [[ -n ${SHIPYARD_TIMING+x} ]]; then
     # backfill node prep start
     # shellcheck disable=SC2086
     python3 perf.py nodeprep start ${prefix} --ts "$npstart" --message "offer=$offer,sku=$sku"
