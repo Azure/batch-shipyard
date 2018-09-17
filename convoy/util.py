@@ -211,8 +211,6 @@ def merge_dict(dict1, dict2):
     :rtype: dict
     :return: merged dictionary
     """
-    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
-        raise ValueError('dict1 or dict2 is not a dictionary')
     result = copy.deepcopy(dict1)
     for k, v in dict2.items():
         if k in result and isinstance(result[k], dict):
