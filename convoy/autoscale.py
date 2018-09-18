@@ -132,59 +132,58 @@ def _formula_tasks(pool):
             'preemptcount = 0',
             'rebalance = 0 == 1',
         ])
-    # compute additional required VMs (subtract out minimums)
-    req_vms.append(
+    # compute maximums and additional required VMs (subtract out minimums)
+    req_vms.extend([
+        'maxDedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
+        'maxTargetDedicated)',
+        'maxLowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
+        'maxTargetLowPriority)',
         'reqVMs = max(0, reqVMs - minTargetDedicated - minTargetLowPriority)'
-    )
+    ])
     req_vms = ';\n'.join(req_vms)
     if pool.autoscale.scenario.bias_node_type == 'auto':
         target_vms = [
             'divisor = (maxTargetDedicated == 0 || '
             'maxTargetLowPriority == 0) ? 1 : 2',
             'dedicatedVMs = reqVMs / divisor',
-            'dedicatedVMs = min(maxTargetDedicated, '
-            '(dedicatedVMs > 0 && dedicatedVMs < 1) ? 1 : dedicatedVMs)',
+            'dedicatedVMs = (dedicatedVMs > 0 && dedicatedVMs < 1) ? '
+            '1 : dedicatedVMs',
+            'dedicatedVMs = max(minTargetDedicated, '
+            'min(dedicatedVMs, maxDedicatedVMs))',
             'remainingVMs = max(0, reqVMs - dedicatedVMs)',
-            'redistVMs = rebalance ? min(preemptcount, remainingVMs) : 0',
-            'dedicatedVMs = min(maxTargetDedicated, '
-            'dedicatedVMs + redistVMs + minTargetDedicated)',
-            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
-            'dedicatedVMs)',
+            'redistVMs = (rebalance && remainingVMs > 0) ? '
+            'min(preemptcount, remainingVMs) : 0',
+            'dedicatedVMs = min(dedicatedVMs + redistVMs, maxDedicatedVMs)',
             'remainingVMs = max(0, reqVMs - dedicatedVMs)',
-            'lowPriVMs = min(maxTargetLowPriority, '
-            'remainingVMs + minTargetLowPriority)',
-            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
-            'lowPriVMs)',
+            'lowPriVMs = max(minTargetLowPriority, '
+            'min(remainingVMs, maxLowPriVMs))',
             '$TargetDedicatedNodes = dedicatedVMs',
             '$TargetLowPriorityNodes = lowPriVMs',
         ]
     elif pool.autoscale.scenario.bias_node_type == 'dedicated':
         target_vms = [
-            'dedicatedVMs = min(maxTargetDedicated, reqVMs)',
-            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
-            'dedicatedVMs)',
+            'dedicatedVMs = max(minTargetDedicated, '
+            'min(reqVMs, maxDedicatedVMs))',
             'remainingVMs = max(0, reqVMs - dedicatedVMs)',
-            'lowPriVMs = min(maxTargetLowPriority, '
-            'remainingVMs + minTargetLowPriority)',
-            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
-            'lowPriVMs)',
+            'redistVMs = (rebalance && remainingVMs > 0) ? '
+            'min(preemptcount, remainingVMs) : 0',
+            'dedicatedVMs = min(dedicatedVMs + redistVMs, maxDedicatedVMs)',
+            'remainingVMs = max(0, reqVMs - dedicatedVMs)',
+            'lowPriVMs = max(minTargetLowPriority, '
+            'min(remainingVMs, maxLowPriVMs))',
             '$TargetDedicatedNodes = dedicatedVMs',
             '$TargetLowPriorityNodes = lowPriVMs',
         ]
     elif pool.autoscale.scenario.bias_node_type == 'low_priority':
         target_vms = [
-            'lowPriVMs = min(maxTargetLowPriority, reqVMs)',
+            'lowPriVMs = max(minTargetLowPriority, min(reqVMs, maxLowPriVMs))',
             'remainingVMs = max(0, reqVMs - lowPriVMs)',
-            'redistVMs = rebalance ? min(preemptcount, remainingVMs) : 0',
-            'lowPriVMs = max(minTargetLowPriority, '
-            'reqVMs - redistVMs + minTargetLowPriority)',
-            'lowPriVMs = min($CurrentLowPriorityNodes + maxIncLowPriority, '
-            'lowPriVMs)',
+            'redistVMs = (rebalance && remainingVMs > 0) ? '
+            'min(preemptcount, remainingVMs) : 0',
+            'lowPriVMs = min(lowPriVMs + redistVMs, maxLowPriVMs)',
             'remainingVMs = max(0, reqVMs - lowPriVMs)',
-            'dedicatedVMs = min(maxTargetDedicated, '
-            'remainingVMs + minTargetDedicated)',
-            'dedicatedVMs = min($CurrentDedicatedNodes + maxIncDedicated, '
-            'dedicatedVMs)',
+            'dedicatedVMs = max(minTargetDedicated, '
+            'min(remainingVMs, maxDedicatedVMs))',
             '$TargetLowPriorityNodes = lowPriVMs',
             '$TargetDedicatedNodes = dedicatedVMs',
         ]
