@@ -69,20 +69,20 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '396.37/NVIDIA-Linux-x86_64-396.37.run'
+            '396.44/NVIDIA-Linux-x86_64-396.44.run'
         ),
         'sha256': (
-            'cdd8bfb6fb5ba99bfffae4c454d7b278e2039b30c0b3f6889d18179c0f21acbe'
+            '8f3473b9b1777fefaec35676212eac64b0ab862d3eaee777a29ccff3d27ad485'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '396.37/NVIDIA-Linux-x86_64-396.37.run'
+            '396.44/NVIDIA-Linux-x86_64-396.44.run'
         ),
         'sha256': (
-            'cdd8bfb6fb5ba99bfffae4c454d7b278e2039b30c0b3f6889d18179c0f21acbe'
+            '8f3473b9b1777fefaec35676212eac64b0ab862d3eaee777a29ccff3d27ad485'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
@@ -121,10 +121,10 @@ _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
-        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.5-2.tar.gz'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.6.tar.gz'
     ),
     'sha256': (
-        '4a9c84e2ce1f367481151591302d0dcbf1004e4a3d86f4f818185a15f135504e'
+        '19cf0bc2fa936b226b792f42d36589aa7b2a57fed4235843f16bc242b7690dd8'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
