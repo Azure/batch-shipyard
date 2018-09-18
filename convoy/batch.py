@@ -365,7 +365,9 @@ def add_cer_cert_to_account(batch_client, config, cer, rm_cerfile=False):
     data = util.base64_encode_string(open(cer, 'rb').read())
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
-            thumbprint, 'sha1', data,
+            thumbprint=thumbprint,
+            thumbprint_algorithm='sha1',
+            data=data,
             certificate_format=batchmodels.CertificateFormat.cer)
     )
     logger.info('added cer cert with thumbprint {} to account {}'.format(
@@ -410,7 +412,9 @@ def add_pfx_cert_to_account(
     data = util.base64_encode_string(open(pfx.filename, 'rb').read())
     batch_client.certificate.add(
         certificate=batchmodels.CertificateAddParameter(
-            pfx.sha1, 'sha1', data,
+            thumbprint=pfx.sha1,
+            thumbprint_algorithm='sha1',
+            data=data,
             certificate_format=batchmodels.CertificateFormat.pfx,
             password=passphrase)
     )
@@ -908,14 +912,14 @@ def _add_admin_user_to_compute_node(
             pool.id,
             node.id,
             batchmodels.ComputeNodeUser(
-                username,
+                name=username,
                 is_admin=True,
                 expiry_time=expiry,
                 password=rdp_password,
                 ssh_public_key=ssh_public_key_data,
             )
         )
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The specified node user already exists' in ex.message.value:
             logger.warning('user {} already exists on node {}'.format(
                 username, node.id))
@@ -1112,7 +1116,7 @@ def _del_remote_user(batch_client, pool_id, node_id, username):
             pool_id, node_id, username)
         logger.debug('deleted remote user {} from node {}'.format(
             username, node_id))
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The node user does not exist' not in ex.message.value:
             raise
 
@@ -1382,7 +1386,7 @@ def pool_stats(batch_client, config, pool_id=None):
             pool_id=pool_id,
             pool_get_options=batchmodels.PoolGetOptions(expand='stats'),
         )
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The specified pool does not exist' in ex.message.value:
             logger.error('pool {} does not exist'.format(pool_id))
             return
@@ -1694,7 +1698,7 @@ def reboot_nodes(batch_client, config, all_start_task_failed, node_ids):
                     config, 'reboot node {} from {} pool'.format(
                         node_id, pool_id)):
                 continue
-            nodes_to_reboot.append(node.id)
+            nodes_to_reboot.append(node_id)
     if util.is_none_or_empty(nodes_to_reboot):
         return
     with concurrent.futures.ThreadPoolExecutor(
@@ -1893,7 +1897,7 @@ def job_stats(batch_client, config, jobid=None):
                 job_id=jobid,
                 job_get_options=batchmodels.JobGetOptions(expand='stats'),
             )
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 raise RuntimeError('job {} does not exist'.format(jobid))
         jobs = [job]
@@ -1904,7 +1908,8 @@ def job_stats(batch_client, config, jobid=None):
     job_times = []
     task_times = []
     task_wall_times = []
-    task_counts = batchmodels.TaskCounts(0, 0, 0, 0, 0, 'validated')
+    task_counts = batchmodels.TaskCounts(
+        active=0, running=0, completed=0, succeeded=0, failed=0)
     total_tasks = 0
     for job in jobs:
         job_count += 1
@@ -1916,9 +1921,6 @@ def job_stats(batch_client, config, jobid=None):
         task_counts.succeeded += tc.succeeded
         task_counts.failed += tc.failed
         total_tasks += tc.active + tc.running + tc.completed
-        if (tc.validation_status !=
-                batchmodels.TaskCountValidationStatus.validated):
-            task_counts.validation_status = tc.validation_status
         if job.execution_info.end_time is not None:
             job_times.append(
                 (job.execution_info.end_time -
@@ -1941,9 +1943,7 @@ def job_stats(batch_client, config, jobid=None):
                      task.execution_info.start_time).total_seconds())
     log = [
         '* Total jobs: {}'.format(job_count),
-        '* Total tasks: {} ({})'.format(
-            total_tasks, task_counts.validation_status
-        ),
+        '* Total tasks: {}'.format(total_tasks),
         '  * Active: {0} ({1:.2f}% of total)'.format(
             task_counts.active,
             100 * task_counts.active / total_tasks if total_tasks > 0 else 0
@@ -2055,7 +2055,7 @@ def disable_jobs(
                     disable_tasks=batchmodels.DisableJobOption(
                         disable_tasks_action),
                 )
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'completed state.' in ex.message.value:
                 logger.error('{} is already completed'.format(job_id))
             elif 'does not exist' in ex.message.value:
@@ -2124,7 +2124,7 @@ def enable_jobs(batch_client, config, jobid=None, jobscheduleid=None):
                 batch_client.job_schedule.enable(job_schedule_id=job_id)
             else:
                 batch_client.job.enable(job_id=job_id)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'completed state.' in ex.message.value:
                 pass
         else:
@@ -2149,7 +2149,7 @@ def _wait_for_task_deletion(batch_client, job_id, task):
                 task_get_options=batchmodels.TaskGetOptions(select='id')
             )
             time.sleep(1)
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The specified task does not exist' in ex.message.value:
             logger.info('task {} in job {} does not exist'.format(
                 task, job_id))
@@ -2254,7 +2254,7 @@ def clean_mi_jobs(batch_client, config):
         try:
             batch_client.job.add(cleanup_job)
             logger.info('Added cleanup job: {}'.format(cleanup_job.id))
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'The specified job already exists' not in ex.message.value:
                 raise
         # get all cleanup tasks
@@ -2322,7 +2322,7 @@ def del_clean_mi_jobs(batch_client, config):
         logger.info('deleting job: {}'.format(cleanup_job_id))
         try:
             batch_client.job.delete(cleanup_job_id)
-        except batchmodels.batch_error.BatchErrorException:
+        except batchmodels.BatchErrorException:
             pass
 
 
@@ -2381,7 +2381,7 @@ def delete_or_terminate_jobs(
                     batch_client.job.delete(job_id)
                 else:
                     batch_client.job.terminate(job_id)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if delete and 'does not exist' in ex.message.value:
                 logger.error('{} {} does not exist'.format(job_id, text))
                 nocheck.add(job_id)
@@ -2417,7 +2417,7 @@ def delete_or_terminate_jobs(
                             break
                     time.sleep(1)
                 logger.info('{} {} {}'.format(text, job_id, action_past))
-            except batchmodels.batch_error.BatchErrorException as ex:
+            except batchmodels.BatchErrorException as ex:
                 if 'does not exist' in ex.message.value:
                     if delete:
                         logger.info('{} {} does not exist'.format(
@@ -2459,7 +2459,7 @@ def delete_or_terminate_all_jobs(
                 batch_client.job.delete(job.id)
             else:
                 batch_client.job.terminate(job.id)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if delete and 'does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(job.id))
                 continue
@@ -2478,7 +2478,7 @@ def delete_or_terminate_all_jobs(
                     if _job.state == batchmodels.JobState.completed:
                         break
                     time.sleep(1)
-            except batchmodels.batch_error.BatchErrorException as ex:
+            except batchmodels.BatchErrorException as ex:
                 if 'The specified job does not exist' not in ex.message.value:
                     raise
 
@@ -2513,7 +2513,7 @@ def delete_or_terminate_all_job_schedules(
                 batch_client.job_schedule.delete(js.id)
             else:
                 batch_client.job_schedule.terminate(js.id)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if delete and 'does not exist' in ex.message.value:
                 logger.error('{} job schedule does not exist'.format(js.id))
                 continue
@@ -2534,7 +2534,7 @@ def delete_or_terminate_all_job_schedules(
                     if _js.state == batchmodels.JobScheduleState.completed:
                         break
                     time.sleep(1)
-            except batchmodels.batch_error.BatchErrorException as ex:
+            except batchmodels.BatchErrorException as ex:
                 if ('The specified job schedule does not exist'
                         not in ex.message.value):
                     raise
@@ -2672,7 +2672,7 @@ def _wait_for_task_completion(batch_client, job_id, task):
             if _task.state == batchmodels.TaskState.completed:
                 break
             time.sleep(1)
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The specified task does not exist' not in ex.message.value:
             raise
 
@@ -2797,7 +2797,7 @@ def get_node_counts(batch_client, config, pool_id=None):
                 AccountListPoolNodeCountsOptions(
                     filter='poolId eq \'{}\''.format(pool_id)))
             pc = list(pc)[0]
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'pool does not exist' in ex.message.value:
             logger.error('{} pool does not exist'.format(pool_id))
         else:
@@ -2951,6 +2951,10 @@ def list_nodes(
             '  * allocation time: {}'.format(node.allocation_time),
             '  * last boot time: {}'.format(node.last_boot_time),
             '  * scheduling state: {}'.format(node.scheduling_state.value),
+            '  * agent:',
+            '    * version: {}'.format(node.node_agent_info.version),
+            '    * last update time: {}'.format(
+                node.node_agent_info.last_update_time),
         ]
         entry.extend(errors)
         entry.extend(st)
@@ -3783,7 +3787,7 @@ def get_task_counts(batch_client, config, jobid=None):
                 )
             else:
                 tc = batch_client.job.get_task_counts(jobid)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(jobid))
                 continue
@@ -3791,8 +3795,6 @@ def get_task_counts(batch_client, config, jobid=None):
                 raise
         else:
             if not settings.raw(config):
-                log.append('* status: {}'.format(
-                    tc.validation_status.value))
                 log.append('* active: {}'.format(tc.active))
                 log.append('* running: {}'.format(tc.running))
                 log.append('* completed: {}'.format(tc.completed))
@@ -3842,7 +3844,7 @@ def list_tasks(batch_client, config, all=False, jobid=None):
                 if task.state != batchmodels.TaskState.completed:
                     all_complete = False
                 i += 1
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(jobid))
                 continue
@@ -3906,7 +3908,7 @@ def list_task_files(batch_client, config, jobid=None, taskid=None):
                     )
                 log.extend(entry)
                 i += 1
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             if 'The specified job does not exist' in ex.message.value:
                 logger.error('{} job does not exist'.format(jobid))
                 continue
@@ -3966,14 +3968,16 @@ def generate_docker_login_settings(config, for_ssh=False):
             cmd.append('export DOCKER_LOGIN_SERVER={}'.format(value))
         else:
             env.append(
-                batchmodels.EnvironmentSetting('DOCKER_LOGIN_SERVER', value)
+                batchmodels.EnvironmentSetting(
+                    name='DOCKER_LOGIN_SERVER', value=value)
             )
         value = ','.join(docker_users)
         if for_ssh:
             cmd.append('export DOCKER_LOGIN_USERNAME={}'.format(value))
         else:
             env.append(
-                batchmodels.EnvironmentSetting('DOCKER_LOGIN_USERNAME', value)
+                batchmodels.EnvironmentSetting(
+                    name='DOCKER_LOGIN_USERNAME', value=value)
             )
         value = ','.join(docker_passwords)
         if for_ssh:
@@ -3981,8 +3985,8 @@ def generate_docker_login_settings(config, for_ssh=False):
         else:
             env.append(
                 batchmodels.EnvironmentSetting(
-                    'DOCKER_LOGIN_PASSWORD',
-                    crypto.encrypt_string(encrypt, value, config))
+                    name='DOCKER_LOGIN_PASSWORD',
+                    value=crypto.encrypt_string(encrypt, value, config))
             )
     if len(singularity_servers) > 0:
         # create either cmd or env for each
@@ -3992,7 +3996,7 @@ def generate_docker_login_settings(config, for_ssh=False):
         else:
             env.append(
                 batchmodels.EnvironmentSetting(
-                    'SINGULARITY_LOGIN_SERVER', value)
+                    name='SINGULARITY_LOGIN_SERVER', value=value)
             )
         value = ','.join(singularity_users)
         if for_ssh:
@@ -4000,7 +4004,7 @@ def generate_docker_login_settings(config, for_ssh=False):
         else:
             env.append(
                 batchmodels.EnvironmentSetting(
-                    'SINGULARITY_LOGIN_USERNAME', value)
+                    name='SINGULARITY_LOGIN_USERNAME', value=value)
             )
         value = ','.join(singularity_passwords)
         if for_ssh:
@@ -4008,8 +4012,8 @@ def generate_docker_login_settings(config, for_ssh=False):
         else:
             env.append(
                 batchmodels.EnvironmentSetting(
-                    'SINGULARITY_LOGIN_PASSWORD',
-                    crypto.encrypt_string(encrypt, value, config))
+                    name='SINGULARITY_LOGIN_PASSWORD',
+                    value=crypto.encrypt_string(encrypt, value, config))
             )
     # unset env for ssh
     if for_ssh:
@@ -4100,8 +4104,7 @@ def _generate_next_generic_task_id(
             tasklist = list(tasklist)
         tasknum = sorted(
             [int(x.id.split(delimiter)[-1]) for x in tasklist])[-1] + 1
-    except (batchmodels.batch_error.BatchErrorException, IndexError,
-            TypeError):
+    except (batchmodels.BatchErrorException, IndexError, TypeError):
         tasknum = 0
     if reserved is not None:
         tasknum_reserved = int(reserved.split(delimiter)[-1])
@@ -4382,8 +4385,8 @@ def _construct_task(
             # add env vars
             taskenv.append(
                 batchmodels.EnvironmentSetting(
-                    'SHIPYARD_SINGULARITY_COMMAND',
-                    'singularity {} {} {}'.format(
+                    name='SHIPYARD_SINGULARITY_COMMAND',
+                    value='singularity {} {} {}'.format(
                         task.singularity_cmd,
                         ' '.join(task.run_options),
                         task.singularity_image,
@@ -4458,15 +4461,15 @@ def _construct_task(
     if util.is_not_empty(env_vars):
         for key in env_vars:
             taskenv.append(
-                batchmodels.EnvironmentSetting(key, env_vars[key])
+                batchmodels.EnvironmentSetting(name=key, value=env_vars[key])
             )
     del env_vars
     # add singularity only vars
     if is_singularity:
         taskenv.append(
             batchmodels.EnvironmentSetting(
-                'SINGULARITY_CACHEDIR',
-                settings.get_singularity_cachedir(config)
+                name='SINGULARITY_CACHEDIR',
+                value=settings.get_singularity_cachedir(config)
             )
         )
     # create task
@@ -4517,7 +4520,7 @@ def _construct_task(
             util.is_not_empty(task.depends_on_range)):
         if util.is_not_empty(task.depends_on_range):
             task_id_ranges = [batchmodels.TaskIdRange(
-                task.depends_on_range[0], task.depends_on_range[1])]
+                start=task.depends_on_range[0], end=task.depends_on_range[1])]
         else:
             task_id_ranges = None
         # need to convert depends_on into python list because it is read
@@ -4611,7 +4614,7 @@ def add_jobs(
         config, vm_config=pool.vm_configuration)
     try:
         cloud_pool = batch_client.pool.get(pool.id)
-    except batchmodels.batch_error.BatchErrorException as ex:
+    except batchmodels.BatchErrorException as ex:
         if 'The specified pool does not exist' in ex.message.value:
             cloud_pool = None
             if autopool is None and util.is_none_or_empty(federation_id):
@@ -4784,8 +4787,8 @@ def add_jobs(
                 rerun_on_node_reboot_after_success=False,
                 environment_settings=[
                     batchmodels.EnvironmentSetting(
-                        'SINGULARITY_CACHEDIR',
-                        settings.get_singularity_cachedir(config)
+                        name='SINGULARITY_CACHEDIR',
+                        value=settings.get_singularity_cachedir(config)
                     ),
                 ],
             )
@@ -4981,7 +4984,8 @@ def add_jobs(
             for ev in job_env_vars:
                 jobschedule.job_specification.job_manager_task.\
                     environment_settings.append(
-                        batchmodels.EnvironmentSetting(ev, job_env_vars[ev])
+                        batchmodels.EnvironmentSetting(
+                            name=ev, value=job_env_vars[ev])
                     )
             del jscs
             del jscmdline
@@ -5016,7 +5020,7 @@ def add_jobs(
                 if settings.verbose(config) and jptask is not None:
                     logger.debug('Job prep command: {}'.format(
                         jptask.command_line))
-            except batchmodels.batch_error.BatchErrorException as ex:
+            except batchmodels.BatchErrorException as ex:
                 if ('The specified job is already in a completed state.' in
                         ex.message.value):
                     if recreate:

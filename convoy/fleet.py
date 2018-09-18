@@ -1506,7 +1506,8 @@ def _construct_pool_object(
             user_identity=batch._RUN_ELEVATED,
             wait_for_success=True,
             environment_settings=[
-                batchmodels.EnvironmentSetting('LC_ALL', 'en_US.UTF-8'),
+                batchmodels.EnvironmentSetting(
+                    name='LC_ALL', value='en_US.UTF-8'),
             ],
             resource_files=[],
         ),
@@ -1530,7 +1531,8 @@ def _construct_pool_object(
         if is_windows:
             pool.certificate_references.append(
                 batchmodels.CertificateReference(
-                    pfx.sha1, 'sha1',
+                    thumbprint=pfx.sha1,
+                    thumbprint_algorithm='sha1',
                     visibility=[
                         batchmodels.CertificateVisibility.start_task,
                         batchmodels.CertificateVisibility.task,
@@ -1540,7 +1542,8 @@ def _construct_pool_object(
         else:
             pool.certificate_references.append(
                 batchmodels.CertificateReference(
-                    pfx.sha1, 'sha1',
+                    thumbprint=pfx.sha1,
+                    thumbprint_algorithm='sha1',
                     visibility=[batchmodels.CertificateVisibility.start_task]
                 )
             )
@@ -1555,13 +1558,15 @@ def _construct_pool_object(
     if not native or delay_image_preload:
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SHIPYARD_STORAGE_ENV',
-                crypto.encrypt_string(
-                    encrypt, '{}:{}:{}'.format(
+                name='SHIPYARD_STORAGE_ENV',
+                value=crypto.encrypt_string(
+                    encrypt,
+                    '{}:{}:{}'.format(
                         storage.get_storageaccount(),
                         storage.get_storageaccount_endpoint(),
                         storage.get_storageaccount_key()),
-                    config)
+                    config
+                )
             )
         )
     if not native:
@@ -1629,8 +1634,8 @@ def _construct_pool_object(
     if util.is_not_empty(sc_fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SHIPYARD_STORAGE_CLUSTER_FSTAB',
-                '#'.join(sc_fstab_mounts)
+                name='SHIPYARD_STORAGE_CLUSTER_FSTAB',
+                value='#'.join(sc_fstab_mounts)
             )
         )
         del sc_args
@@ -1639,15 +1644,15 @@ def _construct_pool_object(
     if util.is_not_empty(custom_linux_fstab_mounts):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SHIPYARD_CUSTOM_MOUNTS_FSTAB',
-                '#'.join(custom_linux_fstab_mounts)
+                name='SHIPYARD_CUSTOM_MOUNTS_FSTAB',
+                value='#'.join(custom_linux_fstab_mounts)
             )
         )
         del custom_linux_fstab_mounts
     # add optional environment variables
     if not native and bs.store_timing_metrics:
         pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting('SHIPYARD_TIMING', '1')
+            batchmodels.EnvironmentSetting(name='SHIPYARD_TIMING', value='1')
         )
     # add docker login settings
     pool.start_task.environment_settings.extend(
@@ -1656,8 +1661,8 @@ def _construct_pool_object(
     if util.is_not_empty(block_for_gr):
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SHIPYARD_CONTAINER_IMAGES_PRELOAD',
-                block_for_gr,
+                name='SHIPYARD_CONTAINER_IMAGES_PRELOAD',
+                value=block_for_gr,
             )
         )
     # Linux-only settings
@@ -1665,43 +1670,43 @@ def _construct_pool_object(
         # singularity env vars
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SINGULARITY_TMPDIR',
-                settings.get_singularity_tmpdir(config)
+                name='SINGULARITY_TMPDIR',
+                value=settings.get_singularity_tmpdir(config)
             )
         )
         pool.start_task.environment_settings.append(
             batchmodels.EnvironmentSetting(
-                'SINGULARITY_CACHEDIR',
-                settings.get_singularity_cachedir(config)
+                name='SINGULARITY_CACHEDIR',
+                value=settings.get_singularity_cachedir(config)
             )
         )
         # prometheus env vars
         if pool_settings.prometheus.ne_enabled:
             pool.start_task.environment_settings.append(
                 batchmodels.EnvironmentSetting(
-                    'PROM_NODE_EXPORTER_PORT',
-                    pool_settings.prometheus.ne_port
+                    name='PROM_NODE_EXPORTER_PORT',
+                    value=pool_settings.prometheus.ne_port
                 )
             )
             if util.is_not_empty(pool_settings.prometheus.ne_options):
                 pool.start_task.environment_settings.append(
                     batchmodels.EnvironmentSetting(
-                        'PROM_NODE_EXPORTER_OPTIONS',
-                        ','.join(pool_settings.prometheus.ne_options)
+                        name='PROM_NODE_EXPORTER_OPTIONS',
+                        value=','.join(pool_settings.prometheus.ne_options)
                     )
                 )
         if pool_settings.prometheus.ca_enabled:
             pool.start_task.environment_settings.append(
                 batchmodels.EnvironmentSetting(
-                    'PROM_CADVISOR_PORT',
-                    pool_settings.prometheus.ca_port
+                    name='PROM_CADVISOR_PORT',
+                    value=pool_settings.prometheus.ca_port
                 )
             )
             if util.is_not_empty(pool_settings.prometheus.ca_options):
                 pool.start_task.environment_settings.append(
                     batchmodels.EnvironmentSetting(
-                        'PROM_CADVISOR_OPTIONS',
-                        ','.join(pool_settings.prometheus.ca_options)
+                        name='PROM_CADVISOR_OPTIONS',
+                        value=','.join(pool_settings.prometheus.ca_options)
                     )
                 )
     return (pool_settings, gluster_on_compute, pool)
@@ -1753,7 +1758,7 @@ def _construct_auto_pool_specification(
     )
     # add auto pool env var for cascade
     poolspec.start_task.environment_settings.append(
-        batchmodels.EnvironmentSetting('SHIPYARD_AUTOPOOL', 1)
+        batchmodels.EnvironmentSetting(name='SHIPYARD_AUTOPOOL', value='1')
     )
     return poolspec
 
@@ -2259,14 +2264,14 @@ def _update_container_images(
         # update taskenv for Singularity
         taskenv.append(
             batchmodels.EnvironmentSetting(
-                'SINGULARITY_TMPDIR',
-                settings.get_singularity_tmpdir(config)
+                name='SINGULARITY_TMPDIR',
+                value=settings.get_singularity_tmpdir(config)
             )
         )
         taskenv.append(
             batchmodels.EnvironmentSetting(
-                'SINGULARITY_CACHEDIR',
-                settings.get_singularity_cachedir(config)
+                name='SINGULARITY_CACHEDIR',
+                value=settings.get_singularity_cachedir(config)
             )
         )
     coordcmd = util.wrap_commands_in_shell(coordcmd, windows=is_windows)
@@ -4700,7 +4705,7 @@ def action_fed_pool_add(
         for poolid in pools:
             try:
                 batch_client.pool.get(poolid)
-            except batchmodels.batch_error.BatchErrorException as ex:
+            except batchmodels.BatchErrorException as ex:
                 if 'The specified pool does not exist' in ex.message.value:
                     raise ValueError(
                         'pool {} does not exist for account {}'.format(

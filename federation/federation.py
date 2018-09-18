@@ -657,7 +657,7 @@ class BatchServiceHandler():
                 iface.delete(job_id)
             else:
                 iface.terminate(job_id)
-        except batchmodels.batch_error.BatchErrorException as exc:
+        except batchmodels.BatchErrorException as exc:
             if delete:
                 if ('does not exist' in exc.message.value or
                         (not wait and
@@ -674,7 +674,7 @@ class BatchServiceHandler():
                     _job = iface.get(job_id)
                     if _job.state == cstate:
                         break
-                except batchmodels.batch_error.BatchErrorException as exc:
+                except batchmodels.BatchErrorException as exc:
                     if 'does not exist' in exc.message.value:
                         break
                     else:
@@ -732,8 +732,7 @@ class BatchServiceHandler():
                 tasklist = [x.id for x in tasklist]
             tasknum = sorted(
                 [int(x.split(delimiter)[-1]) for x in tasklist])[-1] + 1
-        except (batchmodels.batch_error.BatchErrorException, IndexError,
-                TypeError):
+        except (batchmodels.BatchErrorException, IndexError, TypeError):
             tasknum = 0
         id = self._format_generic_task_id(prefix, naming.padding, tasknum)
         while id in tasklist:
@@ -910,7 +909,7 @@ class BatchServiceHandler():
                     select='id',
                 ),
             ))
-        except batchmodels.batch_error.BatchErrorException as exc:
+        except batchmodels.BatchErrorException as exc:
             logger.exception(str(exc))
         else:
             if len(jobs) == 0:
@@ -2391,7 +2390,7 @@ class Federation():
             bsh.add_job_schedule(
                 pool.batch_account, pool.service_url, jobschedule)
             success = True
-        except batchmodels.batch_error.BatchErrorException as exc:
+        except batchmodels.BatchErrorException as exc:
             if 'marked for deletion' in exc.message.value:
                 logger.error(
                     'cannot reuse job shcedule {} being deleted on '
@@ -2451,7 +2450,7 @@ class Federation():
             bsh.add_job(pool.batch_account, pool.service_url, job)
             success = True
             del_job = False
-        except batchmodels.batch_error.BatchErrorException as exc:
+        except batchmodels.BatchErrorException as exc:
             if 'marked for deletion' in exc.message.value:
                 del_job = False
                 logger.error(

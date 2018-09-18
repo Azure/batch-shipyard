@@ -216,40 +216,16 @@ def _monitor_tasks(batch_client, job_id, numtasks):
     :param int numtasks: number of tasks
     """
     i = 0
-    j = 0
     while True:
         try:
             task_counts = batch_client.job.get_task_counts(job_id=job_id)
-        except batchmodels.batch_error.BatchErrorException as ex:
+        except batchmodels.BatchErrorException as ex:
             logger.exception(ex)
         else:
-            if (task_counts.validation_status ==
-                    batchmodels.TaskCountValidationStatus.validated):
-                j = 0
-                if task_counts.completed == numtasks:
-                    logger.info(task_counts)
-                    logger.info('all {} tasks completed'.format(numtasks))
-                    break
-            else:
-                # unvalidated, perform manual list tasks
-                j += 1
-                if j % 10 == 0:
-                    j = 0
-                    try:
-                        tasks = batch_client.task.list(
-                            job_id=job_id,
-                            task_list_options=batchmodels.TaskListOptions(
-                                select='id,state')
-                        )
-                        states = [task.state for task in tasks]
-                    except batchmodels.batch_error.BatchErrorException as ex:
-                        logger.exception(ex)
-                    else:
-                        if (states.count(batchmodels.TaskState.completed) ==
-                                numtasks):
-                            logger.info('all {} tasks completed'.format(
-                                numtasks))
-                            break
+            if task_counts.completed == numtasks:
+                logger.info(task_counts)
+                logger.info('all {} tasks completed'.format(numtasks))
+                break
             i += 1
             if i % 15 == 0:
                 i = 0
