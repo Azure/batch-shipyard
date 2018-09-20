@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [3.6.0b1] - 2018-09-20
+### Added
+- Task and node count commands: `jobs tasks counts` and `pool nodes counts`
+respectively ([#228](https://github.com/Azure/batch-shipyard/issues/228)).
+Please see the usage doc for more information.
+- Support for Ubuntu 18.04
+- Support for CentOS 7.5 in both non-native and native mode
+- MacOS binary for the CLI
+- Enhance blocked action tracking for federations. Please see the usage
+doc for `fed jobs list` for more information.
+
+### Changed
+- Updated Docker to 18.06.1
+- Updated Singularity to 2.6.0
+- Updated blobxfer to 1.5.0
+- Updated Nvidia driver for NC-series to 396.44
+- Update various other dependencies to latest
+- Windows binary is now signed
+
+### Fixed
+- Batch Shipyard site extension on nuget.org has been restored ([#224](https://github.com/Azure/batch-shipyard/issues/224))
+- Pool auto-scaling beyond low priority limit ([#239](https://github.com/Azure/batch-shipyard/issues/239))
+- Fix `jobs tasks term` command wihtout pool SSH info
+- Fix task id generator for federations
+
 ## [3.6.0a1] - 2018-08-06
 ### Added
 - Federation support. Please see the
@@ -1388,7 +1413,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...HEAD
+[3.6.0b1]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...3.6.0b1
 [3.6.0a1]: https://github.com/Azure/batch-shipyard/compare/3.5.3...3.6.0a1
 [3.5.3]: https://github.com/Azure/batch-shipyard/compare/3.5.2...3.5.3
 [3.5.2]: https://github.com/Azure/batch-shipyard/compare/3.5.1...3.5.2
