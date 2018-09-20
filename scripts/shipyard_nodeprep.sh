@@ -530,7 +530,6 @@ install_nvidia_software() {
     # remove nouveau
     set +e
     rmmod nouveau
-    set -e
     # purge nouveau off system
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         apt-get --purge remove xserver-xorg-video-nouveau "xserver-xorg-video-nouveau-hwe-${DISTRIB_RELEASE}"
@@ -540,6 +539,7 @@ install_nvidia_software() {
         log ERROR "unsupported distribution for nvidia/GPU: $DISTRIB_ID $DISTRIB_RELEASE"
         exit 1
     fi
+    set -e
     # blacklist nouveau from being loaded if rebooted
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
 cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
@@ -605,10 +605,10 @@ EOF
     # install nvidia-docker
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         add_repo https://nvidia.github.io/nvidia-docker/gpgkey
-        curl -fSsL "https://nvidia.github.io/nvidia-docker/ubuntu${DISTRIB_RELEASE}/amd64/nvidia-docker.list" | \
+        curl -fSsL "https://nvidia.github.io/nvidia-docker/ubuntu${DISTRIB_RELEASE}/nvidia-docker.list" | \
             tee /etc/apt/sources.list.d/nvidia-docker.list
     elif [[ $DISTRIB_ID == centos* ]]; then
-        add_repo "https://nvidia.github.io/nvidia-docker/centos${DISTRIB_RELEASE}/x86_64/nvidia-docker.repo"
+        add_repo "https://nvidia.github.io/nvidia-docker/centos${DISTRIB_RELEASE}/nvidia-docker.repo"
     fi
     refresh_package_index
     if [ "$DISTRIB_ID" == "ubuntu" ]; then

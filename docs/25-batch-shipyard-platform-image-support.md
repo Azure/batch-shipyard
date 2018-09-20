@@ -44,6 +44,7 @@ SLES is not supported at this time.
 | Publisher             | Offer                        | Sku         | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------------------|------------------------------|-------------|:---:|:-------:|:-----------:|:--------------:|
 | Canonical             | UbuntuServer                 | 16.04-LTS   |  X  |  X (1)  |             |      X (2)     |
+| Canonical             | UbuntuServer                 | 18.04-LTS   |  X  |  X (1)  |             |                |
 | microsoft-azure-batch | ubuntu-server-container      | 16-04-lts   |  X  |         |      X      |                |
 | microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |  X (3)  |      X      |                |
 
@@ -56,7 +57,7 @@ SLES is not supported at this time.
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1803-with-Containers-smalldisk |     |         |      X      |                |
 
 ## Notes
-1. IB/RDMA is only supported for this host OS with a custom image. Please
+1. IB/RDMA is supported for this host OS with a custom image. Please
 see the [packer](../contrib/packer) scripts and consult the
 [custom image guide](63-batch-shipyard-custom-images.md) for information
 on how to create a compliant custom image.
