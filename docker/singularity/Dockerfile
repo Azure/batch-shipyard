@@ -1,9 +1,9 @@
 # Dockerfile for Singularity
 
-FROM alpine:3.7
+FROM alpine:3.8
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
-ENV SINGULARITY_VERSION=2.5.1
+ENV SINGULARITY_VERSION=2.6.0
 
 RUN apk update \
     && apk add --update --no-cache \

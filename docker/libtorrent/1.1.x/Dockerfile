@@ -1,11 +1,10 @@
 # Dockerfile for Azure/batch-shipyard (Cascade libtorrent multi-stage base)
 
-FROM alpine:3.7
+FROM alpine:3.8
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # set environment variables
-# currently libtorrent-rasterbar 1.1.0+ DHT implementations are broken
-ENV libtorrent_version=1.0.11 \
+ENV libtorrent_version=1.1.9 \
     CFLAGS=-lstdc++ PYTHON=/usr/bin/python3 PYTHON_VERSION=3.6
 
 # build libtorrent-rasterbar for python3 and cleanup packaging
