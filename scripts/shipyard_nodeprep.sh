@@ -6,8 +6,8 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.03.1
-DOCKER_CE_VERSION_CENTOS=18.03.1
+DOCKER_CE_VERSION_DEBIAN=18.06.1
+DOCKER_CE_VERSION_CENTOS=18.06.1
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
 NVIDIA_DOCKER_VERSION=2.0.3
@@ -15,9 +15,8 @@ GLUSTER_VERSION_DEBIAN=4.1
 GLUSTER_VERSION_CENTOS=41
 
 # consts
-DOCKER_CE_PACKAGE_DEBIAN_OLD="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce-0~"
-DOCKER_CE_PACKAGE_DEBIAN_NEW="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
-DOCKER_CE_PACKAGE_CENTOS="docker-ce-${DOCKER_CE_VERSION_CENTOS}.ce-1.el7.centos"
+DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
+DOCKER_CE_PACKAGE_CENTOS="docker-ce-${DOCKER_CE_VERSION_CENTOS}.ce-3.el7"
 DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
 NVIDIA_CONTAINER_RUNTIME_PACKAGE_UBUNTU="nvidia-container-runtime=${NVIDIA_CONTAINER_RUNTIME_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
 NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS="nvidia-container-runtime-${NVIDIA_CONTAINER_RUNTIME_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
@@ -1004,12 +1003,7 @@ install_docker_host_engine() {
     if [ "$PACKAGER" == "apt" ]; then
         local repo=https://download.docker.com/linux/"${DISTRIB_ID}"
         local gpgkey="${repo}"/gpg
-        local dockerversion
-        if [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
-            dockerversion="${DOCKER_CE_PACKAGE_DEBIAN_NEW}${DISTRIB_ID}"
-        else
-            dockerversion="${DOCKER_CE_PACKAGE_DEBIAN_OLD}${DISTRIB_ID}"
-        fi
+        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}"
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
         local repo=https://download.docker.com/linux/centos/docker-ce.repo
