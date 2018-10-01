@@ -87,12 +87,11 @@ _NVIDIA_DRIVER = {
         'target': 'nvidia-driver_cc6-7.run'
     },
     'viz_cc52': {
-        # https://go.microsoft.com/fwlink/?linkid=849941
+        # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'https://gpudrivers.file.core.windows.net/nvinstance/Linux/'
-            'NVIDIA-Linux-x86_64-390.75-grid.run?st=2018-04-03T01%3A34%3A00Z&'
-            'se=2019-04-04T01%3A34%3A00Z&sp=rl&sv=2017-04-17&sr=s&'
-            'sig=l3%2FQLZdtT5NL6BQTSOL5KsW%2FiKJK1Ly5iIi2PXpoaDU%3D'
+            'http://download.microsoft.com/download/C/C/A/'
+            'CCA1A402-D4EC-4260-BAD1-3AA1B004882A/'
+            'NVIDIA-Linux-x86_64-390.75-grid.run'
         ),
         'sha256': (
             '7784d69902b3de5d8ab671897d5ab7d291651fe2efd399f921db86d7dab615b7'
@@ -121,7 +120,8 @@ _LIS_PACKAGE = {
     # https://aka.ms/lis
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
-        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/lis-rpms-4.2.6.tar.gz'
+        '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
+        'lis-rpms-4.2.6.tar.gz'
     ),
     'sha256': (
         '19cf0bc2fa936b226b792f42d36589aa7b2a57fed4235843f16bc242b7690dd8'
