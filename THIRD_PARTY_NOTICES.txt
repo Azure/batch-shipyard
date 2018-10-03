@@ -24,7 +24,7 @@ adal (https://github.com/AzureAD/azure-activedirectory-library-for-python)
 
 The MIT License (MIT)
 
-Copyright (c) Microsoft Corporation. 
+Copyright (c) Microsoft Corporation.
 All rights reserved.
 
 This code is licensed under the MIT License.
@@ -775,7 +775,7 @@ ruamel.yaml (https://bitbucket.org/ruamel/yaml)
 
 -------------------------------------------------------------------------------
 
-singularity (https://github.com/singularityware/singularity)
+singularity (https://github.com/sylabs/singularity)
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
