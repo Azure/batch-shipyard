@@ -93,6 +93,11 @@ This Chainer-CPU recipe contains information on how to containerize
 This Chainer-GPU recipe contains information on how to containerize
 [Chainer](http://chainer.org/) on GPUs for use with N-Series Azure VMs.
 
+#### [HPMLA-CPU-OpenMPI](./HPMLA-CPU-OpenMPI)
+This recipe contains information on how to containerize the Microsoft High
+Performance ML Algorithms (HPMLA) for use across multiple compute
+nodes.
+
 #### [Keras+Theano-CPU](./Keras+Theano-CPU)
 This Keras+Theano-CPU recipe contains information on how to containerize
 [Keras](https://keras.io/) with the
@@ -104,11 +109,6 @@ This Keras+Theano-GPU recipe contains information on how to containerize
 [Keras](https://keras.io/) with the
 [Theano](http://www.deeplearning.net/software/theano/) backend for use with
 N-Series Azure VMs.
-
-#### [HPMLA-CPU-OpenMPI](./HPMLA-CPU-OpenMPI)
-This recipe contains information on how to containerize the Microsoft High
-Performance ML Algorithms (HPMLA) for use across multiple compute
-nodes.
 
 #### [MXNet-CPU](./MXNet-CPU)
 This MXNet-CPU recipe contains information on how to containerize

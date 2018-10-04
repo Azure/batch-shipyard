@@ -23,7 +23,7 @@ DEPENDENCIES=(
     https://github.com/boostorg/boost/raw/master/LICENSE_1_0.txt
     click
     https://github.com/pallets/click
-    https://github.com/pallets/click/raw/master/LICENSE
+    https://github.com/pallets/click/raw/master/LICENSE.rst
     future
     https://github.com/PythonCharmers/python-future
     https://github.com/PythonCharmers/python-future/raw/master/LICENSE.txt
@@ -50,7 +50,7 @@ DEPENDENCIES=(
     https://github.com/requests/requests/raw/master/LICENSE
     ruamel.yaml
     https://bitbucket.org/ruamel/yaml
-    https://bitbucket.org/ruamel/yaml/raw/8d3f84d78aff534cbc881fa509ade31a5edc451d/LICENSE
+    https://bitbucket.org/ruamel/yaml/raw/33ca63cd4253fb527f734158dc3832fdfd93eeef/LICENSE
     singularity
     https://github.com/sylabs/singularity
     https://github.com/sylabs/singularity/raw/master/LICENSE.md
