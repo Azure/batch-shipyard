@@ -105,9 +105,10 @@ This Keras+Theano-GPU recipe contains information on how to containerize
 [Theano](http://www.deeplearning.net/software/theano/) backend for use with
 N-Series Azure VMs.
 
-#### [MADL-CPU-OpenMPI](./MADL-CPU-OpenMPI)
+#### [HPMLA-CPU-OpenMPI](./HPMLA-CPU-OpenMPI)
 This recipe contains information on how to containerize the Microsoft High
-Performance ML Algorithms Learner for use across multiple compute nodes.
+Performance ML Algorithms (HPMLA) for use across multiple compute
+nodes.
 
 #### [MXNet-CPU](./MXNet-CPU)
 This MXNet-CPU recipe contains information on how to containerize

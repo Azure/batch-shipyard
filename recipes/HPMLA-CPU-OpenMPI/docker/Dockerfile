@@ -1,4 +1,4 @@
-#Dockerfile for MADL (Microsoft Distributed Learners)
+#Dockerfile for HPMLA (Microsoft High Performance ML Algorithms)
 
 FROM ubuntu:16.04
 MAINTAINER Saeed Maleki Todd Mytkowicz Madan Musuvathi Dany rouhana https://github.com/saeedmaleki/Distributed-Linear-Learner
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 		openmpi-common \
 		libopenmpi-dev && \
 		apt-get clean && \
-		rm -rf /var/lib/apt/lists/* 
+		rm -rf /var/lib/apt/lists/*
 
 # configure ssh server and keys
 RUN mkdir -p /root/.ssh && \
@@ -27,12 +27,12 @@ RUN mkdir -p /root/.ssh && \
     ssh-keygen -f /root/.ssh/id_rsa -t rsa -N '' && \
     chmod 600 /root/.ssh/config && \
     chmod 700 /root/.ssh && \
-    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys	
+    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
-# set parasail dir	
+# set parasail dir
 WORKDIR /parasail
 
-# to create your own image, first download the supersgd from the link supplied in the read me file, 
+# to create your own image, first download the supersgd from the link supplied in the read me file,
 # and the put it in the same dir as this file.
 COPY supersgd /parasail
 COPY run_parasail.sh /parasail
