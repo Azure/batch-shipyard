@@ -15,7 +15,7 @@ RUN yum groupinstall -y \
         libarchive-devel \
     && yum clean all
 
-RUN curl -fSsL https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
+RUN curl -fSsL https://github.com/sylabs/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
     && cd singularity-${SINGULARITY_VERSION} \
     && ./configure --prefix=/opt/singularity --sysconfdir=/opt/singularity/etc --localstatedir=/mnt/resource \
     && make -j4 \

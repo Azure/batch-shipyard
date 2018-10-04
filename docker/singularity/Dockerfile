@@ -10,7 +10,7 @@ RUN apk update \
         curl file build-base autoconf automake libtool linux-headers \
         tar gzip bash python squashfs-tools libarchive-dev \
     && cd /tmp \
-    && curl -fSsL https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
+    && curl -fSsL https://github.com/sylabs/singularity/releases/download/${SINGULARITY_VERSION}/singularity-${SINGULARITY_VERSION}.tar.gz | tar -zxvpf - \
     && cd singularity-${SINGULARITY_VERSION} \
     && ./configure --prefix=/opt/singularity --sysconfdir=/opt/singularity/etc --localstatedir=/var/lib \
     && make -j4 \
