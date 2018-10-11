@@ -1,10 +1,11 @@
 name: $(SourceBranch)$(Rev:.r)
 
-phases:
-  - phase: Windows
-    queue:
-      name: Hosted VS2017
-      parallel: 1
+jobs:
+  - job: Windows
+    pool:
+      vmImage: vs2017-win2016
+    strategy:
+      maxParallel: 1
       matrix:
         Python36:
           python.version: '3.6'
@@ -136,10 +137,11 @@ phases:
         displayName: Docker build
         condition: and(succeeded(), ne(variables['GIT_TAG'], ''))
 
-  - phase: Linux
-    queue:
-      name: Hosted Linux Preview
-      parallel: 1
+  - job: Linux
+    pool:
+      vmImage: ubuntu-16.04
+    strategy:
+      maxParallel: 1
       matrix:
         Python36:
           python.version: '3.6'
@@ -240,10 +242,11 @@ phases:
           artifactName: BatchShipyard-Linux
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
 
-  - phase: MacOS
-    queue:
-      name: Hosted macOS Preview
-      parallel: 1
+  - job: MacOS
+    pool:
+      vmImage: macOS-10.13
+    strategy:
+      maxParallel: 1
       matrix:
         Python36:
           python.version: '3.6'
