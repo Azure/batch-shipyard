@@ -32,7 +32,7 @@ else
         DISTRIB_RELEASE=$VERSION_ID
     fi
 fi
-if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
+if [ -z "${DISTRIB_ID+x}" ] || [ -z "${DISTRIB_RELEASE+x}" ]; then
     log ERROR "Unknown DISTRIB_ID or DISTRIB_RELEASE."
     exit 1
 fi

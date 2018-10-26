@@ -1,11 +1,12 @@
 # Dockerfile for Azure/batch-shipyard CLI (Windows)
 # Adapted from: https://github.com/StefanScherer/dockerfiles-windows/blob/master/python/Dockerfile
 
-FROM python:3.6.6-windowsservercore-ltsc2016
+FROM python:3.7.1-windowsservercore-ltsc2016
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 ENV chocolateyUseWindowsCompression false
-RUN iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')); \
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; \
+    iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')); \
     choco install --no-progress -y git -params "/GitAndUnixToolsOnPath"
 
 ARG GIT_BRANCH
@@ -22,7 +23,7 @@ RUN git clone -b $Env:GIT_BRANCH --single-branch https://github.com/Azure/batch-
     Remove-Item *.yml -Force -Recurse ; \
     Remove-Item install* -Force -Recurse
 
-RUN python -m compileall C:\Python\Lib ; \
+RUN python -m compileall C:\Python\Lib\site-packages ; \
     python -m compileall C:\batch-shipyard\shipyard.py ; \
     python -m compileall C:\batch-shipyard\convoy ; \
 	exit 0
@@ -34,12 +35,12 @@ COPY --from=0 /batch-shipyard /batch-shipyard
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-ENV PYTHON_VERSION 3.6.6
-ENV PYTHON_PIP_VERSION 10.0.1
+ENV PYTHON_VERSION 3.7.1
+ENV PYTHON_PIP_VERSION 18.1
 
 RUN $env:PATH = 'C:\Python;C:\Python\Scripts;{0}' -f $env:PATH ; \
     Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\' -Name Path -Value $env:PATH ; \
-    mkdir $env:APPDATA\Python\Python36\site-packages ; \
+    mkdir $env:APPDATA\Python\Python37\site-packages ; \
     Invoke-WebRequest 'https://bootstrap.pypa.io/get-pip.py' -OutFile 'get-pip.py' -UseBasicParsing ; \
     $replace = ('import tempfile{0}import site{0}site.getusersitepackages()' -f [char][int]10) ; \
     Get-Content get-pip.py | Foreach-Object { $_ -replace 'import tempfile', $replace } | Out-File -Encoding Ascii getpip.py ; \

@@ -122,7 +122,7 @@ def _parse_message(event: str, msg: str) -> dict:
 
 def _diff_events(
         data: dict, nodeid: str, event: str, end_event: str, timing: dict,
-        prefix: str, sizes: dict=None) -> None:
+        prefix: str, sizes: dict = None) -> None:
     """Diff start and end event
     :param dict data: data
     :param str nodeid: node id

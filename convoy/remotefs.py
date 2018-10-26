@@ -495,7 +495,7 @@ def create_storage_cluster(
         for disk_id, sat in disk_names:
             disk_map[disk_id.split('/')[-1]] = (disk_id, sat)
         del disk_names
-    except msrestazure.azure_exceptions.CloudError as e:
+    except msrestazure.azure_exceptions.CloudError:
         logger.error(
             'could not enumerate required disks for storage cluster {}'.format(
                 sc_id))

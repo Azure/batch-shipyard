@@ -2,18 +2,22 @@ steps:
   - script: |
       set -e
       set -o pipefail
-      echo "ARTIFACT_CLI=$ARTIFACT_CLI"
+      echo "SYSTEM_PHASENAME=$SYSTEM_PHASENAME ARTIFACT_CLI=$ARTIFACT_CLI"
+      PYTHON_CONFIGURE_OPTS="--enable-shared"
       if [ "${SYSTEM_PHASENAME}" == "Linux" ]; then
         sudo apt-get update
         sudo apt-get install -y libbz2-dev libreadline-dev libsqlite3-dev
+      elif [ "${SYSTEM_PHASENAME}" == "MacOS" ]; then
+        PYTHON_CONFIGURE_OPTS="$PYTHON_CONFIGURE_OPTS --with-openssl=$(brew --prefix openssl)"
       fi
       export PYENV_ROOT="$(Agent.WorkFolder)/.pyenv"
       git clone https://github.com/pyenv/pyenv.git $PYENV_ROOT
       export PATH="$PYENV_ROOT/bin:$PATH"
       pyenv --version
-      PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install $PYENV_VERSION
+      export PYTHON_CONFIGURE_OPTS
+      pyenv install $PYENV_VERSION
+      unset PYTHON_CONFIGURE_OPTS
       pyenv global $PYENV_VERSION
-      echo $PATH
       echo "##vso[task.prependpath]$PYENV_ROOT/bin"
       echo "##vso[task.prependpath]$PYENV_ROOT/shims"
     displayName: Install Python

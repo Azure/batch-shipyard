@@ -640,14 +640,16 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
                 sa.account, share, is_windows)
             if is_windows:
                 cmd = (
-                    'net use \\\\{sa}.file.{ep}\{share} {sakey} '
+                    'net use \\\\{sa}.file.{ep}\{share} {sakey} '  # noqa
                     '/user:Azure\{sa}'
                 ).format(
                     sa=sa.account, ep=sa.endpoint, share=share,
                     sakey=sa.account_key)
                 cmds.append(cmd)
-                cmd = 'mklink /d {hmp} \\\\{sa}.file.{ep}\{share}'.format(
-                    hmp=hmp, sa=sa.account, ep=sa.endpoint, share=share)
+                cmd = (
+                    'mklink /d {hmp} \\\\{sa}.file.{ep}\{share}'.format(  # noqa
+                        hmp=hmp, sa=sa.account, ep=sa.endpoint, share=share)
+                )
             else:
                 cmd = (
                     'mount -t cifs //{sa}.file.{ep}/{share} {hmp} -o '

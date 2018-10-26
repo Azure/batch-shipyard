@@ -135,13 +135,13 @@ else
         DISTRIB_RELEASE=$VERSION_ID
     fi
     # check for OS X
-    if [ -z ${DISTRIB_ID+x} ] && [ "$(uname)" == "Darwin" ]; then
+    if [ -z "${DISTRIB_ID+x}" ] && [ "$(uname)" == "Darwin" ]; then
         DISTRIB_ID=$(uname)
         DISTRIB_RELEASE=$(uname -a | cut -d' ' -f3)
     fi
 fi
 
-if [ -z ${DISTRIB_ID+x} ] || [ -z ${DISTRIB_RELEASE+x} ]; then
+if [ -z "${DISTRIB_ID+x}" ] || [ -z "${DISTRIB_RELEASE+x}" ]; then
     echo "Unknown DISTRIB_ID or DISTRIB_RELEASE."
     echo "Please refer to the Installation documentation for manual installation steps."
     exit 1

@@ -118,7 +118,7 @@ def is_not_empty(obj: Any) -> bool:
     return obj is not None and len(obj) > 0
 
 
-def datetime_utcnow(as_string: bool=False) -> datetime.datetime:
+def datetime_utcnow(as_string: bool = False) -> datetime.datetime:
     """Returns a datetime now with UTC timezone
     :param as_string: return as ISO8601 extended string
     :return: datetime object representing now with UTC timezone
@@ -309,7 +309,7 @@ class Credentials():
 
     def create_msi_credentials(
             self,
-            resource_id: str=None
+            resource_id: str = None
     ) -> msrestazure.azure_active_directory.MSIAuthentication:
         """Create MSI credentials
         :param resource_id: resource id to auth against
@@ -544,7 +544,7 @@ class BatchServiceHandler():
         client = self.service_proxy.batch_client(batch_account, service_url)
         try:
             return client.pool.get(pool_id)
-        except batchmodels.BatchErrorException as e:
+        except batchmodels.BatchErrorException:
             pass
         return None
 
@@ -569,7 +569,7 @@ class BatchServiceHandler():
                     'service_url={})'.format(
                         pool_id, batch_account, service_url))
             return nc[0]
-        except batchmodels.BatchErrorException as e:
+        except batchmodels.BatchErrorException:
             logger.error(
                 'could not retrieve pool {} node counts (account={} '
                 'service_url={})'.format(pool_id, batch_account, service_url))
@@ -640,7 +640,7 @@ class BatchServiceHandler():
             job_id: str,
             delete: bool,
             is_job_schedule: bool,
-            wait: bool=False,
+            wait: bool = False,
     ) -> None:
         action = 'delete' if delete else 'terminate'
         cstate = (
@@ -698,9 +698,9 @@ class BatchServiceHandler():
             job_id: str,
             naming: TaskNaming,
             current_task_id: str,
-            last_task_id: Optional[str]=None,
-            tasklist: Optional[List[str]]=None,
-            is_merge_task: Optional[bool]=False
+            last_task_id: Optional[str] = None,
+            tasklist: Optional[List[str]] = None,
+            is_merge_task: Optional[bool] = False
     ) -> Tuple[List[str], str]:
         """Regenerate the next generic task id
         :param batch_account: batch account
@@ -3124,7 +3124,7 @@ class FederationProcessor():
 
     async def check_global_lock(
         self,
-        backoff: bool=True
+        backoff: bool = True
     ) -> Generator[None, None, None]:
         if not self.fdh.has_global_lock:
             if backoff:

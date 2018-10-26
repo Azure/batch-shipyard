@@ -119,7 +119,7 @@ def convert_cloud_type(cloud_type: str) -> msrestazure.azure_cloud.Cloud:
 
 def create_msi_credentials(
         cloud: msrestazure.azure_cloud.Cloud,
-        resource_id: str=None
+        resource_id: str = None
 ) -> msrestazure.azure_active_directory.MSIAuthentication:
     """Create MSI credentials
     :param cloud: cloud kind

@@ -2151,7 +2151,7 @@ def delete_storage_containers_boot_diagnostics(
     :param str vm_name: vm name
     :param str vm_id: vm id
     """
-    name = re.sub('[\W_]+', '', vm_name)
+    name = re.sub('[\W_]+', '', vm_name)  # noqa
     contname = 'bootdiagnostics-{}-{}'.format(
         name[0:min((9, len(name)))], vm_id)
     logger.info('deleting container: {}'.format(contname))

@@ -1163,7 +1163,7 @@ def _get_torrent_num_seeds(
 def _start_torrent_via_storage(
         blob_client: azureblob.BlockBlobService,
         table_client: azuretable.TableService,
-        resource: str, entity: dict=None) -> None:
+        resource: str, entity: dict = None) -> None:
     """Start a torrent via storage entity
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
