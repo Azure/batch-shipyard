@@ -17,6 +17,7 @@ jobs:
       - powershell: |
           gci env:* | sort-object name
           python -m pip install --upgrade pip
+          pip install --upgrade setuptools wheel
           pip install -r requirements.txt
           pip install --no-deps -r req_nodeps.txt
           pip install flake8
@@ -176,6 +177,7 @@ jobs:
           echo "PYTHON=$PYTHON PIP=$PIP"
           which shellcheck
           $PYTHON -m pip install --upgrade pip
+          $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
           $PIP install --no-deps -r req_nodeps.txt
           $PIP install flake8
@@ -278,6 +280,7 @@ jobs:
           echo "PATH=$PATH"
           echo "PYTHON=$PYTHON PIP=$PIP"
           $PYTHON -m pip install --upgrade pip
+          $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
           $PIP install --no-deps -r req_nodeps.txt
           $PIP install flake8
