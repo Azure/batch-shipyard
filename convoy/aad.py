@@ -253,12 +253,13 @@ def create_aad_credentials(ctx, aad_settings):
                  'directoryid={} appid={}').format(
                      aad_authority_url, endpoint, aad_directory_id,
                      aad_application_id))
-        return azure.common.credentials.ServicePrincipalCredentials(
+        context = adal.AuthenticationContext(
+            '{}/{}'.format(aad_authority_url, aad_directory_id))
+        return msrestazure.azure_active_directory.AdalAuthentication(
+            context.acquire_token_with_client_credentials,
+            endpoint,
             aad_application_id,
             aad_auth_key,
-            tenant=aad_directory_id,
-            auth_uri=aad_authority_url,
-            resource=endpoint,
         )
     elif util.is_not_empty(aad_password):
         if settings.verbose(ctx.config):
