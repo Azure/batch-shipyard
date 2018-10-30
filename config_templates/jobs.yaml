@@ -60,6 +60,7 @@ job_specifications:
       - jobdata*.bin
       blobxfer_extra_options: null
   default_working_dir: batch
+  restrict_default_bind_mounts: false
   federation_constraints:
     pool:
       autoscale:

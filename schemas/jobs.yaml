@@ -155,6 +155,8 @@ mapping:
           default_working_dir:
             type: str
             enum: ['batch', 'container']
+          restrict_default_bind_mounts:
+            type: bool
           federation_constraints:
             type: map
             mapping:

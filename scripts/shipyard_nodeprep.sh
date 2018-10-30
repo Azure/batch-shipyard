@@ -82,13 +82,15 @@ blobxferversion=latest
 block=
 cascadecontainer=0
 custom_image=0
+default_container_runtime=
 delay_preload=0
 docker_group=
 encrypted=
 fallback_registry=
-hpnssh=0
 gluster_on_compute=0
 gpu=
+hpnssh=0
+kata=0
 lis=
 networkopt=0
 native_mode=0
@@ -97,10 +99,11 @@ p2penabled=0
 prefix=
 sc_args=
 shipyardversion=
+singularity_basedir=
 singularityversion=
 
 # process command line options
-while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
+while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:z:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -114,6 +117,7 @@ while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
             echo "-i [version] singularity version"
             echo "-j delay docker image preload"
+            echo "-k install kata containers runtime"
             echo "-l [lis pkg] LIS package install"
             echo "-m [type:scid] mount storage cluster"
             echo "-n native mode"
@@ -126,6 +130,7 @@ while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
             echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
             echo "-x [version] blobxfer version"
+            echo "-z [runtime] default container runtime"
             echo ""
             exit 1
             ;;
@@ -155,6 +160,9 @@ while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
             ;;
         j)
             delay_preload=1
+            ;;
+        k)
+            kata=1
             ;;
         l)
             lis=$OPTARG
@@ -197,6 +205,9 @@ while getopts "h?abcde:fg:i:jl:m:no:p:rs:tuv:wx:" opt; do
             ;;
         x)
             blobxferversion=$OPTARG
+            ;;
+        z)
+            default_container_runtime=${OPTARG,,}
             ;;
     esac
 done
@@ -798,14 +809,20 @@ docker_pull_image() {
     fi
 }
 
-singularity_basedir=
-singularity_setup() {
+install_singularity() {
+    if [ $native_mode -eq 1 ]; then
+        log DEBUG "Skipping Singularity install on native"
+        return
+    fi
+    if [ -z "$singularityversion" ]; then
+        log WARNING "Singularity version not specified, not installing"
+        return
+    fi
     local offer
     local sku
     singularity_basedir="${USER_MOUNTPOINT}"/singularity
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
-        # TODO add 18.04 support
-        if [ "$DISTRIB_RELEASE" == "16.04" ]; then
+        if [[ "$DISTRIB_RELEASE" == "16.04" ]] || [[ "$DISTRIB_RELEASE" == "18.04" ]]; then
             offer="$DISTRIB_ID"
             sku="$DISTRIB_RELEASE"
         fi
@@ -822,7 +839,7 @@ singularity_setup() {
     local di="alfpark/singularity:${singularityversion}-${offer}-${sku}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
-    docker run --rm -v /opt/singularity:/opt/singularity "$di" \
+    docker run --runtime runc --rm -v /opt/singularity:/opt/singularity "$di" \
         /bin/sh -c 'cp -r /singularity/* /opt/singularity'
     # symlink for global exec
     ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
@@ -855,6 +872,41 @@ singularity_setup() {
     singularity selftest
     # remove docker image
     docker rmi "$di"
+    # singularity registry login
+    if [ -f singularity-registry-login ]; then
+        . singularity-registry-login
+    fi
+}
+
+install_kata_containers() {
+    if [ $kata -eq 0 ]; then
+        log DEBUG "Kata containers not flagged for install"
+        return
+    fi
+    local ARCH
+    local repo_url
+    ARCH=$(arch)
+    if [ "$DISTRIB_ID" == "ubuntu" ]; then
+        repo_url="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/"
+        echo "deb $repo_url /" > /etc/apt/sources.list.d/kata-containers.list
+        repo_url="$repo_url/Release.key"
+    elif [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]]; then
+        repo_url="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/CentOS_${DISTRIB_RELEASE}/home:katacontainers:releases:${ARCH}:master.repo"
+    else
+        log WARNING "Kata containers not supported on $DISTRIB_ID $DISTRIB_RELEASE"
+        return
+    fi
+    add_repo "$repo_url"
+    refresh_package_index
+    install_packages kata-runtime kata-proxy kata-shim
+    # add to available runtimes
+    local dcr
+    if [ "$default_container_runtime" == "kata_containers" ]; then
+        dcr="a['default-runtime']='kata-runtime';"
+    fi
+    python -c "import json;a=json.load(open('/etc/docker/daemon.json'));${dcr}b=a.get('runtimes',{});b['kata-runtime']={'path':'/usr/bin/kata-runtime'};a['runtimes']=b;f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
+    # restart docker to pickup changes
+    systemctl restart docker.service
 }
 
 process_fstab_entry() {
@@ -1281,7 +1333,7 @@ EOF
         # launch container
         log DEBUG "Starting Cascade"
         # shellcheck disable=SC2086
-        docker run $detached --net=host --env-file $envfile \
+        docker run $detached --runtime runc --net=host --env-file $envfile \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v /etc/passwd:/etc/passwd:ro \
             -v /etc/group:/etc/group:ro \
@@ -1315,7 +1367,9 @@ EOF
         local rc
         wait $cascadepid
         rc=$?
-        if [ $rc -ne 0 ]; then
+        if [ $rc -eq 0 ]; then
+            log DEBUG "Cascade exited successfully"
+        else
             log ERROR "cascade exited with non-zero exit code: $rc"
             rm -f "$nodeprepfinished"
             exit $rc
@@ -1421,6 +1475,8 @@ echo "Mount path: $MOUNTS_PATH"
 echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
 echo "Network optimization: $networkopt"
 echo "Encryption cert thumbprint: $encrypted"
+echo "Install Kata Containers: $kata"
+echo "Default container runtime: $default_container_runtime"
 echo "Storage cluster mount: ${sc_args[*]}"
 echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
 echo "Install LIS: $lis"
@@ -1597,13 +1653,9 @@ fi
 docker_pull_image alfpark/blobxfer:"${blobxferversion}"
 docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cargo
 
-# set up singularity
-if [ $native_mode -eq 0 ]; then
-    singularity_setup
-    if [ -f singularity-registry-login ]; then
-        . singularity-registry-login
-    fi
-fi
+# install container runtimes
+install_singularity
+install_kata_containers
 
 # process and mount any storage clusters
 process_storage_clusters

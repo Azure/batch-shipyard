@@ -1431,8 +1431,8 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
-             '{v}{w}{x}').format(
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{k}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
+             '{v}{w}{x}{z}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1441,8 +1441,12 @@ def _construct_pool_object(
                 e=' -e {}'.format(pfx.sha1) if encrypt else '',
                 f=' -f' if gluster_on_compute else '',
                 g=' -g {}'.format(gpu_env) if gpu_env is not None else '',
-                i=' -i {}'.format(misc._SINGULARITY_VERSION),
+                i=' -i {}'.format(misc._SINGULARITY_VERSION) if (
+                    'singularity' in
+                    pool_settings.container_runtimes_install) else '',
                 j=' -j' if delay_image_preload else '',
+                k=' -k' if ('kata_containers' in
+                            pool_settings.container_runtimes_install) else '',
                 lis=' -l {}'.format(
                     lis_pkg.name) if lis_pkg is not None else '',
                 m=' -m {}'.format(','.join(sc_args)) if util.is_not_empty(
@@ -1461,6 +1465,8 @@ def _construct_pool_object(
                 v=' -v {}'.format(__version__),
                 w=' -w' if pool_settings.ssh.hpn_server_swap else '',
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
+                z=' -z {}'.format(pool_settings.container_runtimes_default),
+
             )
         )
     # upload resource files
@@ -2631,6 +2637,23 @@ def _adjust_settings_for_pool_creation(config):
             (pool.prometheus.ne_enabled or pool.prometheus.ca_enabled)):
         raise ValueError(
             'Prometheus monitoring is only available for Linux nodes')
+    # check container runtime compatibility
+    if util.is_not_empty(pool.container_runtimes_install):
+        if 'kata_containers' in pool.container_runtimes_install:
+            if is_windows:
+                raise ValueError(
+                    'Cannot install kata_containers runtime on Windows')
+            if not ((publisher == 'canonical' and offer == 'ubuntuserver') or
+                    (publisher == 'openlogic' and
+                     offer.startswith('centos')) or
+                    publisher == 'microsoft-azure-batch'):
+                raise ValueError(
+                    'Cannot install kata_containers runtime on an '
+                    'unsupported OS: {} {} {}'.format(publisher, offer, sku))
+            if not settings.is_nested_virtualization_capable(pool.vm_size):
+                raise ValueError(
+                    'Cannot use kata_containers runtime on VMs that do not '
+                    'support nested virtualization: {}'.format(pool.vm_size))
 
 
 def _check_settings_for_auto_pool(config):

@@ -36,6 +36,7 @@ try:
     import pathlib2 as pathlib
 except ImportError:
     import pathlib
+import re
 # non-stdlib imports
 import azure.batch.models as batchmodels
 import dateutil.parser
@@ -55,39 +56,35 @@ _TENSORBOARD_DOCKER_IMAGE = (
     '/usr/local/lib/python2.7/dist-packages/tensorboard/main.py',
     6006
 )
-_GPU_CC37_INSTANCES = frozenset((
-    'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
-))
-_GPU_COMPUTE_INSTANCES = frozenset((
-    # standard_nc
-    'standard_nc6', 'standard_nc12', 'standard_nc24', 'standard_nc24r',
-    # standard_nc_v2
-    'standard_nc6s_v2', 'standard_nc12s_v2', 'standard_nc24s_v2',
-    'standard_nc24rs_v2',
-    # standard nc_v3
-    'standard_nc6s_v3', 'standard_nc12s_v3', 'standard_nc24s_v3',
-    'standard_nc24rs_v3',
-    # standard_nd
-    'standard_nd6s', 'standard_nd12s', 'standard_nd24s', 'standard_nd24rs',
-))
-_GPU_VISUALIZATION_INSTANCES = frozenset((
-    # standard_nv
-    'standard_nv6', 'standard_nv12', 'standard_nv24',
-))
-_GPU_INSTANCES = _GPU_COMPUTE_INSTANCES.union(_GPU_VISUALIZATION_INSTANCES)
-_RDMA_INSTANCES = frozenset((
-    # standard_a
-    'standard_a8', 'standard_a9',
-))
-_RDMA_INSTANCE_SUFFIXES = frozenset((
-    'r', 'rs', 'rs_v2', 'rs_v3',
-))
-_PREMIUM_STORAGE_INSTANCE_PREFIXES = frozenset((
-    'standard_ds', 'standard_gs',
-))
-_PREMIUM_STORAGE_INSTANCE_SUFFIXES = frozenset((
-    's', 's_v2', 's_v3',
-))
+_GPU_CC37_INSTANCES = re.compile(
+    # standard nc
+    r'^standard_nc[\d]+r?$',
+    re.IGNORECASE
+)
+_GPU_COMPUTE_INSTANCES = re.compile(
+    # standard nc, ncv2, ncv3, nds
+    r'^standard_n[cd][\d]+r?s?(_v[\d])?$',
+    re.IGNORECASE
+)
+_GPU_VISUALIZATION_INSTANCES = re.compile(
+    # standard nv, nvv2
+    r'^standard_nv[\d]+s?(_v2)?$',
+    re.IGNORECASE
+)
+_RDMA_INSTANCES = re.compile(
+    # standard a8/a9, h+r, nc+r, nd+r
+    r'^standard_((a8|a9)|((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$',
+    re.IGNORECASE
+)
+_PREMIUM_STORAGE_INSTANCES = re.compile(
+    r'^standard_(([a-z]+[\d]+.*s(_v[\d])?)|([dg]s[\d]+(_v2)?))$',
+    re.IGNORECASE
+)
+_NESTED_VIRTUALIZATION_INSTANCES = re.compile(
+    # standard dv3/ev3, fv2, m
+    r'^standard_(([de][\d]+s?_v3)|(f[\d]+s_v2)|(m[\d]+[lmst]*))$',
+    re.IGNORECASE
+)
 _VM_TCP_NO_TUNE = frozenset((
     # basic
     'basic_a0', 'basic_a1', 'basic_a2', 'basic_a3', 'basic_a4',
@@ -189,6 +186,7 @@ PoolSettings = collections.namedtuple(
         'additional_node_prep_commands_post', 'virtual_network',
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
+        'container_runtimes_install', 'container_runtimes_default',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -609,9 +607,9 @@ def is_gpu_pool(vm_size):
     :rtype: bool
     :return: if gpus are present
     """
-    if vm_size.lower() in _GPU_INSTANCES:
-        return True
-    return False
+    return (
+        is_gpu_compute_pool(vm_size) or is_gpu_visualization_pool(vm_size)
+    )
 
 
 def is_gpu_compute_pool(vm_size):
@@ -621,9 +619,7 @@ def is_gpu_compute_pool(vm_size):
     :rtype: bool
     :return: if compute gpus are present
     """
-    if vm_size.lower() in _GPU_COMPUTE_INSTANCES:
-        return True
-    return False
+    return _GPU_COMPUTE_INSTANCES.match(vm_size)
 
 
 def is_gpu_visualization_pool(vm_size):
@@ -633,9 +629,7 @@ def is_gpu_visualization_pool(vm_size):
     :rtype: bool
     :return: if visualization gpus are present
     """
-    if vm_size.lower() in _GPU_VISUALIZATION_INSTANCES:
-        return True
-    return False
+    return _GPU_VISUALIZATION_INSTANCES.match(vm_size)
 
 
 def get_gpu_type_from_vm_size(vm_size):
@@ -646,7 +640,7 @@ def get_gpu_type_from_vm_size(vm_size):
     :return: type of gpu and compute capability
     """
     if is_gpu_compute_pool(vm_size):
-        if vm_size.lower() in _GPU_CC37_INSTANCES:
+        if _GPU_CC37_INSTANCES.match(vm_size):
             return 'compute_cc37'
         else:
             return 'compute_cc6-7'
@@ -749,12 +743,7 @@ def is_rdma_pool(vm_size):
     :rtype: bool
     :return: if rdma is present
     """
-    vsl = vm_size.lower()
-    if vsl in _RDMA_INSTANCES:
-        return True
-    elif any(vsl.endswith(x) for x in _RDMA_INSTANCE_SUFFIXES):
-        return True
-    return False
+    return _RDMA_INSTANCES.match(vm_size)
 
 
 def is_premium_storage_vm_size(vm_size):
@@ -764,12 +753,17 @@ def is_premium_storage_vm_size(vm_size):
     :rtype: bool
     :return: if vm size is premium storage compatible
     """
-    vsl = vm_size.lower()
-    if any(vsl.endswith(x) for x in _PREMIUM_STORAGE_INSTANCE_SUFFIXES):
-        return True
-    elif any(vsl.startswith(x) for x in _PREMIUM_STORAGE_INSTANCE_PREFIXES):
-        return True
-    return False
+    return _PREMIUM_STORAGE_INSTANCES.match(vm_size)
+
+
+def is_nested_virtualization_capable(vm_size):
+    # type: (str) -> bool
+    """Check if vm size is nested virtualization capable
+    :pararm str vm_size: vm size
+    :rtype: bool
+    :return: if vm size is nested virtualization capable
+    """
+    return _NESTED_VIRTUALIZATION_INSTANCES.match(vm_size)
 
 
 def is_platform_image(config, vm_config=None):
@@ -1269,6 +1263,17 @@ def pool_settings(config):
             thumbprint=tp, thumbprint_algorithm='sha1',
             visibility=visibility
         ))
+    # container runtimes
+    try:
+        cr_install = _kv_read_checked(
+            conf['container_runtimes'], 'install', default=[])
+    except KeyError:
+        cr_install = []
+    try:
+        cr_default = _kv_read_checked(
+            conf['container_runtimes'], 'default', default='runc')
+    except KeyError:
+        cr_default = 'runc'
     return PoolSettings(
         id=conf['id'],
         vm_size=_pool_vm_size(config),
@@ -1314,6 +1319,8 @@ def pool_settings(config):
         prometheus=prometheus_settings(conf),
         upload_diagnostics_logs_on_unusable=_kv_read(
             conf, 'upload_diagnostics_logs_on_unusable', default=True),
+        container_runtimes_install=cr_install,
+        container_runtimes_default=cr_default,
     )
 
 
@@ -3613,15 +3620,28 @@ def task_settings(
             def_wd = '$AZ_BATCH_TASK_WORKING_DIR'
     # bind root dir and set working dir
     if not native:
-        # mount batch root dir
-        if is_windows:
-            run_opts.append(
-                '{} %AZ_BATCH_NODE_ROOT_DIR%:%AZ_BATCH_NODE_ROOT_DIR%'.format(
-                    bindparm))
+        restrict_bind = _kv_read(
+            jobspec, 'restrict_default_bind_mounts', default=False)
+        if restrict_bind:
+            # mount task directory only
+            if is_windows:
+                run_opts.append(
+                    '{} %AZ_BATCH_TASK_DIR%:%AZ_BATCH_TASK_DIR%'.format(
+                        bindparm))
+            else:
+                run_opts.append(
+                    '{} $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR'.format(
+                        bindparm))
         else:
-            run_opts.append(
-                '{} $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR'.format(
-                    bindparm))
+            # mount batch root dir
+            if is_windows:
+                run_opts.append(
+                    '{} %AZ_BATCH_NODE_ROOT_DIR%:'
+                    '%AZ_BATCH_NODE_ROOT_DIR%'.format(bindparm))
+            else:
+                run_opts.append(
+                    '{} $AZ_BATCH_NODE_ROOT_DIR:'
+                    '$AZ_BATCH_NODE_ROOT_DIR'.format(bindparm))
         # set working directory if not already set
         if def_wd != 'container':
             if util.is_not_empty(docker_image):

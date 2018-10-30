@@ -131,6 +131,11 @@ pool_specification:
       enabled: false
       port: 8080
       options: []
+  container_runtimes:
+    install:
+      - kata_containers
+      - singularity
+    default: null
 ```
 
 The `pool_specification` property has the following members:
@@ -542,6 +547,17 @@ node instances.
           This is the internal port on the compute node.
         * (optional) `options` is a list of options to pass to the
           cAdvisor instance running on all nodes.
+* (optional) `container_runtimes` properties control container runtime
+behavior on the pool compute nodes.
+    * (optional) `install` controls which optional container runtimes to
+      install. A list of valid values for this option are `kata_containers`
+      and `singularity`. Note that the `runc` container runtime is always
+      installed. The `nvidia` container runtime is automatically installed
+      when allocating a pool with GPUs. `singularity` must be specified if
+      running Singularity containers.
+    * (optional) `default` is the default container runtime to use for
+      running Docker containers. This option has no effect on `singularity`
+      containers.
 
 ## Full template
 A full template of a credentials file can be found

@@ -198,8 +198,9 @@ sample shown here. Please refer to the following resources for more
 information.
 
 For Singularity containers, the workflow would be nearly identical except
-for specifying `singularity_images` in the `config.yaml` and
-`singularity_image` in `jobs.yaml`.
+for specifying `singularity` in `container_runtimes`:`install` in `pool.yaml`,
+`singularity_images` in the `config.yaml`, and `singularity_image` in
+`jobs.yaml`.
 
 #### Batch Shipyard Guide Contents
 Please see the [complete documentation](http://batch-shipyard.readthedocs.io)

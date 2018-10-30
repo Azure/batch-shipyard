@@ -22,13 +22,11 @@ entire [standalone remote file systems (storage clusters)](http://batch-shipyard
 in Azure, independent of any integrated Azure Batch functionality.
 
 ## Major Features
-* Automated [Docker Host Engine](https://www.docker.com) and
-[Singularity](https://www.sylabs.io) installations tuned for
-Azure Batch compute nodes
-* Automated deployment of required Docker and/or Singularity images to
+* Support for multiple container runtimes including
+[Docker](https://docker.com), [Singularity](https://www.sylabs.io), and
+[Kata Containers](https://katacontainers.io/) tuned for Azure Batch
 compute nodes
-* Mixed mode support for Docker and Singularity: run your Docker and
-Singularity containers within the same job, side-by-side or even concurrently
+* Automated deployment of container images required for tasks to compute nodes
 * Comprehensive [data movement](http://batch-shipyard.readthedocs.io/en/latest/70-batch-shipyard-data-movement/)
 support: move data easily between locally accessible storage systems, remote
 filesystems, Azure Blob or File Storage, and compute nodes

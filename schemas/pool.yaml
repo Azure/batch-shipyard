@@ -351,3 +351,14 @@ mapping:
                 type: seq
                 sequence:
                 - type: str
+      container_runtimes:
+        type: map
+        mapping:
+          install:
+            type: seq
+            sequence:
+              - type: str
+                enum: ['kata_containers', 'runc', 'singularity']
+          default:
+            type: str
+            enum: ['kata_containers', 'runc']

@@ -11,3 +11,6 @@ pool_specification:
   vm_size: STANDARD_NC6
   ssh:
     username: shipyard
+  container_runtimes:
+    install:
+      - singularity

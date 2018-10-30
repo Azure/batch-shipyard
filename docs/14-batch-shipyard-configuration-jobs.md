@@ -81,6 +81,7 @@ job_specifications:
       - jobdata*.bin
       blobxfer_extra_options: null
   default_working_dir: batch
+  restrict_default_bind_mounts: false
   federation_constraints:
     pool:
       autoscale:
@@ -521,6 +522,16 @@ container runtime through either `additional_docker_run_options` or
 that property takes precedence over this option. Note that this option does
 not work in `native` mode currently; `native` mode will always override this
 option to `batch`.
+* (optional) `restrict_default_bind_mounts` will restrict the mapped
+host directories into the container. If this property is set to `true`,
+only the `$AZ_BATCH_TASK_DIR` is mapped from the host into the container.
+This is useful when it is necessary to restrict the scope of the Azure Batch
+directory hierarchy is exposed to the container and in particular when in used
+in combination with isolation models such as Hyper-V or Kata containers.
+Note that if shared file systems or other mounts are placed in the
+`$AZ_BATCH_NODE_SHARED_DIR` then enabling this option may prevent tasks
+from accessing required data and working correctly. This option has no
+effect on native container pools. The default is `false`.
 * (optional) `federation_constraints` defines properties to apply to the job
 and all tasks (i.e., the task group) when submitting the job to a federation.
 Please see the [federation guide](68-batch-shipyard-federation.md) for more

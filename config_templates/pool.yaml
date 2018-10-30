@@ -123,3 +123,8 @@ pool_specification:
       enabled: false
       port: 8080
       options: []
+  container_runtimes:
+    install:
+      - kata_containers
+      - singularity
+    default: null
