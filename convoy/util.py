@@ -307,13 +307,13 @@ def singularity_image_name_on_disk(name):
     name = name.replace('/', '-')
     if docker:
         name = name.replace(':', '-')
-        name = '{}.img'.format(name)
+        name = '{}.simg'.format(name)
     else:
-        idx = name.find(':')
-        # for some reason, even tagged images in singularity result in -master?
-        if idx != -1:
-            name = name[:idx]
-        name = '{}-master.simg'.format(name)
+        tmp = name.split(':')
+        if len(tmp) > 1:
+            name = '{}-{}.simg'.format(tmp[0], tmp[1])
+        else:
+            name = '{}-master-latest.simg'.format(name)
     return name
 
 
