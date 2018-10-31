@@ -40,6 +40,7 @@ job_specifications:
   - joblevelvol
   shared_data_volumes:
   - joblevelsharedvol
+  auto_scratch: false
   input_data:
     azure_batch:
     - job_id: someotherjob

@@ -185,6 +185,10 @@ _GLUSTERRESIZE_FILE = (
     pathlib.Path(
         _ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute_resize.sh')
 )
+_AUTOSCRATCH_FILE = (
+    'shipyard_auto_scratch.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_auto_scratch.sh')
+)
 _HPNSSH_FILE = (
     'shipyard_hpnssh.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_hpnssh.sh')
@@ -1170,8 +1174,7 @@ def _construct_pool_object(
                     raise ValueError(
                         'only one glusterfs on compute can be created')
                 gluster_on_compute = True
-            elif settings.is_shared_data_volume_storage_cluster(
-                    sdv, sdvkey):
+            elif settings.is_shared_data_volume_storage_cluster(sdv, sdvkey):
                 storage_cluster_mounts.append(sdvkey)
             elif settings.is_shared_data_volume_custom_linux_mount(
                     sdv, sdvkey):
@@ -1432,7 +1435,7 @@ def _construct_pool_object(
         # create start task commandline
         start_task.append(
             ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{k}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
-             '{v}{w}{x}{z}').format(
+             '{v}{w}{x}{y}{z}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1465,6 +1468,7 @@ def _construct_pool_object(
                 v=' -v {}'.format(__version__),
                 w=' -w' if pool_settings.ssh.hpn_server_swap else '',
                 x=' -x {}'.format(data._BLOBXFER_VERSION),
+                y=' -y' if pool_settings.per_job_auto_scratch else '',
                 z=' -z {}'.format(pool_settings.container_runtimes_default),
 
             )
@@ -2609,6 +2613,21 @@ def _adjust_settings_for_pool_creation(config):
                 'per pool')
     except KeyError:
         pass
+    # check auto scratch settings
+    if pool.per_job_auto_scratch:
+        if is_windows:
+            raise ValueError('per job auto scratch is only available on Linux')
+        if not pool.inter_node_communication_enabled:
+            raise ValueError(
+                'inter node communication in pool configuration '
+                'must be enabled for per job auto scratch')
+        if (pool.virtual_network.arm_subnet_id is not None or
+                pool.virtual_network.name is not None or
+                pool.remote_access_control.allow is not None or
+                pool.remote_access_control.deny is not None):
+            logger.warning(
+                'ensure that you allow SSH access within the virtual network '
+                'or do not deny intranet SSH traffic for per job auto scratch')
     # check data ingress on pool creation on windows
     if is_windows and pool.transfer_files_on_pool_creation:
         raise ValueError(
@@ -3762,7 +3781,7 @@ def action_jobs_add(
         batch_client, blob_client, None, None, keyvault_client, config,
         autopool, _IMAGE_BLOCK_FILE,
         _BLOBXFER_WINDOWS_FILE if is_windows else _BLOBXFER_FILE,
-        recreate, tail)
+        _AUTOSCRATCH_FILE, recreate, tail)
 
 
 def action_jobs_list(batch_client, config, jobid, jobscheduleid):

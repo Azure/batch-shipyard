@@ -153,6 +153,8 @@ mapping:
             type: str
       inter_node_communication_enabled:
         type: bool
+      per_job_auto_scratch:
+        type: bool
       reboot_on_start_task_failed:
         type: bool
       attempt_recovery_on_unusable:

@@ -52,7 +52,8 @@ pool_specification:
           start: 8
           end: 17
     formula: null
-  inter_node_communication_enabled: true
+  inter_node_communication_enabled: false
+  per_job_auto_scratch: false
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false
   upload_diagnostics_logs_on_unusable: true
@@ -317,6 +318,19 @@ that must communicate with each other such as MPI applications. This
 property cannot be enabled if there are positive values for both
 `dedicated and `low_priority` compute nodes specified above. This property
 will be force enabled if peer-to-peer replication is enabled.
+* (optional) `per_job_auto_scratch` will enable on-demand distributed scratch
+space creation across all dedicated or low priority nodes in a pool for a job.
+This scratch will be available at the location
+`$AZ_BATCH_TASK_DIR/auto_scratch` within the container. The scratch drive
+is cleaned up automatically on job termination or deletion. This option
+requires setting the property `inter_node_communication_enabled` to `true`.
+Note that SSH and
+[BeeGFS communication](https://www.beegfs.io/wiki/NetworkTuning) must be
+allowed on the virtual network between nodes. Thus if specifying a
+`virtual_network` and/or `remote_access_control` rules, you must ensure that
+the internal network traffic is not blocked by NSG rules.
+This option is only available on a subset of supported Linux distributions.
+The default, if not specified, is `false`.
 * (optional) `reboot_on_start_task_failed` allows Batch Shipyard to reboot the
 compute node in case there is a transient failure in node preparation (e.g.,
 network timeout, resolution failure or download problem). This defaults to

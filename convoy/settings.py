@@ -187,6 +187,7 @@ PoolSettings = collections.namedtuple(
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
+        'per_job_auto_scratch',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1321,6 +1322,8 @@ def pool_settings(config):
             conf, 'upload_diagnostics_logs_on_unusable', default=True),
         container_runtimes_install=cr_install,
         container_runtimes_default=cr_default,
+        per_job_auto_scratch=_kv_read(
+            conf, 'per_job_auto_scratch', default=False),
     )
 
 
@@ -3074,6 +3077,16 @@ def job_allow_run_on_missing(conf):
     return allow
 
 
+def job_requires_auto_scratch(conf):
+    # type: (dict) -> bool
+    """Get job auto scratch setting
+    :param dict conf: job configuration object
+    :rtype: bool
+    :return: job auto scratch
+    """
+    return _kv_read(conf, 'auto_scratch', default=False)
+
+
 def job_federation_constraint_settings(conf, federation_id):
     # type: (dict, str) -> dict
     """Gets federation constraints
@@ -3687,6 +3700,12 @@ def task_settings(
         else:
             shared_data_volumes = tsdv
     del tsdv
+    if job_requires_auto_scratch(jobspec):
+        run_opts.append(
+            '{} {}/auto_scratch/{}:$AZ_BATCH_TASK_DIR/auto_scratch'.format(
+                bindparm,
+                _HOST_MOUNTS_DIR,
+                jobspec['id']))
     if util.is_not_empty(shared_data_volumes):
         sdv = global_resources_shared_data_volumes(config)
         for sdvkey in shared_data_volumes:

@@ -45,13 +45,15 @@ for Batch pools and RemoteFS storage clusters
 with integration to auto-link these filesystems to compute nodes with
 support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and
 [GlusterFS](https://www.gluster.org/) distributed network file system
-* Automatic shared data volume support for linking to Remote Filesystems as
-provisioned by Batch Shipyard, [Azure File](https://azure.microsoft.com/services/storage/files/)
+* Automatic shared data volume support for linking to
+[Remote Filesystems as provisioned by Batch Shipyard](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/),
+[Azure File](https://azure.microsoft.com/services/storage/files/)
 via SMB, [Azure Blob](https://azure.microsoft.com/services/storage/blobs/)
 via [blobfuse](https://github.com/Azure/azure-storage-fuse),
-[GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes
-(which can act as a distributed local file system/cache), and custom Linux
-mount support (fstab)
+[GlusterFS](https://www.gluster.org/) provisioned directly on compute nodes,
+and custom Linux mount support (fstab)
+* Support for automated on-demand, per-job distributed scratch space
+provisioning via [BeeGFS BeeOND](https://www.beegfs.io/wiki/BeeOND)
 * Support for simple, scenario-based [pool autoscale](http://batch-shipyard.readthedocs.io/en/latest/30-batch-shipyard-autoscale/)
 and autopool to dynamically scale and control computing resources on-demand
 * Support for [Task Factories](http://batch-shipyard.readthedocs.io/en/latest/35-batch-shipyard-task-factory-merge-task/)

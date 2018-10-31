@@ -78,6 +78,7 @@ fi
 # globals
 azureblob=0
 azurefile=0
+beeond=0
 blobxferversion=latest
 block=
 cascadecontainer=0
@@ -103,7 +104,7 @@ singularity_basedir=
 singularityversion=
 
 # process command line options
-while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:z:" opt; do
+while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:yz:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -130,6 +131,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:z:" opt; do
             echo "-v [version] batch-shipyard version"
             echo "-w install openssh-hpn"
             echo "-x [version] blobxfer version"
+            echo "-y install beegfs beeond for autoscratch"
             echo "-z [runtime] default container runtime"
             echo ""
             exit 1
@@ -205,6 +207,9 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:z:" opt; do
             ;;
         x)
             blobxferversion=$OPTARG
+            ;;
+        y)
+            beeond=1
             ;;
         z)
             default_container_runtime=${OPTARG,,}
@@ -529,6 +534,31 @@ install_lis() {
     reboot
 }
 
+install_kernel_devel_package() {
+    if [[ $DISTRIB_ID == centos* ]]; then
+        local kernel_devel_package
+        kernel_devel_package="kernel-devel-$(uname -r)"
+        set +e
+        if ! yum list installed "${kernel_devel_package}"; then
+            set -e
+            local centos_ver
+            centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
+            if [ -e /dev/infiniband/uverbs0 ]; then
+                # HPC distros have pinned repos
+                install_packages "${kernel_devel_package}"
+            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]]; then
+                local pkg
+                pkg="${kernel_devel_package}.rpm"
+                download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
+                install_local_packages "$pkg"
+            else
+                install_packages "${kernel_devel_package}"
+            fi
+        fi
+        set -e
+    fi
+}
+
 install_nvidia_software() {
     log INFO "Installing Nvidia Software"
     # check for nvidia card
@@ -573,26 +603,7 @@ EOF
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         install_packages build-essential
     elif [[ $DISTRIB_ID == centos* ]]; then
-        local kernel_devel_package
-        kernel_devel_package="kernel-devel-$(uname -r)"
-        set +e
-        if ! yum list installed "${kernel_devel_package}"; then
-            set -e
-            local centos_ver
-            centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
-            if [ -e /dev/infiniband/uverbs0 ]; then
-                # HPC distros have pinned repos
-                install_packages "${kernel_devel_package}"
-            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]]; then
-                local pkg
-                pkg="${kernel_devel_package}.rpm"
-                download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
-                install_local_packages "$pkg"
-            else
-                install_packages "${kernel_devel_package}"
-            fi
-        fi
-        set -e
+        install_kernel_devel_package
         install_packages gcc binutils make
     fi
     # get additional dependency if NV-series VMs
@@ -883,6 +894,11 @@ install_kata_containers() {
         log DEBUG "Kata containers not flagged for install"
         return
     fi
+    if [ $custom_image -eq 1 ]; then
+        log DEBUG "Not installing Kata containers due to custom image"
+        return
+    fi
+    logger DEBUG "Installing Kata containers"
     local ARCH
     local repo_url
     ARCH=$(arch)
@@ -907,6 +923,7 @@ install_kata_containers() {
     python -c "import json;a=json.load(open('/etc/docker/daemon.json'));${dcr}b=a.get('runtimes',{});b['kata-runtime']={'path':'/usr/bin/kata-runtime'};a['runtimes']=b;f=open('/etc/docker/daemon.json','w');json.dump(a,f);f.close();"
     # restart docker to pickup changes
     systemctl restart docker.service
+    logger INFO "Kata containers installed"
 }
 
 process_fstab_entry() {
@@ -1118,6 +1135,44 @@ check_for_glusterfs_on_compute() {
     set -e
 }
 
+install_beeond() {
+    if [ $beeond -eq 0 ]; then
+        log DEBUG "BeeGFS BeeOND not flagged for install"
+        return
+    fi
+    if [ $custom_image -eq 1 ]; then
+        log DEBUG "Not installing BeeGFS BeeOND due to custom image"
+        return
+    fi
+    logger DEBUG "Installing BeeGFS BeeOND"
+    local led
+    local pkgnum
+    if [ "$PACKAGER" == "apt" ]; then
+        if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "8" ]; then
+            pkgnum=8
+        elif { [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; } || { [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "16.04" ]; } then
+            pkgnum=9
+        elif [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
+            # TODO temporarily use 9 until debian 10 repo releases
+            pkgnum=9
+        fi
+        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs_deb${pkgnum}.list" "/etc/apt/sources.list.d/beegfs_deb${pkgnum}.list"
+        add_repo "https://www.beegfs.io/release/latest-stable/gpg/DEB-GPG-KEY-beegfs"
+        led=libelf-dev
+    elif [ "$PACKAGER" == "yum" ]; then
+        if [[ "$DISTRIB_RELEASE" == 7* ]]; then
+            pkgnum=7
+        fi
+        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs_rhel${pkgnum}.repo" "/etc/yum.repos.d/beegfs_rhel${pkgnum}.repo"
+        rpm --import "https://www.beegfs.io/release/latest-stable/gpg/RPM-GPG-KEY-beegfs"
+        install_kernel_devel_package
+        led=elfutils-libelf-devel
+    fi
+    refresh_package_index
+    install_packages beeond $led
+    logger INFO "BeeGFS BeeOND installed"
+}
+
 install_glusterfs_on_compute() {
     local gfsstart="systemctl start glusterd"
     local gfsenable="systemctl enable glusterd"
@@ -1247,6 +1302,10 @@ install_cascade_dependencies() {
 }
 
 install_intel_mpi() {
+    if [ $custom_image -eq 1 ]; then
+        log DEBUG "Not installing Intel MPI due to custom image"
+        return
+    fi
     if [ -e /dev/infiniband/uverbs0 ]; then
         log INFO "IB device found"
         if [ ! -d /opt/intel/compilers_and_libraries/linux/mpi ]; then
@@ -1477,6 +1536,7 @@ echo "Network optimization: $networkopt"
 echo "Encryption cert thumbprint: $encrypted"
 echo "Install Kata Containers: $kata"
 echo "Default container runtime: $default_container_runtime"
+echo "Install BeeGFS BeeOND: $beeond"
 echo "Storage cluster mount: ${sc_args[*]}"
 echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
 echo "Install LIS: $lis"
@@ -1645,9 +1705,7 @@ if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1
 fi
 
 # install intel mpi if available
-if [ $custom_image -eq 0 ]; then
-    install_intel_mpi
-fi
+install_intel_mpi
 
 # retrieve required docker images
 docker_pull_image alfpark/blobxfer:"${blobxferversion}"
@@ -1656,6 +1714,9 @@ docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cargo
 # install container runtimes
 install_singularity
 install_kata_containers
+
+# install autoscratch
+install_beeond
 
 # process and mount any storage clusters
 process_storage_clusters

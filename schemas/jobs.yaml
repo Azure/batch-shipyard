@@ -103,6 +103,8 @@ mapping:
             type: seq
             sequence:
               - type: str
+          auto_scratch:
+            type: bool
           input_data:
             type: map
             mapping:

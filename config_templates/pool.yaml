@@ -44,7 +44,8 @@ pool_specification:
           start: 8
           end: 17
     formula: null
-  inter_node_communication_enabled: true
+  inter_node_communication_enabled: false
+  per_job_auto_scratch: false
   reboot_on_start_task_failed: false
   attempt_recovery_on_unusable: false
   upload_diagnostics_logs_on_unusable: true

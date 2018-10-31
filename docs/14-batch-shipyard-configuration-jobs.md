@@ -61,6 +61,7 @@ job_specifications:
   - joblevelvol
   shared_data_volumes:
   - joblevelsharedvol
+  auto_scratch: false
   input_data:
     azure_batch:
     - job_id: someotherjob
@@ -469,6 +470,13 @@ all containers under the job.
 * (optional) `shared_data_volumes` is an array of `shared_data_volume`
 aliases as defined in the global configuration file. These volumes will be
 mounted in all containers under the job.
+* (optional) `auto_scratch` will enable on-demand distributed scratch
+space creation across all dedicated or low priority nodes in the associated
+pool for this job. This scratch will be available at the location
+`$AZ_BATCH_TASK_DIR/auto_scratch` within the container. The scratch space
+is cleaned up automatically on job termination or deletion. This option
+requires setting the property `per_job_auto_scratch` to `true` in the
+corresponding pool configuration.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
