@@ -11,16 +11,35 @@ mapping:
       location:
         type: str
         required: true
+      zone:
+        type: int
+        range:
+          min: 1
       managed_disks:
         type: map
         mapping:
           resource_group:
             type: str
-          premium:
-            type: bool
+          sku:
+            type: str
+            required: true
+            enum: ['standard_lrs', 'premium_lrs', 'standard_ssd_lrs', 'ultra_ssd_lrs']
           disk_size_gb:
             type: int
             required: true
+          disk_provisioned_performance:
+            type: map
+            mapping:
+              iops_read_write:
+                type: int
+                required: true
+                range:
+                  min: 100
+              mbps_read_write:
+                type: int
+                required: true
+                range:
+                  min: 1
           disk_names:
             type: seq
             sequence:

@@ -64,12 +64,35 @@ def _create_managed_disk(compute_client, rfs, disk_name):
     :rtype: msrestazure.azure_operation.AzureOperationPoller
     :return: async operation handle
     """
-    account_type = (
-        compute_client.disks.models.StorageAccountTypes.premium_lrs
-        if rfs.managed_disks.premium else
-        compute_client.disks.models.StorageAccountTypes.standard_lrs
-    )
-    logger.info('creating managed disk: {}'.format(disk_name))
+    iops_rw = None
+    mbps_rw = None
+    if rfs.managed_disks.zone is not None:
+        zone = [rfs.managed_disks.zone]
+    else:
+        zone = None
+    if rfs.managed_disks.sku == 'standard_lrs':
+        sku = compute_client.disks.models.DiskStorageAccountTypes(
+            'Standard_LRS')
+    elif rfs.managed_disks.sku == 'premium_lrs':
+        sku = compute_client.disks.models.DiskStorageAccountTypes(
+            'Premium_LRS')
+    elif rfs.managed_disks.sku == 'standard_ssd_lrs':
+        sku = compute_client.disks.models.DiskStorageAccountTypes(
+            'StandardSSD_LRS')
+    elif rfs.managed_disks.sku == 'ultra_ssd_lrs':
+        sku = compute_client.disks.models.DiskStorageAccountTypes(
+            'UltraSSD_LRS')
+        if zone is None:
+            raise ValueError(
+                'Ultra SSD disks requires availabilty zones, please specify '
+                'zone in configuration')
+        iops_rw = rfs.managed_disks.disk_provisioned_perf_iops_rw
+        mbps_rw = rfs.managed_disks.disk_provisioned_perf_mbps_rw
+    logger.info(
+        'creating managed disk: {} size={} GB sku={} zone={} iops_rw={} '
+        'mbps_rw={}'.format(
+            disk_name, rfs.managed_disks.disk_size_gb, sku, zone,
+            iops_rw, mbps_rw))
     return compute_client.disks.create_or_update(
         resource_group_name=rfs.managed_disks.resource_group,
         disk_name=disk_name,
@@ -80,10 +103,13 @@ def _create_managed_disk(compute_client, rfs, disk_name):
                 DiskCreateOption.empty,
             ),
             sku=compute_client.disks.models.DiskSku(
-                name=account_type,
+                name=sku,
             ),
             os_type=compute_client.disks.models.OperatingSystemTypes.linux,
             disk_size_gb=rfs.managed_disks.disk_size_gb,
+            zones=zone,
+            disk_iops_read_write=iops_rw,
+            disk_mbps_read_write=mbps_rw,
         ),
     )
 
@@ -430,7 +456,10 @@ def _create_availability_set(compute_client, rfs):
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
     if rfs.storage_cluster.vm_count <= 1:
-        logger.warning('insufficient vm_count for availability set')
+        logger.info('insufficient vm_count for availability set')
+        return None
+    if rfs.storage_cluster.zone is not None:
+        logger.info('cannot create an availability set for zonal resource')
         return None
     as_name = settings.generate_availability_set_name(rfs.storage_cluster)
     # check and fail if as exists

@@ -354,7 +354,9 @@ FederationConstraintSettings = collections.namedtuple(
 )
 ManagedDisksSettings = collections.namedtuple(
     'ManagedDisksSettings', [
-        'location', 'resource_group', 'premium', 'disk_size_gb', 'disk_names',
+        'location', 'resource_group', 'zone', 'sku', 'disk_size_gb',
+        'disk_provisioned_perf_iops_rw', 'disk_provisioned_perf_mbps_rw',
+        'disk_names',
     ]
 )
 VirtualNetworkSettings = collections.namedtuple(
@@ -442,10 +444,10 @@ class VmResource(object):
     def __init__(
             self, location, resource_group, hostname_prefix, vm_size,
             public_ip, virtual_network, network_security, ssh,
-            accelerated_networking):
+            accelerated_networking, zone):
         # type: (VmResource, str, str, str, str, PublicIpSettings,
         #        VirtualNetworkSettings, NetworkSecuritySettings, SSHSettings,
-        #        bool) -> None
+        #        bool, int) -> None
         if location is None or ' ' in location:
             raise ValueError('invalid location specified')
         self.location = location
@@ -457,6 +459,7 @@ class VmResource(object):
         self.network_security = network_security
         self.ssh = ssh
         self.accelerated_networking = accelerated_networking
+        self.zone = zone
 
 
 class StorageClusterSettings(VmResource):
@@ -464,14 +467,15 @@ class StorageClusterSettings(VmResource):
             self, id, file_server, vm_count, fault_domains, vm_disk_map,
             location, resource_group, hostname_prefix, vm_size,
             public_ip, virtual_network, network_security, ssh,
-            accelerated_networking, prometheus):
+            accelerated_networking, zone, prometheus):
         # type: (StorageClusterSettings, str, FileServerSettings, int, int,
         #        Dict, str, str, str, str, PublicIpSettings,
         #        VirtualNetworkSettings, NetworkSecuritySettings, SSHSettings,
-        #        bool, PrometheusSettings) -> None
+        #        bool, int, PrometheusSettings) -> None
         super(StorageClusterSettings, self).__init__(
             location, resource_group, hostname_prefix, vm_size, public_ip,
-            virtual_network, network_security, ssh, accelerated_networking)
+            virtual_network, network_security, ssh, accelerated_networking,
+            zone)
         self.id = id
         self.file_server = file_server
         self.vm_count = vm_count
@@ -4254,19 +4258,28 @@ def remotefs_settings(config, sc_id=None):
     location = conf['location']
     if util.is_none_or_empty(location):
         raise ValueError('invalid location in remote_fs')
+    zone = _kv_read(conf, 'zone')
     # managed disk settings
     md_conf = conf['managed_disks']
     md_rg = _kv_read_checked(md_conf, 'resource_group', resource_group)
     if util.is_none_or_empty(md_rg):
         raise ValueError('invalid managed_disks:resource_group in remote_fs')
-    md_premium = _kv_read(md_conf, 'premium', False)
+    md_sku = _kv_read(md_conf, 'sku')
+    if util.is_none_or_empty(md_sku):
+        raise ValueError('invalid managed_disks:sku in remote_fs')
     md_disk_size_gb = _kv_read(md_conf, 'disk_size_gb')
+    md_disk_pp = _kv_read(md_conf, 'disk_provisioned_performance', default={})
+    md_disk_pp_iops = _kv_read(md_disk_pp, 'iops_read_write')
+    md_disk_pp_mbps = _kv_read(md_disk_pp, 'mbps_read_write')
     md_disk_names = _kv_read_checked(md_conf, 'disk_names')
     md = ManagedDisksSettings(
         location=location,
         resource_group=md_rg,
-        premium=md_premium,
+        zone=zone,
+        sku=md_sku,
         disk_size_gb=md_disk_size_gb,
+        disk_provisioned_perf_iops_rw=md_disk_pp_iops,
+        disk_provisioned_perf_mbps_rw=md_disk_pp_mbps,
         disk_names=md_disk_names,
     )
     if util.is_none_or_empty(sc_id):
@@ -4428,17 +4441,12 @@ def remotefs_settings(config, sc_id=None):
             ('Number of entries in vm_disk_map {} inconsistent with '
              'vm_count {}').format(len(disk_map), sc_vm_count))
     return RemoteFsSettings(
-        managed_disks=ManagedDisksSettings(
-            location=location,
-            resource_group=md_rg,
-            premium=md_premium,
-            disk_size_gb=md_disk_size_gb,
-            disk_names=md_disk_names,
-        ),
+        managed_disks=md,
         storage_cluster=StorageClusterSettings(
             id=sc_id,
             location=location,
             resource_group=sc_rg,
+            zone=zone,
             virtual_network=virtual_network_settings(
                 sc_conf,
                 default_resource_group=sc_rg,
@@ -4678,6 +4686,7 @@ def monitoring_settings(config):
     return VmResource(
         location=location,
         resource_group=rg,
+        zone=_kv_read(conf, 'zone'),
         hostname_prefix=hostname_prefix,
         virtual_network=virtual_network_settings(
             conf,
@@ -4826,6 +4835,7 @@ def federation_settings(config):
     return VmResource(
         location=location,
         resource_group=rg,
+        zone=_kv_read(conf, 'zone'),
         hostname_prefix=hostname_prefix,
         virtual_network=virtual_network_settings(
             conf,

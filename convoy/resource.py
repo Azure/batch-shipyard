@@ -572,9 +572,13 @@ def create_public_ip(network_client, vm_resource, offset):
             pass
         else:
             raise
+    if vm_resource.zone is not None:
+        zone = [vm_resource.zone]
+    else:
+        zone = None
     hostname = settings.generate_hostname(vm_resource, offset)
-    logger.debug('creating public ip: {} with label: {}'.format(
-        pip_name, hostname))
+    logger.debug('creating public ip: {} label={} zone={}'.format(
+        pip_name, hostname, zone))
     return network_client.public_ip_addresses.create_or_update(
         resource_group_name=vm_resource.resource_group,
         public_ip_address_name=pip_name,
@@ -590,6 +594,7 @@ def create_public_ip(network_client, vm_resource, offset):
                 networkmodels.IPAllocationMethod.dynamic
             ),
             public_ip_address_version=networkmodels.IPVersion.ipv4,
+            zones=zone,
         ),
     )
 
@@ -703,6 +708,10 @@ def create_virtual_machine(
                 )
             )
             lun += 1
+    if vm_resource.zone is not None:
+        zone = [vm_resource.zone]
+    else:
+        zone = None
     # sub resource availbility set
     if availset is not None:
         availset = compute_client.virtual_machines.models.SubResource(
@@ -717,7 +726,9 @@ def create_virtual_machine(
                 ResourceIdentityType.system_assigned,
             )
     # create vm
-    logger.debug('creating virtual machine: {}'.format(vm_name))
+    logger.debug(
+        'creating virtual machine: {} availset={} zone={}'.format(
+            vm_name, availset.id, zone))
     return compute_client.virtual_machines.create_or_update(
         resource_group_name=vm_resource.resource_group,
         vm_name=vm_name,
@@ -772,6 +783,7 @@ def create_virtual_machine(
                 ),
             ),
             identity=identity,
+            zones=zone,
         ),
     )
 

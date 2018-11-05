@@ -9,9 +9,10 @@ The remote filesystem schema is as follows:
 remote_fs:
   resource_group: my-resource-group
   location: <Azure region, e.g., eastus>
+  zone: null
   managed_disks:
     resource_group: my-disk-resource-group
-    premium: true
+    sku: premium_lrs
     disk_size_gb: 128
     disk_names:
     - p10-disk0a
@@ -126,6 +127,13 @@ configuration blocks.
 `eastus` or `northeurope`. The `location` specified must match the same
 region as your Azure Batch account if linking a compute pool with a storage
 cluster.
+* (optional) `zone` is the availability zone to target for deployment.
+This option is valid only for regions (i.e., `location`) supporting
+[availability zones](https://docs.microsoft.com/azure/availability-zones/az-overview).
+This option is required if using Ultra SSD disks. If a zone is specified,
+automatic availability set creation for distributed/clustered file systems
+will be disabled. Note that only one zone can be specified and resources
+are not spread across availability zones for performance reasons.
 
 ### Managed Disks: `managed_disks`
 This section defines the disks used by the file server as specified in the
@@ -136,20 +144,30 @@ defined in this section.
 * (optional) `resource_group` this is the resource group to use for the
 disks. If this is not specified, then the `resource_group` specified in
 the parent is used. At least one `resource_group` must be defined.
-* (optional) `premium` defines if
-[premium managed disks](https://docs.microsoft.com/azure/storage/storage-premium-storage)
-should be created. Premium storage provisions a
-[guaranteed level of IOPS and bandwidth](https://docs.microsoft.com/azure/storage/storage-premium-storage#premium-storage-scalability-and-performance-targets)
-that scales with disk size. The default is `false` which creates
-standard managed disks. Regardless of the type of storage used to back
-managed disks, all data written is durable and persistent backed to Azure
-Storage.
+* (required) `sku` defines the
+[disk storage account type](https://docs.microsoft.com/azure/virtual-machines/linux/about-disks-and-vhds#types-of-disks)
+to use for the managed disks.
+Valid values are `standard_lrs`, `premium_lrs`, `standard_ssd_lrs`, and
+`ultra_ssd_lrs`. There is no default and this value must be specified.
+If `ultra_ssd_lrs` is specified, then a `zone` must be specified in an
+Availability Zone supported Azure region.
+Regardless of the type of storage used to back managed disks, all data
+written is durable and persistent backed to Azure Storage.
 * (required) `disk_size_gb` is an integral value defining the size of the
 data disks to create. Note that for managed disks, you are billed rounded
 up to the nearest provisioned size. If you are unfamiliar with
 how Azure prices managed disks with regard to the size of disk chosen,
 please refer to
 [this link](https://docs.microsoft.com/azure/storage/storage-managed-disks-overview#pricing-and-billing).
+* (optional) `disk_provisioned_performance` defines provisioned performance
+parameters for Ultra SSD disks. The following properties are ignored for all
+`sku` types that are not `ultra_ssd_lrs`. Please see the
+[Ultra SSD performance targets](https://docs.microsoft.com/azure/virtual-machines/windows/disks-ultra-ssd#scalability-and-performance-targets)
+documentation for more information regarding the following values.
+    * (required) `iops_read_write` is the target provisioned IOPS for each
+      disk.
+    * (required) `mbps_read_write` is the target provisioned througput for
+      each disk in MB/s.
 * (required) `disk_names` is an array of disk names to create. All disks
 will be created identically with the properties defined in the `managed_disks`
 section.
