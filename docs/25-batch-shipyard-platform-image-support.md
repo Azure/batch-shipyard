@@ -32,7 +32,6 @@ container pools.
 
 | Publisher | Offer  | Sku | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------|--------|-----|:---:|:-------:|:-----------:|:--------------:|
-| Credativ  | Debian | 8   |     |         |             |                |
 | Credativ  | Debian | 9   |     |         |             |                |
 
 ### SLES

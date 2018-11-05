@@ -694,9 +694,7 @@ mount_azureblob_container() {
             download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
         elif [ "$DISTRIB_ID" == "debian" ]; then
             install_packages apt-transport-https
-            if [ "$DISTRIB_RELEASE" == "8" ]; then
-                download_file_as "https://packages.microsoft.com/config/ubuntu/14.04/${mspkg}" "$mspkg"
-            elif [ "$DISTRIB_RELEASE" == "9" ]; then
+            if [ "$DISTRIB_RELEASE" == "9" ]; then
                 download_file_as "https://packages.microsoft.com/config/ubuntu/16.04/${mspkg}" "$mspkg"
             fi
         fi
@@ -1148,9 +1146,7 @@ install_beeond() {
     local led
     local pkgnum
     if [ "$PACKAGER" == "apt" ]; then
-        if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "8" ]; then
-            pkgnum=8
-        elif { [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; } || { [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "16.04" ]; } then
+        if { [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; } || { [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "16.04" ]; } then
             pkgnum=9
         elif [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
             # TODO temporarily use 9 until debian 10 repo releases
