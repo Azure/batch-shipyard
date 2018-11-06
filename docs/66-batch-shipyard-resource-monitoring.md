@@ -2,7 +2,7 @@
 The focus of this article is to explain how to provision a resource monitor
 for monitoring Batch pools and RemoteFS clusters.
 
-<img src="https://azurebatchshipyard.blob.core.windows.net/github/66-container_metrics.png" alt="dashboard" width="1024" />
+<img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.gif" alt="dashboard" width="1024" />
 
 ## Overview
 For many scenarios, it is often desirable to have visibility into a set of

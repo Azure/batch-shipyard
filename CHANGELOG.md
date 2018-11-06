@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+## [3.6.0] - 2018-11-06 (SC18 Edition)
+### Added
+- Kata containers support: run containers on Linux compute nodes with a higher
+level of isolation through lightweight VMs. Please see the pool doc for more
+information.
+- Per-job distributed scratch space support: create on-demand scratch
+space shared between tasks of a job which can be particularly useful for MPI
+and multi-instance tasks without having to manage a GlusterFS-on-compute
+shared data volume. Please see both the pool doc and jobs doc for more
+information.
+- Add `restrict_default_bind_mounts` option to jobs specifications. This
+will restrict automatic host directory bindings to the container filesystem
+only to `$AZ_BATCH_TASK_DIR`. This is particularly useful in combination with
+container runtimes enforcing VM-level isolation such as Kata containers.
+- Allow installation and selection of multiple container runtimes along with
+a default container runtime for Docker invocations. Please see the pool doc
+for more information under `container_runtimes`.
+- Support for Standard SSD and Ultra SSD managed disks for RemoteFS clusters.
+In conjunction with this change, Availability Zone support has been added
+for manage disks and storage cluster VMs. Please see the relevant
+documentation for more information.
+
+### Changed
+- **Breaking Change:** the `premium` property under `remote_fs`:`managed_disks`
+has been replaced with `sku`. Please see the RemoteFS configuration doc for
+more information.
+- **Breaking Change:** the Singularity container runtime is no longer installed
+by default, please see the pool doc to configure pools to install Singularity
+as needed under `container_runtimes`:`install`.
+- Renamed MADL recipe to HPMLA
+- Updated NC/ND driver to 410.72 with CUDA 10 support
+- Updated blobxfer to 1.5.4
+- Updated LIS, Prometheus, and Grafana
+- Updated other dependencies to latest
+- Updated binary builds and Windows Docker images to Python 3.7.1
+
+### Fixed
+- `input_data` utilizing Azure File shares ([#243](https://github.com/Azure/batch-shipyard/issues/243))
+- New NV driver location ([#244](https://github.com/Azure/batch-shipyard/issues/244))
+- Fixed non-public Azure region AAD login issues
+- Fixed Singularity image download issues
+- Fixed Grafana update regression with default Batch Shipayrd Dashboard
+- Fixed SSH login to monitoring resource after federation feature merge
+- Enable Singularity on Ubuntu 18.04
+
+### Removed
+- Debian 8 host support
+
 ## [3.6.0b1] - 2018-09-20
 ### Added
 - Task and node count commands: `jobs tasks counts` and `pool nodes counts`
@@ -1413,7 +1461,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0...HEAD
+[3.6.0]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...3.6.0
 [3.6.0b1]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...3.6.0b1
 [3.6.0a1]: https://github.com/Azure/batch-shipyard/compare/3.5.3...3.6.0a1
 [3.5.3]: https://github.com/Azure/batch-shipyard/compare/3.5.2...3.5.3

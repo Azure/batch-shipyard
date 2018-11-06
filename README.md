@@ -5,7 +5,7 @@
 [![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:latest-cli.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
 
 # Batch Shipyard
-<img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.png" alt="dashboard" width="1024" />
+<img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.gif" alt="dashboard" width="1024" />
 
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
 provision, execute, and monitor container-based batch processing and HPC
