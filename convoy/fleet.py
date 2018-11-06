@@ -4429,7 +4429,8 @@ def action_monitor_ssh(
     _check_network_client(network_client)
     vm_res = settings.monitoring_settings(config)
     resource.ssh_to_virtual_machine_resource(
-        compute_client, network_client, vm_res, tty, command)
+        compute_client, network_client, vm_res,
+        crypto.get_monitoring_ssh_key_prefix(), tty, command)
 
 
 def action_monitor_suspend(compute_client, config, wait):
@@ -4571,7 +4572,8 @@ def action_fed_proxy_ssh(
     _check_network_client(network_client)
     vm_res = settings.federation_settings(config)
     resource.ssh_to_virtual_machine_resource(
-        compute_client, network_client, vm_res, tty, command)
+        compute_client, network_client, vm_res,
+        crypto.get_federation_ssh_key_prefix(), tty, command)
 
 
 def action_fed_proxy_suspend(compute_client, config, wait):
@@ -4822,7 +4824,8 @@ def action_fed_jobs_add(
         batch_client, blob_client, table_client, queue_client, keyvault_client,
         config, None, _IMAGE_BLOCK_FILE,
         _BLOBXFER_WINDOWS_FILE if is_windows else _BLOBXFER_FILE,
-        recreate=False, tail=None, federation_id=federation_id)
+        _AUTOSCRATCH_FILE, recreate=False, tail=None,
+        federation_id=federation_id)
 
 
 def action_fed_jobs_list(

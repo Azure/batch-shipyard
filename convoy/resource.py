@@ -728,7 +728,7 @@ def create_virtual_machine(
     # create vm
     logger.debug(
         'creating virtual machine: {} availset={} zone={}'.format(
-            vm_name, availset.id, zone))
+            vm_name, availset.id if availset is not None else None, zone))
     return compute_client.virtual_machines.create_or_update(
         resource_group_name=vm_resource.resource_group,
         vm_name=vm_name,
@@ -953,10 +953,12 @@ def deallocate_virtual_machine(compute_client, rg_name, vm_name):
     )
 
 
-def get_ssh_info(compute_client, network_client, vm_res, nic=None, pip=None):
+def get_ssh_info(
+        compute_client, network_client, vm_res, ssh_key_prefix=None, nic=None,
+        pip=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        settings.VmResource, networkmodes.NetworkInterface,
+    #        settings.VmResource, str, networkmodes.NetworkInterface,
     #        networkmodels.PublicIPAddress) ->
     #        Tuple[pathlib.Path, int, str, str]
     """Get SSH info to a federation proxy
@@ -965,6 +967,7 @@ def get_ssh_info(compute_client, network_client, vm_res, nic=None, pip=None):
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param settings.VmResource vm_res: resource
+    :param str ssh_key_prefix: ssh key prefix
     :param networkmodels.NetworkInterface nic: network interface
     :param networkmodels.PublicIPAddress pip: public ip
     :rtype: tuple
@@ -998,8 +1001,7 @@ def get_ssh_info(compute_client, network_client, vm_res, nic=None, pip=None):
         ssh_priv_key = vm_res.ssh.ssh_private_key
     else:
         ssh_priv_key = pathlib.Path(
-            vm_res.ssh.generated_file_export_path,
-            crypto.get_federation_ssh_key_prefix())
+            vm_res.ssh.generated_file_export_path, ssh_key_prefix)
     if not ssh_priv_key.exists():
         raise RuntimeError('SSH private key file not found at: {}'.format(
             ssh_priv_key))
@@ -1007,21 +1009,22 @@ def get_ssh_info(compute_client, network_client, vm_res, nic=None, pip=None):
 
 
 def ssh_to_virtual_machine_resource(
-        compute_client, network_client, vm_res, tty, command):
+        compute_client, network_client, vm_res, ssh_key_prefix, tty, command):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        settings.VmResource, bool, tuple) -> None
-    """SSH to a node in federation proxy
+    #        settings.VmResource, str, bool, tuple) -> None
+    """SSH to a node
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param azure.mgmt.network.NetworkManagementClient network_client:
         network client
     :param settings.VmResource vm_res: resource
+    :param str ssh_key_prefix: ssh key prefix
     :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
     """
     ssh_priv_key, port, username, ip = get_ssh_info(
-        compute_client, network_client, vm_res)
+        compute_client, network_client, vm_res, ssh_key_prefix=ssh_key_prefix)
     crypto.connect_or_exec_ssh_command(
         ip, port, ssh_priv_key, username, tty=tty, command=command)
 
