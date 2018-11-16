@@ -1220,7 +1220,7 @@ def fs_disks_list(ctx, resource_group, restrict_scope):
     """List managed disks in resource group"""
     ctx.initialize_for_fs()
     convoy.fleet.action_fs_disks_list(
-        ctx.compute__client, ctx.config, resource_group, restrict_scope)
+        ctx.compute_client, ctx.config, resource_group, restrict_scope)
 
 
 @cli.group()

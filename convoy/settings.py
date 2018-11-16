@@ -3969,11 +3969,9 @@ def task_settings(
                     ('Unsupported infiniband VM config, publisher={} '
                      'offer={}').format(publisher, offer))
     # always add option for envfile
-    envfile = None
-    if util.is_not_empty(docker_image):
-        envfile = '.shipyard.envlist'
-        if not native:
-            run_opts.append('--env-file {}'.format(envfile))
+    envfile = '.shipyard.envlist'
+    if util.is_not_empty(docker_image) and not native:
+        run_opts.append('--env-file {}'.format(envfile))
     # populate mult-instance settings
     if is_multi_instance_task(conf):
         if not inter_node_comm:

@@ -34,6 +34,7 @@ import functools
 import logging
 import json
 import os
+import time
 import uuid
 # non-stdlib imports
 import azure.mgmt.authorization.models as authmodels
@@ -294,14 +295,26 @@ def create_federation_proxy(
         break
     if cont_role is None:
         raise RuntimeError('Role Id not found for Reader')
-    role_assign = auth_client.role_assignments.create(
-        scope=sub_scope,
-        role_assignment_name=uuid.uuid4(),
-        parameters=authmodels.RoleAssignmentCreateParameters(
-            role_definition_id=cont_role,
-            principal_id=vms[0].identity.principal_id
-        ),
-    )
+    # sometimes the sp created is not added to the directory in time for
+    # the following call, allow a minute worth of retries before giving up
+    attempts = 0
+    while attempts < 30:
+        try:
+            role_assign = auth_client.role_assignments.create(
+                scope=sub_scope,
+                role_assignment_name=uuid.uuid4(),
+                parameters=authmodels.RoleAssignmentCreateParameters(
+                    role_definition_id=cont_role,
+                    principal_id=vms[0].identity.principal_id
+                ),
+            )
+            break
+        except msrestazure.azure_exceptions.CloudError:
+            time.sleep(2)
+            attempts += 1
+            if attempts == 30:
+                raise
+    del attempts
     if settings.verbose(config):
         logger.debug('reader role assignment: {}'.format(role_assign))
     cont_role = None
