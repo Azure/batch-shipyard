@@ -2469,11 +2469,16 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
     elif publisher == 'microsoftwindowsserver':
         if offer == 'windowsserver':
-            if sku == '2016-datacenter-with-containers':
+            if (sku == '2016-datacenter-with-containers' or
+                    sku == '2019-datacenter-with-containers' or
+                    sku == '2019-datacenter-with-containers-smalldisk' or
+                    sku == '2019-datacenter-core-with-containers' or
+                    sku == '2019-datacenter-core-with-containers-smalldisk'):
                 allowed = True
         elif offer == 'windowsserversemiannual':
             if (sku == 'datacenter-core-1709-with-containers-smalldisk' or
-                    sku == 'datacenter-core-1803-with-containers-smalldisk'):
+                    sku == 'datacenter-core-1803-with-containers-smalldisk' or
+                    sku == 'datacenter-core-1809-with-containers-smalldisk'):
                 allowed = True
     # check if allowed for gpu (if gpu vm size)
     if allowed:

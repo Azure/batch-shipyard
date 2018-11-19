@@ -52,8 +52,13 @@ SLES is not supported at this time.
 | Publisher              | Offer                   | Sku                                            | GPU | IB/RDMA | Native Only | Native Convert |
 |------------------------|-------------------------|------------------------------------------------|:---:|:-------:|:-----------:|:--------------:|
 | MicrosoftWindowsServer | WindowsServer           | 2016-Datacenter-with-Containers                |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-with-Containers                |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-with-Containers-smalldisk      |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers           |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers-smalldisk |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1709-with-Containers-smalldisk |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1803-with-Containers-smalldisk |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1809-with-Containers-smalldisk |     |         |      X      |                |
 
 ## Notes
 1. IB/RDMA is supported for this host OS with a custom image unless
