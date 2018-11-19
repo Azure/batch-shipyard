@@ -1,0 +1,8 @@
+job_specifications:
+- id: pytorchjob
+  tasks:
+  - docker_image: pytorch/pytorch
+    resource_files:
+    - blob_source: https://raw.githubusercontent.com/pytorch/examples/master/mnist/main.py
+      file_path: main.py
+    command: python -u main.py --no-cuda

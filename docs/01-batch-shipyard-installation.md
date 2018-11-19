@@ -106,7 +106,7 @@ which will invoke shipyard with the appropriate interpreter and virtual
 environment, if created during installation.
 
 Do not delete the virtual environment directory (in the above example, a
-directory named `shipyard.venv` would be created), as this contains the
+directory named `.shipyard` would be created), as this contains the
 virtual environment required for execution.
 
 Please note that although Anaconda environment installations are supported,
@@ -198,7 +198,7 @@ which will invoke shipyard with the appropriate interpreter and virtual
 environment, if created during installation.
 
 Do not delete the virtual environment directory (in the above example, a
-directory named `shipyard.venv` would be created), as this contains the
+directory named `.shipyard` would be created), as this contains the
 virtual environment required for execution.
 
 Please note that although Anaconda environment installations are supported,
@@ -301,7 +301,7 @@ installations on Windows Subsystem for Linux should be considered as
 Linux.
 
 Do not delete the virtual environment directory (in the above example, a
-directory named `shipyard.venv` would be created), as this contains the
+directory named `.shipyard` would be created), as this contains the
 virtual environment required for execution.
 
 Please see the Upgrading section below for information on upgrading to a new

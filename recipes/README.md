@@ -1,13 +1,14 @@
 # Batch Shipyard Recipes
-This directory contains recipes and sample batch-style container workloads for
-use with Batch Shipyard on Azure Batch. Please note that all recipes have
-sample configurations that you can use to quickly get going, however, some
-of the config files cannot be used as-is as they may need to be modified for
-specific values (such as the `credentials.yaml` file which needs to be
-populated with your Batch and Storage account credentials). Please review each
-config file you are planning on using and modify accordingly. As the config
-samples are bare examples only, you will need to configure them to your liking
-for actual workloads.
+Batch Shipyard can accommodate most containerized Batch and HPC workloads.
+This directory contains recipes and sample container workloads. Please note
+that all recipes have sample configurations that you can use to quickly get
+going, however, some of the config files cannot be used as-is as they may
+need to be modified for specific values (such as the `credentials.yaml`
+file which needs to be populated with your Batch and Storage account
+credentials). Please review each config file you are planning on using and
+modify accordingly. As these recipe configuration are intended to show
+example usage, you will need to modify and configure them for your actual
+workloads.
 
 If you would like to contribute your recipe, please take a look at
 [this guide](../docs/98-contributing-recipes.md) before submitting a
@@ -46,28 +47,6 @@ distributed [OpenFOAM](http://www.openfoam.org/) across multiple Azure Batch
 compute nodes.
 
 ## <a name="deeplearning"></a>Deep Learning
-#### [CNTK-CPU-Infiniband-IntelMPI](./CNTK-CPU-Infiniband-IntelMPI)
-This CNTK-CPU-Infiniband-IntelMPI recipe contains information on how to
-containerize [CNTK](https://cntk.ai/) for CPUs, including execution across
-multiple Infiniband/RDMA Azure VMs with multi-instance tasks.
-
-#### [CNTK-GPU-Infiniband-IntelMPI](./CNTK-GPU-Infiniband-IntelMPI)
-This CNTK-GPU-Infiniband-IntelMPI recipe contains information on how to
-containerize [CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs,
-including execution across multiple Infiniband/RDMA Azure VMs with
-multi-instance tasks.
-
-#### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
-This CNTK-CPU-OpenMPI recipe contains information on how to containerize
-[CNTK](https://cntk.ai/) for CPUs, including execution across multiple
-compute nodes with multi-instance tasks.
-
-#### [CNTK-GPU-OpenMPI](./CNTK-GPU-OpenMPI)
-This CNTK-GPU-OpenMPI recipe contains information on how to containerize
-[CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs, including
-execution across multiple compute nodes and multiple GPUs with multi-instance
-tasks.
-
 #### [Caffe-CPU](./Caffe-CPU)
 This Caffe-CPU recipe contains information on how to containerize
 [Caffe](http://caffe.berkeleyvision.org/) for use on Azure Batch compute nodes.
@@ -92,6 +71,28 @@ This Chainer-CPU recipe contains information on how to containerize
 #### [Chainer-GPU](./Chainer-GPU)
 This Chainer-GPU recipe contains information on how to containerize
 [Chainer](http://chainer.org/) on GPUs for use with N-Series Azure VMs.
+
+#### [CNTK-CPU-Infiniband-IntelMPI](./CNTK-CPU-Infiniband-IntelMPI)
+This CNTK-CPU-Infiniband-IntelMPI recipe contains information on how to
+containerize [CNTK](https://cntk.ai/) for CPUs, including execution across
+multiple Infiniband/RDMA Azure VMs with multi-instance tasks.
+
+#### [CNTK-CPU-OpenMPI](./CNTK-CPU-OpenMPI)
+This CNTK-CPU-OpenMPI recipe contains information on how to containerize
+[CNTK](https://cntk.ai/) for CPUs, including execution across multiple
+compute nodes with multi-instance tasks.
+
+#### [CNTK-GPU-Infiniband-IntelMPI](./CNTK-GPU-Infiniband-IntelMPI)
+This CNTK-GPU-Infiniband-IntelMPI recipe contains information on how to
+containerize [CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs,
+including execution across multiple Infiniband/RDMA Azure VMs with
+multi-instance tasks.
+
+#### [CNTK-GPU-OpenMPI](./CNTK-GPU-OpenMPI)
+This CNTK-GPU-OpenMPI recipe contains information on how to containerize
+[CNTK](https://cntk.ai/) on GPUs for use with N-Series Azure VMs, including
+execution across multiple compute nodes and multiple GPUs with multi-instance
+tasks.
 
 #### [HPMLA-CPU-OpenMPI](./HPMLA-CPU-OpenMPI)
 This recipe contains information on how to containerize the Microsoft High
@@ -120,6 +121,14 @@ This MXNet-GPU recipe contains information on how to containerize
 [MXNet](http://mxnet.io/) on GPUs for use with N-Series Azure VMs, including
 execution across multiple compute nodes and multiple GPUs with multi-instance
 tasks.
+
+#### [PyTorch-CPU](./PyTorch-CPU)
+This PyTorch-CPU recipe contains information on how to containerize
+[PyTorch](https://pytorch.org) for use on Azure Batch compute nodes.
+
+#### [PyTorch-GPU](./PyTorch-GPU)
+This Torch-GPU recipe contains information on how to containerize
+[PyTorch](https://pytorch.org) on GPUs for use with N-series Azure VMs.
 
 #### [TensorFlow-CPU](./TensorFlow-CPU)
 This TensorFlow-CPU recipe contains information on how to containerize

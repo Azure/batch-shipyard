@@ -1,0 +1,5 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  docker_images:
+  - pytorch/pytorch

@@ -1,0 +1,13 @@
+pool_specification:
+  id: pytorch
+  vm_configuration:
+    platform_image:
+      offer: UbuntuServer
+      publisher: Canonical
+      sku: 18.04-LTS
+  vm_count:
+    dedicated: 1
+    low_priority: 0
+  vm_size: STANDARD_D3_V2
+  ssh:
+    username: shipyard

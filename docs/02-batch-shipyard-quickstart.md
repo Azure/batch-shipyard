@@ -14,15 +14,17 @@ on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
 ## <a name="normal"></a>Normal Quickstart
 If you would like to use Batch Shipyard from the command line, this quickstart
 doc will provide step-by-step instructions. Although Batch Shipyard
-supports various types of workloads, for the following quickstart example,
-we will select from the following Deep Learning recipes to quickly get started:
+supports any type of Batch processing or HPC workload, for the following
+quickstart guide, we will select from the following Deep Learning recipes
+as an example workflow:
 
-* [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI)
 * [Caffe-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe-CPU)
 * [Caffe2-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe2-CPU)
 * [Chainer-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Chainer-CPU)
+* [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI)
 * [Keras+Theano-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Keras+Theano-CPU)
 * [MXNet-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/MXNet-CPU)
+* [PyTorch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/PyTorch-CPU)
 * [TensorFlow-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/TensorFlow-CPU)
 * [Torch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Torch-CPU)
 
@@ -40,12 +42,13 @@ from within Azure Cloud Shell.
 guide, create a directory named `config`.
 3. Copy the sample configuration files from the Deep Learning framework recipe
 of your choice to the `config` directory:
-    * [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI/config/singlenode/)
     * [Caffe-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe-CPU/config/)
     * [Caffe2-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Caffe2-CPU/config/)
     * [Chainer-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Chainer-CPU/config/)
+    * [CNTK-CPU-OpenMPI](https://github.com/Azure/batch-shipyard/blob/master/recipes/CNTK-CPU-OpenMPI/config/singlenode/)
     * [Keras+Theano-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Keras+Theano-CPU/config/)
     * [MXNet-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/MXNet-CPU/config/singlenode/)
+    * [PyTorch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/PyTorch-CPU/config/)
     * [TensorFlow-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/TensorFlow-CPU/config/)
     * [Torch-CPU](https://github.com/Azure/batch-shipyard/blob/master/recipes/Torch-CPU/config/)
 4. Edit the `config/credentials.yaml` file and populate it with your Azure
