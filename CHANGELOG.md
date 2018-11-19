@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- Updated Docker CE to 18.09.0
+- Updated blobxfer to 1.5.5
+- Updated other dependencies to latest
+
+### Fixed
+- fs cluster status issue
+- Retry MSI provisioning for discrete VM resources
+
 ## [3.6.0] - 2018-11-06 (SC18 Edition)
 ### Added
 - Kata containers support: run containers on Linux compute nodes with a higher

@@ -1,8 +1,8 @@
 azure-batch==5.1.1
 azure-cosmosdb-table==1.0.5
 azure-mgmt-compute==4.3.1
-azure-mgmt-network==2.2.1
+azure-mgmt-network==2.3.0
 azure-mgmt-resource==2.0.0
-azure-mgmt-storage==3.0.0
+azure-mgmt-storage==3.1.0
 msrestazure==0.5.1
-requests==2.20.0
+requests==2.20.1
