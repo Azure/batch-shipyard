@@ -28,7 +28,7 @@ RUN python -m compileall C:\Python\Lib\site-packages ; \
     python -m compileall C:\batch-shipyard\convoy ; \
 	exit 0
 
-FROM microsoft/nanoserver
+FROM mcr.microsoft.com/windows/nanoserver:sac2016
 
 COPY --from=0 /Python /Python
 COPY --from=0 /batch-shipyard /batch-shipyard
