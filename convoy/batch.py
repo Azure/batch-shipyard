@@ -30,6 +30,7 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import codecs
 import collections
 import concurrent.futures
 import datetime
@@ -3194,6 +3195,7 @@ def stream_file_and_wait_for_task(
     curr = 0
     completed = False
     notfound = 0
+    dec = None
     try:
         fd = None
         if disk:
@@ -3204,7 +3206,9 @@ def stream_file_and_wait_for_task(
             fp.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
             logger.info('writing streamed data to disk: {}'.format(fp))
             fd = fp.open('wb', buffering=0)
-        while True:
+        else:
+            dec = codecs.getincrementaldecoder('utf8')()
+        while not completed:
             # get task file properties
             try:
                 tfp = batch_client.file.get_properties_from_task(
@@ -3224,6 +3228,9 @@ def stream_file_and_wait_for_task(
                 else:
                     raise
             size = int(tfp.response.headers['Content-Length'])
+            # keep track of received bytes for this fragment as the
+            # amount transferred can be less than the content length
+            rbytes = 0
             if curr < size:
                 frag = batch_client.file.get_from_task(
                     job_id, task_id, file,
@@ -3231,15 +3238,11 @@ def stream_file_and_wait_for_task(
                         ocp_range='bytes={}-{}'.format(curr, size))
                 )
                 for f in frag:
+                    rbytes += len(f)
                     if fd is not None:
                         fd.write(f)
                     else:
-                        print(f.decode('utf8'), end='')
-                curr = size
-            elif completed:
-                if not disk:
-                    print()
-                break
+                        print(dec.decode(f), end='')
             if not completed and curr == size:
                 task = batch_client.task.get(
                     job_id, task_id,
@@ -3248,6 +3251,10 @@ def stream_file_and_wait_for_task(
                 )
                 if task.state == batchmodels.TaskState.completed:
                     completed = True
+                    if not disk:
+                        print(dec.decode(bytes(), True))
+                    break
+            curr += rbytes
             time.sleep(1)
     finally:
         if fd is not None:
