@@ -69,32 +69,32 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.72/NVIDIA-Linux-x86_64-410.72.run'
+            '410.79/NVIDIA-Linux-x86_64-410.79.run'
         ),
         'sha256': (
-            '1f1ef7a1eca295f9004317f540c05d78aaed13b28021e1e28fc3b9011a853d9e'
+            'ded482e54a0d538c89b3fb70fe306611c2ad475ebbef805645a5911a3a05c173'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.72/NVIDIA-Linux-x86_64-410.72.run'
+            '410.79/NVIDIA-Linux-x86_64-410.79.run'
         ),
         'sha256': (
-            '1f1ef7a1eca295f9004317f540c05d78aaed13b28021e1e28fc3b9011a853d9e'
+            'ded482e54a0d538c89b3fb70fe306611c2ad475ebbef805645a5911a3a05c173'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
     'viz_cc52': {
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'http://download.microsoft.com/download/C/C/A/'
-            'CCA1A402-D4EC-4260-BAD1-3AA1B004882A/'
-            'NVIDIA-Linux-x86_64-390.75-grid.run'
+            'http://download.microsoft.com/download/8/5/D/'
+            '85DC7798-B9F7-4BB9-84E8-B3350D7B52F7/'
+            'NVIDIA-Linux-x86_64-410.71-grid.run'
         ),
         'sha256': (
-            '7784d69902b3de5d8ab671897d5ab7d291651fe2efd399f921db86d7dab615b7'
+            '48b0457d3fc18da29f7db743e812d2e0cbb5101e8f4d1bcb154b66784c34e361'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -121,10 +121,10 @@ _LIS_PACKAGE = {
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
         '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
-        'lis-rpms-4.2.6-1.tar.gz'
+        'lis-rpms-4.2.6-2.tar.gz'
     ),
     'sha256': (
-        'daab0218a6631704884a3bb865570358edda64282a01dfc7367534beb1228a17'
+        'a0916fe5497e9f399be3ce0a3a532c3e9b56b33ee9948d0f8c744aa15db6f05d'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
