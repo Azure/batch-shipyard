@@ -20,9 +20,10 @@ Use the following links to quickly navigate to recipe collections:
 1. [Benchmarks](#benchmarks)
 2. [Computational Fluid Dynamics (CFD)](#cfd)
 3. [Deep Learning](#deeplearning)
-4. [Molecular Dynamics (MD)](#md)
-5. [RemoteFS](#remotefs)
-6. [Video Processing](#video)
+4. [Genomics and Bioinformatics](#genomics)
+5. [Molecular Dynamics (MD)](#md)
+6. [RemoteFS](#remotefs)
+7. [Video Processing](#video)
 
 ## <a name="benchmarks"></a>Benchmarks
 #### [HPCG-Infiniband-IntelMPI](./HPCG-Infiniband-IntelMPI)
@@ -151,6 +152,15 @@ This Torch-CPU recipe contains information on how to containerize
 #### [Torch-GPU](./Torch-GPU)
 This Torch-GPU recipe contains information on how to containerize
 [Torch](http://torch.ch) on GPUs for use with N-series Azure VMs.
+
+## <a name="genomics"></a>Genomics and Bioinformatics
+#### [BLAST-CPU](./BLAST-CPU)
+This BLAST-CPU recipes contains information on how to containerize a
+BLAST pipeline with parallelization using Azure Batch compute nodes.
+
+#### [RNASeq-CPU](./RNASeq-CPU)
+This RNASeq-CPU recipes contains information on how to containerize a
+proof-of-concept RNA-Seq pipeline using Azure Batch compute nodes.
 
 ## <a name="md"></a>Molecular Dynamics (MD)
 #### [NAMD-GPU](./NAMD-GPU)

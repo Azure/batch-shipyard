@@ -1,0 +1,13 @@
+pool_specification:
+  id: blast
+  vm_configuration:
+    platform_image:
+      publisher: Canonical
+      offer: UbuntuServer
+      sku: 18.04-LTS
+  vm_count:
+    dedicated: 5
+    low_priority: 0
+  vm_size: STANDARD_F1
+  ssh:
+    username: shipyard

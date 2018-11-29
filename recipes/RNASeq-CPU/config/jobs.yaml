@@ -1,0 +1,52 @@
+job_specifications:
+- id: rna-seq
+  environment_variables:
+    reads: '$AZ_BATCH_NODE_STARTUP_DIR/wd/ggal/*_{1,2}.fq'
+    annot: $AZ_BATCH_NODE_STARTUP_DIR/wd/ggal/ggal_1_48850000_49020000.bed.gff
+    genome: $AZ_BATCH_NODE_STARTUP_DIR/wd/ggal/ggal_1_48850000_49020000.Ggal71.500bpflank.fa
+  tasks:
+  - id: build-index
+    docker_image: quay.io/biocontainers/bowtie2:2.3.4.3--py36h2d50403_0
+    command: /bin/bash -c "bowtie2-build --threads $(nproc) $genome genome.index"
+    output_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: rnaseq/output/build-index
+        local_path: $AZ_BATCH_TASK_WORKING_DIR
+        include:
+        - 'genome.index*'
+  - id: mapping
+    depends_on:
+    - build-index
+    docker_image: quay.io/biocontainers/tophat:2.1.1--py27_1
+    input_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: rnaseq/output/build-index
+        blobxfer_extra_options: '--strip-components 2'
+    command: /bin/bash -c "tophat2 -p $(nproc) --GTF $annot genome.index $reads"
+    output_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: rnaseq/output/mapping
+        local_path: $AZ_BATCH_TASK_WORKING_DIR/tophat_out
+        include:
+        - accepted_hits.bam
+        blobxfer_extra_options: '--strip-components 2'
+  - id: make-transcript
+    depends_on:
+    - mapping
+    docker_image: quay.io/biocontainers/cufflinks:2.2.1--py36_2
+    input_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: rnaseq/output/mapping
+        blobxfer_extra_options: '--strip-components 2'
+    command: /bin/bash -c "cufflinks --no-update-check -q -p $(nproc) -G $annot accepted_hits.bam && cp transcripts.gtf transcript_ggal_liver.gtf && mv transcripts.gtf transcript_ggal_gut.gtf"
+    output_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: rnaseq/output/transcript
+        local_path: $AZ_BATCH_TASK_WORKING_DIR
+        include:
+        - 'transcript_*.gtf'

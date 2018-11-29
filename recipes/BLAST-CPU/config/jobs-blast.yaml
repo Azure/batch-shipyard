@@ -1,0 +1,49 @@
+job_specifications:
+- id: blast
+  tasks:
+  - task_factory:
+      file:
+        azure_storage:
+          storage_account_settings: mystorageaccount
+          remote_path: blast/output/fasta-chunks
+          include:
+            - 'output/fasta-chunks/query-*.fa'
+        task_filepath: file_name
+    docker_image: quay.io/biocontainers/blast:2.7.1--h4422958_6
+    environment_variables:
+      db_path: blast-db/pdb
+      db_name: tiny
+    resource_files:
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.phr
+        file_path: blast-db/pdb/tiny.phr
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.pin
+        file_path: blast-db/pdb/tiny.pin
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.pog
+        file_path: blast-db/pdb/tiny.pog
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.psd
+        file_path: blast-db/pdb/tiny.psd
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.psi
+        file_path: blast-db/pdb/tiny.psi
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/blast-db/pdb/tiny.psq
+        file_path: blast-db/pdb/tiny.psq
+    command: /bin/bash -c "blastp -db $db_path/$db_name -query {file_name} -outfmt 6 > blast_result && cat blast_result | head -n 10 | cut -f 2 > {file_name_no_extension}.top_hits && blastdbcmd -db $db_path/$db_name -entry_batch {file_name_no_extension}.top_hits | head -n 10 > {file_name_no_extension}.sequences"
+    output_data:
+      azure_storage:
+        - storage_account_settings: mystorageaccount
+          remote_path: blast/output/sequences
+          local_path: $AZ_BATCH_TASK_WORKING_DIR
+          include:
+            - '*.sequences'
+  merge_task:
+    docker_image: python:3-alpine
+    input_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: blast/output/sequences
+        blobxfer_extra_options: '--strip-components 2'
+    command: /bin/sh -c "cat query-*.sequences > results.txt"
+    output_data:
+      azure_storage:
+      - storage_account_settings: mystorageaccount
+        remote_path: blast/output/results
+        local_path: $AZ_BATCH_TASK_WORKING_DIR/results.txt

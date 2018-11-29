@@ -3259,6 +3259,16 @@ def job_merge_task(conf):
     return conf['merge_task']
 
 
+def job_force_enable_task_dependencies(conf):
+    # type: (dict) -> bool
+    """If task dependencies are force enabled
+    :param dict conf: task configuration object
+    :rtype: bool
+    :return: jobs with force enabled task dependencies
+    """
+    return _kv_read(conf, 'force_enable_task_dependencies', default=False)
+
+
 def has_depends_on_task(conf):
     # type: (dict) -> bool
     """Determines if task has task dependencies

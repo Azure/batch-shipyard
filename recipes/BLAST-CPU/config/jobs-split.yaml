@@ -1,0 +1,18 @@
+job_specifications:
+- id: blast
+  force_enable_task_dependencies: true
+  tasks:
+  - docker_image: python:3-alpine
+    resource_files:
+      - blob_source: https://github.com/nextflow-io/blast-example/raw/master/data/sample.fa
+        file_path: sample.fa
+      - blob_source: https://github.com/Azure/batch-shipyard/raw/master/recipes/BLAST-CPU/split.py
+        file_path: split.py
+    command: python3 split.py
+    output_data:
+      azure_storage:
+        - storage_account_settings: mystorageaccount
+          remote_path: blast/output/fasta-chunks
+          local_path: $AZ_BATCH_TASK_WORKING_DIR
+          include:
+            - 'query-*.fa'

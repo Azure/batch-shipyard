@@ -159,6 +159,8 @@ mapping:
             enum: ['batch', 'container']
           restrict_default_bind_mounts:
             type: bool
+          force_enable_task_dependencies:
+            type: bool
           federation_constraints:
             type: map
             mapping:
@@ -405,6 +407,7 @@ mapping:
                                   - type: str
                           task_filepath:
                             type: str
+                            enum: ['file_name', 'file_name_no_extension', 'file_path', 'file_path_with_container']
                       custom:
                         type: map
                         mapping:

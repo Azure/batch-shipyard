@@ -1,0 +1,6 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  docker_images:
+    - python:3-alpine
+    - quay.io/biocontainers/blast:2.7.1--h4422958_6

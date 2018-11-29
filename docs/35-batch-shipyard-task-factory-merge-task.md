@@ -349,7 +349,7 @@ The following distributions are available:
 * `weibull`
 
 For more information, please see the
-[distribution](https://docs.python.org/3.6/library/random.html#real-valued-distributions)
+[distribution](https://docs.python.org/3/library/random.html#real-valued-distributions)
 property explanations.
 
 ## Repeat
@@ -378,7 +378,7 @@ task_factory:
   file:
     azure_storage:
       storage_account_settings: mystorageaccount
-      container: mycontainer
+      remote_path: mycontainer
     task_filepath: file_path
 command: /bin/bash -c "echo url={url} full_path={file_path_with_container} file_path={file_path} file_name={file_name} file_name_no_extension={file_name_no_extension}"
 ```

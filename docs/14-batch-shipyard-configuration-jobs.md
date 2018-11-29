@@ -83,6 +83,7 @@ job_specifications:
       blobxfer_extra_options: null
   default_working_dir: batch
   restrict_default_bind_mounts: false
+  force_enable_task_dependencies: false
   federation_constraints:
     pool:
       autoscale:
@@ -540,6 +541,11 @@ Note that if shared file systems or other mounts are placed in the
 `$AZ_BATCH_NODE_SHARED_DIR` then enabling this option may prevent tasks
 from accessing required data and working correctly. This option has no
 effect on native container pools. The default is `false`.
+* (optional) `force_enable_task_dependencies` will flag this job as having
+task dependencies explicitly even if no `tasks` have dependencies specified.
+This is useful for scenarios where the same job is used for tasks at a
+later time that do have dependencies and/or are dependent on tasks
+previously added to the same job. The default is `false`.
 * (optional) `federation_constraints` defines properties to apply to the job
 and all tasks (i.e., the task group) when submitting the job to a federation.
 Please see the [federation guide](68-batch-shipyard-federation.md) for more

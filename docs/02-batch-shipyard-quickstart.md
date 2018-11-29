@@ -107,7 +107,7 @@ Spin up FTL drives:
 
 1. [Create Batch account](https://portal.azure.com/#create/Microsoft.BatchAccount) if you do not have one
 2. [Retrieve the Batch account key and service URL](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Batch%2FbatchAccounts)
-3. [Create Storage account](https://portal.azure.com/#create/Microsoft.StorageAccount-ARM) if you do not have one
+3. [Create Storage account](https://portal.azure.com/#create/Microsoft.StorageAccount-ARM) if you do not have one (preferably in the same region as the Batch account)
 4. [Retrieve the Storage account key](https://portal.azure.com/#blade/HubsExtension/Resources/resourceType/Microsoft.Storage%2FStorageAccounts)
 
 Execute jump:

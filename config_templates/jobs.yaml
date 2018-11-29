@@ -62,6 +62,7 @@ job_specifications:
       blobxfer_extra_options: null
   default_working_dir: batch
   restrict_default_bind_mounts: false
+  force_enable_task_dependencies: false
   federation_constraints:
     pool:
       autoscale:

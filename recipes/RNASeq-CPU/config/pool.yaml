@@ -1,0 +1,26 @@
+pool_specification:
+  id: rna-seq
+  vm_configuration:
+    platform_image:
+      publisher: Canonical
+      offer: UbuntuServer
+      sku: 18.04-LTS
+  vm_count:
+    dedicated: 1
+    low_priority: 0
+  vm_size: STANDARD_D4_V3
+  ssh:
+    username: shipyard
+  resource_files:
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_1_48850000_49020000.Ggal71.500bpflank.fa
+    file_path: ggal/ggal_1_48850000_49020000.Ggal71.500bpflank.fa
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_1_48850000_49020000.bed.gff
+    file_path: ggal/ggal_1_48850000_49020000.bed.gff
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_gut_1.fq
+    file_path: ggal/ggal_gut_1.fq
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_gut_2.fq
+    file_path: ggal/ggal_gut_2.fq
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_liver_1.fq
+    file_path: ggal/ggal_liver_1.fq
+  - blob_source: https://github.com/nextflow-io/rnatoy/raw/master/data/ggal/ggal_liver_2.fq
+    file_path: ggal/ggal_liver_2.fq

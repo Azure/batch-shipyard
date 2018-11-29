@@ -1,0 +1,7 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  docker_images:
+    - quay.io/biocontainers/bowtie2:2.3.4.3--py36h2d50403_0
+    - quay.io/biocontainers/tophat:2.1.1--py27_1
+    - quay.io/biocontainers/cufflinks:2.2.1--py36_2
