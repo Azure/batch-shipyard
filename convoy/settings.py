@@ -62,7 +62,7 @@ _GPU_CC37_INSTANCES = re.compile(
     re.IGNORECASE
 )
 _GPU_COMPUTE_INSTANCES = re.compile(
-    # standard nc, ncv2, ncv3, nds
+    # standard nc, ncv2, ncv3, nd, ndv2
     r'^standard_n[cd][\d]+r?s?(_v[\d])?$',
     re.IGNORECASE
 )
@@ -624,7 +624,7 @@ def is_gpu_compute_pool(vm_size):
     :rtype: bool
     :return: if compute gpus are present
     """
-    return _GPU_COMPUTE_INSTANCES.match(vm_size)
+    return _GPU_COMPUTE_INSTANCES.match(vm_size) is not None
 
 
 def is_gpu_visualization_pool(vm_size):
@@ -634,7 +634,7 @@ def is_gpu_visualization_pool(vm_size):
     :rtype: bool
     :return: if visualization gpus are present
     """
-    return _GPU_VISUALIZATION_INSTANCES.match(vm_size)
+    return _GPU_VISUALIZATION_INSTANCES.match(vm_size) is not None
 
 
 def get_gpu_type_from_vm_size(vm_size):
@@ -748,7 +748,7 @@ def is_rdma_pool(vm_size):
     :rtype: bool
     :return: if rdma is present
     """
-    return _RDMA_INSTANCES.match(vm_size)
+    return _RDMA_INSTANCES.match(vm_size) is not None
 
 
 def is_premium_storage_vm_size(vm_size):
@@ -758,7 +758,7 @@ def is_premium_storage_vm_size(vm_size):
     :rtype: bool
     :return: if vm size is premium storage compatible
     """
-    return _PREMIUM_STORAGE_INSTANCES.match(vm_size)
+    return _PREMIUM_STORAGE_INSTANCES.match(vm_size) is not None
 
 
 def is_nested_virtualization_capable(vm_size):
@@ -768,7 +768,7 @@ def is_nested_virtualization_capable(vm_size):
     :rtype: bool
     :return: if vm size is nested virtualization capable
     """
-    return _NESTED_VIRTUALIZATION_INSTANCES.match(vm_size)
+    return _NESTED_VIRTUALIZATION_INSTANCES.match(vm_size) is not None
 
 
 def is_platform_image(config, vm_config=None):
