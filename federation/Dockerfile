@@ -11,7 +11,7 @@ RUN apk update \
     && apk add --update --no-cache \
         musl build-base python3 python3-dev libressl-dev libffi-dev \
         ca-certificates libressl cifs-utils bash \
-    && pip3 install --no-cache-dir --upgrade pip \
+    && python3 -m pip install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --upgrade -r /opt/batch-shipyard/requirements.txt \
     && apk del --purge \
         build-base python3-dev libressl-dev libffi-dev \

@@ -25,6 +25,7 @@ RUN apk update \
         musl build-base python3 python3-dev libressl-dev libffi-dev \
         ca-certificates boost boost-python3 boost-random \
         tar pigz docker python squashfs-tools bash \
+    && python3 -m pip install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --upgrade -r /opt/batch-shipyard/requirements.txt \
     && ln -s /usr/lib/libboost_python3.so.1.62.0 /usr/lib/libboost_python.so.1.62.0 \
     && ln -s /usr/lib/libtorrent-rasterbar.so.8.0.0 /usr/lib/libtorrent-rasterbar.so \
