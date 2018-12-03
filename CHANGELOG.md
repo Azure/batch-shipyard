@@ -2,12 +2,23 @@
 
 ## [Unreleased]
 
+## [3.6.1] - 2018-12-03
+### Added
+- Windows Server 2019 support
+- Genomics and Bioinformatics recipes: BLAST and RNASeq
+- PyTorch recipes
+
 ### Changed
 - Updated Docker CE to 18.09.0
 - Updated blobxfer to 1.5.5
+- Updated NC/ND driver to 410.79
+- Updated NV driver to 410.71 with CUDA10 support
 - Updated other dependencies to latest
 
 ### Fixed
+- `--tail` console output occasionally repeating characters
+- NV provisioning regressions
+- Windows node prep issue
 - fs cluster status issue
 - Retry MSI provisioning for discrete VM resources
 
@@ -1470,7 +1481,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.1...HEAD
+[3.6.1]: https://github.com/Azure/batch-shipyard/compare/3.6.0...3.6.1
 [3.6.0]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...3.6.0
 [3.6.0b1]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...3.6.0b1
 [3.6.0a1]: https://github.com/Azure/batch-shipyard/compare/3.5.3...3.6.0a1
