@@ -6,7 +6,7 @@ param(
 	[String] $x   # blobxfer version
 )
 
-Set-Variable NodePrepFinished -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath ".batch_shipyard_node_prep_finished)
+Set-Variable NodePrepFinished -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath ".batch_shipyard_node_prep_finished")
 Set-Variable VolatileStartupSave -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath "startup" | Join-Path -ChildPath ".save")
 Set-Variable MountsPath -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "mounts")
 
