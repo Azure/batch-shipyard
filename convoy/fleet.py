@@ -3494,9 +3494,9 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     :param tuple command: command to execute
     """
     _check_batch_client(batch_client)
-    if cardinal is not None and nodeid is not None:
+    if cardinal is not None and util.is_not_empty(nodeid):
         raise ValueError('cannot specify both cardinal and nodeid options')
-    if cardinal is None and nodeid is None:
+    if cardinal is None and util.is_none_or_empty(nodeid):
         logger.warning(
             'assuming node cardinal of 0 as no cardinal or nodeid option '
             'was specified')
@@ -3526,9 +3526,9 @@ def action_pool_rdp(batch_client, config, cardinal, nodeid, no_auto=False):
     :param bool no_auto: no auto login
     """
     _check_batch_client(batch_client)
-    if cardinal is not None and nodeid is not None:
+    if cardinal is not None and util.is_not_empty(nodeid):
         raise ValueError('cannot specify both cardinal and nodeid options')
-    if cardinal is None and nodeid is None:
+    if cardinal is None and util.is_none_or_empty(nodeid):
         logger.warning(
             'assuming node cardinal of 0 as no cardinal or nodeid option '
             'was specified')
@@ -3571,7 +3571,7 @@ def action_pool_nodes_del(
     """
     _check_batch_client(batch_client)
     if ((all_start_task_failed or all_starting or all_unusable) and
-            nodeid is not None):
+            util.is_not_empty(nodeid)):
         raise ValueError(
             'cannot specify all start task failed nodes or unusable with '
             'a specific node id')
@@ -3591,7 +3591,7 @@ def action_pool_nodes_reboot(
     :param list nodeid: list of nodeids to reboot
     """
     _check_batch_client(batch_client)
-    if all_start_task_failed and nodeid is not None:
+    if all_start_task_failed and util.is_not_empty(nodeid):
         raise ValueError(
             'cannot specify all start task failed nodes with a specific '
             'node id')
@@ -3614,9 +3614,9 @@ def action_diag_logs_upload(
     :param bool wait: wait for upload to complete
     """
     _check_batch_client(batch_client)
-    if cardinal is not None and nodeid is not None:
+    if cardinal is not None and util.is_not_empty(nodeid):
         raise ValueError('cannot specify both cardinal and nodeid options')
-    if cardinal is None and nodeid is None:
+    if cardinal is None and util.is_none_or_empty(nodeid):
         logger.warning(
             'assuming node cardinal of 0 as no cardinal or nodeid option '
             'was specified')
