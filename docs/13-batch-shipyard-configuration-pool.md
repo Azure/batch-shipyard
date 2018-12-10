@@ -180,7 +180,7 @@ custom image, please see the
           please consult the [FAQ](https://azure.microsoft.com/pricing/hybrid-benefit/faq/)
           for further information. The only valid value is `windows_server`.
     * (required for custom image) `custom_image` defines the custom image to
-      use. AAD `batch` credentials are required to use custom iamges for both
+      use. AAD `batch` credentials are required to use custom images for both
       Batch service and User Subscription modes.
         * (required for custom image) `arm_image_id` defines the ARM image id
           to use as the OS image for the pool. The ARM image must be in the

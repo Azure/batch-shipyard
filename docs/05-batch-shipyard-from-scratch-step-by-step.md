@@ -103,7 +103,7 @@ Here, we assign a job ID `myjob` and this job has an associated task array.
 A job can have multiple tasks assigned to it, however, for this sample we
 only need to execute one command. First, we must reference the correct
 Docker image to use when executing the job, which is `busybox`. Notice that
-this property, `docker_iamge` matches exactly to that of the image name
+this property, `docker_image` matches exactly to that of the image name
 specified under `docker_images` in the `config.yaml` file. Finally, the
 `command` is set to `wc -l /etc/group` which counts the number of lines
 found in the `/etc/group` file.

@@ -4,6 +4,10 @@
 
 ## [3.6.1] - 2018-12-03
 ### Added
+- `force_enable_task_dependencies` property in jobs configuration to turn
+on task dependencies on a job even when no task dependencies are present
+initially. This is useful when tasks are added at a later time that may
+have dependencies. Please consult the jobs documentation for more information.
 - Windows Server 2019 support
 - Genomics and Bioinformatics recipes: BLAST and RNASeq
 - PyTorch recipes
