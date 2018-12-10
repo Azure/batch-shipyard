@@ -1,0 +1,7 @@
+job_specifications:
+- id: diskspd
+  tasks:
+  - docker_image: stefanscherer/diskspd:nano
+    additional_docker_run_options:
+    - --isolation=hyperv  # need to execute with Hyper-V isolation due to container/OS version mismatch
+    command: -c8192k -d1 testfile.dat

@@ -100,3 +100,9 @@ potentially lead to a greater occurrence of `unusable` nodes.
 #### Does Batch Shipyard support Windows Server Containers?
 * Yes, but with some feature, configuration, and CLI limitations. Please see
 the [current limitations](99-current-limitations.md) doc for more information.
+* If you receive OS compatibility mismatches when running your Windows
+containers, please ensure you have the correct `--isolation` parameter set,
+if required. You can view the Windows container compatibility matrix
+[here](https://docs.microsoft.com/virtualization/windowscontainers/deploy-containers/version-compatibility).
+To learn more about Hyper-V isolation, please see
+[this article](https://docs.microsoft.com/virtualization/windowscontainers/manage-containers/hyperv-container).

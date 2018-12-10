@@ -1,0 +1,13 @@
+pool_specification:
+  id: windows
+  vm_configuration:
+    platform_image:
+      publisher: MicrosoftWindowsServer
+      offer: WindowsServer
+      sku: 2019-Datacenter-with-Containers-smalldisk
+  vm_count:
+    dedicated: 1
+    low_priority: 0
+  vm_size: STANDARD_D4_V3
+  rdp:
+    username: shipyard

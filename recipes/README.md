@@ -24,6 +24,7 @@ Use the following links to quickly navigate to recipe collections:
 5. [Molecular Dynamics (MD)](#md)
 6. [RemoteFS](#remotefs)
 7. [Video Processing](#video)
+8. [Windows](#windows)
 
 ## <a name="benchmarks"></a>Benchmarks
 #### [HPCG-Infiniband-IntelMPI](./HPCG-Infiniband-IntelMPI)
@@ -194,5 +195,15 @@ single VM NFS server.
 
 ## <a name="video"></a>Video Processing
 #### [FFmpeg-GPU](./FFmpeg-GPU)
-This recipe contains information on how to use containerize
+This recipe contains information on how to containerize
 [FFmpeg](https://ffmpeg.org/) on GPUs for use with the N-series Azure VMs.
+
+## <a name="windows"></a>Windows
+#### [DiskSpd-Windows](./DiskSpd-Windows)
+This recipe contains information on how to run a containerized version of
+the [DiskSpd](https://github.com/Microsoft/diskspd) tool with Windows
+Server Containers on Azure VMs.
+
+#### [DotNet-Windows](./DotNet-Windows)
+This recipe contains information on how to run a sample DotNet application
+with Windows Server Containers on Azure VMs.

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- Sample Windows container recipes
+
+### Fixed
+- Some commands were incorrectly failing due to nodeid conflicts with
+supplied parameters
+
 ## [3.6.1] - 2018-12-03
 ### Added
 - `force_enable_task_dependencies` property in jobs configuration to turn
