@@ -26,9 +26,8 @@ be present in those pools. Please use `pool add` with your pool specification
 to create compute resources to execute your Batch Shipyard jobs against.
 
 ### General Limitations and Restrictions
-* Tasks can have a maximum run time of 7 days (including time spent for
-data movement). This is a current fundamental limitation in the Azure Batch
-service.
+* Tasks can have a maximum lifetime of 180 days (including time spent enqueued
+in active state and for data movement).
 * For non-`native` container pools, it is recommended to provision an SSH
 user to aid in client-side assisted task termination and other tasks that
 may require direct SSH access.
