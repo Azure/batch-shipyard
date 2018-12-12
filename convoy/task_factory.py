@@ -302,6 +302,9 @@ def generate_task(task, storage_settings):
     :rtype: TaskSettings
     :return: generated task
     """
+    # create a copy of the base task without task_factory
+    base_task_copy = copy.deepcopy(task)
+    base_task_copy.pop('task_factory')
     # retrieve type of task factory
     task_factory = task['task_factory']
     if 'custom' in task_factory:
@@ -330,18 +333,19 @@ def generate_task(task, storage_settings):
             else:
                 args = module.generate()
         for arg in args:
-            taskcopy = copy.deepcopy(task)
-            taskcopy.pop('task_factory')
+            taskcopy = copy.copy(base_task_copy)
             taskcopy['command'] = taskcopy['command'].format(*arg)
             yield taskcopy
     elif 'file' in task_factory:
         for file in _get_storage_entities(task_factory, storage_settings):
-            taskcopy = copy.deepcopy(task)
-            taskcopy.pop('task_factory')
+            taskcopy = copy.copy(base_task_copy)
             if file.is_blob:
                 # generate a resource file
                 if 'resource_files' not in taskcopy:
                     taskcopy['resource_files'] = []
+                else:
+                    taskcopy['resource_files'] = copy.deepcopy(
+                        base_task_copy['resource_files'])
                 taskcopy['resource_files'].append(
                     {
                         'file_path': file.task_filepath,
@@ -354,6 +358,9 @@ def generate_task(task, storage_settings):
                     taskcopy['input_data'] = {}
                 if 'azure_storage' not in taskcopy['input_data']:
                     taskcopy['input_data']['azure_storage'] = []
+                else:
+                    taskcopy['input_data']['azure_storage'] = copy.deepcopy(
+                        base_task_copy['input_data']['azure_storage'])
                 taskcopy['input_data']['azure_storage'].append(
                     {
                         'storage_account_settings':
@@ -376,8 +383,7 @@ def generate_task(task, storage_settings):
             yield taskcopy
     elif 'repeat' in task_factory:
         for _ in range(0, task_factory['repeat']):
-            taskcopy = copy.deepcopy(task)
-            taskcopy.pop('task_factory')
+            taskcopy = copy.copy(base_task_copy)
             yield taskcopy
     elif 'random' in task_factory:
         try:
@@ -388,8 +394,7 @@ def generate_task(task, storage_settings):
         rfunc = _prepare_random_task_factory(task_factory)
         # generate tasks using rfunc
         for _ in range(0, numgen):
-            taskcopy = copy.deepcopy(task)
-            taskcopy.pop('task_factory')
+            taskcopy = copy.copy(base_task_copy)
             taskcopy['command'] = taskcopy['command'].format(rfunc())
             yield taskcopy
     elif 'parametric_sweep' in task_factory:
@@ -405,8 +410,7 @@ def generate_task(task, storage_settings):
                     )
                 )
             for arg in itertools.product(*product):
-                taskcopy = copy.deepcopy(task)
-                taskcopy.pop('task_factory')
+                taskcopy = copy.copy(base_task_copy)
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
         elif 'product_iterables' in sweep:
@@ -414,8 +418,7 @@ def generate_task(task, storage_settings):
             for chain in sweep['product_iterables']:
                 product.append(chain)
             for arg in itertools.product(*product):
-                taskcopy = copy.deepcopy(task)
-                taskcopy.pop('task_factory')
+                taskcopy = copy.copy(base_task_copy)
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
         elif 'combinations' in sweep:
@@ -428,23 +431,20 @@ def generate_task(task, storage_settings):
             except KeyError:
                 func = itertools.combinations
             for arg in func(iterable, sweep['combinations']['length']):
-                taskcopy = copy.deepcopy(task)
-                taskcopy.pop('task_factory')
+                taskcopy = copy.copy(base_task_copy)
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
         elif 'permutations' in sweep:
             iterable = sweep['permutations']['iterable']
             for arg in itertools.permutations(
                     iterable, sweep['permutations']['length']):
-                taskcopy = copy.deepcopy(task)
-                taskcopy.pop('task_factory')
+                taskcopy = copy.copy(base_task_copy)
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
         elif 'zip' in sweep:
             iterables = sweep['zip']
             for arg in zip(*iterables):
-                taskcopy = copy.deepcopy(task)
-                taskcopy.pop('task_factory')
+                taskcopy = copy.copy(base_task_copy)
                 taskcopy['command'] = taskcopy['command'].format(*arg)
                 yield taskcopy
         else:

@@ -4183,11 +4183,11 @@ def _submit_task_sub_collection(
                         logger.error(
                             ('skipping retry of adding task {} as it '
                              'returned a client error (code={} message={} {}) '
-                             'for job {}').format(
+                             'for job {}, taskspec: {}').format(
                                  result.task_id, result.error.code,
                                  result.error.message,
                                  ' '.join(de) if de is not None else '',
-                                 job_id))
+                                 job_id, task_map[result.task_id]))
                     elif (result.status ==
                           batchmodels.TaskAddStatus.server_error):
                         retry.append(task_map[result.task_id])
@@ -4759,7 +4759,15 @@ def add_jobs(
             allow_run_on_missing = True
         else:
             fed_constraints = None
+        logger.debug(
+            'collating or generating tasks: please be patient, this may '
+            'take a while if there is a large volume of tasks or if the '
+            'job contains large task_factory specifications')
+        ntasks = 0
         for task in settings.job_tasks(config, jobspec):
+            ntasks += 1
+            if ntasks % 10000 == 0:
+                logger.debug('{} tasks collated so far'.format(ntasks))
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
             if util.is_not_empty(di) and di not in docker_images:
@@ -5196,7 +5204,14 @@ def add_jobs(
         task_map = {}
         has_gpu_task = False
         has_ib_task = False
+        logger.debug(
+            'constructing {} task specifications for submission '
+            'to job {}'.format(ntasks, job_id))
+        ntasks = 0
         for _task in settings.job_tasks(config, jobspec):
+            ntasks += 1
+            if ntasks % 10000 == 0:
+                logger.debug('{} tasks constructed so far'.format(ntasks))
             existing_tasklist, lasttaskid, lasttaskic, gpu, ib = \
                 _construct_task(
                     batch_client, blob_client, keyvault_client, config,
@@ -5217,6 +5232,7 @@ def add_jobs(
                 max_instance_count_in_job = lasttaskic
         merge_task_id = None
         if has_merge_task:
+            ntasks += 1
             _task = settings.job_merge_task(jobspec)
             existing_tasklist, merge_task_id, lasttaskic, gpu, ib = \
                 _construct_task(
@@ -5247,6 +5263,10 @@ def add_jobs(
                      'please limit the the number of tasks').format(job_id))
             # add merge task into map
             task_map[merge_task_id] = merge_task
+        logger.debug(
+            'submitting {} task specifications to job {}'.format(
+                ntasks, job_id))
+        del ntasks
         # construct required registries for federation
         registries = construct_registry_list_for_federation(
             config, federation_id, fed_constraints, container_image_refs)
