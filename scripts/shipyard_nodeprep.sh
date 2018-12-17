@@ -1162,14 +1162,14 @@ install_beeond() {
             # TODO temporarily use 9 until debian 10 repo releases
             pkgnum=9
         fi
-        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs_deb${pkgnum}.list" "/etc/apt/sources.list.d/beegfs_deb${pkgnum}.list"
+        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-deb${pkgnum}.list" "/etc/apt/sources.list.d/beegfs-deb${pkgnum}.list"
         add_repo "https://www.beegfs.io/release/latest-stable/gpg/DEB-GPG-KEY-beegfs"
         led=libelf-dev
     elif [ "$PACKAGER" == "yum" ]; then
         if [[ "$DISTRIB_RELEASE" == 7* ]]; then
             pkgnum=7
         fi
-        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs_rhel${pkgnum}.repo" "/etc/yum.repos.d/beegfs_rhel${pkgnum}.repo"
+        download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-rhel${pkgnum}.repo" "/etc/yum.repos.d/beegfs-rhel${pkgnum}.repo"
         rpm --import "https://www.beegfs.io/release/latest-stable/gpg/RPM-GPG-KEY-beegfs"
         install_kernel_devel_package
         led=elfutils-libelf-devel
