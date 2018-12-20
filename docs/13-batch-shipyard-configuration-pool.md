@@ -137,6 +137,8 @@ pool_specification:
       - kata_containers
       - singularity
     default: null
+  environment_variables:
+    abc: 'xyz'
 ```
 
 The `pool_specification` property has the following members:
@@ -572,6 +574,9 @@ behavior on the pool compute nodes.
     * (optional) `default` is the default container runtime to use for
       running Docker containers. This option has no effect on `singularity`
       containers.
+* (optional) `environment_variables` that are set on the Azure Batch start
+task. Note that environment variables are not expanded and are passed
+as-is.
 
 ## Full template
 A full template of a credentials file can be found

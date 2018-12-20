@@ -1677,6 +1677,14 @@ def _construct_pool_object(
                 value=block_for_gr,
             )
         )
+    # add custom env vars to the batch start task
+    env_vars = pool_settings.environment_variables
+    if util.is_not_empty(env_vars):
+        for key in env_vars:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(name=key, value=env_vars[key])
+            )
+    del env_vars
     # Linux-only settings
     if not is_windows:
         # singularity env vars

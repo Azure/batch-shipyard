@@ -187,7 +187,7 @@ PoolSettings = collections.namedtuple(
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
-        'per_job_auto_scratch',
+        'per_job_auto_scratch', 'environment_variables',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1328,6 +1328,8 @@ def pool_settings(config):
         container_runtimes_default=cr_default,
         per_job_auto_scratch=_kv_read(
             conf, 'per_job_auto_scratch', default=False),
+        environment_variables=_kv_read_checked(
+            conf, 'environment_variables', default={}),
     )
 
 
