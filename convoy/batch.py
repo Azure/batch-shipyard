@@ -4680,13 +4680,13 @@ def add_jobs(
             raise RuntimeError(
                 'cannot tail task output for the specified file within '
                 'a federation')
-    # get the pool inter-node comm setting
     bs = settings.batch_shipyard_settings(config)
     pool = settings.pool_settings(config)
     native = settings.is_native_docker_pool(
         config, vm_config=pool.vm_configuration)
     is_windows = settings.is_windows_pool(
         config, vm_config=pool.vm_configuration)
+    # check pool validity
     try:
         cloud_pool = batch_client.pool.get(pool.id)
     except batchmodels.BatchErrorException as ex:
@@ -4703,6 +4703,14 @@ def add_jobs(
                     return
         else:
             raise
+    if (autopool is None and cloud_pool is not None and
+            util.is_none_or_empty(federation_id) and
+            cloud_pool.state != batchmodels.PoolState.active):
+        logger.error(
+            'Cannot submit jobs to pool {} which is not in active '
+            'state'.format(pool.id))
+        return
+    # pre-process jobs and tasks
     tempdisk = settings.temp_disk_mountpoint(config)
     docker_images = settings.global_resources_docker_images(config)
     singularity_images = settings.global_resources_singularity_images(config)
