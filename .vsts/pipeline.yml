@@ -87,7 +87,7 @@ jobs:
           pip install --no-cache-dir pyinstaller
           pip install --upgrade -r requirements.txt
           pip install --upgrade --no-deps -r req_nodeps.txt
-          pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py
+          pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data federation\\docker-compose.yml;federation --add-data heimdall;heimdall --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py
           blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%ARTIFACT_CLI_PATH%" --strip-components 1 --file-md5 --overwrite
           call pyi\\Scripts\\deactivate.bat
         displayName: Build
@@ -228,7 +228,7 @@ jobs:
            pip install pyinstaller; \
            pip install --upgrade -r requirements.txt; \
            pip install --upgrade --no-deps -r req_nodeps.txt; \
-           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data federation/docker-compose.yml:federation --add-data heimdall:heimdall --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
            deactivate"
           chmod +x ${ARTIFACT_CLI_PATH}
           sha256sum ${ARTIFACT_CLI_PATH} | cut -d' ' -f1 > ${ARTIFACT_CLI_PATH}.sha256
@@ -330,7 +330,7 @@ jobs:
            pip install pyinstaller; \
            pip install --upgrade -r requirements.txt; \
            pip install --upgrade --no-deps -r req_nodeps.txt; \
-           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
+           pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data federation/docker-compose.yml:federation --add-data heimdall:heimdall --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
            deactivate"
           chmod +x ${ARTIFACT_CLI_PATH}
           shasum -a 256 ${ARTIFACT_CLI_PATH} | cut -d' ' -f1 > ${ARTIFACT_CLI_PATH}.sha256
