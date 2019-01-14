@@ -131,3 +131,4 @@ pool_specification:
     default: null
   environment_variables:
     abc: 'xyz'
+  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mypoolenv

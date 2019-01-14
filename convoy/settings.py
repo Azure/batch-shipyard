@@ -188,6 +188,7 @@ PoolSettings = collections.namedtuple(
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
         'per_job_auto_scratch', 'environment_variables',
+        'environment_variables_keyvault_secret_id',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1330,6 +1331,8 @@ def pool_settings(config):
             conf, 'per_job_auto_scratch', default=False),
         environment_variables=_kv_read_checked(
             conf, 'environment_variables', default={}),
+        environment_variables_keyvault_secret_id=_kv_read_checked(
+            conf, 'environment_variables_keyvault_secret_id'),
     )
 
 

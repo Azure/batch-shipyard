@@ -139,6 +139,7 @@ pool_specification:
     default: null
   environment_variables:
     abc: 'xyz'
+  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mypoolenv
 ```
 
 The `pool_specification` property has the following members:
@@ -577,6 +578,10 @@ behavior on the pool compute nodes.
 * (optional) `environment_variables` that are set on the Azure Batch start
 task. Note that environment variables are not expanded and are passed
 as-is.
+* (optional) `environment_variables_keyvault_secret_id` are any additional
+environment variables that should be applied to the start task but are
+stored in KeyVault. The secret stored in KeyVault must be a valid YAML/JSON
+string, e.g., `{ "env_var_name": "env_var_value" }`.
 
 ## Full template
 A full template of a credentials file can be found

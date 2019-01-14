@@ -1450,7 +1450,7 @@ def pool_add(ctx):
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
-        ctx.table_client, ctx.config)
+        ctx.table_client, ctx.keyvault_client, ctx.config)
 
 
 @pool.command('list')
