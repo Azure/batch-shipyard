@@ -175,6 +175,14 @@ PrometheusSettings = collections.namedtuple(
         'ca_options',
     ]
 )
+AdditionalNodePrepSettings = collections.namedtuple(
+    'AdditionalNodePrepSettings', [
+        'commands_pre',
+        'commands_post',
+        'environment_variables',
+        'environment_variables_keyvault_secret_id',
+    ]
+)
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
         'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
@@ -182,13 +190,11 @@ PoolSettings = collections.namedtuple(
         'reboot_on_start_task_failed', 'attempt_recovery_on_unusable',
         'block_until_all_global_resources_loaded',
         'transfer_files_on_pool_creation', 'input_data', 'resource_files',
-        'gpu_driver', 'ssh', 'rdp', 'additional_node_prep_commands_pre',
-        'additional_node_prep_commands_post', 'virtual_network',
+        'gpu_driver', 'ssh', 'rdp', 'additional_node_prep', 'virtual_network',
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
-        'per_job_auto_scratch', 'environment_variables',
-        'environment_variables_keyvault_secret_id',
+        'per_job_auto_scratch',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1246,12 +1252,19 @@ def pool_settings(config):
     except KeyError:
         gpu_driver = None
     # additional node prep
-    addl_node_prep = _kv_read_checked(
-        conf, 'additional_node_prep_commands', default={})
-    additional_node_prep_commands_pre = _kv_read_checked(
-        addl_node_prep, 'pre', default=[])
-    additional_node_prep_commands_post = _kv_read_checked(
-        addl_node_prep, 'post', default=[])
+    addl_np = _kv_read_checked(
+        conf, 'additional_node_prep', default={})
+    addl_np_cmds = _kv_read_checked(addl_np, 'commands', default={})
+    additional_node_prep = AdditionalNodePrepSettings(
+        commands_pre=_kv_read_checked(addl_np_cmds, 'pre', default=[]),
+        commands_post=_kv_read_checked(addl_np_cmds, 'post', default=[]),
+        environment_variables=_kv_read_checked(
+            addl_np, 'environment_variables', default={}),
+        environment_variables_keyvault_secret_id=_kv_read_checked(
+            addl_np, 'environment_variables_keyvault_secret_id'),
+    )
+    del addl_np_cmds
+    del addl_np
     # certificates
     certdict = _kv_read_checked(conf, 'certificates', default={})
     certs = []
@@ -1311,8 +1324,7 @@ def pool_settings(config):
             password=rdp_password,
         ),
         gpu_driver=gpu_driver,
-        additional_node_prep_commands_pre=additional_node_prep_commands_pre,
-        additional_node_prep_commands_post=additional_node_prep_commands_post,
+        additional_node_prep=additional_node_prep,
         virtual_network=virtual_network_settings(
             conf,
             default_existing_ok=True,
@@ -1329,10 +1341,6 @@ def pool_settings(config):
         container_runtimes_default=cr_default,
         per_job_auto_scratch=_kv_read(
             conf, 'per_job_auto_scratch', default=False),
-        environment_variables=_kv_read_checked(
-            conf, 'environment_variables', default={}),
-        environment_variables_keyvault_secret_id=_kv_read_checked(
-            conf, 'environment_variables_keyvault_secret_id'),
     )
 
 

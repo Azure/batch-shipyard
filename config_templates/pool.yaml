@@ -109,12 +109,16 @@ pool_specification:
       - node_prep
       - remote_user
       - task
+  additional_node_prep:
+    commands:
+      pre: []
+      post: []
+    environment_variables:
+      abc: xyz
+    environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/nodeprepenv
   gpu:
     nvidia_driver:
       source: https://some.url
-  additional_node_prep_commands:
-    pre: []
-    post: []
   prometheus:
     node_exporter:
       enabled: false
@@ -129,6 +133,3 @@ pool_specification:
       - kata_containers
       - singularity
     default: null
-  environment_variables:
-    abc: 'xyz'
-  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mypoolenv

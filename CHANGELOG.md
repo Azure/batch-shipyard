@@ -4,8 +4,12 @@
 
 ### Added
 - Sample Windows container recipes
-- Added environment variables to pool configuration, which allows users to
-setup Batch environment variables for the start task.
+- Support environment variables on additional node prep commands
+
+### Changed
+- **Breaking Change:** the `additional_node_prep_commands` property has
+been migrated under the new `additional_node_prep` property as
+`commands`.
 
 ### Fixed
 - Some commands were incorrectly failing due to nodeid conflicts with

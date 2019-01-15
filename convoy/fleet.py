@@ -1358,7 +1358,7 @@ def _construct_pool_object(
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
-    start_task = pool_settings.additional_node_prep_commands_pre
+    start_task = pool_settings.additional_node_prep.commands_pre
     # set vm configuration
     if native:
         if util.is_not_empty(custom_image_na):
@@ -1498,7 +1498,7 @@ def _construct_pool_object(
         start_task.append(addlcmds)
     del addlcmds
     # add additional start task commands (post version)
-    start_task.extend(pool_settings.additional_node_prep_commands_post)
+    start_task.extend(pool_settings.additional_node_prep.commands_post)
     # create pool param
     pool = batchmodels.PoolAddParameter(
         id=pool_settings.id,
@@ -1681,16 +1681,19 @@ def _construct_pool_object(
         )
     # add custom env vars to the batch start task
     if util.is_not_empty(
-            pool_settings.environment_variables_keyvault_secret_id):
+            pool_settings.additional_node_prep.
+            environment_variables_keyvault_secret_id):
         _check_keyvault_client(keyvault_client)
         env_vars = keyvault.get_secret(
             keyvault_client,
-            pool_settings.environment_variables_keyvault_secret_id,
+            pool_settings.additional_node_prep.
+            environment_variables_keyvault_secret_id,
             value_is_json=True)
         env_vars = util.merge_dict(
-            pool_settings.environment_variables, env_vars or {})
+            pool_settings.additional_node_prep.environment_variables,
+            env_vars or {})
     else:
-        env_vars = pool_settings.environment_variables
+        env_vars = pool_settings.additional_node_prep.environment_variables
     if util.is_not_empty(env_vars):
         for key in env_vars:
             pool.start_task.environment_settings.append(

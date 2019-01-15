@@ -117,12 +117,16 @@ pool_specification:
       - task
       - start_task
       - remote_user
+  additional_node_prep:
+    commands:
+      pre: []
+      post: []
+    environment_variables:
+      abc: xyz
+    environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/nodeprepenv
   gpu:
     nvidia_driver:
       source: https://some.url
-  additional_node_prep_commands:
-    pre: []
-    post: []
   prometheus:
     node_exporter:
       enabled: false
@@ -137,9 +141,6 @@ pool_specification:
       - kata_containers
       - singularity
     default: null
-  environment_variables:
-    abc: 'xyz'
-  environment_variables_keyvault_secret_id: https://myvault.vault.azure.net/secrets/mypoolenv
 ```
 
 The `pool_specification` property has the following members:
@@ -521,20 +522,30 @@ account and are only applied to new pool allocations.
         * (required) `visibility` is a list of visibility settings to apply
           to the certificate. Valid values are `node_prep`, `remote_user`,
           and `task`.
+* (optional) `additional_node_prep` defines any additional node preparation
+commands to execute on node start.
+    * (optional) `commands` are the commands to execute
+        * (optional) `pre` is an array of additional commands to execute
+          on the compute node host as part of node preparation which occur
+          prior to the Batch Shipyard node preparation steps. This is
+          particularly useful for preparing platform images with software
+          for custom Linux mounts.
+        * (optional) `post` is an array of additional commands to execute
+          on the compute node host as part of node preparation which occur
+          after the Batch Shipyard node preparation steps.
+    * (optional) `environment_variables` that are set on the Azure Batch
+      start task. Note that environment variables are not expanded and
+      are passed as-is.
+    * (optional) `environment_variables_keyvault_secret_id` are any
+      additional environment variables that should be applied to the start
+      task but are stored in KeyVault. The secret stored in KeyVault must be
+      a valid YAML/JSON string, e.g., `{ "env_var_name": "env_var_value" }`.
 * (optional) `gpu` property defines additional information for NVIDIA
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.
     * `nvidia_driver` property contains the following required members:
         * `source` is the source url to download the driver. This should be
           the silent-installable driver package.
-* (optional) `additional_node_prep_commands` contains the following members:
-    * (optional) `pre` is an array of additional commands to execute on the
-      compute node host as part of node preparation which occur prior to
-      the Batch Shipyard node preparation steps. This is particularly useful
-      for preparing platform images with software for custom Linux mounts.
-    * (optional) `post` is an array of additional commands to execute on the
-      compute node host as part of node preparation which occur after the
-      Batch Shipyard node preparation steps.
 * (optional) `prometheus` properties are to control if collectors for metrics
 to export to [Prometheus](https://prometheus.io/) monitoring are enabled.
 Note that all exporters do not have their ports mapped (NAT) on the load
@@ -575,13 +586,6 @@ behavior on the pool compute nodes.
     * (optional) `default` is the default container runtime to use for
       running Docker containers. This option has no effect on `singularity`
       containers.
-* (optional) `environment_variables` that are set on the Azure Batch start
-task. Note that environment variables are not expanded and are passed
-as-is.
-* (optional) `environment_variables_keyvault_secret_id` are any additional
-environment variables that should be applied to the start task but are
-stored in KeyVault. The secret stored in KeyVault must be a valid YAML/JSON
-string, e.g., `{ "env_var_name": "env_var_value" }`.
 
 ## Full template
 A full template of a credentials file can be found

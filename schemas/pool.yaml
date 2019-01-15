@@ -319,15 +319,25 @@ mapping:
             mapping:
               source:
                 type: str
-      additional_node_prep_commands:
+      additional_node_prep:
         type: map
         mapping:
-          pre:
-            sequence:
-              - type: str
-          post:
-            sequence:
-              - type: str
+          commands:
+            type: map
+            mapping:
+              pre:
+                sequence:
+                  - type: str
+              post:
+                sequence:
+                  - type: str
+          environment_variables:
+            type: map
+            mapping:
+              regex;(.+):
+                type: text
+          environment_variables_keyvault_secret_id:
+            type: str
       prometheus:
         type: map
         mapping:
@@ -364,10 +374,3 @@ mapping:
           default:
             type: str
             enum: ['kata_containers', 'runc']
-      environment_variables:
-        type: map
-        mapping:
-          regex;(.+):
-            type: text
-      environment_variables_keyvault_secret_id:
-        type: str
