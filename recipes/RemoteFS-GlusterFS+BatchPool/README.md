@@ -49,7 +49,7 @@ or unspecified
 
 ### Batch Shipyard Commands
 After you have created your RemoteFS GlusterFS storage cluster via
-`fs cluster add`, then you can issue `pool add` with the above config
+`fs cluster orchestrate`, then you can issue `pool add` with the above config
 which will create a Batch pool and automatically link your GlusterFS
 storage cluster against your Batch pool. You can then use data placed on
 the storage cluster in your containerized workloads.

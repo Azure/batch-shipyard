@@ -60,9 +60,9 @@ factors that Batch Shipyard has no control over.
 #### What is `native` under pool `platform_image` and `custom_image`?
 `native` designates to Batch Shipyard to attempt to create the pool such
 that the pool works under native Docker mode where the compute nodes
-understand how to launch and execute Docker containers. Please understand
-that only a subset of `platform_image` combinations are compatible with
-`native` mode. You can refer to the
+"natively" understand how to launch and execute Docker containers. Please
+understand that only a subset of `platform_image` combinations are compatible
+with `native` mode. You can refer to the
 [Batch Shipyard Platform Image support doc](25-batch-shipyard-platform-image-support.md)
 for more information. Compliant
 [custom images](63-batch-shipyard-custom-images.md) are compatible with

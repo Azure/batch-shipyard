@@ -943,8 +943,9 @@ install_kata_containers() {
 
 process_fstab_entry() {
     local desc=$1
-    local mountpoint=$2
-    local fstab_entry=$3
+    local fstab_entry=$2
+    IFS=' ' read -ra fs <<< "$fstab_entry"
+    local mountpoint="${fs[1]}"
     log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p "$mountpoint"
     chmod 777 "$mountpoint"
@@ -976,15 +977,14 @@ process_fstab_entry() {
 }
 
 mount_storage_clusters() {
-    if [ -n "$sc_args" ]; then
+    if [ -n "$SHIPYARD_STORAGE_CLUSTER_FSTAB" ]; then
         log DEBUG "Mounting storage clusters"
-        # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
-        fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
-        IFS='#' read -ra fstabs <<< "$fstab_mounts"
-        i=0
-        for sc_arg in "${sc_args[@]}"; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            mount "${MOUNTS_PATH}"/"${sc[1]}"
+        IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_STORAGE_CLUSTER_FSTAB"
+        for fstab in "${fstab_mounts[@]}"; do
+            # eval and split fstab var to expand vars
+            fstab_entry=$(eval echo "$fstab")
+            IFS=' ' read -ra parts <<< "$fstab_entry"
+            mount "${parts[1]}"
         done
         log INFO "Storage clusters mounted"
     fi
@@ -1000,10 +1000,10 @@ process_storage_clusters() {
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             fstab_entry="${fstabs[$i]}"
-            process_fstab_entry "$sc_arg" "$MOUNTS_PATH/${sc[1]}" "$fstab_entry"
+            process_fstab_entry "$sc_arg" "$fstab_entry"
             i=$((i + 1))
         done
-        log INFO "Storage clusters mounted"
+        log INFO "Storage clusters processed"
     fi
 }
 
@@ -1029,9 +1029,9 @@ process_custom_fstab() {
             # eval and split fstab var to expand vars
             fstab_entry=$(eval echo "$fstab")
             IFS=' ' read -ra parts <<< "$fstab_entry"
-            process_fstab_entry "${parts[2]}" "${parts[1]}" "$fstab_entry"
+            process_fstab_entry "${parts[2]}" "$fstab_entry"
         done
-        log INFO "Custom mounts via fstab mounted"
+        log INFO "Custom mounts via fstab processed"
     fi
 }
 
@@ -1637,26 +1637,9 @@ elif [ -f "$nodeprepfinished" ]; then
     install_and_start_node_exporter
     install_and_start_cadvisor
     # mount any storage clusters
-    if [ -n "$sc_args" ]; then
-        # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
-        fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
-        IFS='#' read -ra fstabs <<< "$fstab_mounts"
-        i=0
-        for sc_arg in "${sc_args[@]}"; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            mount "${MOUNTS_PATH}"/"${sc[1]}"
-        done
-    fi
+    mount_storage_clusters
     # mount any custom mounts
-    if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
-        IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
-        for fstab in "${fstab_mounts[@]}"; do
-            # eval and split fstab var to expand vars
-            fstab_entry=$(eval echo "$fstab")
-            IFS=' ' read -ra parts <<< "$fstab_entry"
-            mount "${parts[1]}"
-        done
-    fi
+    mount_custom_fstab
     # mount glusterfs on compute volumes
     if [ $gluster_on_compute -eq 1 ]; then
         if [ $custom_image -eq 1 ]; then

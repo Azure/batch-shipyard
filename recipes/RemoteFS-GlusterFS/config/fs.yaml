@@ -2,7 +2,7 @@ remote_fs:
   resource_group: my-resource-group
   location: <Azure region, e.g., eastus>
   managed_disks:
-    premium: true
+    sku: premium_lrs
     disk_size_gb: 1023
     disk_names:
     - p30-disk0a

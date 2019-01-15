@@ -1,0 +1,268 @@
+desc: Slurm Configuration Schema
+
+type: map
+mapping:
+  slurm:
+    type: map
+    mapping:
+      storage_account_settings:
+        type: str
+        required: true
+      location:
+        type: str
+        required: true
+      resource_group:
+        type: str
+        required: true
+      cluster_id:
+        type: str
+        required: true
+      controller:
+        type: map
+        required: true
+        mapping:
+          ssh:
+            type: map
+            required: true
+            mapping:
+              username:
+                type: str
+                required: true
+              ssh_public_key:
+                type: str
+              ssh_public_key_data:
+                type: str
+              ssh_private_key:
+                type: str
+              generated_file_export_path:
+                type: str
+          public_ip:
+            type: map
+            mapping:
+              enabled:
+                type: bool
+              static:
+                type: bool
+          virtual_network:
+            type: map
+            required: true
+            mapping:
+              name:
+                type: str
+                required: true
+              resource_group:
+                type: str
+              existing_ok:
+                type: bool
+              address_space:
+                type: str
+              subnet:
+                type: map
+                mapping:
+                  name:
+                    type: str
+                    required: true
+                  address_prefix:
+                    type: str
+                    required: true
+          network_security:
+            type: map
+            required: true
+            mapping:
+              ssh:
+                type: seq
+                required: true
+                sequence:
+                  - type: str
+              custom_inbound_rules:
+                type: map
+                mapping:
+                  regex;([a-zA-Z0-9]+):
+                    type: map
+                    mapping:
+                      destination_port_range:
+                        type: str
+                        required: true
+                      protocol:
+                        type: str
+                        enum: ['*', 'tcp', 'udp']
+                      source_address_prefix:
+                        type: seq
+                        required: true
+                        sequence:
+                          - type: str
+          vm_size:
+            type: str
+            required: true
+          vm_count:
+            type: int
+            required: true
+            range:
+              min: 1
+              max: 3
+          accelerated_networking:
+            type: bool
+          additional_prep_script:
+            type: str
+      login:
+        type: map
+        required: true
+        mapping:
+          ssh:
+            type: map
+            required: true
+            mapping:
+              username:
+                type: str
+                required: true
+              ssh_public_key:
+                type: str
+              ssh_public_key_data:
+                type: str
+              ssh_private_key:
+                type: str
+              generated_file_export_path:
+                type: str
+          public_ip:
+            type: map
+            mapping:
+              enabled:
+                type: bool
+              static:
+                type: bool
+          virtual_network:
+            type: map
+            required: true
+            mapping:
+              name:
+                type: str
+                required: true
+              resource_group:
+                type: str
+              existing_ok:
+                type: bool
+              address_space:
+                type: str
+              subnet:
+                type: map
+                mapping:
+                  name:
+                    type: str
+                    required: true
+                  address_prefix:
+                    type: str
+                    required: true
+          network_security:
+            type: map
+            required: true
+            mapping:
+              ssh:
+                type: seq
+                required: true
+                sequence:
+                  - type: str
+              custom_inbound_rules:
+                type: map
+                mapping:
+                  regex;([a-zA-Z0-9]+):
+                    type: map
+                    mapping:
+                      destination_port_range:
+                        type: str
+                        required: true
+                      protocol:
+                        type: str
+                        enum: ['*', 'tcp', 'udp']
+                      source_address_prefix:
+                        type: seq
+                        required: true
+                        sequence:
+                          - type: str
+          vm_size:
+            type: str
+            required: true
+          vm_count:
+            type: int
+            required: true
+            range:
+              min: 1
+          accelerated_networking:
+            type: bool
+          additional_prep_script:
+            type: str
+      shared_data_volumes:
+        type: map
+        required: true
+        mapping:
+          regex;([a-zA-Z0-9]+):
+            type: map
+            required: true
+            mapping:
+              host_mount_path:
+                type: str
+                required: true
+              store_slurmctld_state:
+                type: bool
+                required: true
+      slurm_options:
+        type: map
+        required: true
+        mapping:
+          idle_reclaim_time:
+            type: str
+          elastic_partitions:
+            type: map
+            required: true
+            mapping:
+              regex;([a-zA-Z0-9]+):
+                type: map
+                mapping:
+                  batch_pools:
+                    type: map
+                    required: true
+                    mapping:
+                      regex;([a-zA-Z0-9]+):
+                        type: map
+                        mapping:
+                          account_service_url:
+                            type: str
+                          compute_node_type:
+                            type: str
+                            required: true
+                            enum: ['dedicated', 'low_priority']
+                          max_compute_nodes:
+                            type: int
+                            required: true
+                            range:
+                              min: 1
+                          weight:
+                            type: int
+                            required: true
+                            range:
+                              min: 0
+                          features:
+                            type: seq
+                            sequence:
+                              - type: text
+                          reclaim_exclude_num_nodes:
+                            type: int
+                            range:
+                              min: 0
+                  max_runtime_limit:
+                    type: str
+                  default:
+                    type: bool
+                    required: true
+          unmanaged_partitions:
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  partition:
+                    type: str
+                    required: true
+                  nodes:
+                    type: seq
+                    required: true
+                    sequence:
+                      - type: str

@@ -479,7 +479,7 @@ class ServiceProxy():
                 return self.batch_clients[batch_account]
             except KeyError:
                 client = azure.batch.BatchServiceClient(
-                    self.creds.batch_creds, base_url=service_url)
+                    self.creds.batch_creds, batch_url=service_url)
                 self._modify_client_for_retry_and_user_agent(client)
                 self.batch_clients[batch_account] = client
                 logger.debug('batch client created for account: {}'.format(

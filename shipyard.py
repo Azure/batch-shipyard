@@ -56,6 +56,7 @@ class CliContext(object):
     """CliContext class: holds context for CLI commands"""
     def __init__(self):
         """Ctor for CliContext"""
+        self.cleanup = True
         self.show_config = False
         self.verbose = False
         self.yes = False
@@ -67,6 +68,7 @@ class CliContext(object):
         self.conf_fs = None
         self.conf_monitor = None
         self.conf_federation = None
+        self.conf_slurm = None
         # clients
         self.batch_mgmt_client = None
         self.batch_client = None
@@ -221,6 +223,50 @@ class CliContext(object):
             convoy.clients.create_storage_clients()
         self._cleanup_after_initialize()
 
+    def initialize_for_slurm(self, init_batch=False):
+        # type: (CliContext, bool) -> None
+        """Initialize context for slurm commands
+        :param CliContext self: this
+        :param bool init_batch: initialize batch
+        """
+        self._read_credentials_config()
+        self._set_global_cli_options()
+        if self.verbose:
+            logger.debug('initializing for slurm actions')
+        self._init_keyvault_client()
+        self._init_config(
+            skip_global_config=False, skip_pool_config=not init_batch,
+            skip_monitor_config=True, skip_federation_config=True,
+            fs_storage=not init_batch)
+
+        self.conf_slurm = self._form_conf_path(
+            self.conf_slurm, 'slurm')
+        if self.conf_slurm is None:
+            raise ValueError('slurm conf file was not specified')
+        self.conf_slurm = CliContext.ensure_pathlib_conf(
+            self.conf_slurm)
+        convoy.validator.validate_config(
+            convoy.validator.ConfigType.Slurm, self.conf_slurm)
+        self._read_config_file(self.conf_slurm)
+
+        self._ensure_credentials_section('storage')
+        self._ensure_credentials_section('slurm')
+        self.auth_client, self.resource_client, self.compute_client, \
+            self.network_client, self.storage_mgmt_client, \
+            self.batch_mgmt_client, self.batch_client = \
+            convoy.clients.create_all_clients(
+                self, batch_clients=init_batch)
+        # inject storage account keys if via aad
+        convoy.fleet.fetch_storage_account_keys_from_aad(
+            self.storage_mgmt_client, self.config, fs_storage=not init_batch)
+        # call populate global settings again to adjust for slurm storage
+        sc = convoy.settings.slurm_credentials_storage(self.config)
+        convoy.fleet.populate_global_settings(
+            self.config, fs_storage=not init_batch, sc=sc)
+        self.blob_client, self.table_client, self.queue_client = \
+            convoy.clients.create_storage_clients()
+        self._cleanup_after_initialize()
+
     def initialize_for_keyvault(self):
         # type: (CliContext) -> None
         """Initialize context for keyvault commands
@@ -311,6 +357,8 @@ class CliContext(object):
         """Cleanup after initialize_for_* funcs
         :param CliContext self: this
         """
+        if not self.cleanup:
+            return
         # free conf objects
         del self.conf_credentials
         del self.conf_fs
@@ -319,6 +367,7 @@ class CliContext(object):
         del self.conf_jobs
         del self.conf_monitor
         del self.conf_federation
+        del self.conf_slurm
         # free cli options
         del self.verbose
         del self.yes
@@ -860,6 +909,19 @@ def monitor_option(f):
         callback=callback)(f)
 
 
+def slurm_option(f):
+    def callback(ctx, param, value):
+        clictx = ctx.ensure_object(CliContext)
+        clictx.conf_slurm = value
+        return value
+    return click.option(
+        '--slurm',
+        expose_value=False,
+        envvar='SHIPYARD_SLURM_CONF',
+        help='Slurm config file',
+        callback=callback)(f)
+
+
 def _storage_cluster_id_argument(f):
     def callback(ctx, param, value):
         return value
@@ -926,6 +988,12 @@ def monitor_options(f):
 
 def federation_options(f):
     f = federation_option(f)
+    f = _azure_subscription_id_option(f)
+    return f
+
+
+def slurm_options(f):
+    f = slurm_option(f)
     f = _azure_subscription_id_option(f)
     return f
 
@@ -1014,6 +1082,23 @@ def cluster(ctx):
 def fs_cluster_add(ctx, storage_cluster_id):
     """Create a filesystem storage cluster in Azure"""
     ctx.initialize_for_fs()
+    convoy.fleet.action_fs_cluster_add(
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.blob_client, ctx.config, storage_cluster_id)
+
+
+@cluster.command('orchestrate')
+@common_options
+@fs_cluster_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def fs_cluster_orchestrate(ctx, storage_cluster_id):
+    """Orchestrate a filesystem storage cluster in Azure with the
+    specified disks"""
+    ctx.initialize_for_fs()
+    convoy.fleet.action_fs_disks_add(
+        ctx.resource_client, ctx.compute_client, ctx.config)
     convoy.fleet.action_fs_cluster_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.blob_client, ctx.config, storage_cluster_id)
@@ -2805,6 +2890,180 @@ def fed_jobs_zap(
     ctx.initialize_for_federation()
     convoy.fleet.action_fed_jobs_zap(
         ctx.blob_client, ctx.config, federation_id, unique_id)
+
+
+@cli.group()
+@pass_cli_context
+def slurm(ctx):
+    """Slurm on Batch actions"""
+    pass
+
+
+@slurm.group()
+@pass_cli_context
+def ssh(ctx):
+    """Slurm SSH actions"""
+    pass
+
+
+@ssh.command('controller')
+@click.option(
+    '--offset', help='Controller VM offset')
+@click.option(
+    '--tty', is_flag=True, help='Allocate a pseudo-tty')
+@common_options
+@slurm_options
+@click.argument('command', nargs=-1)
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_ssh_controller(ctx, offset, tty, command):
+    """Interactively login via SSH to a Slurm controller virtual
+    machine in Azure"""
+    ctx.initialize_for_slurm()
+    convoy.fleet.action_slurm_ssh(
+        ctx.compute_client, ctx.network_client, None, None, ctx.config,
+        tty, command, 'controller', offset, None)
+
+
+@ssh.command('login')
+@click.option(
+    '--offset', help='Controller VM offset')
+@click.option(
+    '--tty', is_flag=True, help='Allocate a pseudo-tty')
+@common_options
+@slurm_options
+@click.argument('command', nargs=-1)
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_ssh_login(ctx, offset, tty, command):
+    """Interactively login via SSH to a Slurm login/gateway virtual
+    machine in Azure"""
+    ctx.initialize_for_slurm()
+    convoy.fleet.action_slurm_ssh(
+        ctx.compute_client, ctx.network_client, None, None, ctx.config,
+        tty, command, 'login', offset, None)
+
+
+@ssh.command('node')
+@click.option(
+    '--node-name', help='Slurm node name')
+@click.option(
+    '--tty', is_flag=True, help='Allocate a pseudo-tty')
+@common_options
+@slurm_options
+@click.argument('command', nargs=-1)
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_ssh_node(ctx, node_name, tty, command):
+    """Interactively login via SSH to a Slurm compute node virtual
+    machine in Azure"""
+    ctx.initialize_for_slurm(init_batch=True)
+    if convoy.util.is_none_or_empty(node_name):
+        raise ValueError('node name must be specified')
+    convoy.fleet.action_slurm_ssh(
+        ctx.compute_client, ctx.network_client, ctx.table_client,
+        ctx.batch_client, ctx.config, tty, command, 'node', None, node_name)
+
+
+@slurm.group()
+@pass_cli_context
+def cluster(ctx):
+    """Slurm cluster actions"""
+    pass
+
+
+@cluster.command('create')
+@common_options
+@slurm_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_create(ctx):
+    """Create a Slurm cluster with controllers and login nodes"""
+    ctx.initialize_for_slurm(init_batch=True)
+    convoy.fleet.action_slurm_cluster_create(
+        ctx.auth_client, ctx.resource_client, ctx.compute_client,
+        ctx.network_client, ctx.blob_client, ctx.table_client,
+        ctx.queue_client, ctx.batch_client, ctx.config)
+
+
+@cluster.command('orchestrate')
+@click.option(
+    '--storage-cluster-id', help='Storage cluster id to create')
+@common_options
+@slurm_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_orchestrate(ctx, storage_cluster_id):
+    """Orchestrate a Slurm cluster with shared file system and Batch pool"""
+    if convoy.util.is_not_empty(storage_cluster_id):
+        ctx.cleanup = False
+        ctx.initialize_for_fs()
+        convoy.fleet.action_fs_disks_add(
+            ctx.resource_client, ctx.compute_client, ctx.config)
+        convoy.fleet.action_fs_cluster_add(
+            ctx.resource_client, ctx.compute_client, ctx.network_client,
+            ctx.blob_client, ctx.config, storage_cluster_id)
+        ctx.cleanup = True
+    else:
+        logger.warning(
+            'skipping fs cluster orchestration as no storage cluster id '
+            'was specified')
+    ctx.initialize_for_slurm(init_batch=True)
+    convoy.fleet.action_pool_add(
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
+        ctx.table_client, ctx.keyvault_client, ctx.config)
+    convoy.fleet.action_slurm_cluster_create(
+        ctx.auth_client, ctx.resource_client, ctx.compute_client,
+        ctx.network_client, ctx.blob_client, ctx.table_client,
+        ctx.queue_client, ctx.batch_client, ctx.config)
+
+
+@cluster.command('status')
+@common_options
+@slurm_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_status(ctx):
+    """Query status of a Slurm controllers and login nodes"""
+    ctx.initialize_for_slurm()
+    convoy.fleet.action_slurm_cluster_status(
+        ctx.compute_client, ctx.network_client, ctx.config)
+
+
+@cluster.command('destroy')
+@click.option(
+    '--delete-resource-group', is_flag=True,
+    help='Delete all resources in the Slurm controller resource group')
+@click.option(
+    '--delete-virtual-network', is_flag=True, help='Delete virtual network')
+@click.option(
+    '--generate-from-prefix', is_flag=True,
+    help='Generate resources to delete from Slurm controller hostname prefix')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for deletion to complete')
+@common_options
+@slurm_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_destroy(
+        ctx, delete_resource_group, delete_virtual_network,
+        generate_from_prefix, no_wait):
+    """Destroy a Slurm controller"""
+    ctx.initialize_for_slurm(init_batch=True)
+    convoy.fleet.action_slurm_cluster_destroy(
+        ctx.resource_client, ctx.compute_client, ctx.network_client,
+        ctx.blob_client, ctx.table_client, ctx.queue_client, ctx.config,
+        delete_resource_group, delete_virtual_network, generate_from_prefix,
+        not no_wait)
 
 
 if __name__ == '__main__':

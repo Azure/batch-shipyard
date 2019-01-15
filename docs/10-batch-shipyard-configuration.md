@@ -26,6 +26,10 @@ Batch Shipyard.
 7. [Federation](17-batch-shipyard-configuration-federation.md) -
 Batch Shipyard federation proxy configuration. This configuration is entirely
 optional unless using the federation capabilities of Batch Shipyard.
+8. [Slurm](18-batch-shipyard-configuration-slurm.md) -
+Batch Shipyard [Slurm](https://slurm.schedmd.com/) configuration. This
+configuration is entirely optional unless using the Slurm on Batch
+capabilities of Batch Shipyard.
 
 Note that all potential properties are described here and that specifying
 all such properties may result in invalid configuration as some properties

@@ -72,8 +72,8 @@ _GPU_VISUALIZATION_INSTANCES = re.compile(
     re.IGNORECASE
 )
 _RDMA_INSTANCES = re.compile(
-    # standard a8/a9, h+r, nc+r, nd+r
-    r'^standard_((a8|a9)|((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$',
+    # standard a8/a9, h+r, nc+r, nd+r, hb/hc
+    r'^standard_((a8|a9)|((h|hb|hc|nc|nd)+[\d]+m?rs?(_v[\d])?))$',
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
@@ -110,6 +110,26 @@ _VM_TCP_NO_TUNE = frozenset((
     'standard_b1s', 'standard_b1ms', 'standard_b2s', 'standard_b2ms',
     'standard_b4ms', 'standard_b8ms',
 ))
+_VM_GPU_COUNT = {
+    1: re.compile(r'^standard_n[cdv]6r?s?(_v[\d])?$', re.IGNORECASE),
+    2: re.compile(r'^standard_n[cdv]12r?s?(_v[\d])?$', re.IGNORECASE),
+    4: re.compile(r'^standard_n[cdv]24r?s?(_v[\d])?$', re.IGNORECASE),
+    8: re.compile(r'^standard_nd40s_v2$', re.IGNORECASE),
+}
+_VM_GPU_CLASS = {
+    'tesla_k80': re.compile(r'^standard_n[c][\d]+r?$', re.IGNORECASE),
+    'tesla_p40': re.compile(r'^standard_n[d][\d]+r?s?$', re.IGNORECASE),
+    'tesla_p100': re.compile(r'^standard_n[c][\d]+r?s_v2$', re.IGNORECASE),
+    'tesla_v100': re.compile(
+        r'^standard_n(([c][\d]+r?s_v3)|(d40s_v2))$', re.IGNORECASE),
+    'tesla_m60': re.compile(r'^standard_nv[\d]+s?(_v2)?$', re.IGNORECASE),
+}
+_VM_IB_CLASS = {
+    'qdr_ib': re.compile(r'^standard_(a8|a9)$', re.IGNORECASE),
+    'fdr_ib': re.compile(
+        r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$', re.IGNORECASE),
+    'edr_ib': re.compile(r'^standard_(hc|hb)+[\d]+rs$', re.IGNORECASE),
+}
 _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
     'depends_on', 'depends_on_range', 'multi_instance', 'task_factory'
@@ -447,6 +467,38 @@ FederationProxyOptionsSettings = collections.namedtuple(
         'scheduling_after_success_evaluate_autoscale',
     ]
 )
+SlurmBatchPoolSettings = collections.namedtuple(
+    'SlurmBatchPoolSettings', [
+        'batch_service_url', 'compute_node_type', 'max_compute_nodes',
+        'weight', 'features', 'reclaim_exclude_num_nodes',
+    ]
+)
+SlurmPartitionSettings = collections.namedtuple(
+    'SlurmPartitionSettings', [
+        'batch_pools', 'max_runtime_limit', 'default',
+    ]
+)
+SlurmUnmanagedPartitionSettings = collections.namedtuple(
+    'SlurmUnmanagedPartitionSettings', [
+        'partition', 'nodes',
+    ]
+)
+SlurmOptionsSettings = collections.namedtuple(
+    'SlurmOptionsSettings', [
+        'cluster_id', 'idle_reclaim_time', 'max_nodes', 'elastic_partitions',
+        'unmanaged_partitions',
+    ]
+)
+SlurmSharedDataVolumesSettings = collections.namedtuple(
+    'SlurmSharedDataVolumesSettings', [
+        'id', 'host_mount_path', 'store_slurmctld_state',
+    ]
+)
+SlurmCredentialsSettings = collections.namedtuple(
+    'SlurmCredentialsSettings', [
+        'db_password',
+    ]
+)
 
 
 class VmResource(object):
@@ -664,6 +716,34 @@ def get_gpu_type_from_vm_size(vm_size):
         return None
 
 
+def get_num_gpus_from_vm_size(vm_size):
+    # type: (str) -> int
+    """Get number of GPUs from VM size
+    :param str vm_size: vm size
+    :rtype: int
+    :return: number of GPUs
+    """
+    for vm in _VM_GPU_COUNT:
+        if _VM_GPU_COUNT[vm].match(vm_size):
+            return vm
+    raise RuntimeError('vm_size {} has no mapping to number of GPUs'.format(
+        vm_size))
+
+
+def get_gpu_class_from_vm_size(vm_size):
+    # type: (str) -> str
+    """Get GPU class from VM size
+    :param str vm_size: vm size
+    :rtype: str
+    :return: GPU class
+    """
+    for c in _VM_GPU_CLASS:
+        if _VM_GPU_CLASS[c].match(vm_size):
+            return c
+    raise RuntimeError('vm_size {} has no mapping to GPU class'.format(
+        vm_size))
+
+
 def gpu_configuration_check(config, vm_size=None):
     # type: (dict, str) -> bool
     """Check if OS is allowed with a GPU VM
@@ -758,6 +838,20 @@ def is_rdma_pool(vm_size):
     :return: if rdma is present
     """
     return _RDMA_INSTANCES.match(vm_size) is not None
+
+
+def get_ib_class_from_vm_size(vm_size):
+    # type: (str) -> str
+    """Get IB class from VM size
+    :param str vm_size: vm size
+    :rtype: str
+    :return: IB class
+    """
+    for c in _VM_IB_CLASS:
+        if _VM_IB_CLASS[c].match(vm_size):
+            return c
+    raise RuntimeError('vm_size {} has no mapping to IB class'.format(
+        vm_size))
 
 
 def is_premium_storage_vm_size(vm_size):
@@ -1930,6 +2024,23 @@ def set_credentials_registry_password(config, link, is_docker, password):
     else:
         kind = 'singularity_registry'
     config['credentials'][kind][link]['password'] = password
+
+
+def credentials_slurm(config):
+    # type: (dict) -> SlurmCredentialsSettings
+    """Get slurm settings
+    :param dict config: configuration object
+    :rtype: SlurmCredentialsSettings
+    :return: Slurm settings
+    """
+    try:
+        creds = config['credentials']
+    except (KeyError, TypeError):
+        creds = {}
+    conf = _kv_read_checked(creds, 'slurm', default={})
+    return SlurmCredentialsSettings(
+        db_password=_kv_read_checked(conf, 'db_password'),
+    )
 
 
 # GLOBAL SETTINGS
@@ -4896,23 +5007,274 @@ def federation_settings(config):
     )
 
 
-def federation_storage_account_settings(config):
-    # type: (dict) ->str
-    """Get federation storage account settings selector
+def slurm_options_settings(config):
+    # type: (dict) -> SlurmOptionsSettings
+    """Get slurm options settings
     :param dict config: configuration dict
-    :rtype: str
-    :return: federation storage settings link
+    :rtype: SlurmOptionsSettings
+    :return: slurm options settings
     """
     try:
-        conf = config['federation']
+        conf = config['slurm']['slurm_options']
+    except KeyError:
+        conf = {}
+    cluster_id = config['slurm']['cluster_id']
+    if util.is_none_or_empty(cluster_id) or len(cluster_id) > 22:
+        raise ValueError(
+            'cluster_id is invalid. Must be between 1 and 22 '
+            'characters in length')
+    bc = credentials_batch(config)
+    idle_reclaim_time = _kv_read(conf, 'idle_reclaim_time', default='00:15:00')
+    idle_reclaim_time = util.convert_string_to_timedelta(idle_reclaim_time)
+    if idle_reclaim_time.total_seconds == 0:
+        raise ValueError('idle_reclaim_time must be positive')
+    max_nodes = 0
+    partitions = {}
+    part_conf = _kv_read_checked(conf, 'elastic_partitions')
+    for key in part_conf:
+        part = _kv_read_checked(part_conf, key)
+        batch_pools = {}
+        pool_conf = _kv_read_checked(part, 'batch_pools', default={})
+        for pkey in pool_conf:
+            bpool = _kv_read_checked(pool_conf, pkey)
+            batch_service_url = _kv_read_checked(bpool, 'account_service_url')
+            if util.is_none_or_empty(batch_service_url):
+                batch_service_url = bc.account_service_url
+            max_compute_nodes = _kv_read(bpool, 'max_compute_nodes')
+            reclaim_exclude_num_nodes = _kv_read(
+                bpool, 'reclaim_exclude_num_nodes', default=0)
+            if reclaim_exclude_num_nodes > max_compute_nodes:
+                raise ValueError(
+                    'reclaim_exclude_num_nodes {} > '
+                    'max_compute_nodes {}'.format(
+                        reclaim_exclude_num_nodes, max_compute_nodes))
+            batch_pools[pkey] = SlurmBatchPoolSettings(
+                batch_service_url=batch_service_url,
+                compute_node_type=_kv_read_checked(bpool, 'compute_node_type'),
+                max_compute_nodes=max_compute_nodes,
+                weight=_kv_read(bpool, 'weight'),
+                features=_kv_read_checked(bpool, 'features', default=[]),
+                reclaim_exclude_num_nodes=reclaim_exclude_num_nodes,
+            )
+            max_nodes = max(max_nodes, batch_pools[pkey].max_compute_nodes)
+        max_runtime_limit = _kv_read_checked(part, 'max_runtime_limit')
+        if util.is_not_empty(max_runtime_limit):
+            max_runtime_limit = max_runtime_limit.replace('.', '-')
+        else:
+            max_runtime_limit = 'UNLIMITED'
+        partition = SlurmPartitionSettings(
+            batch_pools=batch_pools,
+            max_runtime_limit=max_runtime_limit,
+            default=_kv_read(part, 'default'),
+        )
+        partitions[key] = partition
+    unmanaged_partitions = []
+    upart_conf = _kv_read_checked(conf, 'unmanaged_partitions', default=[])
+    for upart in upart_conf:
+        unmanaged_partitions.append(SlurmUnmanagedPartitionSettings(
+            partition=_kv_read_checked(upart, 'partition'),
+            nodes=_kv_read_checked(upart, 'nodes'),
+        ))
+    return SlurmOptionsSettings(
+        cluster_id=cluster_id,
+        idle_reclaim_time=idle_reclaim_time,
+        max_nodes=max_nodes,
+        elastic_partitions=partitions,
+        unmanaged_partitions=unmanaged_partitions,
+    )
+
+
+def slurm_settings(config, kind):
+    # type: (dict) -> VmResource
+    """Get slurm settings
+    :param dict config: configuration dict
+    :rtype: VmResource
+    :return: VM resource settings
+    """
+    # general settings
+    try:
+        conf = config['slurm']
         if util.is_none_or_empty(conf):
             raise KeyError
     except KeyError:
-        raise ValueError('federation settings are invalid or missing')
+        raise ValueError('slurm settings are invalid or missing')
+    location = conf['location']
+    if util.is_none_or_empty(location):
+        raise ValueError('invalid location in slurm')
+    rg = _kv_read_checked(conf, 'resource_group')
+    if util.is_none_or_empty(rg):
+        raise ValueError('invalid resource_group in slurm')
+    zone = _kv_read(conf, 'zone')
+    hostname_prefix = '{}-{}'.format(
+        _kv_read_checked(conf, 'cluster_id'),
+        # Azure doesn't like "login" for DNS
+        'gateway' if kind == 'login' else kind
+    )
+    # get controller settings
+    try:
+        conf = conf[kind]
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError(
+            'slurm:{} settings are invalid or missing'.format(kind))
+    # vm settings
+    vm_size = _kv_read_checked(conf, 'vm_size')
+    accel_net = _kv_read(conf, 'accelerated_networking', False)
+    # public ip settings
+    pip_conf = _kv_read_checked(conf, 'public_ip', {})
+    pip_enabled = _kv_read(pip_conf, 'enabled', True)
+    pip_static = _kv_read(pip_conf, 'static', False)
+    # sc network security settings
+    ns_conf = conf['network_security']
+    ns_inbound = {
+        'ssh': InboundNetworkSecurityRule(
+            destination_port_range='22',
+            source_address_prefix=_kv_read_checked(ns_conf, 'ssh', ['*']),
+            protocol='tcp',
+        ),
+    }
+    if not isinstance(ns_inbound['ssh'].source_address_prefix, list):
+        raise ValueError('expected list for ssh network security rule')
+    if 'custom_inbound_rules' in ns_conf:
+        for key in ns_conf['custom_inbound_rules']:
+            ns_inbound[key] = InboundNetworkSecurityRule(
+                destination_port_range=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'destination_port_range'),
+                source_address_prefix=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key],
+                    'source_address_prefix'),
+                protocol=_kv_read_checked(
+                    ns_conf['custom_inbound_rules'][key], 'protocol'),
+            )
+            if not isinstance(ns_inbound[key].source_address_prefix, list):
+                raise ValueError(
+                    'expected list for network security rule {} '
+                    'source_address_prefix'.format(key))
+    # ssh settings
+    ssh_conf = conf['ssh']
+    ssh_username = _kv_read_checked(ssh_conf, 'username')
+    ssh_public_key = _kv_read_checked(ssh_conf, 'ssh_public_key')
+    if util.is_not_empty(ssh_public_key):
+        ssh_public_key = pathlib.Path(ssh_public_key)
+    ssh_public_key_data = _kv_read_checked(ssh_conf, 'ssh_public_key_data')
+    ssh_private_key = _kv_read_checked(ssh_conf, 'ssh_private_key')
+    if util.is_not_empty(ssh_private_key):
+        ssh_private_key = pathlib.Path(ssh_private_key)
+    if (ssh_public_key is not None and
+            util.is_not_empty(ssh_public_key_data)):
+        raise ValueError('cannot specify both an SSH public key file and data')
+    if (ssh_public_key is None and
+            util.is_none_or_empty(ssh_public_key_data) and
+            ssh_private_key is not None):
+        raise ValueError(
+            'cannot specify an SSH private key with no public key specified')
+    ssh_gen_file_path = _kv_read_checked(
+        ssh_conf, 'generated_file_export_path', '.')
+    return VmResource(
+        location=location,
+        resource_group=rg,
+        zone=zone,
+        hostname_prefix=hostname_prefix,
+        virtual_network=virtual_network_settings(
+            conf,
+            default_resource_group=rg,
+            default_existing_ok=False,
+            default_create_nonexistant=True,
+        ),
+        network_security=NetworkSecuritySettings(
+            inbound=ns_inbound,
+        ),
+        vm_size=vm_size,
+        accelerated_networking=accel_net,
+        public_ip=PublicIpSettings(
+            enabled=pip_enabled,
+            static=pip_static,
+        ),
+        ssh=SSHSettings(
+            username=ssh_username,
+            expiry_days=9999,
+            ssh_public_key=ssh_public_key,
+            ssh_public_key_data=ssh_public_key_data,
+            ssh_private_key=ssh_private_key,
+            generate_docker_tunnel_script=False,
+            generated_file_export_path=ssh_gen_file_path,
+            hpn_server_swap=False,
+            allow_docker_access=False,
+        ),
+    )
+
+
+def slurm_vm_count(config, kind):
+    # type: (dict, str) -> int
+    """Get Slurm controller vm count
+    :param dict config: configuration dict
+    :param str kind: kind
+    :rtype: int
+    :return: vm count
+    """
+    conf = _kv_read_checked(_kv_read_checked(config, 'slurm'), kind)
+    return _kv_read(conf, 'vm_count')
+
+
+def slurm_additional_prep_script(config, kind):
+    # type: (dict, str) -> int
+    """Get Slurm additional prep script
+    :param dict config: configuration dict
+    :param str kind: kind
+    :rtype: str
+    :return: prep script location
+    """
+    conf = _kv_read_checked(_kv_read_checked(config, 'slurm'), kind)
+    return _kv_read(conf, 'additional_prep_script')
+
+
+def slurm_shared_data_volumes(config):
+    # type: (dict) -> List[str]
+    """Get Slurm shared data volumes
+    :param dict config: configuration dict
+    :rtype: List[str]
+    :return: list of SlurmSharedDataVolumesSettings
+    """
+    conf = _kv_read_checked(config, 'slurm')
+    sdv = _kv_read_checked(conf, 'shared_data_volumes', default={})
+    vols = []
+    state = False
+    for sdkey in sdv:
+        store_slurmctld_state = _kv_read(sdv[sdkey], 'store_slurmctld_state')
+        if store_slurmctld_state:
+            if state:
+                raise ValueError(
+                    'only one shared data volume should be designated as '
+                    'store_slurmctld_state')
+            state = True
+        vols.append(SlurmSharedDataVolumesSettings(
+            id=sdkey,
+            host_mount_path=_kv_read_checked(sdv[sdkey], 'host_mount_path'),
+            store_slurmctld_state=store_slurmctld_state,
+        ))
+    return vols
+
+
+def other_storage_account_settings(config, key):
+    # type: (dict, str) ->str
+    """Get other storage account settings selector
+    :param dict config: configuration dict
+    :param str key: config key
+    :rtype: str
+    :return: other storage settings link
+    """
+    try:
+        conf = config[key]
+        if util.is_none_or_empty(conf):
+            raise KeyError
+    except KeyError:
+        raise ValueError('{} settings are invalid or missing'.format(key))
     ssel = _kv_read_checked(conf, 'storage_account_settings')
     if util.is_none_or_empty(ssel):
         raise ValueError(
-            'federation storage_account_settings are invalid or missing')
+            '{} storage_account_settings are invalid or missing'.format(key))
     return ssel
 
 
@@ -4924,7 +5286,18 @@ def federation_credentials_storage(config):
     :return: federation storage cred settings
     """
     return credentials_storage(
-        config, federation_storage_account_settings(config))
+        config, other_storage_account_settings(config, 'federation'))
+
+
+def slurm_credentials_storage(config):
+    # type: (dict) -> StorageCredentialsSettings
+    """Get slurm storage account settings
+    :param dict config: configuration dict
+    :rtype: StorageCredentialsSettings
+    :return: slurm storage cred settings
+    """
+    return credentials_storage(
+        config, other_storage_account_settings(config, 'slurm'))
 
 
 def generate_availability_set_name(vr):

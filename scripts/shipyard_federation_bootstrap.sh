@@ -6,10 +6,10 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.03.1
+DOCKER_CE_VERSION_DEBIAN=18.09.1
 
 # consts
-DOCKER_CE_PACKAGE_DEBIAN="docker-ce=${DOCKER_CE_VERSION_DEBIAN}~ce~3-0~"
+DOCKER_CE_PACKAGE_DEBIAN="docker-ce=5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
 SHIPYARD_VAR_DIR=/var/batch-shipyard
 SHIPYARD_CONF_FILE=${SHIPYARD_VAR_DIR}/federation.json
 

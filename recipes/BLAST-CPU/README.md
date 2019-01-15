@@ -66,7 +66,8 @@ shipyard jobs tasks list --jobid blast --taskid merge-task-00001 --poll-until-ta
 # optionally egress the results.txt file from the compute node to local machine
 shipyard data files task --filespec blast,merge-task-00001,wd/results.txt
 
-# clean-up
-shipyard jobs del -y --wiat jobs-blast.yaml
+# clean up
+shipyard jobs del -y jobs-split.yaml
+shipyard jobs del -y jobs-blast.yaml
 shipyard pool del -y
 ```

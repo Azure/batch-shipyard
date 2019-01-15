@@ -20,6 +20,7 @@ pages:
   - RemoteFS: 15-batch-shipyard-configuration-fs.md
   - Monitoring: 16-batch-shipyard-configuration-monitor.md
   - Federation: 17-batch-shipyard-configuration-federation.md
+  - Slurm : 18-batch-shipyard-configuration-federation.md
 - CLI Commands and Usage: 20-batch-shipyard-usage.md
 - Platform Image support: 25-batch-shipyard-platform-image-support.md
 - In-Depth Feature Guides:
@@ -31,6 +32,7 @@ pages:
   - Remote Filesystems: 65-batch-shipyard-remote-fs.md
   - Resource Monitoring: 66-batch-shipyard-resource-monitoring.md
   - Federations: 68-batch-shipyard-federation.md
+  - Slurm on Batch: 69-batch-shipyard-slurm.md
   - Data Movement: 70-batch-shipyard-data-movement.md
   - Azure KeyVault for Credential Management: 74-batch-shipyard-azure-keyvault.md
   - Credential Encryption: 75-batch-shipyard-credential-encryption.md

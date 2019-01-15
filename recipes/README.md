@@ -23,8 +23,9 @@ Use the following links to quickly navigate to recipe collections:
 4. [Genomics and Bioinformatics](#genomics)
 5. [Molecular Dynamics (MD)](#md)
 6. [RemoteFS](#remotefs)
-7. [Video Processing](#video)
-8. [Windows](#windows)
+7. [Slurm on Batch](#slurm)
+8. [Video Processing](#video)
+9. [Windows](#windows)
 
 ## <a name="benchmarks"></a>Benchmarks
 #### [HPCG-Infiniband-IntelMPI](./HPCG-Infiniband-IntelMPI)
@@ -192,6 +193,11 @@ GlusterFS storage cluster.
 #### [RemoteFS-NFS](./RemoteFS-NFS)
 This RemoteFS-NFS recipe contains information on how to provision a sample
 single VM NFS server.
+
+## <a name="slurm"></a>Slurm on Batch
+#### [Slurm+NFS](./Slurm+NFS)
+This recipe contains information on how to orchestrate a
+[Slurm](https://slurm.schedmd.com/) cluster with an NFS shared file system.
 
 ## <a name="video"></a>Video Processing
 #### [FFmpeg-GPU](./FFmpeg-GPU)

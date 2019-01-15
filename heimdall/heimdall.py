@@ -281,7 +281,7 @@ def _get_batch_credentials(
         return _BATCH_CLIENTS[batch_account]
     except KeyError:
         creds = create_msi_credentials(cloud, resource_id=resource_id)
-        client = azure.batch.BatchServiceClient(creds, base_url=service_url)
+        client = azure.batch.BatchServiceClient(creds, batch_url=service_url)
         _modify_client_for_retry_and_user_agent(client)
         _BATCH_CLIENTS[batch_account] = client
         logger.debug('batch client created for account: {}'.format(

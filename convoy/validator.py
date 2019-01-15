@@ -59,6 +59,7 @@ class ConfigType(enum.Enum):
     RemoteFS = 5,
     Monitor = 6,
     Federation = 7,
+    Slurm = 8,
 
 
 # global defines
@@ -91,6 +92,10 @@ _SCHEMAS = {
     ConfigType.Federation: {
         'name': 'Federation',
         'schema': pathlib.Path(_ROOT_PATH, 'schemas/federation.yaml'),
+    },
+    ConfigType.Slurm: {
+        'name': 'Slurm',
+        'schema': pathlib.Path(_ROOT_PATH, 'schemas/slurm.yaml'),
     },
 }
 

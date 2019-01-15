@@ -54,6 +54,7 @@ from . import monitor
 from . import remotefs
 from . import resource
 from . import settings
+from . import slurm
 from . import storage
 from . import util
 from .version import __version__
@@ -296,6 +297,39 @@ _FEDERATIONSERVICES_FILE = (
 _ALL_FEDERATION_FILES = [
     _FEDERATIONPREP_FILE, _FEDERATIONSERVICES_FILE,
 ]
+_SLURMMASTERPREP_FILE = (
+    'shipyard_slurm_master_bootstrap.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_slurm_master_bootstrap.sh')
+)
+_SLURMCOMPUTENODEPREP_FILE = (
+    'shipyard_slurm_computenode_nodeprep.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_slurm_computenode_nodeprep.sh')
+)
+_SLURMPY_FILE = (
+    'slurm.py',
+    pathlib.Path(_ROOT_PATH, 'slurm/slurm.py')
+)
+_SLURMREQ_FILE = (
+    'requirements.txt',
+    pathlib.Path(_ROOT_PATH, 'slurm/requirements.txt')
+)
+_SLURMCONF_FILE = (
+    'slurm.conf',
+    pathlib.Path(_ROOT_PATH, 'slurm/slurm.conf')
+)
+_SLURMDBDCONF_FILE = (
+    'slurmdbd.conf',
+    pathlib.Path(_ROOT_PATH, 'slurm/slurmdbd.conf')
+)
+_SLURMDBSQL_FILE = (
+    'slurmdb.sql',
+    pathlib.Path(_ROOT_PATH, 'slurm/slurmdb.sql')
+)
+_CONFIGURABLE_SLURM_FILES = {
+    'slurm': _SLURMCONF_FILE,
+    'slurmdbd': _SLURMDBDCONF_FILE,
+    'slurmdbsql': _SLURMDBSQL_FILE,
+}
 
 
 def initialize_globals(verbose):
@@ -771,9 +805,6 @@ def _create_storage_cluster_mount_args(
     :rtype: tuple
     :return: (fstab mount, storage cluster arg)
     """
-    fstab_mount = None
-    sc_arg = None
-    ba, _ = batch.get_batch_account(batch_mgmt_client, config)
     # check for vnet/subnet presence
     if util.is_none_or_empty(subnet_id):
         raise RuntimeError(
@@ -782,15 +813,9 @@ def _create_storage_cluster_mount_args(
     # get remotefs settings
     rfs = settings.remotefs_settings(config, sc_id)
     sc = rfs.storage_cluster
-    # iterate through shared data volumes and fine storage clusters
-    sdv = settings.global_resources_shared_data_volumes(config)
-    if (sc_id not in sdv or
-            not settings.is_shared_data_volume_storage_cluster(
-                sdv, sc_id)):
-        raise RuntimeError(
-            'No storage cluster {} found in configuration'.format(sc_id))
-    vnet_subid, vnet_rg, _, vnet_name, subnet_name = _explode_arm_subnet_id(
-        subnet_id)
+    # perform checks
+    vnet_subid, vnet_rg, _, vnet_name, subnet_name = \
+        util.explode_arm_subnet_id(subnet_id)
     # check for same vnet name
     if vnet_name.lower() != sc.virtual_network.name.lower():
         raise RuntimeError(
@@ -804,6 +829,7 @@ def _create_storage_cluster_mount_args(
             '{} with pool virtual network in resource group {}'.format(
                 sc_id, sc.virtual_network.resource_group, vnet_rg))
     # cross check vnet subscription id
+    ba, _ = batch.get_batch_account(batch_mgmt_client, config)
     _ba_tmp = ba.id.lower().split('/')
     if vnet_subid.lower() != _ba_tmp[2]:
         raise RuntimeError(
@@ -811,152 +837,12 @@ def _create_storage_cluster_mount_args(
             '{} with pool virtual network in subscription {}'.format(
                 sc_id, vnet_subid, _ba_tmp[2]))
     del _ba_tmp
-    # get vm count
-    if sc.vm_count < 1:
-        raise RuntimeError(
-            'storage cluster {} vm_count {} is invalid'.format(
-                sc_id, sc.vm_count))
-    # get fileserver type
-    if sc.file_server.type == 'nfs':
-        # query first vm for info
-        vm_name = settings.generate_virtual_machine_name(sc, 0)
-        vm = compute_client.virtual_machines.get(
-            resource_group_name=sc.resource_group,
-            vm_name=vm_name,
-        )
-        nic = resource.get_nic_from_virtual_machine(
-            network_client, sc.resource_group, vm)
-        # get private ip of vm
-        remote_ip = nic.ip_configurations[0].private_ip_address
-        # construct mount options
-        mo = '_netdev,noauto,nfsvers=4,intr'
-        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
-        if util.is_not_empty(amo):
-            if 'udp' in mo:
-                raise RuntimeError(
-                    ('udp cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            if 'auto' in mo:
-                raise RuntimeError(
-                    ('auto cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            if any([x.startswith('nfsvers=') for x in amo]):
-                raise RuntimeError(
-                    ('nfsvers cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            if any([x.startswith('port=') for x in amo]):
-                raise RuntimeError(
-                    ('port cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            mo = ','.join((mo, ','.join(amo)))
-        # construct mount string for fstab
-        fstab_mount = (
-            '{remoteip}:{srcpath} {hmp}/{scid} '
-            '{fstype} {mo} 0 2').format(
-                remoteip=remote_ip,
-                srcpath=sc.file_server.mountpoint,
-                hmp=settings.get_host_mounts_path(False),
-                scid=sc_id,
-                fstype=sc.file_server.type,
-                mo=mo)
-    elif sc.file_server.type == 'glusterfs':
-        # walk vms and find non-overlapping ud/fds
-        primary_ip = None
-        primary_ud = None
-        primary_fd = None
-        backup_ip = None
-        backup_ud = None
-        backup_fd = None
-        vms = {}
-        # first pass, attempt to populate all ip, ud/fd
-        for i in range(sc.vm_count):
-            vm_name = settings.generate_virtual_machine_name(sc, i)
-            vm = compute_client.virtual_machines.get(
-                resource_group_name=sc.resource_group,
-                vm_name=vm_name,
-                expand=compute_client.virtual_machines.models.
-                InstanceViewTypes.instance_view,
-            )
-            nic = resource.get_nic_from_virtual_machine(
-                network_client, sc.resource_group, vm)
-            vms[i] = (vm, nic)
-            # get private ip and ud/fd of vm
-            remote_ip = nic.ip_configurations[0].private_ip_address
-            ud = vm.instance_view.platform_update_domain
-            fd = vm.instance_view.platform_fault_domain
-            if primary_ip is None:
-                primary_ip = remote_ip
-                primary_ud = ud
-                primary_fd = fd
-            if backup_ip is None:
-                if (primary_ip == backup_ip or primary_ud == ud or
-                        primary_fd == fd):
-                    continue
-                backup_ip = remote_ip
-                backup_ud = ud
-                backup_fd = fd
-        # second pass, fill in with at least non-overlapping update domains
-        if backup_ip is None:
-            for i in range(sc.vm_count):
-                vm, nic = vms[i]
-                remote_ip = nic.ip_configurations[0].private_ip_address
-                ud = vm.instance_view.platform_update_domain
-                fd = vm.instance_view.platform_fault_domain
-                if primary_ud != ud:
-                    backup_ip = remote_ip
-                    backup_ud = ud
-                    backup_fd = fd
-                    break
-        if primary_ip is None or backup_ip is None:
-            raise RuntimeError(
-                'Could not find either a primary ip {} or backup ip {} for '
-                'glusterfs client mount'.format(primary_ip, backup_ip))
-        logger.debug('primary ip/ud/fd={} backup ip/ud/fd={}'.format(
-            (primary_ip, primary_ud, primary_fd),
-            (backup_ip, backup_ud, backup_fd)))
-        # construct mount options
-        mo = '_netdev,noauto,transport=tcp,backupvolfile-server={}'.format(
-            backup_ip)
-        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
-        if util.is_not_empty(amo):
-            if 'auto' in mo:
-                raise RuntimeError(
-                    ('auto cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            if any([x.startswith('backupvolfile-server=') for x in amo]):
-                raise RuntimeError(
-                    ('backupvolfile-server cannot be specified as a mount '
-                     'option for storage cluster {}').format(sc_id))
-            if any([x.startswith('transport=') for x in amo]):
-                raise RuntimeError(
-                    ('transport cannot be specified as a mount option for '
-                     'storage cluster {}').format(sc_id))
-            mo = ','.join((mo, ','.join(amo)))
-        # construct mount string for fstab, srcpath is the gluster volume
-        fstab_mount = (
-            '{remoteip}:/{srcpath} {hmp}/{scid} '
-            '{fstype} {mo} 0 2').format(
-                remoteip=primary_ip,
-                srcpath=settings.get_file_server_glusterfs_volume_name(sc),
-                hmp=settings.get_host_mounts_path(False),
-                scid=sc_id,
-                fstype=sc.file_server.type,
-                mo=mo)
-    else:
-        raise NotImplementedError(
-            ('cannot handle file_server type {} for storage '
-             'cluster {}').format(sc.file_server.type, sc_id))
-    if util.is_none_or_empty(fstab_mount):
-        raise RuntimeError(
-            ('Could not construct an fstab mount entry for storage '
-             'cluster {}').format(sc_id))
-    # construct sc_arg
-    sc_arg = '{}:{}'.format(sc.file_server.type, sc_id)
-    # log config
-    if settings.verbose(config):
-        logger.debug('storage cluster {} fstab mount: {}'.format(
-            sc_id, fstab_mount))
-    return (fstab_mount, sc_arg)
+    # construct host mount path
+    host_mount_path = '{}/{}'.format(
+        settings.get_host_mounts_path(False), sc_id)
+    # return fstab and sc arg
+    return remotefs.create_storage_cluster_mount_args(
+        compute_client, network_client, config, sc_id, host_mount_path)
 
 
 def _create_custom_linux_mount_args(config, mount_name):
@@ -1054,28 +940,6 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     return (image_ref_to_use, sku_to_use.id)
 
 
-def _explode_arm_subnet_id(arm_subnet_id):
-    # type: (str) -> Tuple[str, str, str, str, str]
-    """Parses components from ARM subnet id
-    :param str arm_subnet_id: ARM subnet id
-    :rtype: tuple
-    :return: subid, rg, provider, vnet, subnet
-    """
-    tmp = arm_subnet_id.split('/')
-    try:
-        subid = tmp[2]
-        rg = tmp[4]
-        provider = tmp[6]
-        vnet = tmp[8]
-        subnet = tmp[10]
-    except IndexError:
-        raise ValueError(
-            'Error parsing arm_subnet_id. Make sure the virtual network '
-            'resource id is correct and is postfixed with the '
-            '/subnets/<subnet_id> portion.')
-    return subid, rg, provider, vnet, subnet
-
-
 def _check_for_batch_aad(bc, rmsg):
     # type: (settings.BatchCredentialSettings, str) -> None
     """Check for Batch AAD
@@ -1116,7 +980,7 @@ def _pool_virtual_network_subnet_address_space_check(
     # get subnet object
     subnet_id = None
     if util.is_not_empty(pool_settings.virtual_network.arm_subnet_id):
-        subnet_components = _explode_arm_subnet_id(
+        subnet_components = util.explode_arm_subnet_id(
             pool_settings.virtual_network.arm_subnet_id)
         logger.debug(
             ('arm subnet id breakdown: subid={} rg={} provider={} vnet={} '
@@ -3154,7 +3018,7 @@ def action_fs_cluster_ssh(
             'was specified')
         cardinal = 0
     if cardinal is not None and cardinal < 0:
-            raise ValueError('invalid cardinal option value')
+        raise ValueError('invalid cardinal option value')
     remotefs.ssh_storage_cluster(
         compute_client, network_client, config, storage_cluster_id,
         cardinal, hostname, tty, command)
@@ -3587,8 +3451,11 @@ def action_pool_user_del(batch_client, config):
         batch.del_ssh_user(batch_client, config)
 
 
-def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
-    # type: (batchsc.BatchServiceClient, dict, int, str, bool, tuple) -> None
+def action_pool_ssh(
+        batch_client, config, cardinal, nodeid, tty, command,
+        ssh_username=None, ssh_private_key=None):
+    # type: (batchsc.BatchServiceClient, dict, int, str, bool, tuple, str,
+    #        str) -> None
     """Action: Pool Ssh
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
@@ -3597,6 +3464,8 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     :param str nodeid: node id
     :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
+    :param str ssh_username: ssh username
+    :param pathlib.Path ssh_private_key: ssh private key
     """
     _check_batch_client(batch_client)
     if cardinal is not None and util.is_not_empty(nodeid):
@@ -3609,14 +3478,18 @@ def action_pool_ssh(batch_client, config, cardinal, nodeid, tty, command):
     if cardinal is not None and cardinal < 0:
         raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
-    ssh_private_key = pool.ssh.ssh_private_key
     if ssh_private_key is None:
-        ssh_private_key = pathlib.Path(
-            pool.ssh.generated_file_export_path, crypto.get_ssh_key_prefix())
+        ssh_private_key = pool.ssh.ssh_private_key
+        if ssh_private_key is None:
+            ssh_private_key = pathlib.Path(
+                pool.ssh.generated_file_export_path,
+                crypto.get_ssh_key_prefix())
+    if util.is_none_or_empty(ssh_username):
+        ssh_username = pool.ssh.username
     ip, port = batch.get_remote_login_setting_for_node(
         batch_client, config, cardinal, nodeid)
     crypto.connect_or_exec_ssh_command(
-        ip, port, ssh_private_key, pool.ssh.username, tty=tty,
+        ip, port, ssh_private_key, ssh_username, tty=tty,
         command=command)
 
 
@@ -3639,7 +3512,7 @@ def action_pool_rdp(batch_client, config, cardinal, nodeid, no_auto=False):
             'was specified')
         cardinal = 0
     if cardinal is not None and cardinal < 0:
-            raise ValueError('invalid cardinal option value')
+        raise ValueError('invalid cardinal option value')
     pool = settings.pool_settings(config)
     ip, port = batch.get_remote_login_setting_for_node(
         batch_client, config, cardinal, nodeid)
@@ -5051,3 +4924,167 @@ def action_fed_jobs_zap(blob_client, config, federation_id, unique_id):
         return
     storage.zap_unique_id_from_federation(
         blob_client, config, federation_id, unique_id)
+
+
+def action_slurm_ssh(
+        compute_client, network_client, table_client, batch_client, config,
+        tty, command, kind, offset, node_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict,
+    #        bool, tuple, str, int, str) -> None
+    """Action: Slurm Ssh Controller
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param bool tty: allocate pseudo-tty
+    :param tuple command: command
+    :param str kind: kind
+    :param int offset: offset
+    :param str node_name: node name
+    """
+    if util.is_none_or_empty(node_name):
+        _check_compute_client(compute_client)
+        _check_network_client(network_client)
+        vm_res = settings.slurm_settings(config, kind)
+        if offset is None:
+            offset = 0
+        else:
+            offset = int(offset)
+        if kind == 'login':
+            cont_vm_count = settings.slurm_vm_count(config, 'controller')
+            offset = cont_vm_count + offset
+        resource.ssh_to_virtual_machine_resource(
+            compute_client, network_client, vm_res,
+            crypto.get_slurm_ssh_key_prefix(kind), tty, command, offset=offset)
+    else:
+        slurm_opts = settings.slurm_options_settings(config)
+        # get host name to node id mapping
+        node_id = storage.get_slurm_host_node_id(
+            table_client, slurm_opts.cluster_id, node_name)
+        if util.is_none_or_empty(node_id):
+            raise RuntimeError(
+                'No batch node id associated with Slurm node: {}'.format(
+                    node_name))
+        ss_login = settings.slurm_settings(config, 'login')
+        ssh_private_key = ss_login.ssh.ssh_private_key
+        if ssh_private_key is None:
+            ssh_private_key = pathlib.Path(
+                ss_login.ssh.generated_file_export_path,
+                crypto.get_slurm_ssh_key_prefix('login'))
+        action_pool_ssh(
+            batch_client, config, None, node_id, tty, command,
+            ssh_username=ss_login.ssh.username,
+            ssh_private_key=ssh_private_key)
+
+
+def action_slurm_cluster_create(
+        auth_client, resource_client, compute_client, network_client,
+        blob_client, table_client, queue_client, batch_client, config):
+    # type: (azure.mgmt.authorization.AuthorizationManagementClient,
+    #        azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService,
+    #        azure.batch.batch_service_client.BatchServiceClient, dict) -> None
+    """Action: Slurm Cluster Create
+    :param azure.mgmt.authorization.AuthorizationManagementClient auth_client:
+        auth client
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
+    _check_batch_client(batch_client)
+    # ensure aad creds are populated
+    mgmt_aad = settings.credentials_management(config)
+    if (util.is_none_or_empty(mgmt_aad.subscription_id) or
+            util.is_none_or_empty(mgmt_aad.aad.authority_url)):
+        raise ValueError('management aad credentials are invalid')
+    slurm.create_slurm_controller(
+        auth_client, resource_client, compute_client, network_client,
+        blob_client, table_client, queue_client, batch_client, config,
+        _RESOURCES_PATH, _SLURMMASTERPREP_FILE, _SLURMCOMPUTENODEPREP_FILE,
+        _SLURMPY_FILE, _SLURMREQ_FILE, _CONFIGURABLE_SLURM_FILES)
+
+
+def action_slurm_cluster_status(compute_client, network_client, config):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient, dict) -> None
+    """Action: Slurm Cluster Status
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    """
+    _check_compute_client(compute_client)
+    vm_res = settings.slurm_settings(config, 'controller')
+    cont_vm_count = settings.slurm_vm_count(config, 'controller')
+    i = 0
+    while i < cont_vm_count:
+        resource.stat_virtual_machine_resource(
+            compute_client, network_client, config, vm_res, offset=i)
+        i += 1
+    vm_res = settings.slurm_settings(config, 'login')
+    login_vm_count = settings.slurm_vm_count(config, 'login')
+    i = 0
+    while i < login_vm_count:
+        resource.stat_virtual_machine_resource(
+            compute_client, network_client, config, vm_res,
+            offset=cont_vm_count + i)
+        i += 1
+
+
+def action_slurm_cluster_destroy(
+        resource_client, compute_client, network_client, blob_client,
+        table_client, queue_client, config, delete_all_resources,
+        delete_virtual_network, generate_from_prefix, wait):
+    # type: (azure.mgmt.resource.resources.ResourceManagementClient,
+    #        azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.cosmosdb.table.TableService,
+    #        azure.storage.queue.QueueService, dict, bool, bool,
+    #        bool, bool) -> None
+    """Action: Slurm Cluster Destroy
+    :param azure.mgmt.resource.resources.ResourceManagementClient
+        resource_client: resource client
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.storage.queue.QueueService queue_client: queue client
+    :param dict config: configuration dict
+    :param bool delete_all_resources: delete all resources
+    :param bool delete_virtual_network: delete virtual network
+    :param bool generate_from_prefix: generate resources from hostname prefix
+    :param bool wait: wait for deletion to complete
+    """
+    _check_resource_client(resource_client)
+    _check_compute_client(compute_client)
+    _check_network_client(network_client)
+    if (generate_from_prefix and
+            (delete_all_resources or delete_virtual_network)):
+        raise ValueError(
+            'Cannot specify generate_from_prefix and a delete_* option')
+    slurm.delete_slurm_controller(
+        resource_client, compute_client, network_client, blob_client,
+        table_client, queue_client, config,
+        delete_virtual_network=delete_virtual_network,
+        delete_resource_group=delete_all_resources,
+        generate_from_prefix=generate_from_prefix, wait=wait)

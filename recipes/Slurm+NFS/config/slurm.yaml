@@ -1,0 +1,55 @@
+slurm:
+  storage_account_settings: mystorageaccount
+  resource_group: my-resource-group
+  location: <Azure region, e.g., eastus>
+  cluster_id: myslurmcluster
+  controller:
+    ssh:
+      username: shipyardadmin
+    public_ip:
+      enabled: true
+    virtual_network:
+      address_space: 10.0.0.0/8
+      existing_ok: true
+      name: myvnet
+      subnet:
+        address_prefix: 10.0.2.0/24
+        name: slurm-controller-subnet
+    network_security:
+      ssh:
+        - '*'
+    vm_size: STANDARD_D2_V2
+    vm_count: 1
+  login:
+    ssh:
+      username: shipyard
+    public_ip:
+      enabled: true
+    virtual_network:
+      address_space: 10.0.0.0/8
+      existing_ok: true
+      name: myvnet
+      subnet:
+        address_prefix: 10.0.3.0/24
+        name: slurm-login-subnet
+    network_security:
+      ssh:
+        - '*'
+    vm_size: STANDARD_D2_V2
+    vm_count: 1
+  shared_data_volumes:
+    nfs:
+      host_mount_path: /shared
+      store_slurmctld_state: true
+  slurm_options:
+    idle_reclaim_time: 00:30:00
+    elastic_partitions:
+      mypart1:
+        batch_pools:
+          slurmpool:
+            account_service_url: https://<myaccount>.<region>.batch.azure.com
+            compute_node_type: dedicated
+            max_compute_nodes: 32
+            weight: 0
+            reclaim_exclude_num_nodes: 4
+        default: true

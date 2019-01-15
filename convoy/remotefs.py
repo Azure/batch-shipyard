@@ -52,6 +52,180 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 
+def create_storage_cluster_mount_args(
+        compute_client, network_client, config, sc_id, host_mount_path):
+    # type: (azure.mgmt.compute.ComputeManagementClient,
+    #        azure.mgmt.network.NetworkManagementClient,
+    #        dict, str, str) -> Tuple[str, str]
+    """Create storage cluster mount arguments
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param str sc_id: storage cluster id
+    :param str host_mount_path: host mount path
+    :rtype: tuple
+    :return: (fstab mount, storage cluster arg)
+    """
+    fstab_mount = None
+    sc_arg = None
+    # get remotefs settings
+    rfs = settings.remotefs_settings(config, sc_id)
+    sc = rfs.storage_cluster
+    # iterate through shared data volumes and find storage clusters
+    sdv = settings.global_resources_shared_data_volumes(config)
+    if (sc_id not in sdv or
+            not settings.is_shared_data_volume_storage_cluster(
+                sdv, sc_id)):
+        raise RuntimeError(
+            'No storage cluster {} found in configuration'.format(sc_id))
+    # get vm count
+    if sc.vm_count < 1:
+        raise RuntimeError(
+            'storage cluster {} vm_count {} is invalid'.format(
+                sc_id, sc.vm_count))
+    # get fileserver type
+    if sc.file_server.type == 'nfs':
+        # query first vm for info
+        vm_name = settings.generate_virtual_machine_name(sc, 0)
+        vm = compute_client.virtual_machines.get(
+            resource_group_name=sc.resource_group,
+            vm_name=vm_name,
+        )
+        nic = resource.get_nic_from_virtual_machine(
+            network_client, sc.resource_group, vm)
+        # get private ip of vm
+        remote_ip = nic.ip_configurations[0].private_ip_address
+        # construct mount options
+        mo = '_netdev,noauto,nfsvers=4,intr'
+        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
+        if util.is_not_empty(amo):
+            if 'udp' in mo:
+                raise RuntimeError(
+                    ('udp cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            if 'auto' in mo:
+                raise RuntimeError(
+                    ('auto cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            if any([x.startswith('nfsvers=') for x in amo]):
+                raise RuntimeError(
+                    ('nfsvers cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            if any([x.startswith('port=') for x in amo]):
+                raise RuntimeError(
+                    ('port cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            mo = ','.join((mo, ','.join(amo)))
+        # construct mount string for fstab
+        fstab_mount = (
+            '{remoteip}:{srcpath} {hmp} '
+            '{fstype} {mo} 0 0').format(
+                remoteip=remote_ip,
+                srcpath=sc.file_server.mountpoint,
+                hmp=host_mount_path,
+                fstype=sc.file_server.type,
+                mo=mo)
+    elif sc.file_server.type == 'glusterfs':
+        # walk vms and find non-overlapping ud/fds
+        primary_ip = None
+        primary_ud = None
+        primary_fd = None
+        backup_ip = None
+        backup_ud = None
+        backup_fd = None
+        vms = {}
+        # first pass, attempt to populate all ip, ud/fd
+        for i in range(sc.vm_count):
+            vm_name = settings.generate_virtual_machine_name(sc, i)
+            vm = compute_client.virtual_machines.get(
+                resource_group_name=sc.resource_group,
+                vm_name=vm_name,
+                expand=compute_client.virtual_machines.models.
+                InstanceViewTypes.instance_view,
+            )
+            nic = resource.get_nic_from_virtual_machine(
+                network_client, sc.resource_group, vm)
+            vms[i] = (vm, nic)
+            # get private ip and ud/fd of vm
+            remote_ip = nic.ip_configurations[0].private_ip_address
+            ud = vm.instance_view.platform_update_domain
+            fd = vm.instance_view.platform_fault_domain
+            if primary_ip is None:
+                primary_ip = remote_ip
+                primary_ud = ud
+                primary_fd = fd
+            if backup_ip is None:
+                if (primary_ip == backup_ip or primary_ud == ud or
+                        primary_fd == fd):
+                    continue
+                backup_ip = remote_ip
+                backup_ud = ud
+                backup_fd = fd
+        # second pass, fill in with at least non-overlapping update domains
+        if backup_ip is None:
+            for i in range(sc.vm_count):
+                vm, nic = vms[i]
+                remote_ip = nic.ip_configurations[0].private_ip_address
+                ud = vm.instance_view.platform_update_domain
+                fd = vm.instance_view.platform_fault_domain
+                if primary_ud != ud:
+                    backup_ip = remote_ip
+                    backup_ud = ud
+                    backup_fd = fd
+                    break
+        if primary_ip is None or backup_ip is None:
+            raise RuntimeError(
+                'Could not find either a primary ip {} or backup ip {} for '
+                'glusterfs client mount'.format(primary_ip, backup_ip))
+        logger.debug('primary ip/ud/fd={} backup ip/ud/fd={}'.format(
+            (primary_ip, primary_ud, primary_fd),
+            (backup_ip, backup_ud, backup_fd)))
+        # construct mount options
+        mo = '_netdev,noauto,transport=tcp,backupvolfile-server={}'.format(
+            backup_ip)
+        amo = settings.shared_data_volume_mount_options(sdv, sc_id)
+        if util.is_not_empty(amo):
+            if 'auto' in mo:
+                raise RuntimeError(
+                    ('auto cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            if any([x.startswith('backupvolfile-server=') for x in amo]):
+                raise RuntimeError(
+                    ('backupvolfile-server cannot be specified as a mount '
+                     'option for storage cluster {}').format(sc_id))
+            if any([x.startswith('transport=') for x in amo]):
+                raise RuntimeError(
+                    ('transport cannot be specified as a mount option for '
+                     'storage cluster {}').format(sc_id))
+            mo = ','.join((mo, ','.join(amo)))
+        # construct mount string for fstab, srcpath is the gluster volume
+        fstab_mount = (
+            '{remoteip}:/{srcpath} {hmp} '
+            '{fstype} {mo} 0 0').format(
+                remoteip=primary_ip,
+                srcpath=settings.get_file_server_glusterfs_volume_name(sc),
+                hmp=host_mount_path,
+                fstype=sc.file_server.type,
+                mo=mo)
+    else:
+        raise NotImplementedError(
+            ('cannot handle file_server type {} for storage '
+             'cluster {}').format(sc.file_server.type, sc_id))
+    if util.is_none_or_empty(fstab_mount):
+        raise RuntimeError(
+            ('Could not construct an fstab mount entry for storage '
+             'cluster {}').format(sc_id))
+    # construct sc_arg
+    sc_arg = '{}:{}'.format(sc.file_server.type, sc_id)
+    # log config
+    if settings.verbose(config):
+        logger.debug('storage cluster {} fstab mount: {}'.format(
+            sc_id, fstab_mount))
+    return (fstab_mount, sc_arg)
+
+
 def _create_managed_disk(compute_client, rfs, disk_name):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        settings.RemoteFsSettings, str) ->
@@ -444,52 +618,6 @@ def _create_virtual_machine_extension(
     )
 
 
-def _create_availability_set(compute_client, rfs):
-    # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.RemoteFsSettings) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Create an availability set
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param settings.RemoteFsSettings rfs: remote filesystem settings
-    :rtype: msrestazure.azure_operation.AzureOperationPoller or None
-    :return: msrestazure.azure_operation.AzureOperationPoller
-    """
-    if rfs.storage_cluster.vm_count <= 1:
-        logger.info('insufficient vm_count for availability set')
-        return None
-    if rfs.storage_cluster.zone is not None:
-        logger.info('cannot create an availability set for zonal resource')
-        return None
-    as_name = settings.generate_availability_set_name(rfs.storage_cluster)
-    # check and fail if as exists
-    try:
-        compute_client.availability_sets.get(
-            resource_group_name=rfs.storage_cluster.resource_group,
-            availability_set_name=as_name,
-        )
-        raise RuntimeError('availability set {} exists'.format(as_name))
-    except msrestazure.azure_exceptions.CloudError as e:
-        if e.status_code == 404:
-            pass
-        else:
-            raise
-    logger.debug('creating availability set: {}'.format(as_name))
-    return compute_client.availability_sets.create_or_update(
-        resource_group_name=rfs.storage_cluster.resource_group,
-        availability_set_name=as_name,
-        # user maximums ud, fd from settings due to region variability
-        parameters=compute_client.virtual_machines.models.AvailabilitySet(
-            location=rfs.storage_cluster.location,
-            platform_update_domain_count=20,
-            platform_fault_domain_count=rfs.storage_cluster.fault_domains,
-            sku=compute_client.virtual_machines.models.Sku(
-                name='Aligned',
-            ),
-        )
-    )
-
-
 def create_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
         sc_id, bootstrap_file, remotefs_files):
@@ -633,7 +761,9 @@ def create_storage_cluster(
             resource.create_network_interface, network_client,
             rfs.storage_cluster, subnet, nsg, private_ips, pips, i))
     # create availability set if vm_count > 1, this call is not async
-    availset = _create_availability_set(compute_client, rfs)
+    availset = resource.create_availability_set(
+        compute_client, rfs.storage_cluster, rfs.storage_cluster.vm_count,
+        fault_domains=rfs.storage_cluster.fault_domains)
     # wait for nics to be created
     logger.debug('waiting for network interfaces to provision')
     nics = {}
@@ -1257,24 +1387,6 @@ def expand_storage_cluster(
     return succeeded
 
 
-def _delete_availability_set(compute_client, rg_name, as_name):
-    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
-    #        msrestazure.azure_operation.AzureOperationPoller
-    """Delete an availability set
-    :param azure.mgmt.compute.ComputeManagementClient compute_client:
-        compute client
-    :param str rg_name: resource group name
-    :param str as_name: availability set name
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
-    :return: async op poller
-    """
-    logger.debug('deleting availability set {}'.format(as_name))
-    return compute_client.availability_sets.delete(
-        resource_group_name=rg_name,
-        availability_set_name=as_name,
-    )
-
-
 def delete_storage_cluster(
         resource_client, compute_client, network_client, blob_client, config,
         sc_id, delete_data_disks=False, delete_virtual_network=False,
@@ -1522,7 +1634,7 @@ def delete_storage_cluster(
         if util.is_none_or_empty(as_name) or as_name in deleted:
             continue
         deleted.add(as_name)
-        _delete_availability_set(
+        resource.delete_availability_set(
             compute_client, rfs.storage_cluster.resource_group, as_name)
         logger.info('availability set {} deleted'.format(as_name))
     deleted.clear()

@@ -225,12 +225,14 @@ instead:
   cert      Certificate actions
   data      Data actions
   diag      Diagnostics actions
+  fed       Federation actions
   fs        Filesystem in Azure actions
   jobs      Jobs actions
   keyvault  KeyVault actions
   misc      Miscellaneous actions
   monitor   Monitoring actions
   pool      Pool actions
+  slurm     Slurm on Batch actions
   storage   Storage actions
 ```
 
@@ -238,6 +240,7 @@ instead:
 * `cert` commands deal with certificates to be used with Azure Batch
 * `data` commands deal with data ingress and egress from Azure
 * `diag` commands deal with diganostics for Azure Batch
+* `fed` commandsd del with Batch Shipyard Federations
 * `fs` commands deal with Batch Shipyard provisioned remote filesystems in
 Azure
 * `jobs` commands deal with Azure Batch jobs and tasks
@@ -246,6 +249,7 @@ Shipyard
 * `misc` commands are miscellaneous commands that don't fall into other
 categories
 * `pool` commands deal with Azure Batch pools
+* `slurm` commands deal with Slurm on Batch
 * `storage` commands deal with Batch Shipyard metadata on Azure Storage
 
 ## `account` Command
@@ -499,14 +503,15 @@ parts of a remote filesystem:
 ### `fs cluster` Command
 `fs cluster` command has the following sub-commands:
 ```
-  add      Create a filesystem storage cluster in Azure
-  del      Delete a filesystem storage cluster in Azure
-  expand   Expand a filesystem storage cluster in Azure
-  resize   Resize a filesystem storage cluster in Azure.
-  ssh      Interactively login via SSH to a filesystem...
-  start    Starts a previously suspended filesystem...
-  status   Query status of a filesystem storage cluster...
-  suspend  Suspend a filesystem storage cluster in Azure
+  add          Create a filesystem storage cluster in Azure
+  del          Delete a filesystem storage cluster in Azure
+  expand       Expand a filesystem storage cluster in Azure
+  orchestrate  Orchestrate a filesystem storage cluster in Azure with the...
+  resize       Resize a filesystem storage cluster in Azure.
+  ssh          Interactively login via SSH to a filesystem storage cluster...
+  start        Starts a previously suspended filesystem storage cluster in...
+  status       Query status of a filesystem storage cluster in Azure
+  suspend      Suspend a filesystem storage cluster in Azure
 ```
 As the `fs.yaml` configuration file can contain multiple storage cluster
 definitions, all `fs cluster` commands require the argument
@@ -534,6 +539,8 @@ storage cluster to perform actions against.
 the file server.
     * `--no-rebalance` rebalances the data and metadata among the disks for
       better data spread and performance after the disk is added to the array.
+* `orchestrate` will create the remote disks and the remote fs cluster as
+defined in the fs config file
 * `resize` resizes the storage cluster with additional virtual machines as
 specified in the configuration. This is an experimental feature.
 * `ssh` will interactively log into a virtual machine in the storage cluster.
@@ -914,6 +921,73 @@ configuration file
 configuration file to all nodes in the specified pool
 * `user del` will delete the SSH or RDP user defined in the pool
 configuration file from all nodes in the specified pool
+
+## `slurm` Command
+The `slurm` command has the following sub-commands:
+```
+  cluster  Slurm cluster actions
+  ssh      Slurm SSH actions
+```
+
+The `slurm cluster` sub-command has the following sub-sub-commands:
+```
+  create       Create a Slurm cluster with controllers and login nodes
+  destroy      Destroy a Slurm controller
+  orchestrate  Orchestrate a Slurm cluster with shared file system and
+               Batch...
+  status       Query status of a Slurm controllers and login nodes
+```
+
+The `slurm ssh` sub-command has the following sub-sub-commands:
+```
+  controller  Interactively login via SSH to a Slurm controller virtual...
+  login       Interactively login via SSH to a Slurm login/gateway virtual...
+  node        Interactively login via SSH to a Slurm compute node virtual...
+```
+
+* `cluster create` will create the Slurm controller and login portions of
+the cluster
+* `cluster destroy` will destroy the Slurm controller and login portions of
+the cluster
+    * `--delete-resource-group` will delete the entire resource group that
+      contains the Slurm resources. Please take care when using this
+      option as any resource in the resoure group is deleted which may be
+      other resources that are not Batch Shipyard related.
+    * `--delete-virtual-network` will delete the virtual network and all of
+      its subnets
+    * `--generate-from-prefix` will attempt to generate all resource names
+      using conventions used. This is helpful when there was an issue with
+      creation/deletion and the original virtual machine resources
+      cannot be enumerated. Note that OS disks cannot be deleted with this
+      option. Please use an alternate means (i.e., the Azure Portal) to
+      delete disks that may have been used by the Slurm resource VMs.
+    * `--no-wait` does not wait for deletion completion. It is not recommended
+      to use this parameter.
+* `cluster orchestrate` will orchestrate the entire Slurm cluster with a
+single Batch pool
+    * `--storage-cluster-id` will orchestrate the specified RemoteFS shared
+      file system
+* `cluster status` queries the status of the Slurm controller and login nodes
+* `ssh controller` will SSH into the Slurm controller nodes if permitted with
+the controller SSH user
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--offset` is the cardinal offset of the controller node
+    * `--tty` allocates a pseudo-terminal
+* `ssh login` will SSH into the Slurm login nodes with the cluster user
+identity
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--offset` is the cardinal offset of the login node
+    * `--tty` allocates a pseudo-terminal
+* `ssh node` will SSH into a Batch compute node with the cluster user identity
+    * `COMMAND` is an optional argument to specify the command to run. If your
+      command has switches, preface `COMMAND` with double dash as per POSIX
+      convention, e.g., `pool ssh -- sudo docker ps -a`.
+    * `--node-name` is the required Slurm node name
+    * `--tty` allocates a pseudo-terminal
 
 ## `storage` Command
 The `storage` command has the following sub-commands:

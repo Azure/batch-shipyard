@@ -1,0 +1,18 @@
+pool_specification:
+  id: slurmpool
+  virtual_network:
+    name: myvnet
+    resource_group: my-resource-group
+    address_space: 10.0.0.0/8
+    subnet:
+      name: batch-nodes
+      address_prefix: 10.1.0.0/16
+  vm_configuration:
+    platform_image:
+      offer: UbuntuServer
+      publisher: Canonical
+      sku: 18.04-LTS
+  vm_count:
+    dedicated: 0
+    low_priority: 0
+  vm_size: STANDARD_F2

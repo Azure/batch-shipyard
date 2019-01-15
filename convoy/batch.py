@@ -2798,7 +2798,10 @@ def get_node_counts(batch_client, config, pool_id=None):
                 account_list_pool_node_counts_options=batchmodels.
                 AccountListPoolNodeCountsOptions(
                     filter='poolId eq \'{}\''.format(pool_id)))
-            pc = list(pc)[0]
+            try:
+                pc = list(pc)[0]
+            except IndexError:
+                raise RuntimeError('pool {} does not exist'.format(pool_id))
     except batchmodels.BatchErrorException as ex:
         if 'pool does not exist' in ex.message.value:
             logger.error('{} pool does not exist'.format(pool_id))

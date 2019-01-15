@@ -31,7 +31,6 @@ from builtins import (  # noqa
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import datetime
-import hashlib
 import json
 import logging
 import os
@@ -81,6 +80,7 @@ _STORAGE_CONTAINERS = {
     'table_monitoring': None,
     'table_federation_global': None,
     'table_federation_jobs': None,
+    'table_slurm': None,
     'queue_federation': None,
     # TODO remove following in future release
     'table_registry': None,
@@ -120,6 +120,7 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['table_federation_jobs'] = sep + 'fedjobs'
     _STORAGE_CONTAINERS['table_federation_global'] = sep + 'fedglobal'
+    _STORAGE_CONTAINERS['table_slurm'] = sep + 'slurm'
     _STORAGE_CONTAINERS['queue_federation'] = sep + 'fed'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
@@ -427,8 +428,7 @@ def _add_global_resource(
                 'global resource type: {}'.format(grtype))
         for gr in resources:
             resource = '{}:{}'.format(prefix, gr)
-            resource_sha1 = hashlib.sha1(
-                resource.encode('utf8')).hexdigest()
+            resource_sha1 = util.hash_string(resource)
             logger.info('adding global resource: {} hash={}'.format(
                 resource, resource_sha1))
             table_client.insert_or_replace_entity(
@@ -619,15 +619,6 @@ def remove_resources_from_monitoring(
                         sc_id))
 
 
-def hash_string(strdata):
-    """Hash a string
-    :param str strdata: string data to hash
-    :rtype: str
-    :return: hexdigest
-    """
-    return hashlib.sha1(strdata.encode('utf8')).hexdigest()
-
-
 def hash_pool_and_service_url(pool_id, batch_service_url):
     """Hash a pool and service url
     :param str pool_id: pool id
@@ -635,7 +626,8 @@ def hash_pool_and_service_url(pool_id, batch_service_url):
     :rtype: str
     :return: hashed pool and service url
     """
-    return hash_string('{}${}'.format(batch_service_url.rstrip('/'), pool_id))
+    return util.hash_string('{}${}'.format(
+        batch_service_url.rstrip('/'), pool_id))
 
 
 def hash_federation_id(federation_id):
@@ -644,7 +636,7 @@ def hash_federation_id(federation_id):
     :rtype: str
     :return: hashed federation id
     """
-    fedhash = hash_string(federation_id)
+    fedhash = util.hash_string(federation_id)
     logger.debug('federation id {} -> {}'.format(federation_id, fedhash))
     return fedhash
 
@@ -656,7 +648,8 @@ def generate_job_id_locator_partition_key(federation_id, job_id):
     :rtype: str
     :return: hashed fedhash and job id
     """
-    return '{}${}'.format(hash_string(federation_id), hash_string(job_id))
+    return '{}${}'.format(
+        util.hash_string(federation_id), util.hash_string(job_id))
 
 
 def create_federation_id(
@@ -1185,7 +1178,7 @@ def _pack_sequences(ent, unique_id):
 
 def _retrieve_and_merge_sequence(
         table_client, pk, unique_id, kind, target, entity_must_not_exist):
-    rk = hash_string(target)
+    rk = util.hash_string(target)
     try:
         ent = table_client.get_entity(
             _STORAGE_CONTAINERS['table_federation_jobs'], pk, rk)
@@ -1335,7 +1328,7 @@ def list_blocked_actions_in_federation(
         except azure.common.AzureMissingResourceHttpError:
             pass
     else:
-        rk = hash_string(
+        rk = util.hash_string(
             job_id if util.is_not_empty(job_id) else job_schedule_id)
         try:
             entities = [table_client.get_entity(
@@ -1399,7 +1392,7 @@ def list_queued_actions_in_federation(
         except azure.common.AzureMissingResourceHttpError:
             pass
     else:
-        rk = hash_string(
+        rk = util.hash_string(
             job_id if util.is_not_empty(job_id) else job_schedule_id)
         try:
             entities = [table_client.get_entity(
@@ -1727,6 +1720,75 @@ def zap_unique_id_from_federation(
         print(json.dumps(rawout, sort_keys=True, indent=4))
 
 
+def create_slurm_partition(
+        table_client, queue_client, config, cluster_id, partition_name,
+        batch_service_url, pool_id, compute_node_type, max_compute_nodes,
+        hostlist):
+    partpool_hash = util.hash_string('{}-{}'.format(
+        partition_name, batch_service_url, pool_id))
+    # insert partition entity
+    entity = {
+        'PartitionKey': 'PARTITIONS${}'.format(cluster_id),
+        'RowKey': '{}${}'.format(partition_name, partpool_hash),
+        'BatchServiceUrl': batch_service_url,
+        'BatchPoolId': pool_id,
+        'ComputeNodeType': compute_node_type,
+        'HostList': hostlist,
+        'BatchShipyardSlurmVersion': 1,
+    }
+    logger.debug(
+        'inserting slurm partition {}:{} entity to table for '
+        'cluster {}'.format(partition_name, pool_id, cluster_id))
+    try:
+        table_client.insert_entity(_STORAGE_CONTAINERS['table_slurm'], entity)
+    except azure.common.AzureConflictHttpError:
+        logger.error('partition {}:{} cluster id {} already exists'.format(
+            partition_name, pool_id, cluster_id))
+        if util.confirm_action(
+                config, 'overwrite existing partition {}:{} for '
+                'cluster {}; this can result in undefined behavior'.format(
+                    partition_name, pool_id, cluster_id)):
+            table_client.insert_or_replace_entity(
+                _STORAGE_CONTAINERS['table_slurm'], entity)
+        else:
+            raise
+    # create queue
+    qname = '{}-{}'.format(cluster_id, partpool_hash)
+    logger.debug('creating queue: {}'.format(qname))
+    queue_client.create_queue(qname)
+
+
+def get_slurm_host_node_id(table_client, cluster_id, host):
+    node_id = None
+    try:
+        entity = table_client.get_entity(
+            _STORAGE_CONTAINERS['table_slurm'],
+            '{}${}'.format('HOSTS', cluster_id), host)
+        node_id = entity['BatchNodeId']
+    except (azure.common.AzureMissingResourceHttpError, KeyError):
+        pass
+    return node_id
+
+
+def clear_slurm_table_entities(table_client, cluster_id):
+    logger.debug('deleting slurm cluster {} entities in table'.format(
+        cluster_id))
+    tablename = _STORAGE_CONTAINERS['table_slurm']
+    keys = ['HOSTS', 'PARTITIONS']
+    for key in keys:
+        try:
+            pk = '{}${}'.format(key, cluster_id)
+            entities = table_client.query_entities(
+                tablename,
+                filter='PartitionKey eq \'{}\''.format(pk))
+        except azure.common.AzureMissingResourceHttpError:
+            pass
+        else:
+            batch_delete_entities(
+                table_client, tablename, pk, [x['RowKey'] for x in entities]
+            )
+
+
 def _check_file_and_upload(blob_client, file, key, container=None):
     # type: (azure.storage.blob.BlockBlobService, tuple, str, str) -> None
     """Upload file to blob storage if necessary
@@ -1823,6 +1885,38 @@ def upload_for_nonbatch(blob_client, files, kind):
             _STORAGEACCOUNT, _STORAGEACCOUNTEP,
             _STORAGE_CONTAINERS[key], file[0]))
     return ret
+
+
+def upload_to_container(blob_client, sa, files, container, gen_sas=True):
+    # type: (azure.storage.blob.BlockBlobService,
+    #        settings.StorageCredentialsSettings, List[tuple],
+    #        str, bool) -> dict
+    """Upload files to a specific blob storage container
+    :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param settings.StorageCredentialsSettings sa: storage account
+    :param list files: files to upload
+    :param str container: container
+    :param bool gen_sas: generate a SAS URL for blob
+    :rtype: dict
+    :return: sas url dict
+    """
+    sas_urls = {}
+    for file in files:
+        _check_file_and_upload(blob_client, file, None, container=container)
+        sas_urls[file[0]] = 'https://{}.blob.{}/{}/{}'.format(
+            sa.account, sa.endpoint, container, file[0],
+        )
+        if gen_sas:
+            sas_urls[file[0]] = '{}?{}'.format(
+                sas_urls[file[0]],
+                blob_client.generate_blob_shared_access_signature(
+                    container, file[0],
+                    permission=azureblob.BlobPermissions.READ,
+                    expiry=datetime.datetime.utcnow() +
+                    datetime.timedelta(days=_DEFAULT_SAS_EXPIRY_DAYS)
+                )
+            )
+    return sas_urls
 
 
 def create_global_lock_blob(blob_client, kind):
@@ -1982,7 +2076,8 @@ def clear_storage_containers(
                 continue
             if (key == 'table_monitoring' or
                     key == 'table_federation_global' or
-                    key == 'table_federation_jobs'):
+                    key == 'table_federation_jobs' or
+                    key == 'table_slurm'):
                 continue
             try:
                 _clear_table(
@@ -2052,7 +2147,7 @@ def create_storage_containers_nonbatch(
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
     :param azure.storage.queue.QueueService queue_service: queue client
-    :param str kind: kind, "remotefs", "monitoring" or "federation"
+    :param str kind: kind, "remotefs", "monitoring", "federation", or "slurm"
     """
     if kind == 'federation':
         create_storage_containers_nonbatch(
@@ -2141,6 +2236,46 @@ def delete_storage_containers_nonbatch(
                     queue_client.delete_queue(contname)
                 except azure.common.AzureMissingResourceHttpError:
                     logger.warning('queue not found: {}'.format(contname))
+
+
+def delete_file_share_directory(storage_settings, share, directory):
+    # type: (StorageCredentialsSettings, str, str) -> None
+    """Delete file share directory recursively
+    :param StorageCredentialsSettings storage_settings: storage settings
+    :param str share: share
+    :param str directory: directory to delete
+    """
+    file_client = azurefile.FileService(
+        account_name=storage_settings.account,
+        account_key=storage_settings.account_key,
+        endpoint_suffix=storage_settings.endpoint)
+    logger.info(
+        'recursively deleting files and directories in share {} at '
+        'directory {}'.format(share, directory))
+    del_dirs = []
+    dirs = [directory]
+    while len(dirs) > 0:
+        dir = dirs.pop()
+        try:
+            objects = file_client.list_directories_and_files(
+                share, directory_name=dir)
+        except azure.common.AzureMissingResourceHttpError:
+            logger.warning('directory {} does not exist on share {}'.format(
+                directory, share))
+            continue
+        del_dirs.append(dir)
+        for obj in objects:
+            path = '{}/{}'.format(dir or '', obj.name)
+            if type(obj) == azurefile.models.File:
+                logger.debug('deleting file {} on share {}'.format(
+                    path, share))
+                file_client.delete_file(share, '', path)
+            else:
+                dirs.append(path)
+                del_dirs.append(path)
+    for dir in del_dirs[::-1]:
+        logger.debug('deleting directory {} on share {}'.format(dir, share))
+        file_client.delete_directory(share, dir)
 
 
 def delete_storage_containers_boot_diagnostics(

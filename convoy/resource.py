@@ -639,13 +639,19 @@ def create_network_interface(
         logger.debug('assigning public ip {} to network interface {}'.format(
             pip.name, nic_name))
     # create network ip config
-    if private_ips is None:
+    if private_ips is None or private_ips[offset] is None:
+        logger.debug(
+            'assigning private ip dynamically to network interface {}'.format(
+                nic_name))
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
             name=vm_resource.hostname_prefix,
             subnet=subnet,
             public_ip_address=pip,
         )
     else:
+        logger.debug(
+            'assigning private ip {} statically to network '
+            'interface {}'.format(private_ips[offset], nic_name))
         network_ip_config = networkmodels.NetworkInterfaceIPConfiguration(
             name=vm_resource.hostname_prefix,
             subnet=subnet,
@@ -656,7 +662,8 @@ def create_network_interface(
             private_ip_address_version=networkmodels.IPVersion.ipv4,
 
         )
-    logger.debug('creating network interface: {}'.format(nic_name))
+    logger.debug('creating network interface: {} with nsg={}'.format(
+        nic_name, nsg.name if nsg else None))
     return network_client.network_interfaces.create_or_update(
         resource_group_name=vm_resource.resource_group,
         network_interface_name=nic_name,
@@ -671,10 +678,10 @@ def create_network_interface(
 
 def create_virtual_machine(
         compute_client, vm_resource, availset, nics, disks, ssh_pub_key,
-        offset, enable_msi=False):
+        offset, enable_msi=False, tags=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        settings.VmResource, computemodels.AvailabilitySet,
-    #        dict, dict, computemodels.SshPublicKey, int, bool) ->
+    #        dict, dict, computemodels.SshPublicKey, int, bool, dict) ->
     #        Tuple[int, msrestazure.azure_operation.AzureOperationPoller]
     """Create a virtual machine
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -686,6 +693,7 @@ def create_virtual_machine(
     :param computemodels.SshPublicKey ssh_pub_key: SSH public key
     :param int offset: vm number
     :param bool enable_msi: enable system MSI
+    :param dict tags: tags for VM
     :rtype: tuple
     :return: (offset int, msrestazure.azure_operation.AzureOperationPoller)
     """
@@ -784,43 +792,81 @@ def create_virtual_machine(
             ),
             identity=identity,
             zones=zone,
+            tags=tags,
         ),
     )
 
 
-def create_msi_virtual_machine_extension(
-        compute_client, vm_resource, vm_name, offset, verbose=False):
+def create_availability_set(
+        compute_client, vm_resource, vm_count, update_domains=None,
+        fault_domains=None):
     # type: (azure.mgmt.compute.ComputeManagementClient,
-    #        settings.VmResource, str, int,
-    #        bool) -> msrestazure.azure_operation.AzureOperationPoller
-    """Create a virtual machine extension
+    #        settings.VmResource, int, Optional[int], Optional[int]) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Create an availability set
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
-    :param settings.VmResource vm_resource: VM resource
-    :param str vm_name: vm name
-    :param int offset: vm number
-    :param bool verbose: verbose logging
-    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :param settings.VmResource vm_resource: VM Resource
+    :param int vm_count: VM count
+    :param int update_domains: update domains
+    :param int fault_domains: fault domains
+    :rtype: msrestazure.azure_operation.AzureOperationPoller or None
     :return: msrestazure.azure_operation.AzureOperationPoller
     """
-    vm_ext_name = settings.generate_virtual_machine_msi_extension_name(
-        vm_resource, offset)
-    logger.debug('creating virtual machine extension: {}'.format(vm_ext_name))
-    return compute_client.virtual_machine_extensions.create_or_update(
+    if vm_count <= 1:
+        logger.info('insufficient vm_count for availability set')
+        return None
+    if vm_resource.zone is not None:
+        logger.info('cannot create an availability set for zonal resource')
+        return None
+    as_name = settings.generate_availability_set_name(vm_resource)
+    # check and fail if as exists
+    try:
+        compute_client.availability_sets.get(
+            resource_group_name=vm_resource.resource_group,
+            availability_set_name=as_name,
+        )
+        raise RuntimeError('availability set {} exists'.format(as_name))
+    except msrestazure.azure_exceptions.CloudError as e:
+        if e.status_code == 404:
+            pass
+        else:
+            raise
+    logger.debug('creating availability set: {}'.format(as_name))
+    if update_domains is None:
+        update_domains = 20
+    if fault_domains is None:
+        fault_domains = 2
+    return compute_client.availability_sets.create_or_update(
         resource_group_name=vm_resource.resource_group,
-        vm_name=vm_name,
-        vm_extension_name=vm_ext_name,
-        extension_parameters=compute_client.virtual_machine_extensions.models.
-        VirtualMachineExtension(
+        availability_set_name=as_name,
+        # user maximums ud, fd from settings due to region variability
+        parameters=compute_client.virtual_machines.models.AvailabilitySet(
             location=vm_resource.location,
-            publisher='Microsoft.ManagedIdentity',
-            virtual_machine_extension_type='ManagedIdentityExtensionForLinux',
-            type_handler_version='1.0',
-            auto_upgrade_minor_version=True,
-            settings={
-                'port': 50342,
-            },
-        ),
+            platform_update_domain_count=update_domains,
+            platform_fault_domain_count=fault_domains,
+            sku=compute_client.virtual_machines.models.Sku(
+                name='Aligned',
+            ),
+        )
+    )
+
+
+def delete_availability_set(compute_client, rg_name, as_name):
+    # type: (azure.mgmt.compute.ComputeManagementClient, str, str) ->
+    #        msrestazure.azure_operation.AzureOperationPoller
+    """Delete an availability set
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param str rg_name: resource group name
+    :param str as_name: availability set name
+    :rtype: msrestazure.azure_operation.AzureOperationPoller
+    :return: async op poller
+    """
+    logger.debug('deleting availability set {}'.format(as_name))
+    return compute_client.availability_sets.delete(
+        resource_group_name=rg_name,
+        availability_set_name=as_name,
     )
 
 
@@ -955,11 +1001,11 @@ def deallocate_virtual_machine(compute_client, rg_name, vm_name):
 
 def get_ssh_info(
         compute_client, network_client, vm_res, ssh_key_prefix=None, nic=None,
-        pip=None):
+        pip=None, offset=0):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        settings.VmResource, str, networkmodes.NetworkInterface,
-    #        networkmodels.PublicIPAddress) ->
+    #        networkmodels.PublicIPAddress, int) ->
     #        Tuple[pathlib.Path, int, str, str]
     """Get SSH info to a federation proxy
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
@@ -970,10 +1016,11 @@ def get_ssh_info(
     :param str ssh_key_prefix: ssh key prefix
     :param networkmodels.NetworkInterface nic: network interface
     :param networkmodels.PublicIPAddress pip: public ip
+    :param int offset: offset
     :rtype: tuple
     :return (ssh private key, port, username, ip)
     """
-    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    vm_name = settings.generate_virtual_machine_name(vm_res, offset)
     try:
         vm = compute_client.virtual_machines.get(
             resource_group_name=vm_res.resource_group,
@@ -1009,10 +1056,11 @@ def get_ssh_info(
 
 
 def ssh_to_virtual_machine_resource(
-        compute_client, network_client, vm_res, ssh_key_prefix, tty, command):
+        compute_client, network_client, vm_res, ssh_key_prefix, tty, command,
+        offset=0):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
-    #        settings.VmResource, str, bool, tuple) -> None
+    #        settings.VmResource, str, bool, tuple, int) -> None
     """SSH to a node
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1022,9 +1070,11 @@ def ssh_to_virtual_machine_resource(
     :param str ssh_key_prefix: ssh key prefix
     :param bool tty: allocate pseudo-tty
     :param tuple command: command to execute
+    :param int offset: offset
     """
     ssh_priv_key, port, username, ip = get_ssh_info(
-        compute_client, network_client, vm_res, ssh_key_prefix=ssh_key_prefix)
+        compute_client, network_client, vm_res, ssh_key_prefix=ssh_key_prefix,
+        offset=offset)
     crypto.connect_or_exec_ssh_command(
         ip, port, ssh_priv_key, username, tty=tty, command=command)
 
@@ -1123,10 +1173,10 @@ def start_virtual_machine_resource(
 
 
 def stat_virtual_machine_resource(
-        compute_client, network_client, config, vm_res):
+        compute_client, network_client, config, vm_res, offset=0):
     # type: (azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient, dict,
-    #        settings.VmResource) -> None
+    #        settings.VmResource, int) -> None
     """Retrieve status of a virtual machine resource
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -1134,9 +1184,10 @@ def stat_virtual_machine_resource(
         network client
     :param dict config: configuration dict
     :param settings.VmResource vm_res: resource
+    :param int offset: offset
     """
     # retrieve all vms
-    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    vm_name = settings.generate_virtual_machine_name(vm_res, offset)
     try:
         vm = compute_client.virtual_machines.get(
             resource_group_name=vm_res.resource_group,

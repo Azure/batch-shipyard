@@ -1,0 +1,111 @@
+slurm:
+  storage_account_settings: mystorageaccount
+  location: <Azure region, e.g., eastus>
+  resource_group: my-slurm-rg
+  cluster_id: slurm
+  controller:
+    ssh:
+      username: shipyard
+      ssh_public_key: /path/to/rsa/publickey.pub
+      ssh_public_key_data: ssh-rsa ...
+      ssh_private_key: /path/to/rsa/privatekey
+      generated_file_export_path: null
+    public_ip:
+      enabled: true
+      static: false
+    virtual_network:
+      name: myvnet
+      resource_group: my-vnet-resource-group
+      existing_ok: false
+      address_space: 10.0.0.0/16
+      subnet:
+        name: my-slurm-controller-subnet
+        address_prefix: 10.0.1.0/24
+    network_security:
+      ssh:
+      - '*'
+      custom_inbound_rules:
+        myrule:
+          destination_port_range: 5000-5001
+          protocol: '*'
+          source_address_prefix:
+          - 1.2.3.4
+          - 5.6.7.0/24
+    vm_size: STANDARD_D2_V2
+    vm_count: 2
+    accelerated_networking: false
+    additional_prep_script: /path/to/some/script-controller.sh
+  login:
+    ssh:
+      username: shipyard
+      ssh_public_key: /path/to/rsa/publickey.pub
+      ssh_public_key_data: ssh-rsa ...
+      ssh_private_key: /path/to/rsa/privatekey
+      generated_file_export_path: null
+    public_ip:
+      enabled: true
+      static: false
+    virtual_network:
+      name: myvnet
+      resource_group: my-vnet-resource-group
+      existing_ok: false
+      address_space: 10.0.0.0/16
+      subnet:
+        name: my-slurm-login-subnet
+        address_prefix: 10.0.2.0/24
+    network_security:
+      ssh:
+      - '*'
+      custom_inbound_rules:
+        myrule:
+          destination_port_range: 5000-5001
+          protocol: '*'
+          source_address_prefix:
+          - 1.2.3.4
+          - 5.6.7.0/24
+    vm_size: STANDARD_D4_V2
+    vm_count: 1
+    accelerated_networking: false
+    additional_prep_script: /path/to/some/script-login.sh
+  shared_data_volumes:
+    nfs_server:
+      mount_path: /shared
+      store_slurmctld_state: true
+  slurm_options:
+    idle_reclaim_time: 00:15:00
+    elastic_partitions:
+      partition_1:
+        batch_pools:
+          mypool1:
+            account_service_url: https://...
+            compute_node_type: dedicated
+            max_compute_nodes: 32
+            weight: 0
+            features:
+            - arbitrary_constraint_1
+            reclaim_exclude_num_nodes: 8
+          mypool2:
+            account_service_url: https://...
+            compute_node_type: low_priority
+            max_compute_nodes: 128
+            weight: 1
+            features:
+            - arbitrary_constraint_2
+            reclaim_exclude_num_nodes: 0
+        max_runtime_limit: null
+        default: true
+      partition_2:
+        batch_pools:
+          mypool3:
+            account_service_url: https://...
+            compute_node_type: low_priority
+            max_compute_nodes: 256
+            weight: 2
+            features: []
+            reclaim_exclude_num_nodes: 0
+        max_runtime_limit: 1.12:00:00
+        default: false
+    unmanaged_partitions:
+      - partition: 'PartitionName=onprem Nodes=onprem-[0-31] Default=No MaxTime=INFINITE State=UP'
+        nodes:
+          - 'NodeName=onprem-[0-31] CPUs=512 Sockets=1 CoresPerSocket=8 ThreadsPerCore=2 RealMemory=512128 State=UNKNOWN'

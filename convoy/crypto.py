@@ -55,6 +55,9 @@ _SSH_KEY_PREFIX = 'id_rsa_shipyard'
 _REMOTEFS_SSH_KEY_PREFIX = '{}_remotefs'.format(_SSH_KEY_PREFIX)
 _MONITORING_SSH_KEY_PREFIX = '{}_monitoring'.format(_SSH_KEY_PREFIX)
 _FEDERATION_SSH_KEY_PREFIX = '{}_federation'.format(_SSH_KEY_PREFIX)
+_SLURM_CONTROLLER_SSH_KEY_PREFIX = '{}_slurm_controller'.format(
+    _SSH_KEY_PREFIX)
+_SLURM_LOGIN_SSH_KEY_PREFIX = '{}_slurm_login'.format(_SSH_KEY_PREFIX)
 # named tuples
 PfxSettings = collections.namedtuple(
     'PfxSettings', [
@@ -97,6 +100,19 @@ def get_federation_ssh_key_prefix():
     :return: ssh key prefix for federation proxy
     """
     return _FEDERATION_SSH_KEY_PREFIX
+
+
+def get_slurm_ssh_key_prefix(kind):
+    # type: (str) -> str
+    """Get slurm SSH key prefix
+    :param str kind: kind
+    :rtype: str
+    :return: ssh key prefix for slurm
+    """
+    if kind == 'controller':
+        return _SLURM_CONTROLLER_SSH_KEY_PREFIX
+    else:
+        return _SLURM_LOGIN_SSH_KEY_PREFIX
 
 
 def generate_rdp_password():

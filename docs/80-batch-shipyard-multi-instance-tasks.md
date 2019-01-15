@@ -148,7 +148,7 @@ the user that will execute the task should be present within the Docker
 container. SSH clients will also need to be transparently directed to
 connect to the alternate port and ignore input prompts since these
 programs will be run in non-interactive mode. If you cannot override your MPI
-runtime remote shell options, you can use an SSH config file stored in the
+runtime remote shell options, you can use an SSH `config` file stored in the
 respective root or user's `.ssh` directory alongside the keys:
 
 ```

@@ -80,7 +80,7 @@ def _create_virtual_machine_extension(
     vm_ext_name = settings.generate_virtual_machine_extension_name(
         vm_resource, offset)
     # try to get storage account resource group
-    ssel = settings.federation_storage_account_settings(config)
+    ssel = settings.other_storage_account_settings(config, 'federation')
     rg = settings.credentials_storage(config, ssel).resource_group
     # construct bootstrap command
     cmd = './{bsf}{a}{log}{p}{r}{s}{v}'.format(
@@ -348,18 +348,10 @@ def create_federation_proxy(
         )
         fqdn = pip.dns_settings.fqdn
         ipinfo = 'fqdn={} public_ip_address={}'.format(fqdn, pip.ip_address)
-    # install msi vm extension
-    async_ops['vmext'] = {}
-    async_ops['vmext'][0] = resource.AsyncOperation(
-        functools.partial(
-            resource.create_msi_virtual_machine_extension, compute_client, fs,
-            vms[0].name, 0, settings.verbose(config)),
-        max_retries=0,
-    )
-    logger.debug('waiting for virtual machine msi extensions to provision')
     for offset in async_ops['vmext']:
         async_ops['vmext'][offset].result()
     # install vm extension
+    async_ops['vmext'] = {}
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
             _create_virtual_machine_extension, compute_client, config, fs,

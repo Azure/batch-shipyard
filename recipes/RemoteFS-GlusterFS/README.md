@@ -45,20 +45,15 @@ there are at least 2 VMs, thus disks should be mapped in their respective
 cardinal entry.
 
 ### Commands to create the GlusterFS storage cluster
-After modifying the configuration files as required, then you must create
-the managed disks as the first step. The following assumes the configuration
-files are in the current working directory. First all of the managed disks
-used by the storage cluster must be provisioned:
+After modifying the configuration files as required, you can orchestrate
+the entire GlusterFS shared file system with `fs cluster orchestrate`. The
+`orchestrate` command wraps up the disk allocation (`fs disks add`) and file
+server creation (`fs cluster add`) into one command. The commands can be
+invoked separately if desired. The following assumes the configuration files
+are in the current working directory.
 
 ```shell
-SHIPYARD_CONFIGDIR=. ./shipyard fs disks add
-```
-
-After the managed disks have been created, then you can create the cluster
-with:
-
-```shell
-SHIPYARD_CONFIGDIR=. ./shipyard fs cluster add mystoragecluster
+SHIPYARD_CONFIGDIR=. ./shipyard fs cluster orchestrate mystoragecluster
 ```
 
 This assumes that the storage cluster id is `mystoragecluster`. After the

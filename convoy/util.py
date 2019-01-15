@@ -458,6 +458,16 @@ def compute_md5_for_file(file, as_base64, blocksize=65536):
             return hasher.hexdigest()
 
 
+def hash_string(strdata):
+    # type: (str) -> str
+    """Hash a string
+    :param str strdata: string data to hash
+    :rtype: str
+    :return: hexdigest
+    """
+    return hashlib.sha1(strdata.encode('utf8')).hexdigest()
+
+
 def subprocess_with_output(
         cmd, shell=False, cwd=None, env=None, suppress_output=False):
     # type: (str, bool, str, dict, bool) -> int
@@ -622,3 +632,25 @@ def ip_from_address_prefix(cidr, start_offset=None, max=None):
             last = first + max - 1
     for i in range(first, last + 1):
         yield socket.inet_ntoa(struct.pack('>L', i))
+
+
+def explode_arm_subnet_id(arm_subnet_id):
+    # type: (str) -> Tuple[str, str, str, str, str]
+    """Parses components from ARM subnet id
+    :param str arm_subnet_id: ARM subnet id
+    :rtype: tuple
+    :return: subid, rg, provider, vnet, subnet
+    """
+    tmp = arm_subnet_id.split('/')
+    try:
+        subid = tmp[2]
+        rg = tmp[4]
+        provider = tmp[6]
+        vnet = tmp[8]
+        subnet = tmp[10]
+    except IndexError:
+        raise ValueError(
+            'Error parsing arm_subnet_id. Make sure the virtual network '
+            'resource id is correct and is postfixed with the '
+            '/subnets/<subnet_id> portion.')
+    return subid, rg, provider, vnet, subnet

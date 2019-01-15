@@ -423,21 +423,11 @@ def create_monitoring_resource(
             async_ops['port80'] = resource.AsyncOperation(functools.partial(
                 resource.add_inbound_network_security_rule, network_client, ms,
                 'acme80', isr))
-    # install msi vm extension
-    async_ops['vmext'] = {}
-    async_ops['vmext'][0] = resource.AsyncOperation(
-        functools.partial(
-            resource.create_msi_virtual_machine_extension, compute_client, ms,
-            vms[0].name, 0, settings.verbose(config)),
-        max_retries=0,
-    )
-    logger.debug('waiting for virtual machine msi extensions to provision')
-    for offset in async_ops['vmext']:
-        async_ops['vmext'][offset].result()
     # ensure port 80 rule is ready
     if servconf.lets_encrypt_enabled and ms.public_ip.enabled:
         async_ops['port80'].result()
     # install vm extension
+    async_ops['vmext'] = {}
     async_ops['vmext'][0] = resource.AsyncOperation(
         functools.partial(
             _create_virtual_machine_extension, compute_client, config, ms,
