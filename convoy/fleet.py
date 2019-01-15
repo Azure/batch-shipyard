@@ -1682,6 +1682,7 @@ def _construct_pool_object(
     # add custom env vars to the batch start task
     if util.is_not_empty(
             pool_settings.environment_variables_keyvault_secret_id):
+        _check_keyvault_client(keyvault_client)
         env_vars = keyvault.get_secret(
             keyvault_client,
             pool_settings.environment_variables_keyvault_secret_id,
