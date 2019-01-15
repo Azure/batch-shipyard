@@ -364,3 +364,10 @@ mapping:
           default:
             type: str
             enum: ['kata_containers', 'runc']
+      environment_variables:
+        type: map
+        mapping:
+          regex;(.+):
+            type: text
+      environment_variables_keyvault_secret_id:
+        type: str

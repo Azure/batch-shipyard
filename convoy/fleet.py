@@ -1134,13 +1134,14 @@ def _pool_virtual_network_subnet_address_space_check(
 
 def _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config):
+        batch_client, blob_client, keyvault_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azure.storage.blob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.keyvault.KeyVaultClient, dict) -> None
     """Construct a pool add parameter object for create pool along with
     uploading resource files
     :param azure.mgmt.resource.resources.ResourceManagementClient
@@ -1153,6 +1154,7 @@ def _construct_pool_object(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     """
     # check shared data volume mounts before proceeding to allocate
@@ -1677,6 +1679,24 @@ def _construct_pool_object(
                 value=block_for_gr,
             )
         )
+    # add custom env vars to the batch start task
+    if util.is_not_empty(
+            pool_settings.environment_variables_keyvault_secret_id):
+        _check_keyvault_client(keyvault_client)
+        env_vars = keyvault.get_secret(
+            keyvault_client,
+            pool_settings.environment_variables_keyvault_secret_id,
+            value_is_json=True)
+        env_vars = util.merge_dict(
+            pool_settings.environment_variables, env_vars or {})
+    else:
+        env_vars = pool_settings.environment_variables
+    if util.is_not_empty(env_vars):
+        for key in env_vars:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(name=key, value=env_vars[key])
+            )
+    del env_vars
     # Linux-only settings
     if not is_windows:
         # singularity env vars
@@ -1726,13 +1746,14 @@ def _construct_pool_object(
 
 def _construct_auto_pool_specification(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config):
+        batch_client, blob_client, keyvault_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azure.storage.blob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.keyvault.KeyVaultClient, dict) -> None
     """Construct an auto pool specification
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1744,12 +1765,13 @@ def _construct_auto_pool_specification(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     """
     # upload resource files and construct pool add parameter object
     pool_settings, gluster_on_compute, pool = _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config)
+        batch_client, blob_client, keyvault_client, config)
     # convert pool add parameter object to a pool specification object
     poolspec = batchmodels.PoolSpecification(
         vm_size=pool.vm_size,
@@ -1777,13 +1799,14 @@ def _construct_auto_pool_specification(
 
 def _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config):
+        batch_client, blob_client, keyvault_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
-    #        azure.storage.blob.BlockBlobService, dict) -> None
+    #        azure.storage.blob.BlockBlobService,
+    #        azure.keyvault.KeyVaultClient, dict) -> None
     """Add a Batch pool to account
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1795,12 +1818,13 @@ def _add_pool(
     :param azure.batch.batch_service_client.BatchServiceClient batch_client:
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     """
     # upload resource files and construct pool add parameter object
     pool_settings, gluster_on_compute, pool = _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config)
+        batch_client, blob_client, keyvault_client, config)
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
@@ -3160,14 +3184,15 @@ def action_pool_listskus(batch_client, config):
 
 def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, table_client, config):
+        batch_client, blob_client, table_client, keyvault_client, config):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
     #        azure.storage.blob.BlockBlobService,
-    #        azure.cosmosdb.table.TableService, dict) -> None
+    #        azure.cosmosdb.table.TableService,
+    #        azure.keyvault.KeyVaultClient, dict) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -3180,6 +3205,7 @@ def action_pool_add(
         batch client
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.cosmosdb.table.TableService table_client: table client
+    :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     """
     _check_batch_client(batch_client)
@@ -3196,7 +3222,7 @@ def action_pool_add(
             blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, config
+        batch_client, blob_client, keyvault_client, config
     )
 
 
@@ -3774,7 +3800,7 @@ def action_jobs_add(
         # create autopool specification object
         autopool = _construct_auto_pool_specification(
             resource_client, compute_client, network_client, batch_mgmt_client,
-            batch_client, blob_client, config
+            batch_client, blob_client, keyvault_client, config
         )
         # check settings and warn
         _check_settings_for_auto_pool(config)

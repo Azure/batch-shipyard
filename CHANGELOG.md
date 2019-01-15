@@ -4,6 +4,8 @@
 
 ### Added
 - Sample Windows container recipes
+- Added environment variables to pool configuration, which allows users to
+setup Batch environment variables for the start task.
 
 ### Fixed
 - Some commands were incorrectly failing due to nodeid conflicts with
