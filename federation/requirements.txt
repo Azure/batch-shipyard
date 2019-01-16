@@ -1,10 +1,10 @@
-azure-batch==5.1.1
+azure-batch==6.0.0
 azure-cosmosdb-table==1.0.5
-azure-mgmt-compute==4.3.1
-azure-mgmt-resource==2.0.0
-azure-mgmt-storage==3.1.0
+azure-mgmt-compute==4.4.0
+azure-mgmt-resource==2.1.0
+azure-mgmt-storage==3.1.1
 azure-storage-blob==1.4.0
 azure-storage-queue==1.4.0
 msrestazure==0.5.1
 python-dateutil==2.7.5
-requests==2.20.1
+requests==2.21.0

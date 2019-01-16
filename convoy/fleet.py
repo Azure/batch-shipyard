@@ -179,6 +179,10 @@ _CASCADE_FILE = (
     'cascade.py',
     pathlib.Path(_ROOT_PATH, 'cascade/cascade.py')
 )
+_CASCADE_REQ_FILE = (
+    'requirements.txt',
+    pathlib.Path(_ROOT_PATH, 'cascade/requirements.txt')
+)
 _PERF_FILE = (
     'perf.py',
     pathlib.Path(_ROOT_PATH, 'cascade/perf.py')
@@ -1346,6 +1350,7 @@ def _construct_pool_object(
         _rflist.append(_IMAGE_BLOCK_FILE)
         if not bs.use_shipyard_docker_image:
             _rflist.append(_CASCADE_FILE)
+            _rflist.append(_CASCADE_REQ_FILE)
         if bs.store_timing_metrics:
             _rflist.append(_PERF_FILE)
     if pool_settings.ssh.hpn_server_swap:
@@ -1624,7 +1629,7 @@ def _construct_pool_object(
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
                 file_path=rf,
-                blob_source=sas_urls[rf])
+                http_url=sas_urls[rf])
         )
     if not native or delay_image_preload:
         pool.start_task.environment_settings.append(
@@ -1645,7 +1650,7 @@ def _construct_pool_object(
             pool.start_task.resource_files.append(
                 batchmodels.ResourceFile(
                     file_path=gpu_driver.name,
-                    blob_source=pool_settings.gpu_driver,
+                    http_url=pool_settings.gpu_driver,
                     file_mode='0755')
             )
     # add any additional specified resource files
@@ -1654,7 +1659,7 @@ def _construct_pool_object(
             pool.start_task.resource_files.append(
                 batchmodels.ResourceFile(
                     file_path=rf.file_path,
-                    blob_source=rf.blob_source,
+                    http_url=rf.blob_source,
                     file_mode=rf.file_mode,
                 )
             )
@@ -2028,7 +2033,7 @@ def _setup_glusterfs(
             common_resource_files=[
                 batchmodels.ResourceFile(
                     file_path=shell_script[0],
-                    blob_source=sas_urls[shell_script[0]],
+                    http_url=sas_urls[shell_script[0]],
                     file_mode='0755'),
             ],
         ),

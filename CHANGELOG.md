@@ -11,10 +11,18 @@
 - **Breaking Change:** the `additional_node_prep_commands` property has
 been migrated under the new `additional_node_prep` property as
 `commands` ([#252](https://github.com/Azure/batch-shipyard/issues/252))
+- Performance improvements to speed up job submission with large task
+factories or large amount of tasks. Verbosity of task generation progress
+has been increased which can be modified with `-v`.
+- Updated Docker CE to 18.09.1
+- Updated Singularity to 2.6.1
+- Updated blobxfer to 1.6.0 ([#255](https://github.com/Azure/batch-shipyard/issues/255))
+- Updated other dependencies to latest
 
 ### Fixed
 - Some commands were incorrectly failing due to nodeid conflicts with
 supplied parameters ([#249](https://github.com/Azure/batch-shipyard/issues/249))
+- Azure Function extension installation failure ([#260](https://github.com/Azure/batch-shipyard/issues/260))
 
 ## [3.6.1] - 2018-12-03
 ### Added

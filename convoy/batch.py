@@ -4382,7 +4382,7 @@ def _construct_task(
                 mis.common_resource_files.append(
                     batchmodels.ResourceFile(
                         file_path=rf.file_path,
-                        blob_source=rf.blob_source,
+                        http_url=rf.blob_source,
                         file_mode=rf.file_mode,
                     )
                 )
@@ -4519,7 +4519,7 @@ def _construct_task(
             batchtask.resource_files.append(
                 batchmodels.ResourceFile(
                     file_path=rf.file_path,
-                    blob_source=rf.blob_source,
+                    http_url=rf.blob_source,
                     file_mode=rf.file_mode,
                 )
             )
@@ -4615,7 +4615,7 @@ def _create_auto_scratch_volume(
             common_resource_files=[
                 batchmodels.ResourceFile(
                     file_path=shell_script[0],
-                    blob_source=sas_urls[shell_script[0]],
+                    http_url=sas_urls[shell_script[0]],
                     file_mode='0755'),
             ],
         ),
@@ -4710,6 +4710,10 @@ def add_jobs(
             'Cannot submit jobs to pool {} which is not in active '
             'state'.format(pool.id))
         return
+    if settings.verbose(config):
+        task_prog_mod = 1000
+    else:
+        task_prog_mod = 10000
     # pre-process jobs and tasks
     tempdisk = settings.temp_disk_mountpoint(config)
     docker_images = settings.global_resources_docker_images(config)
@@ -4759,14 +4763,15 @@ def add_jobs(
             allow_run_on_missing = True
         else:
             fed_constraints = None
-        logger.debug(
-            'collating or generating tasks: please be patient, this may '
-            'take a while if there is a large volume of tasks or if the '
-            'job contains large task_factory specifications')
+        if settings.verbose(config):
+            logger.debug(
+                'collating or generating tasks: please be patient, this may '
+                'take a while if there is a large volume of tasks or if the '
+                'job contains large task_factory specifications')
         ntasks = 0
         for task in settings.job_tasks(config, jobspec):
             ntasks += 1
-            if ntasks % 10000 == 0:
+            if ntasks % task_prog_mod == 0:
                 logger.debug('{} tasks collated so far'.format(ntasks))
             # check if task docker image is set in config.json
             di = settings.task_docker_image(task)
@@ -5210,7 +5215,7 @@ def add_jobs(
         ntasks = 0
         for _task in settings.job_tasks(config, jobspec):
             ntasks += 1
-            if ntasks % 10000 == 0:
+            if ntasks % task_prog_mod == 0:
                 logger.debug('{} tasks constructed so far'.format(ntasks))
             existing_tasklist, lasttaskid, lasttaskic, gpu, ib = \
                 _construct_task(
@@ -5283,7 +5288,7 @@ def add_jobs(
                 append(
                     batchmodels.ResourceFile(
                         file_path=_TASKMAP_PICKLE_FILE,
-                        blob_source=sas_url,
+                        http_url=sas_url,
                         file_mode='0640',
                     )
                 )

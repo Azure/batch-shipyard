@@ -349,7 +349,7 @@ def _create_batch_service_client(ctx):
         credentials = batchauth.SharedKeyCredentials(
             bc.account, bc.account_key)
     batch_client = batchsc.BatchServiceClient(
-        credentials, base_url=bc.account_service_url)
+        credentials, batch_url=bc.account_service_url)
     _modify_client_for_retry_and_user_agent(batch_client)
     return batch_client
 

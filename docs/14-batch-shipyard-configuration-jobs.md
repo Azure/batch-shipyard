@@ -322,9 +322,7 @@ directories under the job on the compute node where it ran after the task
 completes. The format for this property is a timedelta with a string
 representation of "d.HH:mm:ss". For example, "1.12:00:00" would allow the
 compute node to clean up all of the task directories under this job
-36 hours after the task completed. The default, if unspecified, is
-effectively infinite - i.e., task data is retained forever on the compute
-node that ran the task.
+36 hours after the task completed. The default, if unspecified, is 7 days.
 * (optional) `priority` is an integral number that indicates the job priority.
 Tasks within jobs with higher priority are run ahead of those with lower
 priority, however, tasks that are already running with lower priority are
@@ -973,9 +971,7 @@ directory on the compute node where it ran after the task completes.
 The format for this property is a timedelta with a string representation
 of "d.HH:mm:ss". For example, "1.12:00:00" would allow the compute node
 to clean up this task's directory 36 hours after the task completed. The
-default, if unspecified, is effectively infinite - i.e., task data is
-retained forever on the compute node that ran the task. This overrides the
-job-level property.
+default, if unspecified, is 7 days. This overrides the job-level property.
 * (optional) `exit_conditions` sets the exit conditions for this task.
 Currently only the `default` exit conditions can be set which react to
 any non-zero exit code. This and any nested property within `exit_conditions`
