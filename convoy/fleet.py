@@ -130,6 +130,28 @@ _LIS_PACKAGE = {
     'intermediate': 'lis_compact.tar',
     'target_compact': 'lis_compact.tar.gz'
 }
+_BATCH_INSIGHTS = {
+    'linux': {
+        'url': (
+            'https://github.com/Azure/batch-insights/releases/download/v'
+            '1.1.0/batch-insights'
+        ),
+        'sha256': (
+            'd42c3cbc98a04a4c3d456caa0c8da6d044b6b4986177367c3e6cc21e83f71612'
+        ),
+        'target': 'batch-insights'
+    },
+    'windows': {
+        'url': (
+            'https://github.com/Azure/batch-insights/releases/download/v'
+            '1.1.0/batch-insights.exe'
+        ),
+        'sha256': (
+            'df22b1f0ca4730ce8c732fae23b7b9008490e3f993c8e50f0020561705f53e17'
+        ),
+        'target': 'batch-insights.exe'
+    }
+}
 _PROMETHEUS = {
     'node_exporter': {
         'url': (
@@ -443,6 +465,28 @@ def _setup_intel_mpi_rt_package(config, pool_settings):
             logger.info('Intel Simplified Software License accepted')
         # download package
         _download_file('Intel MPI Runtime', pkg, _INTEL_MPI_RT_PACKAGE)
+    return pkg
+
+
+def _setup_batch_insights_package(config, pool_settings):
+    # type: (dict, settings.PoolSettings) -> pathlib.Path
+    """Set up the Batch insights package
+    :param dict config: configuration dict
+    :param settings.PoolSettings pool_settings: pool settings
+    :rtype: pathlib.Path
+    :return: package path
+    """
+    if settings.is_windows_pool(config, pool_settings.vm_configuration):
+        os = 'windows'
+    else:
+        os = 'linux'
+    pkg = _RESOURCES_PATH / _BATCH_INSIGHTS[os]['target']
+    # check to see if package is downloaded
+    if (not pkg.exists() or
+            util.compute_sha256_for_file(pkg, False) !=
+            _BATCH_INSIGHTS[os]['sha256']):
+        # download package
+        _download_file('Batch Insights', pkg, _BATCH_INSIGHTS[os])
     return pkg
 
 
@@ -1355,6 +1399,16 @@ def _construct_pool_object(
             _rflist.append((ne_pkg.name, ne_pkg))
         if pool_settings.prometheus.ca_enabled:
             _rflist.append((ca_pkg.name, ca_pkg))
+    # batch insights settings
+    if pool_settings.batch_insights_enabled:
+        if (util.is_none_or_empty(bc.app_insights_application_id) or
+                util.is_none_or_empty(bc.app_insights_instrumentation_key)):
+            raise ValueError(
+                'Application Insights Instrumentation Key or Application '
+                'Id is invalid. Please specify the proper values in '
+                'credentials under batch')
+        bi_pkg = _setup_batch_insights_package(config, pool_settings)
+        _rflist.append((bi_pkg.name, bi_pkg))
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
@@ -1424,10 +1478,11 @@ def _construct_pool_object(
         # create start task commandline
         start_task.append(
             ('powershell -ExecutionPolicy Unrestricted -command '
-             '{npf}{a}{e}{u}{v}{x}').format(
+             '{npf}{a}{e}{q}{u}{v}{x}').format(
                  npf=_NODEPREP_WINDOWS_FILE[0],
                  a=' -a' if azurefile_vd else '',
                  e=' -e {}'.format(pfx.sha1) if encrypt else '',
+                 q=' -q' if pool_settings.batch_insights_enabled else '',
                  u=' -u' if util.is_not_empty(custom_image_na) else '',
                  v=' -v {}'.format(__version__),
                  x=' -x {}'.format(data._BLOBXFER_VERSION))
@@ -1436,8 +1491,8 @@ def _construct_pool_object(
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
-            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{k}{lis}{m}{n}{o}{p}{r}{s}{t}{u}'
-             '{v}{w}{x}{y}{z}').format(
+            ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{k}{lis}{m}{n}{o}{p}{q}{r}{s}'
+             '{t}{u}{v}{w}{x}{y}{z}').format(
                 npf=_NODEPREP_FILE[0],
                 a=' -a' if azurefile_vd else '',
                 b=' -b' if util.is_not_empty(block_for_gr) else '',
@@ -1462,6 +1517,7 @@ def _construct_pool_object(
                         bs.fallback_registry) else '',
                 p=' -p {}'.format(bs.storage_entity_prefix) if (
                     bs.storage_entity_prefix) else '',
+                q=' -q' if pool_settings.batch_insights_enabled else '',
                 r=' -r' if pool_settings.ssh.allow_docker_access else '',
                 s=' -s {}'.format(torrentflags),
                 t=' -t' if settings.can_tune_tcp(
@@ -1679,27 +1735,6 @@ def _construct_pool_object(
                 value=block_for_gr,
             )
         )
-    # add custom env vars to the batch start task
-    if util.is_not_empty(
-            pool_settings.additional_node_prep.
-            environment_variables_keyvault_secret_id):
-        _check_keyvault_client(keyvault_client)
-        env_vars = keyvault.get_secret(
-            keyvault_client,
-            pool_settings.additional_node_prep.
-            environment_variables_keyvault_secret_id,
-            value_is_json=True)
-        env_vars = util.merge_dict(
-            pool_settings.additional_node_prep.environment_variables,
-            env_vars or {})
-    else:
-        env_vars = pool_settings.additional_node_prep.environment_variables
-    if util.is_not_empty(env_vars):
-        for key in env_vars:
-            pool.start_task.environment_settings.append(
-                batchmodels.EnvironmentSetting(name=key, value=env_vars[key])
-            )
-    del env_vars
     # Linux-only settings
     if not is_windows:
         # singularity env vars
@@ -1744,6 +1779,41 @@ def _construct_pool_object(
                         value=','.join(pool_settings.prometheus.ca_options)
                     )
                 )
+    # batch insights
+    if pool_settings.batch_insights_enabled:
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='APP_INSIGHTS_INSTRUMENTATION_KEY',
+                value=bc.app_insights_instrumentation_key,
+            )
+        )
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='APP_INSIGHTS_APP_ID',
+                value=bc.app_insights_application_id,
+            )
+        )
+    # add custom env vars to the batch start task
+    if util.is_not_empty(
+            pool_settings.additional_node_prep.
+            environment_variables_keyvault_secret_id):
+        _check_keyvault_client(keyvault_client)
+        env_vars = keyvault.get_secret(
+            keyvault_client,
+            pool_settings.additional_node_prep.
+            environment_variables_keyvault_secret_id,
+            value_is_json=True)
+        env_vars = util.merge_dict(
+            pool_settings.additional_node_prep.environment_variables,
+            env_vars or {})
+    else:
+        env_vars = pool_settings.additional_node_prep.environment_variables
+    if util.is_not_empty(env_vars):
+        for key in env_vars:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(name=key, value=env_vars[key])
+            )
+    del env_vars
     return (pool_settings, gluster_on_compute, pool)
 
 

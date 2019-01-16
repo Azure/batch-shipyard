@@ -3,17 +3,18 @@
 ## [Unreleased]
 
 ### Added
-- Sample Windows container recipes
-- Support environment variables on additional node prep commands
+- Batch Insights integration ([#259](https://github.com/Azure/batch-shipyard/issues/259))
+- Support environment variables on additional node prep commands ([#253](https://github.com/Azure/batch-shipyard/pull/253))
+- Sample Windows container recipes ([#246](https://github.com/Azure/batch-shipyard/issues/246))
 
 ### Changed
 - **Breaking Change:** the `additional_node_prep_commands` property has
 been migrated under the new `additional_node_prep` property as
-`commands`.
+`commands` ([#252](https://github.com/Azure/batch-shipyard/issues/252))
 
 ### Fixed
 - Some commands were incorrectly failing due to nodeid conflicts with
-supplied parameters
+supplied parameters ([#249](https://github.com/Azure/batch-shipyard/issues/249))
 
 ## [3.6.1] - 2018-12-03
 ### Added

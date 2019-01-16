@@ -40,7 +40,8 @@ regions
 * Automated, integrated
 [resource monitoring](http://batch-shipyard.readthedocs.io/en/latest/66-batch-shipyard-resource-monitoring/)
 with [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/)
-for Batch pools and RemoteFS storage clusters
+for Batch pools and RemoteFS storage clusters or through
+[Batch Insights](https://github.com/Azure/batch-insights)
 * [Standalone Remote Filesystem Provisioning](http://batch-shipyard.readthedocs.io/en/latest/65-batch-shipyard-remote-fs/)
 with integration to auto-link these filesystems to compute nodes with
 support for [NFS](https://en.wikipedia.org/wiki/Network_File_System) and

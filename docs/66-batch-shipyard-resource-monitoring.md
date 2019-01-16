@@ -20,6 +20,13 @@ challenging. Securing these resources adds additional complexity.
 Fortunately, Batch Shipyard has commands that can help setup such monitoring
 resources quickly.
 
+*Nota bene:* if you want a simple, non-realtime, host-only based
+monitoring solution restricted to Batch pools, you can enable
+[Batch Insights](https://github.com/Azure/batch-insights) instead of
+the solution described below. You can view the monitored Batch pools
+through [Batch Explorer](https://github.com/Azure/BatchExplorer). Please
+see the pool and credentials documentation for more information.
+
 ## Major Features
 * Supports monitoring Azure Batch Pools and Batch Shipyard provisioned
 storage clusters

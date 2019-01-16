@@ -338,6 +338,8 @@ mapping:
                 type: text
           environment_variables_keyvault_secret_id:
             type: str
+      batch_insights_enabled:
+        type: bool
       prometheus:
         type: map
         mapping:

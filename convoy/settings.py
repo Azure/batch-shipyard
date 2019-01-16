@@ -194,7 +194,7 @@ PoolSettings = collections.namedtuple(
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
-        'per_job_auto_scratch',
+        'per_job_auto_scratch', 'batch_insights_enabled',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -236,6 +236,8 @@ BatchCredentialsSettings = collections.namedtuple(
     'BatchCredentialsSettings', [
         'aad', 'account', 'account_key', 'account_service_url',
         'resource_group', 'subscription_id', 'location',
+        'app_insights_instrumentation_key',
+        'app_insights_application_id',
     ]
 )
 StorageCredentialsSettings = collections.namedtuple(
@@ -1341,6 +1343,8 @@ def pool_settings(config):
         container_runtimes_default=cr_default,
         per_job_auto_scratch=_kv_read(
             conf, 'per_job_auto_scratch', default=False),
+        batch_insights_enabled=_kv_read(
+            conf, 'batch_insights_enabled', default=False),
     )
 
 
@@ -1694,6 +1698,7 @@ def credentials_batch(config):
             'Both account_key and aad settings specified for batch '
             'credentials. If using Azure Active Directory, then do not '
             'specify an account_key.')
+    app_insights = _kv_read_checked(conf, 'application_insights', default={})
     return BatchCredentialsSettings(
         aad=aad,
         account=account,
@@ -1702,6 +1707,10 @@ def credentials_batch(config):
         resource_group=resource_group,
         location=location,
         subscription_id=subscription_id,
+        app_insights_instrumentation_key=_kv_read_checked(
+            app_insights, 'instrumentation_key'),
+        app_insights_application_id=_kv_read_checked(
+            app_insights, 'application_id'),
     )
 
 

@@ -127,6 +127,7 @@ pool_specification:
   gpu:
     nvidia_driver:
       source: https://some.url
+  batch_insights_enabled: false
   prometheus:
     node_exporter:
       enabled: false
@@ -546,6 +547,11 @@ the driver for the `vm_size` specified.
     * `nvidia_driver` property contains the following required members:
         * `source` is the source url to download the driver. This should be
           the silent-installable driver package.
+* (optional) `batch_insights_enabled` property enables
+[Batch Insights](https://github.com/Azure/batch-insights) monitoring for
+the pool. This provides simple non-realtime, host-based monitoring through
+[Batch Explorer](https://github.com/Azure/BatchExplorer). The default is
+`false`.
 * (optional) `prometheus` properties are to control if collectors for metrics
 to export to [Prometheus](https://prometheus.io/) monitoring are enabled.
 Note that all exporters do not have their ports mapped (NAT) on the load

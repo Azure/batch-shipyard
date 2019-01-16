@@ -88,6 +88,7 @@ fi
 # globals
 azureblob=0
 azurefile=0
+batch_insights=0
 beeond=0
 blobxferversion=latest
 block=
@@ -114,7 +115,7 @@ singularity_basedir=
 singularityversion=
 
 # process command line options
-while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:yz:" opt; do
+while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_nodeprep.sh parameters"
@@ -134,6 +135,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:yz:" opt; do
             echo "-n native mode"
             echo "-o [fallback registry] fallback registry"
             echo "-p [prefix] storage container prefix"
+            echo "-q enable batch insights"
             echo "-r enable azure batch docker group"
             echo "-s [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
             echo "-t optimize network TCP settings"
@@ -190,6 +192,9 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:rs:tuv:wx:yz:" opt; do
             ;;
         p)
             prefix="--prefix $OPTARG"
+            ;;
+        q)
+            batch_insights=1
             ;;
         r)
             docker_group="\"group\": \"_azbatchsudogrp\","
@@ -1526,6 +1531,18 @@ install_and_start_cadvisor() {
     log INFO "Prometheus cAdvisor enabled."
 }
 
+install_and_start_batch_insights() {
+    if [ $batch_insights -eq 0 ]; then
+        log INFO "Batch Insights disabled."
+        return
+    else
+        log INFO "Installing Batch Insights"
+    fi
+    chmod +x batch-insights
+    ./batch-insights > node-stats.log &
+    log INFO "Batch Insights enabled."
+}
+
 log INFO "Prep start"
 echo "Configuration:"
 echo "--------------"
@@ -1537,6 +1554,7 @@ echo "Blobxfer version: $blobxferversion"
 echo "Singularity version: $singularityversion"
 echo "User mountpoint: $USER_MOUNTPOINT"
 echo "Mount path: $MOUNTS_PATH"
+echo "Batch Insights: $batch_insights"
 echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
 echo "Network optimization: $networkopt"
 echo "Encryption cert thumbprint: $encrypted"
@@ -1574,6 +1592,9 @@ check_for_buggy_ntfs_mount
 
 # save startup stderr/stdout
 save_startup_to_volatile
+
+# start batch insights
+install_and_start_batch_insights
 
 # install LIS if required first (lspci won't work on certain distros without it)
 install_lis

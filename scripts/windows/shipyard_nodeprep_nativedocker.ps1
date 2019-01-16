@@ -1,6 +1,7 @@
 param(
 	[switch] $a,  # mount azurefile shares
 	[String] $e,  # encrypted sha1 cert
+	[switch] $q,  # batch insights
 	[switch] $u,  # custom image
 	[String] $v,  # batch-shipyard version
 	[String] $x   # blobxfer version
@@ -50,6 +51,29 @@ New-Item -ItemType file $VolatileStartupSave -Force
 
 # check for docker
 Exec { docker info }
+
+# start batch insights
+if ($q) {
+    Write-Host "Enabling Batch Insights"
+    $bi = Join-Path $Env:AZ_BATCH_TASK_WORKING_DIR -ChildPath "batch-insights.exe"
+    $biapp = "batchappinsights"
+    # remove scheduled task if it exists
+    $exists = Get-ScheduledTask | Where-Object {$_.TaskName -like $biapp }
+    if ($exists)
+    {
+        Write-Host "$biapp scheduled task already exists"
+        Stop-ScheduledTask -TaskName $biapp
+        Unregister-ScheduledTask -Confirm:$false -TaskName $biapp
+    }
+    # install scheduled task
+    Write-Host "Installing $biapp scheduled task"
+    $action = New-ScheduledTaskAction -WorkingDirectory $env:AZ_BATCH_TASK_WORKING_DIR -Execute 'Powershell.exe' -Argument "Start-Process $bi -ArgumentList ('$env:AZ_BATCH_POOL_ID', '$env:AZ_BATCH_NODE_ID', '$env:APP_INSIGHTS_INSTRUMENTATION_KEY') -RedirectStandardOutput .\node-stats.log -RedirectStandardError .\node-stats.err.log -NoNewWindow"
+    $principal = New-ScheduledTaskPrincipal -UserID 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -Action $action -Principal $principal -TaskName $biapp -Force
+    Start-ScheduledTask -TaskName $biapp
+    Get-ScheduledTask -TaskName $biapp
+    Write-Host "Batch Insights enabled"
+}
 
 # mount azure file shares
 if ($a) {

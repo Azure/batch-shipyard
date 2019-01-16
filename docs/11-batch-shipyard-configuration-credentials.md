@@ -34,6 +34,9 @@ credentials:
     account_key_keyvault_secret_id: https://<vault_name>.vault.azure.net/secrets/<secret_id>
     account_service_url: https://<batch_account_name>.<region>.batch.azure.com/
     resource_group: resource-group-of-batch-account
+    application_insights:
+      application_id: 01234...
+      instrumentation_key: 01234...
   storage:
     aad:
       authority_url: https://login.microsoftonline.com
@@ -209,6 +212,11 @@ the Azure CLI.
       specified KeyVault and replace the `account_key` value as returned by
       Azure KeyVault. This cannot be used with Batch accounts authenticated
       with `aad`.
+    * (optional) `application_insights` property defines the Azure
+      Application Insights instance to use to enable
+      [Batch Insights](https://github.com/Azure/batch-insights).
+        * (required) `application_id` is the application id
+        * (required) `instrumentation_key` is the instrumentation key to use
 
 ### Storage: `storage`
 * (required) Multiple storage properties can be defined which references
