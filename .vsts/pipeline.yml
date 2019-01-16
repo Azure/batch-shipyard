@@ -94,7 +94,7 @@ jobs:
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
       - powershell: |
           Invoke-WebRequest "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile "nuget.exe"
-          $env:GIT_TAG | Out-File site-extension\\version.txt -Force -NoNewline
+          $env:GIT_TAG | Out-File site-extension\\version.txt -Force -NoNewline -Encoding ASCII
           Get-Content -Path site-extension\\version.txt
           $nugetArtifact = 'BatchShipyard.' + $env:NUGET_PACKAGE_VERSION + '.nupkg'
           echo "##vso[task.setvariable variable=NUGET_ARTIFACT;]$nugetArtifact"
@@ -111,7 +111,7 @@ jobs:
         condition: and(succeeded(), ne(variables['NUGET_PACKAGE_VERSION'], ''))
       - powershell: |
           $versionTag = "bin\\version_tag.txt"
-          $env:GIT_TAG | Out-File $versionTag -Force -NoNewline
+          $env:GIT_TAG | Out-File $versionTag -Force -NoNewline -Encoding ASCII
           Get-Content -Path $versionTag
           copy .vsts\\populate_tag.ps1 bin\\populate_tag.ps1
           dir bin
