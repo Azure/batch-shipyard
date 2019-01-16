@@ -9,7 +9,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.1'
+          PYENV_VERSION: '3.7.2'
     steps:
       - task: InstallPython@1
         inputs:
@@ -17,11 +17,11 @@ jobs:
       - powershell: |
           gci env:* | sort-object name
           python -m pip install --upgrade pip
-          pip install --upgrade setuptools wheel
-          pip install -r requirements.txt
-          pip install --no-deps -r req_nodeps.txt
-          pip install flake8
-          pip list --format=columns --outdated
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps -r req_nodeps.txt
+          python -m pip install flake8
+          python -m pip list --format=columns --outdated
         displayName: Fetch Dependencies
       - powershell: |
           flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy\*.py
@@ -76,7 +76,7 @@ jobs:
           (Get-Content $fileverInfo).replace('{BUILDVER_DOTTED}', $env:BUILDVER_DOTTED) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{BRANCH_GITSHA1}', $branchGitSha1) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{EXE}', $env:ARTIFACT_CLI) | Set-Content $fileverInfo
-          pip install virtualenv
+          python -m pip install virtualenv
           python -m virtualenv pyi
         displayName: Pre-build
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
@@ -146,7 +146,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.1'
+          PYENV_VERSION: '3.7.2'
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -252,7 +252,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.1'
+          PYENV_VERSION: '3.7.2'
     steps:
       - task: UsePythonVersion@0
         inputs:
