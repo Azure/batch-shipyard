@@ -1000,11 +1000,12 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # backward compat for CentOS HPC 7.1, 7.3 and normal 7.4, 7.5
+    # backward compat for CentOS HPC 7.1, 7.3, 7.4 and normal 7.4, 7.5, 7.6
     if publisher == 'openlogic':
         if ((offer == 'centos-hpc' and
-                (sku == '7.1' or sku == '7.3')) or
-                (offer == 'centos' and (sku == '7.4' or sku == '7.5'))):
+                (sku == '7.1' or sku == '7.3' or sku == '7.4')) or
+                (offer == 'centos' and
+                 (sku == '7.4' or sku == '7.5' or sku == '7.6'))):
             return ({
                 'publisher': publisher,
                 'offer': offer,

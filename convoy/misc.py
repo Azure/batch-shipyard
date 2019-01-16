@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 # global defines
-_SINGULARITY_VERSION = '2.6.0'
+_SINGULARITY_VERSION = '2.6.1'
 _TENSORBOARD_LOG_ARGS = frozenset((
     '--tensorboard_logdir', '-tensorboard_logdir', '--logdir', '--log_dir',
     '--log-dir',

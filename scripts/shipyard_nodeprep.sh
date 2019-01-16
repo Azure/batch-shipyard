@@ -6,8 +6,8 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.09.0
-DOCKER_CE_VERSION_CENTOS=18.09.0
+DOCKER_CE_VERSION_DEBIAN=18.09.1
+DOCKER_CE_VERSION_CENTOS=18.09.1
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
 NVIDIA_DOCKER_VERSION=2.0.3
@@ -561,7 +561,7 @@ install_kernel_devel_package() {
             if [ -e /dev/infiniband/uverbs0 ]; then
                 # HPC distros have pinned repos
                 install_packages "${kernel_devel_package}"
-            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]]; then
+            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]]; then
                 local pkg
                 pkg="${kernel_devel_package}.rpm"
                 download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
@@ -859,6 +859,8 @@ install_singularity() {
         return
     fi
     log DEBUG "Setting up Singularity for $offer $sku"
+    # install squashfs-tools for mksquashfs
+    install_packages squashfs-tools
     # fetch docker image for singularity bits
     local di="alfpark/singularity:${singularityversion}-${offer}-${sku}"
     docker_pull_image "$di"
@@ -1593,9 +1595,6 @@ check_for_buggy_ntfs_mount
 # save startup stderr/stdout
 save_startup_to_volatile
 
-# start batch insights
-install_and_start_batch_insights
-
 # install LIS if required first (lspci won't work on certain distros without it)
 install_lis
 
@@ -1689,10 +1688,6 @@ set -e
 # set sudoers to not require tty
 sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 
-# install prometheus collectors
-install_and_start_node_exporter
-install_and_start_cadvisor
-
 # install docker host engine on non-native
 if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
     install_docker_host_engine
@@ -1725,6 +1720,13 @@ if [ -n "$sc_args" ]; then
         install_storage_cluster_dependencies
     fi
 fi
+
+# start batch insights
+install_and_start_batch_insights
+
+# install prometheus collectors
+install_and_start_node_exporter
+install_and_start_cadvisor
 
 # install dependencies if not using cascade container
 if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; }; then

@@ -4,7 +4,7 @@ FROM ubuntu:18.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 WORKDIR /tmp
-ENV SINGULARITY_VERSION=2.6.0
+ENV SINGULARITY_VERSION=2.6.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
