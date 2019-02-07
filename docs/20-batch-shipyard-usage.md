@@ -791,13 +791,14 @@ The `pool` command has the following sub-commands:
   add        Add a pool to the Batch account
   autoscale  Autoscale actions
   del        Delete a pool from the Batch account
+  exists     Check if a pool exists
   images     Container images actions
   list       List all pools in the Batch account
-  listskus   List available VM configurations available to...
+  listskus   List available VM configurations available to the Batch account
   nodes      Compute node actions
-  rdp        Interactively login via RDP to a node in a...
+  rdp        Interactively login via RDP to a node in a pool
   resize     Resize a pool
-  ssh        Interactively login via SSH to a node in a...
+  ssh        Interactively login via SSH to a node in a pool
   stats      Get statistics about a pool
   user       Remote user actions
 ```
@@ -836,6 +837,9 @@ The `pool user` sub-command has the following sub-sub-commands:
 
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
+    * `--recreate` will delete and recreate the pool if there already exists
+      a pool with the same id. Note that you should only use this option
+      if you are certain that it will not cause side-effects.
 * `autoscale disable` will disable autoscale on the pool
 * `autoscale enable` will enable autoscale on the pool
 * `autoscale evaluate` will evaluate the autoscale formula in the pool
@@ -850,6 +854,9 @@ Azure Storage.
     * `--poolid` will delete the specified pool instead of the pool from the
       pool configuration file
     * `--wait` will wait for deletion to complete
+* `exists` will check if a pool exists under the Batch account
+    * `--pool-id` will query the specified pool instead of the pool from the
+      pool configuration file
 * `images list` will query the nodes in the pool for Docker images. Common
 and mismatched images will be listed. Requires a provisioned SSH user and
 private key.

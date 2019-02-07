@@ -13,6 +13,7 @@ NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
 NVIDIA_DOCKER_VERSION=2.0.3
 GLUSTER_VERSION_DEBIAN=4.1
 GLUSTER_VERSION_CENTOS=41
+IMDS_VERSION=2018-02-01
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="docker-ce=5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
@@ -113,6 +114,8 @@ sc_args=
 shipyardversion=
 singularity_basedir=
 singularityversion=
+vm_size=
+vm_size_is_rdma=
 
 # process command line options
 while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
@@ -292,6 +295,20 @@ EOF
     if [ "$2" -eq 1 ]; then
         ./shipyard_hpnssh.sh "$DISTRIB_ID" "$DISTRIB_RELEASE"
     fi
+}
+
+get_vm_size_from_imds() {
+    if [ -n "$vm_size" ]; then
+        return
+    fi
+    curl -fSsL -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
+    vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
+    if [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$ ]]; then
+        vm_size_is_rdma=1
+    else
+        vm_size_is_rdma=0
+    fi
+    log INFO "VM Size is $vm_size, RDMA: $vm_size_is_rdma"
 }
 
 download_file_as() {
@@ -552,6 +569,7 @@ install_lis() {
 install_kernel_devel_package() {
     if [[ $DISTRIB_ID == centos* ]]; then
         local kernel_devel_package
+        local installed=0
         kernel_devel_package="kernel-devel-$(uname -r)"
         set +e
         if ! yum list installed "${kernel_devel_package}"; then
@@ -559,15 +577,22 @@ install_kernel_devel_package() {
             local centos_ver
             centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
             if [ -e /dev/infiniband/uverbs0 ]; then
-                # HPC distros have pinned repos
-                install_packages "${kernel_devel_package}"
-            elif [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]]; then
-                local pkg
-                pkg="${kernel_devel_package}.rpm"
-                download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
-                install_local_packages "$pkg"
-            else
-                install_packages "${kernel_devel_package}"
+                get_vm_size_from_imds
+                if [ "$vm_size_is_rdma" -eq 1 ]; then
+                    # HPC distros have pinned repos
+                    install_packages "${kernel_devel_package}"
+                    installed=1
+                fi
+            fi
+            if [ "$installed" -eq 0 ]; then
+                if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]]; then
+                    local pkg
+                    pkg="${kernel_devel_package}.rpm"
+                    download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
+                    install_local_packages "$pkg"
+                else
+                    install_packages "${kernel_devel_package}"
+                fi
             fi
         fi
         set -e
@@ -1328,6 +1353,16 @@ install_intel_mpi() {
                 mkdir -p /opt/intel/compilers_and_libraries/linux
                 ln -sf /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
             else
+                if [ ! -f "${AZ_BATCH_TASK_WORKING_DIR}/intel_mpi_rt.tar.gz" ]; then
+                    get_vm_size_from_imds
+                    if [ "$vm_size_is_rdma" -eq 1 ]; then
+                        log ERROR "VM size $vm_size is RDMA capable and Intel MPI Runtime installer is missing"
+                        exit 1
+                    else
+                        log DEBUG "VM size $vm_size is not RDMA capable, skipping Intel MPI runtime installation"
+                        return
+                    fi
+                fi
                 pushd "$AZ_BATCH_TASK_WORKING_DIR"
                 mkdir tmp
                 cd tmp

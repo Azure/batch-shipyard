@@ -1351,6 +1351,18 @@ def resize_pool(batch_client, blob_client, config, wait=False):
             addl_end_states=[batchmodels.ComputeNodeState.running])
 
 
+def pool_exists(batch_client, pool_id):
+    # type: (azure.batch.batch_service_client.BatchServiceClient, str) -> bool
+    """Check if pool exists
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param str pool_id: pool id
+    :rtype: bool
+    :return: if pool exists
+    """
+    return batch_client.pool.exists(pool_id)
+
+
 def del_pool(batch_client, config, pool_id=None):
     # type: (azure.batch.batch_service_client.BatchServiceClient, dict,
     #        str) -> bool

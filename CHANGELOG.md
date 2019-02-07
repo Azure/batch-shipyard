@@ -6,6 +6,8 @@
 - Batch Insights integration ([#259](https://github.com/Azure/batch-shipyard/issues/259))
 - Support environment variables on additional node prep commands ([#253](https://github.com/Azure/batch-shipyard/pull/253))
 - Sample Windows container recipes ([#246](https://github.com/Azure/batch-shipyard/issues/246))
+- `pool exists` command
+- `--recreate` flag for `pool add` to allow existing pools to be recreated
 
 ### Changed
 - **Breaking Change:** the `additional_node_prep_commands` property has
@@ -23,6 +25,8 @@ has been increased which can be modified with `-v`.
 - Some commands were incorrectly failing due to nodeid conflicts with
 supplied parameters ([#249](https://github.com/Azure/batch-shipyard/issues/249))
 - Azure Function extension installation failure ([#260](https://github.com/Azure/batch-shipyard/issues/260))
+- Pools with accelerated networking with fail provisioning sometimes due to
+infiniband devices being present for non-RDMA VM sizes
 
 ## [3.6.1] - 2018-12-03
 ### Added

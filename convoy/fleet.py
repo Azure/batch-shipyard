@@ -37,6 +37,7 @@ try:
 except ImportError:
     import pathlib
 import requests
+import sys
 import tempfile
 import time
 import uuid
@@ -3127,7 +3128,8 @@ def action_pool_listskus(batch_client, config):
 
 def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, table_client, keyvault_client, config):
+        batch_client, blob_client, table_client, keyvault_client, config,
+        recreate):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
@@ -3135,7 +3137,7 @@ def action_pool_add(
     #        azure.batch.batch_service_client.BatchServiceClient,
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
-    #        azure.keyvault.KeyVaultClient, dict) -> None
+    #        azure.keyvault.KeyVaultClient, dict, bool) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -3150,13 +3152,32 @@ def action_pool_add(
     :param azure.cosmosdb.table.TableService table_client: table client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
+    :param bool recreate: recreate
     """
     _check_batch_client(batch_client)
-    # first check if pool exists to prevent accidential metadata clear
-    if batch_client.pool.exists(settings.pool_id(config)):
-        raise RuntimeError(
-            'attempting to create a pool that already exists: {}'.format(
-                settings.pool_id(config)))
+    # first check if pool exists to prevent accidential metadata clear or
+    # if recreation is intentional
+    pool_id = settings.pool_id(config)
+    exists = batch.pool_exists(batch_client, pool_id)
+    if exists:
+        if recreate:
+            if not util.confirm_action(
+                    config,
+                    msg='recreate existing pool {}'.format(pool_id)):
+                return
+            confirm_setting = settings.get_auto_confirm(config)
+            settings.set_auto_confirm(config, True)
+            logger.debug('pool deletion may take a while, please be patient')
+            action_pool_delete(
+                batch_client, blob_client, table_client, config,
+                pool_id=pool_id, wait=True)
+            settings.set_auto_confirm(config, confirm_setting)
+            del confirm_setting
+        else:
+            raise RuntimeError(
+                'attempting to create a pool that already exists: {}'.format(
+                    pool_id))
+    del exists
     _adjust_settings_for_pool_creation(config)
     storage.create_storage_containers(blob_client, table_client, config)
     storage.clear_storage_containers(blob_client, table_client, config)
@@ -3167,6 +3188,24 @@ def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, keyvault_client, config
     )
+
+
+def action_pool_exists(batch_client, config, pool_id=None):
+    # type: (batchsc.BatchServiceClient, dict, str) -> None
+    """Action: Pool Exists
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param str pool_id: poolid to check
+    """
+    _check_batch_client(batch_client)
+    if util.is_none_or_empty(pool_id):
+        pool_id = settings.pool_id(config)
+    if not batch.pool_exists(batch_client, pool_id):
+        logger.info('pool {} does not exist'.format(pool_id))
+        sys.exit(1)
+    else:
+        logger.info('pool {} exists'.format(pool_id))
 
 
 def action_pool_list(batch_client, config):

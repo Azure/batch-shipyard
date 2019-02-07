@@ -936,6 +936,16 @@ def raw(config):
     return config['_raw']
 
 
+def get_auto_confirm(config):
+    # type: (dict) -> bool
+    """Get autoconfirm setting
+    :param dict config: configuration object
+    :rtype: bool
+    :return: auto confirm setting
+    """
+    return config['_auto_confirm']
+
+
 def set_auto_confirm(config, flag):
     # type: (dict, bool) -> None
     """Set autoconfirm setting

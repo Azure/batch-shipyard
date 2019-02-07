@@ -37,6 +37,7 @@ import os
 import pickle
 import re
 import tempfile
+import time
 import uuid
 # non-stdlib imports
 import azure.common
@@ -2124,7 +2125,11 @@ def create_storage_containers(blob_client, table_client, config):
                 continue
             logger.info('creating container: {}'.format(
                 _STORAGE_CONTAINERS[key]))
-            blob_client.create_container(_STORAGE_CONTAINERS[key])
+            while True:
+                blob_client.create_container(_STORAGE_CONTAINERS[key])
+                if blob_client.exists(_STORAGE_CONTAINERS[key]):
+                    break
+                time.sleep(1)
         elif key.startswith('table_'):
             # TODO remove in a future release: unused registry table
             if key == 'table_registry':
@@ -2136,7 +2141,11 @@ def create_storage_containers(blob_client, table_client, config):
             if key == 'table_perf' and not bs.store_timing_metrics:
                 continue
             logger.info('creating table: {}'.format(_STORAGE_CONTAINERS[key]))
-            table_client.create_table(_STORAGE_CONTAINERS[key])
+            while True:
+                table_client.create_table(_STORAGE_CONTAINERS[key])
+                if table_client.exists(_STORAGE_CONTAINERS[key]):
+                    break
+                time.sleep(1)
 
 
 def create_storage_containers_nonbatch(
@@ -2163,7 +2172,11 @@ def create_storage_containers_nonbatch(
                 pass
             else:
                 logger.info('creating container: {}'.format(contname))
-                blob_client.create_container(contname)
+                while True:
+                    blob_client.create_container(contname)
+                    if blob_client.exists(contname):
+                        break
+                    time.sleep(1)
         if table_client is not None:
             try:
                 key = 'table_{}'.format(kind.lower())
@@ -2172,7 +2185,11 @@ def create_storage_containers_nonbatch(
                 pass
             else:
                 logger.info('creating table: {}'.format(contname))
-                table_client.create_table(contname)
+                while True:
+                    table_client.create_table(contname)
+                    if table_client.exists(contname):
+                        break
+                    time.sleep(1)
         if queue_client is not None:
             try:
                 key = 'queue_{}'.format(kind.lower())
@@ -2181,7 +2198,11 @@ def create_storage_containers_nonbatch(
                 pass
             else:
                 logger.info('creating queue: {}'.format(contname))
-                queue_client.create_queue(contname)
+                while True:
+                    queue_client.create_queue(contname)
+                    if queue_client.exists(contname):
+                        break
+                    time.sleep(1)
 
 
 def delete_storage_containers_nonbatch(
