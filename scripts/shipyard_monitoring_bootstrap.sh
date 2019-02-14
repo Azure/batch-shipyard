@@ -6,7 +6,7 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.09.1
+DOCKER_CE_VERSION_DEBIAN=18.09.2
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="docker-ce=5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
@@ -26,22 +26,32 @@ log() {
 # dump uname immediately
 uname -ar
 
-# try to get /etc/lsb-release
-if [ -e /etc/lsb-release ]; then
-    . /etc/lsb-release
+# try to get os release vars
+if [ -e /etc/os-release ]; then
+    . /etc/os-release
+    DISTRIB_ID=$ID
+    DISTRIB_RELEASE=$VERSION_ID
+    DISTRIB_CODENAME=$VERSION_CODENAME
+    if [ -z "$DISTRIB_CODENAME" ]; then
+        if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; then
+            DISTRIB_CODENAME=stretch
+        fi
+    fi
 else
-    if [ -e /etc/os-release ]; then
-        . /etc/os-release
-        DISTRIB_ID=$ID
-        DISTRIB_RELEASE=$VERSION_ID
+    if [ -e /etc/lsb-release ]; then
+        . /etc/lsb-release
     fi
 fi
-if [ -z "${DISTRIB_ID+x}" ] || [ -z "${DISTRIB_RELEASE+x}" ]; then
+if [ -z "${DISTRIB_ID}" ] || [ -z "${DISTRIB_RELEASE}" ]; then
     log ERROR "Unknown DISTRIB_ID or DISTRIB_RELEASE."
     exit 1
 fi
+if [ -z "${DISTRIB_CODENAME}" ]; then
+    log WARNING "Unknown DISTRIB_CODENAME."
+fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+DISTRIB_CODENAME=${DISTRIB_CODENAME,,}
 
 # set distribution specific vars
 PACKAGER=
@@ -257,9 +267,9 @@ install_docker_host_engine() {
     log DEBUG "Installing Docker Host Engine"
     # set vars
     if [ "$PACKAGER" == "apt" ]; then
-        local repo=https://download.docker.com/linux/"${DISTRIB_ID}"
-        local gpgkey="${repo}"/gpg
-        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}"
+        local repo="https://download.docker.com/linux/${DISTRIB_ID}"
+        local gpgkey="${repo}/gpg"
+        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}-${DISTRIB_CODENAME}"
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
         local repo=https://download.docker.com/linux/centos/docker-ce.repo

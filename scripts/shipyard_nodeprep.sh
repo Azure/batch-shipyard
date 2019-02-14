@@ -6,8 +6,8 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.09.1
-DOCKER_CE_VERSION_CENTOS=18.09.1
+DOCKER_CE_VERSION_DEBIAN=18.09.2
+DOCKER_CE_VERSION_CENTOS=18.09.2
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
 NVIDIA_DOCKER_VERSION=2.0.3
@@ -1110,8 +1110,8 @@ install_docker_host_engine() {
     local srvdisable="systemctl disable docker.service"
     local srvstatus="systemctl --no-pager status docker.service"
     if [ "$PACKAGER" == "apt" ]; then
-        local repo=https://download.docker.com/linux/"${DISTRIB_ID}"
-        local gpgkey="${repo}"/gpg
+        local repo="https://download.docker.com/linux/${DISTRIB_ID}"
+        local gpgkey="${repo}/gpg"
         local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}-${DISTRIB_CODENAME}"
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
