@@ -12,10 +12,10 @@ install:
   - travis_retry pip install --upgrade pip
   - travis_retry pip install -r requirements.txt
   - travis_retry pip install --no-deps -r req_nodeps.txt
-  - travis_retry pip install flake8
+  - travis_retry pip install flake8==3.6.0
   - pip list --format=columns --outdated
 
 script:
   - flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
-  - if [[ $TRAVIS_PYTHON_VERSION != '2.7' ]] && [[ $TRAVIS_PYTHON_VERSION != '3.4' ]]; then flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py; fi
+  - if [[ $TRAVIS_PYTHON_VERSION != '2.7' ]] && [[ $TRAVIS_PYTHON_VERSION != '3.4' ]]; then flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py; fi
   - shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh

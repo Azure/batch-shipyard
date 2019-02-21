@@ -20,13 +20,13 @@ jobs:
           python -m pip install --upgrade setuptools wheel
           python -m pip install -r requirements.txt
           python -m pip install --no-deps -r req_nodeps.txt
-          python -m pip install flake8
+          python -m pip install flake8==3.6.0
           python -m pip list --format=columns --outdated
         displayName: Fetch Dependencies
       - powershell: |
           flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy\*.py
           if ($env:PYTHON_VERSION -eq "3.7") {
-            flake8 --select F,E,W --ignore W504 --statistics cascade\*.py cargo\*.py federation\*.py heimdall\*.py
+            flake8 --select F,E,W --ignore W504 --statistics cascade\*.py cargo\*.py federation\*.py heimdall\*.py slurm\*.py
           }
         displayName: Static Analysis
       - powershell: |
@@ -180,7 +180,7 @@ jobs:
           $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
           $PIP install --no-deps -r req_nodeps.txt
-          $PIP install flake8
+          $PIP install flake8==3.6.0
           $PIP list --format=columns --outdated
         displayName: Fetch Dependencies
       - script: |
@@ -188,7 +188,7 @@ jobs:
           set -o pipefail
           flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
           if [[ "$PYENV_VERSION" == 3.7* ]]; then
-            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py
+            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
           fi
           shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh
         displayName: Static Analysis
@@ -283,7 +283,7 @@ jobs:
           $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
           $PIP install --no-deps -r req_nodeps.txt
-          $PIP install flake8
+          $PIP install flake8==3.6.0
           $PIP list --format=columns --outdated
         displayName: Fetch Dependencies
       - script: |
@@ -291,7 +291,7 @@ jobs:
           set -o pipefail
           flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
           if [[ "$PYENV_VERSION" == 3.7* ]]; then
-            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py
+            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
           fi
         displayName: Static Analysis
       - script: |
