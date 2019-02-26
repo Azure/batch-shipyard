@@ -445,6 +445,30 @@ install_local_packages() {
     set -e
 }
 
+execute_command_with_retry() {
+    set +e
+    local retries=$1
+    shift
+    local fatal=$1
+    shift
+    while [ "$retries" -gt 0 ]; do
+        if "$@"; then
+            break
+        fi
+        retries=$((retries-1))
+        if [ $retries -eq 0 ]; then
+            log ERROR "Could not execute command: $*"
+            if [ "$fatal" -eq 1 ]; then
+                exit 1
+            else
+                break
+            fi
+        fi
+        sleep 1
+    done
+    set -e
+}
+
 blacklist_kernel_upgrade() {
     if [ "$DISTRIB_ID" != "ubuntu" ]; then
         log DEBUG "No kernel upgrade blacklist required on $DISTRIB_ID $DISTRIB_RELEASE"
@@ -486,7 +510,7 @@ check_for_nvidia_driver_on_custom_or_native() {
 }
 
 enable_nvidia_persistence_mode() {
-    nvidia-persistenced --user root
+    execute_command_with_retry 10 0 nvidia-persistenced --user root
     nvidia-smi -pm 1
 }
 

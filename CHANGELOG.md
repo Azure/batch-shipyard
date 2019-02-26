@@ -650,7 +650,7 @@ on these compute nodes. You can force disable GPU and/or RDMA by setting
 
 ## [2.9.6] - 2017-10-03
 ### Added
-- Migrate to Read the Docs for [documentation](http://batch-shipyard.readthedocs.io/en/latest/)
+- Migrate to Read the Docs for [documentation](https://batch-shipyard.readthedocs.io/en/latest/)
 
 ### Fixed
 - RemoteFS disk attach fixes

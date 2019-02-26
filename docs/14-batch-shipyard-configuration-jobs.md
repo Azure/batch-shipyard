@@ -361,12 +361,12 @@ a set interval.
         * (optional) `do_not_run_until` is a datetime specification that
           prevents the job from running until this date and time is reached.
           This string should be in a
-          [parseable date time format](http://dateutil.readthedocs.io/en/stable/parser.html).
+          [parseable date time format](https://dateutil.readthedocs.io/en/stable/parser.html).
           The default is to run immediately (i.e., `null`).
         * (optional) `do_not_run_after` is a datetime specification that
           prevents the job from running after this date and time is reached.
           This string should be in a
-          [parseable date time format](http://dateutil.readthedocs.io/en/stable/parser.html).
+          [parseable date time format](https://dateutil.readthedocs.io/en/stable/parser.html).
           The default has no limit (i.e., `null`).
         * (optional) `start_window` is the time window for when the job should
           be created according to this schedule to the maximum delta for which

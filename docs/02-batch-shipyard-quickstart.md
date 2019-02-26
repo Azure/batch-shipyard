@@ -1,15 +1,10 @@
 # Batch Shipyard Quickstart
 Choose your speed:
 
-1. [Notebooks](#notebooks)
-2. [Normal Quickstart](#normal)
-3. [Ludicrous Speed Quickstart](#ludicrous)
-
-## <a name="notebooks"></a>Notebooks
-If you are interested in executing Deep Learning workloads on Batch Shipyard
-and want to jump in without having to install anything, you can utilize the
-[Deep Learning Jupyter Notebooks](https://github.com/Azure/batch-shipyard/blob/master/contrib/notebooks/deep_learning)
-on [Azure Notebooks](https://notebooks.azure.com/) to quickly get started.
+1. [Normal Quickstart](#normal)
+2. [Ludicrous Speed Quickstart](#ludicrous)
+3. [Step-by-Step Guide](#step-by-step)
+4. [Notebooks](#notebooks)
 
 ## <a name="normal"></a>Normal Quickstart
 If you would like to use Batch Shipyard from the command line, this quickstart
@@ -130,10 +125,21 @@ Jump complete:
 unset SHIPYARD_CONFIGDIR
 ```
 
-## Step-by-step Tutorial
+## <a name="step-by-step"></a>Step-by-step Tutorial
 The [From Scratch: Step-by-step](05-batch-shipyard-from-scratch-step-by-step.md)
 guide will provide detailed steps on how to construct your own set of
 configuration files to execute on Batch Shipyard.
+
+## <a name="notebooks"></a>Notebooks
+If you are interested in executing Batch Shipyard on a Jupyter environment
+without having to install anything, you can utilize the community contributed
+[Jupyter Notebooks](https://github.com/Azure/batch-shipyard/blob/master/contrib/notebooks)
+that you can instantiate on [Azure Notebooks](https://notebooks.azure.com/)
+to quickly get started.
+
+**Note:** Because these notebooks are community contributed and supported,
+they may not be up-to-date with the latest Batch Shipyard version and may
+not work properly.
 
 ## Commandline Usage Guide
 [Batch Shipyard Usage](20-batch-shipyard-usage.md) contains explanations for

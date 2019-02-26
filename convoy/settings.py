@@ -1054,57 +1054,28 @@ def _populate_pool_vm_configuration(config):
             )
         # auto convert vm config to native if specified
         if not vm_config.native and _kv_read(conf, 'native', default=False):
+            vm_size = _pool_vm_size(config)
             if (vm_config.publisher == 'canonical' and
                     vm_config.offer == 'ubuntuserver' and
                     vm_config.sku == '16.04-lts'):
-                vm_size = _pool_vm_size(config)
-                if is_rdma_pool(vm_size):
-                    vm_config = PoolVmPlatformImageSettings(
-                        publisher='microsoft-azure-batch',
-                        offer='ubuntu-server-container-rdma',
-                        sku='16-04-lts',
-                        version='latest',
-                        native=True,
-                        license_type=None,
-                    )
-                else:
-                    vm_config = PoolVmPlatformImageSettings(
-                        publisher='microsoft-azure-batch',
-                        offer='ubuntu-server-container',
-                        sku='16-04-lts',
-                        version='latest',
-                        native=True,
-                        license_type=None,
-                    )
-            elif (vm_config.publisher == 'openlogic' and
-                  vm_config.offer == 'centos' and
-                  vm_config.sku == '7.4'):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
-                    offer='centos-container',
-                    sku='7-4',
+                    offer='ubuntu-server-container{}'.format(
+                        '-rdma' if is_rdma_pool(vm_size) else ''),
+                    sku=vm_config.sku.replace('.', '-'),
                     version='latest',
                     native=True,
                     license_type=None,
                 )
             elif (vm_config.publisher == 'openlogic' and
-                  vm_config.offer == 'centos' and
-                  vm_config.sku == '7.5'):
+                  vm_config.offer.startswith('centos') and
+                  (vm_config.sku == '7.4' or vm_config.sku == '7.5' or
+                   vm_config.sku == '7.6')):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
-                    offer='centos-container',
-                    sku='7-5',
-                    version='latest',
-                    native=True,
-                    license_type=None,
-                )
-            elif (vm_config.publisher == 'openlogic' and
-                  vm_config.offer == 'centos-hpc' and
-                  vm_config.sku == '7.4'):
-                vm_config = PoolVmPlatformImageSettings(
-                    publisher='microsoft-azure-batch',
-                    offer='centos-container-rdma',
-                    sku='7-4',
+                    offer='centos-container{}'.format(
+                        '-rdma' if is_rdma_pool(vm_size) else ''),
+                    sku=vm_config.sku.replace('.', '-'),
                     version='latest',
                     native=True,
                     license_type=None,

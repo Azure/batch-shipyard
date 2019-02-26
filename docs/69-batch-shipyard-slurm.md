@@ -34,11 +34,12 @@ worlds by combining the Slurm scheduler with platform benefits of Azure Batch
 compute node orchestration and management.
 
 ## Major Features
-* Simple and automated Slurm cluster creation
+* Simple and automated Slurm cluster deployment and management including
+support for on-demand suspend and restart of cluster resources
 * Automatic HA support of Slurm controllers and the ability to create
 multiple login nodes
 * Ability to specify arbitrary elastic partitions which may be comprised of a
-non-hetergeneous mixture of Batch pools
+hetergeneous mixture of Batch pools
 * Automatic linking of shared file systems (RemoteFS clusters) between
 all Slurm resources
 * Support for concurrent dedicated and low priority compute nodes within
@@ -175,6 +176,11 @@ When Slurm signals that nodes are no longer needed, the Batch Shipyard
 Slurm helper will then translate the Slurm node names back to Batch compute
 node ids and deprovision appropriately.
 
+Some Slurm logs, notably the `Batch Shipyard Slurm Helper`, Slurm power
+save logs, and `slurmd` logs are stored on an Azure File Share for easy
+viewing to debug issues. `slurmctld` logs are stored locally with each
+controller node.
+
 ## Walkthrough
 The following is a brief walkthrough of configuring a Slurm on Batch cluster
 with Batch Shipyard.
@@ -302,7 +308,7 @@ customized per the `additional_prep_script` option on the `controller` and
 `additional_node_prep` for compute nodes.
 * PAM-based auth restrictions for preventing users from logging into
 compute nodes without a running job is not yet implemented.
-* An action aggregator in the Batch Shipyard Slurm helper that would
+* An action aggregator in the `Batch Shipyard Slurm Helper` that would
 improve resize operation performance is not yet implemented.
 * Suspending and resuming the Slurm controller and login nodes is not
 yet supported.

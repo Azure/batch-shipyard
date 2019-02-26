@@ -1,4 +1,9 @@
 # Distributed Deep Learning with Batch Shipyard
+
+**NOTE:** These notebooks are out-of-date with the latest version of
+Batch Shipyard and may not work properly. We welcome any pull requests to
+help keep these contributions up-to-date.
+
 Deep learning has proven to provide state of the art results across many
 domains. To really take advantage of deep learning you need to be able to
 train your network on GPUs and even better on a cluster of GPUs. The

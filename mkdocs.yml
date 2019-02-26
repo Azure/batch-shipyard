@@ -20,7 +20,7 @@ pages:
   - RemoteFS: 15-batch-shipyard-configuration-fs.md
   - Monitoring: 16-batch-shipyard-configuration-monitor.md
   - Federation: 17-batch-shipyard-configuration-federation.md
-  - Slurm : 18-batch-shipyard-configuration-federation.md
+  - Slurm : 18-batch-shipyard-configuration-slurm.md
 - CLI Commands and Usage: 20-batch-shipyard-usage.md
 - Platform Image support: 25-batch-shipyard-platform-image-support.md
 - In-Depth Feature Guides:
