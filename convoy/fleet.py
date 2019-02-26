@@ -71,32 +71,33 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.79/NVIDIA-Linux-x86_64-410.79.run'
+            '410.104/NVIDIA-Linux-x86_64-410.104.run'
         ),
         'sha256': (
-            'ded482e54a0d538c89b3fb70fe306611c2ad475ebbef805645a5911a3a05c173'
+            '6ac4f7355a11e4b6ea2ff5b3d6ea677247f286daecf2e9373ef947ee08682cb7'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.79/NVIDIA-Linux-x86_64-410.79.run'
+            '410.104/NVIDIA-Linux-x86_64-410.104.run'
         ),
         'sha256': (
-            'ded482e54a0d538c89b3fb70fe306611c2ad475ebbef805645a5911a3a05c173'
+            '6ac4f7355a11e4b6ea2ff5b3d6ea677247f286daecf2e9373ef947ee08682cb7'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
     'viz_cc52': {
+        # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
             'http://download.microsoft.com/download/8/5/D/'
             '85DC7798-B9F7-4BB9-84E8-B3350D7B52F7/'
-            'NVIDIA-Linux-x86_64-410.71-grid.run'
+            'NVIDIA-Linux-x86_64-410.92-grid.run'
         ),
         'sha256': (
-            '48b0457d3fc18da29f7db743e812d2e0cbb5101e8f4d1bcb154b66784c34e361'
+            '8289790fe89bb1e071422e2bc2c7e66ff89652b59eaca5ef4dbab16c0864ccb9'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -123,10 +124,10 @@ _LIS_PACKAGE = {
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
         '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
-        'lis-rpms-4.2.6-2.tar.gz'
+        'lis-rpms-4.2.8-1.tar.gz'
     ),
     'sha256': (
-        'a0916fe5497e9f399be3ce0a3a532c3e9b56b33ee9948d0f8c744aa15db6f05d'
+        'aee81e79b81efd1db97e470b5d179fa4c7e954a2c0d996553dfbc081734a5304'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
@@ -136,20 +137,20 @@ _BATCH_INSIGHTS = {
     'linux': {
         'url': (
             'https://github.com/Azure/batch-insights/releases/download/v'
-            '1.1.0/batch-insights'
+            '1.2.0/batch-insights'
         ),
         'sha256': (
-            'd42c3cbc98a04a4c3d456caa0c8da6d044b6b4986177367c3e6cc21e83f71612'
+            'd9ad5e38162772c93e241fb99dc07d1c49181a4ceb04ba175f92bf9b3698c6de'
         ),
         'target': 'batch-insights'
     },
     'windows': {
         'url': (
             'https://github.com/Azure/batch-insights/releases/download/v'
-            '1.1.0/batch-insights.exe'
+            '1.2.0/batch-insights.exe'
         ),
         'sha256': (
-            'df22b1f0ca4730ce8c732fae23b7b9008490e3f993c8e50f0020561705f53e17'
+            '58c957d8c69c070b52e3d51f84f6cad214789305b8ffd61777564c32b81a2e21'
         ),
         'target': 'batch-insights.exe'
     }
