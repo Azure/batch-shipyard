@@ -15,16 +15,19 @@ RUN yum install -y epel-release \
         file \
         python \
         perl-devel \
+        openssl-devel \
+        openssl \
         ruby \
         ruby-devel \
         munge-devel \
         pam-devel \
         mariadb-devel \
         numactl-devel \
+        numactl \
+        hwloc-devel \
+        hwloc \
     && gem install fpm \
     && yum clean all
-
-RUN yum install -y numactl-devel perl-devel
 
 RUN curl -fSsL https://download.schedmd.com/slurm/slurm-${SLURM_VERSION}.tar.bz2 | tar -jxpf - \
     && cd slurm-${SLURM_VERSION} \

@@ -1,6 +1,6 @@
 # Dockerfile for Singularity
 
-FROM alpine:3.8
+FROM alpine:3.9
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 ENV SINGULARITY_VERSION=2.6.1

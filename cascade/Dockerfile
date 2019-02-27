@@ -6,7 +6,7 @@ FROM alfpark/libtorrent:1.0.11-py36
 # base image containing singularity
 FROM alfpark/singularity:2.6.1
 
-FROM alpine:3.8
+FROM alpine:3.9
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # copy libtorrent dynlib and python package from base
@@ -22,9 +22,9 @@ COPY cascade.py perf.py cascade.sh requirements.txt /opt/batch-shipyard/
 # add dependencies, symlink libtorrent, compile python files
 RUN apk update \
     && apk add --update --no-cache \
-        musl build-base python3 python3-dev libressl-dev libffi-dev \
+        musl build-base python3 python3-dev openssl-dev libffi-dev \
         ca-certificates boost boost-python3 boost-random \
-        tar pigz docker python squashfs-tools bash \
+        tar pigz openssl docker python squashfs-tools bash \
     && python3 -m pip install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --upgrade -r /opt/batch-shipyard/requirements.txt \
     && ln -s /usr/lib/libboost_python3.so.1.62.0 /usr/lib/libboost_python.so.1.62.0 \
@@ -33,7 +33,7 @@ RUN apk update \
     && ldconfig /usr/lib \
     && ln -s /opt/singularity/bin/singularity /usr/bin/singularity \
     && ldconfig /opt/singularity/lib/singularity \
-    && apk del --purge build-base python3-dev libressl-dev libffi-dev \
+    && apk del --purge build-base python3-dev openssl-dev libffi-dev \
     && rm /var/cache/apk/* \
     && python3 -m compileall -f /opt/batch-shipyard
 

@@ -22,6 +22,6 @@ RUN curl -fSsL https://github.com/sylabs/singularity/releases/download/${SINGULA
     && make -j4 \
     && make install
 
-FROM alpine:3.8
+FROM alpine:3.9
 
 COPY --from=0 /opt/singularity /singularity

@@ -12,13 +12,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         file \
         python \
+        libssl-dev \
+        openssl \
         ruby \
         ruby-dev \
         libmunge-dev \
         libpam0g-dev \
         libmariadb-client-lgpl-dev \
         libmysqlclient-dev \
+        libnuma-dev \
         numactl \
+        libhwloc-dev \
+        hwloc \
     && gem install fpm \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
