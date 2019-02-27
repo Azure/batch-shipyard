@@ -10,6 +10,7 @@ jobs:
         Python37:
           python.version: '3.7'
           PYENV_VERSION: '3.7.2'
+          VENV_VERSION: '16.2.0'
     steps:
       - task: InstallPython@1
         inputs:
@@ -62,6 +63,7 @@ jobs:
           echo "##vso[task.setvariable variable=GIT_TAG;]$gitTag"
           echo "##vso[task.setvariable variable=ARTIFACT_CLI;]$artifactCli"
           echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]$artifactUploadPath"
+          echo "##vso[task.setvariable variable=DOCKER_TAG;]$gitTag"
         displayName: Pre-build Environment (Tagged Release)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
@@ -76,7 +78,14 @@ jobs:
           (Get-Content $fileverInfo).replace('{BUILDVER_DOTTED}', $env:BUILDVER_DOTTED) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{BRANCH_GITSHA1}', $branchGitSha1) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{EXE}', $env:ARTIFACT_CLI) | Set-Content $fileverInfo
-          python -m pip install virtualenv
+          if(Test-Path env:VENV_VERSION)
+          {
+            python -m pip install virtualenv==$env:VENV_VERSION
+          }
+          else
+          {
+            python -m pip install virtualenv
+          }
           python -m virtualenv pyi
         displayName: Pre-build
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
@@ -136,7 +145,7 @@ jobs:
           docker push $cliImage
           popd
         displayName: Docker build
-        condition: and(succeeded(), ne(variables['GIT_TAG'], ''))
+        condition: and(succeeded(), ne(variables['DOCKER_TAG'], ''))
 
   - job: Linux
     pool:
@@ -147,6 +156,7 @@ jobs:
         Python37:
           python.version: '3.7'
           PYENV_VERSION: '3.7.2'
+          VENV_VERSION: '16.2.0'
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -195,6 +205,11 @@ jobs:
       - script: |
           set -e
           set -o pipefail
+          if [ "$BUILD_SOURCEBRANCHNAME" ==  "master" ]; then
+            echo "##vso[task.setvariable variable=DOCKER_TAG;]latest"
+          else
+            echo "##vso[task.setvariable variable=DOCKER_TAG;]${BUILD_SOURCEBRANCHNAME}"
+          fi
           ARTIFACT_CLI="batch-shipyard-${BUILD_SOURCEBRANCHNAME}-${BUILD_BUILDID}-cli-linux-x86_64"
           ARTIFACT_UPLOAD_PATH="builds/${BUILD_SOURCEBRANCHNAME}"
           echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
@@ -211,6 +226,7 @@ jobs:
           echo "##vso[task.setvariable variable=GIT_TAG;]${GIT_TAG}"
           echo "##vso[task.setvariable variable=ARTIFACT_CLI;]${ARTIFACT_CLI}"
           echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]${ARTIFACT_UPLOAD_PATH}"
+          echo "##vso[task.setvariable variable=DOCKER_TAG;]${GIT_TAG}"
         displayName: Pre-build Environment (Tagged Release)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
@@ -221,7 +237,11 @@ jobs:
           set -o pipefail
           echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH GIT_TAG=$GIT_TAG"
           ARTIFACT_CLI_PATH="bin/${ARTIFACT_CLI}"
-          $PIP install virtualenv
+          if [ -z "$VENV_VERSION" ]; then
+            $PIP install virtualenv
+          else
+            $PIP install virtualenv==${VENV_VERSION}
+          fi
           $PYTHON -m virtualenv -p $PYTHON pyi
           /bin/bash -c \
           "set -e; source pyi/bin/activate; \
@@ -243,6 +263,45 @@ jobs:
           pathtoPublish: bin
           artifactName: BatchShipyard-Linux
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+      - script: |
+          set -e
+          set -o pipefail
+          docker version
+          docker login -u="$(docker.username)" -p="$(docker.password)"
+          if [ -n "$GIT_TAG" ]; then
+            cargoImage="alfpark/batch-shipyard:${DOCKER_TAG}-cargo"
+            pushd cargo
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cargoImage .
+            docker push $cargoImage
+            popd
+            cascadeImage="alfpark/batch-shipyard:${DOCKER_TAG}-cascade"
+            pushd cascade
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cascadeImage .
+            docker push $cascadeImage
+            popd
+            fedImage="alfpark/batch-shipyard:${DOCKER_TAG}-federation"
+            pushd federation
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $fedImage .
+            docker push $fedImage
+            popd
+            heimdallImage="alfpark/batch-shipyard:${DOCKER_TAG}-heimdall"
+            pushd federation
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $heimdallImage .
+            docker push $heimdallImage
+            popd
+            slurmImage="alfpark/batch-shipyard:${DOCKER_TAG}-slurm"
+            pushd slurm
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $slurmImage .
+            docker push $slurmImage
+            popd
+          fi
+          cliImage="alfpark/batch-shipyard:${DOCKER_TAG}-cli"
+          pushd docker/linux/cli
+          docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cliImage .
+          docker push $cliImage
+          popd
+        displayName: Docker Build
+        condition: and(succeeded(), ne(variables['DOCKER_TAG'], ''))
 
   - job: MacOS
     pool:
@@ -253,6 +312,7 @@ jobs:
         Python37:
           python.version: '3.7'
           PYENV_VERSION: '3.7.2'
+          VENV_VERSION: '16.2.0'
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -323,7 +383,11 @@ jobs:
           set -o pipefail
           echo "ARTIFACT_CLI=$ARTIFACT_CLI ARTIFACT_UPLOAD_PATH=$ARTIFACT_UPLOAD_PATH GIT_TAG=$GIT_TAG"
           ARTIFACT_CLI_PATH="bin/${ARTIFACT_CLI}"
-          $PIP install virtualenv
+          if [ -z "$VENV_VERSION" ]; then
+            $PIP install virtualenv
+          else
+            $PIP install virtualenv==${VENV_VERSION}
+          fi
           $PYTHON -m virtualenv -p $PYTHON pyi
           /bin/bash -c \
           "set -e; source pyi/bin/activate; \
