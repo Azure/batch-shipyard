@@ -9,6 +9,9 @@ DEPENDENCIES=(
     adal
     https://github.com/AzureAD/azure-activedirectory-library-for-python
     https://github.com/AzureAD/azure-activedirectory-library-for-python/raw/master/LICENSE
+    azure-cosmos-table-python
+    https://github.com/Azure/azure-cosmos-table-python
+    https://raw.githubusercontent.com/Azure/azure-cosmos-table-python/master/LICENSE.txt
     azure-sdk-for-python
     https://github.com/Azure/azure-sdk-for-python
     https://github.com/Azure/azure-sdk-for-python/raw/master/LICENSE.txt
@@ -50,7 +53,7 @@ DEPENDENCIES=(
     https://github.com/requests/requests/raw/master/LICENSE
     ruamel.yaml
     https://bitbucket.org/ruamel/yaml
-    https://bitbucket.org/ruamel/yaml/raw/33ca63cd4253fb527f734158dc3832fdfd93eeef/LICENSE
+    https://bitbucket.org/ruamel/yaml/raw/75c831644aa26f12ff33ac81180fbaa23b81d4bb/LICENSE
     singularity
     https://github.com/sylabs/singularity
     https://github.com/sylabs/singularity/raw/master/LICENSE.md

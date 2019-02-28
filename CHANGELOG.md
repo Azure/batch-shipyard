@@ -2,12 +2,19 @@
 
 ## [Unreleased]
 
+## [3.7.0] - 2019-02-28
 ### Added
-- Batch Insights integration ([#259](https://github.com/Azure/batch-shipyard/issues/259))
+- Slurm on Batch support: provision Slurm clusters with elastic cloud bursting
+on Azure Batch pools. Please see the
+[Slurm on Batch guide](https://github.com/Azure/batch-shipyard/blob/master/docs/69-batch-shipyard-slurm.md).
+- Batch Insights integration ([#259](https://github.com/Azure/batch-shipyard/issues/259)),
+please see the pool and credentials configuration docs.
 - Support environment variables on additional node prep commands ([#253](https://github.com/Azure/batch-shipyard/pull/253))
-- Sample Windows container recipes ([#246](https://github.com/Azure/batch-shipyard/issues/246))
+- Support CentOS 7.6
 - `pool exists` command
 - `--recreate` flag for `pool add` to allow existing pools to be recreated
+- `fs cluster orchestrate` command
+- Sample Windows container recipes ([#246](https://github.com/Azure/batch-shipyard/issues/246))
 
 ### Changed
 - **Breaking Change:** the `additional_node_prep_commands` property has
@@ -16,15 +23,18 @@ been migrated under the new `additional_node_prep` property as
 - Performance improvements to speed up job submission with large task
 factories or large amount of tasks. Verbosity of task generation progress
 has been increased which can be modified with `-v`.
-- Updated Docker CE to 18.09.1
+- Updated Docker CE to 18.09.2
 - Updated Singularity to 2.6.1
-- Updated blobxfer to 1.6.0 ([#255](https://github.com/Azure/batch-shipyard/issues/255))
+- Updated blobxfer to 1.7.0 ([#255](https://github.com/Azure/batch-shipyard/issues/255))
+- Updated LIS, NV driver to 410.92 and NC/ND driver to 410.104
 - Updated other dependencies to latest
 
 ### Fixed
 - Some commands were incorrectly failing due to nodeid conflicts with
 supplied parameters ([#249](https://github.com/Azure/batch-shipyard/issues/249))
 - Azure Function extension installation failure ([#260](https://github.com/Azure/batch-shipyard/issues/260))
+- Block job submission on non-active pools ([#251](https://github.com/Azure/batch-shipyard/issues/251))
+- Missing files included in binary distributions ([#258](https://github.com/Azure/batch-shipyard/issues/258))
 - Pools with accelerated networking with fail provisioning sometimes due to
 infiniband devices being present for non-RDMA VM sizes
 
@@ -1511,7 +1521,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.6.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.7.0...HEAD
+[3.7.0]: https://github.com/Azure/batch-shipyard/compare/3.6.1...3.7.0
 [3.6.1]: https://github.com/Azure/batch-shipyard/compare/3.6.0...3.6.1
 [3.6.0]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...3.6.0
 [3.6.0b1]: https://github.com/Azure/batch-shipyard/compare/3.6.0a1...3.6.0b1
