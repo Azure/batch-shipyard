@@ -942,7 +942,9 @@ The `slurm cluster` sub-command has the following sub-sub-commands:
   destroy      Destroy a Slurm controller
   orchestrate  Orchestrate a Slurm cluster with shared file system and
                Batch...
+  start        Starts a previously suspended Slurm cluster
   status       Query status of a Slurm controllers and login nodes
+  suspend      Suspend a Slurm cluster contoller and/or login nodes
 ```
 
 The `slurm ssh` sub-command has the following sub-sub-commands:
@@ -974,7 +976,17 @@ the cluster
 single Batch pool
     * `--storage-cluster-id` will orchestrate the specified RemoteFS shared
       file system
+* `cluster start` will start a previously suspended Slurm cluster
+    * `--no-controller-nodes` does not start controller nodes
+    * `--no-login-nodes` does not start login nodes
+    * `--no-wait` does not wait for the restart to complete. It is not
+      recommended to use this parameter.
 * `cluster status` queries the status of the Slurm controller and login nodes
+* `cluster suspend` suspends the Slurm cluster
+    * `--no-controller-nodes` does not suspend controller nodes
+    * `--no-login-nodes` does not suspend login nodes
+    * `--no-wait` does not wait for the suspension to complete. It is not
+      recommended to use this parameter.
 * `ssh controller` will SSH into the Slurm controller nodes if permitted with
 the controller SSH user
     * `COMMAND` is an optional argument to specify the command to run. If your

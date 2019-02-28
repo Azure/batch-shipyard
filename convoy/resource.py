@@ -1080,17 +1080,18 @@ def ssh_to_virtual_machine_resource(
 
 
 def suspend_virtual_machine_resource(
-        compute_client, config, vm_res, wait=False):
+        compute_client, config, vm_res, offset=0, wait=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict,
-    #        settings.VmResource, bool) -> None
+    #        settings.VmResource, int, bool) -> None
     """Suspend a monitoring resource
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param settings.VmResource vm_res: resource
+    :param int offset: offset
     :param bool wait: wait for suspension to complete
     """
-    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    vm_name = settings.generate_virtual_machine_name(vm_res, offset)
     try:
         vm = compute_client.virtual_machines.get(
             resource_group_name=vm_res.resource_group,
@@ -1135,17 +1136,18 @@ def start_virtual_machine(compute_client, rg_name, vm_name):
 
 
 def start_virtual_machine_resource(
-        compute_client, config, vm_res, wait=False):
+        compute_client, config, vm_res, offset=0, wait=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict,
-    #        settings.VmResource, bool) -> None
+    #        settings.VmResource, int, bool) -> None
     """Starts a suspended virtual machine resource
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
     :param dict config: configuration dict
     :param settings.VmResource vm_res: resource
+    :param int offset: offset
     :param bool wait: wait for restart to complete
     """
-    vm_name = settings.generate_virtual_machine_name(vm_res, 0)
+    vm_name = settings.generate_virtual_machine_name(vm_res, offset)
     try:
         vm = compute_client.virtual_machines.get(
             resource_group_name=vm_res.resource_group,

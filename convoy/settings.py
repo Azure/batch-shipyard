@@ -5223,6 +5223,11 @@ def slurm_shared_data_volumes(config):
     vols = []
     state = False
     for sdkey in sdv:
+        host_mount_path = _kv_read_checked(sdv[sdkey], 'host_mount_path')
+        if host_mount_path == '/home' or host_mount_path == '/home/':
+            raise ValueError(
+                '/home host_mount_path for {} is currently not '
+                'supported'.format(sdkey))
         store_slurmctld_state = _kv_read(sdv[sdkey], 'store_slurmctld_state')
         if store_slurmctld_state:
             if state:
@@ -5232,7 +5237,7 @@ def slurm_shared_data_volumes(config):
             state = True
         vols.append(SlurmSharedDataVolumesSettings(
             id=sdkey,
-            host_mount_path=_kv_read_checked(sdv[sdkey], 'host_mount_path'),
+            host_mount_path=host_mount_path,
             store_slurmctld_state=store_slurmctld_state,
         ))
     return vols

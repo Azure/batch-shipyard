@@ -3042,6 +3042,48 @@ def slurm_cluster_orchestrate(ctx, storage_cluster_id):
         ctx.queue_client, ctx.batch_client, ctx.config)
 
 
+@cluster.command('suspend')
+@click.option(
+    '--no-controller-nodes', is_flag=True,
+    help='Do not suspend controller nodes')
+@click.option(
+    '--no-login-nodes', is_flag=True, help='Do not suspend login nodes')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for suspension to complete')
+@common_options
+@slurm_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_suspend(ctx, no_controller_nodes, no_login_nodes, no_wait):
+    """Suspend a Slurm cluster contoller and/or login nodes"""
+    ctx.initialize_for_slurm()
+    convoy.fleet.action_slurm_cluster_suspend(
+        ctx.compute_client, ctx.config, not no_controller_nodes,
+        not no_login_nodes, not no_wait)
+
+
+@cluster.command('start')
+@click.option(
+    '--no-controller-nodes', is_flag=True,
+    help='Do not start controller nodes')
+@click.option(
+    '--no-login-nodes', is_flag=True, help='Do not start login nodes')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for restart to complete')
+@common_options
+@slurm_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def slurm_cluster_start(ctx, no_controller_nodes, no_login_nodes, no_wait):
+    """Starts a previously suspended Slurm cluster"""
+    ctx.initialize_for_slurm()
+    convoy.fleet.action_slurm_cluster_start(
+        ctx.compute_client, ctx.config, not no_controller_nodes,
+        not no_login_nodes, not no_wait)
+
+
 @cluster.command('status')
 @common_options
 @slurm_options

@@ -30,6 +30,7 @@ from builtins import (  # noqa
     bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
     next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
+import concurrent.futures
 import logging
 import os
 try:
@@ -4467,7 +4468,7 @@ def action_monitor_suspend(compute_client, config, wait):
     _check_compute_client(compute_client)
     vm_res = settings.monitoring_settings(config)
     resource.suspend_virtual_machine_resource(
-        compute_client, config, vm_res, wait=wait)
+        compute_client, config, vm_res, offset=0, wait=wait)
 
 
 def action_monitor_start(compute_client, config, wait):
@@ -4481,7 +4482,7 @@ def action_monitor_start(compute_client, config, wait):
     _check_compute_client(compute_client)
     vm_res = settings.monitoring_settings(config)
     resource.start_virtual_machine_resource(
-        compute_client, config, vm_res, wait=wait)
+        compute_client, config, vm_res, offset=0, wait=wait)
 
 
 def action_monitor_status(compute_client, network_client, config):
@@ -4610,7 +4611,7 @@ def action_fed_proxy_suspend(compute_client, config, wait):
     _check_compute_client(compute_client)
     vm_res = settings.federation_settings(config)
     resource.suspend_virtual_machine_resource(
-        compute_client, config, vm_res, wait=wait)
+        compute_client, config, vm_res, offset=0, wait=wait)
 
 
 def action_fed_proxy_start(compute_client, config, wait):
@@ -4624,7 +4625,7 @@ def action_fed_proxy_start(compute_client, config, wait):
     _check_compute_client(compute_client)
     vm_res = settings.federation_settings(config)
     resource.start_virtual_machine_resource(
-        compute_client, config, vm_res, wait=wait)
+        compute_client, config, vm_res, offset=0, wait=wait)
 
 
 def action_fed_proxy_status(compute_client, network_client, config):
@@ -5058,6 +5059,100 @@ def action_slurm_cluster_create(
         blob_client, table_client, queue_client, batch_client, config,
         _RESOURCES_PATH, _SLURMMASTERPREP_FILE, _SLURMCOMPUTENODEPREP_FILE,
         _SLURMPY_FILE, _SLURMREQ_FILE, _CONFIGURABLE_SLURM_FILES)
+
+
+def action_slurm_cluster_suspend(
+        compute_client, config, controller_nodes, login_nodes, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool,
+    #        bool, bool) -> None
+    """Action: Slurm Cluster Suspend
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool controller_nodes: controller nodes
+    :param bool login_nodes: login nodes
+    :param bool wait: wait for suspension to complete
+    """
+    _check_compute_client(compute_client)
+    cluster_id = settings.slurm_options_settings(config).cluster_id
+    ss = []
+    ss_map = {}
+    ss_kind = {}
+    total_vms = 0
+    for kind in ('controller', 'login'):
+        ss_kind[kind] = settings.slurm_settings(config, kind)
+        vm_count = settings.slurm_vm_count(config, kind)
+        total_vms += vm_count
+        for _ in range(0, vm_count):
+            ss.append(ss_kind[kind])
+            ss_map[len(ss) - 1] = kind
+    del ss_kind
+    logger.warning(
+        '**WARNING** cluster suspend is an experimental feature and may lead '
+        'to data loss, unavailability or an unrecoverable state for '
+        'the slurm cluster {}.'.format(cluster_id))
+    if not util.confirm_action(
+            config,
+            msg='suspending Slurm cluster {}'.format(cluster_id)):
+        return
+    settings.set_auto_confirm(config, True)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=total_vms) as executor:
+        futures = []
+        for i in range(0, len(ss)):
+            if (controller_nodes and ss_map[i] == 'controller' or
+                    login_nodes and ss_map[i] == 'login'):
+                futures.append(executor.submit(
+                    resource.suspend_virtual_machine_resource,
+                    compute_client, config, ss[i], offset=i, wait=wait))
+        if wait:
+            for x in futures:
+                x.result()
+
+
+def action_slurm_cluster_start(
+        compute_client, config, controller_nodes, login_nodes, wait):
+    # type: (azure.mgmt.compute.ComputeManagementClient, dict, bool,
+    #        bool, bool) -> None
+    """Action: Slurm Cluster Start
+    :param azure.mgmt.compute.ComputeManagementClient compute_client:
+        compute client
+    :param dict config: configuration dict
+    :param bool controller_nodes: controller nodes
+    :param bool login_nodes: login nodes
+    :param bool wait: wait for restart to complete
+    """
+    _check_compute_client(compute_client)
+    cluster_id = settings.slurm_options_settings(config).cluster_id
+    ss = []
+    ss_map = {}
+    ss_kind = {}
+    total_vms = 0
+    for kind in ('controller', 'login'):
+        ss_kind[kind] = settings.slurm_settings(config, kind)
+        vm_count = settings.slurm_vm_count(config, kind)
+        total_vms += vm_count
+        for _ in range(0, vm_count):
+            ss.append(ss_kind[kind])
+            ss_map[len(ss) - 1] = kind
+    del ss_kind
+    if not util.confirm_action(
+            config,
+            msg='start Slurm cluster {}'.format(cluster_id)):
+        return
+    settings.set_auto_confirm(config, True)
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=total_vms) as executor:
+        futures = []
+        for i in range(0, len(ss)):
+            if (controller_nodes and ss_map[i] == 'controller' or
+                    login_nodes and ss_map[i] == 'login'):
+                futures.append(executor.submit(
+                    resource.start_virtual_machine_resource,
+                    compute_client, config, ss[i], offset=i, wait=wait))
+        if wait:
+            for x in futures:
+                x.result()
 
 
 def action_slurm_cluster_status(compute_client, network_client, config):

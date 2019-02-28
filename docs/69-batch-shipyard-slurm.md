@@ -310,8 +310,6 @@ customized per the `additional_prep_script` option on the `controller` and
 compute nodes without a running job is not yet implemented.
 * An action aggregator in the `Batch Shipyard Slurm Helper` that would
 improve resize operation performance is not yet implemented.
-* Suspending and resuming the Slurm controller and login nodes is not
-yet supported.
 
 ### Quotas
 Ensure that you have sufficient core and pool quota for your Batch account.
