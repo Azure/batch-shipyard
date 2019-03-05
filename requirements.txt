@@ -11,7 +11,7 @@ azure-mgmt-storage==3.1.1
 azure-storage-blob==1.5.0
 azure-storage-file==1.4.0
 azure-storage-queue==1.4.0
-blobxfer==1.7.0
+blobxfer==1.7.1
 click==7.0
 future==0.17.1
 futures==3.2.0; python_version < '3'

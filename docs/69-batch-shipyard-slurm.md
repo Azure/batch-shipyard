@@ -252,7 +252,7 @@ slurm:
   slurm_options:
     idle_reclaim_time: # amount of idle time before Slurm issues suspend on nodes
     elastic_partitions: # define Slurm elastic cloud bursting partitions
-      partition_1:
+      partition_1: # name of partition
         batch_pools:
           mypool1: # pool id, must be pre-allocated with zero nodes
             account_service_url: https://... # currently this must be the same as the Batch account specified in config.yaml
@@ -300,8 +300,6 @@ the Slurm on Batch feature in Batch Shipyard.
 configuration. This limitation will be lifted at a later date.
 * Shared file system (shared data volume) support is currently limited
 to supported RemoteFS provisioned storage clusters: NFS and GlusterFS.
-* Network Security Groups (NSGs) should permit communication between
-Slurm resources for all required communication channels and ports.
 * LDAP for centralized user control is not implemented, but can be
 customized per the `additional_prep_script` option on the `controller` and
 `login` section of the Slurm configuration file and using
@@ -311,8 +309,10 @@ compute nodes without a running job is not yet implemented.
 * An action aggregator in the `Batch Shipyard Slurm Helper` that would
 improve resize operation performance is not yet implemented.
 
-### Quotas
-Ensure that you have sufficient core and pool quota for your Batch account.
+### Notes
+* Network Security Groups (NSGs) should permit communication between
+Slurm resources for all required communication channels and ports.
+* Ensure that you have sufficient core and pool quota for your Batch account.
 Please note that *all* quotas (except for the number of Batch accounts
 per region per subscription) apply to each individual Batch account
 separately. User subscription based Batch accounts share the underlying

@@ -105,19 +105,18 @@ machines will be ultimately filtered by this Network Security Group bound for
 the two required ports.
 
 ### Network Security Group on the Virtual Network
-If you have specified a Network Security Group on the Virtual Network, then
-you will need to create a single `Inbound Security Rule` to allow traffic
-in at the Virtual Network level for Batch compute nodes to successfully
-operate.
+If you have specified a Network Security Group on the Virtual Network at the
+subnet level, then you will need to create a single `Inbound Security Rule`
+to allow traffic in at the Virtual Network level for Batch compute nodes to
+successfully operate.
 
-Ports `29876` and `29877` must allow `TCP` traffic from any source to any
-destination as shown below:
+Ports `29876` and `29877` must allow `TCP` traffic from the Source
+`Service Tag` of `BatchNodeManagement` to `Any` Destination as shown below:
 
 ![64-byovnet-nsg-inbound-rule.png](https://azurebatchshipyard.blob.core.windows.net/github/64-byovnet-nsg-inbound-rule.png)
 
-Note that in the aforementioned Network Security, external traffic not
-originating from the Azure Batch service will be dropped by the Network
-Security Group Azure Batch deploys on each compute node network interface.
+This will prevent external traffic bound for those ports from entering your
+Virtual Network.
 
 If you wish to apply additional inbound security rules for the remote access
 port (i.e., `SSH`), then you can create either utilize the
