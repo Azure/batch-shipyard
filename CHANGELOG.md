@@ -23,8 +23,6 @@ been migrated under the new `additional_node_prep` property as
 - Performance improvements to speed up job submission with large task
 factories or large amount of tasks. Verbosity of task generation progress
 has been increased which can be modified with `-v`.
-- Updated Docker CE to 18.09.2
-- Updated Singularity to 2.6.1
 - Updated blobxfer to 1.7.0 ([#255](https://github.com/Azure/batch-shipyard/issues/255))
 - Updated LIS, NV driver to 410.92 and NC/ND driver to 410.104
 - Updated other dependencies to latest
@@ -35,8 +33,13 @@ supplied parameters ([#249](https://github.com/Azure/batch-shipyard/issues/249))
 - Azure Function extension installation failure ([#260](https://github.com/Azure/batch-shipyard/issues/260))
 - Block job submission on non-active pools ([#251](https://github.com/Azure/batch-shipyard/issues/251))
 - Missing files included in binary distributions ([#258](https://github.com/Azure/batch-shipyard/issues/258))
-- Pools with accelerated networking with fail provisioning sometimes due to
+- Pools with accelerated networking would fail provisioning sometimes due to
 infiniband devices being present for non-RDMA VM sizes
+
+### Security
+- Updated Docker CE to 18.09.2 to address the runc CVE-2019-5736
+- Updated Singularity to 2.6.1 to address the shared mount propagation
+vulnerability CVE-2018-19295
 
 ## [3.6.1] - 2018-12-03
 ### Added

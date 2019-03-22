@@ -110,8 +110,9 @@ subnet level, then you will need to create a single `Inbound Security Rule`
 to allow traffic in at the Virtual Network level for Batch compute nodes to
 successfully operate.
 
-Ports `29876` and `29877` must allow `TCP` traffic from the Source
-`Service Tag` of `BatchNodeManagement` to `Any` Destination as shown below:
+Ports `29876` and `29877` must allow `TCP` traffic from the
+`Source service tag` of `BatchNodeManagement` to `Any` Destination as shown
+below:
 
 ![64-byovnet-nsg-inbound-rule.png](https://azurebatchshipyard.blob.core.windows.net/github/64-byovnet-nsg-inbound-rule.png)
 
@@ -137,7 +138,7 @@ restrict outbound network traffic, ensure that you have either the generic
 `Storage` service tag or the correct `Storage.<region>` service tag.
 Additionally, ensure that if you are specifying the destination port that
 you provide sufficient rules to cover all outbound requests over port `443`
-including potentially accesses to other storage regions or any application
+including potential requests to other storage regions or any application
 logic that may use port `443`.
 
 ## Additional Configuration Documentation

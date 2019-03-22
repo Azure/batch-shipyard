@@ -1,4 +1,4 @@
-# PyTorch-CPU
+# PyTorch-GPU
 This recipe shows how to run [PyTorch](https://pytorch.org/) on GPUs
 using N-series Azure VM instances in an Azure Batch compute pool.
 This sample executes the MNIST example.

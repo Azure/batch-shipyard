@@ -1,4 +1,4 @@
-azure-batch==6.0.0
+azure-batch==6.0.1
 azure-cosmosdb-table==1.0.5
 azure-mgmt-compute==4.4.0
 azure-mgmt-network==2.5.1

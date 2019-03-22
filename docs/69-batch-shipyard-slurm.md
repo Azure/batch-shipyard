@@ -319,5 +319,5 @@ separately. User subscription based Batch accounts share the underlying
 subscription regional core quotas.
 
 ## Sample Usage
-Please see the sample [Slurm recipe](../recipes/Slurm-NFS) for a working
+Please see the sample [Slurm recipe](../recipes/Slurm+NFS) for a working
 example.
