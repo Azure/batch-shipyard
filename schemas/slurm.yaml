@@ -253,6 +253,16 @@ mapping:
                   default:
                     type: bool
                     required: true
+                  preempt_type:
+                    type: str
+                  preempt_mode:
+                    type: str
+                  over_subscribe:
+                    type: str
+                  priority_tier:
+                    type: int
+                  other_options:
+                    type: str
           unmanaged_partitions:
             type: seq
             sequence:

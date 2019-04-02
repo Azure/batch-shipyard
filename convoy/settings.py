@@ -475,7 +475,8 @@ SlurmBatchPoolSettings = collections.namedtuple(
 )
 SlurmPartitionSettings = collections.namedtuple(
     'SlurmPartitionSettings', [
-        'batch_pools', 'max_runtime_limit', 'default',
+        'batch_pools', 'max_runtime_limit', 'default', 'preempt_type',
+        'preempt_mode', 'over_subscribe', 'priority_tier', 'other_options',
     ]
 )
 SlurmUnmanagedPartitionSettings = collections.namedtuple(
@@ -5047,6 +5048,11 @@ def slurm_options_settings(config):
             batch_pools=batch_pools,
             max_runtime_limit=max_runtime_limit,
             default=_kv_read(part, 'default'),
+            preempt_type=_kv_read_checked(part, 'preempt_type'),
+            preempt_mode=_kv_read_checked(part, 'preempt_mode'),
+            over_subscribe=_kv_read_checked(part, 'over_subscribe'),
+            priority_tier=_kv_read(part, 'priority_tier'),
+            other_options=_kv_read_checked(part, 'other_options', default=[]),
         )
         partitions[key] = partition
     unmanaged_partitions = []

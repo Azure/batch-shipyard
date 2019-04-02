@@ -540,10 +540,28 @@ def create_slurm_controller(
                 table_client, queue_client, config, cluster_id, partname,
                 bpool.batch_service_url, pool_id, bpool.compute_node_type,
                 bpool.max_compute_nodes, nodes)
+        if util.is_not_empty(part.preempt_type):
+            preempt_type = ' PreemptType={}'.format(part.preempt_type)
+        else:
+            preempt_type = ''
+        if util.is_not_empty(part.preempt_mode):
+            preempt_mode = ' PreemptMode={}'.format(part.preempt_mode)
+        else:
+            preempt_mode = ''
+        if util.is_not_empty(part.over_subscribe):
+            over_subscribe = ' OverSubscribe={}'.format(part.over_subscribe)
+        else:
+            over_subscribe = ''
+        if util.is_not_empty(part.priority_tier):
+            priority_tier = ' PriorityTier={}'.format(part.priority_tier)
+        else:
+            priority_tier = ''
         slurmpartinfo.append(
-            'PartitionName={} Default={} MaxTime={} Nodes={}\n'.format(
+            'PartitionName={} Default={} MaxTime={}{}{}{}{} {} '
+            'Nodes={}\n'.format(
                 partname, part.default, part.max_runtime_limit,
-                ','.join(partnodes)))
+                preempt_type, preempt_mode, over_subscribe, priority_tier,
+                ' '.join(part.other_options), ','.join(partnodes)))
         del partnodes
     # configure files and write to resources
     with slurm_files['slurm'][1].open('r') as f:

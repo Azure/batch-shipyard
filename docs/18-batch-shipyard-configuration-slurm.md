@@ -102,6 +102,11 @@ slurm:
             reclaim_exclude_num_nodes: 0
         max_runtime_limit: null
         default: true
+        preempty_type: preempt/partition_prio
+        preempt_mode: requeue
+        over_subscribe: no
+        priority_tier: 10
+        other_options: []
       partition_2:
         batch_pools:
           mypool3:
@@ -278,6 +283,13 @@ representation of "d.HH:mm:ss". "HH:mm:ss" is required but "d" is optional.
           required but "d" is optional.
         * (required) `default` designates this partition as the default
           partition.
+        * (optional) `preempt_type` is the PreemptType setting for preemption
+        * (optional) `preempt_mode` is the PreemptMode setting for preemption
+        * (opation) `over_subscribe` is the OverSubscribe setting associated
+          with preemption
+        * (optional) `priority_tier` is the PriorityTier setting for preemption
+        * (optional) `other_options` is a sequence of other options to
+          specify on the partition
 * (optional) `unmanaged_partitions` specifies partitions which are not
 managed by Batch Shipyard but those that you wish to join to the Slurm
 controller. This is useful for joining on-premises nodes within the same
