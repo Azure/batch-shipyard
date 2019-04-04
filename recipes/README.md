@@ -1,14 +1,18 @@
 # Batch Shipyard Recipes
 Batch Shipyard can accommodate most containerized Batch and HPC workloads.
-This directory contains recipes and sample container workloads. Please note
-that all recipes have sample configurations that you can use to quickly get
-going, however, some of the config files cannot be used as-is as they may
-need to be modified for specific values (such as the `credentials.yaml`
-file which needs to be populated with your Batch and Storage account
-credentials). Please review each config file you are planning on using and
-modify accordingly. As these recipe configuration are intended to show
-example usage, you will need to modify and configure them for your actual
-workloads.
+This area contains recipes and sample container workloads that may
+relate to your own anticipated scenario. Batch Shipyard is not limited to
+these programs or types of workloads represented by these recipes, but can
+run arbitrary containers to execute your Batch and HPC scenario.
+
+Please note that all recipes have sample configurations that you can use to
+quickly get started, however, some of the config files cannot be used as-is
+as they may need to be modified for specific values (such as the
+`credentials.yaml` file which needs to be populated with your Batch and
+Storage account credentials). Please review each config file you are planning
+on using and modify accordingly. As these recipe configuration are intended
+to show example usage, you will need to modify and configure them for your
+actual workloads.
 
 If you would like to contribute your recipe, please take a look at
 [this guide](../docs/98-contributing-recipes.md) before submitting a
