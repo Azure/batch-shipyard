@@ -62,7 +62,7 @@ def _create_credentials():
     """
     ba, url, bakey = os.environ['SHIPYARD_BATCH_ENV'].split(';')
     batch_client = batch.BatchServiceClient(
-        batchauth.SharedKeyCredentials(ba, bakey), base_url=url)
+        batchauth.SharedKeyCredentials(ba, bakey), batch_url=url)
     batch_client.config.add_user_agent('batch-shipyard/tfm')
     return batch_client
 

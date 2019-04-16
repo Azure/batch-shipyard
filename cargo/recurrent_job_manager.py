@@ -109,7 +109,7 @@ def _create_credentials():
         account_service_url))
     credentials = TokenAuthentication(aad_token)
     batch_client = batch.BatchServiceClient(
-        credentials, base_url=account_service_url)
+        credentials, batch_url=account_service_url)
     batch_client.config.add_user_agent('batch-shipyard/rjm')
     return batch_client
 
