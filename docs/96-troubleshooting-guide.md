@@ -58,11 +58,11 @@ target VM count may take longer than the specified timeout. In these cases,
 re-issue the resize command.
 3. Not enough IPs in the virtual network subnet: When creating a pool with
 a UserSubscription Batch account with a virtual network, you must ensure
-that there are sufficient number of VMs in your subnet. Batch Shipyard will
-attempt to validate this on your behalf if you specify the subnet's address
-range in the configuration. You can attempt to change the address range
-of the subnet indpendently (if pre-created) and issue the resize command
-again if you encounter this issue.
+that there are sufficient number of available IPs in your subnet. Batch
+Shipyard will attempt to validate this on your behalf if you specify the
+subnet's address range in the configuration. You can attempt to change the
+address range of the subnet indpendently (if pre-created) and issue the
+resize command again if you encounter this issue.
 
 #### Compute Node appears to be stuck in `starting` state
 If you are using pools with `native` container support, compute nodes that
@@ -143,6 +143,11 @@ automatically tries to recover from such situations, but may not be able to
 on occasion. In these circumstances, you can delete the affected nodes
 with `pool nodes del --all-unusable` and then resize back up with `pool resize`
 or recreate the pool.
+
+Another potential problem for nodes that may enter into this state are
+pools which are part of a virtual network. Improper NSG rules can prevent
+communication between the compute nodes and the Batch service which will
+result in `unusable` nodes.
 
 #### Pool creation fails due to `Could not find an Azure Batch Node Agent Sku`
 If you are using a `platform_image`, you may encounter an error such as:
