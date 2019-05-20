@@ -68,13 +68,11 @@ _STORAGEACCOUNTEP = None
 _STORAGE_CONTAINERS = {
     'blob_globalresources': None,
     'blob_resourcefiles': None,
-    'blob_torrents': None,
     'blob_remotefs': None,
     'blob_monitoring': None,
     'blob_federation_global': None,
     'blob_federation': None,
     'table_dht': None,
-    'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
@@ -107,14 +105,11 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'gr', postfix))
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
         (sep + 'rf', postfix))
-    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
     _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['blob_federation'] = sep + 'fed'
     _STORAGE_CONTAINERS['blob_federation_global'] = sep + 'fedglobal'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
-    _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
