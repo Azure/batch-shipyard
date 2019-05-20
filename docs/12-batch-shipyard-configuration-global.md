@@ -24,10 +24,6 @@ batch_shipyard:
   delay_docker_image_preload: false
 data_replication:
   concurrent_source_downloads: null
-  peer_to_peer:
-    enabled: false
-    compression: true
-    direct_download_seed_bias: null
 global_resources:
   additional_registries:
     docker:
@@ -207,20 +203,7 @@ control of the download and data replication behavior for container images.
 image replication mechanism between compute nodes within a compute pool. The
 `concurrent_source_downloads` property specifies the number of nodes that
 can concurrently download the source images in parallel. The default, if
-not specified, is 10. The following options apply to `peer_to_peer` data
-replication options:
-    * (optional) `enabled` property enables or disables private peer-to-peer
-      transfer. Note that for compute pools with a relatively small number
-      of VMs, peer-to-peer transfer may not provide any benefit and is
-      recommended to be disabled in these cases. Compute pools with large
-      number of VMs can benefit from peer-to-peer image replication. The
-      default is `false`.
-    * (optional) `compression` property enables or disables compression of
-      image files. It is strongly recommended to keep this enabled. The
-      default is `true`.
-    * (optional) `direct_download_seed_bias` property sets the number of
-      direct download seeds to prefer per image before switching to
-      peer-to-peer transfer.
+not specified, is 10.
 
 `global_resources` contains properties for populating each compute node
 with required container images and for data movement directives.

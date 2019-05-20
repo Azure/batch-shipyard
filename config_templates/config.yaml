@@ -16,10 +16,6 @@ batch_shipyard:
   delay_docker_image_preload: false
 data_replication:
   concurrent_source_downloads: null
-  peer_to_peer:
-    enabled: false
-    compression: true
-    direct_download_seed_bias: null
 global_resources:
   additional_registries:
     docker:

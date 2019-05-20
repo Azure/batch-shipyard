@@ -1201,13 +1201,8 @@ def _construct_pool_object(
             block_for_gr_docker = ''
         block_for_gr = '{}#{}'.format(
             block_for_gr_docker, block_for_gr_singularity)
-    # data replication and peer-to-peer settings
+    # data replication settings
     dr = settings.data_replication_settings(config)
-    # create torrent flags
-    torrentflags = '{}:{}:{}:{}'.format(
-        dr.peer_to_peer.enabled, dr.concurrent_source_downloads,
-        dr.peer_to_peer.direct_download_seed_bias,
-        dr.peer_to_peer.compression)
     # create resource files list
     if is_windows:
         _rflist = [_REGISTRY_LOGIN_WINDOWS_FILE, _BLOBXFER_WINDOWS_FILE]
@@ -1392,7 +1387,7 @@ def _construct_pool_object(
                     bs.storage_entity_prefix) else '',
                 q=' -q' if pool_settings.batch_insights_enabled else '',
                 r=' -r' if pool_settings.ssh.allow_docker_access else '',
-                s=' -s {}'.format(torrentflags),
+                s=' -s {}'.format(dr.concurrent_source_downloads),
                 t=' -t' if settings.can_tune_tcp(
                     pool_settings.vm_size) else '',
                 u=' -u' if util.is_not_empty(custom_image_na) else '',
@@ -2130,15 +2125,6 @@ def _update_container_images(
     :param str singularity_image: singularity image to update
     :param bool force_ssh: force update over SSH
     """
-    # first check that peer-to-peer is disabled for pool
-    pool_id = settings.pool_id(config)
-    try:
-        if settings.data_replication_settings(config).peer_to_peer.enabled:
-            raise RuntimeError(
-                'cannot update container images for a pool with peer-to-peer '
-                'image distribution')
-    except KeyError:
-        pass
     native = settings.is_native_docker_pool(config)
     if native and not force_ssh:
         logger.debug('forcing update via SSH due to native mode')
@@ -2481,7 +2467,6 @@ def _adjust_settings_for_pool_creation(config):
                  publisher, offer, sku))
     # re-read pool and data replication settings
     pool = settings.pool_settings(config)
-    dr = settings.data_replication_settings(config)
     native = settings.is_native_docker_pool(
         config, vm_config=pool.vm_configuration)
     # ensure singularity images are not specified for native pools
@@ -2491,18 +2476,6 @@ def _adjust_settings_for_pool_creation(config):
             raise ValueError(
                 'cannot specify a native container pool with Singularity '
                 'images as global resources')
-    # ensure settings p2p/as/internode settings are compatible
-    if dr.peer_to_peer.enabled:
-        if native and not bs.delay_docker_image_preload:
-            raise ValueError(
-                'cannot enable peer-to-peer and native container pools')
-        if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
-            raise ValueError('cannot enable peer-to-peer and autoscale')
-        if pool.inter_node_communication_enabled:
-            logger.warning(
-                'force enabling inter-node communication due to peer-to-peer '
-                'transfer')
-            settings.set_inter_node_communication_enabled(config, True)
     # hpn-ssh can only be used for Ubuntu currently
     try:
         if (pool.ssh.hpn_server_swap and
@@ -2543,9 +2516,6 @@ def _adjust_settings_for_pool_creation(config):
                         'glusterfs on compute cannot be installed on an '
                         'autoscale-enabled pool')
                 if not pool.inter_node_communication_enabled:
-                    # do not modify value and proceed since this interplays
-                    # with p2p settings, simply raise exception and force
-                    # user to reconfigure
                     raise ValueError(
                         'inter node communication in pool configuration '
                         'must be enabled for glusterfs on compute')
