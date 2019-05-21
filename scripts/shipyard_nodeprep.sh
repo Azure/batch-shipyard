@@ -1471,7 +1471,7 @@ EOF
         fi
         log DEBUG "Starting Cascade"
         # shellcheck disable=SC2086
-        PYTHONASYNCIODEBUG=1 ./cascade.py "$concurrent_source_downloads" --ipaddress "$ipaddress" $prefix &
+        PYTHONASYNCIODEBUG=1 ./cascade.py "$concurrent_source_downloads" --mode "docker" --ipaddress "$ipaddress" $prefix &
         cascadepid=$!
     fi
 

@@ -28,6 +28,7 @@
 import argparse
 import asyncio
 import datetime
+from enum import Enum
 import hashlib
 import logging
 import logging.handlers
@@ -53,6 +54,7 @@ import azure.storage.blob as azureblob
 logger = logging.getLogger('cascade')
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
+_CONTAINER_MODE = None
 _DOCKER_TAG = 'docker:'
 _SINGULARITY_TAG = 'singularity:'
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -92,6 +94,11 @@ _DOCKER_PULL_ERRORS = frozenset((
     'received unexpected http status',
     'tls handshake timeout',
 ))
+
+
+class ContainerMode(Enum):
+    DOCKER = 1
+    SINGULARITY = 2
 
 
 class StandardStreamLogger:
@@ -675,12 +682,14 @@ def distribute_global_resources(
             _STORAGE_CONTAINERS['table_globalresources'],
             filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
     except azure.common.AzureMissingResourceHttpError:
-        entities = None
+        entities = []
     nentities = 0
-    if entities is not None:
-        for ent in entities:
+    for ent in entities:
+        resource = ent['Resource']
+        grtype, _ = get_container_image_name_from_resource(resource)
+        if grtype == _CONTAINER_MODE.name.lower():
             nentities += 1
-            _DIRECTDL_QUEUE.put(ent['Resource'])
+            _DIRECTDL_QUEUE.put(resource)
     if nentities == 0:
         logger.info('no global resources specified')
         return
@@ -710,6 +719,8 @@ def main():
     # get command-line args
     args = parseargs()
 
+    global _CONCURRENT_DOWNLOADS_ALLOWED, _CONTAINER_MODE
+
     # set up concurrent source downloads
     _CONCURRENT_DOWNLOADS_ALLOWED = int(args.concurrent_source_downloads)
     logger.info('max concurrent downloads: {}'.format(
@@ -730,6 +741,15 @@ def main():
         ipaddress = args.ipaddress
     logger.debug('ip address: {}'.format(ipaddress))
 
+    # set up container mode
+    if args.mode == 'docker':
+        _CONTAINER_MODE = ContainerMode.DOCKER
+    elif args.mode == 'singularity':
+        _CONTAINER_MODE = ContainerMode.SINGULARITY
+    else:
+        raise ValueError('container mode is invalid')
+    logger.info('container mode: {}'.format(_CONTAINER_MODE))
+
     # set up storage names
     _setup_storage_names(args.prefix)
     del args
@@ -748,12 +768,14 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Batch Shipyard File/Image Replicator')
-    parser.set_defaults(ipaddress=None)
+    parser.set_defaults(ipaddress = None, mode = 'docker')
     parser.add_argument(
         'concurrent_source_downloads',
         help='concurrent source downloads')
     parser.add_argument(
         '--ipaddress', help='ip address')
+    parser.add_argument(
+        '--mode', help='container mode (docker/singularity)', )
     parser.add_argument(
         '--prefix', help='storage container prefix')
     return parser.parse_args()
