@@ -2125,6 +2125,7 @@ def _update_container_images(
     :param str singularity_image: singularity image to update
     :param bool force_ssh: force update over SSH
     """
+    pool_id = settings.pool_id(config)
     native = settings.is_native_docker_pool(config)
     if native and not force_ssh:
         logger.debug('forcing update via SSH due to native mode')

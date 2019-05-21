@@ -768,7 +768,7 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Batch Shipyard File/Image Replicator')
-    parser.set_defaults(ipaddress = None, mode = 'docker')
+    parser.set_defaults(ipaddress=None, mode='docker')
     parser.add_argument(
         'concurrent_source_downloads',
         help='concurrent source downloads')
