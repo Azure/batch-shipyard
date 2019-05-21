@@ -638,24 +638,24 @@ async def download_monitor_async(
             logger.critical('Thread exceptions encountered, terminating')
             # raise first exception
             raise _THREAD_EXCEPTIONS[0]
-        # fixup filemodes/ownership for singularity images
-        if (_GR_DONE and _SINGULARITY_CACHE_DIR is not None and
-                _AZBATCH_USER is not None):
-            if _SINGULARITY_CACHE_DIR.exists():
-                logger.info('chown all files in {}'.format(
-                    _SINGULARITY_CACHE_DIR))
-                for file in scantree(str(_SINGULARITY_CACHE_DIR)):
-                    os.chown(
-                        str(file.path),
-                        _AZBATCH_USER[2],
-                        _AZBATCH_USER[3]
-                    )
-            else:
-                logger.warning(
-                    'singularity cache dir {} does not exist'.format(
-                        _SINGULARITY_CACHE_DIR))
         # sleep to avoid pinning cpu
         await asyncio.sleep(1)
+    # fixup filemodes/ownership for singularity images
+    if (_SINGULARITY_CACHE_DIR is not None and
+            _AZBATCH_USER is not None):
+        if _SINGULARITY_CACHE_DIR.exists():
+            logger.info('chown all files in {}'.format(
+                _SINGULARITY_CACHE_DIR))
+            for file in scantree(str(_SINGULARITY_CACHE_DIR)):
+                os.chown(
+                    str(file.path),
+                    _AZBATCH_USER[2],
+                    _AZBATCH_USER[3]
+                )
+        else:
+            logger.warning(
+                'singularity cache dir {} does not exist'.format(
+                    _SINGULARITY_CACHE_DIR))
 
 
 def distribute_global_resources(
