@@ -122,7 +122,7 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['queue_federation'] = sep + 'fed'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
-    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(	
+    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     # ensure all storage containers are between 3 and 63 chars in length
@@ -1978,7 +1978,8 @@ def delete_storage_containers(
             table_client.delete_table(_STORAGE_CONTAINERS[key])
         elif key == 'blob_torrents':
             # TODO remove in future release: unused container
-            logger.debug('deleting container: {}'.format(_STORAGE_CONTAINERS[key]))
+            logger.debug('deleting container: {}'
+                         .format(_STORAGE_CONTAINERS[key]))
             blob_client.delete_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('blob_'):
             if (key == 'blob_remotefs' or key == 'blob_monitoring' or
