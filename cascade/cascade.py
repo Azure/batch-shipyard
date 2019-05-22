@@ -28,7 +28,7 @@
 import argparse
 import asyncio
 import datetime
-from enum import Enum
+import enum
 import hashlib
 import logging
 import logging.handlers
@@ -96,7 +96,7 @@ _DOCKER_PULL_ERRORS = frozenset((
 ))
 
 
-class ContainerMode(Enum):
+class ContainerMode(enum.Enum):
     DOCKER = 1
     SINGULARITY = 2
 
@@ -690,6 +690,10 @@ def distribute_global_resources(
         if grtype == _CONTAINER_MODE.name.lower():
             nentities += 1
             _DIRECTDL_QUEUE.put(resource)
+        else:
+            logger.info('skipping resource {}:'.format(resource) +
+                        'not matching container mode "{}"'
+                        .format(_CONTAINER_MODE.name.lower()))
     if nentities == 0:
         logger.info('no global resources specified')
         return
@@ -722,7 +726,16 @@ def main():
     global _CONCURRENT_DOWNLOADS_ALLOWED, _CONTAINER_MODE
 
     # set up concurrent source downloads
-    _CONCURRENT_DOWNLOADS_ALLOWED = int(args.concurrent_source_downloads)
+    if args.concurrent is None:
+        raise ValueError('concurrent source downloads is not specified')
+    try:
+        _CONCURRENT_DOWNLOADS_ALLOWED = int(args.concurrent)
+    except ValueError:
+        _CONCURRENT_DOWNLOADS_ALLOWED = None
+    if (_CONCURRENT_DOWNLOADS_ALLOWED is None or
+            _CONCURRENT_DOWNLOADS_ALLOWED <= 0):
+        raise ValueError('concurrent source downloads is invalid: {}'
+                         .format(args.concurrent))
     logger.info('max concurrent downloads: {}'.format(
         _CONCURRENT_DOWNLOADS_ALLOWED))
 
@@ -742,12 +755,14 @@ def main():
     logger.debug('ip address: {}'.format(ipaddress))
 
     # set up container mode
+    if args.mode is None:
+        raise ValueError('container mode is not specified')
     if args.mode == 'docker':
         _CONTAINER_MODE = ContainerMode.DOCKER
     elif args.mode == 'singularity':
         _CONTAINER_MODE = ContainerMode.SINGULARITY
     else:
-        raise ValueError('container mode is invalid')
+        raise ValueError('container mode is invalid: {}'.format(args.mode))
     logger.info('container mode: {}'.format(_CONTAINER_MODE))
 
     # set up storage names
@@ -768,14 +783,14 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Batch Shipyard File/Image Replicator')
-    parser.set_defaults(ipaddress=None, mode='docker')
+    parser.set_defaults(concurrent=None, ipaddress=None, mode=None)
     parser.add_argument(
-        'concurrent_source_downloads',
+        '--concurrent',
         help='concurrent source downloads')
     parser.add_argument(
         '--ipaddress', help='ip address')
     parser.add_argument(
-        '--mode', help='container mode (docker/singularity)', )
+        '--mode', help='container mode (docker/singularity)')
     parser.add_argument(
         '--prefix', help='storage container prefix')
     return parser.parse_args()
