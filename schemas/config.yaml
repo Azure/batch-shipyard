@@ -52,15 +52,6 @@ mapping:
     mapping:
       concurrent_source_downloads:
         type: int
-      peer_to_peer:
-        type: map
-        mapping:
-          enabled:
-            type: bool
-          compression:
-            type: bool
-          direct_download_seed_bias:
-            type: int
 
   global_resources:
     type: map

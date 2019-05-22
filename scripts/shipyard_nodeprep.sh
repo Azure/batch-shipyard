@@ -107,8 +107,7 @@ kata=0
 lis=
 networkopt=0
 native_mode=0
-p2p=
-p2penabled=0
+concurrent_source_downloads=
 prefix=
 sc_args=
 shipyardversion=
@@ -140,7 +139,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             echo "-p [prefix] storage container prefix"
             echo "-q enable batch insights"
             echo "-r enable azure batch docker group"
-            echo "-s [enabled:non-p2p concurrent download:seed bias:compression] p2p sharing"
+            echo "-s [concurrent source downloads] concurrent source downloads"
             echo "-t optimize network TCP settings"
             echo "-u custom image"
             echo "-v [version] batch-shipyard version"
@@ -203,13 +202,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             docker_group="\"group\": \"_azbatchsudogrp\","
             ;;
         s)
-            p2p=${OPTARG,,}
-            IFS=':' read -ra p2pflags <<< "$p2p"
-            if [ "${p2pflags[0]}" == "true" ]; then
-                p2penabled=1
-            else
-                p2penabled=0
-            fi
+            concurrent_source_downloads=$OPTARG
             ;;
         t)
             networkopt=1
@@ -1355,10 +1348,6 @@ install_cascade_dependencies() {
     rm -f get-pip.py
     pip3 install --no-cache-dir --upgrade wheel setuptools
     pip3 install --no-cache-dir -r requirements.txt
-    # install cascade dependencies
-    if [ $p2penabled -eq 1 ]; then
-        install_packages python3-libtorrent pigz
-    fi
     log INFO "Cascade on host dependencies installed"
 }
 
@@ -1422,12 +1411,6 @@ spawn_cascade_process() {
     local cascadepid
     local envfile
     if [ $cascadecontainer -eq 1 ]; then
-        local detached
-        if [ $p2penabled -eq 1 ]; then
-            detached="-d"
-        else
-            detached="--rm"
-        fi
         # store docker cascade start
         if command -v python3 > /dev/null 2>&1; then
             drpstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
@@ -1444,7 +1427,7 @@ offer=$DISTRIB_ID
 sku=$DISTRIB_RELEASE
 npstart=$npstart
 drpstart=$drpstart
-p2p=$p2p
+concurrent_source_downloads=$concurrent_source_downloads
 $(env | grep SHIPYARD_)
 $(env | grep AZ_BATCH_)
 $(env | grep DOCKER_LOGIN_)
@@ -1463,7 +1446,7 @@ EOF
         # launch container
         log DEBUG "Starting Cascade"
         # shellcheck disable=SC2086
-        docker run $detached --runtime runc --net=host --env-file $envfile \
+        docker run --rm --runtime runc --net=host --env-file $envfile \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v /etc/passwd:/etc/passwd:ro \
             -v /etc/group:/etc/group:ro \
@@ -1488,22 +1471,19 @@ EOF
         fi
         log DEBUG "Starting Cascade"
         # shellcheck disable=SC2086
-        PYTHONASYNCIODEBUG=1 ./cascade.py "$p2p" --ipaddress "$ipaddress" $prefix &
+        PYTHONASYNCIODEBUG=1 ./cascade.py --concurrent "$concurrent_source_downloads" --mode "docker" --ipaddress "$ipaddress" $prefix &
         cascadepid=$!
     fi
 
-    # if not in p2p mode, then wait for cascade exit
-    if [ $p2penabled -eq 0 ]; then
-        local rc
-        wait $cascadepid
-        rc=$?
-        if [ $rc -eq 0 ]; then
-            log DEBUG "Cascade exited successfully"
-        else
-            log ERROR "cascade exited with non-zero exit code: $rc"
-            rm -f "$nodeprepfinished"
-            exit $rc
-        fi
+    local rc
+    wait $cascadepid
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        log DEBUG "Cascade exited successfully"
+    else
+        log ERROR "cascade exited with non-zero exit code: $rc"
+        rm -f "$nodeprepfinished"
+        exit $rc
     fi
     set -e
 
@@ -1633,7 +1613,7 @@ echo "Enable Azure Batch group for Docker access: $docker_group"
 echo "Fallback registry: $fallback_registry"
 echo "Docker image preload delay: $delay_preload"
 echo "Cascade via container: $cascadecontainer"
-echo "P2P: $p2penabled"
+echo "Concurrent source downloads: $concurrent_source_downloads"
 echo "Block on images: $block"
 echo ""
 
@@ -1655,13 +1635,6 @@ save_startup_to_volatile
 
 # install LIS if required first (lspci won't work on certain distros without it)
 install_lis
-
-# set iptables rules
-if [ $p2penabled -eq 1 ]; then
-    # disable DHT connection tracking
-    iptables -t raw -I PREROUTING -p udp --dport 6881 -j CT --notrack
-    iptables -t raw -I OUTPUT -p udp --sport 6881 -j CT --notrack
-fi
 
 # decrypt encrypted creds
 if [ -n "$encrypted" ]; then

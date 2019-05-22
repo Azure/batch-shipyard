@@ -35,4 +35,4 @@ fi
 
 # execute cascade
 # shellcheck disable=SC2086
-python3 cascade.py "$p2p" --ipaddress "$ipaddress" ${prefix}
+python3 cascade.py --concurrent "$concurrent_source_downloads" --mode "docker" --ipaddress "$ipaddress" ${prefix}

@@ -275,12 +275,7 @@ BatchShipyardSettings = collections.namedtuple(
 )
 DataReplicationSettings = collections.namedtuple(
     'DataReplicationSettings', [
-        'peer_to_peer', 'concurrent_source_downloads',
-    ]
-)
-PeerToPeerSettings = collections.namedtuple(
-    'PeerToPeerSettings', [
-        'enabled', 'compression', 'direct_download_seed_bias',
+        'concurrent_source_downloads',
     ]
 )
 SourceSettings = collections.namedtuple(
@@ -2304,50 +2299,9 @@ def data_replication_settings(config):
             raise KeyError()
     except KeyError:
         concurrent_source_downloads = 10
-    try:
-        conf = config['data_replication']['peer_to_peer']
-    except KeyError:
-        conf = {}
-    try:
-        p2p_enabled = conf['enabled']
-    except KeyError:
-        p2p_enabled = False
-    try:
-        p2p_compression = conf['compression']
-    except KeyError:
-        p2p_compression = True
-    pool_vm_count = _pool_vm_count(config)
-    total_vm_count = pool_vm_count.dedicated + pool_vm_count.low_priority
-    try:
-        p2p_direct_download_seed_bias = conf['direct_download_seed_bias']
-        if (p2p_direct_download_seed_bias is None or
-                p2p_direct_download_seed_bias < 1):
-            raise KeyError()
-    except KeyError:
-        p2p_direct_download_seed_bias = total_vm_count // 10
-        if p2p_direct_download_seed_bias < 1:
-            p2p_direct_download_seed_bias = 1
     return DataReplicationSettings(
-        peer_to_peer=PeerToPeerSettings(
-            enabled=p2p_enabled,
-            compression=p2p_compression,
-            direct_download_seed_bias=p2p_direct_download_seed_bias
-        ),
         concurrent_source_downloads=concurrent_source_downloads,
     )
-
-
-def set_peer_to_peer_enabled(config, flag):
-    # type: (dict, bool) -> None
-    """Set peer to peer enabled setting
-    :param dict config: configuration object
-    :param bool flag: flag to set
-    """
-    if 'data_replication' not in config:
-        config['data_replication'] = {}
-    if 'peer_to_peer' not in config['data_replication']:
-        config['data_replication']['peer_to_peer'] = {}
-    config['data_replication']['peer_to_peer']['enabled'] = flag
 
 
 def global_resources_docker_images(config):

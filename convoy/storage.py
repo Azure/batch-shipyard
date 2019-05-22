@@ -68,13 +68,11 @@ _STORAGEACCOUNTEP = None
 _STORAGE_CONTAINERS = {
     'blob_globalresources': None,
     'blob_resourcefiles': None,
-    'blob_torrents': None,
     'blob_remotefs': None,
     'blob_monitoring': None,
     'blob_federation_global': None,
     'blob_federation': None,
     'table_dht': None,
-    'table_torrentinfo': None,
     'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
@@ -85,6 +83,8 @@ _STORAGE_CONTAINERS = {
     'queue_federation': None,
     # TODO remove following in future release
     'table_registry': None,
+    'blob_torrents': None,
+    'table_torrentinfo': None,
 }
 _CONTAINERS_CREATED = set()
 
@@ -107,14 +107,11 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
         (sep + 'gr', postfix))
     _STORAGE_CONTAINERS['blob_resourcefiles'] = '-'.join(
         (sep + 'rf', postfix))
-    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
-        (sep + 'tor', postfix))
     _STORAGE_CONTAINERS['blob_remotefs'] = sep + 'remotefs'
     _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['blob_federation'] = sep + 'fed'
     _STORAGE_CONTAINERS['blob_federation_global'] = sep + 'fedglobal'
     _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
-    _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
@@ -125,6 +122,9 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['queue_federation'] = sep + 'fed'
     # TODO remove following containers in future release
     _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
+    _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
+        (sep + 'tor', postfix))
+    _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     # ensure all storage containers are between 3 and 63 chars in length
     for key in _STORAGE_CONTAINERS:
         length = len(_STORAGE_CONTAINERS[key])
@@ -1972,10 +1972,15 @@ def delete_storage_containers(
     :param bool skip_tables: skip deleting tables
     """
     for key in _STORAGE_CONTAINERS:
-        if key == 'table_registry':
+        if key == 'table_registry' or key == 'table_torrentinfo':
             # TODO remove in future release: unused table
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
+        elif key == 'blob_torrents':
+            # TODO remove in future release: unused container
+            logger.debug('deleting container: {}'
+                         .format(_STORAGE_CONTAINERS[key]))
+            blob_client.delete_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('blob_'):
             if (key == 'blob_remotefs' or key == 'blob_monitoring' or
                     key == 'blob_federation' or
@@ -2065,6 +2070,9 @@ def clear_storage_containers(
     """
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
+        # TODO remove in a future release: unused container
+        if key == 'blob_torrents':
+            continue
         if not tables_only and key.startswith('blob_'):
             if (key == 'blob_remotefs' or key == 'blob_monitoring' or
                     key == 'blob_federation' or
@@ -2072,8 +2080,8 @@ def clear_storage_containers(
                 continue
             _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
-            # TODO remove in a future release: unused registry table
-            if key == 'table_registry':
+            # TODO remove in a future release: unused table
+            if key == 'table_registry' or key == 'table_torrentinfo':
                 continue
             if (key == 'table_monitoring' or
                     key == 'table_federation_global' or
@@ -2119,6 +2127,9 @@ def create_storage_containers(blob_client, table_client, config):
     bs = settings.batch_shipyard_settings(config)
     for key in _STORAGE_CONTAINERS:
         if key.startswith('blob_'):
+            # TODO remove in a future release: unused container
+            if key == 'blob_torrents':
+                continue
             if (key == 'blob_remotefs' or key == 'blob_monitoring' or
                     key == 'blob_federation' or
                     key == 'blob_federation_global'):
@@ -2131,8 +2142,8 @@ def create_storage_containers(blob_client, table_client, config):
                     break
                 time.sleep(1)
         elif key.startswith('table_'):
-            # TODO remove in a future release: unused registry table
-            if key == 'table_registry':
+            # TODO remove in a future release: unused table
+            if key == 'table_registry' or key == 'table_torrentinfo':
                 continue
             if (key == 'table_monitoring' or
                     key == 'table_federation_global' or
