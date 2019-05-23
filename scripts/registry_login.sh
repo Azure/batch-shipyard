@@ -91,7 +91,7 @@ if [ -n "$SINGULARITY_LOGIN_PASSWORD" ]; then
         log DEBUG "Creating export script into $nusers Singularity registry servers..."
         touch singularity-registry-login
         for i in $(seq 0 $((nusers-1))); do
-cat >> singularity-login << EOF
+cat >> singularity-registry-login << EOF
 SINGULARITY_DOCKER_USERNAME=${users[$i]}
 SINGULARITY_DOCKER_PASSWORD=${passwords[$i]}
 EOF

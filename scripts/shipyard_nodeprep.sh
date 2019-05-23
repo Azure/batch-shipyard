@@ -884,35 +884,29 @@ install_singularity() {
         log WARNING "Singularity version not specified, not installing"
         return
     fi
-    local offer
-    local sku
+    local disuffix
     singularity_basedir="${USER_MOUNTPOINT}"/singularity
-    if [ "$DISTRIB_ID" == "ubuntu" ]; then
-        if [[ "$DISTRIB_RELEASE" == "16.04" ]] || [[ "$DISTRIB_RELEASE" == "18.04" ]]; then
-            offer="$DISTRIB_ID"
-            sku="$DISTRIB_RELEASE"
-        fi
-    elif { [[ "$DISTRIB_ID" == "rhel" ]] || [[ $DISTRIB_ID == centos* ]]; } && [[ $DISTRIB_RELEASE == 7* ]]; then
-        offer=centos
-        sku=7
+    if [ "${USER_MOUNTPOINT}" == "/mnt" ]; then
+        disuffix=mnt
+    else
+        disuffix=mnt-resource
     fi
-    if [ -z "$offer" ] || [ -z "$sku" ]; then
-        log WARNING "Singularity not supported on $DISTRIB_ID $DISTRIB_RELEASE"
-        return
-    fi
-    log DEBUG "Setting up Singularity for $offer $sku"
+    log DEBUG "Setting up Singularity for $DISTRIB_ID $DISTRIB_RELEASE"
     # install squashfs-tools for mksquashfs
     install_packages squashfs-tools
     # fetch docker image for singularity bits
-    local di="alfpark/singularity:${singularityversion}-${offer}-${sku}"
+    #local di="alfpark/singularity:${singularityversion}-${disuffix}"
+    # TODO temporarily pin to verison "3"
+    local di="alfpark/singularity:3-${disuffix}"
+    log DEBUG "Image=${di} basedir=${singularity_basedir}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
     docker run --runtime runc --rm -v /opt/singularity:/opt/singularity "$di" \
-        /bin/sh -c 'cp -r /singularity/* /opt/singularity'
+        /bin/sh -c 'cp -r /opt/singularity/* /opt/singularity'
     # symlink for global exec
     ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
     # fix perms
-    chown root.root /opt/singularity/libexec/singularity/bin/*
+    chown -R root:root /opt/singularity
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
     # prep singularity root/container dir
     mkdir -p $singularity_basedir/mnt/container
@@ -936,8 +930,8 @@ install_singularity() {
     # set proper ownership
     chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
     chown -R _azbatch:_azbatchgrp $singularity_basedir/cache
-    # selftest
-    singularity selftest
+    # ensure it runs
+    singularity version
     # remove docker image
     docker rmi "$di"
     # singularity registry login
@@ -1408,8 +1402,15 @@ spawn_cascade_process() {
         touch "$cascadefailed"
     fi
     set +e
-    local cascadepid
+    local cascade_docker_pid
+    local cascade_singularity_pid
     local envfile
+    local cascade_docker_image="alfpark/batch-shipyard:${shipyardversion}-cascade-docker"
+    local cascade_singularity_image="alfpark/batch-shipyard:${shipyardversion}-cascade-singularity"
+    local detached
+    if [ -z "$block" ]; then
+        detached="-d"
+    fi
     if [ $cascadecontainer -eq 1 ]; then
         # store docker cascade start
         if command -v python3 > /dev/null 2>&1; then
@@ -1434,28 +1435,42 @@ $(env | grep DOCKER_LOGIN_)
 $(env | grep SINGULARITY_)
 EOF
         chmod 600 $envfile
-        # pull image
-        docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cascade
-        # set singularity options
-        local singularity_binds
-        if [ -n "$singularity_basedir" ]; then
-            singularity_binds="\
-                -v $singularity_basedir:$singularity_basedir \
-                -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
-        fi
+        # run cascade for docker
+        docker_pull_image "$cascade_docker_image"
         # launch container
-        log DEBUG "Starting Cascade"
+        log DEBUG "Starting $cascade_docker_image"
         # shellcheck disable=SC2086
-        docker run --rm --runtime runc --net=host --env-file $envfile \
+        docker run $detached --rm --runtime runc --env-file $envfile \
+            -e "cascade_mode=docker" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v /etc/passwd:/etc/passwd:ro \
             -v /etc/group:/etc/group:ro \
-            ${singularity_binds} \
             -v "$AZ_BATCH_NODE_ROOT_DIR":"$AZ_BATCH_NODE_ROOT_DIR" \
             -w "$AZ_BATCH_TASK_WORKING_DIR" \
-            -p 6881-6891:6881-6891 -p 6881-6891:6881-6891/udp \
-            alfpark/batch-shipyard:"${shipyardversion}"-cascade &
-        cascadepid=$!
+            "$cascade_docker_image" &
+        cascade_docker_pid=$!
+        # run cascade for singularity
+        if [ -n "$singularity_basedir" ]; then
+            local singularity_binds
+            # set singularity options
+            singularity_binds="\
+                -v $singularity_basedir:$singularity_basedir \
+                -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
+            # pull image
+            docker_pull_image "$cascade_singularity_image"
+            # launch container
+            log DEBUG "Starting $cascade_singularity_image"
+            # shellcheck disable=SC2086
+            docker run $detached --rm --runtime runc --env-file $envfile \
+                -e "cascade_mode=singularity" \
+                -v /etc/passwd:/etc/passwd:ro \
+                -v /etc/group:/etc/group:ro \
+                ${singularity_binds} \
+                -v "$AZ_BATCH_NODE_ROOT_DIR":"$AZ_BATCH_NODE_ROOT_DIR" \
+                -w "$AZ_BATCH_TASK_WORKING_DIR" \
+                "$cascade_singularity_image" &
+            cascade_singularity_pid=$!
+        fi
     else
         # add timings
         if [[ -n ${SHIPYARD_TIMING+x} ]]; then
@@ -1469,21 +1484,48 @@ EOF
             # shellcheck disable=SC2086
             ./perf.py cascade start $prefix
         fi
-        log DEBUG "Starting Cascade"
+        log DEBUG "Starting Cascade Docker mode"
         # shellcheck disable=SC2086
-        PYTHONASYNCIODEBUG=1 ./cascade.py --concurrent "$concurrent_source_downloads" --mode "docker" --ipaddress "$ipaddress" $prefix &
-        cascadepid=$!
+        PYTHONASYNCIODEBUG=1 ./cascade.py --mode docker \
+            --concurrent "$concurrent_source_downloads" \
+            --ipaddress "$ipaddress" $prefix &
+        cascade_docker_pid=$!
+        # run cascade for singularity
+        if [ -n "$singularity_basedir" ]; then
+            log DEBUG "Starting Cascade Singularity mode"
+            # shellcheck disable=SC2086
+            PYTHONASYNCIODEBUG=1 ./cascade.py --mode singularity \
+                --concurrent "$concurrent_source_downloads" \
+                --ipaddress "$ipaddress" $prefix &
+            cascade_singularity_pid=$!
+        fi
     fi
 
-    local rc
-    wait $cascadepid
-    rc=$?
-    if [ $rc -eq 0 ]; then
-        log DEBUG "Cascade exited successfully"
+    # wait for cascade exit
+    if [ -n "$block" ]; then
+        local rc
+        wait $cascade_docker_pid
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            log DEBUG "Cascade Docker exited successfully"
+        else
+            log ERROR "cascade Docker exited with non-zero exit code: $rc"
+            rm -f "$nodeprepfinished"
+            exit $rc
+        fi
+        if [ -n "$singularity_basedir" ]; then
+            wait $cascade_singularity_pid
+            rc=$?
+            if [ $rc -eq 0 ]; then
+                log DEBUG "Cascade Singularity exited successfully"
+            else
+                log ERROR "cascade Singularity exited with non-zero exit code: $rc"
+                rm -f "$nodeprepfinished"
+                exit $rc
+            fi
+        fi
     else
-        log ERROR "cascade exited with non-zero exit code: $rc"
-        rm -f "$nodeprepfinished"
-        exit $rc
+        log INFO "Not waiting for cascade due to non-blocking option"
     fi
     set -e
 

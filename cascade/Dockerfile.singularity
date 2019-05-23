@@ -1,0 +1,42 @@
+# Dockerfile for Azure/batch-shipyard (Cascade/Singularity)
+
+# base image containing singularity
+FROM alfpark/singularity:3-default
+
+FROM ubuntu:18.04
+MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
+
+# copy singularity
+COPY --from=0 /opt/singularity /opt/singularity
+
+# copy in files
+COPY cascade.py perf.py cascade.sh requirements.txt /opt/batch-shipyard/
+
+# add dependencies and compile python files
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        python3-dev \
+        python3-pip \
+        libssl-dev \
+        libffi-dev \
+        squashfs-tools \
+        bash \
+    && python3 -m pip install --no-cache-dir --upgrade pip \
+    && pip3 install --no-cache-dir --upgrade setuptools wheel \
+    && pip3 install --no-cache-dir --upgrade -r /opt/batch-shipyard/requirements.txt \
+    && ln -s /opt/singularity/bin/singularity /usr/bin/singularity \
+    && ldconfig /opt/singularity/lib/singularity \
+    && python3 -m compileall -f /opt/batch-shipyard \
+    && apt-get remove -y \
+        libssl-dev \
+        libffi-dev \
+        libpython3-dev \
+        libexpat1-dev \
+        libc-dev-bin \
+        libc6-dev \
+        linux-libc-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# set command
+CMD ["/opt/batch-shipyard/cascade.sh"]
