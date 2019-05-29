@@ -310,13 +310,13 @@ def _singularity_image_name_on_disk(name: str) -> str:
     name = name.replace('/', '-')
     if docker:
         name = name.replace(':', '-')
-        name = '{}.simg'.format(name)
+        name = '{}.sif'.format(name)
     else:
         tmp = name.split(':')
         if len(tmp) > 1:
-            name = '{}-{}.simg'.format(tmp[0], tmp[1])
+            name = '{}_{}.sif'.format(tmp[0], tmp[1])
         else:
-            name = '{}-master-latest.simg'.format(name)
+            name = '{}_latest.sif'.format(name)
     return name
 
 
