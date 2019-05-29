@@ -299,6 +299,8 @@ def singularity_image_name_on_disk(name):
     docker = False
     if name.startswith('shub://'):
         name = name[7:]
+    elif name.startswith('library://'):
+        name = name[10:]
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
@@ -307,13 +309,13 @@ def singularity_image_name_on_disk(name):
     name = name.replace('/', '-')
     if docker:
         name = name.replace(':', '-')
-        name = '{}.simg'.format(name)
+        name = '{}.sif'.format(name)
     else:
         tmp = name.split(':')
         if len(tmp) > 1:
-            name = '{}-{}.simg'.format(tmp[0], tmp[1])
+            name = '{}_{}.sif'.format(tmp[0], tmp[1])
         else:
-            name = '{}-master-latest.simg'.format(name)
+            name = '{}_latest.sif'.format(name)
     return name
 
 

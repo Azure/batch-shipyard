@@ -901,8 +901,8 @@ install_singularity() {
     log DEBUG "Image=${di} basedir=${singularity_basedir}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
-    docker run --runtime runc --rm -v /opt/singularity:/opt/singularity "$di" \
-        /bin/sh -c 'cp -r /opt/singularity/* /opt/singularity'
+    docker run --runtime runc --rm -v /opt/singularity:/singularity "$di" \
+        /bin/sh -c 'cp -r /opt/singularity/ /'
     # symlink for global exec
     ln -sf /opt/singularity/bin/singularity /usr/bin/singularity
     # fix perms

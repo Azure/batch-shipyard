@@ -50,8 +50,7 @@ import azure.common
 import azure.cosmosdb.table as azuretable
 import azure.storage.blob as azureblob
 
-# create logger
-logger = logging.getLogger('cascade')
+logger = None
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
 _CONTAINER_MODE = None
@@ -119,12 +118,16 @@ class StandardStreamLogger:
         self.level(sys.stderr)
 
 
-def _setup_logger() -> None:
+def _setup_logger(mode: str) -> None:
+    logger_suffix = "" if mode is None else "-{}".format(mode)
+    logger_name = 'cascade{}'.format(logger_suffix)
+    global logger
+    logger = logging.getLogger(logger_name)
     """Set up logger"""
     logger.setLevel(logging.DEBUG)
     logloc = pathlib.Path(
         os.environ['AZ_BATCH_TASK_WORKING_DIR'],
-        'cascade.log')
+        '{}.log'.format(logger_name))
     handler = logging.handlers.RotatingFileHandler(
         str(logloc), maxBytes=10485760, backupCount=5)
     formatter = logging.Formatter(
@@ -187,7 +190,7 @@ async def _record_perf_async(
     """
     if not _RECORD_PERF:
         return
-    proc = await asyncio.subprocess.create_subprocess_shell(
+    proc = await asyncio.create_subprocess_shell(
         './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), loop=loop)
     await proc.wait()
@@ -299,6 +302,8 @@ def _singularity_image_name_on_disk(name: str) -> str:
     docker = False
     if name.startswith('shub://'):
         name = name[7:]
+    elif name.startswith('library://'):
+        name = name[10:]
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
@@ -307,13 +312,13 @@ def _singularity_image_name_on_disk(name: str) -> str:
     name = name.replace('/', '-')
     if docker:
         name = name.replace(':', '-')
-        name = '{}.simg'.format(name)
+        name = '{}.sif'.format(name)
     else:
         tmp = name.split(':')
         if len(tmp) > 1:
-            name = '{}-{}.simg'.format(tmp[0], tmp[1])
+            name = '{}_{}.sif'.format(tmp[0], tmp[1])
         else:
-            name = '{}-master-latest.simg'.format(name)
+            name = '{}_latest.sif'.format(name)
     return name
 
 
@@ -402,8 +407,9 @@ class ContainerImageSaveThread(threading.Thread):
                 shell=True,
                 universal_newlines=True)
         elif grtype == 'singularity':
+            image_out_path = singularity_image_path_on_disk(image)
             proc = subprocess.Popen(
-                'singularity pull {}'.format(image),
+                'singularity pull -U {} {}'.format(image_out_path, image),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 shell=True,
@@ -612,15 +618,22 @@ def _merge_service(
         for entity in entities:
             for i in range(0, _MAX_VMLIST_PROPERTIES):
                 prop = 'VmList{}'.format(i)
-                if prop in entity and _NODEID in entity[prop]:
+                mode_prefix = _CONTAINER_MODE.name.lower() + ':'
+                if (prop in entity and _NODEID in entity[prop] and
+                   entity['Resource'].startswith(mode_prefix)):
                     count += 1
         if count == nglobalresources:
             _record_perf(
                 'gr-done',
                 'nglobalresources={}'.format(nglobalresources))
             _GR_DONE = True
-            logger.info('all {} global resources loaded'.format(
-                nglobalresources))
+            logger.info('all {} global resources of container mode "{}" loaded'
+                        .format(nglobalresources,
+                                _CONTAINER_MODE.name.lower()))
+        else:
+            logger.info('{}/{} global resources of container mode "{}" loaded'
+                        .format(count, nglobalresources,
+                                _CONTAINER_MODE.name.lower()))
 
 
 async def download_monitor_async(
@@ -697,6 +710,8 @@ def distribute_global_resources(
     if nentities == 0:
         logger.info('no global resources specified')
         return
+    logger.info('{} global resources matching container mode "{}"'
+                .format(nentities, _CONTAINER_MODE.name.lower()))
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
         loop, blob_client, table_client, ipaddress, nentities))
@@ -711,7 +726,7 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
     if _ON_WINDOWS:
         raise NotImplementedError()
     else:
-        proc = await asyncio.subprocess.create_subprocess_shell(
+        proc = await asyncio.create_subprocess_shell(
             'ip addr list eth0 | grep "inet " | cut -d\' \' -f6 | cut -d/ -f1',
             stdout=asyncio.subprocess.PIPE, loop=loop)
         output = await proc.communicate()
@@ -722,6 +737,8 @@ def main():
     """Main function"""
     # get command-line args
     args = parseargs()
+
+    _setup_logger(args.mode)
 
     global _CONCURRENT_DOWNLOADS_ALLOWED, _CONTAINER_MODE
 
@@ -763,7 +780,7 @@ def main():
         _CONTAINER_MODE = ContainerMode.SINGULARITY
     else:
         raise ValueError('container mode is invalid: {}'.format(args.mode))
-    logger.info('container mode: {}'.format(_CONTAINER_MODE))
+    logger.info('container mode: {}'.format(_CONTAINER_MODE.name))
 
     # set up storage names
     _setup_storage_names(args.prefix)
@@ -797,5 +814,4 @@ def parseargs():
 
 
 if __name__ == '__main__':
-    _setup_logger()
     main()
