@@ -615,7 +615,9 @@ def _merge_service(
         for entity in entities:
             for i in range(0, _MAX_VMLIST_PROPERTIES):
                 prop = 'VmList{}'.format(i)
-                if prop in entity and _NODEID in entity[prop]:
+                mode_prefix = _CONTAINER_MODE.name.lower() + ':'
+                if (prop in entity and _NODEID in entity[prop] and
+                   entity['Resource'].startswith(mode_prefix)):
                     count += 1
         if count == nglobalresources:
             _record_perf(
