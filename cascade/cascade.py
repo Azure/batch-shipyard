@@ -50,8 +50,7 @@ import azure.common
 import azure.cosmosdb.table as azuretable
 import azure.storage.blob as azureblob
 
-# create logger
-logger = logging.getLogger('cascade')
+logger = None
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
 _CONTAINER_MODE = None
@@ -119,12 +118,16 @@ class StandardStreamLogger:
         self.level(sys.stderr)
 
 
-def _setup_logger() -> None:
+def _setup_logger(mode: str) -> None:
+    logger_suffix = "" if mode is None else "-{}".format(mode)
+    logger_name = 'cascade{}'.format(logger_suffix)
+    global logger
+    logger = logging.getLogger(logger_name)
     """Set up logger"""
     logger.setLevel(logging.DEBUG)
     logloc = pathlib.Path(
         os.environ['AZ_BATCH_TASK_WORKING_DIR'],
-        'cascade.log')
+        '{}.log'.format(logger_name))
     handler = logging.handlers.RotatingFileHandler(
         str(logloc), maxBytes=10485760, backupCount=5)
     formatter = logging.Formatter(
@@ -723,6 +726,8 @@ def main():
     # get command-line args
     args = parseargs()
 
+    _setup_logger(args.mode)
+
     global _CONCURRENT_DOWNLOADS_ALLOWED, _CONTAINER_MODE
 
     # set up concurrent source downloads
@@ -797,5 +802,4 @@ def parseargs():
 
 
 if __name__ == '__main__':
-    _setup_logger()
     main()
