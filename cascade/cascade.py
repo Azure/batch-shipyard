@@ -302,6 +302,8 @@ def _singularity_image_name_on_disk(name: str) -> str:
     docker = False
     if name.startswith('shub://'):
         name = name[7:]
+    elif name.startswith('library://'):
+        name = name[10:]
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
@@ -405,8 +407,9 @@ class ContainerImageSaveThread(threading.Thread):
                 shell=True,
                 universal_newlines=True)
         elif grtype == 'singularity':
+            image_out_path = singularity_image_path_on_disk(image)
             proc = subprocess.Popen(
-                'singularity pull {}'.format(image),
+                'singularity pull -U {} {}'.format(image_out_path, image),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 shell=True,
