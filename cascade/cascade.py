@@ -190,7 +190,7 @@ async def _record_perf_async(
     """
     if not _RECORD_PERF:
         return
-    proc = await asyncio.subprocess.create_subprocess_shell(
+    proc = await asyncio.create_subprocess_shell(
         './perf.py cascade {ev} --prefix {pr} --message "{msg}"'.format(
             ev=event, pr=_PREFIX, msg=message), loop=loop)
     await proc.wait()
@@ -622,8 +622,13 @@ def _merge_service(
                 'gr-done',
                 'nglobalresources={}'.format(nglobalresources))
             _GR_DONE = True
-            logger.info('all {} global resources loaded'.format(
-                nglobalresources))
+            logger.info('all {} global resources of container mode "{}" loaded'
+                        .format(nglobalresources,
+                                _CONTAINER_MODE.name.lower()))
+        else:
+            logger.info('{}/{} global resources of container mode "{}" loaded'
+                        .format(count, nglobalresources,
+                                _CONTAINER_MODE.name.lower()))
 
 
 async def download_monitor_async(
@@ -700,6 +705,8 @@ def distribute_global_resources(
     if nentities == 0:
         logger.info('no global resources specified')
         return
+    logger.info('{} global resources matching container mode "{}"'
+                .format(nentities, _CONTAINER_MODE.name.lower()))
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
         loop, blob_client, table_client, ipaddress, nentities))
@@ -714,7 +721,7 @@ async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
     if _ON_WINDOWS:
         raise NotImplementedError()
     else:
-        proc = await asyncio.subprocess.create_subprocess_shell(
+        proc = await asyncio.create_subprocess_shell(
             'ip addr list eth0 | grep "inet " | cut -d\' \' -f6 | cut -d/ -f1',
             stdout=asyncio.subprocess.PIPE, loop=loop)
         output = await proc.communicate()
@@ -768,7 +775,7 @@ def main():
         _CONTAINER_MODE = ContainerMode.SINGULARITY
     else:
         raise ValueError('container mode is invalid: {}'.format(args.mode))
-    logger.info('container mode: {}'.format(_CONTAINER_MODE))
+    logger.info('container mode: {}'.format(_CONTAINER_MODE.name))
 
     # set up storage names
     _setup_storage_names(args.prefix)
