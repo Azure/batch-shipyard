@@ -495,6 +495,11 @@ SlurmCredentialsSettings = collections.namedtuple(
         'db_password',
     ]
 )
+SingularitySignedImageSettings = collections.namedtuple(
+    'SingularitySignedImageSettings', [
+        'image', 'key_fingerprint',
+    ]
+)
 
 
 class VmResource(object):
@@ -2322,18 +2327,62 @@ def global_resources_docker_images(config):
 
 def global_resources_singularity_images(config):
     # type: (dict) -> list
-    """Get list of singularity images
+    """Get list of all singularity images (signed and unsigned)
     :param dict config: configuration object
     :rtype: list
-    :return: singularity images
+    :return: all singularity images (signed and unsigned)
     """
-    try:
-        images = config['global_resources']['singularity_images']
-        if util.is_none_or_empty(images):
-            raise KeyError()
-    except KeyError:
-        images = []
+    global_resources = _kv_read_checked(config, 'global_resources', default={})
+    singularity_unsigned_images = (
+        _kv_read_checked(global_resources, 'singularity_images', default=[]))
+    singularity_signed_images_settings = (
+        global_resources_singularity_signed_images_settings(config))
+    singularity_signed_images = (
+        [settings.image for settings in singularity_signed_images_settings])
+    images = singularity_unsigned_images + singularity_signed_images
     return images
+
+
+def global_resources_singularity_signed_images_settings(config):
+    # type: (dict) -> list
+    """Get list of singularity signed images settings
+    :param dict config: configuration object
+    :rtype: list
+    :return: singularity signed images settings
+    """
+    global_resources = _kv_read_checked(config, 'global_resources', default={})
+    singularity_signed_images = _kv_read_checked(global_resources,
+                                                 'singularity_signed_images',
+                                                 default=[])
+    singularity_signed_images_settings = []
+    for settings in singularity_signed_images:
+        image = _kv_read_checked(settings, 'image')
+        if image is None:
+            raise ValueError('singularity signed image is invalid')
+        key_fingerprint = _kv_read_checked(settings, 'key_fingerprint')
+        if key_fingerprint is None:
+            raise ValueError('key_fingerprint for singularity signed image'
+                             ' "{}" is invalid'.format(image))
+        singularity_signed_images_settings.append(
+            SingularitySignedImageSettings(
+                image=image,
+                key_fingerprint=key_fingerprint,
+            )
+        )
+    return singularity_signed_images_settings
+
+
+def global_resources_singularity_signed_images_key_fingerprint_dict(config):
+    # type: (dict) -> list
+    """Get list of singularity signed images
+    :param dict config: configuration object
+    :rtype: list
+    :return: singularity signed images
+    """
+    images_settings = (
+        global_resources_singularity_signed_images_settings(config))
+    return dict((settings.image, settings.key_fingerprint)
+                for settings in images_settings)
 
 
 def global_resources_files(config):

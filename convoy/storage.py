@@ -424,6 +424,10 @@ def _add_global_resource(
         elif grtype == 'singularity_images':
             prefix = 'singularity'
             resources = settings.global_resources_singularity_images(config)
+            key_fingerprint_dict = (
+                settings.
+                    global_resources_singularity_signed_images_key_fingerprint_dict(
+                        config))
         else:
             raise NotImplementedError(
                 'global resource type: {}'.format(grtype))
@@ -432,12 +436,16 @@ def _add_global_resource(
             resource_sha1 = util.hash_string(resource)
             logger.info('adding global resource: {} hash={}'.format(
                 resource, resource_sha1))
+            key_fingerprint = None
+            if prefix == 'singularity':
+                key_fingerprint = key_fingerprint_dict.get(gr, None)
             table_client.insert_or_replace_entity(
                 _STORAGE_CONTAINERS['table_globalresources'],
                 {
                     'PartitionKey': pk,
                     'RowKey': resource_sha1,
                     'Resource': resource,
+                    'KeyFingerprint': key_fingerprint,
                 }
             )
             for i in range(0, dr.concurrent_source_downloads):
