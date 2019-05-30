@@ -28,6 +28,9 @@ global_resources:
   singularity_images:
   - shub://singularityhub/busybox
   - shub://singularityhub/scientific-linux
+  singularity_signed_images:
+  - image: library://sylabs/tests/signed:1.0.0
+    key_fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
   volumes:
     data_volumes:
       contdatavol:

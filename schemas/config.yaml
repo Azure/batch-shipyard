@@ -75,6 +75,17 @@ mapping:
         type: seq
         sequence:
           - type: str
+      singularity_signed_images:
+        type: seq
+        sequence:
+          - type: map
+            mapping:
+              image:
+                type: str
+                required: true
+              key_fingerprint:
+                type: str
+                required: true
       volumes:
         type: map
         mapping:
