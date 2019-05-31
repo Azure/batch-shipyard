@@ -82,6 +82,7 @@ _STORAGE_CONTAINERS = {
     'table_globalresources': None,
 }
 _DIRECTDL_QUEUE = queue.Queue()
+_DIRECTDL_KEY_FINGERPRINT_DICT = dict()
 _DIRECTDL_DOWNLOADING = set()
 _GR_DONE = False
 _THREAD_EXCEPTIONS = []
@@ -400,20 +401,26 @@ class ContainerImageSaveThread(threading.Thread):
         :return: tuple or return code, stdout, stderr
         """
         if grtype == 'docker':
-            proc = subprocess.Popen(
-                'docker pull {}'.format(image),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                universal_newlines=True)
+            cmd = 'docker pull {}'.format(image)
         elif grtype == 'singularity':
+            # if we have a key_fingerprint we need to pull
+            # the key to our keyring
             image_out_path = singularity_image_path_on_disk(image)
-            proc = subprocess.Popen(
-                'singularity pull -U {} {}'.format(image_out_path, image),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                universal_newlines=True)
+            if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
+                key_fingerprint = _DIRECTDL_KEY_FINGERPRINT_DICT[image]
+                key_pull_cmd = ('singularity key pull {}'
+                                .format(key_fingerprint))
+                singularity_pull_cmd = ('singularity pull {} {}'
+                                        .format(image_out_path, image))
+                cmd = key_pull_cmd + ' && ' + singularity_pull_cmd
+            else:
+                cmd = 'singularity pull -U {} {}'.format(image_out_path, image)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            universal_newlines=True)
         stdout, stderr = proc.communicate()
         return proc.returncode, stdout, stderr
 
@@ -427,10 +434,6 @@ class ContainerImageSaveThread(threading.Thread):
         while True:
             rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
-                if grtype == 'singularity':
-                    # log stderr as return code can be misleading
-                    logger.debug('{} image {} pull stderr: {}'.format(
-                        grtype, image, stderr))
                 break
             elif self._check_pull_output_overload(stderr.lower()):
                 logger.error(
@@ -699,10 +702,13 @@ def distribute_global_resources(
     nentities = 0
     for ent in entities:
         resource = ent['Resource']
-        grtype, _ = get_container_image_name_from_resource(resource)
+        grtype, image = get_container_image_name_from_resource(resource)
         if grtype == _CONTAINER_MODE.name.lower():
             nentities += 1
             _DIRECTDL_QUEUE.put(resource)
+            key_fingerprint = ent.get('KeyFingerprint', None)
+            if key_fingerprint is not None:
+                _DIRECTDL_KEY_FINGERPRINT_DICT[image] = key_fingerprint
         else:
             logger.info('skipping resource {}:'.format(resource) +
                         'not matching container mode "{}"'
