@@ -655,6 +655,20 @@ def get_singularity_cachedir(config):
     return sep.join((temp_disk_mountpoint(config), 'singularity', 'cache'))
 
 
+def get_singularity_sypgpdir(config):
+    # type: (dict) -> str
+    """Get Singularity sypgpdir var
+    :param dict config: configuration dict
+    :rtype: str
+    :return: singularity sypgpdir
+    """
+    if is_windows_pool(config):
+        sep = '\\'
+    else:
+        sep = '/'
+    return sep.join((temp_disk_mountpoint(config), 'singularity', 'sypgp'))
+
+
 def can_tune_tcp(vm_size):
     # type: (str) -> bool
     """Check if TCP tuning on compute node should be performed

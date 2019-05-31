@@ -4495,6 +4495,12 @@ def _construct_task(
                 value=settings.get_singularity_cachedir(config)
             )
         )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                name='SINGULARITY_SYPGPDIR',
+                value=settings.get_singularity_sypgpdir(config)
+            )
+        )
     # create task
     if util.is_not_empty(task_commands):
         if native:
@@ -4908,6 +4914,10 @@ def add_jobs(
                     batchmodels.EnvironmentSetting(
                         name='SINGULARITY_CACHEDIR',
                         value=settings.get_singularity_cachedir(config)
+                    ),
+                    batchmodels.EnvironmentSetting(
+                        name='SINGULARITY_SYPGPDIR',
+                        value=settings.get_singularity_sypgpdir(config)
                     ),
                 ],
             )

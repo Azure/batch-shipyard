@@ -679,6 +679,22 @@ async def download_monitor_async(
             logger.warning(
                 'singularity cache dir {} does not exist'.format(
                     _SINGULARITY_CACHE_DIR))
+    # fixup filemodes/ownership for singularity keys
+    if (_SINGULARITY_SYPGP_DIR is not None and
+            _AZBATCH_USER is not None):
+        if _SINGULARITY_SYPGP_DIR.exists():
+            logger.info('chown all files in {}'.format(
+                _SINGULARITY_SYPGP_DIR))
+            for file in scantree(str(_SINGULARITY_SYPGP_DIR)):
+                os.chown(
+                    str(file.path),
+                    _AZBATCH_USER[2],
+                    _AZBATCH_USER[3]
+                )
+        else:
+            logger.warning(
+                'singularity sypgp dir {} does not exist'.format(
+                    _SINGULARITY_SYPGP_DIR))
 
 
 def distribute_global_resources(

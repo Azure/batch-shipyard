@@ -1618,6 +1618,12 @@ def _construct_pool_object(
                 value=settings.get_singularity_cachedir(config)
             )
         )
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='SINGULARITY_SYPGPDIR',
+                value=settings.get_singularity_sypgpdir(config)
+            )
+        )
         # prometheus env vars
         if pool_settings.prometheus.ne_enabled:
             pool.start_task.environment_settings.append(
@@ -2218,12 +2224,16 @@ def _update_container_images(
                 settings.get_singularity_tmpdir(config)),
             'export SINGULARITY_CACHEDIR={}'.format(
                 settings.get_singularity_cachedir(config)),
+            'export SINGULARITY_SYPGPDIR={}'.format(
+                settings.get_singularity_sypgpdir(config)),
         ])
         coordcmd.extend(
             ['singularity pull -F {}'.format(x) for x in singularity_images]
         )
         coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
             settings.get_singularity_cachedir(config)))
+        coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
+            settings.get_singularity_sypgpdir(config)))
     if force_ssh:
         stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
             batch_client, config, pool, 'update container images', coordcmd)
@@ -2241,6 +2251,12 @@ def _update_container_images(
             batchmodels.EnvironmentSetting(
                 name='SINGULARITY_CACHEDIR',
                 value=settings.get_singularity_cachedir(config)
+            )
+        )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                name='SINGULARITY_SYPGPDIR',
+                value=settings.get_singularity_sypgpdir(config)
             )
         )
     coordcmd = util.wrap_commands_in_shell(coordcmd, windows=is_windows)
