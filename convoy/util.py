@@ -301,6 +301,8 @@ def singularity_image_name_on_disk(name):
         name = name[7:]
     elif name.startswith('library://'):
         name = name[10:]
+    elif name.startswith('oras://'):
+        name = name[7:]
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
