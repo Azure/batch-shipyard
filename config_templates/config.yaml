@@ -31,6 +31,7 @@ global_resources:
   singularity_signed_images:
   - image: library://sylabs/tests/signed:1.0.0
     key_fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
+    key_file: /key/file/local/path
   volumes:
     data_volumes:
       contdatavol:

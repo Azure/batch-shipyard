@@ -86,6 +86,8 @@ mapping:
               key_fingerprint:
                 type: str
                 required: true
+              key_file:
+                type: str
       volumes:
         type: map
         mapping:

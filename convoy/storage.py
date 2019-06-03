@@ -425,9 +425,8 @@ def _add_global_resource(
             prefix = 'singularity'
             resources = settings.global_resources_singularity_images(config)
             key_fingerprint_dict = (
-                settings.
-                    global_resources_singularity_signed_images_key_fingerprint_dict(
-                        config))
+                settings.singularity_signed_images_key_fingerprint_dict(
+                    config))
         else:
             raise NotImplementedError(
                 'global resource type: {}'.format(grtype))

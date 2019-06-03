@@ -291,7 +291,7 @@ def scantree(path):
 
 def singularity_image_name_on_disk(name):
     # type: (str) -> str
-    """Convert a singularity URI to an on disk simg name
+    """Convert a singularity URI to an on disk sif name
     :param str name: Singularity image name
     :rtype: str
     :return: singularity image name on disk
@@ -317,6 +317,18 @@ def singularity_image_name_on_disk(name):
         else:
             name = '{}_latest.sif'.format(name)
     return name
+
+
+def singularity_image_name_to_key_file_name(name):
+    # type: (str) -> str
+    """Convert a singularity image to his key file name
+    :param str name: Singularity image name
+    :rtype: str
+    :return: key file name of the singularity image
+    """
+    hash_image_name = hash_string(name)
+    key_file_name = 'public-{}.asc'.format(hash_image_name)
+    return key_file_name
 
 
 def wrap_commands_in_shell(commands, windows=False, wait=True):

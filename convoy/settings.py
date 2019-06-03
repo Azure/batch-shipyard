@@ -497,7 +497,7 @@ SlurmCredentialsSettings = collections.namedtuple(
 )
 SingularitySignedImageSettings = collections.namedtuple(
     'SingularitySignedImageSettings', [
-        'image', 'key_fingerprint',
+        'image', 'key_fingerprint', 'key_file'
     ]
 )
 
@@ -2377,21 +2377,29 @@ def global_resources_singularity_signed_images_settings(config):
         if key_fingerprint is None:
             raise ValueError('key_fingerprint for singularity signed image'
                              ' "{}" is invalid'.format(image))
+        key_file = _kv_read_checked(settings, 'key_file')
+        key_file_path = None
+        if key_file is not None:
+            key_file_path = pathlib.Path(key_file)
+            if not key_file_path.is_file():
+                raise ValueError('invalid key file for image "{}"'
+                                 .format(image))
         singularity_signed_images_settings.append(
             SingularitySignedImageSettings(
                 image=image,
                 key_fingerprint=key_fingerprint,
+                key_file=key_file_path,
             )
         )
     return singularity_signed_images_settings
 
 
-def global_resources_singularity_signed_images_key_fingerprint_dict(config):
-    # type: (dict) -> list
-    """Get list of singularity signed images
+def singularity_signed_images_key_fingerprint_dict(config):
+    # type: (dict) -> dict
+    """Get dict of singularity signed images to key fingerprint
     :param dict config: configuration object
-    :rtype: list
-    :return: singularity signed images
+    :rtype: dict
+    :return: singularity signed images to key fingerprint
     """
     images_settings = (
         global_resources_singularity_signed_images_settings(config))

@@ -1277,6 +1277,16 @@ def _construct_pool_object(
                 'credentials under batch')
         bi_pkg = _setup_batch_insights_package(config, pool_settings)
         _rflist.append((bi_pkg.name, bi_pkg))
+    # singularity settings
+    singularity_signed_images_settings = (
+        settings.global_resources_singularity_signed_images_settings(config))
+    for image_settings in singularity_signed_images_settings:
+        if image_settings.key_file is None:
+            continue
+        key_file_name = util.singularity_image_name_to_key_file_name(
+            image_settings.image)
+        key_file_path = image_settings.key_file
+        _rflist.append((key_file_name, key_file_path))
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
