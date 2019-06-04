@@ -323,7 +323,7 @@ def singularity_image_name_on_disk(name):
 
 def singularity_image_name_to_key_file_name(name):
     # type: (str) -> str
-    """Convert a singularity image to his key file name
+    """Convert a singularity image to its key file name
     :param str name: Singularity image name
     :rtype: str
     :return: key file name of the singularity image

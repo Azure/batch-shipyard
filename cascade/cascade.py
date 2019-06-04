@@ -339,7 +339,7 @@ def singularity_image_path_on_disk(name: str) -> pathlib.Path:
 
 
 def singularity_image_name_to_key_file_name(name: str) -> str:
-    """Convert a singularity image to his key file name
+    """Convert a singularity image to its key file name
     :param str name: Singularity image name
     :rtype: str
     :return: key file name of the singularity image
@@ -431,9 +431,9 @@ class ContainerImageSaveThread(threading.Thread):
                 fingerprint_check_cmd = (
                     'key_fingerprint=$({} | '.format(key_import_cmd) +
                     'grep -o "fingerprint \\(\\S*\\)" | ' +
-                    'grep -o "\\S*$"); ' +
-                    'if [ $key_fingerprint != ' +
-                    '"{}" ]; '.format(key_fingerprint) +
+                    'grep -o "\\S*$" | sed -e "s/\\(.*\\)/\\U\\1/"); ' +
+                    'if [ ${key_fingerprint} != ' +
+                    '"{}" ]; '.format(key_fingerprint.upper()) +
                     'then (>&2 echo "aborting: fingerprint of ' +
                     'key file $key_fingerprint does not match ' +
                     'fingerprint provided {}")'.format(key_fingerprint) +

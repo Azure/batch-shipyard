@@ -928,7 +928,7 @@ install_singularity() {
     chmod 775 $singularity_basedir/cache
     chmod 775 $singularity_basedir/cache/docker
     chmod 775 $singularity_basedir/cache/metadata
-    chmod 775 $singularity_basedir/sypgp
+    chmod 700 $singularity_basedir/sypgp
     # set proper ownership
     chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
     chown -R _azbatch:_azbatchgrp $singularity_basedir/cache

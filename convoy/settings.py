@@ -2347,13 +2347,22 @@ def global_resources_singularity_images(config):
     :return: all singularity images (signed and unsigned)
     """
     global_resources = _kv_read_checked(config, 'global_resources', default={})
+    singularity_images = (
+        _kv_read_checked(global_resources, 'singularity_images', default={}))
     singularity_unsigned_images = (
-        _kv_read_checked(global_resources, 'singularity_images', default=[]))
+        _kv_read_checked(singularity_images, 'unsigned', default=[]))
     singularity_signed_images_settings = (
         global_resources_singularity_signed_images_settings(config))
     singularity_signed_images = (
         [settings.image for settings in singularity_signed_images_settings])
     images = singularity_unsigned_images + singularity_signed_images
+    singularity_signed_and_unsigned_images = (
+        set(singularity_unsigned_images).intersection(
+            singularity_signed_images))
+    if len(singularity_signed_and_unsigned_images):
+        raise ValueError(
+            'image(s) "{}" should not be both signed and unsigned'
+            .format('", "'.join(singularity_signed_and_unsigned_images)))
     return images
 
 
@@ -2365,9 +2374,10 @@ def global_resources_singularity_signed_images_settings(config):
     :return: singularity signed images settings
     """
     global_resources = _kv_read_checked(config, 'global_resources', default={})
-    singularity_signed_images = _kv_read_checked(global_resources,
-                                                 'singularity_signed_images',
-                                                 default=[])
+    singularity_images = _kv_read_checked(
+        global_resources, 'singularity_images', default={})
+    singularity_signed_images = _kv_read_checked(
+        singularity_images, 'signed', default=[])
     singularity_signed_images_settings = []
     for settings in singularity_signed_images:
         image = _kv_read_checked(settings, 'image')

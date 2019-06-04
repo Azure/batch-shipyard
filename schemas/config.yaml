@@ -72,22 +72,25 @@ mapping:
         sequence:
           - type: str
       singularity_images:
-        type: seq
-        sequence:
-          - type: str
-      singularity_signed_images:
-        type: seq
-        sequence:
-          - type: map
-            mapping:
-              image:
-                type: str
-                required: true
-              key_fingerprint:
-                type: str
-                required: true
-              key_file:
-                type: str
+        type: map
+        mapping:
+          unsigned:
+            type: seq
+            sequence:
+              - type: str
+          signed:
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  image:
+                    type: str
+                    required: true
+                  key_fingerprint:
+                    type: str
+                    required: true
+                  key_file:
+                    type: str
       volumes:
         type: map
         mapping:
