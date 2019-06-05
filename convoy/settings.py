@@ -2267,6 +2267,10 @@ def singularity_registries(config, images=None):
         if len(tmp) > 1:
             if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
                 servers.append(tmp[0])
+    credentials = _kv_read_checked(config, 'credentials', default={})
+    singularity_registry = _kv_read_checked(
+        credentials, 'singularity_registry', default={})
+    servers.extend(singularity_registry.keys())
     # get login info for each registry
     registries = []
     # add docker hub if found and no servers are specified

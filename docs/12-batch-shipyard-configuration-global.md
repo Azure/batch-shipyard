@@ -250,12 +250,12 @@ This property is required.
       to leave this property empty if possible. Note that `singularity_images`
       is incompatible with `native` container support enabled pools.
       * (optional) `unsigned` is a list of Singularity images that will not be
-        verify when installing on every compute node. `shub://`, `docker://`,
-        and `library://` URI prefixes are supported.
+        verified when installing on every compute node. `shub://`, `docker://`,
+        `library://`, and `oras://` URI prefixes are supported.
       * (optional) `signed` is a list of objects containing the Singularity
-        image that will be verify when installing on every compute node as
-        well as the information to verify the image. Only the `library://` URI
-        prefix is supported.
+        image that will be verified when installing on every compute node as
+        well as the information to verify the image. `library://`, and
+        `oras://` URI prefixes are supported.
         * (required) `image` is the Singularity image to verify.
         * (required) `key_fingerprint` is the key fingerprint of the Singularity
           image to verify. If no `key_file` is specified, it uses this key

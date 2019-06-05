@@ -422,8 +422,11 @@ class ContainerImageSaveThread(threading.Thread):
         key_file_path = pathlib.Path(
             singularity_image_name_to_key_file_name(image))
         if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
-            singularity_pull_cmd = ('singularity pull {} {}'
-                                    .format(image_out_path, image))
+            singularity_pull_cmd = (
+                'singularity pull '
+                '--docker-username $SINGULARITY_LOGIN_USERNAME '
+                '--docker-password $SINGULARITY_LOGIN_PASSWORD '
+                '{} {}'.format(image_out_path, image))
             key_fingerprint = _DIRECTDL_KEY_FINGERPRINT_DICT[image]
             if key_file_path.is_file():
                 key_import_cmd = ('singularity key import {}'
@@ -451,7 +454,7 @@ class ContainerImageSaveThread(threading.Thread):
                                           .format(image_out_path))
                 cmd = cmd + ' && ' + singularity_verify_cmd
         else:
-            cmd = 'singularity pull -U {} {}'.format(image_out_path, image)
+            cmd = 'singularity pull -U -F {} {}'.format(image_out_path, image)
         return cmd
 
     def _pull(self, grtype: str, image: str) -> tuple:
