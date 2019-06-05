@@ -63,6 +63,10 @@ try:
 except KeyError:
     _SINGULARITY_CACHE_DIR = None
 try:
+    _SINGULARITY_SYPGP_DIR = pathlib.Path(os.environ['SINGULARITY_SYPGPDIR'])
+except KeyError:
+    _SINGULARITY_SYPGP_DIR = None
+try:
     _AZBATCH_USER = pwd.getpwnam('_azbatch')
 except NameError:
     _AZBATCH_USER = None
@@ -82,6 +86,7 @@ _STORAGE_CONTAINERS = {
     'table_globalresources': None,
 }
 _DIRECTDL_QUEUE = queue.Queue()
+_DIRECTDL_KEY_FINGERPRINT_DICT = dict()
 _DIRECTDL_DOWNLOADING = set()
 _GR_DONE = False
 _THREAD_EXCEPTIONS = []
@@ -294,7 +299,7 @@ def compute_resource_hash(resource: str) -> str:
 
 
 def _singularity_image_name_on_disk(name: str) -> str:
-    """Convert a singularity URI to an on disk simg name
+    """Convert a singularity URI to an on disk sif name
     :param str name: Singularity image name
     :rtype: str
     :return: singularity image name on disk
@@ -304,6 +309,8 @@ def _singularity_image_name_on_disk(name: str) -> str:
         name = name[7:]
     elif name.startswith('library://'):
         name = name[10:]
+    elif name.startswith('oras://'):
+        name = name[7:]
     elif name.startswith('docker://'):
         docker = True
         name = name[9:]
@@ -329,6 +336,17 @@ def singularity_image_path_on_disk(name: str) -> pathlib.Path:
     :return: singularity image path on disk
     """
     return _SINGULARITY_CACHE_DIR / _singularity_image_name_on_disk(name)
+
+
+def singularity_image_name_to_key_file_name(name: str) -> str:
+    """Convert a singularity image to its key file name
+    :param str name: Singularity image name
+    :rtype: str
+    :return: key file name of the singularity image
+    """
+    hash_image_name = compute_resource_hash(name)
+    key_file_name = 'public-{}.asc'.format(hash_image_name)
+    return key_file_name
 
 
 class ContainerImageSaveThread(threading.Thread):
@@ -392,6 +410,53 @@ class ContainerImageSaveThread(threading.Thread):
         """
         return any([x in stderr for x in _DOCKER_PULL_ERRORS])
 
+    def _get_singularity_pull_cmd(self, image: str) -> str:
+        """Get singularity pull command
+        :param str image: image to pull
+        :rtype: str
+        :return: pull command for the singularity image
+        """
+        # if we have a key_fingerprint we need to pull
+        # the key to our keyring
+        image_out_path = singularity_image_path_on_disk(image)
+        key_file_path = pathlib.Path(
+            singularity_image_name_to_key_file_name(image))
+        if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
+            singularity_pull_cmd = (
+                'singularity pull '
+                '--docker-username $SINGULARITY_LOGIN_USERNAME '
+                '--docker-password $SINGULARITY_LOGIN_PASSWORD '
+                '{} {}'.format(image_out_path, image))
+            key_fingerprint = _DIRECTDL_KEY_FINGERPRINT_DICT[image]
+            if key_file_path.is_file():
+                key_import_cmd = ('singularity key import {}'
+                                  .format(key_file_path))
+                fingerprint_check_cmd = (
+                    'key_fingerprint=$({} | '.format(key_import_cmd) +
+                    'grep -o "fingerprint \\(\\S*\\)" | ' +
+                    'grep -o "\\S*$" | sed -e "s/\\(.*\\)/\\U\\1/"); ' +
+                    'if [ ${key_fingerprint} != ' +
+                    '"{}" ]; '.format(key_fingerprint.upper()) +
+                    'then (>&2 echo "aborting: fingerprint of ' +
+                    'key file $key_fingerprint does not match ' +
+                    'fingerprint provided {}")'.format(key_fingerprint) +
+                    ' && exit 1; fi')
+                cmd = (key_import_cmd + ' && ' + fingerprint_check_cmd +
+                       ' && ' + singularity_pull_cmd)
+            else:
+                key_pull_cmd = ('singularity key pull {}'
+                                .format(key_fingerprint))
+                cmd = key_pull_cmd + ' && ' + singularity_pull_cmd
+            # if the image pulled from oras we need to manually
+            # verify the image
+            if image.startswith('oras://'):
+                singularity_verify_cmd = ('singularity verify {}'
+                                          .format(image_out_path))
+                cmd = cmd + ' && ' + singularity_verify_cmd
+        else:
+            cmd = 'singularity pull -U -F {} {}'.format(image_out_path, image)
+        return cmd
+
     def _pull(self, grtype: str, image: str) -> tuple:
         """Container image pull
         :param str grtype: global resource type
@@ -400,20 +465,16 @@ class ContainerImageSaveThread(threading.Thread):
         :return: tuple or return code, stdout, stderr
         """
         if grtype == 'docker':
-            proc = subprocess.Popen(
-                'docker pull {}'.format(image),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                universal_newlines=True)
+            cmd = 'docker pull {}'.format(image)
         elif grtype == 'singularity':
-            image_out_path = singularity_image_path_on_disk(image)
-            proc = subprocess.Popen(
-                'singularity pull -U {} {}'.format(image_out_path, image),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                universal_newlines=True)
+            cmd = self._get_singularity_pull_cmd(image)
+        logger.debug('pulling command: {}'.format(cmd))
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            universal_newlines=True)
         stdout, stderr = proc.communicate()
         return proc.returncode, stdout, stderr
 
@@ -427,10 +488,6 @@ class ContainerImageSaveThread(threading.Thread):
         while True:
             rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
-                if grtype == 'singularity':
-                    # log stderr as return code can be misleading
-                    logger.debug('{} image {} pull stderr: {}'.format(
-                        grtype, image, stderr))
                 break
             elif self._check_pull_output_overload(stderr.lower()):
                 logger.error(
@@ -676,6 +733,22 @@ async def download_monitor_async(
             logger.warning(
                 'singularity cache dir {} does not exist'.format(
                     _SINGULARITY_CACHE_DIR))
+    # fixup filemodes/ownership for singularity keys
+    if (_SINGULARITY_SYPGP_DIR is not None and
+            _AZBATCH_USER is not None):
+        if _SINGULARITY_SYPGP_DIR.exists():
+            logger.info('chown all files in {}'.format(
+                _SINGULARITY_SYPGP_DIR))
+            for file in scantree(str(_SINGULARITY_SYPGP_DIR)):
+                os.chown(
+                    str(file.path),
+                    _AZBATCH_USER[2],
+                    _AZBATCH_USER[3]
+                )
+        else:
+            logger.warning(
+                'singularity sypgp dir {} does not exist'.format(
+                    _SINGULARITY_SYPGP_DIR))
 
 
 def distribute_global_resources(
@@ -699,10 +772,13 @@ def distribute_global_resources(
     nentities = 0
     for ent in entities:
         resource = ent['Resource']
-        grtype, _ = get_container_image_name_from_resource(resource)
+        grtype, image = get_container_image_name_from_resource(resource)
         if grtype == _CONTAINER_MODE.name.lower():
             nentities += 1
             _DIRECTDL_QUEUE.put(resource)
+            key_fingerprint = ent.get('KeyFingerprint', None)
+            if key_fingerprint is not None:
+                _DIRECTDL_KEY_FINGERPRINT_DICT[image] = key_fingerprint
         else:
             logger.info('skipping resource {}:'.format(resource) +
                         'not matching container mode "{}"'

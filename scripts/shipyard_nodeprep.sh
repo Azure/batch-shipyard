@@ -923,13 +923,16 @@ install_singularity() {
     mkdir -p $singularity_basedir/tmp
     mkdir -p $singularity_basedir/cache/docker
     mkdir -p $singularity_basedir/cache/metadata
+    mkdir -p $singularity_basedir/sypgp
     chmod 775 $singularity_basedir/tmp
     chmod 775 $singularity_basedir/cache
     chmod 775 $singularity_basedir/cache/docker
     chmod 775 $singularity_basedir/cache/metadata
+    chmod 700 $singularity_basedir/sypgp
     # set proper ownership
     chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
     chown -R _azbatch:_azbatchgrp $singularity_basedir/cache
+    chown -R _azbatch:_azbatchgrp $singularity_basedir/sypgp
     # ensure it runs
     singularity version
     # remove docker image

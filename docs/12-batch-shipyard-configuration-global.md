@@ -237,20 +237,33 @@ This property is required.
       that if you do not specify Docker images to preload, you must specify
       `allow_run_on_missing_image` as `true` in your job specification for
       any tasks that reference images that aren't specified in this property.
-    * (required if using Singularity) `singularity_images` is an array of
-      Singularity images that should be installed on every compute node
-      when this configuration file is supplied while creating a compute pool.
-      Image tags are supported. Image names should be fully qualified
-      including any registry server name prefix. Both `shub://` and
-      `docker://` URI prefixes are supported. If you are
-      referencing a private registry that requires a login, then you must
-      add the credential for the registry in the `singularity_registry`
-      property in the credentials file. If this property is empty or is not
-      specified, no Singularity images will be pre-loaded on to compute nodes
-      which will lead to increased task startup latency. It is
-      highly recommended not to leave this property empty if possible.
-      Note that `singularity_images` is incompatible with `native` container
-      support enabled pools.
+    * (required if using Singularity) `singularity_images` property contains
+      all the Singularity images that should be installed on every compute
+      node when this configuration file is supplied while creating a compute
+      pool. Image tags are supported. Image names should be fully qualified
+      including any registry server name prefix. If you are referencing a
+      private registry that requires a login, then you must add the credential
+      for the registry in the `singularity_registry` property in the
+      credentials file. If this property is empty or is not specified, no
+      Singularity images will be pre-loaded on to compute nodes which will
+      lead to increased task startup latency. It is highly recommended not
+      to leave this property empty if possible. Note that `singularity_images`
+      is incompatible with `native` container support enabled pools.
+      * (optional) `unsigned` is a list of Singularity images that will not be
+        verified when installing on every compute node. `shub://`, `docker://`,
+        `library://`, and `oras://` URI prefixes are supported.
+      * (optional) `signed` is a list of objects containing the Singularity
+        image that will be verified when installing on every compute node as
+        well as the information to verify the image. `library://`, and
+        `oras://` URI prefixes are supported.
+        * (required) `image` is the Singularity image to verify.
+        * (required) `key_fingerprint` is the key fingerprint of the Singularity
+          image to verify. If no `key_file` is specified, it uses this key
+          fingerprint to pull the key from the default key server
+          "[https://keys.sylabs.io](https://keys.sylabs.io)"
+        * (optional) `key_file` is a local path to a public key file. The key
+          fingerprint of the key in `key_file` must match the
+          `key_fingerprint`.
     * (optional) `files` property specifies data that should be ingressed
       from a location accessible by the local machine (i.e., machine invoking
       `shipyard.py` to a shared file system location accessible by compute

@@ -1277,6 +1277,16 @@ def _construct_pool_object(
                 'credentials under batch')
         bi_pkg = _setup_batch_insights_package(config, pool_settings)
         _rflist.append((bi_pkg.name, bi_pkg))
+    # singularity settings
+    singularity_signed_images_settings = (
+        settings.global_resources_singularity_signed_images_settings(config))
+    for image_settings in singularity_signed_images_settings:
+        if image_settings.key_file is None:
+            continue
+        key_file_name = util.singularity_image_name_to_key_file_name(
+            image_settings.image)
+        key_file_path = image_settings.key_file
+        _rflist.append((key_file_name, key_file_path))
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
@@ -1616,6 +1626,12 @@ def _construct_pool_object(
             batchmodels.EnvironmentSetting(
                 name='SINGULARITY_CACHEDIR',
                 value=settings.get_singularity_cachedir(config)
+            )
+        )
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='SINGULARITY_SYPGPDIR',
+                value=settings.get_singularity_sypgpdir(config)
             )
         )
         # prometheus env vars
@@ -2218,12 +2234,16 @@ def _update_container_images(
                 settings.get_singularity_tmpdir(config)),
             'export SINGULARITY_CACHEDIR={}'.format(
                 settings.get_singularity_cachedir(config)),
+            'export SINGULARITY_SYPGPDIR={}'.format(
+                settings.get_singularity_sypgpdir(config)),
         ])
         coordcmd.extend(
             ['singularity pull -F {}'.format(x) for x in singularity_images]
         )
         coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
             settings.get_singularity_cachedir(config)))
+        coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
+            settings.get_singularity_sypgpdir(config)))
     if force_ssh:
         stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
             batch_client, config, pool, 'update container images', coordcmd)
@@ -2241,6 +2261,12 @@ def _update_container_images(
             batchmodels.EnvironmentSetting(
                 name='SINGULARITY_CACHEDIR',
                 value=settings.get_singularity_cachedir(config)
+            )
+        )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                name='SINGULARITY_SYPGPDIR',
+                value=settings.get_singularity_sypgpdir(config)
             )
         )
     coordcmd = util.wrap_commands_in_shell(coordcmd, windows=is_windows)
