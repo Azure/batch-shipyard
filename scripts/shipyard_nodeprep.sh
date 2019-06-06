@@ -1400,6 +1400,7 @@ install_intel_mpi() {
 }
 
 setup_cascade() {
+    envfile=$AZ_BATCH_NODE_STARTUP_DIR/wd/.cascade_envfile
     if [ $cascadecontainer -eq 1 ]; then
         # store shipyard docker pull start
         if command -v python3 > /dev/null 2>&1; then
@@ -1407,23 +1408,19 @@ setup_cascade() {
         else
             drpstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
         fi
-
         log DEBUG "Pulling $cascade_docker_image"
         docker_pull_image "$cascade_docker_image"
         if [ -n "$singularity_basedir" ]; then
             log DEBUG "Pulling $cascade_singularity_image"
             docker_pull_image "$cascade_singularity_image"
         fi
-
         # store shipyard pull end
         if command -v python3 > /dev/null 2>&1; then
             drpend=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
         else
             drpend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
         fi
-
         # create env file
-        envfile=.cascade_envfile
 cat > $envfile << EOF
 PYTHONASYNCIODEBUG=1
 prefix=$prefix
@@ -1439,7 +1436,6 @@ $(env | grep AZ_BATCH_)
 $(env | grep DOCKER_LOGIN_)
 $(env | grep SINGULARITY_)
 EOF
-        chmod 600 $envfile
     else
         # add timings
         if [[ -n ${SHIPYARD_TIMING+x} ]]; then
@@ -1450,7 +1446,15 @@ EOF
             # shellcheck disable=SC2086
             ./perf.py nodeprep end $prefix --ts "$npend"
         fi
+        # create env file
+cat > $envfile << EOF
+$(env | grep SHIPYARD_)
+$(env | grep AZ_BATCH_)
+$(env | grep DOCKER_LOGIN_)
+$(env | grep SINGULARITY_)
+EOF
     fi
+    chmod 600 $envfile
 }
 
 run_cascade() {
