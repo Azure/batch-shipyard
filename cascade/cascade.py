@@ -423,7 +423,7 @@ class ContainerImageSaveThread(threading.Thread):
             singularity_image_name_to_key_file_name(image))
         if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
             singularity_pull_cmd = (
-                'singularity pull '
+                'singularity pull -F '
                 '--docker-username $SINGULARITY_LOGIN_USERNAME '
                 '--docker-password $SINGULARITY_LOGIN_PASSWORD '
                 '{} {}'.format(image_out_path, image))
@@ -535,12 +535,11 @@ async def _direct_download_resources_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azureblob.BlockBlobService,
         table_client: azuretable.TableService,
-        ipaddress: str, nglobalresources: int) -> None:
+        nglobalresources: int) -> None:
     """Direct download resource logic
     :param asyncio.BaseEventLoop loop: event loop
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
-    :param str ipaddress: ip address
     :param int nglobalresources: number of global resources
     """
     # ensure we are not downloading too many sources at once
@@ -697,19 +696,18 @@ async def download_monitor_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azureblob.BlockBlobService,
         table_client: azuretable.TableService,
-        ipaddress: str, nglobalresources: int) -> None:
+        nglobalresources: int) -> None:
     """Download monitor
     :param asyncio.BaseEventLoop loop: event loop
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
-    :param str ipaddress: ip address
     :param int nglobalresource: number of global resources
     """
     while not _GR_DONE:
         # check if there are any direct downloads
         if _DIRECTDL_QUEUE.qsize() > 0:
             await _direct_download_resources_async(
-                loop, blob_client, table_client, ipaddress, nglobalresources)
+                loop, blob_client, table_client, nglobalresources)
         # check for any thread exceptions
         if len(_THREAD_EXCEPTIONS) > 0:
             logger.critical('Thread exceptions encountered, terminating')
@@ -754,13 +752,11 @@ async def download_monitor_async(
 def distribute_global_resources(
         loop: asyncio.BaseEventLoop,
         blob_client: azureblob.BlockBlobService,
-        table_client: azuretable.TableService,
-        ipaddress: str) -> None:
+        table_client: azuretable.TableService) -> None:
     """Distribute global services/resources
     :param asyncio.BaseEventLoop loop: event loop
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
-    :param str ipaddress: ip address
     """
     # get globalresources from table
     try:
@@ -790,23 +786,7 @@ def distribute_global_resources(
                 .format(nentities, _CONTAINER_MODE.name.lower()))
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
-        loop, blob_client, table_client, ipaddress, nentities))
-
-
-async def _get_ipaddress_async(loop: asyncio.BaseEventLoop) -> str:
-    """Get IP address
-    :param asyncio.BaseEventLoop loop: event loop
-    :rtype: str
-    :return: ip address
-    """
-    if _ON_WINDOWS:
-        raise NotImplementedError()
-    else:
-        proc = await asyncio.create_subprocess_shell(
-            'ip addr list eth0 | grep "inet " | cut -d\' \' -f6 | cut -d/ -f1',
-            stdout=asyncio.subprocess.PIPE, loop=loop)
-        output = await proc.communicate()
-        return output[0].decode('ascii').strip()
+        loop, blob_client, table_client, nentities))
 
 
 def main():
@@ -840,13 +820,6 @@ def main():
         loop = asyncio.get_event_loop()
     loop.set_debug(True)
 
-    # get ip address if not specified, for local testing only
-    if args.ipaddress is None:
-        ipaddress = loop.run_until_complete(_get_ipaddress_async(loop))
-    else:
-        ipaddress = args.ipaddress
-    logger.debug('ip address: {}'.format(ipaddress))
-
     # set up container mode
     if args.mode is None:
         raise ValueError('container mode is not specified')
@@ -866,7 +839,7 @@ def main():
     blob_client, table_client = _create_credentials()
 
     # distribute global resources
-    distribute_global_resources(loop, blob_client, table_client, ipaddress)
+    distribute_global_resources(loop, blob_client, table_client)
 
 
 def parseargs():
@@ -876,12 +849,10 @@ def parseargs():
     """
     parser = argparse.ArgumentParser(
         description='Cascade: Batch Shipyard File/Image Replicator')
-    parser.set_defaults(concurrent=None, ipaddress=None, mode=None)
+    parser.set_defaults(concurrent=None, mode=None)
     parser.add_argument(
         '--concurrent',
         help='concurrent source downloads')
-    parser.add_argument(
-        '--ipaddress', help='ip address')
     parser.add_argument(
         '--mode', help='container mode (docker/singularity)')
     parser.add_argument(

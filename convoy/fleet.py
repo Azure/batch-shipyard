@@ -195,6 +195,10 @@ _MIRROR_SYSTEM_IMAGES_FILE = (
     'replicate_batch_shipyard_images.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/replicate_batch_shipyard_images.sh')
 )
+_CASCADE_SCRIPT_FILE = (
+    'shipyard_cascade.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_cascade.sh')
+)
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
@@ -1366,6 +1370,7 @@ def _construct_pool_object(
                  x=' -x {}'.format(data._BLOBXFER_VERSION))
         )
     else:
+        _rflist.append(_CASCADE_SCRIPT_FILE)
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
