@@ -2241,8 +2241,8 @@ def _update_container_images(
         i = '-i alfpark/batch-shipyard:{}-cascade-docker'.format(__version__)
         j = ('-j alfpark/batch-shipyard:{}-cascade-singularity'
              .format(__version__))
-        p = '-p "--prefix {}"'.format(settings.batch_shipyard_settings(config)
-                                      .storage_entity_prefix)
+        p = '-p {}'.format(settings.batch_shipyard_settings(config)
+                           .storage_entity_prefix)
         s = '-s {}/singularity'.format(settings.temp_disk_mountpoint(config))
         coordcmd.extend([
             'set -a',

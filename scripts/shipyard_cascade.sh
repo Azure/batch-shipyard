@@ -129,13 +129,13 @@ spawn_cascade_process() {
         if [[ -n ${SHIPYARD_TIMING+x} ]]; then
             # mark start cascade
             # shellcheck disable=SC2086
-            ./perf.py cascade start $prefix
+            ./perf.py cascade start --prefix "$prefix"
         fi
         log DEBUG "Starting Cascade Docker mode"
         # shellcheck disable=SC2086
         PYTHONASYNCIODEBUG=1 ./cascade.py --mode docker \
             --concurrent "$concurrent_source_downloads" \
-            $prefix &
+            --prefix "$prefix" &
         cascade_docker_pid=$!
         # run cascade for singularity
         if [ -n "$singularity_basedir" ]; then
@@ -143,7 +143,7 @@ spawn_cascade_process() {
             # shellcheck disable=SC2086
             PYTHONASYNCIODEBUG=1 ./cascade.py --mode singularity \
                 --concurrent "$concurrent_source_downloads" \
-                $prefix &
+                --prefix "$prefix" &
             cascade_singularity_pid=$!
         fi
     fi

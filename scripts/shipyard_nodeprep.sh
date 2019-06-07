@@ -193,7 +193,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             fallback_registry=$OPTARG
             ;;
         p)
-            prefix="--prefix $OPTARG"
+            prefix=$OPTARG
             ;;
         q)
             batch_insights=1
@@ -1441,10 +1441,10 @@ EOF
         if [[ -n ${SHIPYARD_TIMING+x} ]]; then
             # backfill node prep start
             # shellcheck disable=SC2086
-            ./perf.py nodeprep start $prefix --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
+            ./perf.py nodeprep start --prefix "$prefix" --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
             # mark node prep finished
             # shellcheck disable=SC2086
-            ./perf.py nodeprep end $prefix --ts "$npend"
+            ./perf.py nodeprep end --prefix "$prefix" --ts "$npend"
         fi
         # create env file
 cat > $envfile << EOF
@@ -1752,8 +1752,8 @@ fi
 touch "$nodeprepfinished"
 
 
-cascade_docker_image="alfpark/batch-shipyard:${shipyardversion}-cascade-docker"
-cascade_singularity_image="alfpark/batch-shipyard:${shipyardversion}-cascade-singularity"
+cascade_docker_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-docker"
+cascade_singularity_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-singularity"
 
 # execute cascade
 if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
