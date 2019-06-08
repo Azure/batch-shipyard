@@ -123,16 +123,20 @@ class StandardStreamLogger:
         self.level(sys.stderr)
 
 
-def _setup_logger(mode: str) -> None:
-    logger_suffix = "" if mode is None else "-{}".format(mode)
-    logger_name = 'cascade{}'.format(logger_suffix)
+def _setup_logger(mode: str, log_dir: str) -> None:
+    if not os.path.isdir(log_dir):
+        invalid_log_dir = log_dir
+        log_dir = os.environ['AZ_BATCH_TASK_WORKING_DIR']
+        print('log directory "{}" '.format(invalid_log_dir) +
+              'is not valid: using "{}"'.format(log_dir))
+    logger_suffix = "" if mode is None else "--{}".format(mode)
+    logger_name = 'cascade{}--{}'.format(
+        logger_suffix, datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S'))
     global logger
     logger = logging.getLogger(logger_name)
     """Set up logger"""
     logger.setLevel(logging.DEBUG)
-    logloc = pathlib.Path(
-        os.environ['AZ_BATCH_TASK_WORKING_DIR'],
-        '{}.log'.format(logger_name))
+    logloc = pathlib.Path(log_dir, '{}.log'.format(logger_name))
     handler = logging.handlers.RotatingFileHandler(
         str(logloc), maxBytes=10485760, backupCount=5)
     formatter = logging.Formatter(
@@ -794,7 +798,7 @@ def main():
     # get command-line args
     args = parseargs()
 
-    _setup_logger(args.mode)
+    _setup_logger(args.mode, args.log_directory)
 
     global _CONCURRENT_DOWNLOADS_ALLOWED, _CONTAINER_MODE
 
@@ -857,6 +861,8 @@ def parseargs():
         '--mode', help='container mode (docker/singularity)')
     parser.add_argument(
         '--prefix', help='storage container prefix')
+    parser.add_argument(
+        '--log-directory', help='directory to store log files')
     return parser.parse_args()
 
 

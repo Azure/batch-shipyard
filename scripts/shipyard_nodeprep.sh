@@ -1460,6 +1460,7 @@ EOF
 run_cascade() {
     local d
     if [ $cascadecontainer -ne 0 ]; then d="-d"; else d=""; fi
+    log_directory=$(pwd)
     set +e
     "${AZ_BATCH_TASK_WORKING_DIR}"/shipyard_cascade.sh \
         -b "$block" \
@@ -1468,6 +1469,7 @@ run_cascade() {
         -e "$envfile" \
         -i "$cascade_docker_image" \
         -j "$cascade_singularity_image" \
+        -l "$log_directory" \
         -p "$prefix" \
         -s "$singularity_basedir" \
         -t

@@ -37,4 +37,4 @@ fi
 
 # execute cascade
 # shellcheck disable=SC2086
-python3 cascade.py --mode "$cascade_mode" --concurrent "$concurrent_source_downloads" --prefix "$prefix"
+python3 cascade.py --mode "$cascade_mode" --concurrent "$concurrent_source_downloads" --prefix "$prefix" --log-directory "$log_directory"

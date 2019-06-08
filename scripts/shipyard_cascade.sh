@@ -16,7 +16,7 @@ prefix=
 singularity_basedir=
 
 # process command line options
-while getopts "h?b:c:de:i:j:p:s:t" opt; do
+while getopts "h?b:c:de:i:j:l:p:s:t" opt; do
     case "$opt" in
         h|\?)
             echo "shipyard_cascade.sh parameters"
@@ -27,6 +27,7 @@ while getopts "h?b:c:de:i:j:p:s:t" opt; do
             echo "-e [envfile] environment file"
             echo "-i [cascade docker image] cascade docker image"
             echo "-j [cascade singularity image] cascade singularity image"
+            echo "-l [log directory] log directory"
             echo "-p [prefix] storage container prefix"
             echo "-s [singularity basedir] singularity base directory"
             echo "-t run cascade as part of the start task"
@@ -50,6 +51,9 @@ while getopts "h?b:c:de:i:j:p:s:t" opt; do
             ;;
         j)
             cascade_singularity_image=$OPTARG
+            ;;
+        l)
+            log_directory=$OPTARG
             ;;
         p)
             prefix=$OPTARG
@@ -78,6 +82,11 @@ if [ $cascadecontainer -eq 1 ] && [ -n "$singularity_basedir" ] && [ -z $cascade
     exit 1
 fi
 
+if [ -z "$log_directory" ]; then
+    log ERROR "log directory not specified"
+    exit 1
+fi
+
 if [ -z "$prefix" ]; then
     log ERROR "prefix not specified"
     exit 1
@@ -92,10 +101,13 @@ spawn_cascade_process() {
         detached="-d"
     fi
     if [ $cascadecontainer -eq 1 ]; then
+        tmp_envfile="$envfile.tmp"
+        cp $envfile $tmp_envfile
+        echo "log_directory=$log_directory" >> $tmp_envfile
         # run cascade for docker
         log DEBUG "Starting $cascade_docker_image"
         # shellcheck disable=SC2086
-        docker run $detached --rm --runtime runc --env-file $envfile \
+        docker run $detached --rm --runtime runc --env-file $tmp_envfile \
             -e "cascade_mode=docker" \
             -e "is_start_task=$is_start_task" \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -114,7 +126,7 @@ spawn_cascade_process() {
                 -v $singularity_basedir:$singularity_basedir \
                 -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
             # shellcheck disable=SC2086
-            docker run $detached --rm --runtime runc --env-file $envfile \
+            docker run $detached --rm --runtime runc --env-file $tmp_envfile \
                 -e "cascade_mode=singularity" \
                 -v /etc/passwd:/etc/passwd:ro \
                 -v /etc/group:/etc/group:ro \
@@ -135,7 +147,8 @@ spawn_cascade_process() {
         # shellcheck disable=SC2086
         PYTHONASYNCIODEBUG=1 ./cascade.py --mode docker \
             --concurrent "$concurrent_source_downloads" \
-            --prefix "$prefix" &
+            --prefix "$prefix" \
+            --log_directory "$log_directory" &
         cascade_docker_pid=$!
         # run cascade for singularity
         if [ -n "$singularity_basedir" ]; then
@@ -143,7 +156,8 @@ spawn_cascade_process() {
             # shellcheck disable=SC2086
             PYTHONASYNCIODEBUG=1 ./cascade.py --mode singularity \
                 --concurrent "$concurrent_source_downloads" \
-                --prefix "$prefix" &
+                --prefix "$prefix" \
+                --log_directory "$log_directory" &
             cascade_singularity_pid=$!
         fi
     fi
