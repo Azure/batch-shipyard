@@ -2146,6 +2146,12 @@ def _update_container_images(
     :param str singularity_image: singularity image to update
     :param bool force_ssh: force update over SSH
     """
+    # exiting on windows because we need to force ssh with native
+    # mode and windows doesn't support ssh 
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        logger.warning('exiting: cannot update images on windows')
+        sys.exit(1)
     pool_id = settings.pool_id(config)
     native = settings.is_native_docker_pool(config)
     if native and not force_ssh:
@@ -2177,10 +2183,6 @@ def _update_container_images(
                 ('singularity image {} is not specified as a global resource '
                  'for pool {}').format(singularity_image, pool_id))
         singularity_images = [singularity_image]
-    if (util.is_none_or_empty(docker_images) and
-            util.is_none_or_empty(singularity_images)):
-        logger.error('no images detected or specified to update')
-        return
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
     # check pool current vms is > 0. There is no reason to run updateimages
@@ -2215,18 +2217,10 @@ def _update_container_images(
                     'pool version metadata mismatch: pool={} cli={}'.format(
                         md.value, __version__))
                 break
-    # perform windows compat checks
-    is_windows = settings.is_windows_pool(config)
-    if is_windows:
-        if force_ssh:
-            raise RuntimeError('cannot update images via SSH on windows')
-        if util.is_not_empty(singularity_images):
-            raise RuntimeError(
-                'invalid configuration: windows pool with singularity images')
     # create coordination command line
     # log in again in case of cred expiry
     taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
-    if (not is_windows and util.is_none_or_empty(docker_image) and
+    if (util.is_none_or_empty(docker_image) and
             util.is_none_or_empty(singularity_image)):
         logger.debug('no image provided: re-running cascade')
         start_mnt = '/'.join((
