@@ -16,7 +16,7 @@ cd /opt/batch-shipyard
 
 # add timing markers
 if [[ -n ${SHIPYARD_TIMING+x} ]]; then
-    if [ $is_start_task -eq 1 ]; then
+    if [ "$is_start_task" -eq 1 ]; then
         # backfill node prep start
         # shellcheck disable=SC2086
         python3 perf.py nodeprep start --prefix "$prefix" --ts "$npstart" --message "offer=$offer,sku=$sku"

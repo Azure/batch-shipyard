@@ -2147,7 +2147,7 @@ def _update_container_images(
     :param bool force_ssh: force update over SSH
     """
     # exiting on windows because we need to force ssh with native
-    # mode and windows doesn't support ssh 
+    # mode and windows doesn't support ssh
     is_windows = settings.is_windows_pool(config)
     if is_windows:
         logger.warning('exiting: cannot update images on windows')

@@ -1421,7 +1421,7 @@ setup_cascade() {
             drpend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
         fi
         # create env file
-cat > $envfile << EOF
+cat > "$envfile" << EOF
 PYTHONASYNCIODEBUG=1
 prefix=$prefix
 offer=$DISTRIB_ID
@@ -1447,14 +1447,14 @@ EOF
             ./perf.py nodeprep end --prefix "$prefix" --ts "$npend"
         fi
         # create env file
-cat > $envfile << EOF
+cat > "$envfile" << EOF
 $(env | grep SHIPYARD_)
 $(env | grep AZ_BATCH_)
 $(env | grep DOCKER_LOGIN_)
 $(env | grep SINGULARITY_)
 EOF
     fi
-    chmod 600 $envfile
+    chmod 600 "$envfile"
 }
 
 run_cascade() {

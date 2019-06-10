@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 log() {
     local level=$1
     shift
@@ -72,12 +74,12 @@ if [ $cascadecontainer -eq 1 ] && [ -z "$envfile" ]; then
     exit 1
 fi
 
-if [ $cascadecontainer -eq 1 ] && [ -z $cascade_docker_image ]; then
+if [ $cascadecontainer -eq 1 ] && [ -z "$cascade_docker_image" ]; then
     log ERROR "cascade docker image not specified"
     exit 1
 fi
 
-if [ $cascadecontainer -eq 1 ] && [ -n "$singularity_basedir" ] && [ -z $cascade_singularity_image ]; then
+if [ $cascadecontainer -eq 1 ] && [ -n "$singularity_basedir" ] && [ -z "$cascade_singularity_image" ]; then
     log ERROR "cascade singularity image not specified"
     exit 1
 fi
@@ -102,12 +104,12 @@ spawn_cascade_process() {
     fi
     if [ $cascadecontainer -eq 1 ]; then
         tmp_envfile="$envfile.tmp"
-        cp $envfile $tmp_envfile
-        echo "log_directory=$log_directory" >> $tmp_envfile
+        cp "$envfile" "$tmp_envfile"
+        echo "log_directory=$log_directory" >> "$tmp_envfile"
         # run cascade for docker
         log DEBUG "Starting $cascade_docker_image"
         # shellcheck disable=SC2086
-        docker run $detached --rm --runtime runc --env-file $tmp_envfile \
+        docker run $detached --rm --runtime runc --env-file "$tmp_envfile" \
             -e "cascade_mode=docker" \
             -e "is_start_task=$is_start_task" \
             -v /var/run/docker.sock:/var/run/docker.sock \
