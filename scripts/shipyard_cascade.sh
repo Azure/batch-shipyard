@@ -148,7 +148,7 @@ spawn_cascade_process() {
         PYTHONASYNCIODEBUG=1 ./cascade.py --mode docker \
             --concurrent "$concurrent_source_downloads" \
             --prefix "$prefix" \
-            --log_directory "$log_directory" &
+            --log-directory "$log_directory" &
         cascade_docker_pid=$!
         # run cascade for singularity
         if [ -n "$singularity_basedir" ]; then
@@ -157,7 +157,7 @@ spawn_cascade_process() {
             PYTHONASYNCIODEBUG=1 ./cascade.py --mode singularity \
                 --concurrent "$concurrent_source_downloads" \
                 --prefix "$prefix" \
-                --log_directory "$log_directory" &
+                --log-directory "$log_directory" &
             cascade_singularity_pid=$!
         fi
     fi
