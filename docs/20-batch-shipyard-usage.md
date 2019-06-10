@@ -861,7 +861,9 @@ Azure Storage.
 and mismatched images will be listed. Requires a provisioned SSH user and
 private key.
 * `images update` will update container images on all compute nodes of the
-pool. This command may require a valid SSH user.
+pool. This command may require a valid SSH user. This command does not work on
+Windows. Specific Singularity images updated with `--singularity-image` will
+not be verified.
     * `--docker-image` will restrict the update to just the Docker image or
       image:tag
     * `--docker-image-digest` will restrict the update to just the Docker

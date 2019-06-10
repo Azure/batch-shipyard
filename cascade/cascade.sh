@@ -16,23 +16,25 @@ cd /opt/batch-shipyard
 
 # add timing markers
 if [[ -n ${SHIPYARD_TIMING+x} ]]; then
-    # backfill node prep start
-    # shellcheck disable=SC2086
-    python3 perf.py nodeprep start ${prefix} --ts "$npstart" --message "offer=$offer,sku=$sku"
-    # backfill docker run pull start
-    # shellcheck disable=SC2086
-    python3 perf.py shipyard pull-start ${prefix} --ts "$drpstart"
-    # mark docker run pull end
-    # shellcheck disable=SC2086
-    python3 perf.py shipyard pull-end ${prefix}
-    # mark node prep finished
-    # shellcheck disable=SC2086
-    python3 perf.py nodeprep end ${prefix}
+    if [ "$is_start_task" -eq 1 ]; then
+        # backfill node prep start
+        # shellcheck disable=SC2086
+        python3 perf.py nodeprep start --prefix "$prefix" --ts "$npstart" --message "offer=$offer,sku=$sku"
+        # backfill docker run pull start
+        # shellcheck disable=SC2086
+        python3 perf.py shipyard pull-start --prefix "$prefix" --ts "$drpstart"
+        # mark docker run pull end
+        # shellcheck disable=SC2086
+        python3 perf.py shipyard pull-end --prefix "$prefix" --ts "$drpend"
+        # mark node prep finished
+        # shellcheck disable=SC2086
+        python3 perf.py nodeprep end --prefix "$prefix" --ts "$npend"
+    fi
     # mark cascade start time
     # shellcheck disable=SC2086
-    python3 perf.py cascade start ${prefix}
+    python3 perf.py cascade start --prefix "$prefix" --message "mode=$cascade_mode"
 fi
 
 # execute cascade
 # shellcheck disable=SC2086
-python3 cascade.py --mode "$cascade_mode" --concurrent "$concurrent_source_downloads" --ipaddress "$ipaddress" ${prefix}
+python3 cascade.py --mode "$cascade_mode" --concurrent "$concurrent_source_downloads" --prefix "$prefix" --log-directory "$log_directory"

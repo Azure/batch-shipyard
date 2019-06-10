@@ -193,7 +193,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             fallback_registry=$OPTARG
             ;;
         p)
-            prefix="--prefix $OPTARG"
+            prefix=$OPTARG
             ;;
         q)
             batch_insights=1
@@ -1399,152 +1399,86 @@ install_intel_mpi() {
     fi
 }
 
-spawn_cascade_process() {
-    # touch cascade failed file, this will be removed once cascade is successful
-    if [ $cascadecontainer -ne 0 ]; then
-        touch "$cascadefailed"
-    fi
-    set +e
-    local cascade_docker_pid
-    local cascade_singularity_pid
-    local envfile
-    local cascade_docker_image="alfpark/batch-shipyard:${shipyardversion}-cascade-docker"
-    local cascade_singularity_image="alfpark/batch-shipyard:${shipyardversion}-cascade-singularity"
-    local detached
-    if [ -z "$block" ]; then
-        detached="-d"
-    fi
+setup_cascade() {
+    envfile=$AZ_BATCH_NODE_STARTUP_DIR/wd/.cascade_envfile
     if [ $cascadecontainer -eq 1 ]; then
-        # store docker cascade start
+        # store shipyard docker pull start
         if command -v python3 > /dev/null 2>&1; then
             drpstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
         else
             drpstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
         fi
+        log DEBUG "Pulling $cascade_docker_image"
+        docker_pull_image "$cascade_docker_image"
+        if [ -n "$singularity_basedir" ]; then
+            log DEBUG "Pulling $cascade_singularity_image"
+            docker_pull_image "$cascade_singularity_image"
+        fi
+        # store shipyard pull end
+        if command -v python3 > /dev/null 2>&1; then
+            drpend=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
+        else
+            drpend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
+        fi
         # create env file
-        envfile=.cascade_envfile
-cat > $envfile << EOF
+cat > "$envfile" << EOF
 PYTHONASYNCIODEBUG=1
 prefix=$prefix
-ipaddress=$ipaddress
 offer=$DISTRIB_ID
 sku=$DISTRIB_RELEASE
 npstart=$npstart
+npend=$npend
 drpstart=$drpstart
+drpend=$drpend
 concurrent_source_downloads=$concurrent_source_downloads
 $(env | grep SHIPYARD_)
 $(env | grep AZ_BATCH_)
 $(env | grep DOCKER_LOGIN_)
 $(env | grep SINGULARITY_)
 EOF
-        chmod 600 $envfile
-        # run cascade for docker
-        docker_pull_image "$cascade_docker_image"
-        # launch container
-        log DEBUG "Starting $cascade_docker_image"
-        # shellcheck disable=SC2086
-        docker run $detached --rm --runtime runc --env-file $envfile \
-            -e "cascade_mode=docker" \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v /etc/passwd:/etc/passwd:ro \
-            -v /etc/group:/etc/group:ro \
-            -v "$AZ_BATCH_NODE_ROOT_DIR":"$AZ_BATCH_NODE_ROOT_DIR" \
-            -w "$AZ_BATCH_TASK_WORKING_DIR" \
-            "$cascade_docker_image" &
-        cascade_docker_pid=$!
-        # run cascade for singularity
-        if [ -n "$singularity_basedir" ]; then
-            local singularity_binds
-            # set singularity options
-            singularity_binds="\
-                -v $singularity_basedir:$singularity_basedir \
-                -v $singularity_basedir/mnt:/var/lib/singularity/mnt"
-            # pull image
-            docker_pull_image "$cascade_singularity_image"
-            # launch container
-            log DEBUG "Starting $cascade_singularity_image"
-            # shellcheck disable=SC2086
-            docker run $detached --rm --runtime runc --env-file $envfile \
-                -e "cascade_mode=singularity" \
-                -v /etc/passwd:/etc/passwd:ro \
-                -v /etc/group:/etc/group:ro \
-                ${singularity_binds} \
-                -v "$AZ_BATCH_NODE_ROOT_DIR":"$AZ_BATCH_NODE_ROOT_DIR" \
-                -w "$AZ_BATCH_TASK_WORKING_DIR" \
-                "$cascade_singularity_image" &
-            cascade_singularity_pid=$!
-        fi
     else
         # add timings
         if [[ -n ${SHIPYARD_TIMING+x} ]]; then
             # backfill node prep start
             # shellcheck disable=SC2086
-            ./perf.py nodeprep start $prefix --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
+            ./perf.py nodeprep start --prefix "$prefix" --ts "$npstart" --message "offer=$DISTRIB_ID,sku=$DISTRIB_RELEASE"
             # mark node prep finished
             # shellcheck disable=SC2086
-            ./perf.py nodeprep end $prefix
-            # mark start cascade
-            # shellcheck disable=SC2086
-            ./perf.py cascade start $prefix
+            ./perf.py nodeprep end --prefix "$prefix" --ts "$npend"
         fi
-        log DEBUG "Starting Cascade Docker mode"
-        # shellcheck disable=SC2086
-        PYTHONASYNCIODEBUG=1 ./cascade.py --mode docker \
-            --concurrent "$concurrent_source_downloads" \
-            --ipaddress "$ipaddress" $prefix &
-        cascade_docker_pid=$!
-        # run cascade for singularity
-        if [ -n "$singularity_basedir" ]; then
-            log DEBUG "Starting Cascade Singularity mode"
-            # shellcheck disable=SC2086
-            PYTHONASYNCIODEBUG=1 ./cascade.py --mode singularity \
-                --concurrent "$concurrent_source_downloads" \
-                --ipaddress "$ipaddress" $prefix &
-            cascade_singularity_pid=$!
-        fi
+        # create env file
+cat > "$envfile" << EOF
+$(env | grep SHIPYARD_)
+$(env | grep AZ_BATCH_)
+$(env | grep DOCKER_LOGIN_)
+$(env | grep SINGULARITY_)
+EOF
     fi
-
-    # wait for cascade exit
-    if [ -n "$block" ]; then
-        local rc
-        wait $cascade_docker_pid
-        rc=$?
-        if [ $rc -eq 0 ]; then
-            log DEBUG "Cascade Docker exited successfully"
-        else
-            log ERROR "cascade Docker exited with non-zero exit code: $rc"
-            rm -f "$nodeprepfinished"
-            exit $rc
-        fi
-        if [ -n "$singularity_basedir" ]; then
-            wait $cascade_singularity_pid
-            rc=$?
-            if [ $rc -eq 0 ]; then
-                log DEBUG "Cascade Singularity exited successfully"
-            else
-                log ERROR "cascade Singularity exited with non-zero exit code: $rc"
-                rm -f "$nodeprepfinished"
-                exit $rc
-            fi
-        fi
-    else
-        log INFO "Not waiting for cascade due to non-blocking option"
-    fi
-    set -e
-
-    # remove cascade failed file
-    rm -f "$cascadefailed"
+    chmod 600 "$envfile"
 }
 
-block_for_container_images() {
-    # wait for images via cascade
-    "${AZ_BATCH_TASK_WORKING_DIR}"/wait_for_images.sh "$block"
-    # clean up cascade env file if block
-    if [ -n "$block" ]; then
-        if [ $cascadecontainer -eq 1 ]; then
-            rm -f $envfile
-        fi
+run_cascade() {
+    local d
+    if [ $cascadecontainer -ne 0 ]; then d="-d"; else d=""; fi
+    log_directory=$(pwd)
+    set +e
+    "${AZ_BATCH_TASK_WORKING_DIR}"/shipyard_cascade.sh \
+        -b "$block" \
+        -c "$concurrent_source_downloads" \
+        $d \
+        -e "$envfile" \
+        -i "$cascade_docker_image" \
+        -j "$cascade_singularity_image" \
+        -l "$log_directory" \
+        -p "$prefix" \
+        -s "$singularity_basedir" \
+        -t
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        rm -f "$nodeprepfinished"
+        exit $rc
     fi
+    set -e
 }
 
 install_and_start_node_exporter() {
@@ -1736,9 +1670,6 @@ elif [ -f "$nodeprepfinished" ]; then
     exit 0
 fi
 
-# get ip address of eth0
-ipaddress=$(ip addr list eth0 | grep "inet " | cut -d' ' -f6 | cut -d/ -f1)
-
 # network setup
 set +e
 optimize_tcp_network_settings $networkopt $hpnssh
@@ -1812,14 +1743,30 @@ process_storage_clusters
 # process and mount any custom mounts
 process_custom_fstab
 
+# store node prep end
+if command -v python3 > /dev/null 2>&1; then
+    npend=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
+else
+    npend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
+fi
+
 # touch node prep finished file to preserve idempotency
 touch "$nodeprepfinished"
 
+
+cascade_docker_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-docker"
+cascade_singularity_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-singularity"
+
 # execute cascade
 if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
-    spawn_cascade_process
-    # block for images if necessary
-    block_for_container_images
+    # touch cascade failed file, this will be removed once cascade is successful
+    if [ $cascadecontainer -ne 0 ]; then
+        touch "$cascadefailed"
+    fi
+    setup_cascade
+    run_cascade
+    # remove cascade failed file
+    rm -f "$cascadefailed"
 fi
 
 log INFO "Prep completed"

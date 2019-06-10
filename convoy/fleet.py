@@ -195,6 +195,10 @@ _MIRROR_SYSTEM_IMAGES_FILE = (
     'replicate_batch_shipyard_images.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/replicate_batch_shipyard_images.sh')
 )
+_CASCADE_SCRIPT_FILE = (
+    'shipyard_cascade.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_cascade.sh')
+)
 _NODEPREP_FILE = (
     'shipyard_nodeprep.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_nodeprep.sh')
@@ -1366,6 +1370,7 @@ def _construct_pool_object(
                  x=' -x {}'.format(data._BLOBXFER_VERSION))
         )
     else:
+        _rflist.append(_CASCADE_SCRIPT_FILE)
         _rflist.append(_NODEPREP_FILE)
         # create start task commandline
         start_task.append(
@@ -2141,16 +2146,26 @@ def _update_container_images(
     :param str singularity_image: singularity image to update
     :param bool force_ssh: force update over SSH
     """
+    # exiting on windows because we need to force ssh with native
+    # mode and windows doesn't support ssh
+    is_windows = settings.is_windows_pool(config)
+    if is_windows:
+        logger.warning('exiting: cannot update images on windows')
+        sys.exit(1)
     pool_id = settings.pool_id(config)
     native = settings.is_native_docker_pool(config)
     if native and not force_ssh:
         logger.debug('forcing update via SSH due to native mode')
         force_ssh = True
     # if image is not specified use images from global config
-    singularity_images = None
-    if util.is_none_or_empty(docker_image):
+    docker_images = []
+    singularity_images = []
+    if (util.is_none_or_empty(docker_image) and
+            util.is_none_or_empty(singularity_image)):
         docker_images = settings.global_resources_docker_images(config)
-    else:
+        singularity_images = settings.global_resources_singularity_images(
+            config)
+    if util.is_not_empty(docker_image):
         # log warning if it doesn't exist in global resources
         if docker_image not in settings.global_resources_docker_images(config):
             logger.warning(
@@ -2160,10 +2175,7 @@ def _update_container_images(
             docker_images = [docker_image]
         else:
             docker_images = ['{}@{}'.format(docker_image, docker_image_digest)]
-    if util.is_none_or_empty(singularity_image):
-        singularity_images = settings.global_resources_singularity_images(
-            config)
-    else:
+    if util.is_not_empty(singularity_image):
         # log warning if it doesn't exist in global resources
         if (singularity_image not in
                 settings.global_resources_singularity_images(config)):
@@ -2171,10 +2183,6 @@ def _update_container_images(
                 ('singularity image {} is not specified as a global resource '
                  'for pool {}').format(singularity_image, pool_id))
         singularity_images = [singularity_image]
-    if (util.is_none_or_empty(docker_images) and
-            util.is_none_or_empty(singularity_images)):
-        logger.error('no images detected or specified to update')
-        return
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
     # check pool current vms is > 0. There is no reason to run updateimages
@@ -2209,41 +2217,70 @@ def _update_container_images(
                     'pool version metadata mismatch: pool={} cli={}'.format(
                         md.value, __version__))
                 break
-    # perform windows compat checks
-    is_windows = settings.is_windows_pool(config)
-    if is_windows:
-        if force_ssh:
-            raise RuntimeError('cannot update images via SSH on windows')
-        if util.is_not_empty(singularity_images):
-            raise RuntimeError(
-                'invalid configuration: windows pool with singularity images')
     # create coordination command line
-    # 1. log in again in case of cred expiry
-    # 2. pull images with respect to registry
-    # 3. tag images that are in a private registry
-    # 4. prune docker images with no tag
+    # log in again in case of cred expiry
     taskenv, coordcmd = batch.generate_docker_login_settings(config, force_ssh)
-    if util.is_not_empty(docker_images):
-        coordcmd.extend(['docker pull {}'.format(x) for x in docker_images])
-        coordcmd.append(
-            'docker images --filter dangling=true -q --no-trunc | '
-            'xargs --no-run-if-empty docker rmi')
-    if util.is_not_empty(singularity_images):
+    if (util.is_none_or_empty(docker_image) and
+            util.is_none_or_empty(singularity_image)):
+        logger.debug('no image provided: re-running cascade')
+        start_mnt = '/'.join((
+            settings.temp_disk_mountpoint(config),
+            'batch', 'tasks', 'startup',
+        ))
+        envfile = '{}/wd/.cascade_envfile'.format(start_mnt)
         coordcmd.extend([
-            'export SINGULARITY_TMPDIR={}'.format(
-                settings.get_singularity_tmpdir(config)),
-            'export SINGULARITY_CACHEDIR={}'.format(
-                settings.get_singularity_cachedir(config)),
-            'export SINGULARITY_SYPGPDIR={}'.format(
-                settings.get_singularity_sypgpdir(config)),
+            'set -a',
+            '. {}'.format(envfile),
+            'set +a',
+            'log_directory=$(pwd)',
+            'pushd $AZ_BATCH_NODE_STARTUP_DIR/wd',
+            './shipyard_cascade.sh '
+            '{b} {c} {d} {e} {i} {j} {ld} {p} {s}'.format(
+                b='-b $SHIPYARD_CONTAINER_IMAGES_PRELOAD',
+                c='-c {}'.format(
+                    settings.data_replication_settings(config)
+                    .concurrent_source_downloads),
+                d='-d' if (settings.batch_shipyard_settings(config)
+                           .use_shipyard_docker_image) else '',
+                e='-e {}'.format(envfile),
+                i='-i alfpark/batch-shipyard:{}-cascade-docker'.format(
+                    __version__),
+                j=('-j alfpark/batch-shipyard:{}-cascade-singularity'
+                   .format(__version__)),
+                ld='-l $log_directory',
+                p='-p {}'.format(
+                    settings.batch_shipyard_settings(config)
+                    .storage_entity_prefix),
+                s='-s {}/singularity'.format(
+                    settings.temp_disk_mountpoint(config))),
+            'popd'
         ])
-        coordcmd.extend(
-            ['singularity pull -F {}'.format(x) for x in singularity_images]
-        )
-        coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
-            settings.get_singularity_cachedir(config)))
-        coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
-            settings.get_singularity_sypgpdir(config)))
+    else:
+        if util.is_not_empty(docker_images):
+            coordcmd.extend(['docker pull {}'
+                             .format(x) for x in docker_images])
+            coordcmd.append(
+                'docker images --filter dangling=true -q --no-trunc | '
+                'xargs --no-run-if-empty docker rmi')
+        if util.is_not_empty(singularity_images):
+            logger.warning('skip verifying for singularity images: {}'
+                           .format(', '.join(singularity_images)))
+            coordcmd.extend([
+                'export SINGULARITY_TMPDIR={}'.format(
+                    settings.get_singularity_tmpdir(config)),
+                'export SINGULARITY_CACHEDIR={}'.format(
+                    settings.get_singularity_cachedir(config)),
+                'export SINGULARITY_SYPGPDIR={}'.format(
+                    settings.get_singularity_sypgpdir(config)),
+            ])
+            coordcmd.extend(
+                ['singularity pull -U -F {}'
+                 .format(x) for x in singularity_images]
+            )
+            coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
+                settings.get_singularity_cachedir(config)))
+            coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
+                settings.get_singularity_sypgpdir(config)))
     if force_ssh:
         stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
             batch_client, config, pool, 'update container images', coordcmd)
