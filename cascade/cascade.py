@@ -129,9 +129,9 @@ def _setup_logger(mode: str, log_dir: str) -> None:
         log_dir = os.environ['AZ_BATCH_TASK_WORKING_DIR']
         print('log directory "{}" '.format(invalid_log_dir) +
               'is not valid: using "{}"'.format(log_dir))
-    logger_suffix = "" if mode is None else "--{}".format(mode)
-    logger_name = 'cascade{}--{}'.format(
-        logger_suffix, datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S'))
+    logger_suffix = "" if mode is None else "-{}".format(mode)
+    logger_name = 'cascade{}-{}'.format(
+        logger_suffix, datetime.datetime.now().strftime('%Y%m%dT%H%M%S'))
     global logger
     logger = logging.getLogger(logger_name)
     """Set up logger"""

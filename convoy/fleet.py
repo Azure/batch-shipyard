@@ -2228,16 +2228,6 @@ def _update_container_images(
             'batch', 'tasks', 'startup',
         ))
         envfile = '{}/wd/.cascade_envfile'.format(start_mnt)
-        c = (settings.data_replication_settings(config)
-             .concurrent_source_downloads)
-        d = '-d' if (settings.batch_shipyard_settings(config)
-                     .use_shipyard_docker_image) else ''
-        i = '-i alfpark/batch-shipyard:{}-cascade-docker'.format(__version__)
-        j = ('-j alfpark/batch-shipyard:{}-cascade-singularity'
-             .format(__version__))
-        p = '-p {}'.format(settings.batch_shipyard_settings(config)
-                           .storage_entity_prefix)
-        s = '-s {}/singularity'.format(settings.temp_disk_mountpoint(config))
         coordcmd.extend([
             'set -a',
             '. {}'.format(envfile),
@@ -2247,14 +2237,22 @@ def _update_container_images(
             './shipyard_cascade.sh '
             '{b} {c} {d} {e} {i} {j} {ld} {p} {s}'.format(
                 b='-b $SHIPYARD_CONTAINER_IMAGES_PRELOAD',
-                c='-c {}'.format(c),
-                d=d,
+                c='-c {}'.format(
+                    settings.data_replication_settings(config)
+                    .concurrent_source_downloads),
+                d='-d' if (settings.batch_shipyard_settings(config)
+                           .use_shipyard_docker_image) else '',
                 e='-e {}'.format(envfile),
-                i=i,
-                j=j,
+                i='-i alfpark/batch-shipyard:{}-cascade-docker'.format(
+                    __version__),
+                j=('-j alfpark/batch-shipyard:{}-cascade-singularity'
+                   .format(__version__)),
                 ld='-l $log_directory',
-                p=p,
-                s=s),
+                p='-p {}'.format(
+                    settings.batch_shipyard_settings(config)
+                    .storage_entity_prefix),
+                s='-s {}/singularity'.format(
+                    settings.temp_disk_mountpoint(config))),
             'popd'
         ])
     else:
@@ -2265,7 +2263,7 @@ def _update_container_images(
                 'docker images --filter dangling=true -q --no-trunc | '
                 'xargs --no-run-if-empty docker rmi')
         if util.is_not_empty(singularity_images):
-            logger.warning('skipping verifying for singularity images: {}'
+            logger.warning('skip verifying for singularity images: {}'
                            .format(', '.join(singularity_images)))
             coordcmd.extend([
                 'export SINGULARITY_TMPDIR={}'.format(
