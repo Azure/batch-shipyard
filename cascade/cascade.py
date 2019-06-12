@@ -56,7 +56,8 @@ logger = None
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
 _CONTAINER_MODE = None
-_DOCKER_CONFIG_FILE = '.docker/config.json'
+_DOCKER_CONFIG_FILE = os.path.join(
+    os.environ['AZ_BATCH_TASK_WORKING_DIR'], '.docker', 'config.json')
 _DOCKER_TAG = 'docker:'
 _SINGULARITY_TAG = 'singularity:'
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -76,8 +77,8 @@ except NameError:
 _PARTITION_KEY = None
 _MAX_VMLIST_PROPERTIES = 13
 _MAX_VMLIST_IDS_PER_PROPERTY = 800
-_DOCKER_AUHTS = None
-_DOCKER_AUHTS_LOCK = threading.Lock()
+_DOCKER_AUTH_MAP = None
+_DOCKER_AUTH_MAP_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
 _CONCURRENT_DOWNLOADS_ALLOWED = 10
 _RECORD_PERF = int(os.getenv('SHIPYARD_TIMING', default='0'))
@@ -427,22 +428,22 @@ class ContainerImageSaveThread(threading.Thread):
         :rtype: tuple
         :return: username and password
         """
-        global _DOCKER_AUHTS
+        global _DOCKER_AUTH_MAP
         registry_type, _, image_name = image.partition('://')
         if registry_type != 'docker' and registry_type != 'oras':
             return None, None
         docker_config_data = {}
-        with _DOCKER_AUHTS_LOCK:
-            if _DOCKER_AUHTS is None:
+        with _DOCKER_AUTH_MAP_LOCK:
+            if _DOCKER_AUTH_MAP is None:
                 with open(_DOCKER_CONFIG_FILE) as docker_config_file:
                     docker_config_data = json.load(docker_config_file)
                 try:
-                    _DOCKER_AUHTS = docker_config_data['auths']
+                    _DOCKER_AUTH_MAP = docker_config_data['auths']
                 except KeyError:
-                    _DOCKER_AUHTS = {}
+                    _DOCKER_AUTH_MAP = {}
         registry = image_name.partition('/')[0]
         try:
-            b64auth = _DOCKER_AUHTS[registry]['auth']
+            b64auth = _DOCKER_AUTH_MAP[registry]['auth']
         except KeyError:
             return None, None
         auth = base64.b64decode(b64auth).decode('utf-8')
