@@ -56,6 +56,7 @@ logger = None
 # global defines
 _ON_WINDOWS = sys.platform == 'win32'
 _CONTAINER_MODE = None
+_DOCKER_CONFIG_FILE = '.docker/config.json'
 _DOCKER_TAG = 'docker:'
 _SINGULARITY_TAG = 'singularity:'
 _NODEID = os.environ['AZ_BATCH_NODE_ID']
@@ -75,6 +76,8 @@ except NameError:
 _PARTITION_KEY = None
 _MAX_VMLIST_PROPERTIES = 13
 _MAX_VMLIST_IDS_PER_PROPERTY = 800
+_DOCKER_AUHTS = None
+_DOCKER_AUHTS_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
 _CONCURRENT_DOWNLOADS_ALLOWED = 10
 _RECORD_PERF = int(os.getenv('SHIPYARD_TIMING', default='0'))
@@ -416,7 +419,7 @@ class ContainerImageSaveThread(threading.Thread):
         """
         return any([x in stderr for x in _DOCKER_PULL_ERRORS])
 
-    def get_singularity_credentials(self, image: str) -> tuple:
+    def _get_singularity_credentials(self, image: str) -> tuple:
         """Get the username and the password of the registry of a given
         Singularity image
         :param str image: image for which we want the username and the
@@ -424,15 +427,22 @@ class ContainerImageSaveThread(threading.Thread):
         :rtype: tuple
         :return: username and password
         """
+        global _DOCKER_AUHTS
         registry_type, _, image_name = image.partition('://')
         if registry_type != 'docker' and registry_type != 'oras':
             return None, None
         docker_config_data = {}
-        with open('./.docker/config.json') as docker_config_file:
-            docker_config_data = json.load(docker_config_file)
+        with _DOCKER_AUHTS_LOCK:
+            if _DOCKER_AUHTS is None:
+                with open(_DOCKER_CONFIG_FILE) as docker_config_file:
+                    docker_config_data = json.load(docker_config_file)
+                try:
+                    _DOCKER_AUHTS = docker_config_data['auths']
+                except KeyError:
+                    _DOCKER_AUHTS = {}
         registry = image_name.partition('/')[0]
         try:
-            b64auth = docker_config_data['auths'][registry]['auth']
+            b64auth = _DOCKER_AUHTS[registry]['auth']
         except KeyError:
             return None, None
         auth = base64.b64decode(b64auth).decode('utf-8')
@@ -450,7 +460,7 @@ class ContainerImageSaveThread(threading.Thread):
         image_out_path = singularity_image_path_on_disk(image)
         key_file_path = pathlib.Path(
             singularity_image_name_to_key_file_name(image))
-        username, password = self.get_singularity_credentials(image)
+        username, password = self._get_singularity_credentials(image)
         if username is not None and password is not None:
             credentials_command_argument = (
                 '--docker-username {} --docker-password {} '.format(
