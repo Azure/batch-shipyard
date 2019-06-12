@@ -206,6 +206,10 @@ _NODEPREP_WINDOWS_FILE = (
         'scripts/windows/shipyard_nodeprep_nativedocker.ps1'
     )
 )
+_TASK_RUNNER_FILE = (
+    'shipyard_task_runner.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_task_runner.sh')
+)
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
@@ -1362,6 +1366,8 @@ def _construct_pool_object(
         )
     else:
         _rflist.append(_NODEPREP_FILE)
+        if not native:
+            _rflist.append(_TASK_RUNNER_FILE)
         # create start task commandline
         start_task.append(
             ('{npf}{a}{b}{c}{d}{e}{f}{g}{i}{j}{k}{lis}{m}{n}{o}{p}{q}{r}{s}'

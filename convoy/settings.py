@@ -341,8 +341,7 @@ TaskSettings = collections.namedtuple(
         'environment_variables', 'environment_variables_keyvault_secret_id',
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
         'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
-        'retention_time', 'docker_run_cmd', 'docker_exec_cmd',
-        'multi_instance', 'default_exit_options',
+        'retention_time', 'multi_instance', 'default_exit_options',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -3981,14 +3980,10 @@ def task_settings(
                 ('cannot initialize a gpu task on nodes without '
                  'gpus: pool={} vm_size={}').format(pool_id, vm_size))
         # set docker commands with nvidia docker wrapper
-        docker_run_cmd = 'nvidia-docker run'
-        docker_exec_cmd = 'nvidia-docker exec'
         if util.is_not_empty(singularity_image):
             run_opts.append('--nv')
-    else:
-        # set normal run and exec commands
-        docker_run_cmd = 'docker run'
-        docker_exec_cmd = 'docker exec'
+        else:
+            run_opts.append('--runtime=nvidia')
     # infiniband
     infiniband = _kv_read(conf, 'infiniband')
     if infiniband is None:
@@ -4157,8 +4152,7 @@ def task_settings(
                 cc_args = None
         else:
             cc_args = [
-                '{} {} {}{}'.format(
-                    docker_run_cmd,
+                'docker run {} {}{}'.format(
                     ' '.join(run_opts),
                     docker_image,
                     coordination_command),
@@ -4239,8 +4233,6 @@ def task_settings(
         gpu=gpu,
         depends_on=depends_on,
         depends_on_range=depends_on_range,
-        docker_run_cmd=docker_run_cmd,
-        docker_exec_cmd=docker_exec_cmd,
         singularity_cmd=singularity_cmd,
         run_elevated=run_elevated,
         multi_instance=MultiInstanceSettings(
