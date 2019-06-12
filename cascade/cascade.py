@@ -27,9 +27,11 @@
 # stdlib imports
 import argparse
 import asyncio
+import base64
 import datetime
 import enum
 import hashlib
+import json
 import logging
 import logging.handlers
 import os
@@ -414,6 +416,29 @@ class ContainerImageSaveThread(threading.Thread):
         """
         return any([x in stderr for x in _DOCKER_PULL_ERRORS])
 
+    def get_singularity_credentials(self, image: str) -> tuple:
+        """Get the username and the password of the registry of a given
+        Singularity image
+        :param str image: image for which we want the username and the
+        password
+        :rtype: tuple
+        :return: username and password
+        """
+        registry_type, _, image_name = image.partition('://')
+        if registry_type != 'docker' and registry_type != 'oras':
+            return None, None
+        docker_config_data = {}
+        with open('./.docker/config.json') as docker_config_file:
+            docker_config_data = json.load(docker_config_file)
+        registry = image_name.partition('/')[0]
+        try:
+            b64auth = docker_config_data['auths'][registry]['auth']
+        except KeyError:
+            return None, None
+        auth = base64.b64decode(b64auth).decode('utf-8')
+        username, _, password = auth.partition(':')
+        return username, password
+
     def _get_singularity_pull_cmd(self, image: str) -> str:
         """Get singularity pull command
         :param str image: image to pull
@@ -425,11 +450,17 @@ class ContainerImageSaveThread(threading.Thread):
         image_out_path = singularity_image_path_on_disk(image)
         key_file_path = pathlib.Path(
             singularity_image_name_to_key_file_name(image))
+        username, password = self.get_singularity_credentials(image)
+        if username is not None and password is not None:
+            credentials_command_argument = (
+                '--docker-username {} --docker-password {} '.format(
+                    username, password))
+        else:
+            credentials_command_argument = ''
         if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
             singularity_pull_cmd = (
-                'singularity pull -F '
-                '--docker-username $SINGULARITY_LOGIN_USERNAME '
-                '--docker-password $SINGULARITY_LOGIN_PASSWORD '
+                'singularity pull -F ' +
+                credentials_command_argument +
                 '{} {}'.format(image_out_path, image))
             key_fingerprint = _DIRECTDL_KEY_FINGERPRINT_DICT[image]
             if key_file_path.is_file():
@@ -458,7 +489,9 @@ class ContainerImageSaveThread(threading.Thread):
                                           .format(image_out_path))
                 cmd = cmd + ' && ' + singularity_verify_cmd
         else:
-            cmd = 'singularity pull -U -F {} {}'.format(image_out_path, image)
+            cmd = ('singularity pull -U -F ' +
+                   credentials_command_argument +
+                   '{} {}'.format(image_out_path, image))
         return cmd
 
     def _pull(self, grtype: str, image: str) -> tuple:

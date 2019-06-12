@@ -2213,6 +2213,10 @@ def docker_registries(config, images=None):
         if len(tmp) > 1:
             if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
                 servers.append(tmp[0])
+    credentials = _kv_read_checked(config, 'credentials', default={})
+    singularity_registry = _kv_read_checked(
+        credentials, 'singularity_registry', default={})
+    servers.extend(singularity_registry.keys())
     # create unique set
     servers = set(servers)
     # get login info for each registry
@@ -2271,6 +2275,8 @@ def singularity_registries(config, images=None):
     singularity_registry = _kv_read_checked(
         credentials, 'singularity_registry', default={})
     servers.extend(singularity_registry.keys())
+    # create unique set
+    servers = set(servers)
     # get login info for each registry
     registries = []
     # add docker hub if found and no servers are specified
@@ -2298,10 +2304,6 @@ def singularity_registries(config, images=None):
                 password=pw,
             )
         )
-    # TODO currently limit to a single server due to env var limit
-    if len(registries) > 1:
-        raise ValueError(
-            'cannot currently specify more than 1 Singularity registry server')
     return registries
 
 
