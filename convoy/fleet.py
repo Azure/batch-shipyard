@@ -2442,6 +2442,99 @@ def _list_docker_images(batch_client, config):
         util.print_raw_json(raw)
 
 
+def _list_singularity_images(batch_client, config):
+    # type: (batchsc.BatchServiceClient, dict) -> None
+    """List Singularity images in pool over ssh
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :param dict config: configuration dict
+    """
+    images = settings.global_resources_singularity_images(config)
+    if settings.is_windows_pool(config) or util.is_none_or_empty(images):
+        return
+    pool_id = settings.pool_id(config)
+    pool = batch_client.pool.get(pool_id)
+    cmd = [
+        'cd {}'.format(settings.get_singularity_cachedir(config)),
+        'pushd library > /dev/null',
+        'find . -name "*.sif"',
+        'popd > /dev/null',
+        'pushd oci-tmp > /dev/null',
+        'find . -name "*.sif"',
+        'popd > /dev/null',
+        'pushd shub > /dev/null',
+        'find . -name "*.sif"',
+        'popd > /dev/null',
+        'pushd oras > /dev/null',
+        'find . -name "*.sif"',
+        'popd > /dev/null',
+    ]
+    stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
+        batch_client, config, pool, 'singularity list', cmd)
+    # process stdout
+    node_images = {}
+    all_images = {}
+    for key in stdout:
+        node_images[key] = set()
+        spout = stdout[key].split('\n')
+        for out in spout:
+            if util.is_not_empty(out):
+                dec = out.split('/')
+                image_hash = dec[1]
+                image_name = dec[2]
+                if (image_hash.startswith('sha256.') or
+                        image_hash.startswith('sha256:')):
+                    image_hash = image_hash[7:]
+                # shub images are not using sha so we only use the name 
+                if image_hash == 'hash':
+                    image_hash = 'shub {}'.format(image_name)
+                node_images[key].add(image_hash)
+                if image_hash not in all_images:
+                    all_images[image_hash] = image_name
+    # find set intersection among all nodes
+    intersecting_images = set.intersection(*list(node_images.values()))
+    if settings.raw(config):
+        raw = {
+            'pool_id': pool.id,
+            'common': {},
+            'mismatched': {}
+        }
+        for key in intersecting_images:
+            raw['common'][key] = all_images[key]
+    else:
+        logger.info(
+            'Common Singularity images across all nodes in pool '
+            '{}:{}{}'.format(
+                pool.id,
+                os.linesep,
+                os.linesep.join(
+                    ['{} {}'.format(key, all_images[key])
+                     if not key.startswith('shub') else key
+                     for key in intersecting_images])
+            ))
+    # find mismatched images on nodes
+    for node in node_images:
+        images = set(node_images[node])
+        diff = images.difference(intersecting_images)
+        if len(diff) > 0:
+            if settings.raw(config):
+                if node not in raw['mismatched']:
+                    raw['mismatched'][node] = {}
+                for key in diff:
+                    raw['mismatched'][node][key] = all_images[key]
+            else:
+                logger.warning(
+                    'Singularity images present only on node {}:{}{}'.format(
+                        node, os.linesep,
+                        os.linesep.join(
+                            ['{} {}'.format(key, all_images[key])
+                             if not key.startswith('shub') else key
+                             for key in diff])
+                    ))
+    if settings.raw(config):
+        util.print_raw_json(raw)
+
+
 def _adjust_settings_for_pool_creation(config):
     # type: (dict) -> None
     """Adjust settings for pool creation
@@ -3712,6 +3805,7 @@ def action_pool_images_list(batch_client, config):
     """
     _check_batch_client(batch_client)
     _list_docker_images(batch_client, config)
+    _list_singularity_images(batch_client, config)
 
 
 def action_pool_stats(batch_client, config, pool_id):
