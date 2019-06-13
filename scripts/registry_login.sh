@@ -88,16 +88,11 @@ if [ -n "$SINGULARITY_LOGIN_PASSWORD" ]; then
     # loop through each server and login
     nusers=${#users[@]}
     if [ "$nusers" -ge 1 ]; then
-        log DEBUG "Creating export script into $nusers Singularity registry servers..."
-        touch singularity-registry-login
+        log DEBUG "Logging into $nusers Singularity registry servers..."
         for i in $(seq 0 $((nusers-1))); do
-cat >> singularity-registry-login << EOF
-SINGULARITY_DOCKER_USERNAME=${users[$i]}
-SINGULARITY_DOCKER_PASSWORD=${passwords[$i]}
-EOF
+            docker_login "${users[$i]}" "${passwords[$i]}" "${servers[$i]}"
         done
-        chmod 600 singularity-registry-login
-        log INFO "Singularity registry logins script created."
+        log INFO "Singularity registry logins completed."
     fi
 else
     log WARNING "No Singularity registry servers found."

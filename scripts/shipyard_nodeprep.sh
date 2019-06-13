@@ -937,10 +937,6 @@ install_singularity() {
     singularity version
     # remove docker image
     docker rmi "$di"
-    # singularity registry login
-    if [ -f singularity-registry-login ]; then
-        . singularity-registry-login
-    fi
 }
 
 install_kata_containers() {
