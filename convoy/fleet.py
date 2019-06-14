@@ -2154,6 +2154,7 @@ def _get_singularity_pull_cmd_for_update(config, image):
                     username, password))
     return singularity_pull_cmd + image
 
+
 def _update_container_images(
         batch_client, config, docker_image=None, docker_image_digest=None,
         singularity_image=None, force_ssh=False):
@@ -2506,7 +2507,7 @@ def _list_singularity_images(batch_client, config):
                 if (image_hash.startswith('sha256.') or
                         image_hash.startswith('sha256:')):
                     image_hash = image_hash[7:]
-                # shub images are not using sha so we only use the name 
+                # shub images are not using sha so we only use the name
                 if image_hash == 'hash':
                     image_hash = 'shub {}'.format(image_name)
                 node_images[key].add(image_hash)
