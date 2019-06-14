@@ -248,10 +248,11 @@ This property is required.
       lead to increased latency to begin task execution. It is highly
       recommended not to leave this property empty if possible. Due to
       Singularity limitations, if the image specified at a certain URI
-      changes, the image will need to be pulled again from the registry the
-      next time that the image is used in a task which will lead to increased
-      latency to begin task execution. Note that `singularity_images` is
-      incompatible with `native` container support enabled pools.
+      changes, the image will automatically be pulled again from the registry
+      the next time that the image is used in a task which will lead to
+      increased latency to begin task execution, and lead to potential
+      inconsistencies between task executions. Note that `singularity_images`
+      is incompatible with `native` container support enabled pools.
       * (optional) `unsigned` is a list of Singularity images that will not be
         verified when installing on every compute node. `shub://`, `docker://`,
         `library://`, and `oras://` URI prefixes are supported.
