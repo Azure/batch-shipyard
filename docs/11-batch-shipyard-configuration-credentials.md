@@ -249,11 +249,14 @@ or `account_key_keyvault_secret_id`.
 ### Docker and Singularity Registries: `docker_registry` and `singularity_registry`
 * (optional) `docker_registry` or `singularity_registry` property defines
 logins for Docker and Singularity registry servers. Currently, a Singularity
-registry server is a Docker registry server to support `docker://` private
-URIs. This property does not need to be defined if you are using only
-public repositories on Docker Hub or Singularity Hub. However, this is
-required if pulling from authenticated private registries such as a secured
-Azure Container Registry or private repositories on Docker Hub.
+registry server is a Docker registry server to support `docker://` or
+`oras://` private URIs. This property does not need to be defined if you are
+using only public repositories on Docker Hub or on Singularity Hub and public
+projects on Sylabs Cloud. However, this is required if pulling from
+authenticated private registries such as a secured Azure Container Registry or
+private repositories on Docker Hub. Note that private projects from Sylabs
+Cloud are not supported. Other Singularity libraries than Sylabs Cloud are
+also not supported.
     * (optional) `hub` defines the login property to Docker Hub. This is only
       required for private repos on Docker Hub.
         * (required) `username` username to log in to Docker Hub
