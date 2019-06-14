@@ -4405,6 +4405,17 @@ def _construct_task(
         if native:
             task_commands = [task.command]
         elif is_singularity:
+            registry_type, _, image_name = (
+                task.singularity_image.partition('://'))
+            if registry_type == 'oras':
+                registry = image_name.partition('/')[0]
+                username, password = (
+                    settings.singularity_registry_login(config, registry))
+                if username is not None and password is not None:
+                    task.run_options.extend([
+                        '--docker-username {}'.format(username),
+                        '--docker-password {}'.format(password)
+                    ])
             # add env vars
             taskenv.append(
                 batchmodels.EnvironmentSetting(
@@ -4437,6 +4448,17 @@ def _construct_task(
                 '{}'.format(' ' + task.command) if task.command else ''
             ]
         elif is_singularity:
+            registry_type, _, image_name = (
+                task.singularity_image.partition('://'))
+            if registry_type == 'oras':
+                registry = image_name.partition('/')[0]
+                username, password = (
+                    settings.singularity_registry_login(config, registry))
+                if username is not None and password is not None:
+                    task.run_options.extend([
+                        '--docker-username {}'.format(username),
+                        '--docker-password {}'.format(password)
+                    ])
             task_commands = [
                 _generate_non_native_env_dump(env_vars, task.envfile),
                 'singularity {} {} {}{}'.format(
