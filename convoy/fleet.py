@@ -2133,6 +2133,27 @@ def _zap_all_container_processes_over_ssh(batch_client, config, remove, stop):
     _log_stdout_by_nodeid(config, pool_id, desc, stdout)
 
 
+def _get_singularity_pull_cmd_for_update(config, image):
+    # type: (dict, str) -> tuple
+    """Get the 'singularity pull' command to update the Singularity image
+    :param dict config: configuration dict
+    :param str image: image for which we want the username and the
+    password
+    :rtype: str
+    :return: pull command
+    """
+    singularity_pull_cmd = 'singularity pull -U -F '
+    registry_type, _, image_name = image.partition('://')
+    if registry_type == 'oras':
+        registry = image_name.partition('/')[0]
+        username, password = (
+            settings.singularity_registry_login(config, registry))
+        if username is not None and password is not None:
+            singularity_pull_cmd = singularity_pull_cmd + (
+                '--docker-username {} --docker-password {} '.format(
+                    username, password))
+    return singularity_pull_cmd + image
+
 def _update_container_images(
         batch_client, config, docker_image=None, docker_image_digest=None,
         singularity_image=None, force_ssh=False):
@@ -2274,8 +2295,8 @@ def _update_container_images(
                     settings.get_singularity_sypgpdir(config)),
             ])
             coordcmd.extend(
-                ['singularity pull -U -F {}'
-                 .format(x) for x in singularity_images]
+                [_get_singularity_pull_cmd_for_update(config, x)
+                 for x in singularity_images]
             )
             coordcmd.append('chown -R _azbatch:_azbatchgrp {}'.format(
                 settings.get_singularity_cachedir(config)))
