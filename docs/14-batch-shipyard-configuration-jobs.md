@@ -701,9 +701,14 @@ configuration. `id` should not be specified in conjunction with the
 `task_factory` property as `id`s will be automatically generated. A
 task `id` may not exceed 64 characters in length.
 * (required if using a Docker image) `docker_image` is the Docker image to
-use for this task
+use for this task.
 * (required if using a Singularity image) `singularity_image` is the
-Singularity image to use for this task
+Singularity image to use for this task. Due to Singularity limitations, if the
+image specified at a certain URI changes, the image will automatically be
+pulled again from the registry the next time that the image is used in a task
+which can lead to increased latency to begin task execution if the image
+differs from a previous pull, and lead to potential inconsistencies between
+task executions.
 * (optional) `task_factory` is a way to dyanmically generate tasks. This
   enables parameter sweeps and task repetition without having to
   explicitly generate a task array with different parameters for the

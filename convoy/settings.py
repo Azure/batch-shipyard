@@ -2213,10 +2213,6 @@ def docker_registries(config, images=None):
         if len(tmp) > 1:
             if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
                 servers.append(tmp[0])
-    credentials = _kv_read_checked(config, 'credentials', default={})
-    singularity_registry = _kv_read_checked(
-        credentials, 'singularity_registry', default={})
-    servers.extend(singularity_registry.keys())
     # create unique set
     servers = set(servers)
     # get login info for each registry
@@ -2267,14 +2263,12 @@ def singularity_registries(config, images=None):
         images = global_resources_singularity_images(config)
     # parse images for servers
     for image in images:
-        tmp = image.split('/')
+        _, _, image_name = (
+            image.partition('://'))
+        tmp = image_name.split('/')
         if len(tmp) > 1:
             if '.' in tmp[0] or ':' in tmp[0] and tmp[0] != 'localhost':
                 servers.append(tmp[0])
-    credentials = _kv_read_checked(config, 'credentials', default={})
-    singularity_registry = _kv_read_checked(
-        credentials, 'singularity_registry', default={})
-    servers.extend(singularity_registry.keys())
     # create unique set
     servers = set(servers)
     # get login info for each registry

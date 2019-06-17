@@ -919,15 +919,12 @@ install_singularity() {
     chmod 755 $singularity_basedir/mnt/final
     chmod 755 $singularity_basedir/mnt/overlay
     chmod 755 $singularity_basedir/mnt/session
-    # create singularity tmp/cache paths
+    # create singularity tmp/cache/sypgp paths
     mkdir -p $singularity_basedir/tmp
-    mkdir -p $singularity_basedir/cache/docker
-    mkdir -p $singularity_basedir/cache/metadata
+    mkdir -p $singularity_basedir/cache
     mkdir -p $singularity_basedir/sypgp
     chmod 775 $singularity_basedir/tmp
     chmod 775 $singularity_basedir/cache
-    chmod 775 $singularity_basedir/cache/docker
-    chmod 775 $singularity_basedir/cache/metadata
     chmod 700 $singularity_basedir/sypgp
     # set proper ownership
     chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
