@@ -706,8 +706,9 @@ use for this task.
 Singularity image to use for this task. Due to Singularity limitations, if the
 image specified at a certain URI changes, the image will automatically be
 pulled again from the registry the next time that the image is used in a task
-which will lead to increased latency to begin task execution, and lead to
-potential inconsistencies between task executions.
+which can lead to increased latency to begin task execution if the image
+differs from a previous pull, and lead to potential inconsistencies between
+task executions.
 * (optional) `task_factory` is a way to dyanmically generate tasks. This
   enables parameter sweeps and task repetition without having to
   explicitly generate a task array with different parameters for the
