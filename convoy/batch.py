@@ -4256,6 +4256,17 @@ def _generate_non_native_env_dump(env_vars, envfile):
         return 'env | {}'.format(envfile)
 
 
+def _generate_non_native_env_var(env_vars):
+    # type: (dict, str) -> str
+    """Generate env dump command for non-native tasks
+    :param dict env_vars: env vars
+    """
+    exclude = [
+        '^{}='.format(x) for x in _ENV_EXCLUDE_LINUX if x not in env_vars
+    ]
+    return '{}'.format('|'.join(exclude))
+
+
 def _construct_task(
         batch_client, blob_client, keyvault_client, config, federation_id,
         bxfile, bs, native, is_windows, tempdisk, allow_run_on_missing,
@@ -4404,86 +4415,110 @@ def _construct_task(
         # set application command
         if native:
             task_commands = [task.command]
-        elif is_singularity:
-            registry_type, _, image_name = (
-                task.singularity_image.partition('://'))
-            if registry_type == 'oras':
-                registry = image_name.partition('/')[0]
-                username, password = (
-                    settings.singularity_registry_login(config, registry))
-                if username is not None and password is not None:
-                    task.run_options.extend([
-                        '--docker-username {}'.format(username),
-                        '--docker-password {}'.format(password)
-                    ])
-            # add env vars
+        else:
+            task_commands = []
             taskenv.append(
                 batchmodels.EnvironmentSetting(
-                    name='SHIPYARD_SINGULARITY_COMMAND',
-                    value='singularity {} {} {}'.format(
-                        task.singularity_cmd,
-                        ' '.join(task.run_options),
-                        task.singularity_image,
-                    )
+                    name='SHIPYARD_ENV_EXCLUDE',
+                    value=_generate_non_native_env_var(env_vars)
                 )
             )
-            # singularity command is passed as-is for multi-instance
-            task_commands = [
-                _generate_non_native_env_dump(env_vars, task.envfile),
-                '{}'.format(' ' + task.command) if task.command else ''
-            ]
-        else:
-            task_commands = [
-                _generate_non_native_env_dump(env_vars, task.envfile),
-                '{} {} {} {}'.format(
-                    task.docker_exec_cmd,
-                    ' '.join(task.docker_exec_options),
-                    task.name,
-                    task.command,
-                ),
-            ]
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_ENV_FILE',
+                    value=task.envfile,
+                )
+            )
+            if is_singularity:
+                taskenv.append(
+                    batchmodels.EnvironmentSetting(
+                        name='SHIPYARD_SINGULARITY_COMMAND',
+                        value='singularity {} {} {}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                        )
+                    )
+                )
+            else:
+                taskenv.append(
+                    batchmodels.EnvironmentSetting(
+                        name='SHIPYARD_RUNTIME_CMD_OPTS',
+                        value=' '.join(task.docker_exec_options)
+                    )
+                )
+                taskenv.append(
+                    batchmodels.EnvironmentSetting(
+                        name='SHIPYARD_RUNTIME',
+                        value='docker',
+                    )
+                )
+                taskenv.append(
+                    batchmodels.EnvironmentSetting(
+                        name='SHIPYARD_RUNTIME_CMD',
+                        value='exec',
+                    )
+                )
+                taskenv.append(
+                    batchmodels.EnvironmentSetting(
+                        name='SHIPYARD_CONTAINER_IMAGE_NAME',
+                        value=task.name,  # docker exec requires task name
+                    )
+                )
     else:
         if native:
             task_commands = [
                 '{}'.format(' ' + task.command) if task.command else ''
             ]
-        elif is_singularity:
-            registry_type, _, image_name = (
-                task.singularity_image.partition('://'))
-            if registry_type == 'oras':
-                registry = image_name.partition('/')[0]
-                username, password = (
-                    settings.singularity_registry_login(config, registry))
-                if username is not None and password is not None:
-                    task.run_options.extend([
-                        '--docker-username {}'.format(username),
-                        '--docker-password {}'.format(password)
-                    ])
-            task_commands = [
-                _generate_non_native_env_dump(env_vars, task.envfile),
-                'singularity {} {} {}{}'.format(
-                    task.singularity_cmd,
-                    ' '.join(task.run_options),
-                    task.singularity_image,
-                    '{}'.format(' ' + task.command) if task.command else '',
-                )
-            ]
         else:
-            task_commands = [
-                _generate_non_native_env_dump(env_vars, task.envfile),
-                '{} {} {}{}'.format(
-                    task.docker_run_cmd,
-                    ' '.join(task.run_options),
-                    task.docker_image,
-                    '{}'.format(' ' + task.command) if task.command else ''),
-            ]
+            task_commands = []
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_ENV_EXCLUDE',
+                    value=_generate_non_native_env_var(env_vars)
+                )
+            )
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_ENV_FILE',
+                    value=task.envfile,
+                )
+            )
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_RUNTIME_CMD_OPTS',
+                    value=' '.join(task.run_options)
+                )
+            )
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_RUNTIME',
+                    value='singularity' if is_singularity else 'docker',
+                )
+            )
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_RUNTIME_CMD',
+                    value=task.singularity_cmd if is_singularity else 'run',
+                )
+            )
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_CONTAINER_IMAGE_NAME',
+                    value=(
+                        task.singularity_image if is_singularity else
+                        task.docker_image
+                    ),
+                )
+            )
     output_files = None
     # get registry login if missing images
     if (not native and allow_run_on_missing and
             (len(docker_missing_images) > 0 or
              len(singularity_missing_images) > 0)):
-        taskenv, logincmd = generate_docker_login_settings(config)
+        loginenv, logincmd = generate_docker_login_settings(config)
         logincmd.extend(task_commands)
+        taskenv = util.merge_dict(taskenv, loginenv)
         task_commands = logincmd
     # digest any input_data
     addlcmds = data.process_input_data(config, bxfile, _task, on_task=True)
@@ -4493,6 +4528,16 @@ def _construct_task(
                 'input_data at task-level is not supported on '
                 'native container pools')
         task_commands.insert(0, addlcmds)
+    if not native:
+        if util.is_not_empty(task_commands):
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_USER_PROLOGUE_CMD',
+                    value=util.wrap_commands_in_shell(
+                        task_commands, windows=is_windows),
+                )
+            )
+        task_commands = []
     # digest any output data
     addlcmds = data.process_output_data(config, bxfile, _task)
     if addlcmds is not None:
@@ -4501,6 +4546,19 @@ def _construct_task(
         else:
             task_commands.append(addlcmds)
     del addlcmds
+    if not native:
+        if util.is_not_empty(task_commands):
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_USER_EPILOGUE_CMD',
+                    value=util.wrap_commands_in_shell(
+                        task_commands, windows=is_windows),
+                )
+            )
+        task_commands = [
+            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh {}'.format(
+                task.command)
+        ]
     # always add env vars in (host) task to be dumped into container
     # task (if non-native)
     if util.is_not_empty(env_vars):

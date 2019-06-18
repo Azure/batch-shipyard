@@ -1632,6 +1632,11 @@ if [ $azureblob -eq 1 ]; then
     mount_azureblob_container
 fi
 
+# prep task execute helper script in non-native mode
+if [ "$native_mode" -eq 0 ]; then
+    chmod 755 shipyard_task_runner.sh
+fi
+
 # check if we're coming up from a reboot
 if [ -f "$cascadefailed" ]; then
     log ERROR "$cascadefailed file exists, assuming cascade failure during node prep"
