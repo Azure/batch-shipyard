@@ -261,10 +261,9 @@ def scantree(path):
     :return: DirEntry via generator
     """
     for entry in os.scandir(path):
+        yield entry
         if entry.is_dir(follow_symlinks=False):
             yield from scantree(entry.path)
-        else:
-            yield entry
 
 
 def get_container_image_name_from_resource(resource: str) -> Tuple[str, str]:
