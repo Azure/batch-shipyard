@@ -29,10 +29,14 @@ global_resources:
     unsigned:
     - shub://singularityhub/busybox
     - shub://singularityhub/scientific-linux
+    - docker://busybox
     signed:
     - image: library://sylabs/tests/signed:1.0.0
       key_fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
-      key_file: /key/file/local/path
+      key_file: /path/to/key/file
+    - image: oras://myazurecr.azurecr.io
+      key_fingerprint: 000123000123000123000123000123000123ABCD
+      key_file: /path/to/key/file
   volumes:
     data_volumes:
       contdatavol:

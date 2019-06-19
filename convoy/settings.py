@@ -3768,15 +3768,6 @@ def task_settings(
             del attach_ui
             del ui
             del uiopt
-    # singularity specific options
-    if util.is_not_empty(singularity_image):
-        registry_type, _, image_name = singularity_image.partition('://')
-        if registry_type.lower() == 'oras':
-            registry = image_name.partition('/')[0]
-            username, password = singularity_registry_login(config, registry)
-            if username is not None and password is not None:
-                run_opts.append('--docker-username {}'.format(username))
-                run_opts.append('--docker-password {}'.format(password))
     # get command
     command = _kv_read_checked(conf, 'command')
     # parse data volumes
@@ -3942,6 +3933,15 @@ def task_settings(
     env_vars = _kv_read_checked(conf, 'environment_variables', default={})
     ev_secid = _kv_read_checked(
         conf, 'environment_variables_keyvault_secret_id')
+    # singularity login
+    if util.is_not_empty(singularity_image):
+        registry_type, _, image_name = singularity_image.partition('://')
+        if registry_type.lower() == 'oras':
+            registry = image_name.partition('/')[0]
+            username, password = singularity_registry_login(config, registry)
+            if username is not None and password is not None:
+                env_vars['SINGULARITY_DOCKER_USERNAME'] = username
+                env_vars['SINGULARITY_DOCKER_PASSWORD'] = password
     # constraints
     max_task_retries = _kv_read(conf, 'max_task_retries')
     max_wall_time = _kv_read_checked(conf, 'max_wall_time')
