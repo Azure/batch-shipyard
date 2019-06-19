@@ -3936,7 +3936,8 @@ def task_settings(
     # singularity login
     if util.is_not_empty(singularity_image):
         registry_type, _, image_name = singularity_image.partition('://')
-        if registry_type.lower() == 'oras':
+        if (registry_type.lower() == 'oras' or
+                registry_type.lower() == 'docker'):
             registry = image_name.partition('/')[0]
             username, password = singularity_registry_login(config, registry)
             if username is not None and password is not None:
