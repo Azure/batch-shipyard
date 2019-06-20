@@ -1441,6 +1441,7 @@ EOF
         fi
         # create env file
 cat > "$envfile" << EOF
+concurrent_source_downloads=$concurrent_source_downloads
 $(env | grep SHIPYARD_)
 $(env | grep AZ_BATCH_)
 $(env | grep DOCKER_LOGIN_)
@@ -1664,6 +1665,15 @@ elif [ -f "$nodeprepfinished" ]; then
             ensure_nvidia_driver_installed
         fi
     fi
+    envfile=$AZ_BATCH_NODE_STARTUP_DIR/wd/.cascade_envfile
+    cat > "$envfile" << EOF
+concurrent_source_downloads=$concurrent_source_downloads
+$(env | grep SHIPYARD_)
+$(env | grep AZ_BATCH_)
+$(env | grep DOCKER_LOGIN_)
+$(env | grep SINGULARITY_)
+EOF
+    chmod 600 "$envfile"
     log INFO "$nodeprepfinished file exists, assuming successful completion of node prep"
     exit 0
 fi

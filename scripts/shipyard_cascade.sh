@@ -193,7 +193,7 @@ spawn_cascade_process() {
 
 block_for_container_images() {
     # wait for images via cascade
-    "${AZ_BATCH_TASK_WORKING_DIR}"/wait_for_images.sh "$block"
+    "${AZ_BATCH_NODE_STARTUP_DIR}"/wd/wait_for_images.sh "$block"
 }
 
 spawn_cascade_process
