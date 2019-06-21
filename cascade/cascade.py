@@ -261,10 +261,9 @@ def scantree(path):
     :return: DirEntry via generator
     """
     for entry in os.scandir(path):
+        yield entry
         if entry.is_dir(follow_symlinks=False):
             yield from scantree(entry.path)
-        else:
-            yield entry
 
 
 def get_container_image_name_from_resource(resource: str) -> Tuple[str, str]:
@@ -558,8 +557,8 @@ class ContainerImageSaveThread(threading.Thread):
         diff = (datetime.datetime.now() - start).total_seconds()
         logger.debug('took {} sec to pull {} image {}'.format(
             diff, grtype, image))
-        # register service
-        _merge_service(
+        # register resource
+        _merge_resource(
             self.table_client, self.resource, self.nglobalresources)
         # get image size
         try:
@@ -656,22 +655,22 @@ async def _direct_download_resources_async(
         raise NotImplementedError()
 
 
-def _merge_service(
+def _merge_resource(
         table_client: azuretable.TableService,
         resource: str, nglobalresources: int) -> None:
-    """Merge entity to services table
+    """Merge resource to the image table
     :param azuretable.TableService table_client: table client
-    :param str resource: resource to add to services table
+    :param str resource: resource to add to the image table
     :param int nglobalresources: number of global resources
     """
-    # merge service into services table
+    # merge resource to the image table
     entity = {
         'PartitionKey': _PARTITION_KEY,
         'RowKey': compute_resource_hash(resource),
         'Resource': resource,
         'VmList0': _NODEID,
     }
-    logger.debug('merging entity {} to services table'.format(entity))
+    logger.debug('merging entity {} to the image table'.format(entity))
     try:
         table_client.insert_entity(
             _STORAGE_CONTAINERS['table_images'], entity=entity)
@@ -709,7 +708,7 @@ def _merge_service(
             except azure.common.AzureHttpError as ex:
                 if ex.status_code != 412:
                     raise
-    logger.info('entity {} merged to services table'.format(entity))
+    logger.info('entity {} merged to the image table'.format(entity))
     global _GR_DONE
     if not _GR_DONE:
         try:
@@ -738,6 +737,66 @@ def _merge_service(
             logger.info('{}/{} global resources of container mode "{}" loaded'
                         .format(count, nglobalresources,
                                 _CONTAINER_MODE.name.lower()))
+
+
+def _unmerge_resources(
+        table_client: azuretable.TableService) -> None:
+    """Remove node from the image table
+    :param azuretable.TableService table_client: table client
+    """
+    logger.debug('removing node {} from the image table for container mode {}'
+                 .format(_NODEID, _CONTAINER_MODE.name.lower()))
+    try:
+        entities = table_client.query_entities(
+            _STORAGE_CONTAINERS['table_images'],
+            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
+    except azure.common.AzureMissingResourceHttpError:
+        entities = []
+    mode_prefix = _CONTAINER_MODE.name.lower() + ':'
+    for entity in entities:
+        if entity['Resource'].startswith(mode_prefix):
+            _unmerge_resource(table_client, entity)
+    logger.info('node {} removed from the image table for container mode {}'
+                .format(_NODEID, _CONTAINER_MODE.name.lower()))
+
+
+def _unmerge_resource(
+        table_client: azuretable.TableService, entity: dict) -> None:
+    """Remove node from entity
+    :param azuretable.TableService table_client: table client
+    """
+    while True:
+        entity = table_client.get_entity(
+            _STORAGE_CONTAINERS['table_images'],
+            entity['PartitionKey'], entity['RowKey'])
+        # merge VmList into entity
+        evms = []
+        for i in range(0, _MAX_VMLIST_PROPERTIES):
+            prop = 'VmList{}'.format(i)
+            if prop in entity:
+                evms.extend(entity[prop].split(','))
+        if _NODEID in evms:
+            evms.remove(_NODEID)
+        for i in range(0, _MAX_VMLIST_PROPERTIES):
+            prop = 'VmList{}'.format(i)
+            start = i * _MAX_VMLIST_IDS_PER_PROPERTY
+            end = start + _MAX_VMLIST_IDS_PER_PROPERTY
+            if end > len(evms):
+                end = len(evms)
+            if start < end:
+                entity[prop] = ','.join(evms[start:end])
+            else:
+                entity[prop] = None
+        etag = entity['etag']
+        entity.pop('etag')
+        try:
+            table_client.update_entity(
+                _STORAGE_CONTAINERS['table_images'], entity=entity,
+                if_match=etag)
+            break
+        except azure.common.AzureHttpError as ex:
+            if ex.status_code != 412:
+                raise
 
 
 async def download_monitor_async(
@@ -806,6 +865,9 @@ def distribute_global_resources(
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
     """
+    # remove node from the image table because cascade relies on it to know
+    # when its work is done
+    _unmerge_resources(table_client)
     # get globalresources from table
     try:
         entities = table_client.query_entities(

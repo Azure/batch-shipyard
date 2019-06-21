@@ -8,7 +8,10 @@ set -e
 set -o pipefail
 
 # login to registry servers (do not specify -e as creds have been decrypted)
-./registry_login.sh
+# only login for cascade docker since we use docker login
+if [ "$cascade_mode" == "docker" ]; then
+    ./registry_login.sh
+fi
 # singularity registries will be imported via env
 
 # ensure we're in the proper directory
