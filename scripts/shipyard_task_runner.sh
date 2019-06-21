@@ -26,8 +26,6 @@ else
     env > "$SHIPYARD_ENV_FILE"
 fi
 
-cat "$SHIPYARD_ENV_FILE"
-
 SHIPYARD_RUNTIME_CMD_OPTS=$(eval echo "${SHIPYARD_RUNTIME_CMD_OPTS}")
 
 if [ -n "$SHIPYARD_RUNTIME" ]; then
