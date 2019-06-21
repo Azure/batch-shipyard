@@ -1761,9 +1761,8 @@ fi
 # touch node prep finished file to preserve idempotency
 touch "$nodeprepfinished"
 
-
-cascade_docker_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-docker"
-cascade_singularity_image="vincentlabo/batch-shipyard:${shipyardversion}-cascade-singularity"
+cascade_docker_image="alfpark/batch-shipyard:${shipyardversion}-cascade-docker"
+cascade_singularity_image="alfpark/batch-shipyard:${shipyardversion}-cascade-singularity"
 
 # execute cascade
 if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
