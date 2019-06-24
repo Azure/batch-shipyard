@@ -3205,6 +3205,30 @@ def job_requires_auto_scratch(conf):
     return _kv_read(conf, 'auto_scratch', default=False)
 
 
+def job_preparation_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job preparation command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job prep command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_preparation', default={}),
+        'command')
+
+
+def job_release_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job release command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job release command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_release', default={}),
+        'command')
+
+
 def job_federation_constraint_settings(conf, federation_id):
     # type: (dict, str) -> dict
     """Gets federation constraints

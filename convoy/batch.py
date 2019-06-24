@@ -4976,6 +4976,10 @@ def add_jobs(
                         'job-level for federations')
             jpcmd.append(addlcmds)
         del addlcmds
+        user_jp = settings.job_preparation_command(jobspec)
+        if user_jp is not None:
+            jpcmd.append(user_jp)
+        del user_jp
         jptask = None
         if len(jpcmd) > 0:
             jptask = batchmodels.JobPreparationTask(
@@ -5006,6 +5010,10 @@ def add_jobs(
                 'docker kill {}'.format(mi_docker_container_name),
                 'docker rm -v {}'.format(mi_docker_container_name)
             ])
+        user_jr = settings.job_release_command(jobspec)
+        if user_jr is not None:
+            jrtaskcmd.append(user_jr)
+        del user_jr
         if util.is_not_empty(jrtaskcmd):
             jrtask = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
@@ -5044,15 +5052,19 @@ def add_jobs(
                 )
             )
         # get base env vars from job
-        job_env_vars = settings.job_environment_variables(jobspec)
-        _job_env_vars_secid = \
+        jevs = settings.job_environment_variables(jobspec)
+        _jevs_secid = \
             settings.job_environment_variables_keyvault_secret_id(jobspec)
-        if util.is_not_empty(_job_env_vars_secid):
-            jevs = keyvault.get_secret(
-                keyvault_client, _job_env_vars_secid, value_is_json=True)
-            job_env_vars = util.merge_dict(job_env_vars, jevs or {})
-            del jevs
-        del _job_env_vars_secid
+        if util.is_not_empty(_jevs_secid):
+            _jevs = keyvault.get_secret(
+                keyvault_client, _jevs_secid, value_is_json=True)
+            jevs = util.merge_dict(jevs, _jevs or {})
+            del _jevs
+        del _jevs_secid
+        job_env_vars = []
+        for jev in jevs:
+            job_env_vars.append(batchmodels.EnvironmentSetting(
+                name=jev, value=jevs[jev]))
         # create jobschedule
         recurrence = settings.job_recurrence(jobspec)
         if recurrence is not None:
@@ -5135,7 +5147,7 @@ def add_jobs(
                 jscs = None
                 envfile = '.shipyard.envlist'
                 jscmd = [
-                    _generate_non_native_env_dump(job_env_vars, envfile),
+                    _generate_non_native_env_dump(jevs, envfile),
                 ]
                 bind = (
                     '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
@@ -5173,7 +5185,7 @@ def add_jobs(
                         id='shipyard-jmtask',
                         command_line=jscmdline,
                         container_settings=jscs,
-                        environment_settings=[],
+                        environment_settings=job_env_vars,
                         kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
                         run_exclusive=recurrence.job_manager.run_exclusive,
@@ -5194,13 +5206,6 @@ def add_jobs(
                     ],
                 )
             )
-            # populate env vars for jm task
-            for ev in job_env_vars:
-                jobschedule.job_specification.job_manager_task.\
-                    environment_settings.append(
-                        batchmodels.EnvironmentSetting(
-                            name=ev, value=job_env_vars[ev])
-                    )
             del jscs
             del jscmdline
         del recurrence
@@ -5214,6 +5219,7 @@ def add_jobs(
                 on_task_failure=on_task_failure,
                 job_preparation_task=jptask,
                 job_release_task=jrtask,
+                common_environment_settings=job_env_vars,
                 metadata=[
                     batchmodels.MetadataItem(
                         name=settings.get_metadata_version_name(),
@@ -5318,7 +5324,7 @@ def add_jobs(
                     federation_id, bxfile, bs, native, is_windows, tempdisk,
                     allow_run_on_missing, docker_missing_images,
                     singularity_missing_images, cloud_pool,
-                    pool, jobspec, job_id, job_env_vars, task_map,
+                    pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, False,
                     uses_task_dependencies, on_task_failure,
                     container_image_refs, _task
@@ -5340,7 +5346,7 @@ def add_jobs(
                     federation_id, bxfile, bs, native, is_windows, tempdisk,
                     allow_run_on_missing, docker_missing_images,
                     singularity_missing_images, cloud_pool,
-                    pool, jobspec, job_id, job_env_vars, task_map,
+                    pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, True,
                     uses_task_dependencies, on_task_failure,
                     container_image_refs, _task)

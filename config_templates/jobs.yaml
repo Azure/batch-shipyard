@@ -41,6 +41,10 @@ job_specifications:
   shared_data_volumes:
   - joblevelsharedvol
   auto_scratch: false
+  job_preparation:
+    command: myjpcommand
+  job_release:
+    command: myjrcommand
   input_data:
     azure_batch:
     - job_id: someotherjob

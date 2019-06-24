@@ -105,6 +105,18 @@ mapping:
               - type: str
           auto_scratch:
             type: bool
+          job_preparation:
+            type: map
+            mapping:
+              command:
+                type: str
+                required: true
+          job_release:
+            type: map
+            mapping:
+              command:
+                type: str
+                required: true
           input_data:
             type: map
             mapping:

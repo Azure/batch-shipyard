@@ -62,6 +62,10 @@ job_specifications:
   shared_data_volumes:
   - joblevelsharedvol
   auto_scratch: false
+  job_preparation:
+    command: myjpcommand
+  job_release:
+    command: myjrcommand
   input_data:
     azure_batch:
     - job_id: someotherjob
@@ -476,6 +480,22 @@ pool for this job. This scratch will be available at the location
 is cleaned up automatically on job termination or deletion. This option
 requires setting the property `per_job_auto_scratch` to `true` in the
 corresponding pool configuration.
+* (optional) `job_preparation` is the property for a user-specified
+job preparation task. The user-specified job preparation task runs after
+any implicit job preparation tasks created by Batch Shipyard (such as
+job-level data ingress). For more information about job preparation and
+release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
+* (optional) `job_release` is the property for a user-specified
+job release task. The user-specified job release task runs after
+any implicit job release tasks created by Batch Shipyard (such as
+multi-instance non-native job auto completion steps). For more information
+about job preparation and release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
