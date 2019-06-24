@@ -155,11 +155,11 @@ If you are using a `platform_image`, you may encounter an error such as:
 ```
 RuntimeError: Could not find an Azure Batch Node Agent Sku for this
 offer=abc publisher=def sku=xyz. You can list the valid and available
-Marketplace images with the command: pool listskus
+Marketplace images with the command: account images
 ```
 
 This problem can happen if you are specifying a `sku` that is not listed
-by the `pool listskus` command. You will need to update your `sku` field
+by the `account images` command. You will need to update your `sku` field
 to one that is listed.
 
 ## <a name="task"></a>Job/Task Execution Issues

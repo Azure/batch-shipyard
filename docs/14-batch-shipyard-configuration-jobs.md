@@ -547,9 +547,7 @@ directory for the container execution is not explicitly set. The default is
 directory, you can pass the appropriate working directory parameter to the
 container runtime through either `additional_docker_run_options` or
 `additional_singularity_options`. A working directory option specified within
-that property takes precedence over this option. Note that this option does
-not work in `native` mode currently; `native` mode will always override this
-option to `batch`.
+that property takes precedence over this option.
 * (optional) `restrict_default_bind_mounts` will restrict the mapped
 host directories into the container. If this property is set to `true`,
 only the `$AZ_BATCH_TASK_DIR` is mapped from the host into the container.

@@ -192,7 +192,7 @@ custom image, please see the
           same subscription and region as the Batch account.
         * (required for custom image) `node_agent` is the node agent sku id to
           use with this custom image. You can view supported base images and
-          their node agent sku ids with the `pool listskus` command.
+          their node agent sku ids with the `account images` command.
         * (optional) `native` will opt to use native Docker container support
           if possible. This provides better task management (such as job and
           task termination while tasks are running), in exchange for some other

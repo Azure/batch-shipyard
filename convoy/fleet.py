@@ -897,54 +897,21 @@ def _pick_node_agent_for_vm(batch_client, config, pool_settings):
     publisher = pool_settings.vm_configuration.publisher
     offer = pool_settings.vm_configuration.offer
     sku = pool_settings.vm_configuration.sku
-    # backward compat for CentOS HPC 7.1, 7.3, 7.4 and normal 7.4, 7.5, 7.6
-    if publisher == 'openlogic':
-        if ((offer == 'centos-hpc' and
-                (sku == '7.1' or sku == '7.3' or sku == '7.4')) or
-                (offer == 'centos' and
-                 (sku == '7.4' or sku == '7.5' or sku == '7.6'))):
-            return ({
-                'publisher': publisher,
-                'offer': offer,
-                'sku': sku,
-                'version': pool_settings.vm_configuration.version,
-            }, 'batch.node.centos 7')
-    # support windows server semi annual
-    if (publisher == 'microsoftwindowsserver' and
-            offer == 'windowsserversemiannual' and 'with-containers' in sku):
-        return ({
-            'publisher': publisher,
-            'offer': offer,
-            'sku': sku,
-            'version': pool_settings.vm_configuration.version,
-        }, 'batch.node.windows amd64')
-    # pick latest sku
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    skus_to_use = [
-        (nas, image_ref) for nas in node_agent_skus
-        for image_ref in sorted(
-            nas.verified_image_references,
-            key=lambda item: item.sku
-        )
-        if image_ref.publisher.lower() == publisher and
-        image_ref.offer.lower() == offer and
-        image_ref.sku.lower() == sku
-    ]
-    try:
-        sku_to_use, image_ref_to_use = skus_to_use[-1]
-    except IndexError:
+    image_ref, node_agent = batch.get_node_agent_for_image(
+        batch_client, config, publisher, offer, sku)
+    if image_ref is None:
         raise RuntimeError(
             ('Could not find an Azure Batch Node Agent Sku for this '
              'offer={} publisher={} sku={}. You can list the valid and '
-             'available Marketplace images with the command: pool '
-             'listskus').format(
+             'available Marketplace images with the command: account '
+             'images').format(
                  pool_settings.vm_configuration.offer,
                  pool_settings.vm_configuration.publisher,
                  pool_settings.vm_configuration.sku))
     # set image version to use
-    image_ref_to_use.version = pool_settings.vm_configuration.version
-    logger.info('deploying vm config: {}'.format(image_ref_to_use))
-    return (image_ref_to_use, sku_to_use.id)
+    image_ref.version = pool_settings.vm_configuration.version
+    logger.info('deploying vm config: {}'.format(image_ref))
+    return (image_ref, node_agent)
 
 
 def _check_for_batch_aad(bc, rmsg):
@@ -2726,6 +2693,25 @@ def _check_batch_client(batch_client):
             'proper "batch" credentials')
 
 
+def action_account_images(
+        batch_client, config, show_unrelated, show_unverified):
+    # type: (batchsc.BatchServiceClient, dict, bool, bool) -> None
+    """Action: Account Images
+    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
+        batch client
+    :param dict config: configuration dict
+    :param bool show_unrelated: show unrelated
+    :param bool show_unverified: show unverified
+    """
+    _check_batch_client(batch_client)
+    if settings.raw(config) and not show_unrelated:
+        logger.warning('force enabling --show-unrelated with --raw')
+        show_unrelated = True
+    batch.list_supported_images(
+        batch_client, config, show_unrelated=show_unrelated,
+        show_unverified=show_unverified)
+
+
 def action_account_info(batch_mgmt_client, config, name, resource_group):
     # type: (azure.mgmt.batch.BatchManagementClient, dict, str, str) -> None
     """Action: Account Info
@@ -3121,17 +3107,6 @@ def action_cert_del(batch_client, config, sha1):
     """
     _check_batch_client(batch_client)
     batch.del_certificate_from_account(batch_client, config, sha1)
-
-
-def action_pool_listskus(batch_client, config):
-    # type: (batchsc.BatchServiceClient, dict) -> None
-    """Action: Pool Listskus
-    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
-        batch client
-    :param dict config: configuration dict
-    """
-    _check_batch_client(batch_client)
-    batch.list_node_agent_skus(batch_client, config)
 
 
 def action_pool_add(

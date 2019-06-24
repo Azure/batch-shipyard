@@ -1,5 +1,5 @@
 adal==1.2.1
-azure-batch==6.0.1
+azure-batch==7.0.0
 azure-cosmosdb-table==1.0.5
 azure-keyvault==1.1.0
 azure-mgmt-authorization==0.51.1

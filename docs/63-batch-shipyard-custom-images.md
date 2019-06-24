@@ -238,9 +238,9 @@ following:
     * The `arm_image_id` points to a valid ARM Image resource
     * `node_agent` is populated with the correct node agent sku id which
       corresponds to the distribution used in the custom image. For instance,
-      if your custom image is based on Ubuntu 16.04, you would use
-      `batch.node.ubuntu 16.04` as the `node_agent` value. You can view a
-      complete list of supported node agent sku ids with the `pool listskus`
+      if your custom image is based on Ubuntu 18.04, you would use
+      `batch.node.ubuntu 18.04` as the `node_agent` value. You can view a
+      complete list of supported node agent sku ids with the `account images`
       command.
 
 ### ARM Image Retention Requirements

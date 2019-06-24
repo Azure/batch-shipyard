@@ -271,22 +271,91 @@ def log_batch_account_service_quota(batch_mgmt_client, config, location):
     logger.info(os.linesep.join(log))
 
 
-def list_node_agent_skus(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
-    """List all node agent skus
+def list_supported_images(
+        batch_client, config, show_unrelated=False, show_unverified=False):
+    # type: (batch.BatchServiceClient, dict, bool, bool) -> None
+    """List all supported images for the account
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool show_unrelated: show unrelated
+    :param bool show_unverified: show unverified images
     """
+    if show_unverified:
+        args = []
+    else:
+        args = [batchmodels.AccountListSupportedImagesOptions(
+            filter='verificationType eq \'verified\'')]
     if settings.raw(config):
-        util.print_raw_paged_output(batch_client.account.list_node_agent_skus)
+        util.print_raw_paged_output(
+            batch_client.account.list_supported_images, *args)
         return
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    for sku in node_agent_skus:
-        for img in sku.verified_image_references:
-            logger.info(
-                'os_type={} publisher={} offer={} sku={} node_agent={}'.format(
-                    sku.os_type, img.publisher, img.offer, img.sku, sku.id))
+    images = batch_client.account.list_supported_images(*args)
+    image_map = {}
+    for image in images:
+        os_type = image.os_type.value
+        if os_type not in image_map:
+            image_map[os_type] = {}
+        if (not show_unrelated and
+                image.image_reference.publisher.lower() not in
+                settings.get_valid_publishers()):
+            continue
+        if image.image_reference.publisher not in image_map[os_type]:
+            image_map[os_type][image.image_reference.publisher] = {}
+        if (image.image_reference.offer not in
+                image_map[os_type][image.image_reference.publisher]):
+            image_map[os_type][image.image_reference.publisher][
+                image.image_reference.offer] = []
+        image_map[os_type][image.image_reference.publisher][
+            image.image_reference.offer].append({
+                'sku': image.image_reference.sku,
+                'na_sku': image.node_agent_sku_id,
+                'verification': image.verification_type,
+                'capabilities': image.capabilities,
+                'support_eol': image.batch_support_end_of_life,
+            })
+    log = ['supported images (include unrelated={}, '
+           'include unverified={})'.format(show_unrelated, show_unverified)]
+    for os_type in image_map:
+        log.append('* os type: {}'.format(os_type))
+        for publisher in image_map[os_type]:
+            log.append('  * publisher: {}'.format(publisher))
+            for offer in image_map[os_type][publisher]:
+                log.append('    * offer: {}'.format(offer))
+                for image in image_map[os_type][publisher][offer]:
+                    log.append('      * sku: {}'.format(image['sku']))
+                    if util.is_not_empty(image['capabilities']):
+                        log.append('        * capabilities: {}'.format(
+                            ','.join(image['capabilities'])))
+                    log.append('        * verification: {}'.format(
+                        image['verification']))
+                    if image['support_eol'] is not None:
+                        log.append('        * batch support eol: {}'.format(
+                            image['support_eol'].strftime("%Y-%m-%d")))
+                    log.append('        * node agent sku id: {}'.format(
+                        image['na_sku']))
+    logger.info(os.linesep.join(log))
+
+
+def get_node_agent_for_image(batch_client, config, publisher, offer, sku):
+    # type: (batch.BatchServiceClient, dict, str, str, str) -> tuple
+    """Get node agent for image
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str publisher: publisher
+    :param str offer: offer
+    :param str sku: sku
+    :rtype: tuple
+    :return: image ref and node agent sku id
+    """
+    images = batch_client.account.list_supported_images()
+    for image in images:
+        if (image.image_reference.publisher.lower() == publisher.lower() and
+                image.image_reference.offer.lower() == offer.lower() and
+                image.image_reference.sku.lower() == sku.lower()):
+            return image.image_reference, image.node_agent_sku_id
+    return None, None
 
 
 def add_certificate_to_account(
@@ -4607,7 +4676,9 @@ def _construct_task(
     if native:
         batchtask.container_settings = batchmodels.TaskContainerSettings(
             container_run_options=' '.join(task.run_options),
-            image_name=task.docker_image)
+            image_name=task.docker_image,
+            working_directory=task.working_dir,
+        )
     # add additional resource files
     if util.is_not_empty(task.resource_files):
         for rf in task.resource_files:
