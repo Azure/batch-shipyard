@@ -562,6 +562,9 @@ mapping:
                                 type: str
                               is_file_share:
                                 type: bool
+                              condition:
+                                type: str
+                                enum: ['taskcompletion', 'taskfailure', 'tasksuccess']
                               exclude:
                                 type: seq
                                 sequence:

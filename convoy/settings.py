@@ -2918,6 +2918,16 @@ def data_exclude(conf):
     return _kv_read_checked(conf, 'exclude', [])
 
 
+def data_condition(conf):
+    # type: (dict) -> str
+    """Retrieve output data condition
+    :param dict conf: configuration object
+    :rtype: str
+    :return: condition
+    """
+    return _kv_read_checked(conf, 'condition', default='tasksuccess')
+
+
 def input_data_job_id(conf):
     # type: (dict) -> str
     """Retrieve input data job id

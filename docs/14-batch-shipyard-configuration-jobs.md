@@ -248,6 +248,7 @@ job_specifications:
         include:
         - 'out*.dat'
         blobxfer_extra_options: null
+        condition: tasksuccess
     default_working_dir: batch
     remove_container_after_exit: true
     shm_size: 256m
@@ -927,10 +928,9 @@ application command.
         * (optional) `blobxfer_extra_options` are any extra options to pass to
           `blobxfer`.
 * (optional) `output_data` is an object containing data that should be
-egressed for this specific task if and only if the task completes
-successfully. This object currently only supports `azure_storage` as a
-member. Note for multi-instance tasks, transfer of `output_data` is only
-applied to the task running the application command.
+egressed for this specific task. This object currently only supports
+`azure_storage` as a member. Note for multi-instance tasks, transfer of
+`output_data` is only applied to the task running the application command.
     * `azure_storage` contains the following members:
         * (required) `storage_account_settings` contains a storage account link
           as defined in the credentials config.
@@ -943,6 +943,11 @@ applied to the task running the application command.
           specified, then `source` is defaulted to `$AZ_BATCH_TASK_DIR`.
         * (optional) `is_file_share` denotes if the `remote_path` is on a
           file share. This defaults to `false`.
+        * (optional) `condition` property defines the output file condition
+          depending upon the task command exit code. The possible options are
+          `taskcompletion`, `taskfailure` and `tasksuccess`. Please see
+          [this document](https://docs.microsoft.com/rest/api/batchservice/task/add#outputfileuploadcondition)
+          for more information.
         * (optional) `include` property defines optional include filters.
         * (optional) `exclude` property defines optional exclude filters.
         * (optional) `blobxfer_extra_options` are any extra options to pass to

@@ -30,15 +30,26 @@ cat "$SHIPYARD_ENV_FILE"
 
 SHIPYARD_RUNTIME_CMD_OPTS=$(eval echo "${SHIPYARD_RUNTIME_CMD_OPTS}")
 
+set +e
+
 if [ -n "$SHIPYARD_RUNTIME" ]; then
     # shellcheck disable=SC2086
     "$SHIPYARD_RUNTIME" "$SHIPYARD_RUNTIME_CMD" $SHIPYARD_RUNTIME_CMD_OPTS \
         "$SHIPYARD_CONTAINER_IMAGE_NAME" "$@"
+    SHIPYARD_TASK_EC=$?
 else
     "$@"
+    SHIPYARD_TASK_EC=$?
 fi
 
 ## POST EXEC
 if [ -n "$SHIPYARD_USER_EPILOGUE_CMD" ]; then
+    if [ "$SHIPYARD_TASK_EC" -eq 0 ]; then
+        export SHIPYARD_TASK_RESULT=success
+    else
+        export SHIPYARD_TASK_RESULT=fail
+    fi
     eval "$SHIPYARD_USER_EPILOGUE_CMD"
 fi
+
+exit $SHIPYARD_TASK_EC
