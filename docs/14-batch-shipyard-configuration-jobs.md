@@ -272,6 +272,10 @@ job_specifications:
       - blob_source: https://some.url
         file_mode: '0750'
         file_path: some/path/in/sharedtask/file
+      pre_execution_command: source ./setup_hplinpack.sh -2
+      intelmpi:
+        perhost: 1
+        np: 2
     entrypoint: null
     command: mycommand
   merge_task:
@@ -1032,6 +1036,17 @@ property are:
           Azure Blob Storage URL.
         * `file_mode` if the file mode to set for the file on the compute node.
           This is optional.
+    * `pre_execution_command` is a command that is run only on the master node
+      of this multi-instance task prior to the application command. This
+      command must not block and must exit successfully for the multi-instance
+      task to proceed. This command can be used to populate environement
+      variables required to run the application command. This is optional and
+      may be null. For Docker containers, usually this property will be
+      unspecified.
+    * (required if using Intel MPI) `intelmpi` is a dictionary of argument
+      that will be used to construct the mpi command. The keys will be mapped
+      as options and the values parameters. It is possible to specify no
+      argument by using `{}`.
 * (optional) `entrypoint` is the property that can override the Docker image
 defined `ENTRYPOINT`. This option only applies to Docker containers.
 * (optional) `command` is the command to execute in the container

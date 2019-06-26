@@ -4430,16 +4430,19 @@ def _construct_task(
                 )
             )
             if is_singularity:
-                taskenv.append(
-                    batchmodels.EnvironmentSetting(
-                        name='SHIPYARD_SINGULARITY_COMMAND',
-                        value='singularity {} {} {}'.format(
+                if task.multi_instance.intelmpi is not None:
+                    mpi_opts = ['-hosts $AZ_BATCH_HOST_LIST']
+                    mpi_opts.extend('-{} {}'.format(x, y) for x, y in
+                                    task.multi_instance.intelmpi.items())
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        'singularity {} {} {} {}'.format(
                             task.singularity_cmd,
                             ' '.join(task.run_options),
                             task.singularity_image,
+                            task.command
                         )
                     )
-                )
             else:
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
@@ -4528,12 +4531,15 @@ def _construct_task(
                 'input_data at task-level is not supported on '
                 'native container pools')
         task_commands.insert(0, addlcmds)
+    # execute multi instance pre-exec cmd
+    if util.is_not_empty(task.multi_instance.pre_execution_command):
+        task_commands.append(task.multi_instance.pre_execution_command)
     if not native:
         if util.is_not_empty(task_commands):
             taskenv.append(
                 batchmodels.EnvironmentSetting(
                     name='SHIPYARD_USER_PROLOGUE_CMD',
-                    value=util.wrap_commands_in_shell(
+                    value=util.wrap_commands(
                         task_commands, windows=is_windows),
                 )
             )
@@ -4555,9 +4561,14 @@ def _construct_task(
                         task_commands, windows=is_windows),
                 )
             )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                name='SHIPYARD_USER_CMD',
+                value=mpi_command or task.command,
+            )
+        )
         task_commands = [
-            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh {}'.format(
-                task.command)
+            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh'
         ]
     # always add env vars in (host) task to be dumped into container
     # task (if non-native)

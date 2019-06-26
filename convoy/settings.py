@@ -342,6 +342,7 @@ TaskSettings = collections.namedtuple(
 MultiInstanceSettings = collections.namedtuple(
     'MultiInstanceSettings', [
         'num_instances', 'coordination_command', 'resource_files',
+        'pre_execution_command', 'intelmpi', 'openmpi',
     ]
 )
 ResourceFileSettings = collections.namedtuple(
@@ -4255,10 +4256,19 @@ def task_settings(
                 )
         except KeyError:
             mi_resource_files = None
+        pre_execution_command = _kv_read_checked(
+            conf['multi_instance'], 'pre_execution_command', None)
+        intelmpi = _kv_read(conf['multi_instance'], 'intelmpi', None)
+        openmpi = _kv_read(conf['multi_instance'], 'openmpi', None)
+        if sum(x is not None for x in [intelmpi, openmpi]) > 1:
+            raise ValueError('Only one mpi implementation shoul be specified')
     else:
         num_instances = 0
         cc_args = None
         mi_resource_files = None
+        pre_execution_command = None
+        intelmpi = None
+        openmpi = None
     return TaskSettings(
         id=task_id,
         docker_image=docker_image,
@@ -4284,6 +4294,9 @@ def task_settings(
             num_instances=num_instances,
             coordination_command=cc_args,
             resource_files=mi_resource_files,
+            pre_execution_command=pre_execution_command,
+            intelmpi=intelmpi,
+            openmpi=openmpi,
         ),
         default_exit_options=TaskExitOptions(
             job_action=job_action,

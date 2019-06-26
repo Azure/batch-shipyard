@@ -624,6 +624,14 @@ mapping:
                               file_path:
                                 type: str
                                 required: true
+                      pre_execution_command:
+                        type: str
+                      intelmpi:
+                        type: map
+                        allowempty: True
+                      openmpi:
+                        type: map
+                        allowempty: True
                   entrypoint:
                     type: str
                   command:
