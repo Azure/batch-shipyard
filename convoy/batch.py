@@ -4531,6 +4531,16 @@ def _construct_task(
                 'input_data at task-level is not supported on '
                 'native container pools')
         task_commands.insert(0, addlcmds)
+    if not native:
+        if util.is_not_empty(task_commands):
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_SYSTEM_PROLOGUE_CMD',
+                    value=util.wrap_commands_in_shell(
+                        task_commands, windows=is_windows),
+                )
+            )
+        task_commands = []
     # execute multi instance pre-exec cmd
     if util.is_not_empty(task.multi_instance.pre_execution_command):
         task_commands.append(task.multi_instance.pre_execution_command)
@@ -4556,7 +4566,7 @@ def _construct_task(
         if util.is_not_empty(task_commands):
             taskenv.append(
                 batchmodels.EnvironmentSetting(
-                    name='SHIPYARD_USER_EPILOGUE_CMD',
+                    name='SHIPYARD_SYSTEM_EPILOGUE_CMD',
                     value=util.wrap_commands_in_shell(
                         task_commands, windows=is_windows),
                 )
