@@ -646,7 +646,7 @@ mapping:
                         mapping:
                           runtime:
                             type: str
-                            enum: ['intelmpi', 'mpich', 'openmpi']
+                            enum: ['intelmpi', 'intelmpi_ofa', 'mpich', 'openmpi']
                             required: true
                           options:
                             type: seq
@@ -654,6 +654,8 @@ mapping:
                               - type: str
                           processes_per_node:
                             type: int
+                            range:
+                              min: 1
                   entrypoint:
                     type: str
                   command:

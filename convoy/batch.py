@@ -4415,18 +4415,7 @@ def _construct_task(
     # merge job and task env vars
     env_vars = util.merge_dict(job_env_vars, task_env_vars)
     del task_env_vars
-    # set ib/gpu env vars
-    if task.infiniband:
-        ib_env = {
-            'I_MPI_FABRICS': 'shm:dapl',
-            'I_MPI_DAPL_PROVIDER': 'ofa-v2-ib0',
-            'I_MPI_DYNAMIC_CONNECTION': '0',
-            # create a manpath entry for potentially buggy
-            # intel mpivars.sh
-            'MANPATH': '/usr/share/man:/usr/local/man',
-        }
-        env_vars = util.merge_dict(env_vars, ib_env)
-        del ib_env
+    # set gpu env vars
     if task.gpu:
         gpu_env = {
             'CUDA_CACHE_DISABLE': '0',
@@ -4506,7 +4495,7 @@ def _construct_task(
                 processes_per_node = (
                     task.multi_instance.mpi.processes_per_node)
                 # set mpi options for the different runtimes
-                if task.multi_instance.mpi.runtime == 'intelmpi':
+                if task.multi_instance.mpi.runtime.startswith('intelmpi'):
                     if processes_per_node is not None:
                         mpi_opts.extend([
                             '-hosts $AZ_BATCH_HOST_LIST',
@@ -4516,6 +4505,28 @@ def _construct_task(
                             ),
                             '-perhost {}'.format(processes_per_node)
                         ])
+                    if task.infiniband:
+                        ib_env = {
+                            'I_MPI_FALLBACK': '0',
+                            # create a manpath entry for potentially buggy
+                            # intel mpivars.sh
+                            'MANPATH': '/usr/share/man:/usr/local/man',
+                        }
+                        if settings.is_networkdirect_rdma_pool(pool.vm_size):
+                            ib_env['I_MPI_FABRICS'] = 'shm:dapl'
+                            ib_env['I_MPI_DAPL_PROVIDER'] = 'ofa-v2-ib0'
+                            ib_env['I_MPI_DYNAMIC_CONNECTION'] = '0'
+                            ib_env['I_MPI_DAPL_TRANSLATION_CACHE'] = '0'
+                        elif settings.is_sriov_rdma_pool(pool.vm_size):
+                            # IntelMPI pre-2019
+                            if (task.multi_instance.mpi.runtime ==
+                                    'intelmpi_ofa'):
+                                ib_env['I_MPI_FABRICS'] = 'shm:ofa'
+                            else:
+                                # IntelMPI 2019+
+                                ib_env['I_MPI_FABRICS'] = 'shm:ofi'
+                        env_vars = util.merge_dict(env_vars, ib_env)
+                        del ib_env
                 elif task.multi_instance.mpi.runtime == 'mpich':
                     if processes_per_node is not None:
                         mpi_opts.extend([
@@ -4834,7 +4845,7 @@ def _construct_task(
                 'multi-instance task coordination command: {}'.format(
                     mis.coordination_command_line))
         logger.debug('task: {} command: {}'.format(
-            task.id, batchtask.command_line))
+            task.id, batchtask.command_line if native else task.command))
         if native:
             logger.debug('native run options: {}'.format(
                 batchtask.container_settings.container_run_options))

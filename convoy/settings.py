@@ -71,9 +71,14 @@ _GPU_VISUALIZATION_INSTANCES = re.compile(
     r'^standard_nv[\d]+s?(_v2)?$',
     re.IGNORECASE
 )
-_RDMA_INSTANCES = re.compile(
-    # standard a8/a9, h+r, nc+r, nd+r, hb/hc
-    r'^standard_((a8|a9)|((h|hb|hc|nc|nd)+[\d]+m?rs?(_v[\d])?))$',
+_SRIOV_RDMA_INSTANCES = re.compile(
+    # standard hb/hc
+    r'^standard_((hb|hc)[\d]+m?rs?(_v[\d])?)$',
+    re.IGNORECASE
+)
+_NETWORKDIRECT_RDMA_INSTANCES = re.compile(
+    # standard a8/a9, h+r, nc+r, nd+r
+    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[\d])?))$',
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
@@ -805,7 +810,7 @@ def gpu_configuration_check(config, vm_size=None):
             sku > '16.04'):
         return True
     elif publisher == 'openlogic':
-        if offer == 'centos-hpc' and sku >= '7.3':
+        if offer == 'centos-hpc' and sku >= '7.6':
             return True
         elif offer == 'centos' and sku >= '7.3':
             return True
@@ -864,6 +869,26 @@ def is_windows_pool(config, vm_config=None):
         return vm_config.node_agent.startswith('batch.node.windows')
 
 
+def is_sriov_rdma_pool(vm_size):
+    # type: (str) -> bool
+    """Check if pool is SRIOV IB/RDMA capable
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if sriov rdma is present
+    """
+    return _SRIOV_RDMA_INSTANCES.match(vm_size) is not None
+
+
+def is_networkdirect_rdma_pool(vm_size):
+    # type: (str) -> bool
+    """Check if pool is NetworkDirect IB/RDMA capable
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if network direct rdma is present
+    """
+    return _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable
@@ -871,7 +896,7 @@ def is_rdma_pool(vm_size):
     :rtype: bool
     :return: if rdma is present
     """
-    return _RDMA_INSTANCES.match(vm_size) is not None
+    return is_sriov_rdma_pool(vm_size) or is_networkdirect_rdma_pool(vm_size)
 
 
 def get_ib_class_from_vm_size(vm_size):
@@ -4129,8 +4154,24 @@ def task_settings(
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
-        # mount /opt/intel for all container types
-        run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # mount /opt/intel for NetworkDirect RDMA
+        if is_networkdirect_rdma_pool(vm_size):
+            run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # until Batch supports SRIOV natively for Docker, add additional
+        # IB devices and rdma dat regardless of pool native mode
+        if is_sriov_rdma_pool(vm_size):
+            if util.is_not_empty(docker_image):
+                run_opts.append('--device=/dev/infiniband/issm0')
+                run_opts.append('--device=/dev/infiniband/ucm0')
+                run_opts.append('--device=/dev/infiniband/umad0')
+            if (native and
+                    (((publisher == 'openlogic' and offer == 'centos-hpc') or
+                      (publisher == 'microsoft-azure-batch' and
+                       offer == 'centos-container-rdma')) or
+                     (is_custom_image and
+                      node_agent.startswith('batch.node.centos')))):
+                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                    bindparm))
         if not native:
             if util.is_not_empty(docker_image):
                 # common run opts
@@ -4165,23 +4206,34 @@ def task_settings(
                     run_opts.remove('--net')
                 except ValueError:
                     pass
-            # only centos-hpc and sles-hpc are supported for infiniband
+            # add rdma dat files into container space
             if (((publisher == 'openlogic' and offer == 'centos-hpc') or
                  (publisher == 'microsoft-azure-batch' and
                   offer == 'centos-container-rdma')) or
                     (is_custom_image and
                      node_agent.startswith('batch.node.centos'))):
-                run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(bindparm))
-                run_opts.append(
-                    '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(bindparm))
+                if is_networkdirect_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(
+                        bindparm))
+                    run_opts.append(
+                        '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(
+                            bindparm))
+                elif is_sriov_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
             elif ((publisher == 'microsoft-azure-batch' and
                    offer == 'ubuntu-server-container-rdma') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.ubuntu'))):
-                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                    bindparm))
-                run_opts.append(
-                    '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(bindparm))
+                if is_networkdirect_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
+                    run_opts.append(
+                        '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(
+                            bindparm))
+                elif is_sriov_rdma_pool(vm_size):
+                    raise RuntimeError(
+                        'SRIOV on Ubuntu is currently not supported')
             elif ((publisher == 'suse' and offer == 'sles-hpc') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.opensuse'))):

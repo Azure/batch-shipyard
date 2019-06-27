@@ -25,6 +25,7 @@ NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DO
 NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
+IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
 
 # status file consts
 lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
@@ -114,7 +115,7 @@ shipyardversion=
 singularity_basedir=
 singularityversion=
 vm_size=
-vm_size_is_rdma=
+vm_rdma_type=0
 
 # process command line options
 while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
@@ -296,12 +297,14 @@ get_vm_size_from_imds() {
     fi
     curl -fSsL -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
     vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
-    if [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$ ]]; then
-        vm_size_is_rdma=1
-    else
-        vm_size_is_rdma=0
+    if [[ "$vm_size" =~ ^standard_((hb|hc)[0-9]+m?rs?(_v[0-9])?)$ ]]; then
+        # SR-IOV RDMA
+        vm_rdma_type=1
+    elif [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)[0-9]+m?rs?(_v[0-9])?))$ ]]; then
+        # network direct RDMA
+        vm_rdma_type=2
     fi
-    log INFO "VM Size is $vm_size, RDMA: $vm_size_is_rdma"
+    log INFO "VmSize=$vm_size RDMA=$vm_rdma_type"
 }
 
 download_file_as() {
@@ -594,8 +597,7 @@ install_kernel_devel_package() {
             local centos_ver
             centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
             if [ -e /dev/infiniband/uverbs0 ]; then
-                get_vm_size_from_imds
-                if [ "$vm_size_is_rdma" -eq 1 ]; then
+                if [ "$vm_rdma_type" -ne 0 ]; then
                     # HPC distros have pinned repos
                     install_packages "${kernel_devel_package}"
                     installed=1
@@ -1357,14 +1359,8 @@ install_intel_mpi() {
                 ln -sf /opt/intel/impi/5.0.3.048 /opt/intel/compilers_and_libraries/linux/mpi
             else
                 if [ ! -f "${AZ_BATCH_TASK_WORKING_DIR}/intel_mpi_rt.tar.gz" ]; then
-                    get_vm_size_from_imds
-                    if [ "$vm_size_is_rdma" -eq 1 ]; then
-                        log ERROR "VM size $vm_size is RDMA capable and Intel MPI Runtime installer is missing"
-                        exit 1
-                    else
-                        log DEBUG "VM size $vm_size is not RDMA capable, skipping Intel MPI runtime installation"
-                        return
-                    fi
+                    log ERROR "VM size $vm_size is RDMA capable and Intel MPI Runtime installer is missing"
+                    exit 1
                 fi
                 pushd "$AZ_BATCH_TASK_WORKING_DIR"
                 mkdir tmp
@@ -1390,6 +1386,62 @@ install_intel_mpi() {
     else
         log INFO "IB device not found"
     fi
+}
+
+export_ib_pkey()
+{
+    key0=$(cat /sys/class/infiniband/mlx5_0/ports/1/pkeys/0)
+    key1=$(cat /sys/class/infiniband/mlx5_0/ports/1/pkeys/1)
+
+    if [ $((key0 - key1)) -gt 0 ]; then
+        IB_PKEY=$key0
+    else
+        IB_PKEY=$key1
+    fi
+
+    UCX_IB_PKEY=$(printf '0x%04x' "$((IB_PKEY & 0x0FFF))")
+
+cat > "$IB_PKEY_FILE" << EOF
+IB_PKEY=$IB_PKEY
+UCX_IB_PKEY=$UCX_IB_PKEY
+EOF
+}
+
+check_for_mellanox_card() {
+    # check for mellanox card
+    set +e
+    local out
+    out=$(lspci)
+    echo "$out" | grep -i mellanox > /dev/null
+    local rc=$?
+    set -e
+    echo "$out"
+    if [ $rc -ne 0 ]; then
+        log INFO "No Mellanox card(s) detected!"
+    else
+        if [ "$vm_rdma_type" -eq 1 ]; then
+            # extract IB PKEY
+            export_ib_pkey
+            # get ofed info
+            ofed_info
+            # run ib tools
+            ibstatus
+            ibv_devinfo
+        elif [ "$vm_rdma_type" -eq 2 ]; then
+            # network direct rmda
+            install_intel_mpi
+        else
+            log DEBUG "Mellanox card is not IB/RDMA capable"
+        fi
+    fi
+}
+
+process_ib_rdma() {
+    if [ "$vm_rdma_type" -eq 0 ]; then
+        log DEBUG "VM size $vm_size does not have IB RDMA"
+    fi
+    check_for_mellanox_card
+    ip addr
 }
 
 setup_cascade() {
@@ -1606,6 +1658,9 @@ check_for_buggy_ntfs_mount
 # save startup stderr/stdout
 save_startup_to_volatile
 
+# get vm size
+get_vm_size_from_imds
+
 # install LIS if required first (lspci won't work on certain distros without it)
 install_lis
 
@@ -1719,6 +1774,9 @@ if [ -n "$sc_args" ]; then
     fi
 fi
 
+# setup ib/rdma
+process_ib_rdma
+
 # start batch insights
 install_and_start_batch_insights
 
@@ -1730,9 +1788,6 @@ install_and_start_cadvisor
 if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; }; then
     install_cascade_dependencies
 fi
-
-# install intel mpi if available
-install_intel_mpi
 
 # retrieve required docker images
 docker_pull_image alfpark/blobxfer:"${blobxferversion}"

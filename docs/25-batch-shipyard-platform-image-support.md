@@ -29,6 +29,7 @@ container pools.
 | OpenLogic             | CentOS-HPC            | 7.1 |     |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.3 |  X  |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |    X    |             |        X       |
+| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (4)  |             |                |
 
 ### Debian
 
@@ -71,3 +72,4 @@ on how to create a compliant custom image.
 2. Native conversion of this platform image will enable IB/RDMA automatically.
 3. The Intel MPI runtime is not present by default on this image, however,
 it is automatically installed through Batch Shipyard.
+4. Only supported on SR-IOV IB/RDMA VM sizes.

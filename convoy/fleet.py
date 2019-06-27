@@ -4910,7 +4910,7 @@ def action_fed_pool_add(
                 if 'The specified pool does not exist' in ex.message.value:
                     raise ValueError(
                         'pool {} does not exist for account {}'.format(
-                            bc.account_service_url))
+                            poolid, bc.account_service_url))
                 else:
                     raise
     else:
