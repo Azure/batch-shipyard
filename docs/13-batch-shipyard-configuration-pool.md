@@ -17,7 +17,7 @@ pool_specification:
       native: false
       license_type: null
     custom_image:
-      arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/images/<image_name>
+      arm_image_id: /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Compute/galleries/<gallery_name>/images/<image_name>/versions/<version>
       node_agent: <node agent sku id>
       native: false
       license_type: null
@@ -187,9 +187,11 @@ custom image, please see the
     * (required for custom image) `custom_image` defines the custom image to
       use. AAD `batch` credentials are required to use custom images for both
       Batch service and User Subscription modes.
-        * (required for custom image) `arm_image_id` defines the ARM image id
-          to use as the OS image for the pool. The ARM image must be in the
-          same subscription and region as the Batch account.
+        * (required for custom image) `arm_image_id` defines the
+          [Azure Shared Image Gallery](https://docs.microsoft.com/azure/virtual-machines/windows/shared-image-galleries)
+          resource id to use as the OS image for the pool. The Shared Image
+          resource must be replicated (and have completed replication) to
+          the same region as the Batch account.
         * (required for custom image) `node_agent` is the node agent sku id to
           use with this custom image. You can view supported base images and
           their node agent sku ids with the `account images` command.

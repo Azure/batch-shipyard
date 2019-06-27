@@ -1,0 +1,63 @@
+{
+  "variables": {
+    "image_name": "",
+    "image_version": "",
+    "image_resource_group": "",
+    "sig_name": "",
+    "sig_replication_regions": "",
+    "sig_resource_group": "",
+    "subscription_id": "",
+    "directory_id": "",
+    "application_id": "",
+    "auth_key": "",
+    "location": "",
+    "vm_size": "STANDARD_D2_V2",
+    "docker_version": "18.09.6",
+    "bootstrap": "bootstrap.sh"
+  },
+  "builders": [
+      {
+          "type": "azure-arm",
+
+          "subscription_id": "{{user `subscription_id`}}",
+          "tenant_id": "{{user `directory_id`}}",
+          "client_id": "{{user `application_id`}}",
+          "client_secret": "{{user `auth_key`}}",
+
+          "os_type": "Linux",
+          "image_publisher": "Canonical",
+          "image_offer": "UbuntuServer",
+          "image_sku": "18.04-LTS",
+
+          "location": "{{user `location`}}",
+          "vm_size": "{{user `vm_size`}}",
+
+          "managed_image_name": "{{user `image_name`}}",
+          "managed_image_resource_group_name": "{{user `image_resource_group`}}",
+          "shared_image_gallery_destination": {
+              "resource_group": "{{user `sig_resource_group`}}",
+              "gallery_name": "{{user `sig_name`}}",
+              "image_name": "{{user `image_name`}}",
+              "image_version": "{{user `image_version`}}",
+              "replication_regions": "{{user `sig_replication_regions`}}"
+          }
+      }
+  ],
+  "provisioners": [
+      {
+          "type": "file",
+          "source": "{{user `bootstrap`}}",
+          "destination": "/tmp/{{user `bootstrap`}}"
+      },
+      {
+          "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
+          "inline": [
+              "chmod +x /tmp/{{user `bootstrap`}}",
+              "/tmp/{{user `bootstrap`}} {{user `docker_version`}}",
+              "/usr/sbin/waagent -force -deprovision+user && export HISTSIZE=0 && sync"
+          ],
+          "inline_shebang": "/bin/bash -e",
+          "type": "shell"
+      }
+  ]
+}
