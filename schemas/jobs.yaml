@@ -626,12 +626,18 @@ mapping:
                                 required: true
                       pre_execution_command:
                         type: str
-                      intelmpi:
+                      mpi:
                         type: map
-                        allowempty: True
-                      openmpi:
-                        type: map
-                        allowempty: True
+                        mapping:
+                          runtime:
+                            type: str
+                            required: true
+                          options:
+                            type: seq
+                            sequence:
+                              - type: str
+                          processes_per_node:
+                            type: int
                   entrypoint:
                     type: str
                   command:

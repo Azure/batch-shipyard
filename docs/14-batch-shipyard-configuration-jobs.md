@@ -273,9 +273,10 @@ job_specifications:
         file_mode: '0750'
         file_path: some/path/in/sharedtask/file
       pre_execution_command: source ./setup_hplinpack.sh -2
-      intelmpi:
-        perhost: 1
-        np: 2
+      mpi:
+        runtime: intelmpi
+        options: []
+        processes_per_node: 1
     entrypoint: null
     command: mycommand
   merge_task:
@@ -1043,7 +1044,13 @@ property are:
       variables required to run the application command. This is optional and
       may be null. For Docker containers, usually this property will be
       unspecified.
-    * (required if using Intel MPI) `intelmpi` is a dictionary of argument
+    * (required if using MPI) `mpi` contains the following members:
+        * (required) `runtime` is the runtime that should be used. Valid
+          values are `intelmpi` and `openmpi`.
+        * (optional) `options` is a list of options that will be passed to the
+          `mpirun` command.
+        * (optional) `processes_per_node` is the number of processes per node.
+          The default value is `1`.
       that will be used to construct the mpi command. The keys will be mapped
       as options and the values parameters. It is possible to specify no
       argument by using `{}`.

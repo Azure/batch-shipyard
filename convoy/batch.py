@@ -4371,6 +4371,7 @@ def _construct_task(
     taskenv = []
     # check if this is a multi-instance task
     mis = None
+    mpi_command = None
     if settings.is_multi_instance_task(_task):
         if util.is_not_empty(task.multi_instance.coordination_command):
             if native:
@@ -4430,7 +4431,7 @@ def _construct_task(
                 )
             )
             if is_singularity:
-                if task.multi_instance.intelmpi is not None:
+                if task.multi_instance.mpi.runtime == 'intelmpi':
                     mpi_opts = ['-hosts $AZ_BATCH_HOST_LIST']
                     mpi_opts.extend('-{} {}'.format(x, y) for x, y in
                                     task.multi_instance.intelmpi.items())

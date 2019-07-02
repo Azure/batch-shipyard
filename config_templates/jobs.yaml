@@ -254,9 +254,10 @@ job_specifications:
         file_mode: '0750'
         file_path: some/path/in/sharedtask/file
       pre_execution_command: source ./setup_hplinpack.sh -2
-      intelmpi:
-        perhost: 1
-        np: 2
+      mpi:
+        runtime: intelmpi
+        options: []
+        processes_per_node: 1
     entrypoint: null
     command: mycommand
   merge_task:
