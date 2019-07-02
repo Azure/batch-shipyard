@@ -4432,9 +4432,19 @@ def _construct_task(
             )
             if is_singularity:
                 if task.multi_instance.mpi.runtime == 'intelmpi':
-                    mpi_opts = ['-hosts $AZ_BATCH_HOST_LIST']
-                    mpi_opts.extend('-{} {}'.format(x, y) for x, y in
-                                    task.multi_instance.intelmpi.items())
+                    mpi_opts = []
+                    processes_per_node = (
+                        task.multi_instance.mpi.processes_per_node)
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-perhost {}'.format(processes_per_node)
+                        ])
+                    mpi_opts.extend(task.multi_instance.mpi.options)
                     mpi_command = 'mpirun {} {}'.format(
                         ' '.join(mpi_opts),
                         'singularity {} {} {} {}'.format(
