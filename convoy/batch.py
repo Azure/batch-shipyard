@@ -4444,6 +4444,33 @@ def _construct_task(
                             task.command
                         )
                     )
+                elif task.multi_instance.mpi.runtime == 'openmpi':
+                    mpi_opts = ['-mca btl_tcp_if_exclude docker0']
+                    processes_per_node = (
+                        task.multi_instance.mpi.processes_per_node)
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-host {}'.format(
+                                ','.join(
+                                    ['$AZ_BATCH_HOST_LIST'] *
+                                    processes_per_node)
+                            ),
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-npernode {}'.format(processes_per_node)
+                        ])
+                    mpi_opts.extend(task.multi_instance.mpi.options)
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        'singularity {} {} {} {}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                            task.command
+                        )
+                    )
             else:
                 taskenv.append(
                     batchmodels.EnvironmentSetting(

@@ -134,7 +134,6 @@ _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
     'depends_on', 'depends_on_range', 'multi_instance', 'task_factory'
 ))
-_MPI_DEFAULT_PPN = 1
 _MPI_RUNTIMES = frozenset(('intelmpi', 'openmpi'))
 # named tuples
 PoolVmCountSettings = collections.namedtuple(
@@ -4271,7 +4270,7 @@ def task_settings(
             raise ValueError('mpi runtime is invalid: should be {}'.format(
                 ','.join(_MPI_RUNTIMES)))
         mpi_options = _kv_read_checked(mpi, 'options', [])
-        mpi_ppn = _kv_read(mpi, 'processes_per_node', None) or _MPI_DEFAULT_PPN
+        mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:
         num_instances = 0
         cc_args = None
