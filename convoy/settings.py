@@ -4264,13 +4264,14 @@ def task_settings(
             mi_resource_files = None
         pre_execution_command = _kv_read_checked(
             conf['multi_instance'], 'pre_execution_command', None)
-        mpi = _kv_read_checked(conf['multi_instance'], 'mpi', {})
-        mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
-        if mpi_runtime not in _MPI_RUNTIMES:
-            raise ValueError('mpi runtime is invalid: should be {}'.format(
-                ','.join(_MPI_RUNTIMES)))
-        mpi_options = _kv_read_checked(mpi, 'options', [])
-        mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
+        mpi = _kv_read(conf['multi_instance'], 'mpi', None)
+        if mpi is not None:
+            mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
+            if mpi_runtime not in _MPI_RUNTIMES:
+                raise ValueError('mpi runtime is invalid: should be {}'.format(
+                    ','.join(_MPI_RUNTIMES)))
+            mpi_options = _kv_read_checked(mpi, 'options', [])
+            mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:
         num_instances = 0
         cc_args = None
@@ -4303,7 +4304,7 @@ def task_settings(
             coordination_command=cc_args,
             resource_files=mi_resource_files,
             pre_execution_command=pre_execution_command,
-            mpi=MpiSettings(
+            mpi=None if mpi is None else MpiSettings(
                 runtime=mpi_runtime,
                 options=mpi_options,
                 processes_per_node=mpi_ppn,
