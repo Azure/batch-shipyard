@@ -4455,7 +4455,7 @@ def _construct_task(
                         )
                     )
                 elif task.multi_instance.mpi.runtime == 'openmpi':
-                    mpi_opts = ['-mca btl_tcp_if_exclude docker0']
+                    mpi_opts = ['-mca btl_tcp_if_include eth0']
                     processes_per_node = (
                         task.multi_instance.mpi.processes_per_node)
                     if processes_per_node is not None:
