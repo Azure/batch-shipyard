@@ -1042,7 +1042,7 @@ property are:
       command must not block and must exit successfully for the multi-instance
       task to proceed. This command can be used to populate environment
       variables required to run the application command. This is optional and
-      may be null.
+      may be null. Note that this command cannot be used with Docker images.
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
           values are `intelmpi` and `openmpi`.
