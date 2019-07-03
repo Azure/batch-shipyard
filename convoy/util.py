@@ -346,6 +346,9 @@ def wrap_commands(commands, windows=False, wait=True):
         tmp = ['(({}) || exit /b)'.format(x) for x in commands]
         return ' && '.join(tmp)
     else:
+        # turn on the `Exit immediately if a pipeline returns a non-zero
+        # status` option, run the commands, and turn off the option if it was
+        # not on before the execution
         return ('tmp_shell_opts=$(echo $-); set -e; {}; '
                 'if [[ ! $tmp_shell_opts =~ "e" ]]; then set e+; fi;'.format(
                     '; '.join(commands) + ('; wait' if wait else '')))

@@ -134,7 +134,6 @@ _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
     'depends_on', 'depends_on_range', 'multi_instance', 'task_factory'
 ))
-_MPI_RUNTIMES = frozenset(('intelmpi', 'openmpi'))
 # named tuples
 PoolVmCountSettings = collections.namedtuple(
     'PoolVmCountSettings', [
@@ -4264,12 +4263,13 @@ def task_settings(
             mi_resource_files = None
         pre_execution_command = _kv_read_checked(
             conf['multi_instance'], 'pre_execution_command', None)
+        if (util.is_not_empty(docker_image) and
+                pre_execution_command is not None):
+            raise ValueError(
+                'cannot use the pre_execution_command with docker images')
         mpi = _kv_read(conf['multi_instance'], 'mpi', None)
         if mpi is not None:
             mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
-            if mpi_runtime not in _MPI_RUNTIMES:
-                raise ValueError('mpi runtime is invalid: should be {}'.format(
-                    ','.join(_MPI_RUNTIMES)))
             mpi_options = _kv_read_checked(mpi, 'options', [])
             mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:

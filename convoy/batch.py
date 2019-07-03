@@ -4559,7 +4559,7 @@ def _construct_task(
              len(singularity_missing_images) > 0)):
         loginenv, logincmd = generate_docker_login_settings(config)
         logincmd.extend(task_commands)
-        taskenv = util.merge_dict(taskenv, loginenv)
+        taskenv.extend(loginenv)
         task_commands = logincmd
     # digest any input_data
     addlcmds = data.process_input_data(config, bxfile, _task, on_task=True)
