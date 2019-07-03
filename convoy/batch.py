@@ -4371,6 +4371,7 @@ def _construct_task(
     taskenv = []
     # check if this is a multi-instance task
     mis = None
+    mpi_command = None
     if settings.is_multi_instance_task(_task):
         if util.is_not_empty(task.multi_instance.coordination_command):
             if native:
@@ -4430,16 +4431,56 @@ def _construct_task(
                 )
             )
             if is_singularity:
-                taskenv.append(
-                    batchmodels.EnvironmentSetting(
-                        name='SHIPYARD_SINGULARITY_COMMAND',
-                        value='singularity {} {} {}'.format(
+                if task.multi_instance.mpi.runtime == 'intelmpi':
+                    mpi_opts = []
+                    processes_per_node = (
+                        task.multi_instance.mpi.processes_per_node)
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-perhost {}'.format(processes_per_node)
+                        ])
+                    mpi_opts.extend(task.multi_instance.mpi.options)
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        'singularity {} {} {} {}'.format(
                             task.singularity_cmd,
                             ' '.join(task.run_options),
                             task.singularity_image,
+                            task.command
                         )
                     )
-                )
+                elif task.multi_instance.mpi.runtime == 'openmpi':
+                    mpi_opts = ['-mca btl_tcp_if_include eth0']
+                    processes_per_node = (
+                        task.multi_instance.mpi.processes_per_node)
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-host {}'.format(
+                                ','.join(
+                                    ['$AZ_BATCH_HOST_LIST'] *
+                                    processes_per_node)
+                            ),
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-npernode {}'.format(processes_per_node)
+                        ])
+                    mpi_opts.extend(task.multi_instance.mpi.options)
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        'singularity {} {} {} {}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                            task.command
+                        )
+                    )
             else:
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
@@ -4518,7 +4559,7 @@ def _construct_task(
              len(singularity_missing_images) > 0)):
         loginenv, logincmd = generate_docker_login_settings(config)
         logincmd.extend(task_commands)
-        taskenv = util.merge_dict(taskenv, loginenv)
+        taskenv.extend(loginenv)
         task_commands = logincmd
     # digest any input_data
     addlcmds = data.process_input_data(config, bxfile, _task, on_task=True)
@@ -4532,8 +4573,21 @@ def _construct_task(
         if util.is_not_empty(task_commands):
             taskenv.append(
                 batchmodels.EnvironmentSetting(
-                    name='SHIPYARD_USER_PROLOGUE_CMD',
+                    name='SHIPYARD_SYSTEM_PROLOGUE_CMD',
                     value=util.wrap_commands_in_shell(
+                        task_commands, windows=is_windows),
+                )
+            )
+        task_commands = []
+    # execute multi instance pre-exec cmd
+    if util.is_not_empty(task.multi_instance.pre_execution_command):
+        task_commands.append(task.multi_instance.pre_execution_command)
+    if not native:
+        if util.is_not_empty(task_commands):
+            taskenv.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_USER_PROLOGUE_CMD',
+                    value=util.wrap_commands(
                         task_commands, windows=is_windows),
                 )
             )
@@ -4550,14 +4604,19 @@ def _construct_task(
         if util.is_not_empty(task_commands):
             taskenv.append(
                 batchmodels.EnvironmentSetting(
-                    name='SHIPYARD_USER_EPILOGUE_CMD',
+                    name='SHIPYARD_SYSTEM_EPILOGUE_CMD',
                     value=util.wrap_commands_in_shell(
                         task_commands, windows=is_windows),
                 )
             )
+        taskenv.append(
+            batchmodels.EnvironmentSetting(
+                name='SHIPYARD_USER_CMD',
+                value=mpi_command or task.command,
+            )
+        )
         task_commands = [
-            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh {}'.format(
-                task.command)
+            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh'
         ]
     # always add env vars in (host) task to be dumped into container
     # task (if non-native)

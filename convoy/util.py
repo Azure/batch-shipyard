@@ -333,6 +333,27 @@ def singularity_image_name_to_key_file_name(name):
     return key_file_name
 
 
+def wrap_commands(commands, windows=False, wait=True):
+    # type: (List[str], bool, bool) -> str
+    """Wrap commands
+    :param list commands: list of commands to wrap
+    :param bool windows: linux or windows commands to wrap
+    :param bool wait: add wait for background processes
+    :rtype: str
+    :return: wrapped commands
+    """
+    if windows:
+        tmp = ['(({}) || exit /b)'.format(x) for x in commands]
+        return ' && '.join(tmp)
+    else:
+        # turn on the `Exit immediately if a pipeline returns a non-zero
+        # status` option, run the commands, and turn off the option if it was
+        # not on before the execution
+        return ('tmp_shell_opts=$(echo $-); set -e; {}; '
+                'if [[ ! $tmp_shell_opts =~ "e" ]]; then set e+; fi;'.format(
+                    '; '.join(commands) + ('; wait' if wait else '')))
+
+
 def wrap_commands_in_shell(commands, windows=False, wait=True):
     # type: (List[str], bool, bool) -> str
     """Wrap commands in a shell

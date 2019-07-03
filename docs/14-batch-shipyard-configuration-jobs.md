@@ -272,6 +272,11 @@ job_specifications:
       - blob_source: https://some.url
         file_mode: '0750'
         file_path: some/path/in/sharedtask/file
+      pre_execution_command: source myrc
+      mpi:
+        runtime: intelmpi
+        options: []
+        processes_per_node: 1
     entrypoint: null
     command: mycommand
   merge_task:
@@ -1032,6 +1037,24 @@ property are:
           Azure Blob Storage URL.
         * `file_mode` if the file mode to set for the file on the compute node.
           This is optional.
+    * `pre_execution_command` is a command that is run only on the master node
+      of this multi-instance task prior to the application command. This
+      command must not block and must exit successfully for the multi-instance
+      task to proceed. This command can be used to populate environment
+      variables required to run the application command. This is optional and
+      may be null. Note that this command cannot be used with Docker images.
+    * (required if using MPI) `mpi` contains the following members:
+        * (required) `runtime` is the runtime that should be used. Valid
+          values are `intelmpi` and `openmpi`.
+        * (optional) `options` is a list of options that will be passed to the
+          `mpirun` command.
+        * (optional) `processes_per_node` is the number of processes per node.
+          If the field is specified, options will be automatically passed to
+          the `mpirun` command in accordance with the specified runtime so
+          that `num_instances` * `processes_per_node` processes spawn. If
+          this field is used with `options`, it is the user's responsability
+          to make sure that the `options` are not interferring with the
+          options automatically added by `processes_per_node`.
 * (optional) `entrypoint` is the property that can override the Docker image
 defined `ENTRYPOINT`. This option only applies to Docker containers.
 * (optional) `command` is the command to execute in the container

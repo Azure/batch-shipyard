@@ -342,6 +342,12 @@ TaskSettings = collections.namedtuple(
 MultiInstanceSettings = collections.namedtuple(
     'MultiInstanceSettings', [
         'num_instances', 'coordination_command', 'resource_files',
+        'pre_execution_command', 'mpi',
+    ]
+)
+MpiSettings = collections.namedtuple(
+    'MpiSettings', [
+        'runtime', 'options', 'processes_per_node',
     ]
 )
 ResourceFileSettings = collections.namedtuple(
@@ -4255,10 +4261,23 @@ def task_settings(
                 )
         except KeyError:
             mi_resource_files = None
+        pre_execution_command = _kv_read_checked(
+            conf['multi_instance'], 'pre_execution_command', None)
+        if (util.is_not_empty(docker_image) and
+                util.is_not_empty(pre_execution_command)):
+            raise ValueError(
+                'cannot use the pre_execution_command with docker images')
+        mpi = _kv_read(conf['multi_instance'], 'mpi', None)
+        if mpi is not None:
+            mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
+            mpi_options = _kv_read_checked(mpi, 'options', [])
+            mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:
         num_instances = 0
         cc_args = None
         mi_resource_files = None
+        pre_execution_command = None
+        mpi = None
     return TaskSettings(
         id=task_id,
         docker_image=docker_image,
@@ -4284,6 +4303,12 @@ def task_settings(
             num_instances=num_instances,
             coordination_command=cc_args,
             resource_files=mi_resource_files,
+            pre_execution_command=pre_execution_command,
+            mpi=None if mpi is None else MpiSettings(
+                runtime=mpi_runtime,
+                options=mpi_options,
+                processes_per_node=mpi_ppn,
+            ),
         ),
         default_exit_options=TaskExitOptions(
             job_action=job_action,

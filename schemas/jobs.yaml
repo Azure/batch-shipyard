@@ -624,6 +624,21 @@ mapping:
                               file_path:
                                 type: str
                                 required: true
+                      pre_execution_command:
+                        type: str
+                      mpi:
+                        type: map
+                        mapping:
+                          runtime:
+                            type: str
+                            enum: ['intelmpi', 'openmpi']
+                            required: true
+                          options:
+                            type: seq
+                            sequence:
+                              - type: str
+                          processes_per_node:
+                            type: int
                   entrypoint:
                     type: str
                   command:

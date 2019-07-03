@@ -4,16 +4,22 @@ set -e
 set -o pipefail
 
 # environment variables used
+# SHIPYARD_SYSTEM_PROLOGUE_CMD: pre-exec system cmd
 # SHIPYARD_USER_PROLOGUE_CMD: pre-exec user cmd
-# SHIPYARD_USER_EPILOGUE_CMD: post-exec user cmd
+# SHIPYARD_SYSTEM_EPILOGUE_CMD: post-exec system cmd
 # SHIPYARD_ENV_EXCLUDE: environment vars to exclude
 # SHIPYARD_ENV_FILE: env file
 # SHIPYARD_RUNTIME: docker or singularity
 # SHIPYARD_RUNTIME_CMD: run or exec
 # SHIPYARD_RUNTIME_CMD_OPTS: options
 # SHIPYARD_CONTAINER_IMAGE_NAME: container name
+# SHIPYARD_USER_CMD: user command
 
 ## PRE-EXEC
+if [ -n "$SHIPYARD_SYSTEM_PROLOGUE_CMD" ]; then
+    eval "$SHIPYARD_SYSTEM_PROLOGUE_CMD"
+fi
+
 if [ -n "$SHIPYARD_USER_PROLOGUE_CMD" ]; then
     eval "$SHIPYARD_USER_PROLOGUE_CMD"
 fi
@@ -29,14 +35,13 @@ fi
 SHIPYARD_RUNTIME_CMD_OPTS=$(eval echo "${SHIPYARD_RUNTIME_CMD_OPTS}")
 
 if [ -n "$SHIPYARD_RUNTIME" ]; then
-    # shellcheck disable=SC2086
-    "$SHIPYARD_RUNTIME" "$SHIPYARD_RUNTIME_CMD" $SHIPYARD_RUNTIME_CMD_OPTS \
-        "$SHIPYARD_CONTAINER_IMAGE_NAME" "$@"
+    eval "$SHIPYARD_RUNTIME $SHIPYARD_RUNTIME_CMD $SHIPYARD_RUNTIME_CMD_OPTS \
+        $SHIPYARD_CONTAINER_IMAGE_NAME $SHIPYARD_USER_CMD"
 else
-    "$@"
+    eval "$SHIPYARD_USER_CMD"
 fi
 
 ## POST EXEC
-if [ -n "$SHIPYARD_USER_EPILOGUE_CMD" ]; then
-    eval "$SHIPYARD_USER_EPILOGUE_CMD"
+if [ -n "$SHIPYARD_SYSTEM_EPILOGUE_CMD" ]; then
+    eval "$SHIPYARD_SYSTEM_EPILOGUE_CMD"
 fi
