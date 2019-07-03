@@ -4454,6 +4454,29 @@ def _construct_task(
                             task.command
                         )
                     )
+                elif task.multi_instance.mpi.runtime in 'mpich':
+                    mpi_opts = []
+                    processes_per_node = (
+                        task.multi_instance.mpi.processes_per_node)
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-ppn {}'.format(processes_per_node)
+                        ])
+                    mpi_opts.extend(task.multi_instance.mpi.options)
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        'singularity {} {} {} {}'.format(
+                            task.singularity_cmd,
+                            ' '.join(task.run_options),
+                            task.singularity_image,
+                            task.command
+                        )
+                    )
                 elif task.multi_instance.mpi.runtime == 'openmpi':
                     mpi_opts = ['-mca btl_tcp_if_include eth0']
                     processes_per_node = (

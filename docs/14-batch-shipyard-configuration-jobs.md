@@ -1045,7 +1045,7 @@ property are:
       may be null. Note that this command cannot be used with Docker images.
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
-          values are `intelmpi` and `openmpi`.
+          values are `intelmpi`, `mpich`, and `openmpi`.
         * (optional) `options` is a list of options that will be passed to the
           `mpirun` command.
         * (optional) `processes_per_node` is the number of processes per node.
