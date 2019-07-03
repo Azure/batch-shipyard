@@ -1053,12 +1053,9 @@ property are:
           If the field is specified, options will be automatically passed to
           the `mpirun` command in accordance with the specified runtime so
           that `num_instances` * `processes_per_node` processes spawn. If
-          this field is used with `options`, it's the user responsability to
-          make sure that the `options` are not interferring with the options
-          automatically added by `processes_per_node`.
-      that will be used to construct the mpi command. The keys will be mapped
-      as options and the values parameters. It is possible to specify no
-      argument by using `{}`.
+          this field is used with `options`, it is the user's responsability
+          to make sure that the `options` are not interferring with the
+          options automatically added by `processes_per_node`.
 * (optional) `entrypoint` is the property that can override the Docker image
 defined `ENTRYPOINT`. This option only applies to Docker containers.
 * (optional) `command` is the command to execute in the container
