@@ -4435,6 +4435,7 @@ def _construct_task(
                 mpi_opts.extend(task.multi_instance.mpi.options)
                 processes_per_node = (
                     task.multi_instance.mpi.processes_per_node)
+                # set mpi options for the different runtimes
                 if task.multi_instance.mpi.runtime == 'intelmpi':
                     if processes_per_node is not None:
                         mpi_opts.extend([
@@ -4445,7 +4446,7 @@ def _construct_task(
                             ),
                             '-perhost {}'.format(processes_per_node)
                         ])
-                elif task.multi_instance.mpi.runtime in 'mpich':
+                elif task.multi_instance.mpi.runtime == 'mpich':
                     if processes_per_node is not None:
                         mpi_opts.extend([
                             '-hosts $AZ_BATCH_HOST_LIST',
@@ -4456,7 +4457,7 @@ def _construct_task(
                             '-ppn {}'.format(processes_per_node)
                         ])
                 elif task.multi_instance.mpi.runtime == 'openmpi':
-                    mpi_opts.extend(['-mca btl_tcp_if_include eth0'])
+                    mpi_opts.append('-mca btl_tcp_if_include eth0')
                     if processes_per_node is not None:
                         mpi_opts.extend([
                             '-host {}'.format(
@@ -4471,6 +4472,7 @@ def _construct_task(
                             '-npernode {}'.format(processes_per_node)
                         ])
                 if is_singularity:
+                    # build the singularity mpi command
                     mpi_singularity_cmd = 'singularity {} {} {} {}'.format(
                         task.singularity_cmd,
                         ' '.join(task.run_options),
@@ -4481,8 +4483,9 @@ def _construct_task(
                         mpi_singularity_cmd
                     )
                 else:
+                    # build the docker mpi command
                     if task.multi_instance.mpi.runtime == 'openmpi':
-                        mpi_opts.extend(['--allow-run-as-root'])
+                        mpi_opts.append('--allow-run-as-root')
                     docker_mpirun_cmd = 'mpirun {} {}'.format(
                         ' '.join(mpi_opts),
                         task.command)
@@ -4498,6 +4501,8 @@ def _construct_task(
                             docker_exec_cmds, windows=is_windows)
                     )
             else:
+                # if it's a multi-instance task, but not an mpi task,
+                # populate environment settings
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
                         name='SHIPYARD_RUNTIME_CMD_OPTS',

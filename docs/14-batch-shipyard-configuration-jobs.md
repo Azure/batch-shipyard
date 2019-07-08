@@ -1039,18 +1039,21 @@ property are:
           This is optional.
     * `pre_execution_command` is a command that is run only on the master node
       of this multi-instance task prior to the application command. For
-      Docker containers, this command is executed in the container just before
-      the application command is executed. For Singularity containers, this
-      command is executed on the host just before the application command is
-      executed. This command must not block and must exit successfully for the
-      multi-instance task to proceed. This command can be used to populate
-      environment variables required to run the application command. This is
-      optional and may be null.
+      Docker containers, this command is executed in only the _master_
+      container just before the application command is executed. For
+      Singularity containers, this command is executed on the _master_ compute
+      node just before the application command is executed. This command must
+      not block and must exit successfully for the multi-instance task to
+      proceed. This command can be used to populate environment variables
+      required to run the application command. This is optional and may be
+      null.
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
           values are `intelmpi`, `mpich`, and `openmpi`. With Docker
           containers, it is the user's responsability to provide a container
-          image that has the specified runtime installed.  
+          image that has the specified runtime installed. For Singularity
+          containers, the specified runtime must be installed and loaded on
+          the host compute node.
         * (optional) `options` is a list of options that will be passed to the
           `mpirun` command.
         * (optional) `processes_per_node` is the number of processes per node.
