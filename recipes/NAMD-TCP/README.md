@@ -28,6 +28,9 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-tcp`
+* `additional_docker_run_options` should have a sequence item of
+`--net=host` to specify host networking. This is needed to open ports for
+communication via TCP between containers.
 * `command` should contain the `mpirun` command. If using the sample NAMD-TCP
 image provided, `"/sw/run_namd.sh <benchmark> <steps> <ppn>"` can be used
 to run the included benchmarks:
@@ -35,7 +38,6 @@ to run the included benchmarks:
   * `<steps>` is the number of steps to execute
   * `<ppn>` is the number of cores on each compute node. This is optional
     and, if omitted, will be determined dynamically.
-* `infiniband` must be set to `false`
 * `multi_instance` property must be defined for NAMD tasks spanning multiple
 nodes.
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
