@@ -4263,10 +4263,6 @@ def task_settings(
             mi_resource_files = None
         pre_execution_command = _kv_read_checked(
             conf['multi_instance'], 'pre_execution_command', None)
-        if (util.is_not_empty(docker_image) and
-                util.is_not_empty(pre_execution_command)):
-            raise ValueError(
-                'cannot use the pre_execution_command with docker images')
         mpi = _kv_read(conf['multi_instance'], 'mpi', None)
         if mpi is not None:
             mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()

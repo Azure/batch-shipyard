@@ -631,7 +631,7 @@ mapping:
                         mapping:
                           runtime:
                             type: str
-                            enum: ['intelmpi', 'openmpi']
+                            enum: ['intelmpi', 'mpich', 'openmpi']
                             required: true
                           options:
                             type: seq

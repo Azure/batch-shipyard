@@ -4372,6 +4372,7 @@ def _construct_task(
     # check if this is a multi-instance task
     mis = None
     mpi_command = None
+    mpi_docker_exec_command = None
     if settings.is_multi_instance_task(_task):
         if util.is_not_empty(task.multi_instance.coordination_command):
             if native:
@@ -4430,11 +4431,13 @@ def _construct_task(
                     value=task.envfile,
                 )
             )
-            if is_singularity:
+            if task.multi_instance.mpi is not None:
+                mpi_opts = []
+                mpi_opts.extend(task.multi_instance.mpi.options)
+                processes_per_node = (
+                    task.multi_instance.mpi.processes_per_node)
+                # set mpi options for the different runtimes
                 if task.multi_instance.mpi.runtime == 'intelmpi':
-                    mpi_opts = []
-                    processes_per_node = (
-                        task.multi_instance.mpi.processes_per_node)
                     if processes_per_node is not None:
                         mpi_opts.extend([
                             '-hosts $AZ_BATCH_HOST_LIST',
@@ -4444,20 +4447,18 @@ def _construct_task(
                             ),
                             '-perhost {}'.format(processes_per_node)
                         ])
-                    mpi_opts.extend(task.multi_instance.mpi.options)
-                    mpi_command = 'mpirun {} {}'.format(
-                        ' '.join(mpi_opts),
-                        'singularity {} {} {} {}'.format(
-                            task.singularity_cmd,
-                            ' '.join(task.run_options),
-                            task.singularity_image,
-                            task.command
-                        )
-                    )
+                elif task.multi_instance.mpi.runtime == 'mpich':
+                    if processes_per_node is not None:
+                        mpi_opts.extend([
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np {}'.format(
+                                task.multi_instance.num_instances *
+                                processes_per_node
+                            ),
+                            '-ppn {}'.format(processes_per_node)
+                        ])
                 elif task.multi_instance.mpi.runtime == 'openmpi':
-                    mpi_opts = ['-mca btl_tcp_if_include eth0']
-                    processes_per_node = (
-                        task.multi_instance.mpi.processes_per_node)
+                    mpi_opts.append('-mca btl_tcp_if_include eth0')
                     if processes_per_node is not None:
                         mpi_opts.extend([
                             '-host {}'.format(
@@ -4471,41 +4472,75 @@ def _construct_task(
                             ),
                             '-npernode {}'.format(processes_per_node)
                         ])
-                    mpi_opts.extend(task.multi_instance.mpi.options)
+                if is_singularity:
+                    # build the singularity mpi command
+                    mpi_singularity_cmd = 'singularity {} {} {} {}'.format(
+                        task.singularity_cmd,
+                        ' '.join(task.run_options),
+                        task.singularity_image,
+                        task.command)
                     mpi_command = 'mpirun {} {}'.format(
                         ' '.join(mpi_opts),
-                        'singularity {} {} {} {}'.format(
-                            task.singularity_cmd,
-                            ' '.join(task.run_options),
-                            task.singularity_image,
-                            task.command
+                        mpi_singularity_cmd
+                    )
+                else:
+                    # build the docker mpi command
+                    if task.multi_instance.mpi.runtime == 'openmpi':
+                        mpi_opts.append('--allow-run-as-root')
+                    mpi_command = 'mpirun {} {}'.format(
+                        ' '.join(mpi_opts),
+                        task.command)
+                    mpi_docker_exec_command = (
+                        'docker exec {} {} $AZ_BATCH_NODE_STARTUP_DIR/wd/'
+                        'shipyard_task_runner.sh'.format(
+                            ' '.join(task.docker_exec_options),
+                            task.name
                         )
                     )
             else:
+                # if it's a multi-instance task, but not an mpi task,
+                # populate environment settings
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
                         name='SHIPYARD_RUNTIME_CMD_OPTS',
-                        value=' '.join(task.docker_exec_options)
+                        value=(
+                            ' '.join(task.run_options) if is_singularity
+                            else ' '.join(task.docker_exec_options)
+                        ),
                     )
                 )
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
                         name='SHIPYARD_RUNTIME',
-                        value='docker',
+                        value='singularity' if is_singularity else 'docker',
                     )
                 )
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
                         name='SHIPYARD_RUNTIME_CMD',
-                        value='exec',
+                        value=(
+                            task.singularity_cmd if is_singularity else
+                            'exec'
+                        ),
                     )
                 )
                 taskenv.append(
                     batchmodels.EnvironmentSetting(
                         name='SHIPYARD_CONTAINER_IMAGE_NAME',
-                        value=task.name,  # docker exec requires task name
+                        value=(
+                            task.singularity_image if is_singularity else
+                            task.name  # docker exec requires task name
+                        ),
                     )
                 )
+                if not is_singularity:
+                    mpi_docker_exec_command = (
+                        'docker exec {} {} $AZ_BATCH_NODE_STARTUP_DIR/wd/'
+                        'shipyard_task_runner.sh'.format(
+                            ' '.join(task.docker_exec_options),
+                            task.name
+                        )
+                    )
     else:
         if native:
             task_commands = [
@@ -4580,7 +4615,7 @@ def _construct_task(
             )
         task_commands = []
     # execute multi instance pre-exec cmd
-    if util.is_not_empty(task.multi_instance.pre_execution_command):
+    if (util.is_not_empty(task.multi_instance.pre_execution_command)):
         task_commands.append(task.multi_instance.pre_execution_command)
     if not native:
         if util.is_not_empty(task_commands):
@@ -4615,9 +4650,12 @@ def _construct_task(
                 value=mpi_command or task.command,
             )
         )
-        task_commands = [
-            '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh'
-        ]
+        if mpi_docker_exec_command is not None:
+            task_commands = [mpi_docker_exec_command]
+        else:
+            task_commands = [
+                '$AZ_BATCH_NODE_STARTUP_DIR/wd/shipyard_task_runner.sh'
+            ]
     # always add env vars in (host) task to be dumped into container
     # task (if non-native)
     if util.is_not_empty(env_vars):
