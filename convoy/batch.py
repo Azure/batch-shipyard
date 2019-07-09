@@ -4533,14 +4533,6 @@ def _construct_task(
                         ),
                     )
                 )
-                if not is_singularity:
-                    mpi_docker_exec_command = (
-                        'docker exec {} {} $AZ_BATCH_NODE_STARTUP_DIR/wd/'
-                        'shipyard_task_runner.sh'.format(
-                            ' '.join(task.docker_exec_options),
-                            task.name
-                        )
-                    )
     else:
         if native:
             task_commands = [
