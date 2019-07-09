@@ -130,6 +130,10 @@ _VM_IB_CLASS = {
         r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$', re.IGNORECASE),
     'edr_ib': re.compile(r'^standard_(hc|hb)+[\d]+rs$', re.IGNORECASE),
 }
+_VALID_PUBLISHERS = frozenset((
+    'canonical', 'credativ', 'microsoft-azure-batch',
+    'microsoftwindowsserver', 'openlogic'
+))
 _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
     'depends_on', 'depends_on_range', 'multi_instance', 'task_factory'
@@ -337,6 +341,7 @@ TaskSettings = collections.namedtuple(
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
         'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
         'retention_time', 'multi_instance', 'default_exit_options',
+        'working_dir',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -592,6 +597,15 @@ def get_metadata_version_name():
     :return: metadata version name
     """
     return _METADATA_VERSION_NAME
+
+
+def get_valid_publishers():
+    # type: (None) -> str
+    """Get valid publishers
+    :rtype: str
+    :return: publisher set
+    """
+    return _VALID_PUBLISHERS
 
 
 def get_tensorboard_docker_image():
@@ -2959,6 +2973,16 @@ def data_exclude(conf):
     return _kv_read_checked(conf, 'exclude', [])
 
 
+def data_condition(conf):
+    # type: (dict) -> str
+    """Retrieve output data condition
+    :param dict conf: configuration object
+    :rtype: str
+    :return: condition
+    """
+    return _kv_read_checked(conf, 'condition', default='tasksuccess')
+
+
 def input_data_job_id(conf):
     # type: (dict) -> str
     """Retrieve input data job id
@@ -3244,6 +3268,30 @@ def job_requires_auto_scratch(conf):
     :return: job auto scratch
     """
     return _kv_read(conf, 'auto_scratch', default=False)
+
+
+def job_preparation_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job preparation command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job prep command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_preparation', default={}),
+        'command')
+
+
+def job_release_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job release command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job release command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_release', default={}),
+        'command')
 
 
 def job_federation_constraint_settings(conf, federation_id):
@@ -3800,6 +3848,23 @@ def task_settings(
             def_wd = '%AZ_BATCH_TASK_WORKING_DIR%'
         else:
             def_wd = '$AZ_BATCH_TASK_WORKING_DIR'
+    # set working directory if not already set
+    if def_wd != 'container':
+        if util.is_not_empty(docker_image):
+            if not any((x.startswith('-w ') or x.startswith('--workdir '))
+                       for x in run_opts):
+                run_opts.append('-w {}'.format(def_wd))
+        else:
+            if not any(x.startswith('--pwd ') for x in run_opts):
+                run_opts.append('--pwd {}'.format(def_wd))
+        working_dir = (
+            batchmodels.ContainerWorkingDirectory.task_working_directory
+        )
+    else:
+        working_dir = (
+            batchmodels.ContainerWorkingDirectory.container_image_default
+        )
+    del def_wd
     # bind root dir and set working dir
     if not native:
         restrict_bind = _kv_read(
@@ -3824,15 +3889,6 @@ def task_settings(
                 run_opts.append(
                     '{} $AZ_BATCH_NODE_ROOT_DIR:'
                     '$AZ_BATCH_NODE_ROOT_DIR'.format(bindparm))
-        # set working directory if not already set
-        if def_wd != 'container':
-            if util.is_not_empty(docker_image):
-                if not any((x.startswith('-w ') or x.startswith('--workdir '))
-                           for x in run_opts):
-                    run_opts.append('-w {}'.format(def_wd))
-            else:
-                if not any(x.startswith('--pwd ') for x in run_opts):
-                    run_opts.append('--pwd {}'.format(def_wd))
     if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:
@@ -4281,6 +4337,7 @@ def task_settings(
         name=name,
         run_options=run_opts,
         docker_exec_options=docker_exec_options,
+        working_dir=working_dir,
         environment_variables=env_vars,
         environment_variables_keyvault_secret_id=ev_secid,
         envfile=envfile,

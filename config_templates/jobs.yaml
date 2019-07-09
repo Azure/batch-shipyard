@@ -41,6 +41,10 @@ job_specifications:
   shared_data_volumes:
   - joblevelsharedvol
   auto_scratch: false
+  job_preparation:
+    command: myjpcommand
+  job_release:
+    command: myjrcommand
   input_data:
     azure_batch:
     - job_id: someotherjob
@@ -220,6 +224,7 @@ job_specifications:
         remote_path: output/dir
         local_path: null
         is_file_share: false
+        condition: tasksuccess
         exclude:
         - '*.tmp'
         include:

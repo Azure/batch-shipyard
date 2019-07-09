@@ -62,8 +62,7 @@ _TENSORBOARD_LOG_ARGS = frozenset((
 def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
     # type: (batchsc.BatchServiceClient, dict, str, str, str, str) -> None
     """Create an SSH tunnel for Tensorboard running on compute nodes
-    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
-        batch client
+    :param azure.batch.BatchServiceClient batch_client: batch client
     :param dict config: configuration dict
     :param str jobid: job id to list
     :param str taskid: task id to list
@@ -251,8 +250,7 @@ def tunnel_tensorboard(batch_client, config, jobid, taskid, logdir, image):
 def mirror_batch_shipyard_images(batch_client, config, script):
     # type: (batchsc.BatchServiceClient, dict, pathlib.Path) -> None
     """Mirror Batch Shipyard images to a fallback registry
-    :param azure.batch.batch_service_client.BatchServiceClient batch_client:
-        batch client
+    :param azure.batch.BatchServiceClient batch_client: batch client
     :param dict config: configuration dict
     :param pathlib.Path script: script to mirror
     """

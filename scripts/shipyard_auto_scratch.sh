@@ -42,14 +42,10 @@ if [ "$action" == "setup" ]; then
     # allow root login
     sed -i 's/PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
     systemctl reload sshd
-fi
-
-if [ "$action" == "start" ]; then
-    offset="$3"
 
     # create configs
     echo "Creating configs"
-    if_file="$commondir/intefaces.conf"
+    if_file="$commondir/interfaces.conf"
     nf_file="$commondir/netfilter.conf"
     echo "eth0" > "$if_file"
     echo "10.0.0.0/8" > "$nf_file"
@@ -68,6 +64,10 @@ EOF
     cp "$clientconf" "$storageconf"
     cp "$clientconf" "$mgmtdconf"
     cp "$clientconf" "$helperdconf"
+fi
+
+if [ "$action" == "start" ]; then
+    offset="$3"
 
     echo "Starting BeeGFS Beeond at $mountpoint with port offset $offset"
     beeond start -n "$nodefile" -d "$data_dir" -c "$mountpoint" -f "$commondir" -p "$offset" -i "$infofile"

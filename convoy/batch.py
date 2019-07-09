@@ -271,22 +271,91 @@ def log_batch_account_service_quota(batch_mgmt_client, config, location):
     logger.info(os.linesep.join(log))
 
 
-def list_node_agent_skus(batch_client, config):
-    # type: (batch.BatchServiceClient, dict) -> None
-    """List all node agent skus
+def list_supported_images(
+        batch_client, config, show_unrelated=False, show_unverified=False):
+    # type: (batch.BatchServiceClient, dict, bool, bool) -> None
+    """List all supported images for the account
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param dict config: configuration dict
+    :param bool show_unrelated: show unrelated
+    :param bool show_unverified: show unverified images
     """
+    if show_unverified:
+        args = []
+    else:
+        args = [batchmodels.AccountListSupportedImagesOptions(
+            filter='verificationType eq \'verified\'')]
     if settings.raw(config):
-        util.print_raw_paged_output(batch_client.account.list_node_agent_skus)
+        util.print_raw_paged_output(
+            batch_client.account.list_supported_images, *args)
         return
-    node_agent_skus = batch_client.account.list_node_agent_skus()
-    for sku in node_agent_skus:
-        for img in sku.verified_image_references:
-            logger.info(
-                'os_type={} publisher={} offer={} sku={} node_agent={}'.format(
-                    sku.os_type, img.publisher, img.offer, img.sku, sku.id))
+    images = batch_client.account.list_supported_images(*args)
+    image_map = {}
+    for image in images:
+        os_type = image.os_type.value
+        if os_type not in image_map:
+            image_map[os_type] = {}
+        if (not show_unrelated and
+                image.image_reference.publisher.lower() not in
+                settings.get_valid_publishers()):
+            continue
+        if image.image_reference.publisher not in image_map[os_type]:
+            image_map[os_type][image.image_reference.publisher] = {}
+        if (image.image_reference.offer not in
+                image_map[os_type][image.image_reference.publisher]):
+            image_map[os_type][image.image_reference.publisher][
+                image.image_reference.offer] = []
+        image_map[os_type][image.image_reference.publisher][
+            image.image_reference.offer].append({
+                'sku': image.image_reference.sku,
+                'na_sku': image.node_agent_sku_id,
+                'verification': image.verification_type,
+                'capabilities': image.capabilities,
+                'support_eol': image.batch_support_end_of_life,
+            })
+    log = ['supported images (include unrelated={}, '
+           'include unverified={})'.format(show_unrelated, show_unverified)]
+    for os_type in image_map:
+        log.append('* os type: {}'.format(os_type))
+        for publisher in image_map[os_type]:
+            log.append('  * publisher: {}'.format(publisher))
+            for offer in image_map[os_type][publisher]:
+                log.append('    * offer: {}'.format(offer))
+                for image in image_map[os_type][publisher][offer]:
+                    log.append('      * sku: {}'.format(image['sku']))
+                    if util.is_not_empty(image['capabilities']):
+                        log.append('        * capabilities: {}'.format(
+                            ','.join(image['capabilities'])))
+                    log.append('        * verification: {}'.format(
+                        image['verification']))
+                    if image['support_eol'] is not None:
+                        log.append('        * batch support eol: {}'.format(
+                            image['support_eol'].strftime("%Y-%m-%d")))
+                    log.append('        * node agent sku id: {}'.format(
+                        image['na_sku']))
+    logger.info(os.linesep.join(log))
+
+
+def get_node_agent_for_image(batch_client, config, publisher, offer, sku):
+    # type: (batch.BatchServiceClient, dict, str, str, str) -> tuple
+    """Get node agent for image
+    :param batch_client: The batch client to use.
+    :type batch_client: `azure.batch.BatchServiceClient`
+    :param dict config: configuration dict
+    :param str publisher: publisher
+    :param str offer: offer
+    :param str sku: sku
+    :rtype: tuple
+    :return: image ref and node agent sku id
+    """
+    images = batch_client.account.list_supported_images()
+    for image in images:
+        if (image.image_reference.publisher.lower() == publisher.lower() and
+                image.image_reference.offer.lower() == offer.lower() and
+                image.image_reference.sku.lower() == sku.lower()):
+            return image.image_reference, image.node_agent_sku_id
+    return None, None
 
 
 def add_certificate_to_account(
@@ -4710,7 +4779,9 @@ def _construct_task(
     if native:
         batchtask.container_settings = batchmodels.TaskContainerSettings(
             container_run_options=' '.join(task.run_options),
-            image_name=task.docker_image)
+            image_name=task.docker_image,
+            working_directory=task.working_dir,
+        )
     # add additional resource files
     if util.is_not_empty(task.resource_files):
         for rf in task.resource_files:
@@ -5079,6 +5150,10 @@ def add_jobs(
                         'job-level for federations')
             jpcmd.append(addlcmds)
         del addlcmds
+        user_jp = settings.job_preparation_command(jobspec)
+        if user_jp is not None:
+            jpcmd.append(user_jp)
+        del user_jp
         jptask = None
         if len(jpcmd) > 0:
             jptask = batchmodels.JobPreparationTask(
@@ -5113,6 +5188,10 @@ def add_jobs(
                 'docker kill {}'.format(mi_docker_container_name),
                 'docker rm -v {}'.format(mi_docker_container_name)
             ])
+        user_jr = settings.job_release_command(jobspec)
+        if user_jr is not None:
+            jrtaskcmd.append(user_jr)
+        del user_jr
         if util.is_not_empty(jrtaskcmd):
             jrtask = batchmodels.JobReleaseTask(
                 command_line=util.wrap_commands_in_shell(
@@ -5151,15 +5230,19 @@ def add_jobs(
                 )
             )
         # get base env vars from job
-        job_env_vars = settings.job_environment_variables(jobspec)
-        _job_env_vars_secid = \
+        jevs = settings.job_environment_variables(jobspec)
+        _jevs_secid = \
             settings.job_environment_variables_keyvault_secret_id(jobspec)
-        if util.is_not_empty(_job_env_vars_secid):
-            jevs = keyvault.get_secret(
-                keyvault_client, _job_env_vars_secid, value_is_json=True)
-            job_env_vars = util.merge_dict(job_env_vars, jevs or {})
-            del jevs
-        del _job_env_vars_secid
+        if util.is_not_empty(_jevs_secid):
+            _jevs = keyvault.get_secret(
+                keyvault_client, _jevs_secid, value_is_json=True)
+            jevs = util.merge_dict(jevs, _jevs or {})
+            del _jevs
+        del _jevs_secid
+        job_env_vars = []
+        for jev in jevs:
+            job_env_vars.append(batchmodels.EnvironmentSetting(
+                name=jev, value=jevs[jev]))
         # create jobschedule
         recurrence = settings.job_recurrence(jobspec)
         if recurrence is not None:
@@ -5242,7 +5325,7 @@ def add_jobs(
                 jscs = None
                 envfile = '.shipyard.envlist'
                 jscmd = [
-                    _generate_non_native_env_dump(job_env_vars, envfile),
+                    _generate_non_native_env_dump(jevs, envfile),
                 ]
                 bind = (
                     '-v $AZ_BATCH_TASK_DIR:$AZ_BATCH_TASK_DIR '
@@ -5280,7 +5363,7 @@ def add_jobs(
                         id='shipyard-jmtask',
                         command_line=jscmdline,
                         container_settings=jscs,
-                        environment_settings=[],
+                        environment_settings=job_env_vars,
                         kill_job_on_completion=kill_job_on_completion,
                         user_identity=_RUN_ELEVATED,
                         run_exclusive=recurrence.job_manager.run_exclusive,
@@ -5301,13 +5384,6 @@ def add_jobs(
                     ],
                 )
             )
-            # populate env vars for jm task
-            for ev in job_env_vars:
-                jobschedule.job_specification.job_manager_task.\
-                    environment_settings.append(
-                        batchmodels.EnvironmentSetting(
-                            name=ev, value=job_env_vars[ev])
-                    )
             del jscs
             del jscmdline
         del recurrence
@@ -5321,6 +5397,7 @@ def add_jobs(
                 on_task_failure=on_task_failure,
                 job_preparation_task=jptask,
                 job_release_task=jrtask,
+                common_environment_settings=job_env_vars,
                 metadata=[
                     batchmodels.MetadataItem(
                         name=settings.get_metadata_version_name(),
@@ -5425,7 +5502,7 @@ def add_jobs(
                     federation_id, bxfile, bs, native, is_windows, tempdisk,
                     allow_run_on_missing, docker_missing_images,
                     singularity_missing_images, cloud_pool,
-                    pool, jobspec, job_id, job_env_vars, task_map,
+                    pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, False,
                     uses_task_dependencies, on_task_failure,
                     container_image_refs, _task
@@ -5447,7 +5524,7 @@ def add_jobs(
                     federation_id, bxfile, bs, native, is_windows, tempdisk,
                     allow_run_on_missing, docker_missing_images,
                     singularity_missing_images, cloud_pool,
-                    pool, jobspec, job_id, job_env_vars, task_map,
+                    pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, True,
                     uses_task_dependencies, on_task_failure,
                     container_image_refs, _task)

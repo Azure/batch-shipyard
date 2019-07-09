@@ -62,6 +62,10 @@ job_specifications:
   shared_data_volumes:
   - joblevelsharedvol
   auto_scratch: false
+  job_preparation:
+    command: myjpcommand
+  job_release:
+    command: myjrcommand
   input_data:
     azure_batch:
     - job_id: someotherjob
@@ -244,6 +248,7 @@ job_specifications:
         include:
         - 'out*.dat'
         blobxfer_extra_options: null
+        condition: tasksuccess
     default_working_dir: batch
     remove_container_after_exit: true
     shm_size: 256m
@@ -481,6 +486,22 @@ pool for this job. This scratch will be available at the location
 is cleaned up automatically on job termination or deletion. This option
 requires setting the property `per_job_auto_scratch` to `true` in the
 corresponding pool configuration.
+* (optional) `job_preparation` is the property for a user-specified
+job preparation task. The user-specified job preparation task runs after
+any implicit job preparation tasks created by Batch Shipyard (such as
+job-level data ingress). For more information about job preparation and
+release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
+* (optional) `job_release` is the property for a user-specified
+job release task. The user-specified job release task runs after
+any implicit job release tasks created by Batch Shipyard (such as
+multi-instance non-native job auto completion steps). For more information
+about job preparation and release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -531,9 +552,7 @@ directory for the container execution is not explicitly set. The default is
 directory, you can pass the appropriate working directory parameter to the
 container runtime through either `additional_docker_run_options` or
 `additional_singularity_options`. A working directory option specified within
-that property takes precedence over this option. Note that this option does
-not work in `native` mode currently; `native` mode will always override this
-option to `batch`.
+that property takes precedence over this option.
 * (optional) `restrict_default_bind_mounts` will restrict the mapped
 host directories into the container. If this property is set to `true`,
 only the `$AZ_BATCH_TASK_DIR` is mapped from the host into the container.
@@ -917,10 +936,9 @@ application command.
         * (optional) `blobxfer_extra_options` are any extra options to pass to
           `blobxfer`.
 * (optional) `output_data` is an object containing data that should be
-egressed for this specific task if and only if the task completes
-successfully. This object currently only supports `azure_storage` as a
-member. Note for multi-instance tasks, transfer of `output_data` is only
-applied to the task running the application command.
+egressed for this specific task. This object currently only supports
+`azure_storage` as a member. Note for multi-instance tasks, transfer of
+`output_data` is only applied to the task running the application command.
     * `azure_storage` contains the following members:
         * (required) `storage_account_settings` contains a storage account link
           as defined in the credentials config.
@@ -933,6 +951,11 @@ applied to the task running the application command.
           specified, then `source` is defaulted to `$AZ_BATCH_TASK_DIR`.
         * (optional) `is_file_share` denotes if the `remote_path` is on a
           file share. This defaults to `false`.
+        * (optional) `condition` property defines the output file condition
+          depending upon the task command exit code. The possible options are
+          `taskcompletion`, `taskfailure` and `tasksuccess`. Please see
+          [this document](https://docs.microsoft.com/rest/api/batchservice/task/add#outputfileuploadcondition)
+          for more information.
         * (optional) `include` property defines optional include filters.
         * (optional) `exclude` property defines optional exclude filters.
         * (optional) `blobxfer_extra_options` are any extra options to pass to

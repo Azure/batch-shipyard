@@ -34,8 +34,8 @@ import os
 import pickle
 import time
 # non-stdlib imports
+import azure.batch
 import azure.batch.models as batchmodels
-import azure.batch.batch_service_client as batch
 import msrest.authentication
 
 # create logger
@@ -97,9 +97,9 @@ class TokenAuthentication(msrest.authentication.Authentication):
 
 
 def _create_credentials():
-    # type: (None) -> azure.batch.batch_service_client.BatchServiceClient
+    # type: (None) -> azure.batch.BatchServiceClient
     """Create authenticated client
-    :rtype: `azure.batch.batch_service_client.BatchServiceClient`
+    :rtype: `azure.batch.BatchServiceClient`
     :return: batch_client
     """
     # get the AAD token provided to the job manager
@@ -108,7 +108,7 @@ def _create_credentials():
     logger.debug('creating batch client for account url: {}'.format(
         account_service_url))
     credentials = TokenAuthentication(aad_token)
-    batch_client = batch.BatchServiceClient(
+    batch_client = azure.batch.BatchServiceClient(
         credentials, batch_url=account_service_url)
     batch_client.config.add_user_agent('batch-shipyard/rjm')
     return batch_client
@@ -119,7 +119,7 @@ def _submit_task_sub_collection(
     # type: (batch.BatchServiceClient, str, int, int, int, list, dict) -> None
     """Submits a sub-collection of tasks, do not call directly
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param str job_id: job to add to
     :param int start: start offset, includsive
     :param int end: end offset, exclusive
@@ -188,7 +188,7 @@ def _add_task_collection(batch_client, job_id, task_map):
     # type: (batch.BatchServiceClient, str, dict) -> None
     """Add a collection of tasks to a job
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param str job_id: job to add to
     :param dict task_map: task collection map to add
     """
@@ -211,7 +211,7 @@ def _monitor_tasks(batch_client, job_id, numtasks):
     # type: (batch.BatchServiceClient, str, int) -> None
     """Monitor tasks for completion
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param str job_id: job to add to
     :param int numtasks: number of tasks
     """

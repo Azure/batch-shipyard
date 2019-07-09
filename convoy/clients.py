@@ -32,8 +32,8 @@ from builtins import (  # noqa
 # stdlib imports
 import logging
 # non-stdlib imports
+import azure.batch
 import azure.batch.batch_auth as batchauth
-import azure.batch.batch_service_client as batchsc
 import azure.cosmosdb.table as azuretable
 import azure.keyvault
 import azure.mgmt.authorization
@@ -247,7 +247,7 @@ def create_all_clients(ctx, batch_clients=False):
     #              azure.mgmt.network.NetworkManagementClient,
     #              azure.mgmt.storage.StorageManagementClient,
     #              azure.mgmt.batch.BatchManagementClient,
-    #              azure.batch.batch_service_client.BatchServiceClient]
+    #              azure.batch.BatchServiceClient]
     """Create all arm clients and batch service client
     :param CliContext ctx: Cli Context
     :param bool batch_clients: create batch clients
@@ -259,7 +259,7 @@ def create_all_clients(ctx, batch_clients=False):
         azure.mgmt.network.NetworkManagementClient,
         azure.mgmt.storage.StorageManagementClient,
         azure.mgmt.batch.BatchManagementClient,
-        azure.batch.batch_service_client.BatchServiceClient)
+        azure.batch.BatchServiceClient)
     """
     mgmt = settings.credentials_management(ctx.config)
     subscription_id = ctx.subscription_id or mgmt.subscription_id
@@ -333,10 +333,10 @@ def create_keyvault_client(ctx):
 
 
 def _create_batch_service_client(ctx):
-    # type: (CliContext) -> azure.batch.batch_service_client.BatchServiceClient
+    # type: (CliContext) -> azure.batch.BatchServiceClient
     """Create batch service client
     :param CliContext ctx: Cli Context
-    :rtype: azure.batch.batch_service_client.BatchServiceClient
+    :rtype: azure.batch.BatchServiceClient
     :return: batch service client
     """
     bc = settings.credentials_batch(ctx.config)
@@ -348,7 +348,7 @@ def _create_batch_service_client(ctx):
     else:
         credentials = batchauth.SharedKeyCredentials(
             bc.account, bc.account_key)
-    batch_client = batchsc.BatchServiceClient(
+    batch_client = azure.batch.BatchServiceClient(
         credentials, batch_url=bc.account_service_url)
     _modify_client_for_retry_and_user_agent(batch_client)
     return batch_client
