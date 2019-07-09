@@ -1083,7 +1083,8 @@ a Singularity container under a multi-instance task, an additional
 environment variable is populated, `SHIPYARD_SINGULARITY_COMMAND` which
 can be used in custom scripts to control execution (note that this command
 will need to be expanded prior to use as it may contain other environment
-variables). This property may be null. Note that if you are using a
+variables). This property may be null. If chaining multiple commands together,
+please ensure your `command` is wrapped in a shell. Note that if you are using a
 `task_factory` for the specification, then task factory arguments are
 applied to the `command`. Therefore, Python-style string formatting
 options (excluding keyword formatting) are required for certain task

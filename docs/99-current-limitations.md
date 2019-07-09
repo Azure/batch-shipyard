@@ -26,7 +26,7 @@ be present in those pools. Please use `pool add` with your pool specification
 to create compute resources to execute your Batch Shipyard jobs against.
 
 ### General Limitations and Restrictions
-* Docker containers used for multi-instance tasks (including MPI jobs) must
+* Docker container images used for multi-instance tasks (including MPI jobs) must
 have `bash` installed.
 * Tasks can have a maximum lifetime of 180 days (including time spent enqueued
 in active state and for data movement).
