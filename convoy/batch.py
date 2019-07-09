@@ -4478,7 +4478,7 @@ def _construct_task(
                         task.singularity_cmd,
                         ' '.join(task.run_options),
                         task.singularity_image,
-                        util.wrap_commands_in_shell([task.command]))
+                        task.command)
                     mpi_command = 'mpirun {} {}'.format(
                         ' '.join(mpi_opts),
                         mpi_singularity_cmd
@@ -4489,7 +4489,7 @@ def _construct_task(
                         mpi_opts.append('--allow-run-as-root')
                     mpi_command = 'mpirun {} {}'.format(
                         ' '.join(mpi_opts),
-                        util.wrap_commands_in_shell([task.command]))
+                        task.command)
                     mpi_docker_exec_command = (
                         'docker exec {} {} $AZ_BATCH_NODE_STARTUP_DIR/wd/'
                         'shipyard_task_runner.sh'.format(
@@ -4534,13 +4534,13 @@ def _construct_task(
                     )
                 )
                 if not is_singularity:
-                    docker_exec_cmds = []
-                    pre_exec_cmd = task.multi_instance.pre_execution_command
-                    if util.is_not_empty(pre_exec_cmd):
-                        docker_exec_cmds.append(pre_exec_cmd)
-                    docker_exec_cmds.append(task.command)
-                    mpi_command = util.wrap_commands_in_shell(
-                        docker_exec_cmds, windows=is_windows)
+                    mpi_docker_exec_command = (
+                        'docker exec {} {} $AZ_BATCH_NODE_STARTUP_DIR/wd/'
+                        'shipyard_task_runner.sh'.format(
+                            ' '.join(task.docker_exec_options),
+                            task.name
+                        )
+                    )
     else:
         if native:
             task_commands = [
