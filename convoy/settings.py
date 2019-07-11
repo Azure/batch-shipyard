@@ -4267,7 +4267,7 @@ def task_settings(
         if mpi is not None:
             mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
             mpi_executable_path = _kv_read_checked(
-                mpi, 'executable_path', 'mpiexec').lower()
+                mpi, 'executable_path', 'mpirun').lower()
             mpi_options = _kv_read_checked(mpi, 'options', [])
             mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:

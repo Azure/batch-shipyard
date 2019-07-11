@@ -51,7 +51,7 @@ vars.
   * `mpi` property must be defined
     * `runtime` should be set to `intelmpi`
     * `processes_per_node` should be set to `1`
-* `command` should contain the command to pass to the `mpiexec` invocation.
+* `command` should contain the command to pass to the `mpirun` invocation.
 For this example, we will run the MNIST convolutional example with Data
 augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. The
 application `command` to run would be:

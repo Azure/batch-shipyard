@@ -256,7 +256,7 @@ job_specifications:
       pre_execution_command: source myrc
       mpi:
         runtime: intelmpi
-        executable_path: path/to/mpiexec
+        executable_path: path/to/mpiexec/or/mpirun
         options: []
         processes_per_node: 1
     entrypoint: null

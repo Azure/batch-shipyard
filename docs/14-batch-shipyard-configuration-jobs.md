@@ -275,7 +275,7 @@ job_specifications:
       pre_execution_command: source myrc
       mpi:
         runtime: intelmpi
-        executable_path: path/to/mpiexec
+        executable_path: path/to/mpiexec/or/mpirun
         options: []
         processes_per_node: 1
     entrypoint: null
@@ -1056,17 +1056,18 @@ property are:
           containers, the specified runtime must be installed and loaded on
           the host compute node.
         * (optional) `options` is a list of options that will be passed to the
-          `mpiexec` command.
+          `mpiexec` or `mpirun` (`executable_path`) command.
         * (optional) `processes_per_node` is the number of processes per node.
           If the field is specified, options will be automatically passed to
-          the `mpiexec` command in accordance with the specified runtime so
-          that `num_instances` * `processes_per_node` processes spawn. If
-          this field is used with `options`, it is the user's responsability
-          to make sure that the `options` are not interferring with the
-          options automatically added by `processes_per_node`.
-        * (optional) `executable_path` is the path to the `mpiexec`
-          executable. By default, it assumes that the the `mpiexec`
-          executable is in the `PATH` and that the value is `mpiexec`.
+          the `mpiexec` or `mpirun` (`executable_path`) command in accordance
+          with the specified runtime so that `num_instances` *
+          `processes_per_node` processes spawn. If this field is used with
+          `options`, it is the user's responsability to make sure that the
+          `options` are not interferring with the options automatically added
+          by `processes_per_node`.
+        * (optional) `executable_path` is the path to the `mpiexec` or
+          `mpirun` executable. By default, it assumes that the `mpirun`
+          executable is in the `PATH`. The default value is `mpirun`.
 * (optional) `entrypoint` is the property that can override the Docker image
 defined `ENTRYPOINT`. This option only applies to Docker containers.
 * (optional) `command` is the command to execute in the container
