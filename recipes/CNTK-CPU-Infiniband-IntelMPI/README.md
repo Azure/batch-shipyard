@@ -36,9 +36,6 @@ For this example, this should be
 `alfpark/cntk:2.1-cpu-1bitsgd-py36-intelmpi-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
-* `resource_files` should contain the `set_up_task.sh` script that is
-responsible of activating the cntk environment and sourcing the intel mpi
-vars.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -47,7 +44,8 @@ vars.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
-  * `pre_execution_command` should source the `set_up_task.sh` script
+  * `pre_execution_command` should source the Intel `mpivars.sh` script:
+    `source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh`
   * `mpi` property must be defined
     * `runtime` should be set to `intelmpi`
     * `processes_per_node` should be set to `1`
@@ -55,7 +53,7 @@ vars.
 For this example, we will run the MNIST convolutional example with Data
 augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. The
 application `command` to run would be:
-`/bin/bash -i -c "python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
+`/bin/bash -c "python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
 
