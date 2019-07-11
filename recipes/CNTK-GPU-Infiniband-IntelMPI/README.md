@@ -37,20 +37,9 @@ For this example, this should be
 `alfpark/cntk:2.1-gpu-1bitsgd-py36-cuda8-cudnn6-intelmpi-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
-* `command` should contain the command to pass to the Docker run invocation.
-For this example, we will run the ResNet-20 Distributed training on CIFAR-10
-example in the `alfpark/cntk:2.1-gpu-1bitsgd-py35-cuda8-cudnn6-refdata`
-Docker image. The application `command` to run would be:
-`"/cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py -- --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
-  * [`run_cntk.sh`](docker/run_cntk.sh) has two parameters
-    * `-s` for the Python script to run
-    * `-w` for the working directory (not required for this example to run)
-    * `--` parameters specified after this are given verbatim to the
-      Python script
-* `infiniband` can be set to `true`, however, it is implicitly enabled by
-Batch Shipyard when executing on a RDMA-enabled compute pool.
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `resource_files` should contain the `set_up_cntk.sh` script which activate
+the cntk environment, configure Intel MPI, and export environement variables
+used by `mpi` `options`.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -59,6 +48,21 @@ Shipyard when executing on a GPU-enabled compute pool.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
+  * `pre_execution_command` should source the `set_up_cntk.sh` script
+  * `mpi` property must be defined
+    * `runtime` should be set to `intelmpi`
+    * `options` should contains `-np $np`, `-ppn $ngpus`, and
+      `-hosts $AZ_BATCH_HOST_LIST`. These options use the environemnt
+      variables set by `set_up_cntk.sh` script.
+* `command` should contain the command to pass to the `mpirun` invocation.
+For this example, we will run the ResNet-20 Distributed training on CIFAR-10
+example in the `alfpark/cntk:2.1-gpu-1bitsgd-py35-cuda8-cudnn6-refdata`
+Docker image. The application `command` to run would be:
+`/bin/bash -c "python -u /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool.
 
 ## Dockerfile and supplementary files
 Supplementary files can be found [here](./docker).
