@@ -347,7 +347,7 @@ MultiInstanceSettings = collections.namedtuple(
 )
 MpiSettings = collections.namedtuple(
     'MpiSettings', [
-        'runtime', 'options', 'processes_per_node',
+        'runtime', 'executable_path', 'options', 'processes_per_node',
     ]
 )
 ResourceFileSettings = collections.namedtuple(
@@ -4266,6 +4266,8 @@ def task_settings(
         mpi = _kv_read(conf['multi_instance'], 'mpi', None)
         if mpi is not None:
             mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
+            mpi_executable_path = _kv_read_checked(
+                mpi, 'executable_path', 'mpiexec').lower()
             mpi_options = _kv_read_checked(mpi, 'options', [])
             mpi_ppn = _kv_read(mpi, 'processes_per_node', None)
     else:
@@ -4302,8 +4304,9 @@ def task_settings(
             pre_execution_command=pre_execution_command,
             mpi=None if mpi is None else MpiSettings(
                 runtime=mpi_runtime,
+                executable_path=mpi_executable_path,
                 options=mpi_options,
-                processes_per_node=mpi_ppn,
+                processes_per_node=mpi_ppn
             ),
         ),
         default_exit_options=TaskExitOptions(

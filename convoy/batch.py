@@ -4479,7 +4479,8 @@ def _construct_task(
                         ' '.join(task.run_options),
                         task.singularity_image,
                         task.command)
-                    mpi_command = 'mpirun {} {}'.format(
+                    mpi_command = '{} {} {}'.format(
+                        task.multi_instance.mpi.executable_path,
                         ' '.join(mpi_opts),
                         mpi_singularity_cmd
                     )
@@ -4487,7 +4488,8 @@ def _construct_task(
                     # build the docker mpi command
                     if task.multi_instance.mpi.runtime == 'openmpi':
                         mpi_opts.append('--allow-run-as-root')
-                    mpi_command = 'mpirun {} {}'.format(
+                    mpi_command = '{} {} {}'.format(
+                        task.multi_instance.mpi.executable_path,
                         ' '.join(mpi_opts),
                         task.command)
                     mpi_docker_exec_command = (
