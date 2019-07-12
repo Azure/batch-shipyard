@@ -4,7 +4,7 @@ pool_specification:
     platform_image:
       offer: UbuntuServer
       publisher: Canonical
-      sku: 16.04-LTS
+      sku: 18.04-LTS
   vm_count:
     dedicated: 2
     low_priority: 0
