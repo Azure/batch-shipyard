@@ -4,11 +4,11 @@ pool_specification:
     platform_image:
       offer: CentOS-HPC
       publisher: OpenLogic
-      sku: '7.3'
+      sku: '7.6'
   vm_count:
     dedicated: 2
     low_priority: 0
-  vm_size: STANDARD_H16R
+  vm_size: STANDARD_HC44rs
   inter_node_communication_enabled: true
   ssh:
     username: shipyard

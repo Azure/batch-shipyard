@@ -2,9 +2,24 @@ job_specifications:
 - id: linpack
   auto_complete: true
   tasks:
-  - docker_image: alfpark/linpack:cpu-intel-mkl
+  - docker_image: alfpark/linpack:2018-intel-mkl
     additional_docker_run_options:
     - --privileged
+    resource_files:
+      - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/HPLinpack-Infiniband-IntelMPI/setup_hplinpack.sh
+        file_path: setup_hplinpack.sh
+      - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/HPLinpack-Infiniband-IntelMPI/findpq.py
+        file_path: findpq.py
+    environment_variables:
+      # Set AVX mode
+      # AVX: A8/A9
+      # AVX2: H-series
+      # AVX512: Hc-series
+      AVX: AVX512
     multi_instance:
       num_instances: pool_current_dedicated
-    command: /sw/run_hplinpack.sh -2
+      mpi:
+        runtime: intelmpi_ofa
+        processes_per_node: 1
+      pre_execution_command: source setup_hplinpack.sh -a $AVX -n 50000; source /opt/intel2/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+    command: /bin/bash -c "cd /opt/intel2/mkl/benchmarks/mp_linpack && ./runme_intel64_prv -p $P -q $Q -b $B $PSIZE"

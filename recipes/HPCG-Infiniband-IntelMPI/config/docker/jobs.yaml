@@ -2,7 +2,19 @@ job_specifications:
 - id: hpcg
   auto_complete: true
   tasks:
-  - docker_image: alfpark/linpack:cpu-intel-mkl
+  - docker_image: alfpark/linpack:2018-intel-mkl
+    environment_variables:
+      # Select program based on AVX
+      # xhpcg_avx: A8/A9
+      # xhpcg_avx2: H-series
+      # xhpcg_skx: Hc-series
+      EXE: xhpcg_skx
+      N: 256  # problem size
+      T: 120  # time in seconds to run
     multi_instance:
       num_instances: pool_current_dedicated
-    command: /sw/run_hpcg.sh -2 -n 256 -t 120
+      mpi:
+        runtime: intelmpi_ofa
+        processes_per_node: 1
+      pre_execution_command: source /opt/intel2/compilers_and_libraries/linux/mkl/bin/mklvars.sh intel64; source /opt/intel2/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+    command: /bin/bash -c "cd /opt/intel2/mkl/benchmarks/hpcg/bin && export OMP_NUM_THREADS=$(nproc) && ./$EXE --n=$N --t=$T"

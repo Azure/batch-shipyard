@@ -2,4 +2,5 @@ batch_shipyard:
   storage_account_settings: mystorageaccount
 global_resources:
   singularity_images:
-  - shub://alfpark/linpack
+    unsigned:
+      - library://alfpark/linpack/linpack:2018-intel-mkl

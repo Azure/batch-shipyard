@@ -7,6 +7,8 @@ Batch compute pool. Execution of this distributed workload requires the use of
 
 Execution under both Docker and Singularity are shown in this recipe.
 
+Note that this container can only be executed on Intel processors.
+
 ## Configuration
 Please see refer to the [set of sample configuration files](./config) for
 this recipe. The directory `docker` will contain the Docker-based execution
@@ -21,14 +23,13 @@ The pool configuration should enable the following properties:
 `platform_image` with IB/RDMA as
 [supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
 
 ### Global Configuration
 #### Docker-based
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid HPLinpack image
 that can be run with Intel MPI and Infiniband in a Docker container context
-on Azure VM instances. This can be `alfpark/linpack:cpu-intel-mkl` which is
+on Azure VM instances. This can be `alfpark/linpack:2018-intel-mkl` which is
 published on [Docker Hub](https://hub.docker.com/r/alfpark/linpack).
 
 #### Singularity-based
@@ -43,70 +44,57 @@ published on [Singularity Hub](https://www.singularity-hub.org/containers/496).
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container
-invocation. For this example, this should be `alfpark/linpack:cpu-intel-mkl`.
-* `command` should contain the `mpirun` command. If using the sample
-[run\_hplinpack.sh](docker/run_hplinpack.sh) script then the command can be:
-`/sw/run_hplinpack.sh`. If you do not specify `-n <problem size>` then the
-script will attempt to create the biggest problem size for the machine's
-available memory. The `run_hplinpack.sh` script has many configuration
-parameters:
-  * `-2`: enable `MKL_CBWR=AVX2`. Specify this option for H-series VMs.
-  * `-b <block size>`: block size, defaults to 256
-  * `-m <memory size in MB>`: scale problem size to specified memory size in
-    MB. Can be specified instead of `-n`.
-  * `-n <problem size>`: problem size. Can be specified instead of `-m`.
-  * `-p <grid row dim>`: grid row dimension, this must be less than or equal
-    to `-q`. If not specified, will be automatically determined from the
-    number of nodes.
-  * `-q <grid column dim>`: grid column dimension, this must be greater than
-    or equal to `-p`. If not specified, will be automatically determined from
-    the number of nodes.
+invocation. For this example, this should be `alfpark/linpack:2018-intel-mkl`.
+* `command` is the command that should be invoked by `mpirun`. For this recipe,
+the `command` should be:
+`/bin/bash -c "cd /opt/intel2/mkl/benchmarks/mp_linpack && ./runme_intel64_prv -p $P -q $Q -b $B $PSIZE"`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
 * `additional_docker_run_options` property should contain `"--privileged"`
 such that HPL can pin and interleave memory
+* `resource_files` should contain the reference to the two helper scripts
+for the task, one of which is the `setup_hplinpack.sh` script (which
+in turn invokes `findpq.py`) as part of the `pre_execution_command`.
+* `environment_variables` should have the following settings
+  * `AVX` should be set to the appropriate AVX setting according to VM CPU
+    capability. Use `AVX` for A8/A9, use `AVX2` for H-series, or use `AVX512`
+    for Hc-series.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
   * `coordination_command` should be unset or `null`. For pools with
     `native` container support, this command should be supplied if
-    a non-standard `sshd` is required.
+    a non-standard launcher is required.
+  * `mpi` property must be defined
+    * `runtime` should be either `intelmpi_ofa` or `intelmpi` depending upon
+      the Intel MPI version used.
+    * `processes_per_node` should be set to `1`
+  * `pre_execution_command` should invoke the setup script downloaded as
+    a resource file (see above). An example invocation would be:
+    `source setup_hplinpack.sh -a $AVX -n 50000; source /opt/intel2/compilers_and_libraries/linux/mpi/bin64/mpivars.sh`
+    If you do not specify `-n <problem size>` then the script will attempt to
+    create the biggest problem size for the machine's available memory.
+    The `run_hplinpack.sh` script has many configuration parameters:
+    * `-a`: specify AVX mode, see environment setting above.
+    * `-b <block size>`: block size, automatically determined from AVX
+      setting if not specified
+    * `-m <memory size in MB>`: scale problem size to specified memory size in
+      MB. Can be specified instead of `-n`.
+    * `-n <problem size>`: problem size. Can be specified instead of `-m`.
+    * `-p <grid row dim>`: grid row dimension, this must be less than or equal
+      to `-q`. If not specified, will be automatically determined from the
+      number of nodes.
+    * `-q <grid column dim>`: grid column dimension, this must be greater than
+      or equal to `-p`. If not specified, will be automatically determined from
+      the number of nodes.
 
 #### Singularity-based
-The jobs configuration should set the following properties within the `tasks`
-array which should have a task definition containing:
+The jobs configuration should set nearly the same properties as the
+Docker-based execution except for the following:
 * `singularity_image` should be the name of the Singularity image for this
 container invocation. For this example, this should be
-`shub://alfpark/linpack`.
-* `command` should contain the `mpirun` command. If using the sample
-[run\_hplinpack.sh](https://github.com/alfpark/linpack/blob/master/run_hplinpack.sh)
-script then the command can be: `./run_hplinpack.sh`. If you do not specify
-`-n <problem size>` then the script will attempt to create the biggest problem
-size for the machine's available memory. The `run_hplinpack.sh` script has
-many configuration parameters:
-  * `-2`: enable `MKL_CBWR=AVX2`. Specify this option for H-series VMs.
-  * `-b <block size>`: block size, defaults to 256
-  * `-m <memory size in MB>`: scale problem size to specified memory size in
-    MB. Can be specified instead of `-n`.
-  * `-n <problem size>`: problem size. Can be specified instead of `-m`.
-  * `-p <grid row dim>`: grid row dimension, this must be less than or equal
-    to `-q`. If not specified, will be automatically determined from the
-    number of nodes.
-  * `-q <grid column dim>`: grid column dimension, this must be greater than
-    or equal to `-p`. If not specified, will be automatically determined from
-    the number of nodes.
-* `additional_singularity_options` property should have an option to set the
-working directory to the linpack binary directory.
-* `infiniband` can be set to `true`, however, it is implicitly enabled by
-Batch Shipyard when executing on a RDMA-enabled compute pool.
-* `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
-    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
-    `pool_current_low_priority`
-* `resource_files` should be populated to download two helper scripts for the
-task, one of which is the `run_hplinpack.sh` script used in the command.
-Please see the sample configuration for details for each file.
+`library://alfpark/linpack/linpack:2018-intel-mkl`.
 
 ## Supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). The

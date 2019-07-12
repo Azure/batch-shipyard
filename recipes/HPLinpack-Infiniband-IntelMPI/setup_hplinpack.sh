@@ -86,7 +86,7 @@ if [ -z $P ] || [ -z $Q ]; then
     IFS=',' read -ra HOSTS <<< "$AZ_BATCH_HOST_LIST"
     nodes=${#HOSTS[@]}
     echo num nodes: $nodes
-    vals=$(python /opt/findpq.py $nodes)
+    vals=$(python findpq.py $nodes)
     IFS=' ' read -ra PQ <<< "$vals"
     export P="${PQ[0]}"
     export Q="${PQ[1]}"

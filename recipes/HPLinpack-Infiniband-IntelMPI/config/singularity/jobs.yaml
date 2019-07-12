@@ -1,14 +1,23 @@
 job_specifications:
 - id: linpack
   tasks:
-  - singularity_image: shub://alfpark/linpack
-    additional_singularity_options:
-    - --pwd /intel/mkl/benchmarks/mp_linpack
+  - singularity_image: library://alfpark/linpack/linpack:2018-intel-mkl
     resource_files:
-    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/findpq.py
-      file_path: findpq.py
-    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/run_hplinpack.sh
-      file_path: run_hplinpack.sh
-    command: ./run_hplinpack.sh -2
+      - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/HPLinpack-Infiniband-IntelMPI/setup_hplinpack.sh
+        file_path: setup_hplinpack.sh
+      - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/HPLinpack-Infiniband-IntelMPI/findpq.py
+        file_path: findpq.py
+    environment_variables:
+      # Set AVX mode
+      # AVX: A8/A9
+      # AVX2: H-series
+      # AVX512: Hc-series
+      AVX: AVX512
     multi_instance:
       num_instances: pool_current_dedicated
+      mpi:
+        runtime: intelmpi_ofa
+        processes_per_node: 1
+      pre_execution_command: source setup_hplinpack.sh -a $AVX -n 50000; source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+    # need to source mpivars again as the container intel mpi/benchmark is not the exact version as on the host
+    command: /bin/bash -c "source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh; cd /opt/intel/mkl/benchmarks/mp_linpack && ./runme_intel64_prv -p $P -q $Q -b $B $PSIZE"

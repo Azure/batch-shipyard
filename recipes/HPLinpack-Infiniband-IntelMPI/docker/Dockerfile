@@ -1,4 +1,4 @@
-# Dockerfile for Linpack-Intel-Infiniband for use with Batch Shipyard on Azure Batch
+# Dockerfile for HPCG and HPLinpack for use with Batch Shipyard on Azure Batch
 
 FROM centos:7.6.1810
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
@@ -24,25 +24,26 @@ RUN yum install -y epel-release \
     && chmod 700 /root/.ssh \
     && cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
 
-# copy in intel c++, mpi and benchmark redistributables
-ENV INTEL_CPP_VER=2018.5.274 \
-    INTEL_MPI_VER=2018.5.288 \
-    INTEL_MKL_VER=2018.3.011
-ADD l_comp_lib_${INTEL_CPP_VER}_comp.cpp_redist.tgz l_mpi_${INTEL_MPI_VER}.tgz l_mklb_p_${INTEL_MKL_VER}.tgz /tmp/
-RUN cd /tmp/l_comp_lib_${INTEL_CPP_VER}_comp.cpp_redist \
-    && ./install.sh -i /opt/intel2 -e \
+# copy in intel mpi and mkl redistributables
+ENV INTEL_MPI_VER=2018.5.288 \
+    INTEL_MKL_VER=2018.4.274
+ADD l_mpi_${INTEL_MPI_VER}.tgz l_mkl_${INTEL_MKL_VER}.tgz /tmp/
+RUN cd /tmp/l_mkl_${INTEL_MKL_VER} \
+    && sed -i -e 's/^ACCEPT_EULA=.*/ACCEPT_EULA=accept/g' silent.cfg \
+    && sed -i -e 's,^PSET_INSTALL_DIR=.*,PSET_INSTALL_DIR=/opt/intel2,g' silent.cfg \
+    && sed -i -e 's,^ARCH_SELECTED=.*,ARCH_SELECTED=INTEL64,g' silent.cfg \
+    && ./install.sh -s silent.cfg \
+    && rm -rf /opt/intel2/compilers_and_libraries/linux/mkl/lib/ia32* \
     && cd .. \
-    && rm -rf l_comp_lib_${INTEL_CPP_VER}_comp.cpp_redist \
+    && rm -rf l_mkl_${INTEL_MKL_VER} \
     && cd l_mpi_${INTEL_MPI_VER} \
-    && sed -i -e 's/^ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' silent.cfg \
+    && sed -i -e 's/^ACCEPT_EULA=.*/ACCEPT_EULA=accept/g' silent.cfg \
     && sed -i -e 's,^PSET_INSTALL_DIR=.*,PSET_INSTALL_DIR=/opt/intel2,g' silent.cfg \
     && sed -i -e 's,^COMPONENTS=.*,COMPONENTS=ALL,g' silent.cfg \
     && sed -i -e 's,^ARCH_SELECTED=.*,ARCH_SELECTED=INTEL64,g' silent.cfg \
     && ./install.sh -s silent.cfg \
     && cd .. \
-    && rm -rf l_mpi_${INTEL_MPI_VER} \
-    && cp -r l_mklb_p_${INTEL_MKL_VER}/benchmarks_2018/linux/mkl /opt/intel2 \
-    && rm -rf l_mklb_p_${INTEL_MKL_VER}
+    && rm -rf l_mpi_${INTEL_MPI_VER}
 
 # set up sshd on port 23
 EXPOSE 23
