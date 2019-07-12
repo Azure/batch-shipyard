@@ -37,11 +37,8 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
-* `command` should contain the `mpirun` command. If using the sample
-`run_sample.sh` script then the command should be simply:
-`/opt/OpenFOAM/run_sample.sh`
-* `infiniband` can be set to `true`, however, it is implicitly enabled by
-Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `resource_files` should contain the `set_up_sample.sh` script which configure
+Intel MPI and set up the sample.
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined
@@ -52,6 +49,17 @@ global configuration file. Please see the previous section for details.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` array can be empty
+  * `pre_execution_command` should source the `set_up_sample.sh` script.
+  * `mpi` property must be defined
+    * `runtime` should be set to `intelmpi`
+    * `options` should contains `-np $np`, `-ppn $ppn`, and
+      `-hosts $AZ_BATCH_HOST_LIST`. These options use the environemnt
+      variables set by `set_up_sample.sh` script.
+* `command` should contain the command to pass to the `mpirun` invocation.
+For this example, the application `command` to run would be:
+`simpleFoam -parallel`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please
