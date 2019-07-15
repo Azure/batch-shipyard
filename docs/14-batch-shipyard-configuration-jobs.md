@@ -1057,14 +1057,15 @@ property are:
           the host compute node.
         * (optional) `options` is a list of options that will be passed to the
           `mpiexec` or `mpirun` (`executable_path`) command.
-        * (optional) `processes_per_node` is the number of processes per node.
-          If the field is specified, options will be automatically passed to
-          the `mpiexec` or `mpirun` (`executable_path`) command in accordance
-          with the specified runtime so that `num_instances` *
-          `processes_per_node` processes spawn. If this field is used with
-          `options`, it is the user's responsability to make sure that the
-          `options` are not interferring with the options automatically added
-          by `processes_per_node`.
+        * (optional) `processes_per_node` is either a number that represents
+          the number of processes per node or a command that, when evaluated,
+          gives the number of processes per node. If the field is specified,
+          options will be automatically passed to the `mpiexec` or `mpirun`
+          (`executable_path`) command in accordance with the specified runtime
+          so that `num_instances` * `processes_per_node` processes spawn. If
+          this field is used with `options`, it is the user's responsability
+          to make sure that the `options` are not interferring with the
+          options automatically added by `processes_per_node`.
         * (optional) `executable_path` is the path to the `mpiexec` or
           `mpirun` executable. By default, it assumes that the `mpirun`
           executable is in the `PATH`. The default value is `mpirun`.
