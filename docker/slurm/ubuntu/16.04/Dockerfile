@@ -37,7 +37,7 @@ RUN curl -fSsL https://download.schedmd.com/slurm/slurm-${SLURM_VERSION}.tar.bz2
     && cd /root \
     && fpm -s dir -t deb -v 1.0 -n slurm-${SLURM_VERSION} --prefix=/usr -C /tmp/slurm-build .
 
-FROM alpine:3.9
+FROM alpine:3.10
 
 COPY --from=0 /root/slurm-*.deb /root/
 COPY slurm*.service /root/
