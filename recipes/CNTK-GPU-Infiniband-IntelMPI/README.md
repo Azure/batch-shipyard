@@ -37,9 +37,6 @@ For this example, this should be
 `alfpark/cntk:2.1-gpu-1bitsgd-py36-cuda8-cudnn6-intelmpi-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
-* `resource_files` should contain the `set_up_cntk.sh` script which activate
-the cntk environment, configure Intel MPI, and export environement variables
-used by `mpi` `options`.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -48,17 +45,17 @@ used by `mpi` `options`.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
-  * `pre_execution_command` should source the `set_up_cntk.sh` script
+  * `pre_execution_command` should source the cntk activation script and the
+    Intel `mpivars.sh` script:
+    `source /cntk/activate-cntk; source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh`
   * `mpi` property must be defined
     * `runtime` should be set to `intelmpi`
-    * `options` should contains `-np $np`, `-ppn $ngpus`, and
-      `-hosts $AZ_BATCH_HOST_LIST`. These options use the environemnt
-      variables set by `set_up_cntk.sh` script.
+    * `processes_per_node` should be set to `nvidia-smi -L | wc -l`
 * `command` should contain the command to pass to the `mpirun` invocation.
 For this example, we will run the ResNet-20 Distributed training on CIFAR-10
 example in the `alfpark/cntk:2.1-gpu-1bitsgd-py35-cuda8-cudnn6-refdata`
 Docker image. The application `command` to run would be:
-`/bin/bash -c "python -u /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
+`python -u /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
 * `gpu` can be set to `true`, however, it is implicitly enabled by Batch
