@@ -48,7 +48,7 @@ the benchmark template file and configure Intel MPI.
     * `<steps>` is the number of steps to execute
   * `mpi` property must be defined
     * `runtime` should be set to `intelmpi`
-    * `processes_per_node` should be set to `16`
+    * `processes_per_node` should be set to `nproc`
 * `command` should contain the command to pass to the `mpirun` invocation.
 For this example, the application `command` to run would be:
 `$NAMD_DIR/namd2 apoa1.namd`

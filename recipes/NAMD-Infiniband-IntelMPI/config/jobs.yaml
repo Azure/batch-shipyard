@@ -12,5 +12,5 @@ job_specifications:
       pre_execution_command: source set_up_namd.sh apoa1 1000
       mpi:
         runtime: intelmpi
-        processes_per_node: 16
+        processes_per_node: nproc
     command: $NAMD_DIR/namd2 apoa1.namd
