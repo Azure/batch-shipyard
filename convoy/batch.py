@@ -4438,7 +4438,7 @@ def _construct_task(
                     task.multi_instance.mpi.processes_per_node)
                 # set mpi options for the different runtimes
                 if task.multi_instance.mpi.runtime == 'intelmpi':
-                    if processes_per_node is not None:
+                    if isinstance(processes_per_node, int):
                         mpi_opts.extend([
                             '-hosts $AZ_BATCH_HOST_LIST',
                             '-np {}'.format(
@@ -4447,8 +4447,17 @@ def _construct_task(
                             ),
                             '-perhost {}'.format(processes_per_node)
                         ])
+                    elif isinstance(processes_per_node, str):
+                        mpi_opts.extend([
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np $(expr {} \\* $({}))'.format(
+                                task.multi_instance.num_instances,
+                                processes_per_node
+                            ),
+                            '-perhost $({})'.format(processes_per_node)
+                        ])
                 elif task.multi_instance.mpi.runtime == 'mpich':
-                    if processes_per_node is not None:
+                    if isinstance(processes_per_node, int):
                         mpi_opts.extend([
                             '-hosts $AZ_BATCH_HOST_LIST',
                             '-np {}'.format(
@@ -4457,20 +4466,37 @@ def _construct_task(
                             ),
                             '-ppn {}'.format(processes_per_node)
                         ])
-                elif task.multi_instance.mpi.runtime == 'openmpi':
-                    mpi_opts.append('-mca btl_tcp_if_include eth0')
-                    if processes_per_node is not None:
+                    elif isinstance(processes_per_node, str):
                         mpi_opts.extend([
-                            '-host {}'.format(
-                                ','.join(
-                                    ['$AZ_BATCH_HOST_LIST'] *
-                                    processes_per_node)
+                            '-hosts $AZ_BATCH_HOST_LIST',
+                            '-np $(expr {} \\* $({}))'.format(
+                                task.multi_instance.num_instances,
+                                processes_per_node
                             ),
+                            '-ppn $({})'.format(processes_per_node)
+                        ])
+                elif task.multi_instance.mpi.runtime == 'openmpi':
+                    mpi_opts.append('--mca btl_tcp_if_include eth0')
+                    if isinstance(processes_per_node, int):
+                        mpi_opts.append('--oversubscribe')
+                        mpi_opts.extend([
+                            '-host $AZ_BATCH_HOST_LIST',
                             '-np {}'.format(
                                 task.multi_instance.num_instances *
                                 processes_per_node
                             ),
-                            '-npernode {}'.format(processes_per_node)
+                            '--map-by ppr:{}:node'.format(processes_per_node)
+                        ])
+                    elif isinstance(processes_per_node, str):
+                        mpi_opts.append('--oversubscribe')
+                        mpi_opts.extend([
+                            '-host $AZ_BATCH_HOST_LIST',
+                            '-np $(expr {} \\* $({}))'.format(
+                                task.multi_instance.num_instances,
+                                processes_per_node
+                            ),
+                            '--map-by ppr:$({}):node'.format(
+                                processes_per_node)
                         ])
                 if is_singularity:
                     # build the singularity mpi command

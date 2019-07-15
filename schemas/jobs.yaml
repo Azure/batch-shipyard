@@ -640,7 +640,7 @@ mapping:
                             sequence:
                               - type: str
                           processes_per_node:
-                            type: int
+                            type: text
                   entrypoint:
                     type: str
                   command:
