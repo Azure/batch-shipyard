@@ -53,7 +53,7 @@ this image name.
 For this example, we will run the MNIST convolutional example with Data
 augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. The
 application `command` to run would be:
-`/bin/bash -c "python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
+`python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
 

@@ -10,4 +10,4 @@ job_specifications:
       mpi:
         runtime: intelmpi
         processes_per_node: 1
-    command: /bin/bash -c "python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"
+    command: python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -q 1 -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output
