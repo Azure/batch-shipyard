@@ -10,5 +10,6 @@ pool_specification:
     low_priority: 0
   vm_size: STANDARD_H16R
   inter_node_communication_enabled: true
+  per_job_auto_scratch: true
   ssh:
     username: shipyard

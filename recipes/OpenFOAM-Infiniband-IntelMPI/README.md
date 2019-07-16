@@ -16,6 +16,7 @@ The pool configuration should enable the following properties:
 `platform_image` with IB/RDMA as
 [supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 * `inter_node_communication_enabled` must be set to `true`
+* `per_job_auto_scratch` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 
 ### Global Configuration
@@ -25,12 +26,6 @@ that can be run with Intel MPI and Infiniband in a Docker container context
 on Azure VM instances. This can be `alfpark/openfoam:4.0-icc-intelmpi` or
 `alfpark/openfoam:v1606plus-icc-intelmpi`
 which are published on [Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
-* `volumes` must be populated with the following:
-  * `shared_data_volumes` should contain an Azure File Docker volume driver,
-    a GlusterFS share or a manually configured NFS share. Batch
-    Shipyard has automatic support for setting up Azure File Docker Volumes
-    and GlusterFS, please refer to the
-    [Batch Shipyard Configuration doc](../../docs/10-batch-shipyard-configuration.md).
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
@@ -39,8 +34,6 @@ array which should have a task definition containing:
 For this example, this can be `alfpark/openfoam:4.0-icc-intelmpi`.
 * `resource_files` should contain the `set_up_sample.sh` script which configure
 Intel MPI and set up the sample.
-* `shared_data_volumes` should have a valid volume name as defined in the
-global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
