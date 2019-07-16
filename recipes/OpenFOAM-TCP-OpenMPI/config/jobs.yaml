@@ -1,13 +1,12 @@
 job_specifications:
 - id: openfoamjob
   auto_complete: true
+  auto_scratch: true
   tasks:
   - docker_image: alfpark/openfoam:4.0-gcc-openmpi
     resource_files:
-    - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/OpenFOAM-TCP-OpenMPI/docker/set_up_sample.sh
+    - blob_source: https://raw.githubusercontent.com/vincentlabonte/batch-shipyard/singularity3/recipes/OpenFOAM-TCP-OpenMPI/docker/set_up_sample.sh
       file_path: set_up_sample.sh
-    shared_data_volumes:
-    - glustervol
     multi_instance:
       num_instances: pool_current_dedicated
       pre_execution_command: source set_up_sample.sh

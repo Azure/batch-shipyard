@@ -2,13 +2,14 @@ pool_specification:
   id: docker-openfoam-tcp
   vm_configuration:
     platform_image:
-      offer: UbuntuServer
-      publisher: Canonical
-      sku: 18.04-LTS
+      publisher: OpenLogic
+      offer: CentOS
+      sku: '7.6'
   vm_count:
     dedicated: 2
     low_priority: 0
   vm_size: STANDARD_D2_V2
   inter_node_communication_enabled: true
+  per_job_auto_scratch: true
   ssh:
     username: shipyard
