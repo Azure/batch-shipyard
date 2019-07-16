@@ -1,0 +1,22 @@
+Bootstrap: docker
+From: ubuntu:18.04
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    wget \
+    openssh-client \
+    openssh-server \
+    openmpi-bin \
+    libopenmpi-dev
+	rm -rf /var/lib/apt/lists/*
+
+    wget -q -O - https://codeload.github.com/LLNL/mpiBench/tar.gz/master | tar -xzf -
+    mv ./mpiBench-master /mpiBench
+    cd /mpiBench
+    make
+
+    apt-get remove -y libopenmpi-dev
+	apt-get clean

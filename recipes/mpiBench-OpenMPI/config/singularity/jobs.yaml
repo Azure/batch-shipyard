@@ -1,0 +1,12 @@
+job_specifications:
+- id: mpibench-openmpi
+  tasks:
+  - singularity_image: library://vincent.labonte/mpi/mpibench:openmpi
+    command: /mpiBench/mpiBench -e 1K
+    multi_instance:
+      num_instances: pool_current_dedicated
+      mpi:
+        runtime: openmpi
+        options:
+        - -mca btl_base_warn_component_unused 0
+        processes_per_node: nproc
