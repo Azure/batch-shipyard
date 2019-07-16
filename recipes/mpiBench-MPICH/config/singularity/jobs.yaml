@@ -1,0 +1,10 @@
+job_specifications:
+- id: mpibench-mpich
+  tasks:
+  - singularity_image: library://vincent.labonte/mpi/mpibench:mpich
+    command: /mpiBench/mpiBench -e 1K
+    multi_instance:
+      num_instances: pool_current_dedicated
+      mpi:
+        runtime: mpich
+        processes_per_node: nproc

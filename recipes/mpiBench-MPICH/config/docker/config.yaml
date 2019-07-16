@@ -1,0 +1,6 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+  use_shipyard_docker_image: false
+global_resources:
+  docker_images:
+  - vincentlabo/mpibench:mpich

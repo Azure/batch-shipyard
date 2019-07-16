@@ -1,0 +1,20 @@
+Bootstrap: docker
+From: ubuntu:18.04
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    wget \
+    mpich \
+    libmpich-dev
+
+    wget -q -O - https://codeload.github.com/LLNL/mpiBench/tar.gz/master | tar -xzf -
+    mv ./mpiBench-master /mpiBench
+    cd /mpiBench
+    make
+
+	rm -rf /var/lib/apt/lists/*
+    apt-get remove -y libmpich-dev
+	apt-get clean
