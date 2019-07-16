@@ -10,7 +10,7 @@ export MPI_ROOT=$I_MPI_ROOT
 OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-4.0
 source $OPENFOAM_DIR/etc/bashrc
 
-# copy sample into glusterfs shared area
+# copy sample into auto scratch shared area
 AUTO_SCRATCH_DIR=$AZ_BATCH_TASK_DIR/auto_scratch
 cd $AUTO_SCRATCH_DIR
 cp -r $OPENFOAM_DIR/tutorials/incompressible/simpleFoam/pitzDaily .

@@ -9,9 +9,9 @@ source /etc/profile.d/modules.sh
 module add mpi/openmpi-x86_64
 source $OPENFOAM_DIR/etc/bashrc
 
-# copy sample into glusterfs shared area
-GFS_DIR=$AZ_BATCH_NODE_SHARED_DIR/gfs
-cd $GFS_DIR
+# copy sample into auto scratch shared area
+AUTO_SCRATCH_DIR=$AZ_BATCH_TASK_DIR/auto_scratch
+cd $AUTO_SCRATCH_DIR
 cp -r $OPENFOAM_DIR/tutorials/incompressible/simpleFoam/pitzDaily .
 cp $OPENFOAM_DIR/tutorials/incompressible/simpleFoam/pitzDailyExptInlet/system/decomposeParDict pitzDaily/system/
 
