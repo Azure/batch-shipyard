@@ -4265,6 +4265,9 @@ def task_settings(
             conf['multi_instance'], 'pre_execution_command', None)
         mpi = _kv_read(conf['multi_instance'], 'mpi', None)
         if mpi is not None:
+            if is_windows:
+                raise ValueError(
+                    'The mpi setting is not supported on windows pools')
             mpi_runtime = _kv_read_checked(mpi, 'runtime', '').lower()
             mpi_executable_path = _kv_read_checked(
                 mpi, 'executable_path', 'mpirun').lower()
