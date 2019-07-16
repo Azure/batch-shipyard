@@ -58,17 +58,17 @@ _TENSORBOARD_DOCKER_IMAGE = (
 )
 _GPU_CC37_INSTANCES = re.compile(
     # standard nc
-    r'^standard_nc[\d]+r?$',
+    r'^standard_nc[\d]+r?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_COMPUTE_INSTANCES = re.compile(
     # standard nc, ncv2, ncv3, nd, ndv2
-    r'^standard_n[cd][\d]+r?s?(_v[\d])?$',
+    r'^standard_n[cd][\d]+r?s?(_v[\d])?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_VISUALIZATION_INSTANCES = re.compile(
     # standard nv, nvv2
-    r'^standard_nv[\d]+s?(_v2)?$',
+    r'^standard_nv[\d]+s?(_v2)?(_promo)?$',
     re.IGNORECASE
 )
 _SRIOV_RDMA_INSTANCES = re.compile(
@@ -78,7 +78,7 @@ _SRIOV_RDMA_INSTANCES = re.compile(
 )
 _NETWORKDIRECT_RDMA_INSTANCES = re.compile(
     # standard a8/a9, h+r, nc+r, nd+r
-    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[\d])?))$',
+    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[1-3])?))(_promo)?$',
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
@@ -116,23 +116,25 @@ _VM_TCP_NO_TUNE = frozenset((
     'standard_b4ms', 'standard_b8ms',
 ))
 _VM_GPU_COUNT = {
-    1: re.compile(r'^standard_n[cdv]6r?s?(_v[\d])?$', re.IGNORECASE),
-    2: re.compile(r'^standard_n[cdv]12r?s?(_v[\d])?$', re.IGNORECASE),
-    4: re.compile(r'^standard_n[cdv]24r?s?(_v[\d])?$', re.IGNORECASE),
+    1: re.compile(r'^standard_n[cdv]6r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
+    2: re.compile(r'^standard_n[cdv]12r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
+    4: re.compile(r'^standard_n[cdv]24r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
     8: re.compile(r'^standard_nd40s_v2$', re.IGNORECASE),
 }
 _VM_GPU_CLASS = {
-    'tesla_k80': re.compile(r'^standard_n[c][\d]+r?$', re.IGNORECASE),
+    'tesla_k80': re.compile(r'^standard_n[c][\d]+r?(_promo)?$', re.IGNORECASE),
     'tesla_p40': re.compile(r'^standard_n[d][\d]+r?s?$', re.IGNORECASE),
     'tesla_p100': re.compile(r'^standard_n[c][\d]+r?s_v2$', re.IGNORECASE),
     'tesla_v100': re.compile(
         r'^standard_n(([c][\d]+r?s_v3)|(d40s_v2))$', re.IGNORECASE),
-    'tesla_m60': re.compile(r'^standard_nv[\d]+s?(_v2)?$', re.IGNORECASE),
+    'tesla_m60': re.compile(
+        r'^standard_nv[\d]+s?(_v2)?(_promo)?$', re.IGNORECASE),
 }
 _VM_IB_CLASS = {
     'qdr_ib': re.compile(r'^standard_(a8|a9)$', re.IGNORECASE),
     'fdr_ib': re.compile(
-        r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$', re.IGNORECASE),
+        r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[1-3])?))(_promo)?$',
+        re.IGNORECASE),
     'edr_ib': re.compile(r'^standard_(hc|hb)+[\d]+rs$', re.IGNORECASE),
 }
 _VALID_PUBLISHERS = frozenset((
