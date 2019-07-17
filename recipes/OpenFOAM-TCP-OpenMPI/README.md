@@ -11,6 +11,8 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
+* `per_job_auto_scratch` must be set to `true`. A job autoscratch is needed to
+  share a common input data set between the nodes.
 * `max_tasks_per_node` must be set to 1 or omitted
 
 ### Global Configuration

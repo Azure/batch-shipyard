@@ -4268,6 +4268,12 @@ def _generate_non_native_env_var(env_vars):
 
 
 def _construct_mpi_command(task):
+    # type: (dict) -> str
+    """Construct the MPI command for MPI tasks
+    :parm str task: task settings
+    :rtype: str
+    :return the mpi command
+    """
     mpi_opts = []
     mpi_opts.extend(task.multi_instance.mpi.options)
     processes_per_node = (
@@ -4314,8 +4320,8 @@ def _construct_mpi_command(task):
     elif task.multi_instance.mpi.runtime == 'openmpi':
         mpi_opts.append('--mca btl_tcp_if_include eth0')
         if isinstance(processes_per_node, int):
-            mpi_opts.append('--oversubscribe')
             mpi_opts.extend([
+                '--oversubscribe',
                 '-host $AZ_BATCH_HOST_LIST',
                 '-np {}'.format(
                     task.multi_instance.num_instances *
@@ -4324,8 +4330,8 @@ def _construct_mpi_command(task):
                 '--map-by ppr:{}:node'.format(processes_per_node)
             ])
         elif isinstance(processes_per_node, str):
-            mpi_opts.append('--oversubscribe')
             mpi_opts.extend([
+                '--oversubscribe',
                 '-host $AZ_BATCH_HOST_LIST',
                 '-np $(expr {} \\* $({}))'.format(
                     task.multi_instance.num_instances,
