@@ -47,15 +47,15 @@ This mpiBench-IntelMPI recipe contains information on how to
 containerize [mpiBench](https://github.com/LLNL/mpiBench)
 across Azure VMs with Intel MPI.
 
-#### [mpiBench-OpenMPI](./mpiBench-OpenMPI)
-This mpiBench-OpenMPI recipe contains information on how to
-containerize [mpiBench](https://github.com/LLNL/mpiBench)
-across Azure VMs with Open MPI.
-
 #### [mpiBench-MPICH](./mpiBench-MPICH)
 This mpiBench-MPICH recipe contains information on how to
 containerize [mpiBench](https://github.com/LLNL/mpiBench)
 across Azure VMs with MPICH.
+
+#### [mpiBench-OpenMPI](./mpiBench-OpenMPI)
+This mpiBench-OpenMPI recipe contains information on how to
+containerize [mpiBench](https://github.com/LLNL/mpiBench)
+across Azure VMs with Open MPI.
 
 ## <a name="cfd"></a>Computational Fluid Dynamics (CFD)
 #### [OpenFOAM-Infiniband-IntelMPI](./OpenFOAM-Infiniband-IntelMPI)
