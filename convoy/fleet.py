@@ -2482,23 +2482,15 @@ def _list_singularity_images(batch_client, config):
         return
     pool_id = settings.pool_id(config)
     pool = batch_client.pool.get(pool_id)
-    cmd = [
-        'cd {}'.format(settings.get_singularity_cachedir(config)),
-        'pushd library > /dev/null',
-        'find . -name "*.sif"',
-        'popd > /dev/null',
-        'pushd oci-tmp > /dev/null',
-        'find . -name "*.sif"',
-        'popd > /dev/null',
-        'pushd shub > /dev/null',
-        'find . -name "*.sif"',
-        'popd > /dev/null',
-        'pushd oras > /dev/null',
-        'find . -name "*.sif"',
-        'popd > /dev/null',
-    ]
+    cmds = ['cd {}'.format(settings.get_singularity_cachedir(config))]
+    directories = ['library', 'oci-tmp', 'shub', 'oras']
+    for directory in directories:
+        cmds.append(
+            'if [[ -d "{0}" ]]; then '
+            'find {0} -name "*.sif"; '
+            'fi'.format(directory))
     stdout = _execute_command_on_pool_over_ssh_with_keyed_output(
-        batch_client, config, pool, 'singularity list', cmd)
+        batch_client, config, pool, 'singularity list', cmds)
     # process stdout
     node_images = {}
     all_images = {}

@@ -214,6 +214,3 @@ RUN sed -i -e 's/^ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' /tmp/l_mpi_2017.2.17
 # set sshd command
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
-
-# copy in intel mpirun helper script on Batch
-COPY run_cntk.sh /cntk/

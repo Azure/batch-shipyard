@@ -23,5 +23,3 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # make sshd listen on 23 and run by default
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]
-
-COPY run_cntk.sh /cntk/

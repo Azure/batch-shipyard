@@ -633,12 +633,14 @@ mapping:
                             type: str
                             enum: ['intelmpi', 'mpich', 'openmpi']
                             required: true
+                          executable_path:
+                            type: str
                           options:
                             type: seq
                             sequence:
                               - type: str
                           processes_per_node:
-                            type: int
+                            type: text
                   entrypoint:
                     type: str
                   command:

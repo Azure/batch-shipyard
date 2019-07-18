@@ -3,16 +3,15 @@
 set -e
 set -o pipefail
 
-# set up mpi and set up openfoam env
-source $INTELCOMPILERVARS intel64
-source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
-export MPI_ROOT=$I_MPI_ROOT
+# get mpi ref and set up openfoam env
 OPENFOAM_DIR=/opt/OpenFOAM/OpenFOAM-4.0
+source /etc/profile.d/modules.sh
+module add mpi/openmpi-x86_64
 source $OPENFOAM_DIR/etc/bashrc
 
-# copy sample into glusterfs shared area
-GFS_DIR=$AZ_BATCH_NODE_SHARED_DIR/gfs
-cd $GFS_DIR
+# copy sample into auto scratch shared area
+AUTO_SCRATCH_DIR=$AZ_BATCH_TASK_DIR/auto_scratch
+cd $AUTO_SCRATCH_DIR
 cp -r $OPENFOAM_DIR/tutorials/incompressible/simpleFoam/pitzDaily .
 cp $OPENFOAM_DIR/tutorials/incompressible/simpleFoam/pitzDailyExptInlet/system/decomposeParDict pitzDaily/system/
 
@@ -36,5 +35,18 @@ cd pitzDaily
 blockMesh
 decomposePar -force
 
-# execute mpi job
-mpirun -np $np -ppn $ppn -hosts $AZ_BATCH_HOST_LIST simpleFoam -parallel
+# create hostfile
+hostfile="hostfile"
+touch $hostfile
+>| $hostfile
+for node in "${HOSTS[@]}"
+do
+    echo $node slots=$ppn max-slots=$ppn >> $hostfile
+done
+
+# export parameters
+export mpirun=`which mpirun`
+export mpienvopts=`echo \`env | grep WM_ | sed -e "s/=.*$//"\` | sed -e "s/ / -x /g"`
+export mpienvopts2=`echo \`env | grep FOAM_ | sed -e "s/=.*$//"\` | sed -e "s/ / -x /g"`
+export np
+export hostfile

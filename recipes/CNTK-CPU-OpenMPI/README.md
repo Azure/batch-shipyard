@@ -41,16 +41,6 @@ array which should have a task definition containing:
 For this example, this should be `alfpark/cntk:2.1-cpu-py35-refdata`.
 Please note that the `docker_images` in the Global Configuration should match
 this image name.
-* `command` should contain the command to pass to the Docker run invocation.
-For this example, we will run the MNIST convolutional example with Data
-augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. The
-application `command` to run would be:
-`"/cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -- --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
-  * [`run_cntk.sh`](docker/run_cntk.sh) has two parameters
-    * `-s` for the Python script to run
-    * `-w` for the working directory (not required for this example to run)
-    * `--` parameters specified after this are given verbatim to the
-      Python script
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -59,6 +49,16 @@ application `command` to run would be:
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` should be unset or the array can be empty
+  * `mpi` property must be defined
+    * `runtime` should be set to `openmpi`
+    * `executable_path` should be set to `/root/openmpi/bin/mpiexec`
+    * `processes_per_node` should be set to `1`
+* `command` should contain the command to pass to the `mpiexec` invocation.
+For this example, we will run the MNIST convolutional example with Data
+augmentation in the `alfpark/cntk:2.1-cpu-py35-refdata` Docker image. Before
+running the example, we need to activate CNTK. The application `command` to
+run would then be:
+`/bin/bash -c "source /cntk/activate-cntk; python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

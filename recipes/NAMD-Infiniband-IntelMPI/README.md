@@ -31,15 +31,8 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation,
 e.g., `alfpark/namd:2.11-icc-mkl-intelmpi`
-* `command` should contain the `mpirun` command. If using the sample
-`run_namd.sh` script then `"/sw/run_namd.sh <benchmark> <steps> <ppn>"`
-can be used to run the included benchmarks:
-  * `<benchmark>` is the benchmark to run: `apoa1` or `stmv`
-  * `<steps>` is the number of steps to execute
-  * `<ppn>` is the number of cores on each compute node. This is optional
-    and, if omitted, will be determined dynamically.
-* `infiniband` can be set to `true`, however, it is implicitly enabled by
-Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `resource_files` should contain the `set_up_namd.sh` script which populate
+the benchmark template file and configure Intel MPI.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -48,6 +41,19 @@ Batch Shipyard when executing on a RDMA-enabled compute pool.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` array can be empty
+  * `pre_execution_command` should source the `set_up_namd.sh` script. This
+    script will generate a config file `<benchmark>.namd`.
+    Usage: `set_up_namd.sh <benchmark> <steps>`
+    * `<benchmark>` is the benchmark to run: `apoa1` or `stmv`
+    * `<steps>` is the number of steps to execute
+  * `mpi` property must be defined
+    * `runtime` should be set to `intelmpi`
+    * `processes_per_node` should be set to `nproc`
+* `command` should contain the command to pass to the `mpirun` invocation.
+For this example, the application `command` to run would be:
+`$NAMD_DIR/namd2 apoa1.namd`
+* `infiniband` can be set to `true`, however, it is implicitly enabled by
+Batch Shipyard when executing on a RDMA-enabled compute pool.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please

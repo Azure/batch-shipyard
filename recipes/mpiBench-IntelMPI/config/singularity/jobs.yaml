@@ -1,0 +1,11 @@
+job_specifications:
+- id: mpibench-intelmpi
+  tasks:
+  - singularity_image: library://vincent.labonte/mpi/mpibench:intelmpi
+    command: /mpiBench/mpiBench -e 1K
+    multi_instance:
+      num_instances: pool_current_dedicated
+      pre_execution_command: source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+      mpi:
+        runtime: intelmpi
+        processes_per_node: nproc

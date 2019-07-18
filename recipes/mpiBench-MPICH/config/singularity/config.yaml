@@ -1,0 +1,6 @@
+batch_shipyard:
+  storage_account_settings: mystorageaccount
+global_resources:
+  singularity_images:
+    unsigned:
+    - library://vincent.labonte/mpi/mpibench:mpich

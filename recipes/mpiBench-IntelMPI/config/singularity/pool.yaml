@@ -1,0 +1,27 @@
+pool_specification:
+  id: singularity-mpibench-intelmpi
+  vm_configuration:
+    platform_image:
+      offer: CentOS
+      publisher: OpenLogic
+      sku: '7.6'
+  vm_count:
+    dedicated: 2
+    low_priority: 0
+  vm_size: STANDARD_D1_V2
+  inter_node_communication_enabled: true
+  ssh:
+    username: shipyard
+  additional_node_prep:
+    commands:
+      pre:
+        - yum install -y gcc gcc-c++ make ca-certificates wget
+        - wget -q -O - http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/13651/l_mpi_2018.4.274.tgz | tar -xzf -
+        - wget https://raw.githubusercontent.com/szarkos/AzureBuildCentOS/master/config/azure/IntelMPI-v2018.x-silent.cfg
+        - mv -f ./IntelMPI-v2018.x-silent.cfg ./l_mpi_2018.4.274/silent.cfg
+        - pushd ./l_mpi_2018.4.274
+        - ./install.sh --silent ./silent.cfg
+        - popd
+  container_runtimes:
+    install:
+      - singularity

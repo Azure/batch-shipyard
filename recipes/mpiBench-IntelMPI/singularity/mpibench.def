@@ -1,0 +1,28 @@
+Bootstrap: docker
+From: centos:7.6.1810
+
+%post
+    yum install -y \
+        gcc \
+        gcc-c++ \
+        make \
+        ca-certificates \
+        wget
+    
+    intel_mpi_version="l_mpi_2018.4.274"
+    wget -q -O - "http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/13651/$intel_mpi_version.tgz" | tar -xzf -
+
+    wget "https://raw.githubusercontent.com/szarkos/AzureBuildCentOS/master/config/azure/IntelMPI-v2018.x-silent.cfg"
+    mv -f "./IntelMPI-v2018.x-silent.cfg" "./$intel_mpi_version/silent.cfg"
+    
+    wget -q -O - "https://codeload.github.com/LLNL/mpiBench/tar.gz/master" | tar -xzf -
+    mv "./mpiBench-master" "/mpiBench"
+
+    cd "/$intel_mpi_version"
+    ./install.sh --silent "./silent.cfg"
+
+    export MANPATH="/usr/share/man"
+    source /opt/intel/compilers_and_libraries_2018/linux/mpi/bin64/mpivars.sh
+
+    cd "/mpiBench"
+    make

@@ -1,0 +1,15 @@
+pool_specification:
+  id: docker-mpibench-mpich
+  vm_configuration:
+    platform_image:
+      offer: UbuntuServer
+      publisher: Canonical
+      sku: 18.04-LTS
+      native: true
+  vm_count:
+    dedicated: 2
+    low_priority: 0
+  vm_size: STANDARD_D1_V2
+  inter_node_communication_enabled: true
+  ssh:
+    username: shipyard

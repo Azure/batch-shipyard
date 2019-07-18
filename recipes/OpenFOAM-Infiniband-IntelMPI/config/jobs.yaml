@@ -2,10 +2,19 @@ job_specifications:
 - id: openfoamjob
   auto_complete: true
   shm_size: 256m
+  auto_scratch: true
   tasks:
   - docker_image: alfpark/openfoam:4.0-icc-intelmpi
-    shared_data_volumes:
-    - glustervol
+    resource_files:
+    - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/OpenFOAM-Infiniband-IntelMPI/docker/set_up_sample.sh
+      file_path: set_up_sample.sh
     multi_instance:
       num_instances: pool_current_dedicated
-    command: /opt/OpenFOAM/run_sample.sh
+      pre_execution_command: source set_up_sample.sh
+      mpi:
+        runtime: intelmpi
+        options:
+          - -np $np
+          - -ppn $ppn
+          - -hosts $AZ_BATCH_HOST_LIST
+    command: simpleFoam -parallel

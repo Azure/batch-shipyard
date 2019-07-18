@@ -37,9 +37,6 @@ ADD openfoam-4.0-icc-intelmpi.tar.gz /opt/OpenFOAM
 ENV OPENFOAM_VER=4.0 FOAM_INST_DIR=/opt/OpenFOAM PATH=${PATH}:/usr/lib64/qt4/bin
 ENV OPENFOAM_DIR=${FOAM_INST_DIR}/OpenFOAM-${OPENFOAM_VER}
 
-# copy sample run script
-COPY run_sample.sh ${FOAM_INST_DIR}
-
 # set up sshd on port 23
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]

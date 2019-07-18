@@ -11,6 +11,8 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
+* `per_job_auto_scratch` must be set to `true`. A job autoscratch is needed to
+  share a common input data set between the nodes.
 * `max_tasks_per_node` must be set to 1 or omitted
 
 ### Global Configuration
@@ -32,9 +34,8 @@ The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation.
 For this example, this should be `alfpark/openfoam:4.0-gcc-openmpi`.
-* `command` should contain the `mpirun` command. If using the sample
-`run_sample.sh` script then the command should be simply:
-`/opt/OpenFOAM/run_sample.sh`
+* `resource_files` should contain the `set_up_sample.sh` script which set up
+the sample and export environement variables used by `mpi` `options`.
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the previous section for details.
 * `multi_instance` property must be defined
@@ -45,6 +46,16 @@ global configuration file. Please see the previous section for details.
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
   * `resource_files` array can be empty
+  * `pre_execution_command` should source the `set_up_sample.sh` script.
+  * `mpi` property must be defined
+    * `runtime` should be set to `openmpi`
+    * `options` should contains `-np $np`, `--hostfile $hostfile`, `-x PATH`,
+      `-x LD_LIBRARY_PATH`, `-x MPI_BUFFER_SIZE`, `-x $mpienvopts`, and
+      `-x $mpienvopts2`. These options use the environemnt variables set by
+      the `set_up_sample.sh` script.
+* `command` should contain the command to pass to the `mpirun` invocation.
+For this example, the application `command` to run would be:
+`simpleFoam -parallel`
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please

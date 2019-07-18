@@ -57,9 +57,6 @@ RUN source /etc/profile.d/modules.sh \
     && wrmo -a \
     && bin/foamInstallationTest
 
-# copy sample run script
-COPY run_sample.sh ${FOAM_INST_DIR}
-
 # set up sshd on port 23
 EXPOSE 23
 CMD ["/usr/sbin/sshd", "-D", "-p", "23"]

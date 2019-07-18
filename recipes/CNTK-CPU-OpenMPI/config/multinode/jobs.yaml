@@ -5,4 +5,8 @@ job_specifications:
   - docker_image: alfpark/cntk:2.1-cpu-py35-refdata
     multi_instance:
       num_instances: pool_current_dedicated
-    command: /cntk/run_cntk.sh -s /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -- --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output
+      mpi:
+        runtime: openmpi
+        executable_path: /root/openmpi/bin/mpiexec
+        processes_per_node: 1
+    command: /bin/bash -c "source /cntk/activate-cntk; python -u /cntk/Examples/Image/Classification/ConvNet/Python/ConvNet_CIFAR10_DataAug_Distributed.py -datadir /cntk/Examples/Image/DataSets/CIFAR-10 -outputdir $AZ_BATCH_TASK_WORKING_DIR/output"

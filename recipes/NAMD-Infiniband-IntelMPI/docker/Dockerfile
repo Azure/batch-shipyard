@@ -22,10 +22,9 @@ RUN yum swap -y fakesystemd systemd \
 # add software
 ADD NAMD_2.11_Linux-x86_64-MPI-icc-mkl.tar.gz /sw
 ADD apoa1.tar.gz stmv.tar.gz /sw/namd/
-COPY run_namd.sh /sw/
 
 # export environment
-ENV NAMD_DIR=/sw/namd NAMD_SCRIPT=/sw/run_namd.sh
+ENV NAMD_DIR=/sw/namd
 
 # set up sshd on port 23
 EXPOSE 23
