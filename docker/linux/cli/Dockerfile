@@ -1,6 +1,6 @@
 # Dockerfile for Azure/batch-shipyard (cli)
 
-FROM alpine:3.9
+FROM alpine:3.10
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 ARG GIT_BRANCH

@@ -7,6 +7,8 @@ Batch compute pool. Execution of this distributed workload requires the use of
 
 Execution under both Docker and Singularity are shown in this recipe.
 
+Note that this container can only be executed on Intel processors.
+
 ## Configuration
 Please see refer to the [set of sample configuration files](./config) for
 this recipe. The directory `docker` will contain the Docker-based execution
@@ -21,14 +23,13 @@ The pool configuration should enable the following properties:
 `platform_image` with IB/RDMA as
 [supported by Batch Shipyard](../../docs/25-batch-shipyard-platform-image-support.md).
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
 
 ### Global Configuration
 #### Docker-based
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid HPCG image
 that can be run with Intel MPI and Infiniband in a Docker container context
-on Azure VM instances. This can be `alfpark/linpack:cpu-intel-mkl` which is
+on Azure VM instances. This can be `alfpark/linpack:2018-intel-mkl` which is
 published on [Docker Hub](https://hub.docker.com/r/alfpark/linpack). HPCG is
 included in the Linpack image.
 
@@ -44,22 +45,16 @@ published on [Singularity Hub](https://www.singularity-hub.org/containers/496).
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container
-invocation. For this example, this can be `alfpark/linpack:cpu-intel-mkl`.
-* `command` should contain the `mpirun` command. If using the sample
-[run\_hpcg.sh](docker/run_hpcg.sh) script then the command can be:
-`/sw/run_hpcg.sh -n <problem size> -t <run time>`. `-n <problem size>` should
-be selected such that the problem is large enough to fit in available memory.
-The `run_hpcg.sh` script has many configuration parameters:
-  * `-2`: Use the AVX2 optimized version of the benchmark. Specify this option
-    for H-series VMs.
-  * `-n <problem size>`: nx, ny and nz are set to this value
-  * `-t <run time>`: limit execution time to specified seconds. Official runs
-    must be at least 1800 seconds (30 min).
-  * `-x <nx>`: set nx to this value
-  * `-y <ny>`: set ny to this value
-  * `-z <nz>`: set nz to this value
+invocation. For this example, this can be `alfpark/linpack:2018-intel-mkl`.
+* `command` is the command that should be invoked by `mpirun`. For this recipe,
+the `command` should be:
+`/bin/bash -c "cd /opt/intel2/mkl/benchmarks/hpcg/bin && export OMP_NUM_THREADS=$(nproc) && ./$EXE --n=$N --t=$T"`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
+* `environment_variables` should have the following settings
+  * `EXE` should be set to the appropriate program executable according to
+    the AVX VM CPU capability. Use `xhpcg_avx` for A8/A9, use `xhpcg_avx2`
+    for H-series, or use `xhpcg_skx` for Hc-series.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -67,33 +62,17 @@ Batch Shipyard when executing on a RDMA-enabled compute pool.
   * `coordination_command` should be unset or `null`. For pools with
     `native` container support, this command should be supplied if
     a non-standard `sshd` is required.
+  * `mpi` property must be defined
+    * `runtime` should be either `intelmpi_ofa` or `intelmpi` depending upon
+      the Intel MPI version used.
+    * `processes_per_node` should be set to `1`
 
 #### Singularity-based
-The jobs configuration should set the following properties within the `tasks`
-array which should have a task definition containing:
+The jobs configuration should set nearly the same properties as the
+Docker-based execution except for the following:
 * `singularity_image` should be the name of the Singularity image for this
 container invocation. For this example, this should be
-`shub://alfpark/linpack`.
-* `command` should contain the `mpirun` command. If using the sample
-[run\_hpcg.sh](https://github.com/alfpark/linpack/blob/master/run_hpcg.sh)
-script then the command can be:
-`/sw/run_hpcg.sh -n <problem size> -t <run time>`. `-n <problem size>` should
-be selected such that the problem is large enough to fit in available memory.
-The `run_hpcg.sh` script has many configuration parameters:
-  * `-2`: Use the AVX2 optimized version of the benchmark. Specify this option
-    for H-series VMs.
-  * `-n <problem size>`: nx, ny and nz are set to this value
-  * `-t <run time>`: limit execution time to specified seconds. Official runs
-    must be at least 1800 seconds (30 min).
-  * `-x <nx>`: set nx to this value
-  * `-y <ny>`: set ny to this value
-  * `-z <nz>`: set nz to this value
-* `infiniband` can be set to `true`, however, it is implicitly enabled by
-Batch Shipyard when executing on a RDMA-enabled compute pool.
-* `multi_instance` property must be defined
-  * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
-    `pool_vm_count_low_priority`, `pool_current_dedicated`, or
-    `pool_current_low_priority`
+`library://alfpark/linpack/linpack:2018-intel-mkl`.
 
 ## Supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). The

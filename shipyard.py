@@ -1014,6 +1014,23 @@ def account(ctx):
     pass
 
 
+@account.command('images')
+@click.option(
+    '--show-unrelated', is_flag=True, help='Include unrelated images')
+@click.option(
+    '--show-unverified', is_flag=True, help='Include unverified images')
+@common_options
+@batch_options
+@keyvault_options
+@aad_options
+@pass_cli_context
+def account_images(ctx, show_unrelated, show_unverified):
+    """List available VM images available to the Batch account"""
+    ctx.initialize_for_batch()
+    convoy.fleet.action_account_images(
+        ctx.batch_client, ctx.config, show_unrelated, show_unverified)
+
+
 @account.command('info')
 @click.option('--name', help='Batch account name')
 @click.option('--resource-group', help='Batch account resource group')
@@ -1508,18 +1525,6 @@ def cert_del(ctx, sha1):
 def pool(ctx):
     """Pool actions"""
     pass
-
-
-@pool.command('listskus')
-@common_options
-@batch_options
-@keyvault_options
-@aad_options
-@pass_cli_context
-def pool_listskus(ctx):
-    """List available VM configurations available to the Batch account"""
-    ctx.initialize_for_batch()
-    convoy.fleet.action_pool_listskus(ctx.batch_client, ctx.config)
 
 
 @pool.command('add')

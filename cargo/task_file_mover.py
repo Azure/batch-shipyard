@@ -34,8 +34,8 @@ import multiprocessing
 import os
 import pathlib
 # non-stdlib imports
+import azure.batch
 import azure.batch.batch_auth as batchauth
-import azure.batch.batch_service_client as batch
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -55,13 +55,13 @@ def _setup_logger() -> None:
 
 
 def _create_credentials():
-    # type: (None) -> azure.batch.batch_service_client.BatchServiceClient
+    # type: (None) -> azure.batch.BatchServiceClient
     """Create authenticated client
-    :rtype: `azure.batch.batch_service_client.BatchServiceClient`
+    :rtype: `azure.batch.BatchServiceClient`
     :return: batch_client
     """
     ba, url, bakey = os.environ['SHIPYARD_BATCH_ENV'].split(';')
-    batch_client = batch.BatchServiceClient(
+    batch_client = azure.batch.BatchServiceClient(
         batchauth.SharedKeyCredentials(ba, bakey), batch_url=url)
     batch_client.config.add_user_agent('batch-shipyard/tfm')
     return batch_client
@@ -72,7 +72,7 @@ def _get_task_file(batch_client, job_id, task_id, filename, fp):
     #        pathlib.Path) -> None
     """Get a files from a task
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     :param str job_id: job id
     :param str task_id: task id
     :param str filename: file name
@@ -88,7 +88,7 @@ def get_all_files_via_task(batch_client, job_id, task_id, incl, excl, dst):
     # type: (batch.BatchServiceClient, str, str, list, list, str) -> None
     """Get all files from a task
     :param batch_client: The batch client to use.
-    :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
+    :type batch_client: `azure.batch.BatchServiceClient`
     """
     # prepare incl/excl filters
     if incl is not None:

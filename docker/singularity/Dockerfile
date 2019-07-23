@@ -49,6 +49,6 @@ RUN export GOPATH=${HOME}/go \
     && ldconfig /opt/singularity/lib/singularity \
     && ln -s /opt/singularity/bin/singularity /usr/bin/singularity
 
-FROM alpine:3.9
+FROM alpine:3.10
 
 COPY --from=0 /opt/singularity /opt/singularity

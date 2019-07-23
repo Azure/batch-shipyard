@@ -1,10 +1,20 @@
 job_specifications:
 - id: hpcg
   tasks:
-  - singularity_image: shub://alfpark/linpack
-    resource_files:
-    - blob_source: https://raw.githubusercontent.com/alfpark/linpack/master/run_hpcg.sh
-      file_path: run_hpcg.sh
-    command: ./run_hpcg.sh -2 -n 256 -t 120
+  - singularity_image: library://alfpark/linpack/linpack:2018-intel-mkl
+    environment_variables:
+      # Select program based on AVX
+      # xhpcg_avx: A8/A9
+      # xhpcg_avx2: H-series
+      # xhpcg_skx: Hc-series
+      EXE: xhpcg_skx
+      N: 256
+      T: 120
     multi_instance:
       num_instances: pool_current_dedicated
+      mpi:
+        runtime: intelmpi_ofa
+        processes_per_node: 1
+      pre_execution_command: source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+    # need to source mpivars again as the container intel mpi/benchmark is not the exact version as on the host
+    command: /bin/bash -c "source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh; source /opt/intel/compilers_and_libraries/linux/mkl/bin/mklvars.sh intel64; cd /opt/intel/mkl/benchmarks/hpcg/bin && OMP_NUM_THREADS=$(nproc) && ./$EXE --n=$N --t=$T"

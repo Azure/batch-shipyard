@@ -333,6 +333,7 @@ def _process_storage_output_data(config, native, is_windows, output_data):
                 storage_settings, container, 'egress', create_container=True)
         includes = settings.data_include(xfer)
         excludes = settings.data_exclude(xfer)
+        condition = settings.data_condition(xfer)
         # convert include/excludes into extra options
         filters = _convert_filter_to_blobxfer_option(includes, excludes)
         local_path = settings.data_local_path(xfer, True, task_wd=False)
@@ -354,6 +355,12 @@ def _process_storage_output_data(config, native, is_windows, output_data):
                 fp = sep.join((local_path, include))
             else:
                 fp = ''.join((local_path, include))
+            if condition == 'taskcompletion':
+                buc = batchmodels.OutputFileUploadCondition.task_completion
+            elif condition == 'taskfailure':
+                buc = batchmodels.OutputFileUploadCondition.task_failure
+            elif condition == 'tasksuccess':
+                buc = batchmodels.OutputFileUploadCondition.task_success
             of = batchmodels.OutputFile(
                 file_pattern=fp,
                 destination=batchmodels.OutputFileDestination(
@@ -366,8 +373,7 @@ def _process_storage_output_data(config, native, is_windows, output_data):
                     )
                 ),
                 upload_options=batchmodels.OutputFileUploadOptions(
-                    upload_condition=batchmodels.
-                    OutputFileUploadCondition.task_success
+                    upload_condition=buc
                 ),
             )
             args.append(of)
@@ -380,12 +386,13 @@ def _process_storage_output_data(config, native, is_windows, output_data):
                     storage_settings.account, storage_settings.endpoint,
                     saskey, remote_path),
                 config)
-            args.append('"{bxver},e,{enc},{creds},{lp},{eo}"'.format(
+            args.append('"{bxver},e,{enc},{creds},{lp},{eo},{cond}"'.format(
                 bxver=_BLOBXFER_VERSION,
                 enc=encrypt,
                 creds=creds,
                 lp=local_path,
                 eo=' '.join((filters, eo)).lstrip(),
+                cond=condition,
             ))
     return args
 

@@ -119,6 +119,7 @@ may change/break if the underlying service version changes. It is important
 to pin the Batch Shipyard release to a specific version if using this feature
 and perform upgrade testing/validation for your scenario and workflow between
 releases. The following commands support this option:
+    * `account images`
     * `account info`
     * `account quota`
     * `cert list`
@@ -142,7 +143,6 @@ releases. The following commands support this option:
     * `pool images list`
     * `pool images update`
     * `pool list`
-    * `pool listskus`
     * `pool nodes count`
     * `pool nodes grls`
     * `pool nodes list`
@@ -255,11 +255,17 @@ categories
 ## `account` Command
 The `account` command has the following sub-commands:
 ```
-  info   Retrieve Batch account information and quotas
-  list   Retrieve a list of Batch accounts and...
-  quota  Retrieve Batch account quota at the...
+  images  List available VM images available to the Batch account
+  info    Retrieve Batch account information and quotas
+  list    Retrieve a list of Batch accounts and associated quotas in...
+  quota   Retrieve Batch account quota at the subscription level for the...
 ```
 
+* `images` lists available VM images to deploy as compute nodes in a Batch
+pool
+    * `--show-unrelated` will additionally list images that are unrelated for
+      Batch Shipyard. This option is not applicable with `--raw`.
+    * `--show-unverified` will additionally list images that are unverified
 * `info` provides information about the specified batch account provided
 in credentials
     * `--name` is the name of the Batch account to query instead of the
@@ -794,7 +800,6 @@ The `pool` command has the following sub-commands:
   exists     Check if a pool exists
   images     Container images actions
   list       List all pools in the Batch account
-  listskus   List available VM configurations available to the Batch account
   nodes      Compute node actions
   rdp        Interactively login via RDP to a node in a pool
   resize     Resize a pool

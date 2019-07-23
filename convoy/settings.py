@@ -58,22 +58,27 @@ _TENSORBOARD_DOCKER_IMAGE = (
 )
 _GPU_CC37_INSTANCES = re.compile(
     # standard nc
-    r'^standard_nc[\d]+r?$',
+    r'^standard_nc[\d]+r?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_COMPUTE_INSTANCES = re.compile(
     # standard nc, ncv2, ncv3, nd, ndv2
-    r'^standard_n[cd][\d]+r?s?(_v[\d])?$',
+    r'^standard_n[cd][\d]+r?s?(_v[\d])?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_VISUALIZATION_INSTANCES = re.compile(
     # standard nv, nvv2
-    r'^standard_nv[\d]+s?(_v2)?$',
+    r'^standard_nv[\d]+s?(_v2)?(_promo)?$',
     re.IGNORECASE
 )
-_RDMA_INSTANCES = re.compile(
-    # standard a8/a9, h+r, nc+r, nd+r, hb/hc
-    r'^standard_((a8|a9)|((h|hb|hc|nc|nd)+[\d]+m?rs?(_v[\d])?))$',
+_SRIOV_RDMA_INSTANCES = re.compile(
+    # standard hb/hc
+    r'^standard_((hb|hc)[\d]+m?rs?(_v[\d])?)$',
+    re.IGNORECASE
+)
+_NETWORKDIRECT_RDMA_INSTANCES = re.compile(
+    # standard a8/a9, h+r, nc+r, nd+r
+    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[1-3])?))(_promo)?$',
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
@@ -111,25 +116,31 @@ _VM_TCP_NO_TUNE = frozenset((
     'standard_b4ms', 'standard_b8ms',
 ))
 _VM_GPU_COUNT = {
-    1: re.compile(r'^standard_n[cdv]6r?s?(_v[\d])?$', re.IGNORECASE),
-    2: re.compile(r'^standard_n[cdv]12r?s?(_v[\d])?$', re.IGNORECASE),
-    4: re.compile(r'^standard_n[cdv]24r?s?(_v[\d])?$', re.IGNORECASE),
+    1: re.compile(r'^standard_n[cdv]6r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
+    2: re.compile(r'^standard_n[cdv]12r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
+    4: re.compile(r'^standard_n[cdv]24r?s?(_v[\d])?(_promo)?$', re.IGNORECASE),
     8: re.compile(r'^standard_nd40s_v2$', re.IGNORECASE),
 }
 _VM_GPU_CLASS = {
-    'tesla_k80': re.compile(r'^standard_n[c][\d]+r?$', re.IGNORECASE),
+    'tesla_k80': re.compile(r'^standard_n[c][\d]+r?(_promo)?$', re.IGNORECASE),
     'tesla_p40': re.compile(r'^standard_n[d][\d]+r?s?$', re.IGNORECASE),
     'tesla_p100': re.compile(r'^standard_n[c][\d]+r?s_v2$', re.IGNORECASE),
     'tesla_v100': re.compile(
         r'^standard_n(([c][\d]+r?s_v3)|(d40s_v2))$', re.IGNORECASE),
-    'tesla_m60': re.compile(r'^standard_nv[\d]+s?(_v2)?$', re.IGNORECASE),
+    'tesla_m60': re.compile(
+        r'^standard_nv[\d]+s?(_v2)?(_promo)?$', re.IGNORECASE),
 }
 _VM_IB_CLASS = {
     'qdr_ib': re.compile(r'^standard_(a8|a9)$', re.IGNORECASE),
     'fdr_ib': re.compile(
-        r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[\d])?))$', re.IGNORECASE),
+        r'^standard_(((h|nc|nd)+[\d]+m?rs?(_v[1-3])?))(_promo)?$',
+        re.IGNORECASE),
     'edr_ib': re.compile(r'^standard_(hc|hb)+[\d]+rs$', re.IGNORECASE),
 }
+_VALID_PUBLISHERS = frozenset((
+    'canonical', 'credativ', 'microsoft-azure-batch',
+    'microsoftwindowsserver', 'openlogic'
+))
 _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
     'depends_on', 'depends_on_range', 'multi_instance', 'task_factory'
@@ -337,6 +348,7 @@ TaskSettings = collections.namedtuple(
         'envfile', 'resource_files', 'command', 'infiniband', 'gpu',
         'depends_on', 'depends_on_range', 'max_task_retries', 'max_wall_time',
         'retention_time', 'multi_instance', 'default_exit_options',
+        'working_dir',
     ]
 )
 MultiInstanceSettings = collections.namedtuple(
@@ -594,6 +606,15 @@ def get_metadata_version_name():
     return _METADATA_VERSION_NAME
 
 
+def get_valid_publishers():
+    # type: (None) -> str
+    """Get valid publishers
+    :rtype: str
+    :return: publisher set
+    """
+    return _VALID_PUBLISHERS
+
+
 def get_tensorboard_docker_image():
     # type: (None) -> Tuple[str, str]
     """Get tensorboard docker image
@@ -791,7 +812,7 @@ def gpu_configuration_check(config, vm_size=None):
             sku > '16.04'):
         return True
     elif publisher == 'openlogic':
-        if offer == 'centos-hpc' and sku >= '7.3':
+        if offer == 'centos-hpc' and sku >= '7.6':
             return True
         elif offer == 'centos' and sku >= '7.3':
             return True
@@ -850,6 +871,26 @@ def is_windows_pool(config, vm_config=None):
         return vm_config.node_agent.startswith('batch.node.windows')
 
 
+def is_sriov_rdma_pool(vm_size):
+    # type: (str) -> bool
+    """Check if pool is SRIOV IB/RDMA capable
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if sriov rdma is present
+    """
+    return _SRIOV_RDMA_INSTANCES.match(vm_size) is not None
+
+
+def is_networkdirect_rdma_pool(vm_size):
+    # type: (str) -> bool
+    """Check if pool is NetworkDirect IB/RDMA capable
+    :param str vm_size: vm size
+    :rtype: bool
+    :return: if network direct rdma is present
+    """
+    return _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None
+
+
 def is_rdma_pool(vm_size):
     # type: (str) -> bool
     """Check if pool is IB/RDMA capable
@@ -857,7 +898,7 @@ def is_rdma_pool(vm_size):
     :rtype: bool
     :return: if rdma is present
     """
-    return _RDMA_INSTANCES.match(vm_size) is not None
+    return is_sriov_rdma_pool(vm_size) or is_networkdirect_rdma_pool(vm_size)
 
 
 def get_ib_class_from_vm_size(vm_size):
@@ -2959,6 +3000,16 @@ def data_exclude(conf):
     return _kv_read_checked(conf, 'exclude', [])
 
 
+def data_condition(conf):
+    # type: (dict) -> str
+    """Retrieve output data condition
+    :param dict conf: configuration object
+    :rtype: str
+    :return: condition
+    """
+    return _kv_read_checked(conf, 'condition', default='tasksuccess')
+
+
 def input_data_job_id(conf):
     # type: (dict) -> str
     """Retrieve input data job id
@@ -3244,6 +3295,30 @@ def job_requires_auto_scratch(conf):
     :return: job auto scratch
     """
     return _kv_read(conf, 'auto_scratch', default=False)
+
+
+def job_preparation_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job preparation command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job prep command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_preparation', default={}),
+        'command')
+
+
+def job_release_command(conf):
+    # type: (dict) -> str
+    """Get arbitrary job release command
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job release command
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'job_release', default={}),
+        'command')
 
 
 def job_federation_constraint_settings(conf, federation_id):
@@ -3800,6 +3875,23 @@ def task_settings(
             def_wd = '%AZ_BATCH_TASK_WORKING_DIR%'
         else:
             def_wd = '$AZ_BATCH_TASK_WORKING_DIR'
+    # set working directory if not already set
+    if def_wd != 'container':
+        if util.is_not_empty(docker_image):
+            if not any((x.startswith('-w ') or x.startswith('--workdir '))
+                       for x in run_opts):
+                run_opts.append('-w {}'.format(def_wd))
+        else:
+            if not any(x.startswith('--pwd ') for x in run_opts):
+                run_opts.append('--pwd {}'.format(def_wd))
+        working_dir = (
+            batchmodels.ContainerWorkingDirectory.task_working_directory
+        )
+    else:
+        working_dir = (
+            batchmodels.ContainerWorkingDirectory.container_image_default
+        )
+    del def_wd
     # bind root dir and set working dir
     if not native:
         restrict_bind = _kv_read(
@@ -3824,15 +3916,6 @@ def task_settings(
                 run_opts.append(
                     '{} $AZ_BATCH_NODE_ROOT_DIR:'
                     '$AZ_BATCH_NODE_ROOT_DIR'.format(bindparm))
-        # set working directory if not already set
-        if def_wd != 'container':
-            if util.is_not_empty(docker_image):
-                if not any((x.startswith('-w ') or x.startswith('--workdir '))
-                           for x in run_opts):
-                    run_opts.append('-w {}'.format(def_wd))
-            else:
-                if not any(x.startswith('--pwd ') for x in run_opts):
-                    run_opts.append('--pwd {}'.format(def_wd))
     if util.is_not_empty(data_volumes):
         dv = global_resources_data_volumes(config)
         for dvkey in data_volumes:
@@ -4073,8 +4156,24 @@ def task_settings(
                 ('cannot initialize an infiniband task on nodes '
                  'without RDMA: pool={} vm_size={}').format(
                      pool_id, vm_size))
-        # mount /opt/intel for all container types
-        run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # mount /opt/intel for NetworkDirect RDMA
+        if is_networkdirect_rdma_pool(vm_size):
+            run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
+        # until Batch supports SRIOV natively for Docker, add additional
+        # IB devices and rdma dat regardless of pool native mode
+        if is_sriov_rdma_pool(vm_size):
+            if util.is_not_empty(docker_image):
+                run_opts.append('--device=/dev/infiniband/issm0')
+                run_opts.append('--device=/dev/infiniband/ucm0')
+                run_opts.append('--device=/dev/infiniband/umad0')
+            if (native and
+                    (((publisher == 'openlogic' and offer == 'centos-hpc') or
+                      (publisher == 'microsoft-azure-batch' and
+                       offer == 'centos-container-rdma')) or
+                     (is_custom_image and
+                      node_agent.startswith('batch.node.centos')))):
+                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                    bindparm))
         if not native:
             if util.is_not_empty(docker_image):
                 # common run opts
@@ -4109,23 +4208,34 @@ def task_settings(
                     run_opts.remove('--net')
                 except ValueError:
                     pass
-            # only centos-hpc and sles-hpc are supported for infiniband
+            # add rdma dat files into container space
             if (((publisher == 'openlogic' and offer == 'centos-hpc') or
                  (publisher == 'microsoft-azure-batch' and
                   offer == 'centos-container-rdma')) or
                     (is_custom_image and
                      node_agent.startswith('batch.node.centos'))):
-                run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(bindparm))
-                run_opts.append(
-                    '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(bindparm))
+                if is_networkdirect_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/rdma:/etc/rdma:ro'.format(
+                        bindparm))
+                    run_opts.append(
+                        '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(
+                            bindparm))
+                elif is_sriov_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
             elif ((publisher == 'microsoft-azure-batch' and
                    offer == 'ubuntu-server-container-rdma') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.ubuntu'))):
-                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                    bindparm))
-                run_opts.append(
-                    '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(bindparm))
+                if is_networkdirect_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
+                    run_opts.append(
+                        '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(
+                            bindparm))
+                elif is_sriov_rdma_pool(vm_size):
+                    raise RuntimeError(
+                        'SRIOV on Ubuntu is currently not supported')
             elif ((publisher == 'suse' and offer == 'sles-hpc') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.opensuse'))):
@@ -4286,6 +4396,7 @@ def task_settings(
         name=name,
         run_options=run_opts,
         docker_exec_options=docker_exec_options,
+        working_dir=working_dir,
         environment_variables=env_vars,
         environment_variables_keyvault_secret_id=ev_secid,
         envfile=envfile,

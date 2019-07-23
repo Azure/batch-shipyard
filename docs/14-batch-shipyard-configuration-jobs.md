@@ -62,6 +62,10 @@ job_specifications:
   shared_data_volumes:
   - joblevelsharedvol
   auto_scratch: false
+  job_preparation:
+    command: myjpcommand
+  job_release:
+    command: myjrcommand
   input_data:
     azure_batch:
     - job_id: someotherjob
@@ -244,6 +248,7 @@ job_specifications:
         include:
         - 'out*.dat'
         blobxfer_extra_options: null
+        condition: tasksuccess
     default_working_dir: batch
     remove_container_after_exit: true
     shm_size: 256m
@@ -482,6 +487,22 @@ pool for this job. This scratch will be available at the location
 is cleaned up automatically on job termination or deletion. This option
 requires setting the property `per_job_auto_scratch` to `true` in the
 corresponding pool configuration.
+* (optional) `job_preparation` is the property for a user-specified
+job preparation task. The user-specified job preparation task runs after
+any implicit job preparation tasks created by Batch Shipyard (such as
+job-level data ingress). For more information about job preparation and
+release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
+* (optional) `job_release` is the property for a user-specified
+job release task. The user-specified job release task runs after
+any implicit job release tasks created by Batch Shipyard (such as
+multi-instance non-native job auto completion steps). For more information
+about job preparation and release tasks, see
+[this document](https://docs.microsoft.com/azure/batch/batch-job-prep-release).
+    * (required) `command` is the command to execute. This command runs
+      on the host without a container context.
 * (optional) `input_data` is an object containing data that should be
 ingressed for the job. Any `input_data` defined at this level will be
 downloaded for this job which can be run on any number of compute nodes
@@ -532,9 +553,7 @@ directory for the container execution is not explicitly set. The default is
 directory, you can pass the appropriate working directory parameter to the
 container runtime through either `additional_docker_run_options` or
 `additional_singularity_options`. A working directory option specified within
-that property takes precedence over this option. Note that this option does
-not work in `native` mode currently; `native` mode will always override this
-option to `batch`.
+that property takes precedence over this option.
 * (optional) `restrict_default_bind_mounts` will restrict the mapped
 host directories into the container. If this property is set to `true`,
 only the `$AZ_BATCH_TASK_DIR` is mapped from the host into the container.
@@ -918,10 +937,9 @@ application command.
         * (optional) `blobxfer_extra_options` are any extra options to pass to
           `blobxfer`.
 * (optional) `output_data` is an object containing data that should be
-egressed for this specific task if and only if the task completes
-successfully. This object currently only supports `azure_storage` as a
-member. Note for multi-instance tasks, transfer of `output_data` is only
-applied to the task running the application command.
+egressed for this specific task. This object currently only supports
+`azure_storage` as a member. Note for multi-instance tasks, transfer of
+`output_data` is only applied to the task running the application command.
     * `azure_storage` contains the following members:
         * (required) `storage_account_settings` contains a storage account link
           as defined in the credentials config.
@@ -934,6 +952,11 @@ applied to the task running the application command.
           specified, then `source` is defaulted to `$AZ_BATCH_TASK_DIR`.
         * (optional) `is_file_share` denotes if the `remote_path` is on a
           file share. This defaults to `false`.
+        * (optional) `condition` property defines the output file condition
+          depending upon the task command exit code. The possible options are
+          `taskcompletion`, `taskfailure` and `tasksuccess`. Please see
+          [this document](https://docs.microsoft.com/rest/api/batchservice/task/add#outputfileuploadcondition)
+          for more information.
         * (optional) `include` property defines optional include filters.
         * (optional) `exclude` property defines optional exclude filters.
         * (optional) `blobxfer_extra_options` are any extra options to pass to
@@ -1003,8 +1026,8 @@ Shipyard can be found
 [here](80-batch-shipyard-multi-instance-tasks.md). Do not define this
 property for tasks that are not multi-instance. Additional members of this
 property are:
-    * `num_instances` is a property setting the number of compute node
-      instances are required for this multi-instance task. Note that it is
+    * (required) `num_instances` is a property setting the number of compute
+      node instances are required for this multi-instance task. Note that it is
       generally recommended not to use low priority nodes for multi-instance
       tasks as compute nodes may be pre-empted at any time. This property
       can be any one of the following:
@@ -1020,41 +1043,40 @@ property are:
            `vm_count`:`dedicated` specified in the pool configuration.
         5. `pool_specification_vm_count_low_priority` which is the
            `vm_count`:`low_priority` specified in the pool configuration.
-    * `coordination_command` is the coordination command this is run by each
-      instance (compute node) of this multi-instance task prior to the
-      application command. This command must not block and must exit
+    * (optional) `coordination_command` is the coordination command this is
+      run by each instance (compute node) of this multi-instance task prior
+      to the application command. This command must not block and must exit
       successfully for the multi-instance task to proceed. For Docker
       containers, this is the command passed to the container in `docker run`
       for multi-instance tasks. This Docker container will automatically be
-      daemonized for multi-instance tasks running on non-`native` pools. This
-      is optional and may be null. For Singularity containers, usually
-      this property will be unspecified.
-    * `resource_files` is an array of resource files that should be downloaded
-      as part of the multi-instance task. Each array entry contains the
-      following information:
-        * `file_path` is the path within the task working directory to place
-          the file on the compute node.
-        * `blob_source` is an accessible HTTP/HTTPS URL. This need not be an
-          Azure Blob Storage URL.
-        * `file_mode` if the file mode to set for the file on the compute node.
-          This is optional.
-    * `pre_execution_command` is a command that is run only on the master node
-      of this multi-instance task prior to the application command. For
-      Docker containers, this command is executed in only the _master_
-      container just before the application command is executed. For
+      daemonized for multi-instance tasks running on non-`native` pools.
+      For Singularity containers, usually this property will be unspecified.
+    * (optional) `resource_files` is an array of resource files that should be
+      downloaded as part of the multi-instance task. Each array entry contains
+      the following information:
+        * (required) `file_path` is the path within the task working directory
+          to place the file on the compute node.
+        * (required) `blob_source` is an accessible HTTP/HTTPS URL. This need
+          not be an Azure Blob Storage URL.
+        * (optional) `file_mode` if the file mode to set for the file on the
+          compute node.
+    * (optional) `pre_execution_command` is a command that is run only on the
+      master node of this multi-instance task prior to the application command.
+      For Docker containers, this command is executed in the _master_ compute
+      node container just before the application command is executed. For
       Singularity containers, this command is executed on the _master_ compute
       node just before the application command is executed. This command must
       not block and must exit successfully for the multi-instance task to
-      proceed. This command can be used to populate environment variables
-      required to run the application command. This is optional and may be
-      null.
+      proceed. This command, for example, can be used to populate environment
+      variables required to run the application command. This is optional and
+      may be null.
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
-          values are `intelmpi`, `mpich`, and `openmpi`. With Docker
-          containers, it is the user's responsability to provide a container
-          image that has the specified runtime installed. For Singularity
-          containers, the specified runtime must be installed and loaded on
-          the host compute node.
+          values are `intelmpi`, `intelmpi_ofa`, `mpich`, and `openmpi`.
+          With Docker containers, it is the user's responsability to provide
+          a container image that has the specified runtime installed. For
+          Singularity containers, the specified runtime must be installed
+          and loaded on the host compute node.
         * (optional) `options` is a list of options that will be passed to the
           `mpiexec` or `mpirun` (`executable_path`) command.
         * (optional) `processes_per_node` is either a number that represents
