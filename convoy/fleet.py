@@ -125,10 +125,10 @@ _LIS_PACKAGE = {
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
         '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
-        'lis-rpms-4.2.8-1.tar.gz'
+        'lis-rpms-4.3.3.tar.gz'
     ),
     'sha256': (
-        'aee81e79b81efd1db97e470b5d179fa4c7e954a2c0d996553dfbc081734a5304'
+        '8f6d51fb7f6d8e32bf1e2e6a9299947344691f6ad7586566b5a5e06866ae0b2f'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
