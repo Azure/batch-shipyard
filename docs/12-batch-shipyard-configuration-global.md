@@ -144,8 +144,12 @@ The `batch_shipyard` property is used to set settings for the tool:
 
 * (required) `storage_account_settings` is a link to the alias of the storage
 account specified, in this case, it is `mystorageaccount`. Batch shipyard
-requires a storage account for storing metadata in order to execute across a
-distributed environment.
+requires a *general purpose* type of storage account for storing metadata in
+order to execute across a distributed environment. The restriction for a
+general purpose storage account only applies to this account for Batch
+Shipyard metadata. Additional storage accounts (of varying types) can be
+specified in the credentials configuration file and referenced where
+appropriate.
 * (optional) `storage_entity_prefix` property is used as a generic qualifier
 to prefix storage containers (blob containers, tables, queues) with. If not
 specified, defaults to `shipyard`.

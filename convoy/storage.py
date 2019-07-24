@@ -200,6 +200,8 @@ def populate_storage_account_keys_from_aad(storage_mgmt_client, config):
     modified = False
     if storage_mgmt_client is None:
         return modified
+    # get ref to main storage account
+    main_sa = settings.batch_shipyard_settings(config).storage_account_settings
     # iterate all storage accounts, if storage account does not have
     # a storage account key, then lookup via aad
     for ssel in settings.iterate_storage_credentials(config):
@@ -213,8 +215,22 @@ def populate_storage_account_keys_from_aad(storage_mgmt_client, config):
                 sc.resource_group, sc.account)
             props = storage_mgmt_client.storage_accounts.get_properties(
                 sc.resource_group, sc.account)
-            ep = '.'.join(
-                props.primary_endpoints.blob.rstrip('/').split('.')[2:])
+            if main_sa == ssel:
+                ep = props.primary_endpoints.table
+                if ep is None:
+                    raise ValueError(
+                        ('the specified '
+                         'batch_shipyard:storage_account_settings storage '
+                         'account (link={} account={}) is not a general '
+                         'purpose type storage account').format(
+                             ssel, sc.account))
+            else:
+                # get either blob or file endpoint
+                ep = (
+                    props.primary_endpoints.blob or
+                    props.primary_endpoints.file
+                )
+            ep = '.'.join(ep.rstrip('/').split('.')[2:])
             settings.set_credentials_storage_account(
                 config, ssel, keys.keys[0].value, ep)
             modified = True
