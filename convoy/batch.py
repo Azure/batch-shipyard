@@ -4403,7 +4403,6 @@ def _construct_mpi_command(pool, task):
                 '-ppn $({})'.format(processes_per_node)
             ])
     elif task.multi_instance.mpi.runtime == 'openmpi':
-        mpi_opts.append('--mca btl_tcp_if_include eth0')
         if isinstance(processes_per_node, int):
             mpi_opts.extend([
                 '--oversubscribe',
@@ -4425,6 +4424,16 @@ def _construct_mpi_command(pool, task):
                 '--map-by ppr:$({}):node'.format(
                     processes_per_node)
             ])
+        if task.infiniband and settings.is_sriov_rdma_pool(pool.vm_size):
+            ib_pkey_file = '$AZ_BATCH_NODE_STARTUP_DIR/wd/UCX_IB_PKEY'
+            mpi_opts.extend([
+                '--mca pml ucx',
+                '--mca btl ^vader,tcp,openib',
+                '-x UCX_NET_DEVICES=mlx5_0:1',
+                '-x $(cat {})'.format(ib_pkey_file)
+            ])
+        else:
+            mpi_opts.append('--mca btl_tcp_if_include eth0')
     is_singularity = util.is_not_empty(task.singularity_image)
     if is_singularity:
         # build the singularity mpi command
