@@ -1,24 +1,21 @@
 job_specifications:
-- id: openfoamjob
+- id: docker-openfoam-openmpi-ib-job
   auto_complete: true
   auto_scratch: true
   tasks:
-  - docker_image: alfpark/openfoam:4.0-gcc-openmpi
+  - docker_image: vincentlabo/openfoam:openmpi-ib
+    additional_docker_run_options:
+    - --cap-add=sys_nice
     resource_files:
-    - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/OpenFOAM-TCP-OpenMPI/docker/set_up_sample.sh
+    - blob_source: https://raw.githubusercontent.com/Azure/batch-shipyard/master/recipes/OpenFOAM-Infiniband-OpenMPI/docker/set_up_sample.sh
       file_path: set_up_sample.sh
     multi_instance:
       num_instances: pool_current_dedicated
       pre_execution_command: source set_up_sample.sh
       mpi:
         runtime: openmpi
-        executable_path: $mpirun
         options:
           - -np $np
           - --hostfile $hostfile
-          - -x PATH
-          - -x LD_LIBRARY_PATH
-          - -x MPI_BUFFER_SIZE
           - -x $mpienvopts
-          - -x $mpienvopts2
     command: simpleFoam -parallel

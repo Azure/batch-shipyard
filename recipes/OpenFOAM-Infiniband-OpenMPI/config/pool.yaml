@@ -1,0 +1,15 @@
+pool_specification:
+  id: docker-openfoam-openmpi-ib
+  vm_configuration:
+    platform_image:
+      offer: CentOS-HPC
+      publisher: OpenLogic
+      sku: '7.6'
+  vm_count:
+    dedicated: 2
+    low_priority: 0
+  vm_size: STANDARD_HB60rs
+  inter_node_communication_enabled: true
+  per_job_auto_scratch: true
+  ssh:
+    username: shipyard
