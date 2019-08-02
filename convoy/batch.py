@@ -4402,6 +4402,10 @@ def _construct_mpi_command(pool, task):
                 ),
                 '-ppn $({})'.format(processes_per_node)
             ])
+        if task.infiniband and settings.is_sriov_rdma_pool(pool.vm_size):
+            ib_pkey_file = '$AZ_BATCH_NODE_STARTUP_DIR/wd/UCX_IB_PKEY'
+            mpi_opts.append(
+                '-env $(cat {})'.format(ib_pkey_file))
     elif task.multi_instance.mpi.runtime == 'openmpi':
         if isinstance(processes_per_node, int):
             mpi_opts.extend([
