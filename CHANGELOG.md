@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.7.1] - 2019-07-23
+### Fixed
+- Detection of graph root was broken with new version of Docker client (CLI)
+on GPU pools ([#291](https://github.com/Azure/batch-shipyard/issues/291))
+
 ## [3.7.0] - 2019-02-28
 ### Added
 - Slurm on Batch support: provision Slurm clusters with elastic cloud bursting
@@ -1524,7 +1529,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.7.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.7.1...HEAD
+[3.7.1]: https://github.com/Azure/batch-shipyard/compare/3.7.0...3.7.1
 [3.7.0]: https://github.com/Azure/batch-shipyard/compare/3.6.1...3.7.0
 [3.6.1]: https://github.com/Azure/batch-shipyard/compare/3.6.0...3.6.1
 [3.6.0]: https://github.com/Azure/batch-shipyard/compare/3.6.0b1...3.6.0

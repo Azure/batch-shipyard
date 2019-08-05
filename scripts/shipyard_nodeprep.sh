@@ -16,11 +16,11 @@ GLUSTER_VERSION_CENTOS=41
 IMDS_VERSION=2018-02-01
 
 # consts
-DOCKER_CE_PACKAGE_DEBIAN="docker-ce=5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
-DOCKER_CE_PACKAGE_CENTOS="docker-ce-${DOCKER_CE_VERSION_CENTOS}-3.el7"
+DOCKER_CE_PACKAGE_DEBIAN="5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
+DOCKER_CE_PACKAGE_CENTOS="${DOCKER_CE_VERSION_CENTOS}-3.el7"
 DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
 NVIDIA_CONTAINER_RUNTIME_PACKAGE_UBUNTU="nvidia-container-runtime=${NVIDIA_CONTAINER_RUNTIME_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
-NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS="nvidia-container-runtime-${NVIDIA_CONTAINER_RUNTIME_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
+NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS="nvidia-container-runtime-${NVIDIA_CONTAINER_RUNTIME_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}"
 NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
 NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
@@ -724,12 +724,11 @@ EOF
     nvidia-docker version
     set +e
     local rootdir
-    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
-    if echo "$rootdir" | grep "$USER_MOUNTPOINT" > /dev/null; then
+    rootdir=$(awk -F' ' '{print $NF}' <<< "$(docker info | grep 'Docker Root Dir')")
+    if echo "$rootdir" | grep "^$USER_MOUNTPOINT" > /dev/null; then
         log DEBUG "Docker root dir: $rootdir"
     else
-        log ERROR "Docker root dir $rootdir not within $USER_MOUNTPOINT"
-        exit 1
+        log WARNING "Docker root dir not within $USER_MOUNTPOINT: $rootdir"
     fi
     set -e
     nvidia-smi
@@ -1122,18 +1121,21 @@ install_docker_host_engine() {
     if [ "$PACKAGER" == "apt" ]; then
         local repo="https://download.docker.com/linux/${DISTRIB_ID}"
         local gpgkey="${repo}/gpg"
-        local dockerversion="${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}-${DISTRIB_CODENAME}"
+        local docker_ce_pkg="docker-ce=${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}-${DISTRIB_CODENAME}"
+        local docker_cli_pkg="docker-ce-cli=${DOCKER_CE_PACKAGE_DEBIAN}${DISTRIB_ID}-${DISTRIB_CODENAME}"
         local prereq_pkgs="apt-transport-https ca-certificates curl gnupg2 software-properties-common"
     elif [ "$PACKAGER" == "yum" ]; then
         local repo=https://download.docker.com/linux/centos/docker-ce.repo
-        local dockerversion="${DOCKER_CE_PACKAGE_CENTOS}"
+        local docker_ce_pkg="docker-ce-${DOCKER_CE_PACKAGE_CENTOS}"
+        local docker_cli_pkg="docker-ce-cli-${DOCKER_CE_PACKAGE_CENTOS}"
         local prereq_pkgs="yum-utils device-mapper-persistent-data lvm2"
     elif [ "$PACKAGER" == "zypper" ]; then
         if [[ "$DISTRIB_RELEASE" == 12-sp3* ]]; then
             local repodir=SLE_12_SP3
         fi
         local repo="http://download.opensuse.org/repositories/Virtualization:containers/${repodir}/Virtualization:containers.repo"
-        local dockerversion="${DOCKER_CE_PACKAGE_SLES}"
+        local docker_ce_pkg="${DOCKER_CE_PACKAGE_SLES}"
+        local docker_cli_pkg
     fi
     # refresh package index
     refresh_package_index
@@ -1151,7 +1153,7 @@ install_docker_host_engine() {
     # refresh index
     refresh_package_index
     # install docker engine
-    install_packages "$dockerversion"
+    install_packages "$docker_ce_pkg" "$docker_cli_pkg"
     # disable docker from auto-start due to temp disk issues
     $srvstop
     $srvdisable
