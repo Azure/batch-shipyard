@@ -1,6 +1,6 @@
-# OpenFOAM-TCP-OpenMPI
+# OpenFOAM-Infiniband-OpenMPI
 This recipe shows how to run [OpenFOAM](http://www.openfoam.org/)
-on Linux using OpenMPI over TCP in an Azure Batch compute pool.
+on Linux using OpenMPI over Infiniband in an Azure Batch compute pool.
 Execution of this distributed workload requires the use of
 [multi-instance tasks](../../docs/80-batch-shipyard-multi-instance-tasks.md).
 
@@ -14,22 +14,29 @@ The pool configuration should enable the following properties:
 * `per_job_auto_scratch` must be set to `true`. A job autoscratch is needed to
   share a common input data set between the nodes.
 * `max_tasks_per_node` must be set to 1 or omitted
+* `vm_configuration` must be defined
+  * `platform_image` must be defined
+    * `offer` must be set to `CentOS-HPC`
+    * `publisher` must be set to `OpenLogic`
+    * `sku` must be set to `CentOS-HPC`
+* `vm_size` must be set to `7.6`
 
 ### Global Configuration
 The global configuration should set the following properties:
 * `docker_images` array must have a reference to a valid OpenFOAM image
-that can be run with MPI in a Docker container context. This can be
-`alfpark/openfoam:4.0-gcc-openmpi` or `alfpark/openfoam:v1606plus-gcc-openmpi`
-which are published on
-[Docker Hub](https://hub.docker.com/r/alfpark/openfoam).
+that can be run with Open MPI and Infiniband in a Docker container context.
+This can be `vincentlabo/openfoam:openmpi-ib` which is published on
+[Docker Hub](https://hub.docker.com/r/vincentlabo/openfoam).
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `docker_image` should be the name of the Docker image for this container invocation.
-For this example, this should be `alfpark/openfoam:4.0-gcc-openmpi`.
+For this example, this should be `vincentlabo/openfoam:openmpi-ib`.
 * `resource_files` should contain the `set_up_sample.sh` script which set up
 the sample and export environement variables used by `mpi` `options`.
+* `additional_docker_run_options` should contain the `--cap-add=sys_nice`
+option.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
@@ -41,9 +48,8 @@ the sample and export environement variables used by `mpi` `options`.
   * `pre_execution_command` should source the `set_up_sample.sh` script.
   * `mpi` property must be defined
     * `runtime` should be set to `openmpi`
-    * `options` should contains `-np $np`, `--hostfile $hostfile`, `-x PATH`,
-      `-x LD_LIBRARY_PATH`, `-x MPI_BUFFER_SIZE`, `-x $mpienvopts`, and
-      `-x $mpienvopts2`. These options use the environemnt variables set by
+    * `options` should contains `-np $np`, `--hostfile $hostfile`, and
+      `-x $mpienvopts`. These options use the environemnt variables set by
       the `set_up_sample.sh` script.
 * `command` should contain the command to pass to the `mpirun` invocation.
 For this example, the application `command` to run would be:

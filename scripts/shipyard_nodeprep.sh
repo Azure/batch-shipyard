@@ -26,6 +26,7 @@ NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
 IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
+UCX_IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/UCX_IB_PKEY
 
 # status file consts
 lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
@@ -1398,11 +1399,11 @@ export_ib_pkey()
     else
         IB_PKEY=$key1
     fi
-
-    UCX_IB_PKEY=$(printf '0x%04x' "$((IB_PKEY & 0x0FFF))")
-
 cat > "$IB_PKEY_FILE" << EOF
 IB_PKEY=$IB_PKEY
+EOF
+    UCX_IB_PKEY=$(printf '0x%04x' "$((IB_PKEY & 0x0FFF))")
+cat > "$UCX_IB_PKEY_FILE" << EOF
 UCX_IB_PKEY=$UCX_IB_PKEY
 EOF
 }

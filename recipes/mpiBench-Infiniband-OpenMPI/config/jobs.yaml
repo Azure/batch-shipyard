@@ -1,0 +1,13 @@
+job_specifications:
+- id: mpibench-openmpi-ib
+  auto_complete: true
+  tasks:
+  - docker_image: vincentlabo/mpibench:openmpi-ib
+    additional_docker_run_options:
+    - --privileged
+    multi_instance:
+      num_instances: pool_current_dedicated
+      mpi:
+        runtime: openmpi
+        processes_per_node: nproc
+    command: /mpiBench/mpiBench -e 1K

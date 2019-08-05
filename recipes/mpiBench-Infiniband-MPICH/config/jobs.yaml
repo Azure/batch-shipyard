@@ -1,0 +1,14 @@
+job_specifications:
+- id: mpibench-mpich-ib
+  auto_complete: true
+  shm_size: 256m
+  tasks:
+  - docker_image: vincentlabo/mpibench:mpich-ib
+    additional_docker_run_options:
+    - --privileged
+    multi_instance:
+      num_instances: pool_current_dedicated
+      mpi:
+        runtime: mpich
+        processes_per_node: nproc
+    command: /mpiBench/mpiBench -e 1K
