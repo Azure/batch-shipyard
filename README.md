@@ -35,9 +35,6 @@ on [Azure N-Series VM instances](https://docs.microsoft.com/azure/virtual-machin
 [Azure Container Registry](https://azure.microsoft.com/services/container-registry/),
 other Internet-accessible public and private registries, and support for
 the [Singularity Hub](https://singularity-hub.org/) Container Registry
-* Accelerated Docker and Singularity image deployment at scale to compute
-pools consisting of a large number of VMs via private peer-to-peer
-distribution of container images among the compute nodes
 
 ### Data Management and Shared File Systems
 * Comprehensive [data movement](https://batch-shipyard.readthedocs.io/en/latest/70-batch-shipyard-data-movement/)

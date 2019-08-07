@@ -23,6 +23,7 @@ NVIDIA_CONTAINER_RUNTIME_PACKAGE_UBUNTU="nvidia-container-runtime=${NVIDIA_CONTA
 NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS="nvidia-container-runtime-${NVIDIA_CONTAINER_RUNTIME_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}"
 NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
 NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
+EPHEMERAL_DISK_PARTITION=/dev/sdb1
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
 IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
@@ -71,11 +72,9 @@ DISTRIB_CODENAME=${DISTRIB_CODENAME,,}
 
 # set distribution specific vars
 PACKAGER=
-USER_MOUNTPOINT=/mnt/resource
 SYSTEMD_PATH=/lib/systemd/system
 if [ "$DISTRIB_ID" == "ubuntu" ]; then
     PACKAGER=apt
-    USER_MOUNTPOINT=/mnt
 elif [ "$DISTRIB_ID" == "debian" ]; then
     PACKAGER=apt
 elif [[ $DISTRIB_ID == centos* ]] || [ "$DISTRIB_ID" == "rhel" ]; then
@@ -101,6 +100,8 @@ default_container_runtime=
 delay_preload=0
 docker_group=
 encrypted=
+EPHEMERAL_DEVICE=
+EPHEMERAL_ENCRYPTED=
 fallback_registry=
 gluster_on_compute=0
 gpu=
@@ -115,6 +116,7 @@ sc_args=
 shipyardversion=
 singularity_basedir=
 singularityversion=
+USER_MOUNTPOINT=
 vm_size=
 vm_rdma_type=0
 
@@ -255,6 +257,28 @@ check_for_buggy_ntfs_mount() {
     set -e
     if [ $rc -eq 0 ]; then
         log ERROR "/dev/sdb1 temp disk is mounted as fuseblk/ntfs"
+        exit 1
+    fi
+}
+
+set_user_mountpoint() {
+    local lsblk
+    local cryptout
+    lsblk=$(lsblk -npr "$EPHEMERAL_DISK_PARTITION")
+    log DEBUG "$lsblk"
+    cryptout=$(echo "$lsblk" | grep crypt)
+    # check for Azure Disk Encryption
+    if [ "$(echo "$cryptout" | cut -d' ' -f 6)" == "crypt" ]; then
+        EPHEMERAL_ENCRYPTED=1
+        EPHEMERAL_DEVICE=$(echo "$cryptout" | cut -d' ' -f 1)
+    else
+        EPHEMERAL_ENCRYPTED=0
+        EPHEMERAL_DEVICE="$EPHEMERAL_DISK_PARTITION"
+    fi
+    USER_MOUNTPOINT=$(lsblk -nr -o MOUNTPOINT "$EPHEMERAL_DEVICE")
+    log INFO "ephemeral: $EPHEMERAL_DEVICE (encrypted=$EPHEMERAL_ENCRYPTED user=$USER_MOUNTPOINT)"
+    if [ "$USER_MOUNTPOINT" != "/mnt" ] && [ "$USER_MOUNTPOINT" != "/mnt/resource" ]; then
+        log ERROR "User mountpoint is not in a supported location: $USER_MOUNTPOINT"
         exit 1
     fi
 }
@@ -887,7 +911,7 @@ install_singularity() {
         return
     fi
     local disuffix
-    singularity_basedir="${USER_MOUNTPOINT}"/singularity
+    singularity_basedir="${USER_MOUNTPOINT}/singularity"
     if [ "${USER_MOUNTPOINT}" == "/mnt" ]; then
         disuffix=mnt
     else
@@ -897,9 +921,7 @@ install_singularity() {
     # install squashfs-tools for mksquashfs
     install_packages squashfs-tools
     # fetch docker image for singularity bits
-    #local di="alfpark/singularity:${singularityversion}-${disuffix}"
-    # TODO temporarily pin to verison "3"
-    local di="alfpark/singularity:3-${disuffix}"
+    local di="alfpark/singularity:${singularityversion}-${disuffix}"
     log DEBUG "Image=${di} basedir=${singularity_basedir}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
@@ -911,27 +933,27 @@ install_singularity() {
     chown -R root:root /opt/singularity
     chmod 4755 /opt/singularity/libexec/singularity/bin/*-suid
     # prep singularity root/container dir
-    mkdir -p $singularity_basedir/mnt/container
-    mkdir -p $singularity_basedir/mnt/final
-    mkdir -p $singularity_basedir/mnt/overlay
-    mkdir -p $singularity_basedir/mnt/session
-    chmod 755 $singularity_basedir
-    chmod 755 $singularity_basedir/mnt
-    chmod 755 $singularity_basedir/mnt/container
-    chmod 755 $singularity_basedir/mnt/final
-    chmod 755 $singularity_basedir/mnt/overlay
-    chmod 755 $singularity_basedir/mnt/session
+    mkdir -p "$singularity_basedir/mnt/container"
+    mkdir -p "$singularity_basedir/mnt/final"
+    mkdir -p "$singularity_basedir/mnt/overlay"
+    mkdir -p "$singularity_basedir/mnt/session"
+    chmod 755 "$singularity_basedir"
+    chmod 755 "$singularity_basedir/mnt"
+    chmod 755 "$singularity_basedir/mnt/container"
+    chmod 755 "$singularity_basedir/mnt/final"
+    chmod 755 "$singularity_basedir/mnt/overlay"
+    chmod 755 "$singularity_basedir/mnt/session"
     # create singularity tmp/cache/sypgp paths
-    mkdir -p $singularity_basedir/tmp
-    mkdir -p $singularity_basedir/cache
-    mkdir -p $singularity_basedir/sypgp
-    chmod 775 $singularity_basedir/tmp
-    chmod 775 $singularity_basedir/cache
-    chmod 700 $singularity_basedir/sypgp
+    mkdir -p "$singularity_basedir/tmp"
+    mkdir -p "$singularity_basedir/cache"
+    mkdir -p "$singularity_basedir/sypgp"
+    chmod 775 "$singularity_basedir/tmp"
+    chmod 775 "$singularity_basedir/cache"
+    chmod 700 "$singularity_basedir/sypgp"
     # set proper ownership
-    chown -R _azbatch:_azbatchgrp $singularity_basedir/tmp
-    chown -R _azbatch:_azbatchgrp $singularity_basedir/cache
-    chown -R _azbatch:_azbatchgrp $singularity_basedir/sypgp
+    chown -R _azbatch:_azbatchgrp "$singularity_basedir/tmp"
+    chown -R _azbatch:_azbatchgrp "$singularity_basedir/cache"
+    chown -R _azbatch:_azbatchgrp "$singularity_basedir/sypgp"
     # ensure it runs
     singularity version
     # remove docker image
@@ -1657,6 +1679,9 @@ fi
 
 # check sdb1 mount
 check_for_buggy_ntfs_mount
+
+# set ephemeral device/user mountpoint
+set_user_mountpoint
 
 # save startup stderr/stdout
 save_startup_to_volatile
