@@ -1,6 +1,6 @@
 # Dockerfile for Azure/batch-shipyard (Cargo)
 
-FROM alpine:3.9
+FROM alpine:3.10
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
 # copy in files
