@@ -43,8 +43,8 @@ For the `microsoft/cntk:2.1-gpu-python3.5-cuda8.0-cudnn6.0` Docker image, and
 to run the MNIST convolutional example on a single CPU, the `command` would
 be:
 `"/bin/bash -c \"source /cntk/activate-cntk && cd /cntk/Examples/Image/DataSets/MNIST && python -u install_mnist.py && cd /cntk/Examples/Image/Classification/ConvNet/Python && python -u ConvNet_MNIST.py\""`
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ### MPI Jobs Configuration (SingleNode+MultiGPU, MultiNode+SingleGPU, MultiNode+MultiGPU)
 The jobs configuration should set the following properties within the `tasks`

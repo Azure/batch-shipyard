@@ -34,8 +34,8 @@ For the `alfpark/caffe:gpu` Docker image and to run the MNIST convolutional
 example on all available GPUs, we are using a
 [`run_mnist.sh` helper script](docker/run_mnist.sh). Thus, the `command` would
 simply be: `"/caffe/run_mnist.sh -gpu all"`
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

@@ -54,8 +54,8 @@ the download of the training file from the web endpoint:
 * `command` should contain the command to pass to the Docker run invocation.
 To run the MNIST convolutional example, the `command` would be:
 `python -u convolutional.py`
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 #### Singularity-based
 The jobs configuration should set the following properties within the `tasks`
@@ -74,8 +74,8 @@ the download of the training file from the web endpoint:
 * `command` should contain the command to pass to the Docker run invocation.
 To run the MNIST convolutional example, the `command` would be:
 `python -u convolutional.py`
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ### Tensorboard
 If you would like to tunnel Tensorboard to your local machine, use the

@@ -37,8 +37,8 @@ using NVENC transcode offload on to the GPU:
     any number of files to be available to the task for processing.
   * `hevc_nvenc` informs FFmpeg to use the H.256/HEVC NVENC encoder. To
     encode with H.264 using NVENC specify `h264_nvenc` instead.
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image referenced above can be found

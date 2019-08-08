@@ -51,7 +51,7 @@ job_specifications:
   remove_container_after_exit: true
   shm_size: 256m
   infiniband: false
-  gpu: false
+  gpus: disable
   exit_conditions:
     default:
       exit_options:
@@ -254,7 +254,7 @@ job_specifications:
     shm_size: 256m
     additional_docker_run_options: []
     infiniband: false
-    gpu: false
+    gpus: disable
     depends_on:
     - taskid-a
     - taskid-b
@@ -454,14 +454,17 @@ not set, it will default to `true` if the task is destined for an RDMA-enabled
 compute pool and `inter_node_communication_enabled` is set to `true`. This
 option has no effect on `native` container support pools as it is
 automtically enabled by the system.
-* (optional) `gpu` designates if all containers under the job require access
-to the GPU devices on the host. If this property is set to `true`, Docker
-containers are instantiated via `nvidia-docker` and the appropriate options
-are passed for Singularity containers. This requires N-series VM instances.
-If this property is not set, it will default to `true` if the task
-is destined for a compute pool with GPUs. This option has no effect on
-`native` container support pools as it is automatically enabled by the
-system.
+* (optional) `gpus` designates if all containers under the job require access
+to the GPU devices on the host. If this property is set to a valid value,
+containers are instantiated with appropriate GPU enablement options for
+the respective container runtime. This requires N-series VM instances.
+If this property is not set, it will default to `all` if the task
+is destined for a compute pool with GPUs, which exposes all GPUs to the
+task. The value `disable` will disable exposing GPUs to the container.
+For Docker containers, valid values for the `--gpus` parameter will be
+accepted. For singularity containers, the only valid values are `all` or
+`disable`. This option has no effect on `native` container support pools as
+it is automatically enabled by Batch.
 * (optional) `exit_conditions` sets the exit conditions for all tasks
 under this job. Currently only the `default` exit conditions can be set
 which react to any non-zero exit code.
@@ -983,12 +986,19 @@ set to `true`, ensure that the `pool_specification` property
 `inter_node_communication_enabled` is set to `true`. This overrides the
 job-level property, if set. It follows the same default behavior as the
 job-level property if not set.
-* (optional) `gpu` designates if this container requires access to the GPU
-devices on the host. If this property is set to `true`, Docker containers
-are instantiated via `nvidia-docker` and the appropriate options are passed
-for Singularity containers. This requires N-series VM instances.
-This overrides the job-level property, if set. It follows the same default
-behavior as the job-level property if not set.
+* (optional) `gpus` designates if this container require access
+to the GPU devices on the host. If this property is set to a valid value,
+containers are instantiated with appropriate GPU enablement options for
+the respective container runtime. This requires N-series VM instances.
+If this property is not set, it will default to `all` if the task
+is destined for a compute pool with GPUs, which exposes all GPUs to the
+task. The value `disable` will disable exposing GPUs to the container.
+For Docker containers, valid values for the `--gpus` parameter will be
+accepted. For singularity containers, the only valid values are `all` or
+`disable`. This option has no effect on `native` container support pools as
+it is automatically enabled by Batch. This overrides the job-level property,
+if set. It follows the same default behavior as the job-level property if
+not set.
 * (optional) `max_task_retries` sets the maximum number of times that
 Azure Batch should retry this task for. This overrides the job-level task
 retry count. By default, Azure Batch does not retry tasks that fail

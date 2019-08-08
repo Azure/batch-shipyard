@@ -48,8 +48,8 @@ The source for `run_mxnet.sh` can be found [here](./docker/run_mxnet.sh).
     For single node executions, this should be `.`.
   * Arguments after the second are passed to the training script. In this
     example, we specify where to save the model.
-* `gpu` must be set to `true`. This enables invoking the `nvidia-docker`
-wrapper.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ### MultiNode Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
@@ -75,8 +75,8 @@ The source for `run_mxnet.sh` can be found [here](./docker/run_mxnet.sh).
 * `shared_data_volumes` should have a valid volume name as defined in the
 global configuration file. Please see the global configuration section above
 for details.
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_vm_count_low_priority`, `pool_current_dedicated`, or

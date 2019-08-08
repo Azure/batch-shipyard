@@ -37,8 +37,8 @@ the download of the training file from the web endpoint:
 * `command` should contain the command to pass to the Docker run invocation.
 For the `chainer/chainer` Docker image and to run the MNIST MLP example, the
 `command` would be: `python -u train_mnist.py -g 0`
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 Note that you could have inlined the download in the command itself provided
 the Docker image has programs to fetch content from the required source.

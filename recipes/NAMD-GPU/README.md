@@ -35,8 +35,8 @@ to run the included benchmarks:
   * `<steps>` is the number of steps to execute
   * `<ppn>` is the number of cores on each compute node. This is optional
     and, if omitted, will be determined dynamically.
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker). Please

@@ -58,8 +58,8 @@ Docker image. The application `command` to run would be:
 `python -u /cntk/Examples/Image/Classification/ResNet/Python/TrainResNet_CIFAR10_Distributed.py --network resnet20 -q 1 -a 0 --datadir /cntk/Examples/Image/DataSets/CIFAR-10 --outputdir $AZ_BATCH_TASK_WORKING_DIR/output`
 * `infiniband` can be set to `true`, however, it is implicitly enabled by
 Batch Shipyard when executing on a RDMA-enabled compute pool.
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ## Dockerfile and supplementary files
 Supplementary files can be found [here](./docker).

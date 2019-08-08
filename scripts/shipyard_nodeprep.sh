@@ -6,23 +6,19 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=18.09.2
-DOCKER_CE_VERSION_CENTOS=18.09.2
+DOCKER_CE_VERSION_DEBIAN=19.03.1
+DOCKER_CE_VERSION_CENTOS=19.03.1
 DOCKER_CE_VERSION_SLES=17.09.1
 NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
 NVIDIA_DOCKER_VERSION=2.0.3
 GLUSTER_VERSION_DEBIAN=4.1
 GLUSTER_VERSION_CENTOS=41
-IMDS_VERSION=2018-02-01
+IMDS_VERSION=2019-03-11
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
 DOCKER_CE_PACKAGE_CENTOS="${DOCKER_CE_VERSION_CENTOS}-3.el7"
 DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
-NVIDIA_CONTAINER_RUNTIME_PACKAGE_UBUNTU="nvidia-container-runtime=${NVIDIA_CONTAINER_RUNTIME_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
-NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS="nvidia-container-runtime-${NVIDIA_CONTAINER_RUNTIME_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}"
-NVIDIA_DOCKER_PACKAGE_UBUNTU="nvidia-docker2=${NVIDIA_DOCKER_VERSION}+docker${DOCKER_CE_VERSION_DEBIAN}-1"
-NVIDIA_DOCKER_PACKAGE_CENTOS="nvidia-docker2-${NVIDIA_DOCKER_VERSION}-1.docker${DOCKER_CE_VERSION_CENTOS}.ce"
 EPHEMERAL_DISK_PARTITION=/dev/sdb1
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
@@ -265,7 +261,8 @@ set_user_mountpoint() {
     local lsblk
     local cryptout
     lsblk=$(lsblk -npr "$EPHEMERAL_DISK_PARTITION")
-    log DEBUG "$lsblk"
+    log DEBUG "lsblk: $lsblk"
+    set +e
     cryptout=$(echo "$lsblk" | grep crypt)
     # check for Azure Disk Encryption
     if [ "$(echo "$cryptout" | cut -d' ' -f 6)" == "crypt" ]; then
@@ -281,6 +278,7 @@ set_user_mountpoint() {
         log ERROR "User mountpoint is not in a supported location: $USER_MOUNTPOINT"
         exit 1
     fi
+    set -e
 }
 
 optimize_tcp_network_settings() {
@@ -505,10 +503,10 @@ blacklist_kernel_upgrade() {
     fi
 }
 
-check_for_nvidia_docker() {
+check_for_nvidia_container_runtime() {
     set +e
-    if ! nvidia-docker version; then
-        log ERROR "nvidia-docker2 not installed"
+    if ! command -v nvidia-container-cli > /dev/null 2>&1; then
+        log ERROR "nvidia container runtime not installed"
         exit 1
     fi
     set -e
@@ -526,7 +524,7 @@ check_for_nvidia_driver_on_custom_or_native() {
         log ERROR "No Nvidia drivers detected!"
         exit 1
     else
-        check_for_nvidia_docker
+        check_for_nvidia_container_runtime
     fi
 }
 
@@ -665,28 +663,24 @@ install_nvidia_software() {
     fi
     set -e
     # blacklist nouveau from being loaded if rebooted
+    local blfile
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
-cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
-blacklist nouveau
-blacklist lbm-nouveau
-options nouveau modeset=0
-alias nouveau off
-alias lbm-nouveau off
-EOF
+        blfile=/etc/modprobe.d/blacklist-nouveau.conf
     elif [[ $DISTRIB_ID == centos* ]]; then
-cat >> /etc/modprobe.d/blacklist.conf << EOF
+        blfile=/etc/modprobe.d/blacklist.conf
+    fi
+cat >> "$blfile" << EOF
 blacklist nouveau
 blacklist lbm-nouveau
 options nouveau modeset=0
 alias nouveau off
 alias lbm-nouveau off
 EOF
-    dracut /boot/initramfs-"$(uname -r)".img "$(uname -r)" --force
-    fi
     # get development essentials for nvidia driver
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         install_packages build-essential
     elif [[ $DISTRIB_ID == centos* ]]; then
+        dracut /boot/initramfs-"$(uname -r)".img "$(uname -r)" --force
         install_kernel_devel_package
         install_packages gcc binutils make
     fi
@@ -716,11 +710,7 @@ EOF
         add_repo "https://nvidia.github.io/nvidia-docker/centos${DISTRIB_RELEASE}/nvidia-docker.repo"
     fi
     refresh_package_index
-    if [ "$DISTRIB_ID" == "ubuntu" ]; then
-        install_packages "$NVIDIA_CONTAINER_RUNTIME_PACKAGE_UBUNTU" "$NVIDIA_DOCKER_PACKAGE_UBUNTU"
-    elif [[ $DISTRIB_ID == centos* ]]; then
-        install_packages "$NVIDIA_CONTAINER_RUNTIME_PACKAGE_CENTOS" "$NVIDIA_DOCKER_PACKAGE_CENTOS"
-    fi
+    install_packages nvidia-container-toolkit
     # merge daemon configs if necessary
     set +e
     grep \"data-root\" /etc/docker/daemon.json
@@ -745,7 +735,7 @@ EOF
         systemctl restart docker.service
     fi
     systemctl --no-pager status docker.service
-    nvidia-docker version
+    check_for_nvidia_container_runtime
     set +e
     local rootdir
     rootdir=$(awk -F' ' '{print $NF}' <<< "$(docker info | grep 'Docker Root Dir')")

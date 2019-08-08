@@ -30,7 +30,7 @@ job_specifications:
   remove_container_after_exit: true
   shm_size: 256m
   infiniband: false
-  gpu: false
+  gpus: disable
   exit_conditions:
     default:
       exit_options:
@@ -235,7 +235,7 @@ job_specifications:
     shm_size: 256m
     additional_docker_run_options: []
     infiniband: false
-    gpu: false
+    gpus: disable
     depends_on:
     - taskid-a
     - taskid-b

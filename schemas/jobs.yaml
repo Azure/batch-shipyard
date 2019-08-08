@@ -78,8 +78,8 @@ mapping:
             type: str
           infiniband:
             type: bool
-          gpu:
-            type: bool
+          gpus:
+            type: text
           exit_conditions:
             type: map
             mapping:
@@ -588,8 +588,8 @@ mapping:
                       - type: str
                   infiniband:
                     type: bool
-                  gpu:
-                    type: bool
+                  gpus:
+                    type: text
                   depends_on:
                     type: seq
                     sequence:

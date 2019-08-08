@@ -4090,17 +4090,19 @@ def task_settings(
         )
     )
     # gpu
-    gpu = _kv_read(conf, 'gpu')
+    gpu = _kv_read(conf, 'gpus')
     if gpu is None:
-        gpu = _kv_read(jobspec, 'gpu')
+        gpu = _kv_read(jobspec, 'gpus')
+    if gpu is not None:
+        gpu = str(gpu)
     # if not specified check for gpu pool and implicitly enable
-    if gpu is None:
+    if util.is_none_or_empty(gpu):
         if is_gpu_pool(vm_size) and not is_windows:
-            gpu = True
+            gpu = 'all'
         else:
-            gpu = False
+            gpu = 'disable'
     # adjust for gpu settings
-    if gpu:
+    if util.is_not_empty(gpu) and gpu != 'disable':
         if util.is_not_empty(federation_id):
             # ensure that the job-level constraint does not conflict with
             # job/task level requirements
@@ -4113,11 +4115,23 @@ def task_settings(
             raise RuntimeError(
                 ('cannot initialize a gpu task on nodes without '
                  'gpus: pool={} vm_size={}').format(pool_id, vm_size))
-        # set docker commands with nvidia docker wrapper
+        if is_windows:
+            raise ValueError(
+                'cannot execute a gpu task on a windows pool: {}'.format(
+                    pool_id))
+        # set docker commands with nvidia container runtime
         if util.is_not_empty(singularity_image):
+            if gpu != 'all':
+                raise ValueError(
+                    'cannot execute a singularity container with non-default '
+                    'gpu options (i.e., "all")')
             run_opts.append('--nv')
         else:
-            run_opts.append('--runtime=nvidia')
+            # batch native mode will take care of using the proper runtime
+            # TODO once native mode supports new native docker gpu support
+            # this should change and support gpus options
+            if not native:
+                run_opts.append('--gpus={}'.format(gpu))
     # infiniband
     infiniband = _kv_read(conf, 'infiniband')
     if infiniband is None:

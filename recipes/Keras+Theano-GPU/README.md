@@ -32,8 +32,8 @@ e.g., `alfpark/keras:gpu`
 For the `alfpark/keras:gpu` Docker image and to run the MNIST convolutional
 example, the `command` would simply be:
 `"python -u /keras/examples/mnist_cnn.py"`
-* `gpu` can be set to `true`, however, it is implicitly enabled by Batch
-Shipyard when executing on a GPU-enabled compute pool.
+* `gpus` can be set to `all`, however, it is implicitly enabled by Batch
+Shipyard when executing on a GPU-enabled compute pool and can be omitted.
 
 ## Dockerfile and supplementary files
 The `Dockerfile` for the Docker image can be found [here](./docker).

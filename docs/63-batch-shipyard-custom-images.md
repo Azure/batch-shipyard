@@ -248,10 +248,13 @@ on the host).
 
 #### GPU-enabled Compute Nodes
 In order to utilize the GPUs available on compute nodes that have them
-(e.g., N-series VMs), the NVIDIA driver must be installed and loaded upon
-boot.
+(e.g., N-series VMs), the following requirements apply:
 
-Additionally, [nvidia-docker2](https://github.com/NVIDIA/nvidia-docker)
+1. A compatible NVIDIA driver must be installed and loaded upon boot.
+2. The Docker engine must be at least version `19.03` or a compatible
+moby-based version with `--gpus` support
+([moby #38828](https://github.com/moby/moby/pull/38828), [docker-cli #1714](https://github.com/docker/cli/pull/1714)).
+3. The [NVIDIA container toolkit](https://github.com/NVIDIA/nvidia-docker)
 must be installed.
 
 #### Infiniband/RDMA-enabled Compute Nodes
