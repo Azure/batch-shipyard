@@ -29,6 +29,19 @@ list.
 Once all of the nodes have been contacted and initialization of the MPI runtime
 is complete across all of the nodes, then the MPI application can execute.
 
+### Seamless MPI Runtime Integration
+Batch Shipyard, as of version `3.8.0`, provides seamless MPI launch
+integration for popular MPI runtimes, including OpenMPI, MPICH, MVAPICH,
+and Intel MPI. Users can now specify simply the runtime they wish to use
+and if the environment contains the proper runtime, the commandlines for
+launching will automatically be populated. In the case of RDMA VMs,
+complexity of certain requirements such as exposing the IB PKEY are
+automatically handled.
+
+Please see the
+[jobs configuration documentation](14-batch-shipyard-configuration-jobs.md)
+for more information about the MPI interface available in Batch Shipyard.
+
 ## Singularity Containers and MPI
 [Singularity](https://www.sylabs.io) containers are built for common
 HPC scenarios. Thus, executing an MPI application works seamlessly with
@@ -221,6 +234,9 @@ by Batch Shipyard. The user just needs to ensure that their MPI container
 images are either constructed with the aforementioned accommodations and/or
 are able to provide sufficient commands to the coordination/application
 commands to work with the Azure Batch compute node environment.
+
+As referred to earlier in this guide, Batch Shipyard now provides seamless
+MPI runtime integration with popular frameworks.
 
 ## Which to choose for MPI? Docker or Singularity?
 In the context of Batch Shipyard, both approaches are somewhat similar as

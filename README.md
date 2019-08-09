@@ -89,10 +89,13 @@ generators
 to accommodate MPI and multi-node cluster applications packaged as Docker or
 Singularity containers on compute pools with automatic job completion and
 task termination
+* Seamless, direct high-level configuration support for popular MPI runtimes
+including OpenMPI, MPICH, MVAPICH, and Intel MPI
 * Transparent assist for running Docker and Singularity containers utilizing
 Infiniband/RDMA for MPI on HPC low-latency Azure VM instances including
 [A-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 [H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
+[Hb/Hc-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the

@@ -55,8 +55,8 @@ invocations may result in failure if task ids for these jobs are
 auto-generated.
 * The ephemeral mount point cannot be changed from the default on custom
 images.
-* Hc/Hb VM sizes have some additional known issues which are cataloged
-[here](https://docs.microsoft.com/azure/virtual-machines/workloads/hpc/hb-hc-known-issues)
+* Hc/Hb VM sizes have some additional known issues which are detailed in this
+[document](https://docs.microsoft.com/azure/virtual-machines/workloads/hpc/hb-hc-known-issues).
 
 ### Monitoring Limitations
 * Only Linux Batch pools and RemoteFS clusters can be monitored. Windows

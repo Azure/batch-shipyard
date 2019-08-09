@@ -9,8 +9,6 @@ set -o pipefail
 DOCKER_CE_VERSION_DEBIAN=19.03.1
 DOCKER_CE_VERSION_CENTOS=19.03.1
 DOCKER_CE_VERSION_SLES=17.09.1
-NVIDIA_CONTAINER_RUNTIME_VERSION=2.0.0
-NVIDIA_DOCKER_VERSION=2.0.3
 GLUSTER_VERSION_DEBIAN=4.1
 GLUSTER_VERSION_CENTOS=41
 IMDS_VERSION=2019-03-11
@@ -1432,7 +1430,12 @@ check_for_mellanox_card() {
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
-        log INFO "No Mellanox card(s) detected!"
+        if [ "$vm_rdma_type" -eq 0 ]; then
+            log INFO "No Mellanox card(s) detected"
+        else
+            log ERROR "Expected Mellanox IB card not detected"
+            exit 1
+        fi
     else
         if [ "$vm_rdma_type" -eq 1 ]; then
             # extract IB PKEY

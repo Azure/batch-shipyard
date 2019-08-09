@@ -25,7 +25,6 @@ if [ -n "$SHIPYARD_USER_PROLOGUE_CMD" ]; then
 fi
 
 ## TASK EXEC
-# dump env for envfile
 if [ -n "$SHIPYARD_ENV_EXCLUDE" ]; then
     env | grep -vE "$SHIPYARD_ENV_EXCLUDE" > "$SHIPYARD_ENV_FILE"
 else

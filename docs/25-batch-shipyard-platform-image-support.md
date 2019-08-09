@@ -23,13 +23,14 @@ container pools.
 | microsoft-azure-batch | centos-container      | 7-5 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container      | 7-6 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |    X    |      X      |                |
+| microsoft-azure-batch | centos-container-rdma | 7-6 |  X  |    X    |      X      |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
 | OpenLogic             | CentOS                | 7.5 |  X  |         |             |        X       |
 | OpenLogic             | CentOS                | 7.6 |  X  |         |             |        X       |
 | OpenLogic             | CentOS-HPC            | 7.1 |     |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.3 |  X  |    X    |             |                |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |    X    |             |        X       |
-| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (4)  |             |                |
+| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (4)  |             |        X       |
 
 ### Debian
 
@@ -71,5 +72,6 @@ utilizing the native conversion option. Please see the
 on how to create a compliant custom image.
 2. Native conversion of this platform image will enable IB/RDMA automatically.
 3. The Intel MPI runtime is not present by default on this image, however,
-it is automatically installed through Batch Shipyard.
+it is automatically installed through Batch Shipyard for Network Direct RDMA
+VM sizes.
 4. Only supported on SR-IOV IB/RDMA VM sizes.

@@ -4342,6 +4342,7 @@ def _construct_mpi_command(pool, task):
     :rtype: tuple
     :return mpi command, ib env
     """
+    ib_pkey_file = '$AZ_BATCH_NODE_STARTUP_DIR/wd/UCX_IB_PKEY'
     ib_env = {}
     mpi_opts = []
     mpi_opts.extend(task.multi_instance.mpi.options)
@@ -4403,7 +4404,6 @@ def _construct_mpi_command(pool, task):
                 '-ppn $({})'.format(processes_per_node)
             ])
         if task.infiniband and settings.is_sriov_rdma_pool(pool.vm_size):
-            ib_pkey_file = '$AZ_BATCH_NODE_STARTUP_DIR/wd/UCX_IB_PKEY'
             mpi_opts.append(
                 '-env $(cat {})'.format(ib_pkey_file))
     elif task.multi_instance.mpi.runtime == 'openmpi':
@@ -4429,7 +4429,6 @@ def _construct_mpi_command(pool, task):
                     processes_per_node)
             ])
         if task.infiniband and settings.is_sriov_rdma_pool(pool.vm_size):
-            ib_pkey_file = '$AZ_BATCH_NODE_STARTUP_DIR/wd/UCX_IB_PKEY'
             mpi_opts.extend([
                 '--mca pml ucx',
                 '--mca btl ^vader,tcp,openib',

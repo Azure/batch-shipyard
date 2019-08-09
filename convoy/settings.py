@@ -812,7 +812,7 @@ def gpu_configuration_check(config, vm_size=None):
             sku > '16.04'):
         return True
     elif publisher == 'openlogic':
-        if offer == 'centos-hpc' and sku >= '7.6':
+        if offer == 'centos-hpc' and sku >= '7.3':
             return True
         elif offer == 'centos' and sku >= '7.3':
             return True
