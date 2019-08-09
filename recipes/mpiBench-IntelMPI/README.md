@@ -24,7 +24,7 @@ The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
 * `max_tasks_per_node` must be set to 1 or omitted
 * `additional_node_prep` should contains the commands necessary for
-  installing Open MPI on the node. For example:
+  installing Intel MPI on the node. For example:
     ```
     - yum install -y gcc gcc-c++ make ca-certificates wget
     - wget -q -O - http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/13651/l_mpi_2018.4.274.tgz | tar -xzf -

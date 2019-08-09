@@ -42,6 +42,16 @@ This HPLinpack-Infiniband-IntelMPI recipe contains information on how to
 containerize [HPLinpack (HPL)](http://www.netlib.org/benchmark/hpl/)
 across Infiniband/RDMA Azure VMs with Intel MPI.
 
+#### [mpiBench-Infiniband-MPICH](./mpiBench-Infiniband-MPICH)
+This mpiBench-Infinibnad-MPICH recipe contains information on how to
+containerize [mpiBench](https://github.com/LLNL/mpiBench)
+across Infiniband/RDMA Azure VMs with MPICH.
+
+#### [mpiBench-Infiniband-OpenMPI](./mpiBench-Infiniband-OpenMPI)
+This mpiBench-Infinibnad-MPICH recipe contains information on how to
+containerize [mpiBench](https://github.com/LLNL/mpiBench)
+across Infiniband/RDMA Azure VMs with MPICH.
+
 #### [mpiBench-IntelMPI](./mpiBench-IntelMPI)
 This mpiBench-IntelMPI recipe contains information on how to
 containerize [mpiBench](https://github.com/LLNL/mpiBench)
@@ -56,6 +66,11 @@ across Azure VMs with MPICH.
 This mpiBench-OpenMPI recipe contains information on how to
 containerize [mpiBench](https://github.com/LLNL/mpiBench)
 across Azure VMs with Open MPI.
+
+#### [OSUMicroBenchmarks-Infiniband-MVAPICH](./OSUMicroBenchmarks-Infiniband-MVAPICH)
+This OSUMicroBenchmarks-Infiniband-MVAPICH recipe contains information on
+how to containers the [OSU Micro-Benchmarks](http://mvapich.cse.ohio-state.edu/benchmarks/)
+across Infiniband/RDMA Azure VMs with MVAPICH.
 
 ## <a name="cfd"></a>Computational Fluid Dynamics (CFD)
 #### [OpenFOAM-Infiniband-IntelMPI](./OpenFOAM-Infiniband-IntelMPI)

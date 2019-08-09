@@ -1,0 +1,14 @@
+pool_specification:
+  id: osu-benchmarks
+  vm_configuration:
+    platform_image:
+      publisher: OpenLogic
+      offer: CentOS-HPC
+      sku: '7.6'
+  vm_count:
+    dedicated: 2
+    low_priority: 0
+  vm_size: STANDARD_HB60rs
+  inter_node_communication_enabled: true
+  ssh:
+    username: shipyard

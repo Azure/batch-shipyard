@@ -1,0 +1,21 @@
+Bootstrap: library
+From: centos:7
+
+%post
+yum install -y \
+    ca-certificates tar gzip curl net-tools numactl numactl-devel \
+    libibverbs libibverbs-devel librdmacm librdmacm-devel libibmad libibmad-devel \
+    gtk2 atk cairo tcsh libnl3 tcl libmnl tk
+yum groupinstall -y "Development tools"
+# Install MOFED
+cd /tmp
+curl -fSsL http://www.mellanox.com/downloads/ofed/MLNX_OFED-4.6-1.0.1.1/MLNX_OFED_LINUX-4.6-1.0.1.1-rhel7.6-x86_64.tgz | tar -zxpf -
+./MLNX_OFED_LINUX-4.6-1.0.1.1-rhel7.6-x86_64/mlnxofedinstall --user-space-only --without-fw-update --all --force
+# Install MVAPICH
+MVAPICH_VERSION=2.3.1
+curl -fSsL http://mvapich.cse.ohio-state.edu/download/mvapich/mv2/mvapich2-${MVAPICH_VERSION}.tar.gz | tar -zxpf -
+cd mvapich2-${MVAPICH_VERSION}
+./configure --enable-g=none --enable-fast=yes
+make -j $(nproc)
+make install
+cd ..

@@ -1,9 +1,11 @@
-# mpiBench-Infiniband-MPICH
+# OSUMicroBenchmarks-Infiniband-MVAPICH
 This recipe shows how to run the
-[mpiBench](https://github.com/LLNL/mpiBench) benchmark
-on Linux using MPICH and Infiniband over Azure VM instances in an Azure
+[OSU Micro-Benchmarks](http://mvapich.cse.ohio-state.edu/benchmarks/)
+on Linux using MVAPICH and Infiniband over Azure VM instances in an Azure
 Batch compute pool. Execution of this distributed workload requires the use of
 [multi-instance tasks](../../docs/80-batch-shipyard-multi-instance-tasks.md).
+
+This recipe demonstrates Singularity usage.
 
 ## Configuration
 Please see refer to the [set of sample configuration files](./config) for
@@ -23,31 +25,32 @@ The pool configuration should enable the following properties:
 
 ### Global Configuration
 The global configuration should set the following properties:
-* `docker_images` array must have a reference to a valid mpiBench image that
-can be run with MPICH. This can be `vincentlabo/mpibench:mpich-ib` which
-is published on [Docker Hub](https://hub.docker.com/r/vincentlabo/mpibench).
+* `singularity_images` array have a reference to a valid OSU
+Micro-Benchmark image with MVAPICH. This can be
+`library://alfpark/mvapich/mvapich:2.3.1`
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
-* `docker_image` should be the name of the Docker image for this container
-invocation. For this example, this should be `vincentlabo/mpibench:mpich-ib`.
+* `singularity_iamge` should be the name of the Singularity image for this
+container task invocation. For this example, this should be
+`library://alfpark/mvapich/mvapich:2.3.1`.
+* `environment_variables` are the environment variables to set
+    * `HOST_MVAPICH_VERSION` is the MVAPICH version on the host that can be
+      loaded by the environment modules system.
+    * `BENCHMARK` is the OSU benchmark to execute
+    * `BENCHMARK_ARGS` are any arguments to pass to the benchmark executable
 * `command` should contain the command to pass to the `mpirun` invocation.
-For this example, we will run mpiBench with an ending message size of 1kB.
-The application `command` to run would be: `/mpiBench/mpiBench -e 1K`
+Please see the example `jobs.yaml` configuration for an example.
 * `multi_instance` property must be defined
   * `num_instances` should be set to `pool_specification_vm_count_dedicated`,
     `pool_specification_vm_count_low_priority`, `pool_current_dedicated`, or
     `pool_current_low_priority`
-  * `coordination_command` should be unset or `null`. For pools with
-    `native` container support, this command should be supplied if
-    a non-standard `sshd` is required.
-  * `resource_files` should be unset or the array can be empty
+  * `pre_execution_command` should be the `module load` command to load the
+    appropriate MPI into the current environment.
   * `mpi` property must be defined
-    * `runtime` should be set to `mpich`
-    * `processes_per_node` should be set to `nproc`
+    * `runtime` should be set to `mvapich`
+    * `processes_per_node` should be set to `1`
 
 ## Supplementary files
-The `Dockerfile` for the Docker image can be found [here](./docker).
-The Singularity Definition file for the Singularity image can be found
-[here](./singularity).
+The Singularity image definition file can be found [here](./singularity).

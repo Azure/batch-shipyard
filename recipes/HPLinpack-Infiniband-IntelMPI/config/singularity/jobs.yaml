@@ -16,7 +16,7 @@ job_specifications:
     multi_instance:
       num_instances: pool_current_dedicated
       mpi:
-        runtime: intelmpi_ofa
+        runtime: intelmpi-ofa
         processes_per_node: 1
       pre_execution_command: source setup_hplinpack.sh -a $AVX -n 50000; source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
     # need to source mpivars again as the container intel mpi/benchmark is not the exact version as on the host

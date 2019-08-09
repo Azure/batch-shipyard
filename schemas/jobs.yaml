@@ -646,7 +646,7 @@ mapping:
                         mapping:
                           runtime:
                             type: str
-                            enum: ['intelmpi', 'intelmpi_ofa', 'mpich', 'openmpi']
+                            enum: ['intelmpi', 'intelmpi-ofa', 'mpich', 'mvapich', 'openmpi']
                             required: true
                           executable_path:
                             type: str

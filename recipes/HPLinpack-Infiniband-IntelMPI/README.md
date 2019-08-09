@@ -67,7 +67,7 @@ in turn invokes `findpq.py`) as part of the `pre_execution_command`.
     `native` container support, this command should be supplied if
     a non-standard launcher is required.
   * `mpi` property must be defined
-    * `runtime` should be either `intelmpi_ofa` or `intelmpi` depending upon
+    * `runtime` should be either `intelmpi-ofa` or `intelmpi` depending upon
       the Intel MPI version used.
     * `processes_per_node` should be set to `1`
   * `pre_execution_command` should invoke the setup script downloaded as

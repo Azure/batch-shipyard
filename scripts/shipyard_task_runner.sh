@@ -15,6 +15,12 @@ set -o pipefail
 # SHIPYARD_CONTAINER_IMAGE_NAME: container name
 # SHIPYARD_USER_CMD: user command
 
+## Load environment modules, if available
+if [ -f /etc/profile.d/modules.sh ]; then
+    # shellcheck disable=SC1091
+    source /etc/profile.d/modules.sh
+fi
+
 ## PRE-EXEC
 if [ -n "$SHIPYARD_SYSTEM_PROLOGUE_CMD" ]; then
     eval "$SHIPYARD_SYSTEM_PROLOGUE_CMD"

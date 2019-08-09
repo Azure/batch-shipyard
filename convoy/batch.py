@@ -4379,12 +4379,13 @@ def _construct_mpi_command(pool, task):
                 ib_env['I_MPI_DAPL_TRANSLATION_CACHE'] = '0'
             elif settings.is_sriov_rdma_pool(pool.vm_size):
                 # IntelMPI pre-2019
-                if task.multi_instance.mpi.runtime == 'intelmpi_ofa':
+                if task.multi_instance.mpi.runtime == 'intelmpi-ofa':
                     ib_env['I_MPI_FABRICS'] = 'shm:ofa'
                 else:
                     # IntelMPI 2019+
                     ib_env['I_MPI_FABRICS'] = 'shm:ofi'
-    elif task.multi_instance.mpi.runtime == 'mpich':
+    elif (task.multi_instance.mpi.runtime == 'mpich' or
+          task.multi_instance.mpi.runtime == 'mvapich'):
         if isinstance(processes_per_node, int):
             mpi_opts.extend([
                 '-hosts $AZ_BATCH_HOST_LIST',
@@ -4541,7 +4542,7 @@ def _construct_task(
     env_vars = util.merge_dict(job_env_vars, task_env_vars)
     del task_env_vars
     # set gpu env vars
-    if task.gpu:
+    if task.gpu != 'disable':
         gpu_env = {
             'CUDA_CACHE_DISABLE': '0',
             'CUDA_CACHE_MAXSIZE': '1073741824',

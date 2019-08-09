@@ -16,10 +16,11 @@ The pool configuration should enable the following properties:
 * `max_tasks_per_node` must be set to 1 or omitted
 * `vm_configuration` must be defined
   * `platform_image` must be defined
-    * `offer` must be set to `CentOS-HPC`
     * `publisher` must be set to `OpenLogic`
-    * `sku` must be set to `CentOS-HPC`
-* `vm_size` must be set to `7.6`
+    * `offer` must be set to `CentOS-HPC`
+    * `sku` must be set to `7.6`
+* `vm_size` should be an SR-IOV RDMA compatible VM size such as
+`STANDARD_HB60rs` or `STANDARD_HC44rs`
 
 ### Global Configuration
 The global configuration should set the following properties:

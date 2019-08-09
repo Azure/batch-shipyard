@@ -14,7 +14,7 @@ job_specifications:
     multi_instance:
       num_instances: pool_current_dedicated
       mpi:
-        runtime: intelmpi_ofa
+        runtime: intelmpi-ofa
         processes_per_node: 1
       pre_execution_command: source /opt/intel2/compilers_and_libraries/linux/mkl/bin/mklvars.sh intel64; source /opt/intel2/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
     command: /bin/bash -c "cd /opt/intel2/mkl/benchmarks/hpcg/bin && export OMP_NUM_THREADS=$(nproc) && ./$EXE --n=$N --t=$T"
