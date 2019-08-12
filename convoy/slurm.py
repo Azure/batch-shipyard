@@ -840,10 +840,10 @@ def create_slurm_controller(
     if cont_role is None:
         raise RuntimeError('Role Id not found for Reader')
     # sometimes the sp created is not added to the directory in time for
-    # the following call, allow a minute worth of retries before giving up
+    # the following call, allow some retries before giving up
     attempts = 0
     role_assign_done = set()
-    while attempts < 30:
+    while attempts < 90:
         try:
             for i in range(0, len(ss)):
                 if i in role_assign_done:
@@ -864,7 +864,7 @@ def create_slurm_controller(
         except msrestazure.azure_exceptions.CloudError:
             time.sleep(2)
             attempts += 1
-            if attempts == 30:
+            if attempts == 90:
                 raise
     del attempts
     cont_role = None

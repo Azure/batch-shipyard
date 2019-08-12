@@ -72,20 +72,20 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.104/NVIDIA-Linux-x86_64-410.104.run'
+            '418.67/NVIDIA-Linux-x86_64-418.67.run'
         ),
         'sha256': (
-            '6ac4f7355a11e4b6ea2ff5b3d6ea677247f286daecf2e9373ef947ee08682cb7'
+            '8badb9aaf428550dc9f2c8629ba42ddde4850f0b6805b88920399deef63a40e8'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '410.104/NVIDIA-Linux-x86_64-410.104.run'
+            '418.67/NVIDIA-Linux-x86_64-418.67.run'
         ),
         'sha256': (
-            '6ac4f7355a11e4b6ea2ff5b3d6ea677247f286daecf2e9373ef947ee08682cb7'
+            '8badb9aaf428550dc9f2c8629ba42ddde4850f0b6805b88920399deef63a40e8'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
@@ -93,12 +93,12 @@ _NVIDIA_DRIVER = {
         # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'http://download.microsoft.com/download/8/5/D/'
-            '85DC7798-B9F7-4BB9-84E8-B3350D7B52F7/'
-            'NVIDIA-Linux-x86_64-410.92-grid.run'
+            'http://download.microsoft.com/download/B/0/D/'
+            'B0DD6405-CA50-4B99-A908-6D32C1B6836A/'
+            'NVIDIA-Linux-x86_64-430.30-grid.run'
         ),
         'sha256': (
-            '8289790fe89bb1e071422e2bc2c7e66ff89652b59eaca5ef4dbab16c0864ccb9'
+            'c624dff6ed1610d366e4fdc92dff54b720f6b609b7748b1da20615a41167ff75'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -138,20 +138,20 @@ _BATCH_INSIGHTS = {
     'linux': {
         'url': (
             'https://github.com/Azure/batch-insights/releases/download/v'
-            '1.2.0/batch-insights'
+            '1.3.0/batch-insights'
         ),
         'sha256': (
-            'd9ad5e38162772c93e241fb99dc07d1c49181a4ceb04ba175f92bf9b3698c6de'
+            'c07529f55d7c9db9b8e5361ef40dc5d3c05c2a3786284691375a58e8e78d87a8'
         ),
         'target': 'batch-insights'
     },
     'windows': {
         'url': (
             'https://github.com/Azure/batch-insights/releases/download/v'
-            '1.2.0/batch-insights.exe'
+            '1.3.0/batch-insights.exe'
         ),
         'sha256': (
-            '58c957d8c69c070b52e3d51f84f6cad214789305b8ffd61777564c32b81a2e21'
+            'd3112f0b609356afbc44b85e881735b00b09bc4dec1a74f022e3a59f6c6cf874'
         ),
         'target': 'batch-insights.exe'
     }

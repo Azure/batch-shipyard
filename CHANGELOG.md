@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Removed
+- Python 3.4 support
+
 ## [3.7.1] - 2019-07-23
 ### Fixed
 - Detection of graph root was broken with new version of Docker client (CLI)

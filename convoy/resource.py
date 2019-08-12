@@ -41,6 +41,7 @@ except ImportError:
 import random
 import time
 # non-stdlib imports
+import azure.mgmt.compute.models as computemodels
 import azure.mgmt.network.models as networkmodels
 import azure.mgmt.resource.resources.models as rgmodels
 import msrest.exceptions
@@ -704,13 +705,11 @@ def create_virtual_machine(
     if util.is_not_empty(disks):
         for diskname in vm_resource.vm_disk_map[offset].disk_array:
             data_disks.append(
-                compute_client.disks.models.DataDisk(
+                computemodels.DataDisk(
                     lun=lun,
                     name=diskname,
-                    create_option=compute_client.disks.models.
-                    DiskCreateOptionTypes.attach,
-                    managed_disk=compute_client.disks.models.
-                    ManagedDiskParameters(
+                    create_option=computemodels.DiskCreateOptionTypes.attach,
+                    managed_disk=computemodels.ManagedDiskParameters(
                         id=disks[diskname][0],
                     ),
                 )

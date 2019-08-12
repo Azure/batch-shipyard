@@ -39,6 +39,7 @@ try:
 except ImportError:
     import pathlib
 # non-stdlib imports
+import azure.mgmt.compute.models as computemodels
 import msrestazure.azure_exceptions
 # local imports
 from . import crypto
@@ -434,7 +435,7 @@ def delete_managed_disks(
 def list_disks(
         compute_client, config, resource_group=None, restrict_scope=False):
     # type: (azure.mgmt.compute.ComputeManagementClient, dict, str, bool) ->
-    #        List[str, computemodels.StorageAccountTypes]
+    #        List[str, computemodels.DiskStorageAccountTypes]
     """List managed disks
     :param azure.mgmt.compute.ComputeManagementClient compute_client:
         compute client
@@ -499,7 +500,8 @@ def _create_virtual_machine_extension(
     premium = False
     for diskname in rfs.storage_cluster.vm_disk_map[offset].disk_array:
         if (disks[diskname][1] ==
-                compute_client.disks.models.StorageAccountTypes.premium_lrs):
+                compute_client.disks.models.DiskStorageAccountTypes.
+                premium_lrs):
             premium = True
             break
     # construct server options
@@ -683,7 +685,7 @@ def create_storage_cluster(
                      'vm offset {}').format(disk, disk_map, i))
             if (disk_map[disk][1] ==
                     compute_client.disks.models.
-                    StorageAccountTypes.premium_lrs and
+                    DiskStorageAccountTypes.premium_lrs and
                     not settings.is_premium_storage_vm_size(
                         rfs.storage_cluster.vm_size)):
                 raise RuntimeError(
@@ -1288,16 +1290,14 @@ def expand_storage_cluster(
         for diskname in entry['new_disks']:
             if (disk_map[diskname][1] ==
                     compute_client.disks.models.
-                    StorageAccountTypes.premium_lrs):
+                    DiskStorageAccountTypes.premium_lrs):
                 premium = True
             vm.storage_profile.data_disks.append(
-                compute_client.disks.models.DataDisk(
+                computemodels.DataDisk(
                     lun=lun,
                     name=diskname,
-                    create_option=compute_client.disks.models.
-                    DiskCreateOptionTypes.attach,
-                    managed_disk=compute_client.disks.models.
-                    ManagedDiskParameters(
+                    create_option=computemodels.DiskCreateOptionTypes.attach,
+                    managed_disk=computemodels.ManagedDiskParameters(
                         id=disk_map[diskname][0],
                     ),
                 )

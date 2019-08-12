@@ -295,7 +295,7 @@ jobs:
             docker push $fedImage
             popd
             heimdallImage="alfpark/batch-shipyard:${DOCKER_TAG}-heimdall"
-            pushd federation
+            pushd heimdall
             docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $heimdallImage .
             docker push $heimdallImage
             popd

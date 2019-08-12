@@ -1811,8 +1811,8 @@ if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1
 fi
 
 # retrieve required docker images
-docker_pull_image alfpark/blobxfer:"${blobxferversion}"
-docker_pull_image alfpark/batch-shipyard:"${shipyardversion}"-cargo
+docker_pull_image "mcr.microsoft.com/blobxfer:${blobxferversion}"
+docker_pull_image "alfpark/batch-shipyard:${shipyardversion}-cargo"
 
 # install container runtimes
 install_singularity

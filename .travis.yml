@@ -4,7 +4,6 @@ cache: pip
 
 python:
   - 2.7
-  - 3.4
   - 3.5
   - 3.6
 
@@ -17,5 +16,5 @@ install:
 
 script:
   - flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
-  - if [[ $TRAVIS_PYTHON_VERSION != '2.7' ]] && [[ $TRAVIS_PYTHON_VERSION != '3.4' ]]; then flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py; fi
+  - if [[ $TRAVIS_PYTHON_VERSION > '3.4' ]]; then flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py; fi
   - shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh

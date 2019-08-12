@@ -296,9 +296,9 @@ def create_federation_proxy(
     if cont_role is None:
         raise RuntimeError('Role Id not found for Reader')
     # sometimes the sp created is not added to the directory in time for
-    # the following call, allow a minute worth of retries before giving up
+    # the following call, allow some retries before giving up
     attempts = 0
-    while attempts < 30:
+    while attempts < 90:
         try:
             role_assign = auth_client.role_assignments.create(
                 scope=sub_scope,
@@ -312,7 +312,7 @@ def create_federation_proxy(
         except msrestazure.azure_exceptions.CloudError:
             time.sleep(2)
             attempts += 1
-            if attempts == 30:
+            if attempts == 90:
                 raise
     del attempts
     if settings.verbose(config):

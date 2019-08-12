@@ -1,10 +1,12 @@
 azure-batch==7.0.0
 azure-cosmosdb-table==1.0.5
-azure-mgmt-compute==4.4.0
-azure-mgmt-resource==2.1.0
-azure-mgmt-storage==3.1.1
-azure-storage-blob==1.5.0
-azure-storage-queue==1.4.0
-msrestazure==0.5.1
+azure-mgmt-compute==6.0.0
+azure-mgmt-resource==3.1.0
+azure-mgmt-storage==4.0.0
+azure-storage-blob==2.0.1
+# temporarily pin azure-storage-common due to azure-cosmosdb-table incompatibility
+azure-storage-common==2.0.0
+azure-storage-queue==2.0.1
+msrestazure==0.6.1
 python-dateutil==2.8.0
-requests==2.21.0
+requests==2.22.0

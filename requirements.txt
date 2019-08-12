@@ -1,25 +1,27 @@
-adal==1.2.1
+adal==1.2.2
 azure-batch==7.0.0
 azure-cosmosdb-table==1.0.5
 azure-keyvault==1.1.0
-azure-mgmt-authorization==0.51.1
+azure-mgmt-authorization==0.60.0
 azure-mgmt-batch==6.0.0
-azure-mgmt-compute==4.4.0
-azure-mgmt-network==2.5.1
-azure-mgmt-resource==2.1.0
-azure-mgmt-storage==3.1.1
-azure-storage-blob==1.5.0
-azure-storage-file==1.4.0
-azure-storage-queue==1.4.0
-blobxfer==1.7.1
+azure-mgmt-compute==6.0.0
+azure-mgmt-network==4.0.0
+azure-mgmt-resource==3.1.0
+azure-mgmt-storage==4.0.0
+azure-storage-blob==2.0.1
+# temporarily pin azure-storage-common due to azure-cosmosdb-table incompatibility
+azure-storage-common==2.0.0
+azure-storage-file==2.0.1
+azure-storage-queue==2.0.1
+blobxfer==1.9.0
 click==7.0
 future==0.17.1
-futures==3.2.0; python_version < '3'
+futures==3.3.0; python_version < '3'
 keyrings.alt==3.1.1
-msrest==0.5.5
-msrestazure==0.5.1
-pathlib2==2.3.3; python_version < '3.5'
+msrest==0.6.9
+msrestazure==0.6.1
+pathlib2==2.3.4; python_version < '3.5'
 python-dateutil==2.8.0
-requests==2.21.0
-ruamel.yaml==0.15.89
-scandir==1.9.0; python_version < '3.5'
+requests==2.22.0
+ruamel.yaml==0.16.1
+scandir==1.10.0; python_version < '3.5'
