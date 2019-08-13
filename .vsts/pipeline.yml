@@ -3,7 +3,7 @@ name: $(SourceBranch)$(Rev:.r)
 jobs:
   - job: ComponentGovernance
     pool:
-      vmImage: vs2017-win2016
+      vmImage: windows-2019
     condition: ne(variables['Build.Reason'], 'PullRequest')
     variables:
       EnableDetectorPip: true
@@ -143,9 +143,9 @@ jobs:
         condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
       - powershell: |
           docker version
-          docker login -u="$(docker.username)" -p="$(docker.password)"
-          $cargoImage = "alfpark/batch-shipyard:" + $env:GIT_TAG + "-cargo-windows"
-          $cliImage = "alfpark/batch-shipyard:" + $env:GIT_TAG + "-cli-windows"
+          docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
+          $cargoImage = "$(docker.servername)/public/azure-batch/shipyard:" + $env:GIT_TAG + "-cargo-windows"
+          $cliImage = "$(docker.servername)/public/azure-batch/shipyard:" + $env:GIT_TAG + "-cli-windows"
           pushd docker\\windows\\cargo
           docker build --build-arg GIT_BRANCH=$env:BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$env:BUILD_SOURCEVERSION -t $cargoImage .
           docker push $cargoImage
@@ -241,6 +241,25 @@ jobs:
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
           startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.7'))
+      - script: |
+          set -e
+          set -o pipefail
+          docker version
+          docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
+          singularity_version=$(grep -m1 _SINGULARITY_VERSION convoy/misc.py | cut -d "'" -f 2)
+          echo "Replicating Singularity verison $singularity_version images to MCR"
+          dhImage="alfpark/singularity:${singularity_version}-mnt"
+          docker pull "$dhImage"
+          mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt"
+          docker tag "$dhImage" "$mcrImage"
+          docker push "$mcrImage"
+          dhImage="alfpark/singularity:${singularity_version}-mnt-resource"
+          docker pull "$dhImage"
+          mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt-resource"
+          docker tag "$dhImage" "$mcrImage"
+          docker push "$mcrImage"
+        displayName: Replicate Singularity Container Images
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
       - template: ./pyenv.yml
       - script: |
           set -e
@@ -277,35 +296,38 @@ jobs:
           set -e
           set -o pipefail
           docker version
-          docker login -u="$(docker.username)" -p="$(docker.password)"
+          docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
           if [ -n "$GIT_TAG" ]; then
-            cargoImage="alfpark/batch-shipyard:${DOCKER_TAG}-cargo"
             pushd cargo
+            cargoImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-cargo"
             docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cargoImage .
             docker push $cargoImage
             popd
-            cascadeImage="alfpark/batch-shipyard:${DOCKER_TAG}-cascade"
             pushd cascade
-            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cascadeImage .
+            cascadeImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-cascade-docker"
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cascadeImage -f Dockerfile.docker .
+            docker push $cascadeImage
+            cascadeImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-cascade-singularity"
+            docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cascadeImage -f Dockerfile.singularity .
             docker push $cascadeImage
             popd
-            fedImage="alfpark/batch-shipyard:${DOCKER_TAG}-federation"
             pushd federation
+            fedImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-federation"
             docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $fedImage .
             docker push $fedImage
             popd
-            heimdallImage="alfpark/batch-shipyard:${DOCKER_TAG}-heimdall"
             pushd heimdall
+            heimdallImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-heimdall"
             docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $heimdallImage .
             docker push $heimdallImage
             popd
-            slurmImage="alfpark/batch-shipyard:${DOCKER_TAG}-slurm"
             pushd slurm
+            slurmImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-slurm"
             docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $slurmImage .
             docker push $slurmImage
             popd
           fi
-          cliImage="alfpark/batch-shipyard:${DOCKER_TAG}-cli"
+          cliImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-cli"
           pushd docker/linux/cli
           docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cliImage .
           docker push $cliImage

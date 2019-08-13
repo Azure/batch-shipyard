@@ -99,7 +99,7 @@ if (!$?)
 }
 
 # pull required images
-Exec { docker pull alfpark/batch-shipyard:${v}-cargo-windows }
+Exec { docker pull mcr.microsoft.com/azure-batch/shipyard:${v}-cargo-windows }
 
 # touch node prep finished file
 New-Item -ItemType file $NodePrepFinished -Force

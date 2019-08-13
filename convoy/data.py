@@ -226,7 +226,8 @@ def process_input_data(config, bxfile, spec, on_task=False):
     :rtype: str
     :return: additonal command
     """
-    tfmimage = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+    tfmimage = 'mcr.microsoft.com/azure-batch/shipyard:{}-cargo'.format(
+        __version__)
     is_windows = settings.is_windows_pool(config)
     if is_windows:
         bxcmd = ('powershell -ExecutionPolicy Unrestricted -command '

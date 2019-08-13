@@ -1088,18 +1088,19 @@ task `task1` from a live compute node. Because all portions of the
 `--filespec` option are specified, the tool will not prompt for any input.
 
 ## <a name="container-cli"></a>Batch Shipyard Container Image CLI Invocation
-If using either the Docker image [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
+If using either the Docker image
+[mcr.microsoft.com/azure-batch/shipyard:latest-cli](https://hub.docker.com/_/microsoft-azure-batch-shipyard)
 or the Singularity image
-[shub://alfpark/batch-shipyard-singularity:cli](https://www.singularity-hub.org/collections/204),
+[library://alfpark/batch/shipyard:latest-cli](https://cloud.sylabs.io/library/alfpark/batch/shipyard),
 then you would invoke Batch Shipyard as:
 
 ```shell
 # if using Docker
-docker run --rm -it alfpark/batch-shipyard:latest-cli \
+docker run --rm -it mcr.microsoft.com/azure-batch/shipyard:latest-cli \
     <command> <subcommand> <options...>
 
 # if using Singularity
-singularity run shub://alfpark/batch-shipyard-singularity:cli \
+singularity run library://alfpark/batch/shipyard:latest-cli \
     <command> <subcommand> <options...>
 ```
 
@@ -1119,14 +1120,14 @@ Shipyard configs are stored in the host path
 docker run --rm -it \
     -v /home/user/batch-shipyard-configs:/configs \
     -w /configs \
-    alfpark/batch-shipyard:latest-cli \
+    mcr.microsoft.com/azure-batch/shipyard:latest-cli \
     <command> <subcommand> <options...>
 
 # if using Singularity
 singularity run \
     -B /home/user/batch-shipyard-configs:/configs \
     --pwd /configs \
-    shub://alfpark/batch-shipyard-singularity:cli \
+    library://alfpark/batch/shipyard:latest-cli \
     <command> <subcommand> <options...>
 ```
 

@@ -2,7 +2,7 @@ version: "3.5"
 
 services:
   federation:
-    image: alfpark/batch-shipyard:{BATCH_SHIPYARD_VERSION}-federation
+    image: mcr.microsoft.com/azure-batch/shipyard:{BATCH_SHIPYARD_VERSION}-federation
     container_name: federation
     restart: unless-stopped
     privileged: true

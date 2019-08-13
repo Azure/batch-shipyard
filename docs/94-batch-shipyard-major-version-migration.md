@@ -78,7 +78,10 @@ The Docker image name for the CLI has changed. Batch Shipyard Docker images
 now follow the `version-component` naming convetion for tags. Thus, the
 `latest` CLI version will now be `alfpark/batch-shipyard:latest-cli`. This
 will also apply to versioned CLI images. For example, version `3.0.0` will
-be named as `alfpark/batch-shipyard:3.0.0-cli`.
+be named as `alfpark/batch-shipyard:3.0.0-cli`. As of version `3.8.0`,
+Docker images are published to the
+[mcr.microsoft.com/azure-batch/shipyard](https://hub.docker.com/_/microsoft-azure-batch-shipyard)
+on the Microsoft Container Registry instead of Docker Hub.
 
 #### Command Renaming
 Some commands have been placed under sub-commands for better hierarchy

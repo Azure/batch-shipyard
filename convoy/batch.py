@@ -5204,7 +5204,8 @@ def add_jobs(
         addlcmds = data.process_input_data(config, bxfile, jobspec)
         if addlcmds is not None:
             if util.is_not_empty(federation_id):
-                tfm = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+                tfm = 'mcr.microsoft.com/azure-batch/shipyard:{}-cargo'.format(
+                    __version__)
                 if tfm in addlcmds:
                     raise RuntimeError(
                         'input_data:azure_batch is not supported at the '
@@ -5368,7 +5369,10 @@ def add_jobs(
                             config, 'continue adding job schedule {}'.format(
                                 job_id)):
                         continue
-            jmimgname = 'alfpark/batch-shipyard:{}-cargo'.format(__version__)
+            jmimgname = (
+                'mcr.microsoft.com/azure-batch/shipyard:{}-cargo'.format(
+                    __version__)
+            )
             if is_windows:
                 jmimgname = '{}-windows'.format(jmimgname)
                 jscmdline = (

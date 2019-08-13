@@ -3,10 +3,10 @@
 FROM ubuntu:18.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 
+ARG SINGULARITY_VERSION
 ARG LOCAL_STATE_DIR
 
-ENV SINGULARITY_VERSION=3.3.0 \
-    GO_VERSION=1.12 \
+ENV GO_VERSION=1.12 \
     GOOS=linux \
     GOARCH=amd64
 

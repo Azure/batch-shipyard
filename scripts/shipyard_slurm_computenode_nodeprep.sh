@@ -342,7 +342,7 @@ check_provisioning_status() {
     local reset_host=$2
     set +e
     docker run --rm -v "${SHIPYARD_VAR_DIR}:${SHIPYARD_VAR_DIR}:ro" \
-        "alfpark/batch-shipyard:${shipyardversion}-slurm" \
+        "mcr.microsoft.com/azure-batch/shipyard:${shipyardversion}-slurm" \
         check-provisioning-status --conf "${SHIPYARD_CONF_FILE}" \
         --host "$1"
     rc=$?
@@ -405,7 +405,7 @@ if [ -s "$SHIPYARD_HOST_FILE" ]; then
 
         docker run --rm -v "${SHIPYARD_CONF_FILE}:${SHIPYARD_CONF_FILE}:ro" \
             -v "${AZFILE_MOUNT_DIR}:${AZFILE_MOUNT_DIR}:rw" \
-            "alfpark/batch-shipyard:${shipyardversion}-slurm" \
+            "mcr.microsoft.com/azure-batch/shipyard:${shipyardversion}-slurm" \
             complete-node-assignment --conf "${SHIPYARD_CONF_FILE}" \
             --host "$host"
         touch "$SHIPYARD_COMPLETED_ASSIGNMENT_FILE"
@@ -420,7 +420,7 @@ create_batch_shipyard_slurm_config
 echo "Fetching host assignment"
 docker run --rm -v "${SHIPYARD_VAR_DIR}:${SHIPYARD_VAR_DIR}:rw" \
     -v "${AZFILE_MOUNT_DIR}:${AZFILE_MOUNT_DIR}:rw" \
-    "alfpark/batch-shipyard:${shipyardversion}-slurm" \
+    "mcr.microsoft.com/azure-batch/shipyard:${shipyardversion}-slurm" \
     get-node-assignment --conf "${SHIPYARD_CONF_FILE}"
 host=$(<${SHIPYARD_HOST_FILE})
 echo "Hostname assignment retrieved: $host"

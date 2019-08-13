@@ -22,6 +22,7 @@ MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
 IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
 UCX_IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/UCX_IB_PKEY
+SHIPYARD_IMAGE_PREFIX=mcr.microsoft.com/azure-batch/shipyard
 
 # status file consts
 lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
@@ -127,7 +128,7 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             echo "-e [thumbprint] encrypted credentials with cert"
             echo "-f set up glusterfs on compute"
             echo "-g [nv-series:driver file:nvidia docker pkg] gpu support"
-            echo "-i [version] singularity version"
+            echo "-i [version] install singularity container runtime"
             echo "-j delay docker image preload"
             echo "-k install kata containers runtime"
             echo "-l [lis pkg] LIS package install"
@@ -895,21 +896,21 @@ install_singularity() {
         return
     fi
     if [ -z "$singularityversion" ]; then
-        log WARNING "Singularity version not specified, not installing"
+        log DEBUG "Singularity not flagged for install"
         return
     fi
     local disuffix
     singularity_basedir="${USER_MOUNTPOINT}/singularity"
     if [ "${USER_MOUNTPOINT}" == "/mnt" ]; then
-        disuffix=mnt
+        disuffix=singularity-mnt
     else
-        disuffix=mnt-resource
+        disuffix=singularity-mnt-resource
     fi
     log DEBUG "Setting up Singularity for $DISTRIB_ID $DISTRIB_RELEASE"
     # install squashfs-tools for mksquashfs
     install_packages squashfs-tools
     # fetch docker image for singularity bits
-    local di="alfpark/singularity:${singularityversion}-${disuffix}"
+    local di="${SHIPYARD_IMAGE_PREFIX}:${singularityversion}-${disuffix}"
     log DEBUG "Image=${di} basedir=${singularity_basedir}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
@@ -1023,6 +1024,7 @@ process_fstab_entry() {
 mount_storage_clusters() {
     if [ -n "$SHIPYARD_STORAGE_CLUSTER_FSTAB" ]; then
         log DEBUG "Mounting storage clusters"
+        local fstab_mounts
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_STORAGE_CLUSTER_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1035,9 +1037,10 @@ mount_storage_clusters() {
 }
 
 process_storage_clusters() {
-    if [ -n "$sc_args" ]; then
+    if [ -n "${sc_args[0]}" ]; then
         log DEBUG "Processing storage clusters"
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
+        local fstab_mounts
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
         IFS='#' read -ra fstabs <<< "$fstab_mounts"
         i=0
@@ -1054,6 +1057,7 @@ process_storage_clusters() {
 mount_custom_fstab() {
     if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Mounting custom mounts via fstab"
+        local fstab_mounts
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1068,6 +1072,7 @@ mount_custom_fstab() {
 process_custom_fstab() {
     if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Processing custom mounts via fstab"
+        local fstab_mounts
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1264,35 +1269,36 @@ install_glusterfs_on_compute() {
 }
 
 check_for_storage_cluster_software() {
+    if [ -z "${sc_args[0]}" ]; then
+        return
+    fi
     local rc
-    if [ -n "$sc_args" ]; then
-        for sc_arg in "${sc_args[@]}"; do
-            IFS=':' read -ra sc <<< "$sc_arg"
-            local server_type=${sc[0]}
-            if [ "$server_type" == "nfs" ]; then
-                set +e
-                mount.nfs4 -V
-                rc=$?
-                set -e
-            elif [ "$server_type" == "glusterfs" ]; then
-                set +e
-                glusterfs -V
-                rc=$?
-                set -e
-            else
-                log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
-                exit 1
-            fi
-        done
-    fi
-    if [ $rc -ne 0 ]; then
-        log ERROR "required storage cluster software to mount $sc_args not installed"
-        exit 1
-    fi
+    for sc_arg in "${sc_args[@]}"; do
+        IFS=':' read -ra sc <<< "$sc_arg"
+        local server_type=${sc[0]}
+        if [ "$server_type" == "nfs" ]; then
+            set +e
+            mount.nfs4 -V
+            rc=$?
+            set -e
+        elif [ "$server_type" == "glusterfs" ]; then
+            set +e
+            glusterfs -V
+            rc=$?
+            set -e
+        else
+            log ERROR "Unknown file server type ${sc[0]} for ${sc[1]}"
+            exit 1
+        fi
+        if [ $rc -ne 0 ]; then
+            log ERROR "Required storage cluster software to mount $server_type not installed"
+            exit 1
+        fi
+    done
 }
 
 install_storage_cluster_dependencies() {
-    if [ -z "$sc_args" ]; then
+    if [ -z "${sc_args[0]}" ]; then
         return
     fi
     log DEBUG "Installing storage cluster dependencies"
@@ -1566,7 +1572,7 @@ install_and_start_node_exporter() {
     else
         ib="--no-collector.infiniband"
     fi
-    if [ -n "$sc_args" ]; then
+    if [ -n "${sc_args[0]}" ]; then
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
             if [ "${sc[0]}" == "nfs" ]; then
@@ -1606,7 +1612,7 @@ install_and_start_cadvisor() {
     if [ -n "${PROM_CADVISOR_OPTIONS}" ]; then
         IFS=',' read -ra pcao <<< "$PROM_CADVISOR_OPTIONS"
     else
-        pcao=
+        pcao=()
     fi
     "${AZ_BATCH_TASK_WORKING_DIR}"/cadvisor \
         -port "${PROM_CADVISOR_PORT}" \
@@ -1644,7 +1650,7 @@ echo "Encryption cert thumbprint: $encrypted"
 echo "Install Kata Containers: $kata"
 echo "Default container runtime: $default_container_runtime"
 echo "Install BeeGFS BeeOND: $beeond"
-echo "Storage cluster mount: ${sc_args[*]}"
+echo "Storage cluster mounts (${#sc_args[@]}): ${sc_args[*]}"
 echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
 echo "Install LIS: $lis"
 echo "GPU: $gpu"
@@ -1787,7 +1793,7 @@ if [ $gluster_on_compute -eq 1 ]; then
 fi
 
 # check or install dependencies for storage cluster mount
-if [ -n "$sc_args" ]; then
+if [ -n "${sc_args[0]}" ]; then
     if [ $custom_image -eq 1 ]; then
         check_for_storage_cluster_software
     else
@@ -1812,7 +1818,7 @@ fi
 
 # retrieve required docker images
 docker_pull_image "mcr.microsoft.com/blobxfer:${blobxferversion}"
-docker_pull_image "alfpark/batch-shipyard:${shipyardversion}-cargo"
+docker_pull_image "${SHIPYARD_IMAGE_PREFIX}:${shipyardversion}-cargo"
 
 # install container runtimes
 install_singularity
@@ -1837,8 +1843,8 @@ fi
 # touch node prep finished file to preserve idempotency
 touch "$nodeprepfinished"
 
-cascade_docker_image="alfpark/batch-shipyard:${shipyardversion}-cascade-docker"
-cascade_singularity_image="alfpark/batch-shipyard:${shipyardversion}-cascade-singularity"
+cascade_docker_image="${SHIPYARD_IMAGE_PREFIX}:${shipyardversion}-cascade-docker"
+cascade_singularity_image="${SHIPYARD_IMAGE_PREFIX}:${shipyardversion}-cascade-singularity"
 
 # execute cascade
 if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then

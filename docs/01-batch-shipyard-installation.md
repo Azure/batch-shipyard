@@ -307,7 +307,8 @@ Please see the Upgrading section below for information on upgrading to a new
 release of Batch Shipyard.
 
 ## <a name="docker-install"></a>Batch Shipyard CLI Installation via Docker
-If using the [alfpark/batch-shipyard:latest-cli](https://hub.docker.com/r/alfpark/batch-shipyard)
+If using the
+[mcr.microsoft.com/azure-batch/shipyard:latest-cli](https://hub.docker.com/_/microsoft-azure-batch-shipyard)
 Docker image, then all of the required software is bundled in the image
 itself, however, you will need an installation of the Docker engine on
 your machine. More information on installing Docker to your local machine
@@ -315,7 +316,7 @@ can be found [here](https://www.docker.com/products/overview).
 
 To install:
 ```shell
-docker pull alfpark/batch-shipyard:latest-cli
+docker pull mcr.microsoft.com/azure-batch/shipyard:latest-cli
 ```
 This will pull the CLI Docker image of Batch Shipyard to your local machine.
 You are now ready to execute it with `docker run`. Please see the
@@ -323,7 +324,8 @@ You are now ready to execute it with `docker run`. Please see the
 on how to execute the Batch Shipyard CLI Docker image.
 
 ## <a name="singularity-install"></a>Batch Shipyard CLI Installation via Singularity
-If using the [alfpark/batch-shipyard-singularity:cli](https://www.singularity-hub.org/collections/204)
+If using the
+[library://alfpark/batch/shipyard:latest-cli](https://cloud.sylabs.io/library/alfpark/batch/shipyard),
 Singularity image, then all of the required software is bundled in the image
 itself, however, you will need an installation of Singularity on your
 machine. More information on installing Singularity to your local machine
@@ -331,7 +333,7 @@ can be found [here](https://www.sylabs.io/singularity/).
 
 To install:
 ```shell
-singularity pull shub://alfpark/batch-shipyard-singularity:cli
+singularity pull library://alfpark/batch/shipyard:cli
 ```
 This will pull the CLI Singularity image of Batch Shipyard to your local
 machine (to the current working directory). You are now ready to execute

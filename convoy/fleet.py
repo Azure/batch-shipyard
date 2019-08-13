@@ -2238,10 +2238,10 @@ def _update_container_images(
                 d='-d' if (settings.batch_shipyard_settings(config)
                            .use_shipyard_docker_image) else '',
                 e='-e {}'.format(envfile),
-                i='-i alfpark/batch-shipyard:{}-cascade-docker'.format(
-                    __version__),
-                j=('-j alfpark/batch-shipyard:{}-cascade-singularity'
-                   .format(__version__)),
+                i=('-i mcr.microsoft.com/azure-batch/shipyard:'
+                   '{}-cascade-docker'.format(__version__)),
+                j=('-j mcr.microsoft.com/azure-batch/shipyard:'
+                   '{}-cascade-singularity'.format(__version__)),
                 ld='-l $log_directory',
                 p='-p {}'.format(
                     settings.batch_shipyard_settings(config)
@@ -2391,8 +2391,9 @@ def _list_docker_images(batch_client, config):
         for out in spout:
             if util.is_not_empty(out):
                 dec = out.split()
-                if (not dec[1].startswith('alfpark/batch-shipyard') and
-                        not dec[1].startswith('alfpark/blobxfer')):
+                if (not dec[1].startswith(
+                        'mcr.microsoft.com/azure-batch/shipyard') and
+                        not dec[1].startswith('mcr.microsoft.com/blobxfer')):
                     node_images[key].add(dec[0])
                     if dec[0] not in all_images:
                         all_images[dec[0]] = dec[1]

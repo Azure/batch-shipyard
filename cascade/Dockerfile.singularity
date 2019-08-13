@@ -1,7 +1,7 @@
 # Dockerfile for Azure/batch-shipyard (Cascade/Singularity)
 
 # base image containing singularity
-FROM alfpark/singularity:3.3.0-default
+FROM alfpark/singularity:3.3.0
 
 FROM ubuntu:18.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>

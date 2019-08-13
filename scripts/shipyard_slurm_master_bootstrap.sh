@@ -348,7 +348,7 @@ install_docker_host_engine() {
 }
 
 install_storage_cluster_dependencies() {
-    if [ -z "$sc_args" ]; then
+    if [ -z "${sc_args[0]}" ]; then
         return
     fi
     log DEBUG "Installing storage cluster dependencies"
@@ -433,7 +433,7 @@ process_fstab_entry() {
 }
 
 process_storage_clusters() {
-    if [ -n "$sc_args" ]; then
+    if [ -n "${sc_args[0]}" ]; then
         log DEBUG "Processing storage clusters"
         IFS='#' read -ra fstabs <<< "$SHIPYARD_STORAGE_CLUSTER_FSTAB"
         i=0
@@ -521,7 +521,7 @@ echo "Hostname: $HOSTNAME"
 echo "Batch Shipyard Version: $shipyardversion"
 echo "AAD cloud: $aad_cloud"
 echo "Storage: $storage_account:$storage_rg:$storage_prefix"
-echo "Storage cluster mount: ${sc_args[*]}"
+echo "Storage cluster mounts (${#sc_args[@]}): ${sc_args[*]}"
 echo "Cluster Id: $cluster_id"
 echo "Cluster Name: $cluster_name"
 echo "Cluster user: $cluster_user"
@@ -550,7 +550,7 @@ install_packages build-essential libffi-dev libssl-dev python3-dev
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python3
 
 # check or install dependencies for storage cluster mount
-if [ -n "$sc_args" ]; then
+if [ -n "${sc_args[0]}" ]; then
     install_storage_cluster_dependencies
 fi
 # process and mount storage clusters

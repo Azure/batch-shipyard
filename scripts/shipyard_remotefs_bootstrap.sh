@@ -852,7 +852,7 @@ if [ $attach_disks -eq 0 ]; then
         exit 1
     fi
     # setup samba server if specified
-    if [ -n "$samba_options" ]; then
+    if [ "${#samba_options[@]}" -ne 0 ]; then
         # install samba
         apt-get install -y -q --no-install-recommends samba
         # parse options

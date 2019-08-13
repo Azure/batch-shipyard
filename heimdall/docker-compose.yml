@@ -10,7 +10,7 @@ networks:
 
 services:
   heimdall:
-    image: alfpark/batch-shipyard:{BATCH_SHIPYARD_VERSION}-heimdall
+    image: mcr.microsoft.com/azure-batch/shipyard:{BATCH_SHIPYARD_VERSION}-heimdall
     container_name: heimdall
     restart: unless-stopped
     networks:
