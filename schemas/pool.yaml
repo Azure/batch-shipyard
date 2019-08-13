@@ -298,6 +298,10 @@ mapping:
                 type: str
               address_prefix:
                 type: str
+      public_ips:
+        type: seq
+        sequence:
+          - type: str
       certificates:
         type: map
         mapping:

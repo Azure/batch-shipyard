@@ -1023,6 +1023,41 @@ def _pool_virtual_network_subnet_address_space_check(
     return subnet_id
 
 
+def _pool_public_ip_check(network_client, config, pool_settings, bc):
+    # type: (azure.mgmt.network.NetworkManagementClient, dict,
+    #        settings.PoolSettings, settings.BatchCredentialsSettings) -> str
+    """Check if Pool public IPs are available
+    :param azure.mgmt.network.NetworkManagementClient network_client:
+        network client
+    :param dict config: configuration dict
+    :param settings.PoolSettings pool_settings: pool settings
+    :param settings.BatchCredentialsSettings bc: batch cred settings
+    """
+    if util.is_none_or_empty(pool_settings.public_ips):
+        logger.debug('no public ips settings specified')
+        return
+    # check if AAD is enabled
+    _check_for_batch_aad(bc, 'allocate a pool with public ips')
+    if network_client is None:
+        logger.warning(
+            'cannot check public ips without a valid network client')
+        return
+    for publicip in pool_settings.public_ips:
+        pip_components = util.explode_arm_pip_id(publicip)
+        pip = network_client.public_ip_addresses.get(
+            resource_group_name=pip_components[1],
+            public_ip_address_name=pip_components[3],
+        )
+        # does not actually check if public ip is used/attached
+        if pip.dns_settings is None:
+            raise RuntimeError(
+                'Public IP does not have DNS name label defined: {} '
+                '(address={})'.format(publicip, pip.ip_address))
+        logger.debug('pool public_ip_address={} fqdn={}'.format(
+            pip.ip_address,
+            pip.dns_settings.fqdn if pip.dns_settings is not None else 'n/a'))
+
+
 def _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, keyvault_client, config):
@@ -1110,6 +1145,7 @@ def _construct_pool_object(
     bc = settings.credentials_batch(config)
     subnet_id = _pool_virtual_network_subnet_address_space_check(
         resource_client, network_client, config, pool_settings, bc)
+    _pool_public_ip_check(network_client, config, pool_settings, bc)
     # construct fstab mounts for storage clusters
     sc_fstab_mounts = []
     sc_args = []
@@ -1551,10 +1587,11 @@ def _construct_pool_object(
             )
         else:
             pec = None
-        # add subnet and NAT rules
+        # add subnet, NAT rules, and public IPs
         pool.network_configuration = batchmodels.NetworkConfiguration(
             subnet_id=subnet_id,
             endpoint_configuration=pec,
+            public_ips=pool_settings.public_ips,
         )
     # storage cluster settings
     if util.is_not_empty(sc_fstab_mounts):

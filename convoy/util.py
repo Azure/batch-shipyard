@@ -691,3 +691,23 @@ def explode_arm_subnet_id(arm_subnet_id):
             'resource id is correct and is postfixed with the '
             '/subnets/<subnet_id> portion.')
     return subid, rg, provider, vnet, subnet
+
+
+def explode_arm_pip_id(arm_pip_id):
+    # type: (str) -> Tuple[str, str, str, str]
+    """Parses components from ARM pip id
+    :param str arm_subnet_id: ARM pip id
+    :rtype: tuple
+    :return: subid, rg, provider, ip
+    """
+    tmp = arm_pip_id.split('/')
+    try:
+        subid = tmp[2]
+        rg = tmp[4]
+        provider = tmp[6]
+        pip = tmp[8]
+    except IndexError:
+        raise ValueError(
+            'Error parsing arm_pip_id. Make sure the public IP address '
+            'resource id is correct.')
+    return subid, rg, provider, pip

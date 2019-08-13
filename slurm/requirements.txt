@@ -1,4 +1,4 @@
-azure-batch==7.0.0
+azure-batch==8.0.0
 azure-cosmosdb-table==1.0.5
 azure-mgmt-resource==3.1.0
 azure-mgmt-storage==4.0.0

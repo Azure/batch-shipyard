@@ -103,6 +103,9 @@ pool_specification:
     subnet:
       name: subnet-for-batch-vms
       address_prefix: 10.0.0.0/20
+  public_ips:
+  - /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/publicIPAddresses/<public_ip_name1>
+  - /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/publicIPAddresses/<public_ip_name2>
   certificates:
     sha1-thumbprint:
       visibility:

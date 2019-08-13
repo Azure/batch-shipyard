@@ -1,9 +1,9 @@
 adal==1.2.2
-azure-batch==7.0.0
+azure-batch==8.0.0
 azure-cosmosdb-table==1.0.5
 azure-keyvault==1.1.0
 azure-mgmt-authorization==0.60.0
-azure-mgmt-batch==6.0.0
+azure-mgmt-batch==7.0.0
 azure-mgmt-compute==6.0.0
 azure-mgmt-network==4.0.0
 azure-mgmt-resource==3.1.0

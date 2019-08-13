@@ -1,19 +1,21 @@
-# Virtual Networks and Batch Shipyard
+# Virtual Networks, Public IPs and Batch Shipyard
 The focus of this article is to explain how to bring your own Virtual Network
-with Batch Shipyard. This will allow you to deploy Batch compute nodes
-into a subnet within the Virtual Network that you specify.
+and/or public IPs with Batch Shipyard. This will allow you to deploy Batch
+compute nodes into a subnet within the Virtual Network that you specify and/or
+specify your own public IPs for the load balancers for the deployments
+underlying the Batch pool.
 
 ## Batch Account Modes, Configuration and Settings
 The following sections will describe the different account modes along with
 configuration and settings to enable you to deploy Batch compute nodes to
-an existing Virtual Network.
+an existing Virtual Network and/or public IPs.
 
 ### Choose Your Batch Account Mode
-You can bring your own virtual network with either Batch Service and
-User Subscription Batch accounts. Outside of management of the resources
-deployed to the subnets, there is no difference in Batch-level functionality.
-However, it may be more convenient or compliant to use one mode over the
-other.
+You can bring your own virtual network and/or public IPs with either Batch
+Service and User Subscription Batch accounts. Outside of management of the
+resources deployed to the subnets, there is no difference in Batch-level
+functionality. However, it may be more convenient or compliant to use one
+mode over the other.
 
 ### Azure Active Directory Authentication Required
 Azure Active Directory authentication is required for the `batch` account
@@ -22,18 +24,33 @@ regardless of the account mode. This means that the
 must include an `aad` section with the appropriate options, including the
 authentication method of your choosing.
 
-Your service principal requires at least the `Virtual Machine Contributor`
-role permission or a
+To bring your own virtual network to a pool, your service principal requires
+at least the `Virtual Machine Contributor` role permission or a
 [custom role with the action](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles):
 
 * `Microsoft.Network/virtualNetworks/subnets/join/action`
 
-### Public IP Quota
+To bring your own public IPs to a pool, your service principal requires
+at least the `Virtual Machine Contributor` role permission or a
+[custom role with the action](https://docs.microsoft.com/azure/active-directory/role-based-access-control-custom-roles):
+
+* `Microsoft.Network/virtualNetworks/read`
+* `Microsoft.Network/virtualNetworks/subnets/join/action`
+* `Microsoft.Network/publicIPAddresses/read`
+* `Microsoft.Network/publicIPAddresses/join/action`
+
+## Public IPs
 For pools that are not internode communication enabled, more than 1 public IP
-and load balancer may be created for the pool. These public IPs are allocated
-in the subscription that has allocated the virtual network. Please ensure
-that proper Public IP quota has been granted for the subscription of the
-virtual network.
+and load balancer may be created for the pool. If you are not bringing your
+own public IPs, they are allocated in the subscription that has allocated the
+virtual network. If you are not bringing your own public IPs, ensure that
+the sufficient Public IP quota has been granted for the subscription of the
+virtual network (and is sufficient for any pool resizes that may occur).
+
+If you are bringing your own public IPs, you must supply a sufficient number
+of public IPs in the pool configuration for the maximum number of compute
+nodes you intend to deploy for the pool. The current requirements are
+1 public IP per 50 dedicated nodes or 20 low priority nodes.
 
 Note that enabling internode communication is not recommended unless
 running MPI (multinstance) jobs as this will restrict the upper-bound
@@ -83,6 +100,28 @@ on-premises, then you may have to add
 to that subnet. Please follow the instructions found in this
 [document](https://docs.microsoft.com/azure/batch/batch-virtual-network#user-defined-routes-for-forced-tunneling).
 
+## `public_ips` Pool configuration
+To deploy Batch compute nodes with pre-defined public IPs that
+you specify, you will need to define the `public_ips` property in the
+pool configuration file. The template is:
+
+```yaml
+  public_ips:
+    - /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/publicIPAddresses/<public_ip_name1>
+    # ... more as needed
+```
+
+The subscription and region for which the public IPs have been allocated
+must match the subscription and region of the Batch account.
+
+Public IPs that you specify for the Batch pool:
+
+* Must not already be attached to another resource
+* Must have a DNS name label specified
+
+Batch Shipyard will perform basic validation of the public IPs given but will
+not check if the IP address has already been associated with another resource.
+
 ## Network Security
 Azure provides a resource called a Network Security Group that allows you
 to define security rules to restrict inbound and outbound network traffic
@@ -111,8 +150,8 @@ to allow traffic in at the Virtual Network level for Batch compute nodes to
 successfully operate.
 
 Ports `29876` and `29877` must allow `TCP` traffic from the
-`Source service tag` of `BatchNodeManagement` to `Any` Destination as shown
-below:
+`Source service tag` of `BatchNodeManagement` (or
+`BatchNodeManagement.[Region]`) to `Any` Destination as shown below:
 
 ![64-byovnet-nsg-inbound-rule.png](https://azurebatchshipyard.blob.core.windows.net/github/64-byovnet-nsg-inbound-rule.png)
 

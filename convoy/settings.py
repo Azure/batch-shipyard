@@ -225,7 +225,7 @@ PoolSettings = collections.namedtuple(
         'autoscale', 'node_fill_type', 'remote_access_control',
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
-        'per_job_auto_scratch', 'batch_insights_enabled',
+        'per_job_auto_scratch', 'batch_insights_enabled', 'public_ips',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1481,6 +1481,7 @@ def pool_settings(config):
             conf, 'per_job_auto_scratch', default=False),
         batch_insights_enabled=_kv_read(
             conf, 'batch_insights_enabled', default=False),
+        public_ips=_kv_read_checked(conf, 'public_ips'),
     )
 
 
