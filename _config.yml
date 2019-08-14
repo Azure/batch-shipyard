@@ -1,5 +1,5 @@
 title: Batch Shipyard
-description: Provision, execute, and monitor containerized workloads on Azure Batch
+description: Simplify HPC and Batch workloads on Azure
 google_analytics:
 show_downloads: false
 theme: jekyll-theme-architect
