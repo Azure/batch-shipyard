@@ -1427,6 +1427,10 @@ EOF
 }
 
 check_for_mellanox_card() {
+    if [ "$vm_rdma_type" -eq 0 ]; then
+        log DEBUG "Not an RDMA capable VM size, skipping IB detection/setup"
+        return
+    fi
     # check for mellanox card
     set +e
     local out
@@ -1436,27 +1440,30 @@ check_for_mellanox_card() {
     set -e
     echo "$out"
     if [ $rc -ne 0 ]; then
-        if [ "$vm_rdma_type" -eq 0 ]; then
-            log INFO "No Mellanox card(s) detected"
-        else
+        if [ "$vm_rdma_type" -eq 1 ]; then
             log ERROR "Expected Mellanox IB card not detected"
             exit 1
-        fi
-    else
-        if [ "$vm_rdma_type" -eq 1 ]; then
-            # extract IB PKEY
-            export_ib_pkey
-            # get ofed info
-            ofed_info
-            # run ib tools
-            ibstatus
-            ibv_devinfo
         elif [ "$vm_rdma_type" -eq 2 ]; then
-            # network direct rmda
-            install_intel_mpi
-        else
-            log DEBUG "Mellanox card is not IB/RDMA capable"
+            # check for ib device
+            if [ -e /dev/infiniband/uverbs0 ]; then
+                log INFO "IB device detected"
+            else
+                log ERROR "Expected IB device not detected"
+                exit 1
+            fi
         fi
+    fi
+    if [ "$vm_rdma_type" -eq 1 ]; then
+        # extract IB PKEY
+        export_ib_pkey
+        # get ofed info
+        ofed_info
+        # run ib tools
+        ibstatus
+        ibv_devinfo
+    elif [ "$vm_rdma_type" -eq 2 ]; then
+        # network direct rmda
+        install_intel_mpi
     fi
 }
 

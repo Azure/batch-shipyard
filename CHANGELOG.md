@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Provisioning Network Direct RDMA VM sizes (A8/A9/NC24rX/H16r/H16mr) resulted
+in start task failures
+
 ## [3.8.0] - 2019-08-13
 ### Added
 - Revamped Singularity support, including support for Singularity 3,
