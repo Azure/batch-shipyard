@@ -63,6 +63,7 @@ updates to SR-IOV RDMA VM sizes
 - Per-job autoscratch setup failing for more than 2 nodes
 
 ### Removed
+- Peer-to-peer image distribution support
 - Python 3.4 support
 
 ## [3.7.1] - 2019-07-23

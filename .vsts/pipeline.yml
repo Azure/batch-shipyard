@@ -83,7 +83,7 @@ jobs:
           echo "##vso[task.setvariable variable=ARTIFACT_CLI_PATH;]$artifactCliPath"
           $branchGitSha1 = [string]::Format("{0}@{1}",$env:BUILD_SOURCEBRANCHNAME,$env:BUILD_SOURCEVERSION.Substring(0,7))
           echo "$env:ARTIFACT_CLI $env:BUILDVER_TUPLE $branchGitSha1"
-          $fileverInfo = "docker\\windows\\file_version_info.txt"
+          $fileverInfo = "images\\docker\\windows\\file_version_info.txt"
           (Get-Content $fileverInfo).replace('{BUILDVER_TUPLE}', $env:BUILDVER_TUPLE) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{BUILDVER_DOTTED}', $env:BUILDVER_DOTTED) | Set-Content $fileverInfo
           (Get-Content $fileverInfo).replace('{BRANCH_GITSHA1}', $branchGitSha1) | Set-Content $fileverInfo
@@ -106,7 +106,7 @@ jobs:
           pip install --no-cache-dir pyinstaller
           pip install --upgrade -r requirements.txt
           pip install --upgrade --no-deps -r req_nodeps.txt
-          pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data federation\\docker-compose.yml;federation --add-data heimdall;heimdall --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon docker\\windows\\azure.ico --version-file docker\\windows\\file_version_info.txt --distpath bin shipyard.py
+          pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data federation\\docker-compose.yml;federation --add-data heimdall;heimdall --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon images\\docker\\windows\\azure.ico --version-file images\\docker\\windows\\file_version_info.txt --distpath bin shipyard.py
           blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%ARTIFACT_CLI_PATH%" --strip-components 1 --file-md5 --overwrite
           call pyi\\Scripts\\deactivate.bat
         displayName: Build
@@ -146,11 +146,11 @@ jobs:
           docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
           $cargoImage = "$(docker.servername)/public/azure-batch/shipyard:" + $env:GIT_TAG + "-cargo-windows"
           $cliImage = "$(docker.servername)/public/azure-batch/shipyard:" + $env:GIT_TAG + "-cli-windows"
-          pushd docker\\windows\\cargo
+          pushd images\\docker\\windows\\cargo
           docker build --build-arg GIT_BRANCH=$env:BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$env:BUILD_SOURCEVERSION -t $cargoImage .
           docker push $cargoImage
           popd
-          pushd docker\\windows\\cli
+          pushd images\\docker\\windows\\cli
           docker build --build-arg GIT_BRANCH=$env:BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$env:BUILD_SOURCEVERSION -t $cliImage .
           docker push $cliImage
           popd
@@ -210,7 +210,7 @@ jobs:
           if [[ "$PYENV_VERSION" == 3.7* ]]; then
             flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
           fi
-          shellcheck ./*.sh cargo/*.sh cascade/*.sh docker/*.sh scripts/*.sh
+          shellcheck ./*.sh cargo/*.sh cascade/*.sh images/*.sh scripts/*.sh
         displayName: Static Analysis
       - script: |
           set -e
@@ -343,7 +343,7 @@ jobs:
             popd
           fi
           cliImage="$(docker.servername)/public/azure-batch/shipyard:${DOCKER_TAG}-cli"
-          pushd docker/linux/cli
+          pushd images/docker/linux/cli
           docker build --build-arg GIT_BRANCH=$BUILD_SOURCEBRANCHNAME --build-arg GIT_COMMIT=$BUILD_SOURCEVERSION -t $cliImage .
           docker push $cliImage
           popd

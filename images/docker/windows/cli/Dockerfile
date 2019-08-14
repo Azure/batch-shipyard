@@ -19,6 +19,7 @@ RUN git clone -b $Env:GIT_BRANCH --single-branch https://github.com/Azure/batch-
     pip install --no-cache-dir --no-deps -r req_nodeps.txt ; \
     Remove-Item .git -Force -Recurse ; \
     Remove-Item .git* -Force -Recurse ; \
+    Remove-Item .vsts -Force -Recurse ; \
     Remove-Item .travis.yml -Force -Recurse ; \
     Remove-Item *.yml -Force -Recurse ; \
     Remove-Item install* -Force -Recurse

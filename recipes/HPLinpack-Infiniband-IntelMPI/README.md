@@ -36,8 +36,8 @@ published on [Docker Hub](https://hub.docker.com/r/alfpark/linpack).
 The global configuration should set the following properties:
 * `singularity_images` array must have a reference to a valid HPLinpack image
 that can be run with Intel MPI and Infiniband. This can be
-`shub://alfpark/linpack` which is
-published on [Singularity Hub](https://www.singularity-hub.org/containers/496).
+`library://alfpark/linpack/linpack:2018-intel-mkl` which is
+published on the [Singularity Library](https://cloud.sylabs.io/library/alfpark/linpack/linpack).
 
 ### Jobs Configuration
 #### Docker-based
