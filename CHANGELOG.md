@@ -2,6 +2,66 @@
 
 ## [Unreleased]
 
+## [3.8.0] - 2019-08-13
+### Added
+- Revamped Singularity support, including support for Singularity 3,
+SIF images, and pull support from ACR registries for SIF images via ORAS.
+Please see the global and jobs configuration docs for more information.
+([#146](https://github.com/Azure/batch-shipyard/issues/146))
+- New MPI interface in jobs configuration for seamless multi-instance task
+executions with automatic configuration for SR-IOV RDMA VM sizes with support
+for popular MPI runtimes including OpenMPI, MPICH, Intel MPI, and MVAPICH
+([#287](https://github.com/Azure/batch-shipyard/issues/287))
+- Support for Hb/Hc SR-IOV RDMA VM sizes
+([#277](https://github.com/Azure/batch-shipyard/issues/277))
+- Support for NC/NV/H Promo VM sizes
+- Support for user-specified job preparation and release tasks on the host
+([#202](https://github.com/Azure/batch-shipyard/issues/202))
+- Support for conditional output data
+([#230](https://github.com/Azure/batch-shipyard/issues/230))
+- Support for bring your own public IP addresses on Batch pools.
+Please see the pool configuration doc and the
+[Virtual Networks and Public IPs guide](docs/64-batch-shipyard-byovnet.md)
+for more information.
+- Support for Shared Image Gallery for custom images
+- Support for CentOS HPC 7.6 native conversion
+- Additional Slurm configuration options
+- New recipes: mpiBench across various configurations,
+OpenFOAM-Infiniband-OpenMPI, OSUMicroBenchmarks-Infiniband-MVAPICH
+
+### Changed
+- **Breaking Change:** the `singularity_images` property in the global
+configuration has been modified to accomodate Singularity 3 support.
+Please see the global configuration doc for more information.
+([#146](https://github.com/Azure/batch-shipyard/issues/146))
+- **Breaking Change:** the `gpu` property in the jobs configuration has
+been changed to `gpus` to accommodate the new native GPU execution
+support in Docker 19.03. Please see the jobs configuration doc for
+more information.
+([#293](https://github.com/Azure/batch-shipyard/issues/293))
+- `pool images` commands now support Singularity
+- Non-native task execution is now proxied via script
+([#235](https://github.com/Azure/batch-shipyard/issues/235))
+- Batch Shipyard images have been migrated to the Microsoft Container Registry
+([#278](https://github.com/Azure/batch-shipyard/issues/278))
+- Updated Docker CE to 19.03.1
+- Updated blobxfer to 1.9.0
+- Updated LIS to 4.3.3
+- Updated NC/ND driver to 418.67, NV driver to 430.30
+- Updated Batch Insights to 1.3.0
+- Updated dependencies to latest, where applicable
+- Updated Python to 3.7.4 for pre-built binaries
+- Updated Docker images to use Alpine 3.10
+- Various recipe updates to showcase the new MPI schema, HPLinpack and HPCG
+updates to SR-IOV RDMA VM sizes
+
+### Fixed
+- Cargo Batch service client update missed
+([#274](https://github.com/Azure/batch-shipyard/issues/274), [#296](https://github.com/Azure/batch-shipyard/issues/296))
+- Premium File Shares were not enumerating correctly with AAD
+([#294](https://github.com/Azure/batch-shipyard/issues/294))
+- Per-job autoscratch setup failing for more than 2 nodes
+
 ### Removed
 - Python 3.4 support
 
@@ -1532,7 +1592,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.7.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.8.0...HEAD
+[3.8.0]: https://github.com/Azure/batch-shipyard/compare/3.7.1...3.8.0
 [3.7.1]: https://github.com/Azure/batch-shipyard/compare/3.7.0...3.7.1
 [3.7.0]: https://github.com/Azure/batch-shipyard/compare/3.6.1...3.7.0
 [3.6.1]: https://github.com/Azure/batch-shipyard/compare/3.6.0...3.6.1

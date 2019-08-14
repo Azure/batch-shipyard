@@ -39,24 +39,9 @@ at least the `Virtual Machine Contributor` role permission or a
 * `Microsoft.Network/publicIPAddresses/read`
 * `Microsoft.Network/publicIPAddresses/join/action`
 
-## Public IPs
-For pools that are not internode communication enabled, more than 1 public IP
-and load balancer may be created for the pool. If you are not bringing your
-own public IPs, they are allocated in the subscription that has allocated the
-virtual network. If you are not bringing your own public IPs, ensure that
-the sufficient Public IP quota has been granted for the subscription of the
-virtual network (and is sufficient for any pool resizes that may occur).
+## Virtual Networks
 
-If you are bringing your own public IPs, you must supply a sufficient number
-of public IPs in the pool configuration for the maximum number of compute
-nodes you intend to deploy for the pool. The current requirements are
-1 public IP per 50 dedicated nodes or 20 low priority nodes.
-
-Note that enabling internode communication is not recommended unless
-running MPI (multinstance) jobs as this will restrict the upper-bound
-scalability of the pool.
-
-## `virtual_network` Pool configuration
+### `virtual_network` Pool configuration
 To deploy Batch compute nodes into a subnet within a Virtual Network that
 you specify, you will need to define the `virtual_network` property in the
 pool configuration file. The template is:
@@ -100,7 +85,24 @@ on-premises, then you may have to add
 to that subnet. Please follow the instructions found in this
 [document](https://docs.microsoft.com/azure/batch/batch-virtual-network#user-defined-routes-for-forced-tunneling).
 
-## `public_ips` Pool configuration
+## Public IPs
+For pools that are not internode communication enabled, more than 1 public IP
+and load balancer may be created for the pool. If you are not bringing your
+own public IPs, they are allocated in the subscription that has allocated the
+virtual network. If you are not bringing your own public IPs, ensure that
+the sufficient Public IP quota has been granted for the subscription of the
+virtual network (and is sufficient for any pool resizes that may occur).
+
+If you are bringing your own public IPs, you must supply a sufficient number
+of public IPs in the pool configuration for the maximum number of compute
+nodes you intend to deploy for the pool. The current requirements are
+1 public IP per 50 dedicated nodes or 20 low priority nodes.
+
+Note that enabling internode communication is not recommended unless
+running MPI (multinstance) jobs as this will restrict the upper-bound
+scalability of the pool.
+
+### `public_ips` Pool configuration
 To deploy Batch compute nodes with pre-defined public IPs that
 you specify, you will need to define the `public_ips` property in the
 pool configuration file. The template is:

@@ -1,8 +1,6 @@
 [![Build Status](https://azurebatch.visualstudio.com/batch-shipyard/_apis/build/status/batch-shipyard-CI)](https://azurebatch.visualstudio.com/batch-shipyard/_build/latest?definitionId=11)
 [![Build Status](https://travis-ci.org/Azure/batch-shipyard.svg?branch=master)](https://travis-ci.org/Azure/batch-shipyard)
 [![Build status](https://ci.appveyor.com/api/projects/status/3a0j0gww57o6nkpw/branch/master?svg=true)](https://ci.appveyor.com/project/alfpark/batch-shipyard)
-[![Docker Pulls](https://img.shields.io/docker/pulls/alfpark/batch-shipyard.svg)](https://hub.docker.com/r/alfpark/batch-shipyard)
-[![Image Layers](https://images.microbadger.com/badges/image/alfpark/batch-shipyard:latest-cli.svg)](http://microbadger.com/images/alfpark/batch-shipyard)
 
 # Batch Shipyard
 <img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.gif" alt="dashboard" width="1024" />
@@ -28,13 +26,21 @@ in Azure, independent of any integrated Azure Batch functionality.
 [Kata Containers](https://katacontainers.io/) tuned for Azure Batch
 compute nodes
 * Automated deployment of container images required for tasks to compute nodes
+* Support for container registries including
+[Azure Container Registry](https://azure.microsoft.com/services/container-registry/)
+for both Docker and Singularity images (ORAS), other Internet-accessible
+public and private registries, and support for
+the [Sylabs Singularity Library](https://cloud.sylabs.io/library) and
+[Singularity Hub](https://singularity-hub.org/)
 * Transparent support for GPU-accelerated container applications on both
 [Docker](https://github.com/NVIDIA/nvidia-docker) and Singularity
 on [Azure N-Series VM instances](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
-* Support for Docker Registries including
-[Azure Container Registry](https://azure.microsoft.com/services/container-registry/),
-other Internet-accessible public and private registries, and support for
-the [Singularity Hub](https://singularity-hub.org/) Container Registry
+* Transparent assist for running Docker and Singularity containers utilizing
+Infiniband/RDMA on HPC Azure VM instances including
+[A-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
+[H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
+[Hb/Hc-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
+and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
 
 ### Data Management and Shared File Systems
 * Comprehensive [data movement](https://batch-shipyard.readthedocs.io/en/latest/70-batch-shipyard-data-movement/)
@@ -90,13 +96,8 @@ to accommodate MPI and multi-node cluster applications packaged as Docker or
 Singularity containers on compute pools with automatic job completion and
 task termination
 * Seamless, direct high-level configuration support for popular MPI runtimes
-including OpenMPI, MPICH, MVAPICH, and Intel MPI
-* Transparent assist for running Docker and Singularity containers utilizing
-Infiniband/RDMA for MPI on HPC low-latency Azure VM instances including
-[A-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
-[H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
-[Hb/Hc-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
-and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
+including OpenMPI, MPICH, MVAPICH, and Intel MPI with automatic configuration
+for Infiniband, including SR-IOV RDMA VM sizes
 * Seamless integration with Azure Batch job, task and file concepts along with
 full pass-through of the
 [Azure Batch API](https://azure.microsoft.com/documentation/articles/batch-api-basics/)
@@ -111,9 +112,11 @@ tasks at set intervals
 * Support for [Low Priority Compute Nodes](https://docs.microsoft.com/azure/batch/batch-low-pri-vms)
 * Support for deploying Batch compute nodes into a specified
 [Virtual Network](https://batch-shipyard.readthedocs.io/en/latest/64-batch-shipyard-byovnet/)
+and pre-defined public IP addresses
 * Automatic setup of SSH or RDP users to all nodes in the compute pool and
 optional creation of SSH tunneling scripts to Docker Hosts on compute nodes
 * Support for [custom host images](https://batch-shipyard.readthedocs.io/en/latest/63-batch-shipyard-custom-images/)
+including Shared Image Gallery
 * Support for [Windows Containers](https://docs.microsoft.com/virtualization/windowscontainers/about/)
 on compliant Windows compute node pools with the ability to activate
 [Azure Hybrid Use Benefit](https://azure.microsoft.com/pricing/hybrid-benefit/)
@@ -134,8 +137,8 @@ and [iOS](https://itunes.apple.com/us/app/microsoft-azure/id1219013620?mt=8)
 app.
 
 Simply request a Cloud Shell session and type `shipyard` to invoke the CLI;
-no installation is required. Try Batch Shipyard now from your browser:
-[![Launch Cloud Shell](https://shell.azure.com/images/launchcloudshell.png "Launch Cloud Shell")](https://shell.azure.com)
+no installation is required. Try Batch Shipyard now
+[in your browser](https://shell.azure.com).
 
 ## Documentation and Recipes
 Please refer to the
