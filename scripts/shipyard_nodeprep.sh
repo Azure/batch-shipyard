@@ -329,6 +329,17 @@ get_vm_size_from_imds() {
     log INFO "VmSize=$vm_size RDMA=$vm_rdma_type"
 }
 
+set_default_pool_user_privileges() {
+    if [ -n "$docker_group" ]; then
+        # Modify the default pool user to have sudo privileges, which in turn
+        # will give access to the Docker socket. This is required to allow
+        # input/output phases via Docker containers as the default pool user.
+        usermod -aG _azbatchsudogrp _azbatch
+    else
+        usermod -aG docker _azbatch
+    fi
+}
+
 download_file_as() {
     log INFO "Downloading: $1 as $2"
     local retries=10
@@ -1778,6 +1789,11 @@ sed -i 's/^Defaults[ ]*requiretty/# Defaults requiretty/g' /etc/sudoers
 # install docker host engine on non-native
 if [ $custom_image -eq 0 ] && [ $native_mode -eq 0 ]; then
     install_docker_host_engine
+fi
+
+# set default pool user privileges
+if [ $native_mode -eq 0 ]; then
+    set_default_pool_user_privileges
 fi
 
 # login to registry servers (do not specify -e as creds have been decrypted)
