@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+## [3.8.1] - 2019-08-19
+### Changed
+- Updated blobxfer to 1.9.1
+
 ### Fixed
+- Task runner regressions for non-native mode pools including `input_data`,
+`output_data` and `pre_execution_command` for native mode pools
+([#301](https://github.com/Azure/batch-shipyard/issues/301))
 - Provisioning Network Direct RDMA VM sizes (A8/A9/NC24rX/H16r/H16mr) resulted
 in start task failures
+([#299](https://github.com/Azure/batch-shipyard/issues/299))
 
 ## [3.8.0] - 2019-08-13
 ### Added
@@ -1597,7 +1605,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.8.0...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.8.1...HEAD
+[3.8.1]: https://github.com/Azure/batch-shipyard/compare/3.8.0...3.8.1
 [3.8.0]: https://github.com/Azure/batch-shipyard/compare/3.7.1...3.8.0
 [3.7.1]: https://github.com/Azure/batch-shipyard/compare/3.7.0...3.7.1
 [3.7.0]: https://github.com/Azure/batch-shipyard/compare/3.6.1...3.7.0
