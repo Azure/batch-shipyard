@@ -66,7 +66,7 @@ resize command again if you encounter this issue.
 
 #### Compute Node appears to be stuck in `starting` state
 If you are using pools with `native` container support, compute nodes that
-appear to be "stuck" in `starting` state may not be stack at all. During this
+appear to be "stuck" in `starting` state may not really be stuck. During this
 phase, all Docker images specified in the `global_resources` are preloaded
 on to compute nodes. Thus, it may take a while for your compute nodes to
 transition to `idle` from this state.
@@ -79,8 +79,8 @@ with `pool nodes del --all-starting` and then `pool resize` to scale the
 pool back to your desired amount.
 
 #### Compute Node appears to be stuck in `waiting_for_start_task` state
-Compute nodes that appear to be "stuck" in waiting for start task may not be
-stuck at all. If you are not using pools with `native` container support
+Compute nodes that appear to be "stuck" in waiting for start task may not
+really be stuck. If you are not using pools with `native` container support
 and are specifying that nodes should block for all Docker images to
 be present on the node before allowing scheduling and your Docker images are
 large, it may take a while for your compute nodes to transition from waiting
@@ -113,8 +113,8 @@ Alternatively, you can issue the command
 nodes that have entered this state.
 
 If the compute node fails to start properly, Batch Shipyard will automatically
-download the compute node's stdout.txt, stderr.txt and cascade.log files
-for the start task into the directory where you ran `shipyard`. The files
+download the compute node's `stdout.txt`, `stderr.txt` and `wd/cascade*.log`
+files for the start task into the directory where you ran `shipyard`. The files
 will be placed in `<pool name>/<node id>/startup/`. You can examine these
 files to see what the possible culprit for the issue is. If it appears to be
 transient, you can try to create the pool again. If it appears to be a Batch

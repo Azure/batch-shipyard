@@ -607,7 +607,7 @@ def _retrieve_outputs_from_failed_nodes(batch_client, config, nodeid=None):
     else:
         sep = '/'
     stdfilter = sep.join(('startup', 'std*.txt'))
-    cascadelog = sep.join(('startup', 'wd', 'cascade.log'))
+    cascadelog = sep.join(('startup', 'wd', 'cascade*.log'))
     # for any node in state start task failed, retrieve the stdout and stderr
     for node in nodes:
         if node.state == batchmodels.ComputeNodeState.start_task_failed:
