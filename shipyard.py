@@ -1002,8 +1002,7 @@ def slurm_options(f):
 @click.version_option(version=convoy.__version__)
 @click.pass_context
 def cli(ctx):
-    """Batch Shipyard: Provision, execute and monitor container workloads on
-    Azure Batch"""
+    """Batch Shipyard: Simplify HPC and Batch workloads on Azure"""
     pass
 
 

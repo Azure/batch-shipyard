@@ -161,15 +161,16 @@ def _inclusion_check(path, include, exclude):
     return inc
 
 
-def _list_all_files_in_fileshare(client, fileshare):
-    # type: (azure.storage.file.FileService, str) -> str
+def _list_all_files_in_fileshare(client, fileshare, prefix):
+    # type: (azure.storage.file.FileService, str, str) -> str
     """List all files in share
     :param azure.storage.file.FileService client: file client
     :param str fileshare: file share
+    :param str prefix: prefix directory
     :rtype: str
     :return: file name
     """
-    dirs = [None]
+    dirs = [prefix]
     while len(dirs) > 0:
         dir = dirs.pop()
         files = client.list_directories_and_files(
@@ -202,9 +203,13 @@ def _get_storage_entities(task_factory, storage_settings):
             account_name=storage_settings.storage_settings.account,
             account_key=storage_settings.storage_settings.account_key,
             endpoint_suffix=storage_settings.storage_settings.endpoint)
-        # list blobs in container with include/exclude
+        # list blobs in container with filters
+        if storage_settings.container != storage_settings.remote_path:
+            prefix = '/'.join(storage_settings.remote_path.split('/')[1:])
+        else:
+            prefix = None
         blobs = blob_client.list_blobs(
-            container_name=storage_settings.container)
+            container_name=storage_settings.container, prefix=prefix)
         for blob in blobs:
             if not _inclusion_check(
                     blob.name, storage_settings.include,
@@ -257,8 +262,12 @@ def _get_storage_entities(task_factory, storage_settings):
             account_key=storage_settings.storage_settings.account_key,
             endpoint_suffix=storage_settings.storage_settings.endpoint)
         # list files in share with include/exclude
+        if storage_settings.container != storage_settings.remote_path:
+            prefix = '/'.join(storage_settings.remote_path.split('/')[1:])
+        else:
+            prefix = None
         for file in _list_all_files_in_fileshare(
-                file_client, storage_settings.container):
+                file_client, storage_settings.container, prefix):
             if not _inclusion_check(
                     file, storage_settings.include,
                     storage_settings.exclude):
