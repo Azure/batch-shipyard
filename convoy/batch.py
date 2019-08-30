@@ -3038,9 +3038,12 @@ def list_nodes(
             '  * last boot time: {}'.format(node.last_boot_time),
             '  * scheduling state: {}'.format(node.scheduling_state.value),
             '  * agent:',
-            '    * version: {}'.format(node.node_agent_info.version),
+            '    * version: {}'.format(
+                node.node_agent_info.version
+                if node.node_agent_info is not None else 'pending'),
             '    * last update time: {}'.format(
-                node.node_agent_info.last_update_time),
+                node.node_agent_info.last_update_time
+                if node.node_agent_info is not None else 'pending'),
         ]
         entry.extend(errors)
         entry.extend(st)
