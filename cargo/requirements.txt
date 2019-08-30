@@ -1,3 +1,4 @@
 azure-batch==8.0.0
 msrest==0.6.9
 requests==2.22.0
+ruamel.yaml==0.16.5
