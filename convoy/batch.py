@@ -2718,8 +2718,16 @@ def _terminate_task(
         # directly send docker kill signal if running
         if _task.state == batchmodels.TaskState.running or force:
             # check if task is a docker task
-            if ('docker run' in _task.command_line or
-                    'docker exec' in _task.command_line):
+            is_docker_task = False
+            if 'shipyard_docker_exec_task_runner' in _task.command_line:
+                is_docker_task = True
+            else:
+                for env_var in _task.environment_settings:
+                    if env_var.name == 'SHIPYARD_RUNTIME':
+                        if env_var.value == 'docker':
+                            is_docker_task = True
+                        break
+            if is_docker_task:
                 if (_task.multi_instance_settings is not None and
                         _task.multi_instance_settings.number_of_instances > 1):
                     task_is_mi = True

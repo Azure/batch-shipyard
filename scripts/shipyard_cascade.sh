@@ -14,6 +14,7 @@ cascade_singularity_image=
 concurrent_source_downloads=10
 envfile=
 is_start_task=0
+log_directory=
 prefix=
 singularity_basedir=
 
@@ -68,6 +69,8 @@ while getopts "h?b:c:de:i:j:l:p:s:t" opt; do
             ;;
     esac
 done
+shift $((OPTIND-1))
+[ "$1" = "--" ] && shift
 
 if [ $cascadecontainer -eq 1 ] && [ -z "$envfile" ]; then
     log ERROR "envfile not specified"

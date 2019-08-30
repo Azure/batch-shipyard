@@ -2269,16 +2269,16 @@ def _update_container_images(
             'set -a',
             '. {}'.format(envfile),
             'set +a',
-            'log_directory=$(pwd)',
+            'log_directory=$PWD',
             'pushd $AZ_BATCH_NODE_STARTUP_DIR/wd',
             './shipyard_cascade.sh '
             '{b} {c} {d} {e} {i} {j} {ld} {p} {s}'.format(
-                b='-b $SHIPYARD_CONTAINER_IMAGES_PRELOAD',
+                b='-b "$SHIPYARD_CONTAINER_IMAGES_PRELOAD"',
                 c='-c {}'.format(
-                    settings.data_replication_settings(config)
-                    .concurrent_source_downloads),
-                d='-d' if (settings.batch_shipyard_settings(config)
-                           .use_shipyard_docker_image) else '',
+                    settings.data_replication_settings(
+                        config).concurrent_source_downloads),
+                d='-d' if (settings.batch_shipyard_settings(
+                    config).use_shipyard_docker_image) else '',
                 e='-e {}'.format(envfile),
                 i=('-i mcr.microsoft.com/azure-batch/shipyard:'
                    '{}-cascade-docker'.format(__version__)),
@@ -2286,22 +2286,23 @@ def _update_container_images(
                    '{}-cascade-singularity'.format(__version__)),
                 ld='-l $log_directory',
                 p='-p {}'.format(
-                    settings.batch_shipyard_settings(config)
-                    .storage_entity_prefix),
+                    settings.batch_shipyard_settings(
+                        config).storage_entity_prefix),
                 s='-s {}/singularity'.format(
                     settings.temp_disk_mountpoint(config))),
             'popd'
         ])
     else:
         if util.is_not_empty(docker_images):
-            coordcmd.extend(['docker pull {}'
-                             .format(x) for x in docker_images])
+            coordcmd.extend(
+                ['docker pull {}'.format(x) for x in docker_images])
             coordcmd.append(
                 'docker images --filter dangling=true -q --no-trunc | '
                 'xargs --no-run-if-empty docker rmi')
         if util.is_not_empty(singularity_images):
-            logger.warning('skip verifying for singularity images: {}'
-                           .format(', '.join(singularity_images)))
+            logger.warning(
+                'skip verifying for singularity images: {}'.format(
+                    ', '.join(singularity_images)))
             coordcmd.extend([
                 'export SINGULARITY_TMPDIR={}'.format(
                     settings.get_singularity_tmpdir(config)),
