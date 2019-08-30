@@ -286,12 +286,15 @@ Sylabs Cloud are also not supported.
           by Azure KeyVault.
 
 ### Management: `management`
-* (optional) The `management` property defines the required members for
-accessing Azure Resources (ARM) with Azure Active Directory credentials. This
-is required with `fs` filesystem actions and pools that need to be created
-with a `virtual_network` specification.
+* (required depending upon context) The `management` property
+defines the required members for accessing Azure Resources (ARM) with Azure
+Active Directory credentials. This is required if using `aad`. For example,
+it would be required with `fs` filesystem actions, `monitor` actions,
+and pools that need to be created with ARM resources such as custom images,
+virtual networks, or public IPs.
     * (required) `subscription_id` is the subscription id to interact with.
-    * (required) `aad` AAD authentication parameters for ARM.
+    * (required if not specified globally) `aad` AAD authentication parameters
+      for ARM.
 
 ### KeyVault: `keyvault`
 Please see the
@@ -305,10 +308,13 @@ this property is *mutually exclusive* of all other properties in this file.
 If you need to define other members in this config file while using Azure
 KeyVault, then you will need to use environment variables or cli parameters
 instead for AAD and KeyVault credentials.
-    * (optional) `uri` property defines the Azure KeyVault DNS name (URI).
-    * (optional) `credentials_secret_id` property defines the KeyVault secret
+    * (required if not using command line option or environment variable) `uri`
+      property defines the Azure KeyVault DNS name (URI).
+    * (required if not using command line option or environment variable)
+      `credentials_secret_id` property defines the KeyVault secret
       id containing an entire credentials.yaml file.
-    * (required) `aad` AAD authentication parameters for KeyVault.
+    * (required if not specified globally) `aad` AAD authentication parameters
+      for KeyVault.
 
 Please refer to the
 [Azure KeyVault and Batch Shipyard guide](74-batch-shipyard-azure-keyvault.md)

@@ -197,26 +197,27 @@ be specified at once, i.e., `--aad-auth-key`, `--aad-password`, and
 Note that the following options can be specified as environment variables
 instead:
 
-* `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
-* `SHIPYARD_CREDENTIALS_CONF` in lieu of `--credentials`
-* `SHIPYARD_CONFIG_CONF` in lieu of `--config`
-* `SHIPYARD_POOL_CONF` in lieu of `--pool`
-* `SHIPYARD_JOBS_CONF` in lieu of `--jobs`
-* `SHIPYARD_FS_CONF` in lieu of `--fs`
-* `SHIPYARD_MONITOR_CONF` in lieu of `--monitor`
-* `SHIPYARD_SUBSCRIPTION_ID` in lieu of `--subscription-id`
-* `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
-* `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
-`--keyvault-credentials-secret-id`
-* `SHIPYARD_AAD_ENDPOINT` in lieu of `--aad-endpoint`
-* `SHIPYARD_AAD_DIRECTORY_ID` in lieu of `--aad-directory-id`
 * `SHIPYARD_AAD_APPLICATION_ID` in lieu of `--aad-application-id`
 * `SHIPYARD_AAD_AUTH_KEY` in lieu of `--aad-auth-key`
 * `SHIPYARD_AAD_AUTHORITY_URL` in lieu of `--aad-authority-url`
-* `SHIPYARD_AAD_USER` in lieu of `--aad-user`
-* `SHIPYARD_AAD_PASSWORD` in lieu of `--aad-password`
 * `SHIPYARD_AAD_CERT_PRIVATE_KEY` in lieu of `--aad-cert-private-key`
 * `SHIPYARD_AAD_CERT_THUMBPRINT` in lieu of `--aad-cert-thumbprint`
+* `SHIPYARD_AAD_DIRECTORY_ID` in lieu of `--aad-directory-id`
+* `SHIPYARD_AAD_ENDPOINT` in lieu of `--aad-endpoint`
+* `SHIPYARD_AAD_PASSWORD` in lieu of `--aad-password`
+* `SHIPYARD_AAD_USER` in lieu of `--aad-user`
+* `SHIPYARD_CONFIG_CONF` in lieu of `--config`
+* `SHIPYARD_CONFIGDIR` in lieu of `--configdir`
+* `SHIPYARD_CREDENTIALS_CONF` in lieu of `--credentials`
+* `SHIPYARD_FS_CONF` in lieu of `--fs`
+* `SHIPYARD_JOBS_CONF` in lieu of `--jobs`
+* `SHIPYARD_KEYVAULT_CREDENTIALS_SECRET_ID` in lieu of
+`--keyvault-credentials-secret-id`
+* `SHIPYARD_KEYVAULT_URI` in lieu of `--keyvault-uri`
+* `SHIPYARD_MONITOR_CONF` in lieu of `--monitor`
+* `SHIPYARD_POOL_CONF` in lieu of `--pool`
+* `SHIPYARD_SLURM_CONF` in lieu of `--slurm`
+* `SHIPYARD_SUBSCRIPTION_ID` in lieu of `--subscription-id`
 
 ## Commands
 `shipyard` has the following top-level commands:

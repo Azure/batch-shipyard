@@ -362,6 +362,12 @@ def create_storage_clients():
     """
     account_name = storage.get_storageaccount()
     account_key = storage.get_storageaccount_key()
+    if account_key is None:
+        raise RuntimeError(
+            'No storage account key provided for storage account {}. If '
+            'accessing via AAD, ensure that a subscription id is specified '
+            'under management in the credentials configuration.'.format(
+                account_name))
     endpoint_suffix = storage.get_storageaccount_endpoint()
     blob_client = azureblob.BlockBlobService(
         account_name=account_name,
