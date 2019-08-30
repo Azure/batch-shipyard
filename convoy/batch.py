@@ -1281,8 +1281,9 @@ def list_pools(batch_client, config):
             errors = ['  * resize errors:']
             for err in pool.resize_errors:
                 errors.append('    * {}: {}'.format(err.code, err.message))
-                for de in err.values:
-                    de.append('      * {}: {}'.format(de.name, de.value))
+                if util.is_not_empty(err.values):
+                    for de in err.values:
+                        de.append('      * {}: {}'.format(de.name, de.value))
         else:
             errors = ['  * no resize errors']
         entry = [
