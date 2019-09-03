@@ -2713,35 +2713,30 @@ def _terminate_task(
         nocheck[job_id].add(task)
         return
     logger.info('Terminating task: {}'.format(task))
-    if native:
+    # always terminate
+    if _task.state != batchmodels.TaskState.completed:
         batch_client.task.terminate(job_id, task)
-    else:
-        # directly send docker kill signal if running
-        if _task.state == batchmodels.TaskState.running or force:
-            # check if task is a docker task
-            is_docker_task = False
-            if 'shipyard_docker_exec_task_runner' in _task.command_line:
-                is_docker_task = True
+    # directly send docker kill signal if a running docker task
+    if not native and (_task.state == batchmodels.TaskState.running or force):
+        is_docker_task = False
+        if 'shipyard_docker_exec_task_runner' in _task.command_line:
+            is_docker_task = True
+        else:
+            for env_var in _task.environment_settings:
+                if env_var.name == 'SHIPYARD_RUNTIME':
+                    if env_var.value == 'docker':
+                        is_docker_task = True
+                    break
+        if is_docker_task:
+            if (_task.multi_instance_settings is not None and
+                    _task.multi_instance_settings.number_of_instances > 1):
+                task_is_mi = True
             else:
-                for env_var in _task.environment_settings:
-                    if env_var.name == 'SHIPYARD_RUNTIME':
-                        if env_var.value == 'docker':
-                            is_docker_task = True
-                        break
-            if is_docker_task:
-                if (_task.multi_instance_settings is not None and
-                        _task.multi_instance_settings.number_of_instances > 1):
-                    task_is_mi = True
-                else:
-                    task_is_mi = False
-                _send_docker_kill_signal(
-                    batch_client, config, ssh_username,
-                    ssh_private_key, _task.node_info.pool_id,
-                    _task.node_info.node_id, job_id, task, task_is_mi)
-            else:
-                # non-docker task, so ensure it's not completed
-                if _task.state != batchmodels.TaskState.completed:
-                    batch_client.task.terminate(job_id, task)
+                task_is_mi = False
+            _send_docker_kill_signal(
+                batch_client, config, ssh_username,
+                ssh_private_key, _task.node_info.pool_id,
+                _task.node_info.node_id, job_id, task, task_is_mi)
 
 
 def _wait_for_task_completion(batch_client, job_id, task):
