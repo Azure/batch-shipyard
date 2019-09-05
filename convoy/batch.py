@@ -4745,8 +4745,6 @@ def _construct_task(
         if native:
             output_files = commands['output']
             commands['output'] = None
-        else:
-            commands['output'] = [commands['output']]
     # populate task runner vars for non-native mode
     if not native:
         # set the correct runner script
@@ -4795,8 +4793,7 @@ def _construct_task(
             taskenv.append(
                 batchmodels.EnvironmentSetting(
                     name='SHIPYARD_SYSTEM_EPILOGUE_CMD',
-                    value=util.wrap_commands_in_shell(
-                        commands['output'], windows=is_windows),
+                    value=commands['output']
                 )
             )
     # always add env vars in (host) task to be dumped into container

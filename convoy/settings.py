@@ -2957,7 +2957,10 @@ def data_local_path(conf, on_task, task_wd=True):
             else:
                 dst = '$AZ_BATCH_TASK_DIR'
         else:
-            raise
+            raise ValueError(
+                'local_path not specified for input_data or output_data '
+                'for storage_account_settings {}'.format(
+                    conf['storage_account_settings']))
     return dst
 
 
