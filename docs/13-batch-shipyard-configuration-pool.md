@@ -2,6 +2,13 @@
 This page contains in-depth details on how to configure the pool
 configuration file for Batch Shipyard.
 
+## Considerations
+- Note that environment variable conventions used below are for Linux.
+Windows environment variables should follow Windows conventions. For example,
+the Azure Batch Shared Directory on compute nodes are referenced in Linux
+as `$AZ_BATCH_NODE_SHARED_DIR`, while on Windows, it would be
+`%AZ_BATCH_NODE_SHARED_DIR%`.
+
 ## Schema
 The pool schema is as follows:
 
@@ -111,6 +118,9 @@ pool_specification:
     subnet:
       name: subnet-for-batch-vms
       address_prefix: 10.0.0.0/20
+  public_ips:
+  - /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/publicIPAddresses/<public_ip_name1>
+  - /subscriptions/<subscription_id>/resourceGroups/<resource_group>/providers/Microsoft.Network/publicIPAddresses/<public_ip_name2>
   certificates:
     sha1-thumbprint:
       visibility:
@@ -517,6 +527,11 @@ rules on these ports.
       connecting to the remote access port. Take care when specifying
       `deny` rules when your nodes must make use of SSH or RDP to perform
       actions between compute nodes.
+* (optional) `public_ips` property defines a list of any pre-defined
+Azure-allocated Public IP addresses that are assigned to the pool. These
+must not already be bound and there must be a sufficient number of public
+IPs to cover the number of compute nodes in a pool (or any potential future
+resizes). These must be fully-qualified ARM Public IP resource ids.
 * (optional) `certificates` property defines any certificate references to
 add on this pool. These certificates must already be present on the Batch
 account and are only applied to new pool allocations.

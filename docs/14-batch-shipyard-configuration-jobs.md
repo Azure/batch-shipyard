@@ -14,6 +14,11 @@ or `additional_singularity_options`.
 within the `$AZ_BATCH_TASK_DIR`. You can egress these logs using the
 `data files task` command (e.g.,
 `data files task --filespec myjobid,mytaskid,stdout.txt`).
+- Note that environment variable conventions used below are for Linux.
+Windows environment variables should follow Windows conventions. For example,
+the Azure Batch Shared Directory on compute nodes are referenced in Linux
+as `$AZ_BATCH_NODE_SHARED_DIR`, while on Windows, it would be
+`%AZ_BATCH_NODE_SHARED_DIR%`.
 
 ## Schema
 The jobs schema is as follows:

@@ -2,6 +2,5 @@ job_specifications:
 - id: dotnet-app
   tasks:
   - docker_image: microsoft/dotnet-samples:dotnetapp-nanoserver-1809
-    additional_docker_run_options:
-    - --workdir C:\\app  # this is needed as Batch sets the working directory to the Batch task
+    default_working_dir: container  # this is needed as the default is to set the working directory to the Batch task
     command: "Hello from Batch Shipyard!"
