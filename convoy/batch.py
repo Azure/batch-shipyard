@@ -5044,13 +5044,25 @@ def add_jobs(
                     return
         else:
             raise
-    if (autopool is None and cloud_pool is not None and
-            util.is_none_or_empty(federation_id) and
-            cloud_pool.state != batchmodels.PoolState.active):
-        logger.error(
-            'Cannot submit jobs to pool {} which is not in active '
-            'state'.format(pool.id))
-        return
+    # checks for existing pool
+    if autopool is None and cloud_pool is not None:
+        # ensure pool is active
+        if (util.is_none_or_empty(federation_id) and
+                cloud_pool.state != batchmodels.PoolState.active):
+            logger.error(
+                'Cannot submit jobs to pool {} which is not in active '
+                'state'.format(pool.id))
+            return
+        # ensure pool is at least version 3.8.0 as task runner is required
+        try:
+            _check_metadata_mismatch(
+                'pool', cloud_pool.metadata, req_ge='3.8.0')
+        except Exception as ex:
+            logger.error(
+                'Cannot submit jobs against a pool created with a prior '
+                'version of Batch Shipyard. Please re-create your pool with '
+                'a newer version of Batch Shipyard.')
+            raise ex
     if settings.verbose(config):
         task_prog_mod = 1000
     else:
