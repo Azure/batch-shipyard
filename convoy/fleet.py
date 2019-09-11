@@ -72,20 +72,20 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '418.67/NVIDIA-Linux-x86_64-418.67.run'
+            '418.87/NVIDIA-Linux-x86_64-418.87.00.run'
         ),
         'sha256': (
-            '8badb9aaf428550dc9f2c8629ba42ddde4850f0b6805b88920399deef63a40e8'
+            'dca372ca933aa7fb1ab88cc8c109d79838cf6f0c6f5a7938fcb23e8332c091d9'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '418.67/NVIDIA-Linux-x86_64-418.67.run'
+            '418.87/NVIDIA-Linux-x86_64-418.87.00.run'
         ),
         'sha256': (
-            '8badb9aaf428550dc9f2c8629ba42ddde4850f0b6805b88920399deef63a40e8'
+            'dca372ca933aa7fb1ab88cc8c109d79838cf6f0c6f5a7938fcb23e8332c091d9'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },

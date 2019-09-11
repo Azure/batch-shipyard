@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- Updated Docker CE to 19.03.2
+- Updated NC/ND driver to 418.87.00
+- Updated blobxfer to 1.9.2
+- Updated dependencies
+
 ## [3.8.1] - 2019-08-19
 ### Changed
 - Updated blobxfer to 1.9.1
@@ -42,6 +48,8 @@ for more information.
 OpenFOAM-Infiniband-OpenMPI, OSUMicroBenchmarks-Infiniband-MVAPICH
 
 ### Changed
+- **Breaking Change:** jobs cannot be submitted against pre-`3.8.0` pools.
+Pools must be re-created with `3.8.0` or later.
 - **Breaking Change:** the `singularity_images` property in the global
 configuration has been modified to accomodate Singularity 3 support.
 Please see the global configuration doc for more information.

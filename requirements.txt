@@ -4,21 +4,21 @@ azure-cosmosdb-table==1.0.5
 azure-keyvault==1.1.0
 azure-mgmt-authorization==0.60.0
 azure-mgmt-batch==7.0.0
-azure-mgmt-compute==6.0.0
-azure-mgmt-network==4.0.0
-azure-mgmt-resource==3.1.0
+azure-mgmt-compute==7.0.0
+azure-mgmt-network==5.0.0
+azure-mgmt-resource==4.0.0
 azure-mgmt-storage==4.0.0
 azure-storage-blob==2.0.1
 # temporarily pin azure-storage-common due to azure-cosmosdb-table incompatibility
 azure-storage-common==2.0.0
 azure-storage-file==2.0.1
 azure-storage-queue==2.0.1
-blobxfer==1.9.1
+blobxfer==1.9.2
 click==7.0
 future==0.17.1
 futures==3.3.0; python_version < '3'
 keyrings.alt==3.1.1
-msrest==0.6.9
+msrest==0.6.10
 msrestazure==0.6.1
 pathlib2==2.3.4; python_version < '3.5'
 python-dateutil==2.8.0
