@@ -2,11 +2,39 @@
 
 ## [Unreleased]
 
+## [3.8.2] - 2019-09-12
 ### Changed
+- `blobxfer` program output for handling `input_data` and `output_data` on
+non-native pools is now captured to a separate file named
+`blobxfer-download.log` and `blobxfer-upload.log`, respectively. This
+prevents pollution of the stdout/stderr streams by the data transfer
+phases.
 - Updated Docker CE to 19.03.2
 - Updated NC/ND driver to 418.87.00
 - Updated blobxfer to 1.9.2
 - Updated dependencies
+
+### Fixed
+- Fix non-string pickling in recurring job definitions
+([#306](https://github.com/Azure/batch-shipyard/issues/306))
+- Fix potential null values on node error collections and node agent info
+on preempted nodes
+([#307](https://github.com/Azure/batch-shipyard/issues/307),
+[#309](https://github.com/Azure/batch-shipyard/issues/309))
+- Fix task termination for infinite retry tasks and in non-native mode over
+SSH ([#308](https://github.com/Azure/batch-shipyard/issues/308))
+- Fix non-native data transfer sequence coupling
+([#310](https://github.com/Azure/batch-shipyard/issues/310))
+- Prevent job submission on pools without task runner
+([#312](https://github.com/Azure/batch-shipyard/issues/312))
+- Fix task `output_data` with include filters for native pools
+([#313](https://github.com/Azure/batch-shipyard/issues/313))
+- Update documentation regarding AAD and subscription id requirements
+along with better error messages
+([#305](https://github.com/Azure/batch-shipyard/issues/305))
+- Update documentation regarding Windows vs Linux environment
+variables
+([#311](https://github.com/Azure/batch-shipyard/issues/311))
 
 ## [3.8.1] - 2019-08-19
 ### Changed
@@ -1613,7 +1641,8 @@ transfer is disabled
 #### Added
 - Initial release
 
-[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.8.1...HEAD
+[Unreleased]: https://github.com/Azure/batch-shipyard/compare/3.8.2...HEAD
+[3.8.2]: https://github.com/Azure/batch-shipyard/compare/3.8.1...3.8.2
 [3.8.1]: https://github.com/Azure/batch-shipyard/compare/3.8.0...3.8.1
 [3.8.0]: https://github.com/Azure/batch-shipyard/compare/3.7.1...3.8.0
 [3.7.1]: https://github.com/Azure/batch-shipyard/compare/3.7.0...3.7.1
