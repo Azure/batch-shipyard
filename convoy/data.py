@@ -291,6 +291,54 @@ def process_input_data(config, bxfile, spec, on_task=False):
         return None
 
 
+def _generate_batch_output_file_spec(
+        storage_settings, container, saskey, seperator, condition, local_path,
+        include):
+    # type: (settings.StorageCredentialsSettings, str, str, str, str, str,
+    #        str) -> batchmodels.OutputFile
+    """Generate Batch output file spec with given local path and filter
+    :param settings.StorageCredentialsSettings storage_settings:
+        storage settings
+    :param str container: container
+    :param str saskey: sas key
+    :param str separator: dir separator
+    :param str condition: upload condition
+    :param str local_path: task local path
+    :param str include: include filter
+    :rtype: batchmodels.OutputFile
+    :return: Batch output file spec
+    """
+    # set file pattern
+    if local_path.endswith(seperator):
+        fp = ''.join((local_path, include))
+    else:
+        fp = seperator.join((local_path, include))
+    # set upload condition
+    if condition == 'taskcompletion':
+        buc = batchmodels.OutputFileUploadCondition.task_completion
+    elif condition == 'taskfailure':
+        buc = batchmodels.OutputFileUploadCondition.task_failure
+    elif condition == 'tasksuccess':
+        buc = batchmodels.OutputFileUploadCondition.task_success
+    # generate spec
+    outfile = batchmodels.OutputFile(
+        file_pattern=fp,
+        destination=batchmodels.OutputFileDestination(
+            container=batchmodels.OutputFileBlobContainerDestination(
+                path='',
+                container_url='{}?{}'.format(
+                    storage.generate_blob_container_uri(
+                        storage_settings, container),
+                    saskey)
+            )
+        ),
+        upload_options=batchmodels.OutputFileUploadOptions(
+            upload_condition=buc
+        ),
+    )
+    return outfile
+
+
 def _process_storage_output_data(config, native, is_windows, output_data):
     # type: (dict, bool, bool, dict) -> str
     """Process output data to egress to Azure storage
@@ -335,8 +383,6 @@ def _process_storage_output_data(config, native, is_windows, output_data):
         includes = settings.data_include(xfer)
         excludes = settings.data_exclude(xfer)
         condition = settings.data_condition(xfer)
-        # convert include/excludes into extra options
-        filters = _convert_filter_to_blobxfer_option(includes, excludes)
         local_path = settings.data_local_path(xfer, True, task_wd=False)
         # auto replace container path for gluster with host path
         if (util.is_not_empty(gluster_container) and
@@ -351,34 +397,14 @@ def _process_storage_output_data(config, native, is_windows, output_data):
             else:
                 sep = '/'
             if util.is_none_or_empty(includes):
-                include = '**{}*'.format(sep)
-            if not local_path.endswith(sep):
-                fp = sep.join((local_path, include))
-            else:
-                fp = ''.join((local_path, include))
-            if condition == 'taskcompletion':
-                buc = batchmodels.OutputFileUploadCondition.task_completion
-            elif condition == 'taskfailure':
-                buc = batchmodels.OutputFileUploadCondition.task_failure
-            elif condition == 'tasksuccess':
-                buc = batchmodels.OutputFileUploadCondition.task_success
-            of = batchmodels.OutputFile(
-                file_pattern=fp,
-                destination=batchmodels.OutputFileDestination(
-                    container=batchmodels.OutputFileBlobContainerDestination(
-                        path='',
-                        container_url='{}?{}'.format(
-                            storage.generate_blob_container_uri(
-                                storage_settings, container),
-                            saskey)
-                    )
-                ),
-                upload_options=batchmodels.OutputFileUploadOptions(
-                    upload_condition=buc
-                ),
-            )
-            args.append(of)
+                includes = ['**{}*'.format(sep)]
+            for include in includes:
+                args.append(_generate_batch_output_file_spec(
+                    storage_settings, container, saskey, sep, condition,
+                    local_path, include))
         else:
+            # convert include/excludes into extra options
+            filters = _convert_filter_to_blobxfer_option(includes, excludes)
             # construct argument
             # kind:encrypted:<sa:ep:saskey:remote_path>:local_path:eo
             creds = crypto.encrypt_string(
