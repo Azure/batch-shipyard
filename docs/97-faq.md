@@ -86,7 +86,8 @@ Disadvantages of `native` mode are:
 * `input_data` of any kind at the task-level is not possible; you must either
 use `resource_files` or build your own solution.
 * `output_data` options are limited and egress to `azure_storage` Azure Files
-(i.e., file shares) is not possible.
+(i.e., file shares) is not possible. Additionally, there is only limited
+resolution of environment variables in output file path specfications.
 * Less aggressive retries of compute node provisioning steps. This can
 potentially lead to a greater occurrence of `unusable` nodes.
 * Other experimental features may not be supported.

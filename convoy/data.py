@@ -292,16 +292,18 @@ def process_input_data(config, bxfile, spec, on_task=False):
 
 
 def _generate_batch_output_file_spec(
-        storage_settings, container, saskey, seperator, condition, local_path,
-        include):
-    # type: (settings.StorageCredentialsSettings, str, str, str, str, str,
-    #        str) -> batchmodels.OutputFile
+        is_windows, separator, storage_settings, saskey, container,
+        remote_path, condition, local_path, include):
+    # type: (bool, str, settings.StorageCredentialsSettings, str, str, str,
+    #        str, str, str) -> batchmodels.OutputFile
     """Generate Batch output file spec with given local path and filter
+    :param bool is_windows: is windows pool
+    :param str separator: dir separator
     :param settings.StorageCredentialsSettings storage_settings:
         storage settings
-    :param str container: container
     :param str saskey: sas key
-    :param str separator: dir separator
+    :param str container: container
+    :param str remote_path: remote path
     :param str condition: upload condition
     :param str local_path: task local path
     :param str include: include filter
@@ -309,10 +311,10 @@ def _generate_batch_output_file_spec(
     :return: Batch output file spec
     """
     # set file pattern
-    if local_path.endswith(seperator):
+    if local_path.endswith(separator):
         fp = ''.join((local_path, include))
     else:
-        fp = seperator.join((local_path, include))
+        fp = separator.join((local_path, include))
     # set upload condition
     if condition == 'taskcompletion':
         buc = batchmodels.OutputFileUploadCondition.task_completion
@@ -320,12 +322,30 @@ def _generate_batch_output_file_spec(
         buc = batchmodels.OutputFileUploadCondition.task_failure
     elif condition == 'tasksuccess':
         buc = batchmodels.OutputFileUploadCondition.task_success
+    # strip container from remote path
+    rp = remote_path.split('/')
+    if len(rp) > 1:
+        rp = rp[1:]
+        if '*' not in fp and '?' not in fp:
+            # limited resolution of file path/pattern
+            if is_windows:
+                tmp = fp.replace(
+                    '%AZ_BATCH_TASK_DIR%\\', '').replace(
+                        '%AZ_BATCH_TASK_WORKING_DIR%\\', 'wd\\')
+            else:
+                tmp = fp.replace(
+                    '$AZ_BATCH_TASK_DIR/', '').replace(
+                        '$AZ_BATCH_TASK_WORKING_DIR/', 'wd/')
+            rp.append(tmp)
+        rp = '/'.join(rp)
+    else:
+        rp = ''
     # generate spec
     outfile = batchmodels.OutputFile(
         file_pattern=fp,
         destination=batchmodels.OutputFileDestination(
             container=batchmodels.OutputFileBlobContainerDestination(
-                path='',
+                path=rp,
                 container_url='{}?{}'.format(
                     storage.generate_blob_container_uri(
                         storage_settings, container),
@@ -393,15 +413,15 @@ def _process_storage_output_data(config, native, is_windows, output_data):
                 raise ValueError(
                     'native container pool does not support excludes')
             if is_windows:
-                sep = '\\'
+                separator = '\\'
             else:
-                sep = '/'
+                separator = '/'
             if util.is_none_or_empty(includes):
-                includes = ['**{}*'.format(sep)]
+                includes = ['**{}*'.format(separator)]
             for include in includes:
                 args.append(_generate_batch_output_file_spec(
-                    storage_settings, container, saskey, sep, condition,
-                    local_path, include))
+                    is_windows, separator, storage_settings, saskey,
+                    container, remote_path, condition, local_path, include))
         else:
             # convert include/excludes into extra options
             filters = _convert_filter_to_blobxfer_option(includes, excludes)

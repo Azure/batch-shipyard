@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- Fix task `output_data` to correctly honor virtual directories in remote
+paths for native pools
+([#313](https://github.com/Azure/batch-shipyard/issues/313))
+
 ## [3.8.2] - 2019-09-12
 ### Changed
 - `blobxfer` program output for handling `input_data` and `output_data` on
@@ -15,6 +20,8 @@ phases.
 - Updated dependencies
 
 ### Fixed
+- Fix prefix filter not being applied on task factory `remote_path`
+([#303](https://github.com/Azure/batch-shipyard/issues/303))
 - Fix non-string pickling in recurring job definitions
 ([#306](https://github.com/Azure/batch-shipyard/issues/306))
 - Fix potential null values on node error collections and node agent info
@@ -29,6 +36,7 @@ SSH ([#308](https://github.com/Azure/batch-shipyard/issues/308))
 ([#312](https://github.com/Azure/batch-shipyard/issues/312))
 - Fix task `output_data` with include filters for native pools
 ([#313](https://github.com/Azure/batch-shipyard/issues/313))
+- Fix downloading of cascade logs on start task failure
 - Update documentation regarding AAD and subscription id requirements
 along with better error messages
 ([#305](https://github.com/Azure/batch-shipyard/issues/305))
