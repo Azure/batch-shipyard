@@ -311,12 +311,7 @@ If creating a job `recurrence`, utilizing `auto_complete` is one way to have
 recurrent job instances created from a schedule to complete such that the
 next job recurrence can be created.
 * (optional) `environment_variables` under the job are environment variables
-which will be applied to all tasks operating under the job. Note that
-environment variables are not expanded and are passed as-is. You will need
-to source the environment file `$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist`
-in a shell within the Docker `command` or `entrypoint` if you want any
-environment variables to be expanded. This behavior does not apply to
-`native` container pools and Singularity images.
+which will be applied to all tasks operating under the job.
 * (optional) `environment_variables_keyvault_secret_id` under the job are
 environment variables stored in KeyVault that should be applied to all tasks
 operating under the job. The secret stored in KeyVault must be a valid
@@ -873,13 +868,7 @@ option only applies to Docker containers.
 * (optional) `labels` is an array of labels to apply to the container.
 This option only applies to Docker containers.
 * (optional) `environment_variables` are any additional task-specific
-environment variables that should be applied to the container. For
-Docker non-`native` pools, note that environment variables are not expanded
-and are passed as-is. You will need to source the environment file
-`$AZ_BATCH_TASK_WORKING_DIR/.shipyard.envlist` in a shell within the
-Docker `command` or `entrypoint` if you want any environment variables
-to be expanded. This behavior does not apply to `native` container pools and
-Singularity images.
+environment variables that should be applied to the container.
 * (optional) `environment_variables_keyvault_secret_id` are any additional
 task-specific environment variables that should be applied to the
 container but are stored in KeyVault. The secret stored in KeyVault must
