@@ -1,7 +1,7 @@
 @echo off
 
 REM get installed python exe and dir
-pushd %HOME%\python*
+pushd %HOME%\python3*
 SET PYTHONHOME=%cd%
 SET PYTHON=%PYTHONHOME%\python.exe
 IF NOT EXIST "%PYTHON%" (

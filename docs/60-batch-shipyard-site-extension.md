@@ -16,9 +16,16 @@ bar, you will see a plus sign. Select `Compute >` and then
 ![60-site-extension-step1-0.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step1-0.png)
 
 In the create blade, fill in the appropriate properties for your Function App.
-Ensure that your Hosting Plan is set to `App Service Plan` and use the
-`App Service plan/Location` to create a new App Service plan (if applicable).
-Very basic plans may lead to startup delay in Batch Shipyard.
+You will need to ensure that the OS is set to `Windows`. This restriction
+is only for Batch Shipyard to execute, and has no bearing on the actual
+container workload invoked by Batch Shipyard (as that runs in the Batch
+service). Additionally, ensure that your Hosting Plan is set to
+`App Service Plan` and use the `App Service plan/Location` to create a new
+App Service plan (if applicable). Very basic plans may lead to startup delay
+in Batch Shipyard. You can ignore the `Runtime Stack` language selection.
+It has no bearing on the functionality of this Azure Function App for
+Batch Shipyard as we will be installing Python as a site extension (in
+a later step).
 
 ![60-site-extension-step1-1.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step1-1.png)
 
@@ -79,7 +86,7 @@ underpowered). To continue the installation, follow these steps:
 (it may take a long time).
 4. Restart your site.
 5. To verify: Re-load Kudu, go back to the `Debug console`, select `CMD` and
-then run `%BATCH_SHIPYARD_CMD% --version`. There will be a delay, but you
+then run `%BATCH_SHIPYARD_CMD% --version`. There will be a long delay, but you
 should see the version in the output.
 
 ## Invoking Batch Shipyard in an Azure Function App
