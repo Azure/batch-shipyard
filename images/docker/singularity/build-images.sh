@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-SINGULARITY_VERSION=3.3.0
+SINGULARITY_VERSION=3.4.1
 REPO=alfpark/singularity
 
 LSD=(/var/lib /mnt /mnt/resource)
