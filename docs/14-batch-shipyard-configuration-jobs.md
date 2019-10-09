@@ -1077,7 +1077,7 @@ property are:
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
           values are `intelmpi`, `intelmpi_ofa`, `mpich`, and `openmpi`.
-          With Docker containers, it is the user's responsability to provide
+          With Docker containers, it is the user's responsibility to provide
           a container image that has the specified runtime installed. For
           Singularity containers, the specified runtime must be installed
           and loaded on the host compute node.
@@ -1090,7 +1090,7 @@ property are:
           will be automatically passed to the `mpiexec` or `mpirun`
           (`executable_path`) command in accordance with the specified runtime
           so that `num_instances` * `processes_per_node` processes spawn. If
-          this field is used with `options`, it is the user's responsability
+          this field is used with `options`, it is the user's responsibility
           to make sure that the `options` are not interferring with the
           options automatically added by `processes_per_node`.
         * (optional) `executable_path` is the path to the `mpiexec` or

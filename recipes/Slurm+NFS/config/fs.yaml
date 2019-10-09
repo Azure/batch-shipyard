@@ -13,8 +13,10 @@ remote_fs:
       ssh:
         username: shipyard
       file_server:
+        type: nfs
         server_options:
-          '*':
+          nfs:
+            '*':
             - rw
             - no_root_squash
             - no_subtree_check
@@ -22,7 +24,6 @@ remote_fs:
         - noatime
         - nodiratime
         mountpoint: /shared
-        type: nfs
       network_security:
         nfs:
         - <ip address prefix in cidr notation for allowable external clients>
