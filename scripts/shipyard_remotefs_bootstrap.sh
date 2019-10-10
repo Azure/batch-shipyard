@@ -709,26 +709,36 @@ fi
 # create filesystem on target device
 if [ $format_target -eq 1 ]; then
     if [ -z "$target_md" ]; then
-        echo "Target not specified for format"
-        exit 1
+        if [ "$numdisks" -eq 1 ]; then
+            disk=${data_disks[0]}
+            part1=$(partprobe -d -s "$disk" | cut -d' ' -f4)
+            target_md=${disk}${part1}
+        else
+            echo "Target not specified for format"
+            exit 1
+        fi
     fi
     sleep 5
     echo "Creating filesystem on $target_md"
     if [ "$filesystem" == "btrfs" ]; then
         mkfs.btrfs "$target_md"
     elif [ "$filesystem" == "xfs" ]; then
-        mdadm --detail --scan
-        set +e
-        # let mkfs.xfs automatically select the appropriate su/sw
-        if ! mkfs.xfs "$target_md"; then
-            # mkfs.xfs can sometimes fail because it can't query the
-            # underlying device, try to re-assemble and retry format
-            set -e
-            mdadm --verbose --assemble "$target_md" "${raid_array[@]}"
-            mdadm --detail --scan
+        if [ "$numdisks" -eq 1 ]; then
             mkfs.xfs "$target_md"
+        else
+            mdadm --detail --scan
+            set +e
+            # let mkfs.xfs automatically select the appropriate su/sw
+            if ! mkfs.xfs "$target_md"; then
+                # mkfs.xfs can sometimes fail because it can't query the
+                # underlying device, try to re-assemble and retry format
+                set -e
+                mdadm --verbose --assemble "$target_md" "${raid_array[@]}"
+                mdadm --detail --scan
+                mkfs.xfs "$target_md"
+            fi
+            set -e
         fi
-        set -e
     elif [[ $filesystem == ext* ]]; then
         mkfs."${filesystem}" -m 0 "$target_md"
     else
@@ -737,6 +747,9 @@ if [ $format_target -eq 1 ]; then
     fi
     # refresh target uuid
     read -r target_uuid < <(blkid "${target_md}" | awk -F "[= ]" '{print $3}' | sed 's/\"//g')
+    if [ "$numdisks" -eq 1 ]; then
+        target_md=
+    fi
 fi
 
 # mount filesystem

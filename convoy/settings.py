@@ -4737,9 +4737,10 @@ def remotefs_settings(config, sc_id=None):
                  'managed_disks:disk_names ({})').format(
                      disk_array, vmkey, _disk_set))
         raid_level = _kv_read(vmd_conf[vmkey], 'raid_level', default=-1)
-        if len(disk_array) == 1 and raid_level != -1:
-            raise ValueError(
-                'Cannot specify a RAID-level with 1 disk in array')
+        if len(disk_array) == 1:
+            if raid_level != -1:
+                raise ValueError(
+                    'Cannot specify a RAID-level with 1 disk in array')
         else:
             if raid_level == 0 and len(disk_array) < 2:
                 raise ValueError('RAID-0 arrays require at least two disks')
