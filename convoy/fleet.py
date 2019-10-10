@@ -1841,9 +1841,9 @@ def _add_pool(
         except Exception as e:
             logger.exception(e)
             logger.error(
-                'Could not add SSH users to nodes. Please ensure ssh-keygen '
-                'is available in your PATH or cwd. Skipping data ingress if '
-                'specified.')
+                'Could not add SSH users to nodes. Please ensure the '
+                'specified keyfile exists or ssh-keygen is available in '
+                'your PATH or cwd. Skipping data ingress if specified.')
         else:
             rls = None
             # ingress data to shared fs if specified

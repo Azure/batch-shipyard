@@ -4614,8 +4614,7 @@ def _construct_task(
                 )
         # set pre-exec command
         if util.is_not_empty(task.multi_instance.pre_execution_command):
-            commands['preexec'] = [
-                task.multi_instance.pre_execution_command]
+            commands['preexec'] = task.multi_instance.pre_execution_command
         # set application command
         if native:
             if task.multi_instance.mpi is None:
@@ -4628,7 +4627,7 @@ def _construct_task(
                 commands['task'] = [commands['mpi']]
             # insert preexec prior to task command for native
             if util.is_not_empty(commands['preexec']):
-                commands['task'].insert(0, commands['preexec'][0])
+                commands['task'].insert(0, commands['preexec'])
         else:
             commands['task'] = []
             # for non-native do not set the RUNTIME so the user command is
@@ -4777,8 +4776,7 @@ def _construct_task(
             taskenv.append(
                 batchmodels.EnvironmentSetting(
                     name='SHIPYARD_USER_PROLOGUE_CMD',
-                    value=util.wrap_commands_in_shell(
-                        commands['preexec'], windows=is_windows),
+                    value=commands['preexec'],
                 )
             )
         # set user command (task)
