@@ -4252,8 +4252,8 @@ def task_settings(
                         '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(
                             bindparm))
                 elif is_sriov_rdma_pool(vm_size):
-                    raise RuntimeError(
-                        'SRIOV on Ubuntu is currently not supported')
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
             elif ((publisher == 'suse' and offer == 'sles-hpc') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.opensuse'))):
