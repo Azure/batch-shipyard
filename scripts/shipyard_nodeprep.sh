@@ -746,15 +746,7 @@ EOF
     fi
     systemctl --no-pager status docker.service
     check_for_nvidia_container_runtime
-    set +e
-    local rootdir
-    rootdir=$(awk -F' ' '{print $NF}' <<< "$(docker info | grep 'Docker Root Dir')")
-    if echo "$rootdir" | grep "^$USER_MOUNTPOINT" > /dev/null; then
-        log DEBUG "Docker root dir: $rootdir"
-    else
-        log WARNING "Docker root dir not within $USER_MOUNTPOINT: $rootdir"
-    fi
-    set -e
+    check_docker_root_dir
     nvidia-smi
 }
 
@@ -1125,16 +1117,13 @@ check_for_docker_host_engine() {
 check_docker_root_dir() {
     set +e
     local rootdir
-    rootdir=$(docker info | grep "Docker Root Dir" | cut -d' ' -f 4)
-    set -e
-    log DEBUG "Docker root dir: $rootdir"
-    if [ -z "$rootdir" ]; then
-        log ERROR "Could not determine docker root dir"
-    elif [[ "$rootdir" == ${USER_MOUNTPOINT}/* ]]; then
-        log INFO "Docker root dir is within ephemeral temp disk"
+    rootdir=$(awk -F' ' '{print $NF}' <<< "$(docker info | grep 'Docker Root Dir')")
+    if echo "$rootdir" | grep "^$USER_MOUNTPOINT" > /dev/null; then
+        log INFO "Docker root dir within ephemeral temp disk: $rootdir"
     else
-        log WARNING "Docker root dir is on the OS disk. Performance may be impacted."
+        log WARNING "Docker root dir not within $USER_MOUNTPOINT: $rootdir"
     fi
+    set -e
 }
 
 install_docker_host_engine() {
