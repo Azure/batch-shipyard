@@ -3299,6 +3299,7 @@ def stream_file_and_wait_for_task(
             fd = fp.open('wb', buffering=0)
         else:
             dec = codecs.getincrementaldecoder('utf8')()
+        finalcheck = False
         while not completed:
             # get task file properties
             try:
@@ -3334,19 +3335,24 @@ def stream_file_and_wait_for_task(
                         fd.write(f)
                     else:
                         print(dec.decode(f), end='')
-            if not completed and curr == size:
+            elif curr == size:
                 task = batch_client.task.get(
                     job_id, task_id,
                     task_get_options=batchmodels.TaskGetOptions(
                         select='state')
                 )
                 if task.state == batchmodels.TaskState.completed:
-                    completed = True
-                    if not disk:
-                        print(dec.decode(bytes(), True))
-                    break
+                    # need to loop one more time the first time completed
+                    # is noticed to get any remaining data
+                    if not finalcheck:
+                        finalcheck = True
+                    else:
+                        completed = True
+                        if not disk:
+                            print(dec.decode(bytes(), True))
             curr += rbytes
-            time.sleep(1)
+            if not completed and not finalcheck:
+                time.sleep(1)
     finally:
         if fd is not None:
             fd.close()
