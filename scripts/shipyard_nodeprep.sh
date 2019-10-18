@@ -543,6 +543,11 @@ enable_nvidia_persistence_mode() {
     nvidia-smi -pm 1
 }
 
+query_nvidia_card() {
+    nvidia-smi -q -d PAGE_RETIREMENT
+    nvidia-smi
+}
+
 check_for_nvidia_on_custom_or_native() {
     log INFO "Checking for Nvidia Hardware"
     # first check for card
@@ -560,7 +565,7 @@ check_for_nvidia_on_custom_or_native() {
         # prevent kernel upgrades from breaking driver
         blacklist_kernel_upgrade
         enable_nvidia_persistence_mode
-        nvidia-smi
+        query_nvidia_card
     fi
 }
 
@@ -580,7 +585,7 @@ ensure_nvidia_driver_installed() {
     else
         log INFO "Nvidia driver detected"
         enable_nvidia_persistence_mode
-        nvidia-smi
+        query_nvidia_card
     fi
 }
 
@@ -637,7 +642,7 @@ install_kernel_devel_package() {
                 fi
             fi
             if [ "$installed" -eq 0 ]; then
-                if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]]; then
+                if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]] || [[ "$centos_ver" == 7.6.* ]]; then
                     local pkg
                     pkg="${kernel_devel_package}.rpm"
                     download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
@@ -747,7 +752,7 @@ EOF
     systemctl --no-pager status docker.service
     check_for_nvidia_container_runtime
     check_docker_root_dir
-    nvidia-smi
+    query_nvidia_card
 }
 
 mount_azurefile_share() {
