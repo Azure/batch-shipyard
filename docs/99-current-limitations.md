@@ -53,6 +53,8 @@ current limitation of the underlying Azure Batch service.
 * Adding tasks to the same job across multiple, concurrent Batch Shipyard
 invocations may result in failure if task ids for these jobs are
 auto-generated.
+* `per_job_auto_scratch` and `auto_scratch` are not intended to be used on
+autoscale pools.
 * The ephemeral mount point cannot be changed from the default on custom
 images.
 * Hc/Hb VM sizes have some additional known issues which are detailed in this

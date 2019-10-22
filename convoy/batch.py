@@ -4946,10 +4946,24 @@ def _create_auto_scratch_volume(
     sas_urls = storage.upload_resource_files(blob_client, [shell_script])
     # get pool current dedicated
     pool = batch_client.pool.get(pool_id)
+    if pool.enable_auto_scale:
+        logger.warning(
+            'auto_scratch is not intended to be used with autoscale '
+            'pools: {}'.format(pool_id))
     if pool.current_dedicated_nodes > 0:
         target_nodes = pool.current_dedicated_nodes
+        logger.debug(
+            'creating auto_scratch on {} number of dedicated nodes on '
+            'pool {}'.format(target_nodes, pool_id))
     else:
         target_nodes = pool.current_low_priority_nodes
+        logger.debug(
+            'creating auto_scratch on {} number of low priority nodes on '
+            'pool {}'.format(target_nodes, pool_id))
+    if target_nodes == 0:
+        raise RuntimeError(
+            'Cannot create an auto_scratch volume with no current '
+            'dedicated or low priority nodes')
     batchtask = batchmodels.TaskAddParameter(
         id=_AUTOSCRATCH_TASK_ID,
         multi_instance_settings=batchmodels.MultiInstanceSettings(

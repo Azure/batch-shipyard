@@ -2754,6 +2754,10 @@ def _adjust_settings_for_pool_creation(config):
             raise ValueError(
                 'inter node communication in pool configuration '
                 'must be enabled for per job auto scratch')
+        if settings.is_pool_autoscale_enabled(config, pas=pool.autoscale):
+            logger.warning(
+                'per job auto scratch is generally not compatible with '
+                'autoscale pools')
         if (pool.virtual_network.arm_subnet_id is not None or
                 pool.virtual_network.name is not None or
                 pool.remote_access_control.allow is not None or
