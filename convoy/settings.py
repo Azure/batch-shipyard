@@ -1787,8 +1787,13 @@ def parse_batch_service_url(account_service_url, test_cluster=False):
     :return: account, location
     """
     # parse location from url
-    tmp = account_service_url.split('.')
-    location = tmp[1].lower()
+    try:
+        tmp = account_service_url.split('.')
+        location = tmp[1].lower()
+    except Exception:
+        raise ValueError(
+            'The Batch account_service_url is malformed, please check '
+            'your configuration')
     # parse account name from url
     if test_cluster:
         account = account_service_url.split('/')[-1]
