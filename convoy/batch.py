@@ -4397,6 +4397,7 @@ def _construct_mpi_command(pool, task):
                 else:
                     # IntelMPI 2019+
                     ib_env['I_MPI_FABRICS'] = 'shm:ofi'
+                    ib_env['FI_PROVIDER'] = 'mlx'
     elif (task.multi_instance.mpi.runtime == 'mpich' or
           task.multi_instance.mpi.runtime == 'mvapich'):
         if isinstance(processes_per_node, int):
