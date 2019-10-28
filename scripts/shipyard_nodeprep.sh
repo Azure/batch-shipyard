@@ -17,7 +17,9 @@ IMDS_VERSION=2019-03-11
 DOCKER_CE_PACKAGE_DEBIAN="5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
 DOCKER_CE_PACKAGE_CENTOS="${DOCKER_CE_VERSION_CENTOS}-3.el7"
 DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
-EPHEMERAL_DISK_PARTITION=/dev/sdb1
+VMBUS_DEVICES_PATH=/sys/bus/vmbus/devices
+GEN1_VMBUS_DEVICE_PREFIX="{00000000-0001-"
+GEN2_VMBUS_DEVICE_ID="{f8b3781a-1e82-4818-a1c3-63d806ec15bb}"
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
 IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
@@ -95,6 +97,8 @@ default_container_runtime=
 delay_preload=0
 docker_group=
 encrypted=
+EPHEMERAL_DISK=
+EPHEMERAL_DISK_PARTITION=
 EPHEMERAL_DEVICE=
 EPHEMERAL_ENCRYPTED=
 fallback_registry=
@@ -242,6 +246,53 @@ save_startup_to_volatile() {
     set +e
     touch "${VOLATILE_PATH}"/startup/.save
     set -e
+}
+
+get_ephemeral_device() {
+    if [ -n "$EPHEMERAL_DISK_PARTITION" ]; then
+        return
+    fi
+    local OLD_IFS=$IFS
+    local devices
+    local devicepath
+    local deviceid
+    local device
+    local dev
+    local blockpath
+    mapfile -t devices < <(ls "${VMBUS_DEVICES_PATH}")
+    for devicepath in "${devices[@]}"; do
+        deviceid=$(<"${VMBUS_DEVICES_PATH}/${devicepath}/device_id")
+        if [[ "$deviceid" == ${GEN1_VMBUS_DEVICE_PREFIX}* ]] || [ "$deviceid" == "${GEN2_VMBUS_DEVICE_ID}" ]; then
+            blockpath=$(find "${VMBUS_DEVICES_PATH}/${devicepath}/" -type d -name block)
+            if [ -z "$blockpath" ]; then
+                continue
+            fi
+            # gen2 VMs have all disks presented in this device, so we need
+            # to read the LUN. The LUN mappings are:
+            # 0: OS disk
+            # 1: Resource/ephemeral disk
+            # 2: CD-ROM
+            if [ "$deviceid" == "${GEN2_VMBUS_DEVICE_ID}" ]; then
+                local lunsplit
+                local lun
+                IFS='/'
+                read -ra lunsplit <<< "$blockpath"
+                IFS=':'
+                read -ra lun <<< "${lunsplit[-2]}"
+                if [ "${lun[-1]}" != "1" ]; then
+                    continue
+                fi
+            fi
+            device=$(find "${blockpath}/" -type d -name "sd*" | head -1)
+            IFS='/'
+            read -ra dev <<< "$device"
+            EPHEMERAL_DISK="/dev/${dev[-1]}"
+            EPHEMERAL_DISK_PARTITION="${EPHEMERAL_DISK}1"
+            log INFO "Ephemeral disk discovered as $EPHEMERAL_DISK"
+            break
+        fi
+    done
+    IFS=$OLD_IFS
 }
 
 check_for_buggy_ntfs_mount() {
@@ -767,31 +818,53 @@ mount_azureblob_container() {
     log INFO "Mounting Azure Blob Containers"
     chmod 700 azureblob-mount.sh
     chown root:root azureblob-mount.sh
-    local mspkg
+    # check if blobfuse is installed
+    local blobfuse_installed=0
+    set +e
     if [ "$PACKAGER" == "apt" ]; then
-        mspkg=packages-microsoft-prod.deb
-        if [ "$DISTRIB_ID" == "ubuntu" ]; then
-            download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
-        elif [ "$DISTRIB_ID" == "debian" ]; then
-            install_packages apt-transport-https
-            if [ "$DISTRIB_RELEASE" == "9" ]; then
-                download_file_as "https://packages.microsoft.com/config/ubuntu/16.04/${mspkg}" "$mspkg"
-            fi
+        if dpkg -s blobfuse | grep "^Status:.* installed$"; then
+            blobfuse_installed=1
         fi
     elif [ "$PACKAGER" == "yum" ]; then
-        mspkg=packages-microsoft-prod.rpm
-        download_file_as "https://packages.microsoft.com/config/rhel/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+        if yum list installed blobfuse; then
+            blobfuse_installed=1
+        fi
     elif [ "$PACKAGER" == "zypper" ]; then
-        mspkg=packages-microsoft-prod.rpm
-        download_file_as "https://packages.microsoft.com/config/sles/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+        if rpm -q blobfuse; then
+            blobfuse_installed=1
+        fi
     fi
-    if [ ! -f ${mspkg} ]; then
-        echo "ERROR: unsupported distribution for Azure blob: $DISTRIB_ID $DISTRIB_RELEASE"
-        exit 1
+    set -e
+    if [ "$blobfuse_installed" -eq 1 ]; then
+        log DEBUG "blobfuse is installed"
+    else
+        log DEBUG "blobfuse is not installed"
+        local mspkg
+        if [ "$PACKAGER" == "apt" ]; then
+            mspkg=packages-microsoft-prod.deb
+            if [ "$DISTRIB_ID" == "ubuntu" ]; then
+                download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+            elif [ "$DISTRIB_ID" == "debian" ]; then
+                install_packages apt-transport-https
+                if [ "$DISTRIB_RELEASE" == "9" ]; then
+                    download_file_as "https://packages.microsoft.com/config/ubuntu/16.04/${mspkg}" "$mspkg"
+                fi
+            fi
+        elif [ "$PACKAGER" == "yum" ]; then
+            mspkg=packages-microsoft-prod.rpm
+            download_file_as "https://packages.microsoft.com/config/rhel/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+        elif [ "$PACKAGER" == "zypper" ]; then
+            mspkg=packages-microsoft-prod.rpm
+            download_file_as "https://packages.microsoft.com/config/sles/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
+        fi
+        if [ ! -f ${mspkg} ]; then
+            echo "ERROR: unsupported distribution for Azure blob: $DISTRIB_ID $DISTRIB_RELEASE"
+            exit 1
+        fi
+        install_local_packages ${mspkg}
+        refresh_package_index
+        install_packages blobfuse
     fi
-    install_local_packages ${mspkg}
-    refresh_package_index
-    install_packages blobfuse
     ./azureblob-mount.sh
     rm azureblob-mount.sh
 }
@@ -1688,7 +1761,10 @@ else
     npstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
 fi
 
-# check sdb1 mount
+# get ephemeral device/disk
+get_ephemeral_device
+
+# check ephemeral mount
 check_for_buggy_ntfs_mount
 
 # set ephemeral device/user mountpoint
