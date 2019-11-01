@@ -908,7 +908,7 @@ def create_slurm_controller(
         if util.is_none_or_empty(pips):
             fqdn[i] = None
             ipinfo[i] = 'private_ip_address={}'.format(
-                nics[i].ip_configurations[i].private_ip_address)
+                nics[i].ip_configurations[0].private_ip_address)
         else:
             # refresh public ip for vm
             pip = network_client.public_ip_addresses.get(
