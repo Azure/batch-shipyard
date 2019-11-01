@@ -494,6 +494,13 @@ install_packages() {
         if [ $retries -eq 0 ]; then
             log ERROR "Could not install packages ($PACKAGER): $*"
             exit 1
+        else
+            # extend retries (by sleeping longer in-between) in the case of packager lock contention
+            if [ "$PACKAGER" == "apt" ]; then
+                if lsof /var/lib/dpkg/lock-frontend; then
+                    sleep 2
+                fi
+            fi
         fi
         sleep 1
     done
@@ -517,8 +524,15 @@ install_local_packages() {
         fi
         retries=$((retries-1))
         if [ $retries -eq 0 ]; then
-            log ERROR "Could not install local packages: $*"
+            log ERROR "Could not install local packages ($PACKAGER): $*"
             exit 1
+        else
+            # extend retries (by sleeping longer in-between) in the case of packager lock contention
+            if [ "$PACKAGER" == "apt" ]; then
+                if lsof /var/lib/dpkg/lock-frontend; then
+                    sleep 2
+                fi
+            fi
         fi
         sleep 1
     done
