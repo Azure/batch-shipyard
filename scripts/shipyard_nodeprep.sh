@@ -1002,8 +1002,14 @@ install_singularity() {
         disuffix=singularity-mnt-resource
     fi
     log DEBUG "Setting up Singularity for $DISTRIB_ID $DISTRIB_RELEASE"
-    # install squashfs-tools for mksquashfs
-    install_packages squashfs-tools
+    # install prereqs
+    local cryptpkg
+    if [ "$PACKAGER" == "apt" ]; then
+        cryptpkg=cryptsetup-bin
+    elif [ "$PACKAGER" == "yum" ]; then
+        cryptpkg=cryptsetup
+    fi
+    install_packages squashfs-tools $cryptpkg
     # fetch docker image for singularity bits
     local di="${SHIPYARD_IMAGE_PREFIX}:${singularityversion}-${disuffix}"
     log DEBUG "Image=${di} basedir=${singularity_basedir}"
