@@ -1,7 +1,7 @@
 # Singularity for Azure/batch-shipyard (cli)
 
 Bootstrap: library
-From: alpine:3.9
+From: alpine:3.10
 
 %post
 apk update

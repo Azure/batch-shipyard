@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgpgme11-dev \
         squashfs-tools \
         libseccomp-dev \
+        cryptsetup-bin \
         pkg-config \
         curl \
         file \

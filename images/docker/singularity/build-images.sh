@@ -3,8 +3,11 @@
 set -e
 set -o pipefail
 
-SINGULARITY_VERSION=3.3.0
+SINGULARITY_VERSION=$(grep -m1 _SINGULARITY_VERSION ../../../convoy/misc.py | cut -d "'" -f 2)
 REPO=alfpark/singularity
+
+echo "Extracted Singularity Version: $SINGULARITY_VERSION"
+echo "Publishing to repo: $REPO"
 
 LSD=(/var/lib /mnt /mnt/resource)
 TAGS=(default mnt mnt-resource)
