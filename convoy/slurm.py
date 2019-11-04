@@ -552,7 +552,7 @@ def create_slurm_controller(
             over_subscribe = ' OverSubscribe={}'.format(part.over_subscribe)
         else:
             over_subscribe = ''
-        if isinstance(part.priority_tier,int):
+        if part.priority_tier is not None:
             priority_tier = ' PriorityTier={}'.format(part.priority_tier)
         else:
             priority_tier = ''
