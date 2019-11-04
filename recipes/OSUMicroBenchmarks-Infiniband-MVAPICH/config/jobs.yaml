@@ -1,9 +1,8 @@
 job_specifications:
 - id: osu-benchmark
   tasks:
-  - singularity_image: library://alfpark/mvapich/mvapich:2.3.1
+  - singularity_image: library://alfpark/mvapich/mvapich:2.3.2
     environment_variables:
-      HOST_MVAPICH_VERSION: 2.3.1
       BENCHMARK: collective/osu_allreduce
       BENCHMARK_ARGS: -f
     multi_instance:
@@ -11,5 +10,5 @@ job_specifications:
       mpi:
         runtime: mvapich
         processes_per_node: 1
-      pre_execution_command: module load mpi/mvapich2-${HOST_MVAPICH_VERSION}
+      pre_execution_command: module load mpi/mvapich2
     command: /bin/bash -c "cd /usr/local/libexec/osu-micro-benchmarks/mpi; ./${BENCHMARK} ${BENCHMARK_ARGS}"

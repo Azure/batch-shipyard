@@ -3,4 +3,4 @@ batch_shipyard:
 global_resources:
   singularity_images:
     unsigned:
-      - library://alfpark/mvapich/mvapich:2.3.1
+      - library://alfpark/mvapich/mvapich:2.3.2

@@ -19,7 +19,7 @@ The pool configuration should enable the following properties:
   * `platform_image` must be defined
     * `publisher` must be set to `OpenLogic`
     * `offer` must be set to `CentOS-HPC`
-    * `sku` must be set to `7.6`
+    * `sku` must be set to `7.6` or later
 * `vm_size` must be set to an SR-IOV RDMA compatible VM size such as
 `STANDARD_HB60rs` or `STANDARD_HC44rs`
 
@@ -27,17 +27,15 @@ The pool configuration should enable the following properties:
 The global configuration should set the following properties:
 * `singularity_images` array have a reference to a valid OSU
 Micro-Benchmark image with MVAPICH. This can be
-`library://alfpark/mvapich/mvapich:2.3.1`
+`library://alfpark/mvapich/mvapich:2.3.2`
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`
 array which should have a task definition containing:
 * `singularity_iamge` should be the name of the Singularity image for this
 container task invocation. For this example, this should be
-`library://alfpark/mvapich/mvapich:2.3.1`.
+`library://alfpark/mvapich/mvapich:2.3.2`.
 * `environment_variables` are the environment variables to set
-    * `HOST_MVAPICH_VERSION` is the MVAPICH version on the host that can be
-      loaded by the environment modules system.
     * `BENCHMARK` is the OSU benchmark to execute
     * `BENCHMARK_ARGS` are any arguments to pass to the benchmark executable
 * `command` should contain the command to pass to the `mpirun` invocation.
