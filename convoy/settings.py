@@ -4182,28 +4182,19 @@ def task_settings(
         # mount /opt/intel for NetworkDirect RDMA
         if is_networkdirect_rdma_pool(vm_size):
             run_opts.append('{} /opt/intel:/opt/intel:ro'.format(bindparm))
-        # until Batch supports SRIOV natively for Docker, add additional
-        # IB devices and rdma dat regardless of pool native mode
-        if is_sriov_rdma_pool(vm_size):
-            if util.is_not_empty(docker_image):
-                run_opts.append('--device=/dev/infiniband/issm0')
-                run_opts.append('--device=/dev/infiniband/ucm0')
-                run_opts.append('--device=/dev/infiniband/umad0')
-            if (native and
-                    (((publisher == 'openlogic' and offer == 'centos-hpc') or
-                      (publisher == 'microsoft-azure-batch' and
-                       offer == 'centos-container-rdma')) or
-                     (is_custom_image and
-                      node_agent.startswith('batch.node.centos')))):
-                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                    bindparm))
+        # mutate run options
         if not native:
             if util.is_not_empty(docker_image):
-                # common run opts
                 run_opts.append('--net=host')
                 run_opts.append('--ulimit memlock=9223372036854775807')
                 run_opts.append('--device=/dev/infiniband/rdma_cm')
                 run_opts.append('--device=/dev/infiniband/uverbs0')
+                if is_sriov_rdma_pool(vm_size):
+                    run_opts.append('--device=/dev/infiniband/issm0')
+                    run_opts.append('--device=/dev/infiniband/ucm0')
+                    run_opts.append('--device=/dev/infiniband/umad0')
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
             else:
                 # ensure singularity opts do not have network namespace
                 # or contain options
@@ -4243,9 +4234,6 @@ def task_settings(
                     run_opts.append(
                         '{} /etc/rdma/dat.conf:/etc/dat.conf:ro'.format(
                             bindparm))
-                elif is_sriov_rdma_pool(vm_size):
-                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                        bindparm))
             elif ((publisher == 'microsoft-azure-batch' and
                    offer == 'ubuntu-server-container-rdma') or
                   (is_custom_image and
@@ -4256,18 +4244,17 @@ def task_settings(
                     run_opts.append(
                         '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(
                             bindparm))
-                elif is_sriov_rdma_pool(vm_size):
-                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                        bindparm))
             elif ((publisher == 'suse' and offer == 'sles-hpc') or
                   (is_custom_image and
                    node_agent.startswith('batch.node.opensuse'))):
-                run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
-                    bindparm))
-                run_opts.append(
-                    '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(bindparm))
-                if util.is_not_empty(docker_image):
-                    run_opts.append('--device=/dev/hvnd_rdma')
+                if is_networkdirect_rdma_pool(vm_size):
+                    run_opts.append('{} /etc/dat.conf:/etc/dat.conf:ro'.format(
+                        bindparm))
+                    run_opts.append(
+                        '{} /etc/dat.conf:/etc/rdma/dat.conf:ro'.format(
+                            bindparm))
+                    if util.is_not_empty(docker_image):
+                        run_opts.append('--device=/dev/hvnd_rdma')
             else:
                 raise ValueError(
                     ('Unsupported infiniband VM config, publisher={} '
