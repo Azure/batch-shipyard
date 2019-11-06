@@ -27,16 +27,29 @@ global_resources:
   - myserver.azurecr.io/repo/myimage
   singularity_images:
     unsigned:
-    - shub://singularityhub/busybox
-    - shub://singularityhub/scientific-linux
-    - docker://busybox
+    - image: shub://singularityhub/busybox
+    - image: docker://busybox
+    - image: oras://myazurecr.azurecr.io/repo/myunsignedimage:1.0.0
+    - image: library://user/repo/image:1.0.0
+    - image: library://user/repo/encryptedimage:1.0.0
+      encryption:
+        certificate:
+          sha1_thumbprint: 123456789...
     signed:
     - image: library://sylabs/tests/signed:1.0.0
-      key_fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
-      key_file: /path/to/key/file
-    - image: oras://myazurecr.azurecr.io
-      key_fingerprint: 000123000123000123000123000123000123ABCD
-      key_file: /path/to/key/file
+      signing_key:
+        fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
+    - image: oras://myazurecr.azurecr.io/repo/mysignedimage:1.0.0
+      signing_key:
+        fingerprint: 000123000123000123000123000123000123ABCD
+        file: /path/to/key/file
+    - image: library://user/repo/encryptedimage:1.0.0
+      signing_key:
+        fingerprint: 000123000123000123000123000123000123ABCD
+        file: /path/to/key/file
+      encryption:
+        certificate:
+          sha1_thumbprint: 123456789...
   volumes:
     data_volumes:
       contdatavol:

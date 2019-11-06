@@ -53,10 +53,10 @@ docker_login() {
 # decrypt passwords if necessary
 if [ "$1" == "-e" ]; then
     if [ -n "$DOCKER_LOGIN_PASSWORD" ]; then
-        DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
+        DOCKER_LOGIN_PASSWORD=$(echo "$DOCKER_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/shipyard-enckey.pem)
     fi
     if [ -n "$SINGULARITY_LOGIN_PASSWORD" ]; then
-        SINGULARITY_LOGIN_PASSWORD=$(echo "$SINGULARITY_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/key.pem)
+        SINGULARITY_LOGIN_PASSWORD=$(echo "$SINGULARITY_LOGIN_PASSWORD" | base64 -d | openssl rsautl -decrypt -inkey ../certs/shipyard-enckey.pem)
     fi
 fi
 

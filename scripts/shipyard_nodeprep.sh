@@ -187,7 +187,9 @@ while getopts "h?abcde:fg:i:jkl:m:no:p:qrs:tuv:wx:yz:" opt; do
             lis=$OPTARG
             ;;
         m)
+            OLD_IFS=$IFS
             IFS=',' read -ra sc_args <<< "${OPTARG,,}"
+            IFS=$OLD_IFS
             ;;
         n)
             native_mode=1
@@ -726,7 +728,9 @@ install_nvidia_software() {
     # check for nvidia card
     check_for_nvidia_card
     # split arg into two
+    local OLD_IFS=$IFS
     IFS=':' read -ra GPUARGS <<< "$gpu"
+    IFS=$OLD_IFS
     local is_viz=${GPUARGS[0]}
     local nvdriver=${GPUARGS[1]}
     # remove nouveau
@@ -1090,7 +1094,9 @@ install_kata_containers() {
 process_fstab_entry() {
     local desc=$1
     local fstab_entry=$2
+    local OLD_IFS=$IFS
     IFS=' ' read -ra fs <<< "$fstab_entry"
+    IFS=$OLD_IFS
     local mountpoint="${fs[1]}"
     log INFO "Creating host directory for $desc at $mountpoint"
     mkdir -p "$mountpoint"
@@ -1126,6 +1132,7 @@ mount_storage_clusters() {
     if [ -n "$SHIPYARD_STORAGE_CLUSTER_FSTAB" ]; then
         log DEBUG "Mounting storage clusters"
         local fstab_mounts
+        local OLD_IFS=$IFS
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_STORAGE_CLUSTER_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1133,6 +1140,7 @@ mount_storage_clusters() {
             IFS=' ' read -ra parts <<< "$fstab_entry"
             mount "${parts[1]}"
         done
+        IFS=$OLD_IFS
         log INFO "Storage clusters mounted"
     fi
 }
@@ -1142,6 +1150,7 @@ process_storage_clusters() {
         log DEBUG "Processing storage clusters"
         # eval and split fstab var to expand vars (this is ok since it is set by shipyard)
         local fstab_mounts
+        local OLD_IFS=$IFS
         fstab_mounts=$(eval echo "$SHIPYARD_STORAGE_CLUSTER_FSTAB")
         IFS='#' read -ra fstabs <<< "$fstab_mounts"
         i=0
@@ -1151,6 +1160,7 @@ process_storage_clusters() {
             process_fstab_entry "$sc_arg" "$fstab_entry"
             i=$((i + 1))
         done
+        IFS=$OLD_IFS
         log INFO "Storage clusters processed"
     fi
 }
@@ -1159,6 +1169,7 @@ mount_custom_fstab() {
     if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Mounting custom mounts via fstab"
         local fstab_mounts
+        local OLD_IFS=$IFS
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1166,6 +1177,7 @@ mount_custom_fstab() {
             IFS=' ' read -ra parts <<< "$fstab_entry"
             mount "${parts[1]}"
         done
+        IFS=$OLD_IFS
         log INFO "Custom mounts via fstab mounted"
     fi
 }
@@ -1174,6 +1186,7 @@ process_custom_fstab() {
     if [ -n "$SHIPYARD_CUSTOM_MOUNTS_FSTAB" ]; then
         log DEBUG "Processing custom mounts via fstab"
         local fstab_mounts
+        local OLD_IFS=$IFS
         IFS='#' read -ra fstab_mounts <<< "$SHIPYARD_CUSTOM_MOUNTS_FSTAB"
         for fstab in "${fstab_mounts[@]}"; do
             # eval and split fstab var to expand vars
@@ -1181,17 +1194,49 @@ process_custom_fstab() {
             IFS=' ' read -ra parts <<< "$fstab_entry"
             process_fstab_entry "${parts[2]}" "$fstab_entry"
         done
+        IFS=$OLD_IFS
         log INFO "Custom mounts via fstab processed"
     fi
+}
+
+convert_singularity_certificates() {
+    # converts pfx certs to PKCS1 (RSA private) pem certs for singularity
+    if [ -z "$SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES" ]; then
+        log INFO "No singularity decryption certificates defined"
+        return
+    fi
+    log INFO "Processing Singularity decryption certificates: $SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES"
+    local OLD_IFS=$IFS
+    IFS=',' read -ra cert_tps <<< "${SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES,,}"
+    IFS=$OLD_IFS
+    local pfx
+    local pw
+    local pkcs1
+    pushd "$AZ_BATCH_CERTIFICATES_DIR"
+    for tp in "${cert_tps[@]}"; do
+        pfx="sha1-${tp}.pfx"
+        pw="${pfx}.pw"
+        if [ ! -f "$pfx" ] || [ ! -f "$pw" ]; then
+            log ERROR "Certificate needed for Singularity image decryption not found: $pfx or $pw"
+            exit 1
+        fi
+        pkcs1="sha1-${tp}-rsa.pem"
+        openssl pkcs12 -in "$pfx" -nodes -password "file:${pw}" | openssl rsa -out "$pkcs1"
+        chmod 640 "$pkcs1"
+        chown _azbatch:_azbatchsudogrp "$pkcs1"
+        # remove the pfx/pw files bound to start task
+        rm -f "$pfx" "$pw"
+    done
+    popd
 }
 
 decrypt_encrypted_credentials() {
     # convert pfx to pem
     pfxfile=$AZ_BATCH_CERTIFICATES_DIR/sha1-$encrypted.pfx
-    privatekey=$AZ_BATCH_CERTIFICATES_DIR/key.pem
-    openssl pkcs12 -in "$pfxfile" -out "$privatekey" -nodes -password file:"${pfxfile}".pw
+    privatekey=$AZ_BATCH_CERTIFICATES_DIR/shipyard-enckey.pem
+    openssl pkcs12 -in "$pfxfile" -out "$privatekey" -nodes -password "file:${pfxfile}.pw"
     # remove pfx-related files
-    rm -f "$pfxfile" "${pfxfile}".pw
+    rm -f "$pfxfile" "${pfxfile}.pw"
     # decrypt creds
     SHIPYARD_STORAGE_ENV=$(echo "$SHIPYARD_STORAGE_ENV" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
     if [[ -n ${DOCKER_LOGIN_USERNAME+x} ]]; then
@@ -1372,7 +1417,9 @@ check_for_storage_cluster_software() {
     fi
     local rc
     for sc_arg in "${sc_args[@]}"; do
+        local OLD_IFS=$IFS
         IFS=':' read -ra sc <<< "$sc_arg"
+        IFS=$OLD_IFS
         local server_type=${sc[0]}
         if [ "$server_type" == "nfs" ]; then
             set +e
@@ -1407,7 +1454,9 @@ install_storage_cluster_dependencies() {
         local repo="http://download.opensuse.org/repositories/filesystems/${repodir}/filesystems.repo"
     fi
     for sc_arg in "${sc_args[@]}"; do
+        local OLD_IFS=$IFS
         IFS=':' read -ra sc <<< "$sc_arg"
+        IFS=$OLD_IFS
         server_type=${sc[0]}
         if [ "$server_type" == "nfs" ]; then
             if [ "$PACKAGER" == "apt" ]; then
@@ -1677,6 +1726,7 @@ install_and_start_node_exporter() {
     else
         ib="--no-collector.infiniband"
     fi
+    local OLD_IFS=$IFS
     if [ -n "${sc_args[0]}" ]; then
         for sc_arg in "${sc_args[@]}"; do
             IFS=':' read -ra sc <<< "$sc_arg"
@@ -1685,9 +1735,12 @@ install_and_start_node_exporter() {
                 break
             fi
         done
+        IFS=$OLD_IFS
     fi
     local pneo
+    OLD_IFS=$IFS
     IFS=',' read -ra pneo <<< "$PROM_NODE_EXPORTER_OPTIONS"
+    IFS=$OLD_IFS
     # shellcheck disable=SC2086
     "${AZ_BATCH_TASK_WORKING_DIR}"/node_exporter \
         "$ib" $nfs \
@@ -1715,7 +1768,9 @@ install_and_start_cadvisor() {
     # start
     local pcao
     if [ -n "${PROM_CADVISOR_OPTIONS}" ]; then
+        local OLD_IFS=$IFS
         IFS=',' read -ra pcao <<< "$PROM_CADVISOR_OPTIONS"
+        IFS=$OLD_IFS
     else
         pcao=()
     fi
@@ -1769,6 +1824,7 @@ echo "Docker image preload delay: $delay_preload"
 echo "Cascade via container: $cascadecontainer"
 echo "Concurrent source downloads: $concurrent_source_downloads"
 echo "Block on images: $block"
+echo "Singularity decryption certs: $SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES"
 echo ""
 
 # set python env vars
@@ -1803,6 +1859,9 @@ install_lis
 if [ -n "$encrypted" ]; then
     decrypt_encrypted_credentials
 fi
+
+# convert certs to pkcs1 for singularity encrypted container support
+convert_singularity_certificates
 
 # create shared mount points
 mkdir -p "$MOUNTS_PATH"

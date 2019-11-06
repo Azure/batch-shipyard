@@ -18,7 +18,7 @@ for spec in "$@"; do
         eo=${parts[5]}
         cond=${parts[6]}
         # decrypt ciphertext
-        privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
+        privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/shipyard-enckey.pem
         cipher=$(echo "$cipher" | base64 -d | openssl rsautl -decrypt -inkey "$privatekey")
         IFS=',' read -ra storage <<< "$cipher"
         sa=${storage[0]}

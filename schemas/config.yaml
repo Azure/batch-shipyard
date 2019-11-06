@@ -77,7 +77,21 @@ mapping:
           unsigned:
             type: seq
             sequence:
-              - type: str
+              - type: map
+                mapping:
+                  image:
+                    type: str
+                    required: true
+                  encryption:
+                    type: map
+                    mapping:
+                      certificate:
+                        type: map
+                        required: true
+                        mapping:
+                          sha1_thumbprint:
+                            type: str
+                            required: true
           signed:
             type: seq
             sequence:
@@ -86,11 +100,24 @@ mapping:
                   image:
                     type: str
                     required: true
-                  key_fingerprint:
-                    type: str
-                    required: true
-                  key_file:
-                    type: str
+                  signing_key:
+                    type: map
+                    mapping:
+                      fingerprint:
+                        type: str
+                        required: true
+                      file:
+                        type: str
+                  encryption:
+                    type: map
+                    mapping:
+                      certificate:
+                        type: map
+                        required: true
+                        mapping:
+                          sha1_thumbprint:
+                            type: str
+                            required: true
       volumes:
         type: map
         mapping:

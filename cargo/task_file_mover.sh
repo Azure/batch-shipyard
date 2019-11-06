@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 set -f
 
-privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/key.pem
+privatekey=$AZ_BATCH_NODE_STARTUP_DIR/certs/shipyard-enckey.pem
 
 for spec in "$@"; do
     IFS=',' read -ra parts <<< "$spec"

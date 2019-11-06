@@ -512,9 +512,10 @@ SlurmCredentialsSettings = collections.namedtuple(
         'db_password',
     ]
 )
-SingularitySignedImageSettings = collections.namedtuple(
-    'SingularitySignedImageSettings', [
-        'image', 'key_fingerprint', 'key_file'
+SingularityImageSettings = collections.namedtuple(
+    'SingularityImageSettings', [
+        'image', 'key_fingerprint', 'key_file',
+        'encryption_certificate_sha1_thumbprint'
     ]
 )
 
@@ -2398,62 +2399,74 @@ def global_resources_singularity_images(config):
     :rtype: list
     :return: all singularity images (signed and unsigned)
     """
-    global_resources = _kv_read_checked(config, 'global_resources', default={})
-    singularity_images = (
-        _kv_read_checked(global_resources, 'singularity_images', default={}))
-    singularity_unsigned_images = (
-        _kv_read_checked(singularity_images, 'unsigned', default=[]))
+    singularity_unsigned_images_settings = (
+        global_resources_singularity_images_settings(config, False)
+    )
+    singularity_unsigned_images = [
+        settings.image for settings in singularity_unsigned_images_settings
+    ]
     singularity_signed_images_settings = (
-        global_resources_singularity_signed_images_settings(config))
-    singularity_signed_images = (
-        [settings.image for settings in singularity_signed_images_settings])
+        global_resources_singularity_images_settings(config, True)
+    )
+    singularity_signed_images = [
+        settings.image for settings in singularity_signed_images_settings
+    ]
     images = singularity_unsigned_images + singularity_signed_images
     singularity_signed_and_unsigned_images = (
         set(singularity_unsigned_images).intersection(
             singularity_signed_images))
-    if len(singularity_signed_and_unsigned_images):
+    if len(singularity_signed_and_unsigned_images) > 0:
         raise ValueError(
-            'image(s) "{}" should not be both signed and unsigned'
-            .format('", "'.join(singularity_signed_and_unsigned_images)))
+            'image(s) "{}" should not be both signed and unsigned'.format(
+                '", "'.join(singularity_signed_and_unsigned_images)))
     return images
 
 
-def global_resources_singularity_signed_images_settings(config):
-    # type: (dict) -> list
-    """Get list of singularity signed images settings
+def global_resources_singularity_images_settings(config, signed):
+    # type: (dict, bool) -> list
+    """Get list of singularity images settings
     :param dict config: configuration object
+    :param bool signed: get signed images if True, else unsigned images
     :rtype: list
-    :return: singularity signed images settings
+    :return: singularity images settings
     """
     global_resources = _kv_read_checked(config, 'global_resources', default={})
-    singularity_images = _kv_read_checked(
+    images = _kv_read_checked(
         global_resources, 'singularity_images', default={})
-    singularity_signed_images = _kv_read_checked(
-        singularity_images, 'signed', default=[])
-    singularity_signed_images_settings = []
-    for settings in singularity_signed_images:
+    singularity_images = _kv_read_checked(
+        images, 'signed' if signed else 'unsigned', default=[])
+    singularity_images_settings = []
+    for settings in singularity_images:
         image = _kv_read_checked(settings, 'image')
-        if image is None:
-            raise ValueError('singularity signed image is invalid')
-        key_fingerprint = _kv_read_checked(settings, 'key_fingerprint')
-        if key_fingerprint is None:
-            raise ValueError('key_fingerprint for singularity signed image'
-                             ' "{}" is invalid'.format(image))
-        key_file = _kv_read_checked(settings, 'key_file')
+        if util.is_none_or_empty(image):
+            raise ValueError('singularity image is invalid')
+        key_fingerprint = None
         key_file_path = None
-        if key_file is not None:
-            key_file_path = pathlib.Path(key_file)
-            if not key_file_path.is_file():
-                raise ValueError('invalid key file for image "{}"'
-                                 .format(image))
-        singularity_signed_images_settings.append(
-            SingularitySignedImageSettings(
+        if signed:
+            key = _kv_read_checked(settings, 'signing_key', default={})
+            key_fingerprint = _kv_read_checked(key, 'fingerprint')
+            if util.is_none_or_empty(key_fingerprint):
+                raise ValueError(
+                    'key_fingerprint for singularity signed image "{}" is '
+                    'invalid'.format(image))
+            key_file = _kv_read_checked(key, 'file')
+            if key_file is not None:
+                key_file_path = pathlib.Path(key_file)
+                if not key_file_path.is_file():
+                    raise ValueError(
+                        'invalid key file for image "{}"'.format(image))
+        enc = _kv_read_checked(settings, 'encryption', default={})
+        enc_cert = _kv_read_checked(enc, 'certificate', default={})
+        singularity_images_settings.append(
+            SingularityImageSettings(
                 image=image,
                 key_fingerprint=key_fingerprint,
                 key_file=key_file_path,
+                encryption_certificate_sha1_thumbprint=_kv_read_checked(
+                    enc_cert, 'sha1_thumbprint'),
             )
         )
-    return singularity_signed_images_settings
+    return singularity_images_settings
 
 
 def singularity_signed_images_key_fingerprint_dict(config):
@@ -2463,10 +2476,31 @@ def singularity_signed_images_key_fingerprint_dict(config):
     :rtype: dict
     :return: singularity signed images to key fingerprint
     """
+    images_settings = global_resources_singularity_images_settings(
+        config, True)
+    return dict(
+        (settings.image, settings.key_fingerprint)
+        for settings in images_settings
+    )
+
+
+def singularity_image_to_encryption_cert_map(config):
+    # type: (dict) -> dict
+    """Get mapping of image to encryptiong cert thumbprint
+    :param dict config: configuration object
+    :rtype: dict
+    :return: singularity image name to cert thumbprint
+    """
     images_settings = (
-        global_resources_singularity_signed_images_settings(config))
-    return dict((settings.image, settings.key_fingerprint)
-                for settings in images_settings)
+        global_resources_singularity_images_settings(config, False) +
+        global_resources_singularity_images_settings(config, True)
+    )
+    image_map = {}
+    for image in images_settings:
+        if util.is_not_empty(image.encryption_certificate_sha1_thumbprint):
+            image_map[
+                image.image] = image.encryption_certificate_sha1_thumbprint
+    return image_map
 
 
 def global_resources_files(config):
@@ -4041,6 +4075,13 @@ def task_settings(
             if username is not None and password is not None:
                 env_vars['SINGULARITY_DOCKER_USERNAME'] = username
                 env_vars['SINGULARITY_DOCKER_PASSWORD'] = password
+        singularity_cert_map = singularity_image_to_encryption_cert_map(config)
+        cert = singularity_cert_map.get(singularity_image)
+        if cert is not None:
+            # use run option over env var to use az batch env var to cert path
+            run_opts.append(
+                '--pem-path=$AZ_BATCH_NODE_STARTUP_DIR/certs/'
+                'sha1-{}-rsa.pem'.format(cert))
     # constraints
     max_task_retries = _kv_read(conf, 'max_task_retries')
     max_wall_time = _kv_read_checked(conf, 'max_wall_time')

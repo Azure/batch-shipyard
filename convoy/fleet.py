@@ -1292,16 +1292,17 @@ def _construct_pool_object(
                 'credentials under batch')
         bi_pkg = _setup_batch_insights_package(config, pool_settings)
         _rflist.append((bi_pkg.name, bi_pkg))
-    # singularity settings
-    singularity_signed_images_settings = (
-        settings.global_resources_singularity_signed_images_settings(config))
-    for image_settings in singularity_signed_images_settings:
-        if image_settings.key_file is None:
-            continue
-        key_file_name = util.singularity_image_name_to_key_file_name(
-            image_settings.image)
-        key_file_path = image_settings.key_file
-        _rflist.append((key_file_name, key_file_path))
+    # singularity images settings
+    singularity_images_settings = (
+        settings.global_resources_singularity_images_settings(config, False) +
+        settings.global_resources_singularity_images_settings(config, True)
+    )
+    for image_settings in singularity_images_settings:
+        if util.is_not_empty(image_settings.key_file):
+            key_file_name = util.singularity_image_name_to_key_file_name(
+                image_settings.image)
+            key_file_path = image_settings.key_file
+            _rflist.append((key_file_name, key_file_path))
     # get container registries
     docker_registries = settings.docker_registries(config)
     # set additional start task commands (pre version)
@@ -1494,6 +1495,7 @@ def _construct_pool_object(
         task_scheduling_policy=task_scheduling_policy,
         certificate_references=[]
     )
+    # certificate refs
     if encrypt:
         if is_windows:
             pool.certificate_references.append(
@@ -1514,27 +1516,29 @@ def _construct_pool_object(
                     visibility=[batchmodels.CertificateVisibility.start_task]
                 )
             )
+    singularity_certs = []
+    for image_setting in singularity_images_settings:
+        if util.is_not_empty(
+                image_setting.encryption_certificate_sha1_thumbprint):
+            pool.certificate_references.append(
+                batchmodels.CertificateReference(
+                    thumbprint=image_setting.
+                    encryption_certificate_sha1_thumbprint,
+                    thumbprint_algorithm='sha1',
+                    visibility=[batchmodels.CertificateVisibility.start_task]
+                )
+            )
+            singularity_certs.append(
+                image_setting.encryption_certificate_sha1_thumbprint)
+    del singularity_images_settings
     if util.is_not_empty(pool_settings.certificates):
         pool.certificate_references.extend(pool_settings.certificates)
+    # resource files
     for rf in sas_urls:
         pool.start_task.resource_files.append(
             batchmodels.ResourceFile(
                 file_path=rf,
                 http_url=sas_urls[rf])
-        )
-    if not native or delay_image_preload:
-        pool.start_task.environment_settings.append(
-            batchmodels.EnvironmentSetting(
-                name='SHIPYARD_STORAGE_ENV',
-                value=crypto.encrypt_string(
-                    encrypt,
-                    '{}:{}:{}'.format(
-                        storage.get_storageaccount(),
-                        storage.get_storageaccount_endpoint(),
-                        storage.get_storageaccount_key()),
-                    config
-                )
-            )
         )
     if not native:
         if pool_settings.gpu_driver and util.is_none_or_empty(custom_image_na):
@@ -1598,6 +1602,30 @@ def _construct_pool_object(
             endpoint_configuration=pec,
             public_ips=pool_settings.public_ips,
         )
+    # storage env vars
+    if not native or delay_image_preload:
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='SHIPYARD_STORAGE_ENV',
+                value=crypto.encrypt_string(
+                    encrypt,
+                    '{}:{}:{}'.format(
+                        storage.get_storageaccount(),
+                        storage.get_storageaccount_endpoint(),
+                        storage.get_storageaccount_key()),
+                    config
+                )
+            )
+        )
+    # singularity certs
+    if util.is_not_empty(singularity_certs):
+        pool.start_task.environment_settings.append(
+            batchmodels.EnvironmentSetting(
+                name='SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES',
+                value=','.join(singularity_certs)
+            )
+        )
+    del singularity_certs
     # storage cluster settings
     if util.is_not_empty(sc_fstab_mounts):
         pool.start_task.environment_settings.append(
@@ -1606,8 +1634,8 @@ def _construct_pool_object(
                 value='#'.join(sc_fstab_mounts)
             )
         )
-        del sc_args
-        del sc_fstab_mounts
+    del sc_args
+    del sc_fstab_mounts
     # custom linux mount settings
     if util.is_not_empty(custom_linux_fstab_mounts):
         pool.start_task.environment_settings.append(
@@ -1616,7 +1644,7 @@ def _construct_pool_object(
                 value='#'.join(custom_linux_fstab_mounts)
             )
         )
-        del custom_linux_fstab_mounts
+    del custom_linux_fstab_mounts
     # add optional environment variables
     if not native and bs.store_timing_metrics:
         pool.start_task.environment_settings.append(

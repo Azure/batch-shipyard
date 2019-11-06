@@ -1,7 +1,7 @@
 # Dockerfile for Azure/batch-shipyard (Cascade/Singularity)
 
-# base image containing singularity
-FROM alfpark/singularity:3.3.0
+# base image containing Singularity
+FROM alfpark/singularity:3.4.2
 
 FROM ubuntu:18.04
 MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         libffi-dev \
         squashfs-tools \
+        cryptsetup-bin \
         bash \
     && python3 -m pip install --no-cache-dir --upgrade pip \
     && pip3 install --no-cache-dir --upgrade setuptools wheel \

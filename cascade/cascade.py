@@ -464,18 +464,19 @@ class ContainerImageSaveThread(threading.Thread):
         if username is not None and password is not None:
             credentials_command_argument = (
                 '--docker-username {} --docker-password {} '.format(
-                    username, password))
+                    username, password)
+            )
         else:
             credentials_command_argument = ''
         if image in _DIRECTDL_KEY_FINGERPRINT_DICT:
             singularity_pull_cmd = (
-                'singularity pull -F ' +
-                credentials_command_argument +
-                '{} {}'.format(image_out_path, image))
+                'singularity pull -F ' + credentials_command_argument +
+                '{} {}'.format(image_out_path, image)
+            )
             key_fingerprint = _DIRECTDL_KEY_FINGERPRINT_DICT[image]
             if key_file_path.is_file():
-                key_import_cmd = ('singularity key import {}'
-                                  .format(key_file_path))
+                key_import_cmd = 'singularity key import {}'.format(
+                    key_file_path)
                 fingerprint_check_cmd = (
                     'key_fingerprint=$({} | '.format(key_import_cmd) +
                     'grep -o "fingerprint \\(\\S*\\)" | ' +
@@ -486,22 +487,19 @@ class ContainerImageSaveThread(threading.Thread):
                     'key file $key_fingerprint does not match ' +
                     'fingerprint provided {}")'.format(key_fingerprint) +
                     ' && exit 1; fi')
-                cmd = (key_import_cmd + ' && ' + fingerprint_check_cmd +
-                       ' && ' + singularity_pull_cmd)
+                cmd = '{} && {} && {}'.format(
+                    key_import_cmd, fingerprint_check_cmd,
+                    singularity_pull_cmd)
             else:
-                key_pull_cmd = ('singularity key pull {}'
-                                .format(key_fingerprint))
-                cmd = key_pull_cmd + ' && ' + singularity_pull_cmd
-            # if the image pulled from oras we need to manually
-            # verify the image
-            if image.startswith('oras://'):
-                singularity_verify_cmd = ('singularity verify {}'
-                                          .format(image_out_path))
-                cmd = cmd + ' && ' + singularity_verify_cmd
+                cmd = '{} && singularity key pull {}'.format(
+                    singularity_pull_cmd, key_fingerprint)
+            # always verify image separately
+            cmd = '{} && singularity verify {}'.format(cmd, image_out_path)
         else:
-            cmd = ('singularity pull -U -F ' +
-                   credentials_command_argument +
-                   '{} {}'.format(image_out_path, image))
+            cmd = (
+                'singularity pull -U -F ' + credentials_command_argument +
+                '{} {}'.format(image_out_path, image)
+            )
         return cmd
 
     def _pull(self, grtype: str, image: str) -> tuple:
@@ -535,6 +533,7 @@ class ContainerImageSaveThread(threading.Thread):
         while True:
             rc, stdout, stderr = self._pull(grtype, image)
             if rc == 0:
+                logger.debug(stdout)
                 break
             elif self._check_pull_output_overload(stderr.lower()):
                 logger.error(
