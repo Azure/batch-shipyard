@@ -2,5 +2,7 @@ batch_shipyard:
   storage_account_settings: mystorageaccount
 global_resources:
   singularity_images:
-    unsigned:
-      - library://alfpark/mvapich/mvapich:2.3.2
+    signed:
+      - image: library://alfpark/mvapich/mvapich:2.3.2
+        signing_key:
+          fingerprint: B55AC090E5139130C112A5783C4D545F457737EB

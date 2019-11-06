@@ -3,4 +3,4 @@ batch_shipyard:
 global_resources:
   singularity_images:
     unsigned:
-    - docker://tensorflow/tensorflow:latest-gpu
+      - image: docker://tensorflow/tensorflow:latest-gpu

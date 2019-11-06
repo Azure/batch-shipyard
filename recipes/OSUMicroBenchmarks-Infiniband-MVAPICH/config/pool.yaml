@@ -12,3 +12,6 @@ pool_specification:
   inter_node_communication_enabled: true
   ssh:
     username: shipyard
+  container_runtimes:
+    install:
+      - singularity

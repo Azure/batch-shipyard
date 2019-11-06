@@ -37,8 +37,11 @@ included in the Linpack image.
 The global configuration should set the following properties:
 * `singularity_images` array must have a reference to a valid HPCG image
 that can be run with Intel MPI and Infiniband. This can be
-`library://alfpark/linpack/linpack:2018-intel-mkl` which is
+`image: library://alfpark/linpack/linpack:2018-intel-mkl` which is
 published on the [Singularity Library](https://cloud.sylabs.io/library/alfpark/linpack/linpack).
+Since this image is signed, it should be placed under the `signed` section
+with the appropriate `signing_key`. Please see the `config.yaml` file for
+more information.
 
 ### Jobs Configuration
 #### Docker-based

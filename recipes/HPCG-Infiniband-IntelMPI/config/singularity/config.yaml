@@ -2,5 +2,7 @@ batch_shipyard:
   storage_account_settings: mystorageaccount
 global_resources:
   singularity_images:
-    unsigned:
-      - library://alfpark/linpack/linpack:2018-intel-mkl
+    signed:
+      - image: library://alfpark/linpack/linpack:2018-intel-mkl
+        signing_key:
+          fingerprint: B55AC090E5139130C112A5783C4D545F457737EB

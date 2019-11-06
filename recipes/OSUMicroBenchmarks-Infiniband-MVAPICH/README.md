@@ -28,6 +28,9 @@ The global configuration should set the following properties:
 * `singularity_images` array have a reference to a valid OSU
 Micro-Benchmark image with MVAPICH. This can be
 `library://alfpark/mvapich/mvapich:2.3.2`
+Since this image is signed, it should be placed under the `signed` section
+with the appropriate `signing_key`. Please see the `config.yaml` file for
+more information.
 
 ### Jobs Configuration
 The jobs configuration should set the following properties within the `tasks`

@@ -3,4 +3,4 @@ batch_shipyard:
 global_resources:
   singularity_images:
     unsigned:
-    - library://vincent.labonte/mpi/mpibench:openmpi
+      - image: library://vincent.labonte/mpi/mpibench:openmpi

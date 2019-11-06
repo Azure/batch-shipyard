@@ -34,7 +34,7 @@ Batch Shipyard, as of version `3.8.0`, provides seamless MPI launch
 integration for popular MPI runtimes, including OpenMPI, MPICH, MVAPICH,
 and Intel MPI. Users can now specify simply the runtime they wish to use
 and if the environment contains the proper runtime, the commandlines for
-launching will automatically be populated. In the case of RDMA VMs,
+launching will automatically be populated. In the case of SR-IOV IB/RDMA VMs,
 complexity of certain requirements such as exposing the IB PKEY are
 automatically handled.
 
@@ -83,8 +83,8 @@ will attempt to initialize on the host with an MPI runtime that doesn't
 exist.
 
 ### Docker and MPI Mental Model
-With the basics reviewed above, we can construct a mental model of the layout
-of how a Dockerized MPI program will execute.
+Keeping the aforementioned basics in mind, we can construct a mental model
+of the layout of how a Dockerized MPI program will execute.
 
 The typical Docker package, distribute, deploy model usually ends up with an
 image being run with `docker run`. This is fine for a large majority of  use
@@ -150,7 +150,7 @@ mounted in from the host OS, copied into the Docker image during build time
 via `COPY`, or generated during build time. Note that if you copy or generate
 the keys into your Docker image, publishing your Docker image will expose
 your private RSA key. Although external users will not be able to SSH into
-these running instances by default as this SSH port is not exposed externally,
+these running instances by default, as this SSH port is not exposed externally,
 it can still be a security risk if a compute node is compromised. If this is
 an unacceptable risk for your scenario, you should be mounting in a private
 key into the Docker image at runtime which is not published as part of the

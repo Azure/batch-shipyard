@@ -31,17 +31,29 @@ global_resources:
   docker_images:
   - busybox
   singularity_images:
-    unsigned:
-    - shub://singularityhub/busybox
-    - shub://singularityhub/scientific-linux
-    - docker://busybox
+    - image: shub://singularityhub/busybox
+    - image: docker://busybox
+    - image: oras://myazurecr.azurecr.io/repo/myunsignedimage:1.0.0
+    - image: library://user/repo/image:1.0.0
+    - image: library://user/repo/encryptedimage:1.0.0
+      encryption:
+        certificate:
+          sha1_thumbprint: 123456789...
     signed:
     - image: library://sylabs/tests/signed:1.0.0
-      key_fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
-      key_file: /path/to/key/file
-    - image: oras://myazurecr.azurecr.io
-      key_fingerprint: 000123000123000123000123000123000123ABCD
-      key_file: /path/to/key/file
+      signing_key:
+        fingerprint: 8883491F4268F173C6E5DC49EDECE4F3F38D871E
+    - image: oras://myazurecr.azurecr.io/repo/mysignedimage:1.0.0
+      signing_key:
+        fingerprint: 000123000123000123000123000123000123ABCD
+        file: /path/to/key/file
+    - image: library://user/repo/encryptedimage:1.0.0
+      signing_key:
+        fingerprint: 000123000123000123000123000123000123ABCD
+        file: /path/to/key/file
+      encryption:
+        certificate:
+          sha1_thumbprint: 123456789...
   volumes:
     data_volumes:
       contdatavol:
@@ -267,22 +279,46 @@ This property is required.
       increased latency to begin task execution if the image differs from a
       previous pull, and lead to potential inconsistencies between task
       executions. Note that `singularity_images` is incompatible with `native`
-      container support enabled pools.
+      container support enabled pools. For encrypted container support,
+      please see the [Singularity Encrypted Containers](https://sylabs.io/guides/3.4/user-guide/encryption.html)
+      documentation for more details.
       * (optional) `unsigned` is a list of Singularity images that will not be
         verified when installing on every compute node. `shub://`, `docker://`,
         `library://`, and `oras://` URI prefixes are supported.
+        * (required) `image` is the unsigned Singularity image.
+        * (optional) `encryption` is the image encryption properties. Only
+          images encrypted with an asymmetric RSA key pair are currently
+          supported in Batch Shipyard.
+            * (required) `certificate` is the PFX decryption certificate with
+              the appropriate private key that has been bound to the
+              Batch account. This cannot be a CER certificate as a private key
+              is required for image decryption.
+                * (required) `sha1_thumbprint` is the associated SHA-1
+                  thumbprint of the certificate. This must be associated with
+                  the PFX with the private key.
       * (optional) `signed` is a list of objects containing the Singularity
         image that will be verified when installing on every compute node as
         well as the information to verify the image. `library://`, and
         `oras://` URI prefixes are supported.
-        * (required) `image` is the Singularity image to verify.
-        * (required) `key_fingerprint` is the key fingerprint of the Singularity
-          image to verify. If no `key_file` is specified, it uses this key
-          fingerprint to pull the key from the default key server
-          "[https://keys.sylabs.io](https://keys.sylabs.io)"
-        * (optional) `key_file` is a local path to a public key file. The key
-          fingerprint of the key in `key_file` must match the
-          `key_fingerprint`.
+        * (required) `image` is the signed Singularity image.
+        * (required) `signing_key` is the signing key properties.
+            * (required) `fingerprint` is the key fingerprint of the
+              Singularity image to verify. If no `key_file` is specified, it
+              uses this key fingerprint to pull the key from the default key
+              server "[https://keys.sylabs.io](https://keys.sylabs.io)"
+            * (optional) `file` is a local path to a public key file. The key
+              fingerprint of the key in `file` must match the
+              `fingerprint`.
+        * (optional) `encryption` is the image encryption properties. Only
+          images encrypted with an asymmetric RSA key pair are currently
+          supported in Batch Shipyard.
+            * (required) `certificate` is the PFX decryption certificate with
+              the appropriate private key that has been bound to the
+              Batch account. This cannot be a CER certificate as a private key
+              is required for image decryption.
+                * (required) `sha1_thumbprint` is the associated SHA-1
+                  thumbprint of the certificate. This must be associated with
+                  the PFX with the private key.
     * (optional) `files` property specifies data that should be ingressed
       from a location accessible by the local machine (i.e., machine invoking
       `shipyard.py` to a shared file system location accessible by compute
