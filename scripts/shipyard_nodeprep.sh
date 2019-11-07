@@ -565,6 +565,7 @@ execute_command_with_retry() {
     set -e
 }
 
+# TODO remove this once native images are fixed
 blacklist_kernel_upgrade() {
     if [ "$DISTRIB_ID" != "ubuntu" ]; then
         log DEBUG "No kernel upgrade blacklist required on $DISTRIB_ID $DISTRIB_RELEASE"
@@ -606,12 +607,12 @@ check_for_nvidia_driver_on_custom_or_native() {
 }
 
 enable_nvidia_persistence_mode() {
-    execute_command_with_retry 10 0 nvidia-persistenced --user root
+    execute_command_with_retry 5 0 nvidia-persistenced --user root
     nvidia-smi -pm 1
 }
 
 query_nvidia_card() {
-    nvidia-smi -q -d PAGE_RETIREMENT
+    nvidia-smi -q
     nvidia-smi
 }
 
@@ -762,11 +763,12 @@ alias lbm-nouveau off
 EOF
     # get development essentials for nvidia driver
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
-        install_packages build-essential
+        install_packages build-essential dkms
     elif [[ $DISTRIB_ID == centos* ]]; then
         dracut /boot/initramfs-"$(uname -r)".img "$(uname -r)" --force
         install_kernel_devel_package
-        install_packages gcc binutils make
+        install_packages gcc binutils make epel-release
+        install_packages dkms
     fi
     # get additional dependency if NV-series VMs
     if [ "$is_viz" == "True" ]; then
@@ -777,7 +779,7 @@ EOF
         fi
     fi
     # install driver
-    ./"${nvdriver}" -s
+    ./"${nvdriver}" -s --dkms
     # add flag to config for GRID driver
     if [ "$is_viz" == "True" ]; then
         cp /etc/nvidia/gridd.conf.template /etc/nvidia/gridd.conf
