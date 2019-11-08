@@ -26,6 +26,7 @@ pages:
 - In-Depth Feature Guides:
   - Autoscale: 30-batch-shipyard-autoscale.md
   - Task Factory and Merge Tasks: 35-batch-shipyard-task-factory-merge-task.md
+  - Singularity Encrypted Containers: 50-batch-shipyard-encrypted-containers.md
   - Azure Functions and Batch Shipyard: 60-batch-shipyard-site-extension.md
   - Custom Images for Host Compute Nodes: 63-batch-shipyard-custom-images.md
   - Virtual Networks and Public IPs: 64-batch-shipyard-byovnet.md

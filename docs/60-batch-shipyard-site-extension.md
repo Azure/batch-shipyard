@@ -19,13 +19,17 @@ In the create blade, fill in the appropriate properties for your Function App.
 You will need to ensure that the OS is set to `Windows`. This restriction
 is only for Batch Shipyard to execute, and has no bearing on the actual
 container workload invoked by Batch Shipyard (as that runs in the Batch
-service). Additionally, ensure that your Hosting Plan is set to
-`App Service Plan` and use the `App Service plan/Location` to create a new
-App Service plan (if applicable). Very basic plans may lead to startup delay
-in Batch Shipyard. You can ignore the `Runtime Stack` language selection.
-It has no bearing on the functionality of this Azure Function App for
-Batch Shipyard as we will be installing Python as a site extension (in
-a later step).
+service). Additionally, ensure that your select a Hosting Plan that is
+appropriate for your workload. Please see documentation
+[here](https://docs.microsoft.com/azure/azure-functions/functions-scale)
+regarding default and maximum timeouts (and how to modify them). It is
+recommended to use an `App Service Plan` rather than a Consumption plan
+for pre-warmed instances and other benefits. Use the `App Service plan/Location`
+to create a new App Service plan (if applicable). Very basic and Consumption
+plans may lead to startup delay in Batch Shipyard. You can ignore the
+`Runtime Stack` language selection; you can keep it populated as .NET Core.
+It has no bearing on the functionality of this Azure Function App for Batch
+Shipyard as we will be installing Python as a site extension (in a later step).
 
 ![60-site-extension-step1-1.png](https://azurebatchshipyard.blob.core.windows.net/github/60-site-extension-step1-1.png)
 

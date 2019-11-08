@@ -438,7 +438,7 @@ def _autofill_subject():
     :rtype: str
     :return: generated autofill subject
     """
-    return '/C=/ST=/L=/O=/CN=BatchShipyard{}'.format(
+    return '/O=BatchShipyard/CN=GenCert{}'.format(
         datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
 
 
@@ -481,7 +481,7 @@ def generate_pem_pfx_certificates(config, file_prefix=None, pfx_password=None):
     try:
         subprocess.check_call(
             ['openssl', 'req', '-new', '-nodes', '-x509', '-newkey',
-             'rsa:2048', '-keyout', privatekey, '-out', f.name,
+             'rsa:4096', '-keyout', privatekey, '-out', f.name,
              '-days', '3650', '-subj', _autofill_subject()]
         )
         # extract public key from private key

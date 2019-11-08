@@ -59,6 +59,8 @@ autoscale pools.
 images.
 * Hc/Hb VM sizes have some additional known issues which are detailed in this
 [document](https://docs.microsoft.com/azure/virtual-machines/workloads/hpc/hb-hc-known-issues).
+* Encrypted Singularity container images must be pre-loaded, i.e., defined
+in the `global_resources` section during Batch pool creation time.
 
 ### Monitoring Limitations
 * Only Linux Batch pools and RemoteFS clusters can be monitored. Windows
