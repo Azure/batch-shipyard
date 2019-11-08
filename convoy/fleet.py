@@ -72,20 +72,20 @@ _NVIDIA_DRIVER = {
     'compute_cc37': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '418.87/NVIDIA-Linux-x86_64-418.87.00.run'
+            '418.87/NVIDIA-Linux-x86_64-418.87.01.run'
         ),
         'sha256': (
-            'dca372ca933aa7fb1ab88cc8c109d79838cf6f0c6f5a7938fcb23e8332c091d9'
+            'fe6dcba384d67e906fad3cdc707fb6b0993cf190fc694660b70224d49a69144f'
         ),
         'target': 'nvidia-driver_cc37.run'
     },
     'compute_cc6-7': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
-            '418.87/NVIDIA-Linux-x86_64-418.87.00.run'
+            '418.87/NVIDIA-Linux-x86_64-418.87.01.run'
         ),
         'sha256': (
-            'dca372ca933aa7fb1ab88cc8c109d79838cf6f0c6f5a7938fcb23e8332c091d9'
+            'fe6dcba384d67e906fad3cdc707fb6b0993cf190fc694660b70224d49a69144f'
         ),
         'target': 'nvidia-driver_cc6-7.run'
     },
@@ -93,12 +93,12 @@ _NVIDIA_DRIVER = {
         # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'http://download.microsoft.com/download/B/0/D/'
-            'B0DD6405-CA50-4B99-A908-6D32C1B6836A/'
-            'NVIDIA-Linux-x86_64-430.30-grid.run'
+            'https://download.microsoft.com/download/1/a/5/'
+            '1a537cae-5b52-4348-acd2-2f210fc412b0/'
+            'NVIDIA-Linux-x86_64-430.46-grid.run'
         ),
         'sha256': (
-            'c624dff6ed1610d366e4fdc92dff54b720f6b609b7748b1da20615a41167ff75'
+            'a06b13c36c8c203babf7e681f1b83e7d7967c76e4bdb71ba4a2cd80dad502bfd'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -125,10 +125,10 @@ _LIS_PACKAGE = {
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
         '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
-        'lis-rpms-4.3.3.tar.gz'
+        'lis-rpms-4.3.4.x86_64.tar.gz'
     ),
     'sha256': (
-        '8f6d51fb7f6d8e32bf1e2e6a9299947344691f6ad7586566b5a5e06866ae0b2f'
+        '5317176c536c6f013b5090c20e1a6045df155ac927afbcd1fb5059e49d19bc2b'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
@@ -572,7 +572,10 @@ def _setup_lis_package(config, vm_size):
              '--delete LISISO/RHEL* --delete LISISO/CentOS5* '
              '--delete LISISO/CentOS6* --delete LISISO/CentOS70* '
              '--delete LISISO/CentOS71* --delete LISISO/CentOS72* '
-             '--delete LISISO/CentOS73* ').format(inter),
+             '--delete LISISO/CentOS73* --delete LISISO/RPMS5* '
+             '--delete LISISO/RPMS6* --delete LISISO/RPMS70* '
+             '--delete LISISO/RPMS71* --delete LISISO/RPMS72* '
+             '--delete LISISO/RPMS73*').format(inter),
             shell=True, suppress_output=True)
         util.subprocess_with_output(
             'gzip -f {}'.format(inter), shell=True, suppress_output=True)
