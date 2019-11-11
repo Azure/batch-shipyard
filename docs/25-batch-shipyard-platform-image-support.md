@@ -20,17 +20,17 @@ container pools.
 | Publisher             | Offer                 | Sku | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------------------|-----------------------|-----|:---:|:-------:|:-----------:|:--------------:|
 | microsoft-azure-batch | centos-container      | 7-4 |  X  |         |      X      |                |
-| microsoft-azure-batch | centos-container      | 7-5 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container      | 7-6 |  X  |         |      X      |                |
-| microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |    X    |      X      |                |
-| microsoft-azure-batch | centos-container-rdma | 7-6 |  X  |    X    |      X      |                |
+| microsoft-azure-batch | centos-container      | 7-7 |  X  |         |      X      |                |
+| microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |  X (4)  |      X      |                |
+| microsoft-azure-batch | centos-container-rdma | 7-6 |  X  |  X (5)  |      X      |                |
+| microsoft-azure-batch | centos-container-rdma | 7-7 |  X  |  X (5)  |      X      |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
-| OpenLogic             | CentOS                | 7.5 |  X  |         |             |        X       |
 | OpenLogic             | CentOS                | 7.6 |  X  |         |             |        X       |
-| OpenLogic             | CentOS-HPC            | 7.1 |     |    X    |             |                |
-| OpenLogic             | CentOS-HPC            | 7.3 |  X  |    X    |             |                |
-| OpenLogic             | CentOS-HPC            | 7.4 |  X  |    X    |             |        X       |
-| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (4)  |             |        X       |
+| OpenLogic             | CentOS                | 7.7 |  X  |         |             |        X       |
+| OpenLogic             | CentOS-HPC            | 7.4 |  X  |  X (4)  |             |        X       |
+| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (5)  |             |        X       |
+| OpenLogic             | CentOS-HPC            | 7.7 |  X  |  X (5)  |             |        X       |
 
 ### Debian
 
@@ -44,12 +44,12 @@ SLES is not supported at this time.
 
 ### Ubuntu
 
-| Publisher             | Offer                        | Sku         | GPU | IB/RDMA | Native Only | Native Convert |
-|-----------------------|------------------------------|-------------|:---:|:-------:|:-----------:|:--------------:|
-| Canonical             | UbuntuServer                 | 16.04-LTS   |  X  |  X (1)  |             |      X (2)     |
-| Canonical             | UbuntuServer                 | 18.04-LTS   |  X  |  X (1)  |             |                |
-| microsoft-azure-batch | ubuntu-server-container      | 16-04-lts   |  X  |         |      X      |                |
-| microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |  X (3)  |      X      |                |
+| Publisher             | Offer                        | Sku         | GPU |  IB/RDMA  | Native Only | Native Convert |
+|-----------------------|------------------------------|-------------|:---:|:---------:|:-----------:|:--------------:|
+| Canonical             | UbuntuServer                 | 16.04-LTS   |  X  |  X (1)    |             |     X (2,4)    |
+| Canonical             | UbuntuServer                 | 18.04-LTS   |  X  |  X (1)    |             |                |
+| microsoft-azure-batch | ubuntu-server-container      | 16-04-lts   |  X  |           |      X      |                |
+| microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |  X (3,4)  |      X      |                |
 
 ### Windows
 
@@ -60,8 +60,7 @@ SLES is not supported at this time.
 | MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-with-Containers-smalldisk      |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers           |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers-smalldisk |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1709-with-Containers-smalldisk |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1803-with-Containers-smalldisk |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | Datacenter-Core-1903-with-Containers-smalldisk |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1809-with-Containers-smalldisk |     |         |      X      |                |
 
 ## Notes
@@ -72,6 +71,7 @@ utilizing the native conversion option. Please see the
 on how to create a compliant custom image.
 2. Native conversion of this platform image will enable IB/RDMA automatically.
 3. The Intel MPI runtime is not present by default on this image, however,
-it is automatically installed through Batch Shipyard for Network Direct RDMA
-VM sizes.
-4. Only supported on SR-IOV IB/RDMA VM sizes.
+it is automatically installed through Batch Shipyard for Network Direct
+IB/RDMA VM sizes.
+4. Only supported on Network Direct IB/RDMA VM sizes.
+5. Only supported on SR-IOV IB/RDMA VM sizes.
