@@ -260,37 +260,44 @@ get_ephemeral_device() {
     local deviceid
     local device
     local dev
+    local blockpaths
     local blockpath
     mapfile -t devices < <(ls "${VMBUS_DEVICES_PATH}")
     for devicepath in "${devices[@]}"; do
         deviceid=$(<"${VMBUS_DEVICES_PATH}/${devicepath}/device_id")
         if [[ "$deviceid" == ${GEN1_VMBUS_DEVICE_PREFIX}* ]] || [ "$deviceid" == "${GEN2_VMBUS_DEVICE_ID}" ]; then
-            blockpath=$(find "${VMBUS_DEVICES_PATH}/${devicepath}/" -type d -name block)
-            if [ -z "$blockpath" ]; then
-                continue
-            fi
-            # gen2 VMs have all disks presented in this device, so we need
-            # to read the LUN. The LUN mappings are:
-            # 0: OS disk
-            # 1: Resource/ephemeral disk
-            # 2: CD-ROM
-            if [ "$deviceid" == "${GEN2_VMBUS_DEVICE_ID}" ]; then
-                local lunsplit
-                local lun
-                IFS='/'
-                read -ra lunsplit <<< "$blockpath"
-                IFS=':'
-                read -ra lun <<< "${lunsplit[-2]}"
-                if [ "${lun[-1]}" != "1" ]; then
+            mapfile -t blockpaths < <(find "${VMBUS_DEVICES_PATH}/${devicepath}/" -type d -name block)
+            for blockpath in "${blockpaths[@]}"; do
+                if [ -z "$blockpath" ]; then
                     continue
                 fi
-            fi
-            device=$(find "${blockpath}/" -type d -name "sd*" | head -1)
-            IFS='/'
-            read -ra dev <<< "$device"
-            EPHEMERAL_DISK="/dev/${dev[-1]}"
-            EPHEMERAL_DISK_PARTITION="${EPHEMERAL_DISK}1"
-            log INFO "Ephemeral disk discovered as $EPHEMERAL_DISK"
+                # gen2 VMs have all disks presented in this device, so we need
+                # to read the LUN. The LUN mappings are:
+                # 0: OS disk
+                # 1: Resource/ephemeral disk
+                # 2: CD-ROM
+                if [ "$deviceid" == "${GEN2_VMBUS_DEVICE_ID}" ]; then
+                    local lunsplit
+                    local lun
+                    IFS='/'
+                    read -ra lunsplit <<< "$blockpath"
+                    IFS=':'
+                    read -ra lun <<< "${lunsplit[-2]}"
+                    IFS=$OLD_IFS
+                    if [ "${lun[-1]}" != "1" ]; then
+                        continue
+                    fi
+                fi
+                device=$(find "${blockpath}/" -type d -name "sd*" | head -1)
+                IFS='/'
+                read -ra dev <<< "$device"
+                EPHEMERAL_DISK="/dev/${dev[-1]}"
+                EPHEMERAL_DISK_PARTITION="${EPHEMERAL_DISK}1"
+                log INFO "Ephemeral disk discovered as $EPHEMERAL_DISK"
+                break
+            done
+        fi
+        if [ -n "$EPHEMERAL_DISK_PARTITION" ]; then
             break
         fi
     done
