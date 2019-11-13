@@ -2300,8 +2300,8 @@ def _update_container_images(
             'set -a',
             '. {}'.format(envfile),
             'set +a',
-            'log_directory=$PWD',
             'pushd $AZ_BATCH_NODE_STARTUP_DIR/wd',
+            'log_directory=$PWD',
             './shipyard_cascade.sh '
             '{b} {c} {d} {e} {i} {j} {ld} {p} {s}'.format(
                 b='-b "$SHIPYARD_CONTAINER_IMAGES_PRELOAD"',

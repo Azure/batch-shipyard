@@ -75,8 +75,6 @@ try:
 except NameError:
     _AZBATCH_USER = None
 _PARTITION_KEY = None
-_MAX_VMLIST_PROPERTIES = 13
-_MAX_VMLIST_IDS_PER_PROPERTY = 800
 _DOCKER_AUTH_MAP = None
 _DOCKER_AUTH_MAP_LOCK = threading.Lock()
 _DIRECTDL_LOCK = threading.Lock()
@@ -88,13 +86,14 @@ _BLOB_LEASES = {}
 _PREFIX = None
 _STORAGE_CONTAINERS = {
     'blob_globalresources': None,
-    'table_images': None,
     'table_globalresources': None,
 }
 _DIRECTDL_QUEUE = queue.Queue()
 _DIRECTDL_KEY_FINGERPRINT_DICT = dict()
 _DIRECTDL_DOWNLOADING = set()
+_GR_LOCK = threading.Lock()
 _GR_DONE = False
+_GR_COUNT = 0
 _THREAD_EXCEPTIONS = []
 _DOCKER_PULL_ERRORS = frozenset((
     'toomanyrequests',
@@ -174,7 +173,6 @@ def _setup_storage_names(sep: str) -> None:
         raise ValueError('storage_entity_prefix is invalid')
     _STORAGE_CONTAINERS['blob_globalresources'] = '-'.join(
         (sep + 'gr', batchaccount, poolid))
-    _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _PREFIX = sep
 
@@ -362,18 +360,15 @@ class ContainerImageSaveThread(threading.Thread):
     """Container Image Save Thread"""
     def __init__(
             self, blob_client: azureblob.BlockBlobService,
-            table_client: azuretable.TableService,
             resource: str, blob_name: str, nglobalresources: int):
         """ContainerImageSaveThread ctor
         :param azureblob.BlockBlobService blob_client: blob client
-        :param azuretable.TableService table_client: table client
         :param str resource: resource
         :param str blob_name: resource blob name
         :param int nglobalresources: number of global resources
         """
         threading.Thread.__init__(self)
         self.blob_client = blob_client
-        self.table_client = table_client
         self.resource = resource
         self.blob_name = blob_name
         self.nglobalresources = nglobalresources
@@ -556,9 +551,8 @@ class ContainerImageSaveThread(threading.Thread):
         diff = (datetime.datetime.now() - start).total_seconds()
         logger.debug('took {} sec to pull {} image {}'.format(
             diff, grtype, image))
-        # register resource
-        _merge_resource(
-            self.table_client, self.resource, self.nglobalresources)
+        # global resource accounting
+        _inc_resource_count(self.nglobalresources)
         # get image size
         try:
             if grtype == 'docker':
@@ -580,12 +574,10 @@ class ContainerImageSaveThread(threading.Thread):
 async def _direct_download_resources_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azureblob.BlockBlobService,
-        table_client: azuretable.TableService,
         nglobalresources: int) -> None:
     """Direct download resource logic
     :param asyncio.BaseEventLoop loop: event loop
     :param azureblob.BlockBlobService blob_client: blob client
-    :param azuretable.TableService table_client: table client
     :param int nglobalresources: number of global resources
     """
     # ensure we are not downloading too many sources at once
@@ -646,7 +638,7 @@ async def _direct_download_resources_async(
     # pull and save container image in thread
     if is_container_resource(resource):
         thr = ContainerImageSaveThread(
-            blob_client, table_client, resource, blob_name, nglobalresources)
+            blob_client, resource, blob_name, nglobalresources)
         thr.start()
     else:
         # TODO download via blob, explode uri to get container/blob
@@ -654,166 +646,40 @@ async def _direct_download_resources_async(
         raise NotImplementedError()
 
 
-def _merge_resource(
-        table_client: azuretable.TableService,
-        resource: str, nglobalresources: int) -> None:
-    """Merge resource to the image table
-    :param azuretable.TableService table_client: table client
-    :param str resource: resource to add to the image table
+def _inc_resource_count(nglobalresources: int) -> None:
+    """Increment global resource counter
     :param int nglobalresources: number of global resources
     """
-    # merge resource to the image table
-    entity = {
-        'PartitionKey': _PARTITION_KEY,
-        'RowKey': compute_resource_hash(resource),
-        'Resource': resource,
-        'VmList0': _NODEID,
-    }
-    logger.debug('merging entity {} to the image table'.format(entity))
-    try:
-        table_client.insert_entity(
-            _STORAGE_CONTAINERS['table_images'], entity=entity)
-    except azure.common.AzureConflictHttpError:
-        while True:
-            entity = table_client.get_entity(
-                _STORAGE_CONTAINERS['table_images'],
-                entity['PartitionKey'], entity['RowKey'])
-            # merge VmList into entity
-            evms = []
-            for i in range(0, _MAX_VMLIST_PROPERTIES):
-                prop = 'VmList{}'.format(i)
-                if prop in entity:
-                    evms.extend(entity[prop].split(','))
-            if _NODEID in evms:
-                break
-            evms.append(_NODEID)
-            for i in range(0, _MAX_VMLIST_PROPERTIES):
-                prop = 'VmList{}'.format(i)
-                start = i * _MAX_VMLIST_IDS_PER_PROPERTY
-                end = start + _MAX_VMLIST_IDS_PER_PROPERTY
-                if end > len(evms):
-                    end = len(evms)
-                if start < end:
-                    entity[prop] = ','.join(evms[start:end])
-                else:
-                    entity[prop] = None
-            etag = entity['etag']
-            entity.pop('etag')
-            try:
-                table_client.merge_entity(
-                    _STORAGE_CONTAINERS['table_images'], entity=entity,
-                    if_match=etag)
-                break
-            except azure.common.AzureHttpError as ex:
-                if ex.status_code != 412:
-                    raise
-    logger.info('entity {} merged to the image table'.format(entity))
-    global _GR_DONE
-    if not _GR_DONE:
-        try:
-            entities = table_client.query_entities(
-                _STORAGE_CONTAINERS['table_images'],
-                filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
-        except azure.common.AzureMissingResourceHttpError:
-            entities = []
-        count = 0
-        for entity in entities:
-            for i in range(0, _MAX_VMLIST_PROPERTIES):
-                prop = 'VmList{}'.format(i)
-                mode_prefix = _CONTAINER_MODE.name.lower() + ':'
-                if (prop in entity and _NODEID in entity[prop] and
-                   entity['Resource'].startswith(mode_prefix)):
-                    count += 1
-        if count == nglobalresources:
-            _record_perf(
-                'gr-done',
-                'nglobalresources={}'.format(nglobalresources))
+    global _GR_COUNT, _GR_DONE
+    with _GR_LOCK:
+        _GR_COUNT += 1
+        if _GR_COUNT == nglobalresources:
             _GR_DONE = True
-            logger.info('all {} global resources of container mode "{}" loaded'
-                        .format(nglobalresources,
-                                _CONTAINER_MODE.name.lower()))
-        else:
-            logger.info('{}/{} global resources of container mode "{}" loaded'
-                        .format(count, nglobalresources,
-                                _CONTAINER_MODE.name.lower()))
-
-
-def _unmerge_resources(
-        table_client: azuretable.TableService) -> None:
-    """Remove node from the image table
-    :param azuretable.TableService table_client: table client
-    """
-    logger.debug('removing node {} from the image table for container mode {}'
-                 .format(_NODEID, _CONTAINER_MODE.name.lower()))
-    try:
-        entities = table_client.query_entities(
-            _STORAGE_CONTAINERS['table_images'],
-            filter='PartitionKey eq \'{}\''.format(_PARTITION_KEY))
-    except azure.common.AzureMissingResourceHttpError:
-        entities = []
-    mode_prefix = _CONTAINER_MODE.name.lower() + ':'
-    for entity in entities:
-        if entity['Resource'].startswith(mode_prefix):
-            _unmerge_resource(table_client, entity)
-    logger.info('node {} removed from the image table for container mode {}'
-                .format(_NODEID, _CONTAINER_MODE.name.lower()))
-
-
-def _unmerge_resource(
-        table_client: azuretable.TableService, entity: dict) -> None:
-    """Remove node from entity
-    :param azuretable.TableService table_client: table client
-    """
-    while True:
-        entity = table_client.get_entity(
-            _STORAGE_CONTAINERS['table_images'],
-            entity['PartitionKey'], entity['RowKey'])
-        # merge VmList into entity
-        evms = []
-        for i in range(0, _MAX_VMLIST_PROPERTIES):
-            prop = 'VmList{}'.format(i)
-            if prop in entity:
-                evms.extend(entity[prop].split(','))
-        if _NODEID in evms:
-            evms.remove(_NODEID)
-        for i in range(0, _MAX_VMLIST_PROPERTIES):
-            prop = 'VmList{}'.format(i)
-            start = i * _MAX_VMLIST_IDS_PER_PROPERTY
-            end = start + _MAX_VMLIST_IDS_PER_PROPERTY
-            if end > len(evms):
-                end = len(evms)
-            if start < end:
-                entity[prop] = ','.join(evms[start:end])
-            else:
-                entity[prop] = None
-        etag = entity['etag']
-        entity.pop('etag')
-        try:
-            table_client.update_entity(
-                _STORAGE_CONTAINERS['table_images'], entity=entity,
-                if_match=etag)
-            break
-        except azure.common.AzureHttpError as ex:
-            if ex.status_code != 412:
-                raise
+    if _GR_DONE:
+        _record_perf('gr-done', 'nglobalresources={}'.format(nglobalresources))
+        logger.info(
+            'all {} global resources of container mode "{}" loaded'.format(
+                nglobalresources, _CONTAINER_MODE.name.lower()))
+    else:
+        logger.info(
+            '{}/{} global resources of container mode "{}" loaded'.format(
+                _GR_COUNT, nglobalresources, _CONTAINER_MODE.name.lower()))
 
 
 async def download_monitor_async(
         loop: asyncio.BaseEventLoop,
         blob_client: azureblob.BlockBlobService,
-        table_client: azuretable.TableService,
         nglobalresources: int) -> None:
     """Download monitor
     :param asyncio.BaseEventLoop loop: event loop
     :param azureblob.BlockBlobService blob_client: blob client
-    :param azuretable.TableService table_client: table client
     :param int nglobalresource: number of global resources
     """
     while not _GR_DONE:
         # check if there are any direct downloads
         if _DIRECTDL_QUEUE.qsize() > 0:
             await _direct_download_resources_async(
-                loop, blob_client, table_client, nglobalresources)
+                loop, blob_client, nglobalresources)
         # check for any thread exceptions
         if len(_THREAD_EXCEPTIONS) > 0:
             logger.critical('Thread exceptions encountered, terminating')
@@ -864,9 +730,6 @@ def distribute_global_resources(
     :param azureblob.BlockBlobService blob_client: blob client
     :param azuretable.TableService table_client: table client
     """
-    # remove node from the image table because cascade relies on it to know
-    # when its work is done
-    _unmerge_resources(table_client)
     # get globalresources from table
     try:
         entities = table_client.query_entities(
@@ -885,17 +748,17 @@ def distribute_global_resources(
             if key_fingerprint is not None:
                 _DIRECTDL_KEY_FINGERPRINT_DICT[image] = key_fingerprint
         else:
-            logger.info('skipping resource {}:'.format(resource) +
-                        'not matching container mode "{}"'
-                        .format(_CONTAINER_MODE.name.lower()))
+            logger.info(
+                'skipping resource {}: not matching container '
+                'mode "{}"'.format(resource, _CONTAINER_MODE.name.lower()))
     if nentities == 0:
         logger.info('no global resources specified')
         return
-    logger.info('{} global resources matching container mode "{}"'
-                .format(nentities, _CONTAINER_MODE.name.lower()))
+    logger.info('{} global resources matching container mode "{}"'.format(
+        nentities, _CONTAINER_MODE.name.lower()))
     # run async func in loop
     loop.run_until_complete(download_monitor_async(
-        loop, blob_client, table_client, nentities))
+        loop, blob_client, nentities))
 
 
 def main():

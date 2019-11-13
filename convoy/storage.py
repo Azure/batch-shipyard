@@ -72,8 +72,6 @@ _STORAGE_CONTAINERS = {
     'blob_monitoring': None,
     'blob_federation_global': None,
     'blob_federation': None,
-    'table_dht': None,
-    'table_images': None,
     'table_globalresources': None,
     'table_perf': None,
     'table_monitoring': None,
@@ -82,8 +80,10 @@ _STORAGE_CONTAINERS = {
     'table_slurm': None,
     'queue_federation': None,
     # TODO remove following in future release
-    'table_registry': None,
     'blob_torrents': None,
+    'table_dht': None,
+    'table_images': None,
+    'table_registry': None,
     'table_torrentinfo': None,
 }
 _CONTAINERS_CREATED = set()
@@ -111,8 +111,6 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['blob_monitoring'] = sep + 'monitor'
     _STORAGE_CONTAINERS['blob_federation'] = sep + 'fed'
     _STORAGE_CONTAINERS['blob_federation_global'] = sep + 'fedglobal'
-    _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
-    _STORAGE_CONTAINERS['table_images'] = sep + 'images'
     _STORAGE_CONTAINERS['table_globalresources'] = sep + 'gr'
     _STORAGE_CONTAINERS['table_perf'] = sep + 'perf'
     _STORAGE_CONTAINERS['table_monitoring'] = sep + 'monitor'
@@ -121,9 +119,11 @@ def set_storage_configuration(sep, postfix, sa, sakey, saep, sasexpiry):
     _STORAGE_CONTAINERS['table_slurm'] = sep + 'slurm'
     _STORAGE_CONTAINERS['queue_federation'] = sep + 'fed'
     # TODO remove following containers in future release
-    _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['blob_torrents'] = '-'.join(
         (sep + 'tor', postfix))
+    _STORAGE_CONTAINERS['table_dht'] = sep + 'dht'
+    _STORAGE_CONTAINERS['table_images'] = sep + 'images'
+    _STORAGE_CONTAINERS['table_registry'] = sep + 'registry'
     _STORAGE_CONTAINERS['table_torrentinfo'] = sep + 'torrentinfo'
     # ensure all storage containers are between 3 and 63 chars in length
     for key in _STORAGE_CONTAINERS:
@@ -1995,14 +1995,16 @@ def delete_storage_containers(
     :param bool skip_tables: skip deleting tables
     """
     for key in _STORAGE_CONTAINERS:
-        if key == 'table_registry' or key == 'table_torrentinfo':
+        # TODO add table_images to below on next release
+        if (key == 'table_dht' or key == 'table_registry' or
+                key == 'table_torrentinfo'):
             # TODO remove in future release: unused table
             logger.debug('deleting table: {}'.format(_STORAGE_CONTAINERS[key]))
             table_client.delete_table(_STORAGE_CONTAINERS[key])
         elif key == 'blob_torrents':
             # TODO remove in future release: unused container
-            logger.debug('deleting container: {}'
-                         .format(_STORAGE_CONTAINERS[key]))
+            logger.debug(
+                'deleting container: {}'.format(_STORAGE_CONTAINERS[key]))
             blob_client.delete_container(_STORAGE_CONTAINERS[key])
         elif key.startswith('blob_'):
             if (key == 'blob_remotefs' or key == 'blob_monitoring' or
@@ -2104,7 +2106,8 @@ def clear_storage_containers(
             _clear_blobs(blob_client, _STORAGE_CONTAINERS[key])
         elif key.startswith('table_'):
             # TODO remove in a future release: unused table
-            if key == 'table_registry' or key == 'table_torrentinfo':
+            if (key == 'table_dht' or key == 'table_images' or
+                    key == 'table_registry' or key == 'table_torrentinfo'):
                 continue
             if (key == 'table_monitoring' or
                     key == 'table_federation_global' or
@@ -2166,11 +2169,13 @@ def create_storage_containers(blob_client, table_client, config):
                 time.sleep(1)
         elif key.startswith('table_'):
             # TODO remove in a future release: unused table
-            if key == 'table_registry' or key == 'table_torrentinfo':
+            if (key == 'table_dht' or key == 'table_images' or
+                    key == 'table_registry' or key == 'table_torrentinfo'):
                 continue
             if (key == 'table_monitoring' or
                     key == 'table_federation_global' or
-                    key == 'table_federation_jobs'):
+                    key == 'table_federation_jobs' or
+                    key == 'table_slurm'):
                 continue
             if key == 'table_perf' and not bs.store_timing_metrics:
                 continue
