@@ -20,5 +20,6 @@ for lsd in "${LSD[@]}"; do
     fi
     di="${REPO}:${SINGULARITY_VERSION}${tag}"
     docker build --pull -t "$di" --build-arg SINGULARITY_VERSION="$SINGULARITY_VERSION" --build-arg LOCAL_STATE_DIR="$lsd" -f Dockerfile .
+    docker push "$di"
     i=$((i + 1))
 done

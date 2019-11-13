@@ -6,7 +6,7 @@ MAINTAINER Fred Park <https://github.com/Azure/batch-shipyard>
 ARG SINGULARITY_VERSION
 ARG LOCAL_STATE_DIR
 
-ENV GO_VERSION=1.12 \
+ENV GO_VERSION=1.13.4 \
     GOOS=linux \
     GOARCH=amd64
 
