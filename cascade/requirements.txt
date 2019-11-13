@@ -1,4 +1,2 @@
-azure-cosmosdb-table==1.0.5
-azure-storage-blob==2.0.1
-# temporarily pin azure-storage-common due to azure-cosmosdb-table incompatibility
-azure-storage-common==2.0.0
+azure-cosmosdb-table==1.0.6
+azure-storage-blob==2.1.0
