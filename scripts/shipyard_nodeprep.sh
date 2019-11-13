@@ -554,15 +554,18 @@ execute_command_with_retry() {
     shift
     local fatal=$1
     shift
+    local rc
     while [ "$retries" -gt 0 ]; do
-        if "$@"; then
+        "$@"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
             break
         fi
         retries=$((retries-1))
         if [ $retries -eq 0 ]; then
             log ERROR "Could not execute command: $*"
             if [ "$fatal" -eq 1 ]; then
-                exit 1
+                exit $rc
             else
                 break
             fi

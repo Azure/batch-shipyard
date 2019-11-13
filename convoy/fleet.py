@@ -218,6 +218,10 @@ _DOCKER_EXEC_TASK_RUNNER_FILE = (
     'shipyard_docker_exec_task_runner.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_docker_exec_task_runner.sh')
 )
+_AZURE_STORAGE_MOUNT_FILE = (
+    'shipyard_azure_storage_mount.sh',
+    pathlib.Path(_ROOT_PATH, 'scripts/shipyard_azure_storage_mount.sh')
+)
 _GLUSTERPREP_FILE = (
     'shipyard_glusterfs_on_compute.sh',
     pathlib.Path(_ROOT_PATH, 'scripts/shipyard_glusterfs_on_compute.sh')
@@ -661,7 +665,7 @@ def _setup_azureblob_mounts(blob_client, config, bc):
     """
     tmpmount = settings.temp_disk_mountpoint(config)
     # construct mount commands
-    cmds = []
+    mounts = []
     sdv = settings.global_resources_shared_data_volumes(config)
     for svkey in sdv:
         if settings.is_shared_data_volume_azure_blob(sdv, svkey):
@@ -669,52 +673,45 @@ def _setup_azureblob_mounts(blob_client, config, bc):
                 config,
                 settings.azure_storage_account_settings(sdv, svkey))
             cont = settings.azure_blob_container_name(sdv, svkey)
-            hmp = settings.azure_blob_host_mount_path(sa.account, cont)
             sas = storage.create_blob_container_saskey(
                 sa, cont, 'egress', create_container=True)
-            tmpmp = '{}/blobfuse-tmp/{}-{}'.format(tmpmount, sa.account, cont)
-            cmds.append('mkdir -p {}'.format(hmp))
-            cmds.append('chmod 0770 {}'.format(hmp))
-            cmds.append('mkdir -p {}'.format(tmpmp))
-            cmds.append('chown _azbatch:_azbatchgrp {}'.format(tmpmp))
-            cmds.append('chmod 0770 {}'.format(tmpmp))
-            cmds.append('export AZURE_STORAGE_ACCOUNT="{}"'.format(sa.account))
-            cmds.append('export AZURE_STORAGE_SAS_TOKEN="{}"'.format(sas))
-            cmd = (
-                'blobfuse {hmp} --container-name={cont} '
-                '--tmp-path={tmpmp} -o allow_other'
-            ).format(hmp=hmp, cont=cont, tmpmp=tmpmp)
             # add any additional mount options
             mo = settings.shared_data_volume_mount_options(sdv, svkey)
-            if util.is_not_empty(mo):
-                opts = []
-                for opt in mo:
-                    if opt.strip() == '-o allow_other':
-                        continue
-                    opts.append(opt)
-                cmd = '{} {}'.format(cmd, ' '.join(opts))
-            if '-o attr_timeout=' not in cmd:
-                cmd = '{} -o attr_timeout=240'.format(cmd)
-            if '-o entry_timeout=' not in cmd:
-                cmd = '{} -o entry_timeout=240'.format(cmd)
-            if '-o negative_timeout=' not in cmd:
-                cmd = '{} -o negative_timeout=120'.format(cmd)
-            cmds.append(cmd)
-    # create file share mount command script
-    if util.is_none_or_empty(cmds):
+            opts = ' '.join(mo or [])
+            if '-o allow_other' not in opts:
+                opts = '{} -o allow_other'.format(opts)
+            if '-o attr_timeout=' not in opts:
+                opts = '{} -o attr_timeout=240'.format(opts)
+            if '-o entry_timeout=' not in opts:
+                opts = '{} -o entry_timeout=240'.format(opts)
+            if '-o negative_timeout=' not in opts:
+                opts = '{} -o negative_timeout=120'.format(opts)
+            mount = {
+                'sa': sa,
+                'container': cont,
+                'sas': sas,
+                'user_mp': tmpmount,
+                'options': opts,
+            }
+            mounts.append(mount)
+    # create blob mount command script
+    if util.is_none_or_empty(mounts):
         raise RuntimeError('Generated Azure blob mount commands are invalid')
+    with _AZURE_STORAGE_MOUNT_FILE[1].open('r') as f:
+        template = f.readlines()
+    newline = '\n'
     volcreate = _generate_azure_mount_script_name(
         bc.account, settings.pool_id(config), False, False)
-    newline = '\n'
     with volcreate.open('w', newline=newline) as f:
-        f.write('#!/usr/bin/env bash')
-        f.write(newline)
-        f.write('set -e')
-        f.write(newline)
-        f.write('set -o pipefail')
-        f.write(newline)
-        for cmd in cmds:
-            f.write(cmd)
+        for line in template:
+            f.write(line)
+        for mount in mounts:
+            f.write('prep_blob_mount_dirs "{}" "{}" "{}"'.format(
+                mount['user_mp'], mount['sa'].account, mount['container']))
+            f.write(newline)
+            f.write('mount_blob_container "{}" "{}" "{}" "{}" {}'.format(
+                mount['user_mp'], mount['sa'].account, mount['container'],
+                mount['sas'], mount['options']))
             f.write(newline)
     return volcreate
 
@@ -755,17 +752,10 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
                         hmp=hmp, sa=sa.account, ep=sa.endpoint, share=share)
                 )
             else:
-                cmd = (
-                    'mount -t cifs //{sa}.file.{ep}/{share} {hmp} -o '
-                    'vers=3.0,username={sa},password={sakey},'
-                    'serverino'
-                ).format(
-                    sa=sa.account, ep=sa.endpoint, share=share, hmp=hmp,
-                    sakey=sa.account_key)
                 # add any additional mount options
                 mo = settings.shared_data_volume_mount_options(sdv, svkey)
+                opts = []
                 if util.is_not_empty(mo):
-                    opts = []
                     # retain backward compatibility with filemode/dirmode
                     # options from the old Azure File Docker volume driver
                     for opt in mo:
@@ -776,9 +766,12 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
                             opts.append('dir_mode={}'.format(tmp[1]))
                         else:
                             opts.append(opt)
-                    cmd = '{},{}'.format(cmd, ','.join(opts))
-            if not is_windows:
-                cmds.append('mkdir -p {}'.format(hmp))
+                opts = ','.join(opts)
+                cmd = {
+                    'sa': sa,
+                    'share': share,
+                    'options': opts,
+                }
             cmds.append(cmd)
     # create file share mount command script
     if util.is_none_or_empty(cmds):
@@ -790,16 +783,22 @@ def _setup_azurefile_mounts(blob_client, config, bc, is_windows):
         if is_windows:
             f.write('@echo off')
             f.write(newline)
+            for cmd in cmds:
+                f.write(cmd)
+                f.write(newline)
         else:
-            f.write('#!/usr/bin/env bash')
-            f.write(newline)
-            f.write('set -e')
-            f.write(newline)
-            f.write('set -o pipefail')
-            f.write(newline)
-        for cmd in cmds:
-            f.write(cmd)
-            f.write(newline)
+            with _AZURE_STORAGE_MOUNT_FILE[1].open('r') as inf:
+                template = inf.readlines()
+            for line in template:
+                f.write(line)
+            for mount in cmds:
+                f.write('prep_file_mount_dirs "{}" "{}"'.format(
+                    mount['sa'].account, mount['share']))
+                f.write(newline)
+                f.write('mount_file_share "{}" "{}" "{}" "{}" "{}"'.format(
+                    mount['sa'].account, mount['sa'].endpoint,
+                    mount['sa'].account_key, mount['share'], mount['options']))
+                f.write(newline)
     return volcreate
 
 
