@@ -19,7 +19,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.4'
+          PYENV_VERSION: '3.7.5'
           VENV_VERSION: '16.2.0'
     steps:
       - task: InstallPython@1
@@ -165,7 +165,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.4'
+          PYENV_VERSION: '3.7.5'
           VENV_VERSION: '16.2.0'
     steps:
       - task: UsePythonVersion@0
@@ -358,7 +358,7 @@ jobs:
       matrix:
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.4'
+          PYENV_VERSION: '3.7.5'
           VENV_VERSION: '16.2.0'
     steps:
       - task: UsePythonVersion@0
