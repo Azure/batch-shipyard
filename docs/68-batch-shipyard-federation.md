@@ -313,6 +313,8 @@ formula will scale up/down both low priority and dedicated nodes.
 federation. Adding a pool to multiple federations simultaneously will result
 in undefined behavior.
 * Singularity containers are not fully supported in federations.
+* Auto-genereated task id configuration at the job and task factory level
+are not supported.
 
 ### Quotas
 Ensure that you have sufficient active job/job schedule quota for each
