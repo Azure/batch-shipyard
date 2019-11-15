@@ -1124,6 +1124,12 @@ def _construct_pool_object(
         config, vm_config=pool_settings.vm_configuration)
     is_windows = settings.is_windows_pool(
         config, vm_config=pool_settings.vm_configuration)
+    logger.debug(
+        'pool vm_size={} ib(nd={} sriov={}) native={} windows={}'.format(
+            pool_settings.vm_size,
+            settings.is_networkdirect_rdma_pool(pool_settings.vm_size),
+            settings.is_sriov_rdma_pool(pool_settings.vm_size),
+            native, is_windows))
     # get autoscale settings
     if settings.is_pool_autoscale_enabled(config, pas=pool_settings.autoscale):
         asenable = True
@@ -2606,7 +2612,7 @@ def _adjust_settings_for_pool_creation(config):
     publisher = settings.pool_publisher(config, lower=True)
     offer = settings.pool_offer(config, lower=True)
     sku = settings.pool_sku(config, lower=True)
-    node_agent = settings.pool_custom_image_node_agent(config).lower()
+    node_agent = settings.pool_custom_image_node_agent(config)
     if util.is_not_empty(node_agent) and util.is_not_empty(sku):
         raise ValueError(
             'cannot specify both a platform_image and a custom_image in the '
@@ -2655,7 +2661,7 @@ def _adjust_settings_for_pool_creation(config):
                     sku == 'datacenter-core-1809-with-containers-smalldisk'):
                 allowed = True
     if (util.is_not_empty(node_agent) and
-            node_agent.startswith('batch.node.ubuntu')):
+            node_agent.lower().startswith('batch.node.ubuntu')):
         shipyard_container_required = False
     # check if allowed for gpu (if gpu vm size)
     if allowed:

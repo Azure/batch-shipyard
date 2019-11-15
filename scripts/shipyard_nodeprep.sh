@@ -20,11 +20,15 @@ DOCKER_CE_PACKAGE_SLES="docker-${DOCKER_CE_VERSION_SLES}_ce-257.3"
 VMBUS_DEVICES_PATH=/sys/bus/vmbus/devices
 GEN1_VMBUS_DEVICE_PREFIX="{00000000-0001-"
 GEN2_VMBUS_DEVICE_ID="{f8b3781a-1e82-4818-a1c3-63d806ec15bb}"
+IB_SM_DEVICE=/dev/infiniband/issm0
+IB_UVERBS_DEVICE=/dev/infiniband/uverbs0
 MOUNTS_PATH=$AZ_BATCH_NODE_ROOT_DIR/mounts
 VOLATILE_PATH=$AZ_BATCH_NODE_ROOT_DIR/volatile
 IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/IB_PKEY
 UCX_IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/UCX_IB_PKEY
-SHIPYARD_IMAGE_PREFIX=mcr.microsoft.com/azure-batch/shipyard
+MCR_REPO=mcr.microsoft.com
+BLOBXFER_IMAGE_PREFIX=${MCR_REPO}/blobxfer
+SHIPYARD_IMAGE_PREFIX=${MCR_REPO}/azure-batch/shipyard
 
 # status file consts
 lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
@@ -382,9 +386,37 @@ get_vm_size_from_imds() {
     if [[ "$vm_size" =~ ^standard_((hb|hc)[0-9]+m?rs?(_v[1-9])?)$ ]]; then
         # SR-IOV RDMA
         vm_rdma_type=1
+    elif [[ "$vm_size" =~ ^standard_(nc[0-9]+rs_v3)$ ]]; then
+        # SR-IOV RDMA (transition)
+        vm_rdma_type=1
     elif [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)[0-9]+m?rs?(_v[1-3])?))$ ]]; then
         # network direct RDMA
         vm_rdma_type=2
+    fi
+    # perform device-based overrides
+    if [ -e "$IB_SM_DEVICE" ]; then
+        if [ $vm_rdma_type -ne 1 ]; then
+            log INFO "Changing RDMA type from $vm_rdma_type to SR-IOV for VM size $vm_size as $IB_SM_DEVICE was found."
+        fi
+        vm_rdma_type=1
+    elif [ -e "$IB_UVERBS_DEVICE" ]; then
+        if [ $vm_rdma_type -ne 2 ]; then
+            log INFO "Changing RDMA type from $vm_rdma_type to Network Direct for VM size $vm_size as $IB_UVERBS_DEVICE was found."
+        fi
+        vm_rdma_type=2
+    fi
+    # validate setting
+    if [ $vm_rdma_type -eq 1 ]; then
+        if [ ! -e "$IB_SM_DEVICE" ]; then
+            log ERROR "Expected IB device not found for VM size $vm_size: $IB_SM_DEVICE"
+            exit 1
+        fi
+    fi
+    if [ $vm_rdma_type -ne 0 ]; then
+        if [ ! -e "$IB_UVERBS_DEVICE" ]; then
+            log ERROR "Expected IB device not found for VM size $vm_size: $IB_UVERBS_DEVICE"
+            exit 1
+        fi
     fi
     log INFO "VmSize=$vm_size RDMA=$vm_rdma_type"
 }
@@ -712,12 +744,10 @@ install_kernel_devel_package() {
             set -e
             local centos_ver
             centos_ver=$(cut -d' ' -f 4 /etc/centos-release)
-            if [ -e /dev/infiniband/uverbs0 ]; then
-                if [ "$vm_rdma_type" -ne 0 ]; then
-                    # HPC distros have pinned repos
-                    install_packages "${kernel_devel_package}"
-                    installed=1
-                fi
+            if [ "$vm_rdma_type" -ne 0 ]; then
+                # HPC distros have pinned repos
+                install_packages "${kernel_devel_package}"
+                installed=1
             fi
             if [ "$installed" -eq 0 ]; then
                 if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]] || [[ "$centos_ver" == 7.6.* ]]; then
@@ -1526,8 +1556,7 @@ install_intel_mpi() {
         log DEBUG "Not installing Intel MPI due to custom image"
         return
     fi
-    if [ -e /dev/infiniband/uverbs0 ]; then
-        log INFO "IB device found"
+    if [ "$vm_rdma_type" -eq 2 ]; then
         if [ ! -d /opt/intel/compilers_and_libraries/linux/mpi ]; then
             log DEBUG "Installing Intel MPI"
             if [[ "$DISTRIB_ID" == sles* ]]; then
@@ -1562,7 +1591,7 @@ install_intel_mpi() {
             exit 1
         fi
     else
-        log INFO "IB device not found"
+        log INFO "Not installing Intel MPI for RDMA type: $vm_rdma_type"
     fi
 }
 
@@ -1602,14 +1631,6 @@ check_for_mellanox_card() {
         if [ "$vm_rdma_type" -eq 1 ]; then
             log ERROR "Expected Mellanox IB card not detected"
             exit 1
-        elif [ "$vm_rdma_type" -eq 2 ]; then
-            # check for ib device
-            if [ -e /dev/infiniband/uverbs0 ]; then
-                log INFO "IB device detected"
-            else
-                log ERROR "Expected IB device not detected"
-                exit 1
-            fi
         fi
     fi
     if [ "$vm_rdma_type" -eq 1 ]; then
@@ -1733,7 +1754,7 @@ install_and_start_node_exporter() {
     local ib
     local nfs
     nfs="--no-collector.nfs"
-    if [ -e /dev/infiniband/uverbs0 ]; then
+    if [ $vm_rdma_type -eq 1 ]; then
         ib="--collector.infiniband"
     else
         ib="--no-collector.infiniband"
@@ -2001,7 +2022,7 @@ if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
 fi
 
 # retrieve required docker images
-docker_pull_image "mcr.microsoft.com/blobxfer:${blobxferversion}"
+docker_pull_image "${BLOBXFER_IMAGE_PREFIX}:${blobxferversion}"
 docker_pull_image "${SHIPYARD_IMAGE_PREFIX}:${shipyardversion}-cargo"
 
 # install container runtimes

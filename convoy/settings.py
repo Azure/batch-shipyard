@@ -76,6 +76,11 @@ _SRIOV_RDMA_INSTANCES = re.compile(
     r'^standard_((hb|hc)[\d]+m?rs?(_v[\d])?)$',
     re.IGNORECASE
 )
+_SRIOV_RDMA_TRANSITION_INSTANCES = re.compile(
+    # standard nc+r_v3
+    r'^standard_(nc[\d]+rs_v3)$',
+    re.IGNORECASE
+)
 _NETWORKDIRECT_RDMA_INSTANCES = re.compile(
     # standard a8/a9, h+r, nc+r, nd+r
     r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[1-3])?))(_promo)?$',
@@ -879,7 +884,10 @@ def is_sriov_rdma_pool(vm_size):
     :rtype: bool
     :return: if sriov rdma is present
     """
-    return _SRIOV_RDMA_INSTANCES.match(vm_size) is not None
+    return (
+        _SRIOV_RDMA_INSTANCES.match(vm_size) is not None or
+        _SRIOV_RDMA_TRANSITION_INSTANCES.match(vm_size) is not None
+    )
 
 
 def is_networkdirect_rdma_pool(vm_size):
@@ -889,7 +897,10 @@ def is_networkdirect_rdma_pool(vm_size):
     :rtype: bool
     :return: if network direct rdma is present
     """
-    return _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None
+    return (
+        _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None and
+        _SRIOV_RDMA_TRANSITION_INSTANCES.match(vm_size) is None
+    )
 
 
 def is_rdma_pool(vm_size):
