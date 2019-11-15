@@ -6,6 +6,6 @@ bit set.
 
 Each directory may have one or more of the following:
 
-* `build-sig.json` files create images directly into Shared Image Galleries
-* `build-mi.json` files create Azure Managed Images
-* `build-vhd.json` files create VHD page blobs
+* `build.json` or `build-sig.json` files create images directly into Shared Image Galleries
+* `build-mi.json` files create Azure Managed Images (deprecated)
+* `build-vhd.json` files create VHD page blobs (deprecated)
