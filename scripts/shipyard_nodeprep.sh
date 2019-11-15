@@ -1996,7 +1996,7 @@ install_and_start_node_exporter
 install_and_start_cadvisor
 
 # install dependencies if not using cascade container
-if [ $custom_image -eq 0 ] && { [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; }; then
+if [ $native_mode -eq 0 ] || [ $delay_preload -eq 1 ]; then
     install_cascade_dependencies
 fi
 

@@ -2606,7 +2606,7 @@ def _adjust_settings_for_pool_creation(config):
     publisher = settings.pool_publisher(config, lower=True)
     offer = settings.pool_offer(config, lower=True)
     sku = settings.pool_sku(config, lower=True)
-    node_agent = settings.pool_custom_image_node_agent(config)
+    node_agent = settings.pool_custom_image_node_agent(config).lower()
     if util.is_not_empty(node_agent) and util.is_not_empty(sku):
         raise ValueError(
             'cannot specify both a platform_image and a custom_image in the '
@@ -2654,6 +2654,9 @@ def _adjust_settings_for_pool_creation(config):
                     sku == 'datacenter-core-1803-with-containers-smalldisk' or
                     sku == 'datacenter-core-1809-with-containers-smalldisk'):
                 allowed = True
+    if (util.is_not_empty(node_agent) and
+            node_agent.startswith('batch.node.ubuntu')):
+        shipyard_container_required = False
     # check if allowed for gpu (if gpu vm size)
     if allowed:
         allowed = settings.gpu_configuration_check(
@@ -2676,8 +2679,7 @@ def _adjust_settings_for_pool_creation(config):
     # compute total vm count
     pool_total_vm_count = pool.vm_count.dedicated + pool.vm_count.low_priority
     # adjust for shipyard container requirement
-    if (not bs.use_shipyard_docker_image and
-            (shipyard_container_required or util.is_not_empty(node_agent))):
+    if not bs.use_shipyard_docker_image and shipyard_container_required:
         settings.set_use_shipyard_docker_image(config, True)
         logger.debug(
             ('forcing shipyard docker image to be used due to '
@@ -2687,13 +2689,36 @@ def _adjust_settings_for_pool_creation(config):
     pool = settings.pool_settings(config)
     native = settings.is_native_docker_pool(
         config, vm_config=pool.vm_configuration)
-    # ensure singularity images are not specified for native pools
-    if native:
-        images = settings.global_resources_singularity_images(config)
-        if util.is_not_empty(images):
+    # check singularity compatibility
+    singularity_unsigned_images_settings = (
+        settings.global_resources_singularity_images_settings(config, False)
+    )
+    singularity_signed_images_settings = (
+        settings.global_resources_singularity_images_settings(config, True)
+    )
+    singularity_images = (
+        singularity_unsigned_images_settings +
+        singularity_signed_images_settings
+    )
+    if util.is_not_empty(singularity_images):
+        if native:
             raise ValueError(
                 'cannot specify a native container pool with Singularity '
                 'images as global resources')
+        if is_windows:
+            raise ValueError(
+                'cannot deploy Singularity images on windows pools')
+        # certain distros don't have a sufficient version of cryptsetup
+        # that is compatible with Singularity encrypted containers
+        if ((offer == 'ubuntuserver' and sku == '16.04-lts') or
+                (offer == 'debian' and sku == '9')):
+            if any([util.is_not_empty(
+                    si.encryption_certificate_sha1_thumbprint)
+                    for si in singularity_images]):
+                raise ValueError(
+                    'cannot deploy encrypted Singularity images on this '
+                    'VM config, publisher={} offer={} sku={}'.format(
+                        publisher, offer, sku))
     # hpn-ssh can only be used for Ubuntu currently
     try:
         if (pool.ssh.hpn_server_swap and
@@ -2799,10 +2824,6 @@ def _adjust_settings_for_pool_creation(config):
     if is_windows and pool.transfer_files_on_pool_creation:
         raise ValueError(
             'cannot transfer files on pool creation to windows compute nodes')
-    # check singularity images are not present for windows
-    if (is_windows and util.is_not_empty(
-            settings.global_resources_singularity_images(config))):
-        raise ValueError('cannot deploy Singularity images on windows pools')
     # check pool count of 0 and remote login
     if pool_total_vm_count == 0:
         if is_windows:
