@@ -41,6 +41,8 @@ Infiniband/RDMA on HPC Azure VM instances including
 [H-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 [Hb/Hc-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-hpc),
 and [N-Series](https://docs.microsoft.com/azure/virtual-machines/linux/sizes-gpu)
+* Integrated support for
+[Singularity Encrypted Containers](https://batch-shipyard.readthedocs.io/en/latest/50-batch-shipyard-encrypted-containers/)
 
 ### Data Management and Shared File Systems
 * Comprehensive [data movement](https://batch-shipyard.readthedocs.io/en/latest/70-batch-shipyard-data-movement/)
