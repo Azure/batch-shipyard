@@ -61,13 +61,12 @@ shipyard jobs add --jobs jobs-split.yaml --tail stdout.txt
 shipyard jobs add --jobs jobs-blast.yaml
 
 # poll the merge task until it completes
-shipyard jobs tasks list --jobid blast --taskid merge-task-00001 --poll-until-tasks-complete
+shipyard jobs tasks list --jobid blast --taskid merge-task-00000 --poll-until-tasks-complete
 
 # optionally egress the results.txt file from the compute node to local machine
-shipyard data files task --filespec blast,merge-task-00001,wd/results.txt
+shipyard data files task --filespec blast,merge-task-00000,wd/results.txt
 
 # clean up
-shipyard jobs del -y --jobs jobs-split.yaml
 shipyard jobs del -y --jobs jobs-blast.yaml
 shipyard pool del -y
 ```

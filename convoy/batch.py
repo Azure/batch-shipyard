@@ -5630,7 +5630,7 @@ def add_jobs(
         merge_task_id = None
         if has_merge_task:
             ntasks += 1
-            _task = settings.job_merge_task(jobspec)
+            _task = settings.job_merge_task(config, jobspec)
             existing_tasklist, merge_task_id, lasttaskic, gpu, ib = \
                 _construct_task(
                     batch_client, blob_client, keyvault_client, config,

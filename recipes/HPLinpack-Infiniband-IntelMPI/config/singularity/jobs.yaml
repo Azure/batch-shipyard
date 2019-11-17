@@ -18,6 +18,6 @@ job_specifications:
       mpi:
         runtime: intelmpi-ofa
         processes_per_node: 1
-      pre_execution_command: source setup_hplinpack.sh -a $AVX -n 50000; source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+      pre_execution_command: source setup_hplinpack.sh -a $AVX -n 50000; module load mpi/impi; source $MPI_BIN/mpivars.sh
     # need to source mpivars again as the container intel mpi/benchmark is not the exact version as on the host
     command: /bin/bash -c "source /opt/intel/compilers_and_libraries/linux/mpi/bin64/mpivars.sh; cd /opt/intel/mkl/benchmarks/mp_linpack && ./runme_intel64_prv -p $P -q $Q -b $B $PSIZE"
