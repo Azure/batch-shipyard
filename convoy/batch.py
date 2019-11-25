@@ -919,9 +919,9 @@ def check_pool_nodes_runnable(batch_client, config):
     return False
 
 
-def create_pool(batch_client, blob_client, config, pool):
+def create_pool(batch_client, blob_client, config, pool, no_wait):
     # type: (batch.BatchServiceClient, azure.storage.blob.BlockBlobService,
-    #        dict, batchmodels.PoolAddParameter) ->
+    #        dict, batchmodels.PoolAddParameter, bool) ->
     #        List[batchmodels.ComputeNode]
     """Create pool if not exists
     :param batch_client: The batch client to use.
@@ -929,6 +929,7 @@ def create_pool(batch_client, blob_client, config, pool):
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
     :param batchmodels.PoolAddParameter pool: pool addparameter object
+    :param bool no_Wait: do not wait for nodes to provision
     :rtype: list
     :return: list of nodes
     """
@@ -952,8 +953,11 @@ def create_pool(batch_client, blob_client, config, pool):
                 sys.exit(1)
         else:
             logger.error('Pool {!r} already exists'.format(pool.id))
-    # wait for pool idle
-    return wait_for_pool_ready(batch_client, blob_client, config, pool.id)
+    # wait for pool idle, if wait
+    if no_wait:
+        return None
+    else:
+        return wait_for_pool_ready(batch_client, blob_client, config, pool.id)
 
 
 def _add_admin_user_to_compute_node(

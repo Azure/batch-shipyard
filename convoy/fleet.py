@@ -1812,14 +1812,14 @@ def _construct_auto_pool_specification(
 
 def _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, keyvault_client, config):
+        batch_client, blob_client, keyvault_client, config, no_wait):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
     #        azure.mgmt.batch.BatchManagementClient,
     #        azure.batch.batch_service_client.BatchServiceClient,
     #        azure.storage.blob.BlockBlobService,
-    #        azure.keyvault.KeyVaultClient, dict) -> None
+    #        azure.keyvault.KeyVaultClient, dict, bool) -> None
     """Add a Batch pool to account
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -1833,11 +1833,31 @@ def _add_pool(
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
+    :param bool no_wait: do not wait for nodes to provision
     """
     # upload resource files and construct pool add parameter object
     pool_settings, gluster_on_compute, pool = _construct_pool_object(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, keyvault_client, config)
+    # check no wait settings
+    if no_wait:
+        if gluster_on_compute:
+            logger.error('forcing wait on pool due to glusterfs on compute')
+            no_wait = False
+        if pool_settings.transfer_files_on_pool_creation:
+            logger.error(
+                'forcing wait on pool due to file transfer on pool creation')
+            no_wait = False
+        if settings.is_windows_pool(config):
+            if util.is_not_empty(pool_settings.rdp.username):
+                logger.warning(
+                    'skipping adding RDP user on Windows pool due to '
+                    'disabling waiting for node provisioning')
+        else:
+            if util.is_not_empty(pool_settings.ssh.username):
+                logger.warning(
+                    'skipping adding SSH user on Linux pool due to '
+                    'disabling waiting for node provisioning')
     # ingress data to Azure Blob Storage if specified
     storage_threads = []
     if pool_settings.transfer_files_on_pool_creation:
@@ -1845,7 +1865,11 @@ def _add_pool(
             batch_client, compute_client, network_client, config, rls=None,
             kind='storage')
     # create pool
-    nodes = batch.create_pool(batch_client, blob_client, config, pool)
+    nodes = batch.create_pool(batch_client, blob_client, config, pool, no_wait)
+    if no_wait:
+        logger.warning(
+            'Not waiting for nodes to provision for pool: {}'.format(pool.id))
+        return
     _pool = batch_client.pool.get(pool.id)
     pool_current_vm_count = (
         _pool.current_dedicated_nodes + _pool.current_low_priority_nodes
@@ -3358,7 +3382,7 @@ def action_cert_del(batch_client, config, sha1):
 def action_pool_add(
         resource_client, compute_client, network_client, batch_mgmt_client,
         batch_client, blob_client, table_client, keyvault_client, config,
-        recreate):
+        recreate, no_wait):
     # type: (azure.mgmt.resource.resources.ResourceManagementClient,
     #        azure.mgmt.compute.ComputeManagementClient,
     #        azure.mgmt.network.NetworkManagementClient,
@@ -3366,7 +3390,7 @@ def action_pool_add(
     #        azure.batch.batch_service_client.BatchServiceClient,
     #        azure.storage.blob.BlockBlobService,
     #        azure.cosmosdb.table.TableService,
-    #        azure.keyvault.KeyVaultClient, dict, bool) -> None
+    #        azure.keyvault.KeyVaultClient, dict, bool, bool) -> None
     """Action: Pool Add
     :param azure.mgmt.resource.resources.ResourceManagementClient
         resource_client: resource client
@@ -3382,6 +3406,7 @@ def action_pool_add(
     :param azure.keyvault.KeyVaultClient keyvault_client: keyvault client
     :param dict config: configuration dict
     :param bool recreate: recreate
+    :param bool no_wait: do not wait for nodes to provision
     """
     _check_batch_client(batch_client)
     # first check if pool exists to prevent accidential metadata clear or
@@ -3415,7 +3440,7 @@ def action_pool_add(
             blob_client, table_client, config)
     _add_pool(
         resource_client, compute_client, network_client, batch_mgmt_client,
-        batch_client, blob_client, keyvault_client, config
+        batch_client, blob_client, keyvault_client, config, no_wait
     )
 
 

@@ -843,6 +843,9 @@ The `pool user` sub-command has the following sub-sub-commands:
 
 * `add` will add the pool defined in the pool configuration file to the
 Batch account
+    * `--no-wait` will not wait for nodes to provision successfully. This will
+      prevent creation of remote users and is incompatible with certain
+      options that require nodes to be provisioned.
     * `--recreate` will delete and recreate the pool if there already exists
       a pool with the same id. Note that you should only use this option
       if you are certain that it will not cause side-effects.

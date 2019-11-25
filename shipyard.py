@@ -1529,19 +1529,21 @@ def pool(ctx):
 @pool.command('add')
 @click.option(
     '--recreate', is_flag=True, help='Recreate pool if it exists')
+@click.option(
+    '--no-wait', is_flag=True, help='Do not wait for nodes to provision')
 @common_options
 @fs_option
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
-def pool_add(ctx, recreate):
+def pool_add(ctx, recreate, no_wait):
     """Add a pool to the Batch account"""
     ctx.initialize_for_batch()
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
-        ctx.table_client, ctx.keyvault_client, ctx.config, recreate)
+        ctx.table_client, ctx.keyvault_client, ctx.config, recreate, no_wait)
 
 
 @pool.command('exists')
@@ -3039,7 +3041,7 @@ def slurm_cluster_orchestrate(ctx, storage_cluster_id):
     convoy.fleet.action_pool_add(
         ctx.resource_client, ctx.compute_client, ctx.network_client,
         ctx.batch_mgmt_client, ctx.batch_client, ctx.blob_client,
-        ctx.table_client, ctx.keyvault_client, ctx.config, False)
+        ctx.table_client, ctx.keyvault_client, ctx.config, False, False)
     convoy.fleet.action_slurm_cluster_create(
         ctx.auth_client, ctx.resource_client, ctx.compute_client,
         ctx.network_client, ctx.blob_client, ctx.table_client,
