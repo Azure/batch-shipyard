@@ -3353,14 +3353,26 @@ def job_allow_run_on_missing(conf):
     return allow
 
 
-def job_requires_auto_scratch(conf):
-    # type: (dict) -> bool
+def job_auto_scratch_setup(conf):
+    # type: (dict) -> str
+    """Get job auto scratch setup setting
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job auto scratch setup type
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'auto_scratch', default={}), 'setup')
+
+
+def job_auto_scratch_num_instances(conf):
+    # type: (dict) -> str
     """Get job auto scratch setting
     :param dict conf: job configuration object
-    :rtype: bool
-    :return: job auto scratch
+    :rtype: str
+    :return: job auto scratch instances
     """
-    return _kv_read(conf, 'auto_scratch', default=False)
+    return _kv_read(
+        _kv_read_checked(conf, 'auto_scratch', default={}), 'num_instances')
 
 
 def job_preparation_command(conf):
@@ -4027,7 +4039,7 @@ def task_settings(
         else:
             shared_data_volumes = tsdv
     del tsdv
-    if job_requires_auto_scratch(jobspec):
+    if job_auto_scratch_setup(jobspec) is not None:
         run_opts.append(
             '{} {}/auto_scratch/{}:$AZ_BATCH_TASK_DIR/auto_scratch'.format(
                 bindparm,

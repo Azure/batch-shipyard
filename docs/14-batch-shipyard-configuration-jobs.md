@@ -66,7 +66,9 @@ job_specifications:
   - joblevelvol
   shared_data_volumes:
   - joblevelsharedvol
-  auto_scratch: false
+  auto_scratch:
+    setup: block
+    num_instances: pool_current_dedicated
   job_preparation:
     command: myjpcommand
   job_release:
@@ -496,6 +498,35 @@ pool for this job. This scratch will be available at the location
 is cleaned up automatically on job termination or deletion. This option
 requires setting the property `per_job_auto_scratch` to `true` in the
 corresponding pool configuration.
+  * (required) `setup` is the setup process to use which can be either
+    `block` or `dependency`. `block` will invoke a client-side wait on the
+    setup task before adding subsequent tasks which may be dependent upon the
+    auto scratch task to complete successfully. `dependency` will use task
+    dependencies to enforce ordering of the auto scratch setup task to complete
+    first. However, if one specifies task dependencies for other tasks in this
+    job with dependency actions that are not set to block, then this can
+    interfere with proper setup. In these cases, it's recommended to use
+    the `block` client-side wait. Note that if `dependency` is specified as
+    the setup method and the task fails, it will block all subsequent tasks
+    in the job. There is no default value and an option must be specified.
+  * (required) `num_instances` is the number of instances for the auto scratch
+    volume to span. Note that if you specify a number less than the number
+    of available nodes, then subsequent tasks may not get assigned to nodes
+    with the auto scratch volume; you must ensure that this property is
+    specified correctly for all tasks within your job that must use the defined
+    auto scratch volume. Valid values for this property are:
+      1. An integral number. Note that if there are insufficient nodes to
+         matching this number, the task will be blocked.
+      2. `pool_current_dedicated` which is the instantaneous reading of the
+         target pool's current dedicated count during this function
+         invocation.
+      3. `pool_current_low_priority` which is the instantaneous reading of
+         the target pool's current low priority count during this function
+         invocation.
+      4. `pool_specification_vm_count_dedicated` which is the
+         `vm_count`:`dedicated` specified in the pool configuration.
+      5. `pool_specification_vm_count_low_priority` which is the
+         `vm_count`:`low_priority` specified in the pool configuration.
 * (optional) `job_preparation` is the property for a user-specified
 job preparation task. The user-specified job preparation task runs after
 any implicit job preparation tasks created by Batch Shipyard (such as

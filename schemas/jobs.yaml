@@ -104,7 +104,15 @@ mapping:
             sequence:
               - type: str
           auto_scratch:
-            type: bool
+            type: map
+            mapping:
+              setup:
+                type: str
+                required: true
+                enum: ['block', 'dependency']
+              num_instances:
+                required: true
+                type: text
           job_preparation:
             type: map
             mapping:

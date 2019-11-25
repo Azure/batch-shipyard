@@ -4492,13 +4492,13 @@ def _construct_task(
         docker_missing_images, singularity_missing_images, cloud_pool,
         pool, jobspec, job_id, job_env_vars, task_map, existing_tasklist,
         reserved_task_id, lasttaskid, is_merge_task, uses_task_dependencies,
-        on_task_failure, container_image_refs, _task):
+        on_task_failure, container_image_refs, autoscratch_setup, _task):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
     #        azure.keyvault.KeyVaultClient, dict, str, tuple,
     #        settings.BatchShipyardSettings, bool, bool, str, bool,
     #        list, list, batchmodels.CloudPool, settings.PoolSettings,
     #        dict, str, dict, dict, list, str, str, bool, bool,
-    #        batchmodels.OnTaskFailure, set, dict) -> tuple
+    #        batchmodels.OnTaskFailure, set, str, dict) -> tuple
     """Contruct a Batch task and add it to the task map
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
@@ -4526,6 +4526,7 @@ def _construct_task(
     :param bool uses_task_dependencies: uses task dependencies
     :param batchmodels.OntaskFailure on_task_failure: on task failure
     :param set container_image_refs: container image references
+    :param str autoscratch_setup: autoscratch setup type
     :param dict _task: task spec
     :rtype: tuple
     :return: (list of committed task ids for job, task id added to task map,
@@ -4898,6 +4899,17 @@ def _construct_task(
             task_ids=task_depends_on,
             task_id_ranges=task_id_ranges,
         )
+    # add autoscratch dependency
+    if autoscratch_setup == 'dependency':
+        if batchtask.depends_on is None:
+            batchtask.depends_on = batchmodels.TaskDependencies(
+                task_ids=[_AUTOSCRATCH_TASK_ID],
+                task_id_ranges=None,
+            )
+        elif batchtask.depends_on.task_ids is None:
+            batchtask.depends_on.task_ids = [_AUTOSCRATCH_TASK_ID]
+        else:
+            batchtask.depends_on.task_ids.append(_AUTOSCRATCH_TASK_ID)
     # add exit conditions
     if on_task_failure == batchmodels.OnTaskFailure.no_action:
         job_action = None
@@ -4934,51 +4946,71 @@ def _construct_task(
 
 
 def _create_auto_scratch_volume(
-        batch_client, blob_client, config, pool_id, job_id, shell_script):
+        batch_client, blob_client, config, jobspec, autoscratch_setup,
+        pool_settings, job_id, autopool, shell_script):
     # type: (batch.BatchServiceClient, azureblob.BlockBlobService,
-    #        dict, str, str, tuple) -> None
+    #        dict, dict, str, str, str, tuple) -> str
     """Create auto scratch volume
     :param batch_client: The batch client to use.
     :type batch_client: `azure.batch.batch_service_client.BatchServiceClient`
     :param azure.storage.blob.BlockBlobService blob_client: blob client
     :param dict config: configuration dict
-    :param str pool_id: pool id
+    :param dict jobspec: job spec
+    :param str autoscratch_setup: auto scratch setup type
+    :param settings.PoolSettings pool_settings: pool settings
     :param str job_id: job id
+    :param batchmodels.PoolSpecification autopool: auto pool specification
     :param tuple asfile: autoscratch file
+    :rtype: str
+    :return: autoscratch task id
     """
     # list jobs in pool and set port offset
     jobs = batch_client.job.list(
         job_list_options=batchmodels.JobListOptions(
-            filter='executionInfo/poolId eq \'{}\''.format(pool_id))
+            filter='executionInfo/poolId eq \'{}\''.format(pool_settings.id))
     )
     offset = 1000 + 10 * (len(list(jobs)) - 1)
     del jobs
     # upload script
     sas_urls = storage.upload_resource_files(blob_client, [shell_script])
-    # get pool current dedicated
-    pool = batch_client.pool.get(pool_id)
-    if pool.enable_auto_scale:
-        logger.warning(
-            'auto_scratch is not intended to be used with autoscale '
-            'pools: {}'.format(pool_id))
-    if pool.current_dedicated_nodes > 0:
-        target_nodes = pool.current_dedicated_nodes
-        logger.debug(
-            'creating auto_scratch on {} number of dedicated nodes on '
-            'pool {}'.format(target_nodes, pool_id))
-    else:
-        target_nodes = pool.current_low_priority_nodes
-        logger.debug(
-            'creating auto_scratch on {} number of low priority nodes on '
-            'pool {}'.format(target_nodes, pool_id))
-    if target_nodes == 0:
+    # configure instances
+    if autopool is None:
+        pool = batch_client.pool.get(pool_settings.id)
+        if pool.enable_auto_scale:
+            logger.warning(
+                'auto_scratch is not intended to be used with autoscale '
+                'pools: {}'.format(pool_settings.id))
+    num_instances = settings.job_auto_scratch_num_instances(jobspec)
+    if not isinstance(num_instances, int):
+        if num_instances == 'pool_specification_vm_count_dedicated':
+            num_instances = pool_settings.vm_count.dedicated
+        elif num_instances == 'pool_specification_vm_count_low_priority':
+            num_instances = pool_settings.vmc_ount.low_priority
+        elif num_instances == 'pool_current_dedicated':
+            if autopool is not None:
+                raise RuntimeError(
+                    'cannot query current dedicated nodes for autopool')
+            num_instances = pool.current_dedicated_nodes
+        elif num_instances == 'pool_current_low_priority':
+            if autopool is not None:
+                raise RuntimeError(
+                    'cannot query current low priority nodes for autopool')
+            num_instances = pool.current_low_priority_nodes
+        else:
+            raise ValueError(
+                'multi instance num instances setting invalid: {}'.format(
+                    num_instances))
+    logger.debug(
+        'creating auto_scratch on {} compute nodes on pool {}'.format(
+            num_instances, pool_settings.id))
+    if num_instances == 0:
         raise RuntimeError(
             'Cannot create an auto_scratch volume with no current '
-            'dedicated or low priority nodes')
+            'dedicated, low priority nodes or zero specified vm counts')
     batchtask = batchmodels.TaskAddParameter(
         id=_AUTOSCRATCH_TASK_ID,
         multi_instance_settings=batchmodels.MultiInstanceSettings(
-            number_of_instances=target_nodes,
+            number_of_instances=num_instances,
             coordination_command_line=util.wrap_commands_in_shell([
                 '$AZ_BATCH_TASK_DIR/{} setup {}'.format(
                     shell_script[0], job_id)]),
@@ -4996,21 +5028,28 @@ def _create_auto_scratch_volume(
     )
     # add task
     batch_client.task.add(job_id=job_id, task=batchtask)
-    logger.debug(
-        'waiting for auto scratch setup task {} in job {} to complete'.format(
-            batchtask.id, job_id))
     # wait for beegfs beeond setup task to complete
-    while True:
-        batchtask = batch_client.task.get(job_id, batchtask.id)
-        if batchtask.state == batchmodels.TaskState.completed:
-            break
-        time.sleep(1)
-    if (batchtask.execution_info.result ==
-            batchmodels.TaskExecutionResult.failure):
-        raise RuntimeError('auto scratch setup failed')
-    logger.info(
-        'auto scratch setup task {} in job {} completed'.format(
-            batchtask.id, job_id))
+    if autoscratch_setup == 'block':
+        logger.debug(
+            'waiting for auto scratch setup task {} in job {} to '
+            'complete'.format(batchtask.id, job_id))
+        while True:
+            batchtask = batch_client.task.get(job_id, batchtask.id)
+            if batchtask.state == batchmodels.TaskState.completed:
+                break
+            time.sleep(1)
+        if (batchtask.execution_info.result ==
+                batchmodels.TaskExecutionResult.failure):
+            raise RuntimeError('auto scratch setup failed for job {}'.format(
+                job_id))
+        logger.info(
+            'auto scratch setup task {} in job {} completed'.format(
+                batchtask.id, job_id))
+    else:
+        logger.info(
+            'auto scratch setup task {} in job {} will be queued as '
+            'dependency'.format(batchtask.id, job_id))
+    return batchtask.id
 
 
 def add_jobs(
@@ -5101,7 +5140,6 @@ def add_jobs(
     docker_images = settings.global_resources_docker_images(config)
     singularity_images = settings.global_resources_singularity_images(config)
     autoscratch_avail = pool.per_job_auto_scratch
-    autoscratch_avail = True
     lastjob = None
     lasttaskid = None
     tasksadded = False
@@ -5115,13 +5153,17 @@ def add_jobs(
         # 3. if tasks have dependencies, set it if so
         # 4. if there are multi-instance tasks
         auto_complete = settings.job_auto_complete(jobspec)
+        autoscratch_setup = settings.job_auto_scratch_setup(jobspec)
+        autoscratch_task = None
         jobschedule = None
         multi_instance = False
         mi_docker_container_name = None
         reserved_task_id = None
         on_task_failure = batchmodels.OnTaskFailure.no_action
-        uses_task_dependencies = settings.job_force_enable_task_dependencies(
-            jobspec)
+        uses_task_dependencies = (
+            settings.job_force_enable_task_dependencies(jobspec) or
+            autoscratch_setup == 'dependency'
+        )
         docker_missing_images = []
         singularity_missing_images = []
         allow_run_on_missing = settings.job_allow_run_on_missing(jobspec)
@@ -5129,10 +5171,9 @@ def add_jobs(
         has_merge_task = settings.job_has_merge_task(jobspec)
         max_instance_count_in_job = 0
         instances_required_in_job = 0
-        autoscratch_required = settings.job_requires_auto_scratch(jobspec)
         # set federation overrides from constraints
         if util.is_not_empty(federation_id):
-            if autoscratch_required:
+            if autoscratch_setup is not None:
                 raise ValueError(
                     'auto_scratch is incompatible with federations, please '
                     'use glusterfs_on_compute instead')
@@ -5291,7 +5332,7 @@ def add_jobs(
         # construct job release
         jrtask = None
         jrtaskcmd = []
-        if autoscratch_required and autoscratch_avail:
+        if autoscratch_setup is not None and autoscratch_avail:
             jrtaskcmd.append(
                 '$AZ_BATCH_NODE_ROOT_DIR/workitems/{}/job-1/{}/{} '
                 'stop {}'.format(
@@ -5360,7 +5401,7 @@ def add_jobs(
         # create jobschedule
         recurrence = settings.job_recurrence(jobspec)
         if recurrence is not None:
-            if autoscratch_required:
+            if autoscratch_setup is not None:
                 raise ValueError(
                     'auto_scratch is incompatible with recurrences, please '
                     'use glusterfs_on_compute instead')
@@ -5575,15 +5616,28 @@ def add_jobs(
                                  'desired={}').format(
                                      job_id, _job.on_task_failure.value,
                                      on_task_failure.value))
-                        if autoscratch_required:
+                        # check if autoscratch task exists
+                        if autoscratch_avail and autoscratch_setup is not None:
                             try:
-                                _astask = batch_client.task.get(
+                                autoscratch_task = batch_client.task.get(
                                     job_id, _AUTOSCRATCH_TASK_ID)
-                                if (_astask.execution_info.result ==
-                                        batchmodels.TaskExecutionResult.
-                                        success):
-                                    autoscratch_required = False
-                                else:
+                                if (autoscratch_task.execution_info is None and
+                                        autoscratch_setup == 'block'):
+                                    raise RuntimeError(
+                                        'existing job {} auto-scratch setup '
+                                        'task has not run with blocking '
+                                        'setup'.format(job_id))
+                                if (autoscratch_task.
+                                        execution_info is not None and
+                                        autoscratch_task.execution_info.
+                                        result == batchmodels.
+                                        TaskExecutionResult.failure):
+                                    aslog = [
+                                        'auto-scratch setup task failure:'
+                                    ]
+                                    aslog.extend(log_task(
+                                        autoscratch_task, job_id))
+                                    logger.error(os.linesep.join(aslog))
                                     raise RuntimeError(
                                         'existing job {} auto-scratch setup '
                                         'task failed'.format(job_id))
@@ -5596,9 +5650,12 @@ def add_jobs(
                                             job_id))
                 else:
                     raise
-            if autoscratch_required and autoscratch_avail:
+            # create autoscratch volume if necessary
+            if (autoscratch_avail and autoscratch_setup is not None and
+                    autoscratch_task is None):
                 _create_auto_scratch_volume(
-                    batch_client, blob_client, config, pool.id, job_id, asfile)
+                    batch_client, blob_client, config, jobspec,
+                    autoscratch_setup, pool, job_id, autopool, asfile)
         del mi_docker_container_name
         # add all tasks under job
         container_image_refs = set()
@@ -5622,7 +5679,7 @@ def add_jobs(
                     pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, False,
                     uses_task_dependencies, on_task_failure,
-                    container_image_refs, _task
+                    container_image_refs, autoscratch_setup, _task
                 )
             if not has_gpu_task and gpu:
                 has_gpu_task = True
@@ -5644,7 +5701,8 @@ def add_jobs(
                     pool, jobspec, job_id, jevs, task_map,
                     existing_tasklist, reserved_task_id, lasttaskid, True,
                     uses_task_dependencies, on_task_failure,
-                    container_image_refs, _task)
+                    container_image_refs, autoscratch_avail, _task
+                )
             if not has_gpu_task and gpu:
                 has_gpu_task = True
             if not has_ib_task and ib:

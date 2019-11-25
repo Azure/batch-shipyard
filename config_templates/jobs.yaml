@@ -40,7 +40,9 @@ job_specifications:
   - joblevelvol
   shared_data_volumes:
   - joblevelsharedvol
-  auto_scratch: false
+  auto_scratch:
+    setup: block
+    num_instances: pool_current_dedicated
   job_preparation:
     command: myjpcommand
   job_release:
