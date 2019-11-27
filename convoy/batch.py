@@ -70,7 +70,6 @@ _MAX_EXECUTOR_WORKERS = min((multiprocessing.cpu_count() * 4, 32))
 _MAX_REBOOT_RETRIES = 5
 _SSH_TUNNEL_SCRIPT = 'ssh_docker_tunnel_shipyard.sh'
 _TASKMAP_PICKLE_FILE = 'taskmap.pickle'
-_AUTOSCRATCH_TASK_ID = 'batch-shipyard-autoscratch'
 _RUN_ELEVATED = batchmodels.UserIdentity(
     auto_user=batchmodels.AutoUserSpecification(
         scope=batchmodels.AutoUserScope.pool,
@@ -4901,15 +4900,16 @@ def _construct_task(
         )
     # add autoscratch dependency
     if autoscratch_setup == 'dependency':
+        astaskid = settings.job_auto_scratch_task_id(jobspec)
         if batchtask.depends_on is None:
             batchtask.depends_on = batchmodels.TaskDependencies(
-                task_ids=[_AUTOSCRATCH_TASK_ID],
+                task_ids=[astaskid],
                 task_id_ranges=None,
             )
         elif batchtask.depends_on.task_ids is None:
-            batchtask.depends_on.task_ids = [_AUTOSCRATCH_TASK_ID]
+            batchtask.depends_on.task_ids = [astaskid]
         else:
-            batchtask.depends_on.task_ids.append(_AUTOSCRATCH_TASK_ID)
+            batchtask.depends_on.task_ids.append(astaskid)
     # add exit conditions
     if on_task_failure == batchmodels.OnTaskFailure.no_action:
         job_action = None
@@ -5008,7 +5008,7 @@ def _create_auto_scratch_volume(
             'Cannot create an auto_scratch volume with no current '
             'dedicated, low priority nodes or zero specified vm counts')
     batchtask = batchmodels.TaskAddParameter(
-        id=_AUTOSCRATCH_TASK_ID,
+        id=settings.job_auto_scratch_task_id(jobspec),
         multi_instance_settings=batchmodels.MultiInstanceSettings(
             number_of_instances=num_instances,
             coordination_command_line=util.wrap_commands_in_shell([
@@ -5154,6 +5154,7 @@ def add_jobs(
         # 4. if there are multi-instance tasks
         auto_complete = settings.job_auto_complete(jobspec)
         autoscratch_setup = settings.job_auto_scratch_setup(jobspec)
+        autoscratch_task_id = settings.job_auto_scratch_task_id(jobspec)
         autoscratch_task = None
         jobschedule = None
         multi_instance = False
@@ -5336,7 +5337,7 @@ def add_jobs(
             jrtaskcmd.append(
                 '$AZ_BATCH_NODE_ROOT_DIR/workitems/{}/job-1/{}/{} '
                 'stop {}'.format(
-                    job_id, _AUTOSCRATCH_TASK_ID, asfile[0], job_id)
+                    job_id, autoscratch_task_id, asfile[0], job_id)
             )
         if multi_instance and auto_complete and not native:
             jrtaskcmd.extend([
@@ -5620,7 +5621,7 @@ def add_jobs(
                         if autoscratch_avail and autoscratch_setup is not None:
                             try:
                                 autoscratch_task = batch_client.task.get(
-                                    job_id, _AUTOSCRATCH_TASK_ID)
+                                    job_id, autoscratch_task_id)
                                 if (autoscratch_task.execution_info is None and
                                         autoscratch_setup == 'block'):
                                     raise RuntimeError(

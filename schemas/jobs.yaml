@@ -110,6 +110,8 @@ mapping:
                 type: str
                 required: true
                 enum: ['block', 'dependency']
+              task_id:
+                type: str
               num_instances:
                 required: true
                 type: text

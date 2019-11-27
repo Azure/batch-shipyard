@@ -3364,6 +3364,20 @@ def job_auto_scratch_setup(conf):
         _kv_read_checked(conf, 'auto_scratch', default={}), 'setup')
 
 
+def job_auto_scratch_task_id(conf):
+    # type: (dict) -> str
+    """Get job auto scratch task id setting
+    :param dict conf: job configuration object
+    :rtype: str
+    :return: job auto scratch task id
+    """
+    return _kv_read_checked(
+        _kv_read_checked(conf, 'auto_scratch', default={}),
+        'task_id',
+        default='batch-shipyard-autoscratch'
+    )
+
+
 def job_auto_scratch_num_instances(conf):
     # type: (dict) -> str
     """Get job auto scratch setting

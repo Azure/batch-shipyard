@@ -156,7 +156,11 @@ pool_specification:
 
 The `pool_specification` property has the following members:
 
-* (required) `id` is the compute pool ID.
+* (required) `id` is the compute pool ID. This value can be any combination
+of alphanumeric characters including hyphens and underscores up to 64
+characters in length. If this pool specification is used for an `auto_pool`
+then the maximum length of this value is 20 characters which becomes the
+prefix for the autopool id.
 * (required) `vm_configuration` specifies the image configuration for the
 VM. Either `platform_image` or `custom_image` must be specified. You cannot
 specify both. Please see the

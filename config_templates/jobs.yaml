@@ -42,6 +42,7 @@ job_specifications:
   - joblevelsharedvol
   auto_scratch:
     setup: block
+    task_id: batch-shipyard-autoscratch
     num_instances: pool_current_dedicated
   job_preparation:
     command: myjpcommand

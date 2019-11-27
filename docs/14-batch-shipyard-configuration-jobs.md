@@ -68,6 +68,7 @@ job_specifications:
   - joblevelsharedvol
   auto_scratch:
     setup: block
+    task_id: batch-shipyard-autoscratch
     num_instances: pool_current_dedicated
   job_preparation:
     command: myjpcommand
@@ -509,6 +510,8 @@ corresponding pool configuration.
     the `block` client-side wait. Note that if `dependency` is specified as
     the setup method and the task fails, it will block all subsequent tasks
     in the job. There is no default value and an option must be specified.
+  * (optional) `task_id` is the task id of the autoscratch setup task. If
+    not specified, the default is `batch-shipyard-autoscratch`.
   * (required) `num_instances` is the number of instances for the auto scratch
     volume to span. Note that if you specify a number less than the number
     of available nodes, then subsequent tasks may not get assigned to nodes
