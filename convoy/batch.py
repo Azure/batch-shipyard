@@ -5157,8 +5157,8 @@ def add_jobs(
         autoscratch_task_id = settings.job_auto_scratch_task_id(jobspec)
         autoscratch_task = None
         jobschedule = None
-        multi_instance = False
-        mi_docker_container_name = None
+        has_multi_instance = False
+        mi_docker_container_names = set()
         reserved_task_id = None
         on_task_failure = batchmodels.OnTaskFailure.no_action
         uses_task_dependencies = (
@@ -5224,8 +5224,6 @@ def add_jobs(
                          'image {} pre-load on pool {} without job-level '
                          'allow_run_on_missing_image option').format(
                              job_id, si, pool.id))
-            del di
-            del si
             if (on_task_failure != batchmodels.OnTaskFailure.
                     perform_exit_options_job_action and
                     settings.has_task_exit_condition_job_action(
@@ -5237,26 +5235,14 @@ def add_jobs(
             # task dependencies are set
             if settings.has_depends_on_task(task) or has_merge_task:
                 uses_task_dependencies = True
+            # catalog multi instance tasks for cleanup
             if settings.is_multi_instance_task(task):
-                if multi_instance and auto_complete:
-                    raise ValueError(
-                        'cannot specify more than one multi-instance task '
-                        'per job with auto completion enabled')
-                multi_instance = True
-                mi_docker_container_name = settings.task_name(task)
-                if util.is_none_or_empty(mi_docker_container_name):
-                    _id = settings.task_id(task)
-                    if util.is_none_or_empty(_id):
-                        existing_tasklist, reserved_task_id = \
-                            _generate_next_generic_task_id(
-                                batch_client, config, job_id,
-                                task, tasklist=existing_tasklist,
-                                federation_id=federation_id)
-                        settings.set_task_id(task, reserved_task_id)
-                        _id = '{}-{}'.format(job_id, reserved_task_id)
-                    settings.set_task_name(task, _id)
-                    mi_docker_container_name = settings.task_name(task)
-                    del _id
+                has_multi_instance = True
+                if not native:
+                    mi_docker_container_names.add(
+                        util.normalize_docker_image_name_for_job(job_id, di))
+            del di
+            del si
         # define max task retry count constraint for this task if set
         job_constraints = None
         max_task_retries = settings.job_max_task_retries(jobspec)
@@ -5339,11 +5325,12 @@ def add_jobs(
                 'stop {}'.format(
                     job_id, autoscratch_task_id, asfile[0], job_id)
             )
-        if multi_instance and auto_complete and not native:
-            jrtaskcmd.extend([
-                'docker kill {}'.format(mi_docker_container_name),
-                'docker rm -v {}'.format(mi_docker_container_name)
-            ])
+        if has_multi_instance and not native:
+            jrtaskcmd.append('set +e')
+            for midcn in mi_docker_container_names:
+                jrtaskcmd.append('docker kill {}'.format(midcn))
+                jrtaskcmd.append('docker rm -v {}'.format(midcn))
+            jrtaskcmd.append('set -e')
         user_jr = settings.job_release_command(jobspec)
         if user_jr is not None:
             jrtaskcmd.append(user_jr)
@@ -5594,7 +5581,7 @@ def add_jobs(
                 elif 'The specified job already exists' in ex.message.value:
                     # cannot re-use an existing job if multi-instance due to
                     # job release requirement
-                    if multi_instance and auto_complete:
+                    if has_multi_instance and auto_complete and not native:
                         raise
                     else:
                         # retrieve job and check for version consistency
@@ -5657,7 +5644,7 @@ def add_jobs(
                 _create_auto_scratch_volume(
                     batch_client, blob_client, config, jobspec,
                     autoscratch_setup, pool, job_id, autopool, asfile)
-        del mi_docker_container_name
+        del mi_docker_container_names
         # add all tasks under job
         container_image_refs = set()
         task_map = {}
@@ -5792,7 +5779,7 @@ def add_jobs(
                         blob_client, config, unique_id, federation_id,
                         fed_constraints, registries, kind, jobschedule.id,
                         jobschedule, native, is_windows, auto_complete,
-                        multi_instance, uses_task_dependencies,
+                        has_multi_instance, uses_task_dependencies,
                         has_gpu_task, has_ib_task, max_instance_count_in_job,
                         instances_required_in_job, has_merge_task,
                         merge_task_id, task_map
@@ -5859,7 +5846,7 @@ def add_jobs(
                     generate_info_metadata_for_federation_message(
                         blob_client, config, unique_id, federation_id,
                         fed_constraints, registries, kind, job_id, job,
-                        native, is_windows, auto_complete, multi_instance,
+                        native, is_windows, auto_complete, has_multi_instance,
                         uses_task_dependencies, has_gpu_task,
                         has_ib_task, max_instance_count_in_job,
                         instances_required_in_job, has_merge_task,

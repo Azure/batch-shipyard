@@ -365,9 +365,11 @@ mutually exclusive of one another.
 * (optional) `auto_pool` will create a compute pool on demand for
 the job as specified in the pool configuration. Note that storage resources
 required by Batch Shipyard may not be automatically cleaned up when using
-autopools. Utilizing `jobs term` or `jobs del` without any jobid scoping
-will attempt to clean up storage resources. Otherwise, you will need to use
-`storage del` or `storage clear` to clean up storage resources manually.
+autopools. Note that the pool id prefix used for autopools is based on the
+`id` of the pool in the linked pool specification. Utilizing `jobs term` or
+`jobs del` without any jobid scoping will attempt to clean up storage
+resources. Otherwise, you will need to use `storage del` or `storage clear`
+to clean up storage resources manually.
     * (optional) `pool_lifetime` specifies the lifetime of the pool. Valid
       values are `job` and `job_schedule`. `job_schedule` is only valid if
       the `recurrence` property is also specified. The default is `job`.
@@ -929,7 +931,8 @@ to pass to the `singularity_cmd`. This option only applies to Singularity
 containers.
 * (optional) `name` is the name to assign to the Docker container. If not
 specified, the value of the `id` property will be used for `name`. This
-option only applies to Docker containers.
+option will be ignored for multi-instance tasks, and this option only
+applies to Docker containers.
 * (optional) `labels` is an array of labels to apply to the container.
 This option only applies to Docker containers.
 * (optional) `environment_variables` are any additional task-specific

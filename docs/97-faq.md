@@ -76,9 +76,9 @@ deleting jobs with running tasks in cases where normal Batch task termination
 fails to properly end the Docker container processes.
 * Direct execution of container tasks by the Batch node agent itself which
 lends to cleaner container execution lifecycle management.
-* Multi-instance task execution (e.g., MPI job) is cleaner. You can execute
-multiple multi-instance tasks per job. If your workload is predominantly
-multi-instance, then it is strongly recommended to use `native` mode.
+* Multi-instance task execution (e.g., MPI job) is cleaner. If your workload
+is predominantly multi-instance, then it is strongly recommended to use
+`native` mode.
 
 Disadvantages of `native` mode are:
 
@@ -88,6 +88,7 @@ use `resource_files` or build your own solution.
 * `output_data` options are limited and egress to `azure_storage` Azure Files
 (i.e., file shares) is not possible. Additionally, there is only limited
 resolution of environment variables in output file path specfications.
+* `per_job_auto_scratch` (and `auto_scratch`) is not compatible.
 * Less aggressive retries of compute node provisioning steps. This can
 potentially lead to a greater occurrence of `unusable` nodes.
 * Other experimental features may not be supported.

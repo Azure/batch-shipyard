@@ -333,6 +333,17 @@ def singularity_image_name_to_key_file_name(name):
     return key_file_name
 
 
+def normalize_docker_image_name_for_job(job_id, name):
+    # type: (str) -> str
+    """Normalizes docker image and job id into container names
+    :param str job_id: job id
+    :param str name: Docker image name
+    :rtype: str
+    :return: normalized name
+    """
+    return '{}-{}'.format(job_id, name.replace('/', '-').replace(':', '-'))
+
+
 def wrap_commands(commands, windows=False, wait=True):
     # type: (List[str], bool, bool) -> str
     """Wrap commands

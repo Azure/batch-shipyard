@@ -48,8 +48,6 @@ is restricted to Batch accounts with keys (non-AAD).
 supported with Windows compute node pools such as on-premises to compute
 node direct data ingress, storage cluster mounting, and credential
 encryption support.
-* Task dependencies are incompatible with multi-instance tasks. This is a
-current limitation of the underlying Azure Batch service.
 * Adding tasks to the same job across multiple, concurrent Batch Shipyard
 invocations may result in failure if task ids for these jobs are
 auto-generated.

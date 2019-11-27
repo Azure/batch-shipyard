@@ -3885,10 +3885,15 @@ def task_settings(
             run_opts.append('--shm-size={}'.format(shm_size))
         del shm_size
         # parse name option, if not specified use task id
-        name = _kv_read_checked(conf, 'name')
-        if util.is_none_or_empty(name):
-            name = task_id
+        if is_multi_instance_task(conf):
+            name = util.normalize_docker_image_name_for_job(
+                job_id(jobspec), docker_image)
             set_task_name(conf, name)
+        else:
+            name = _kv_read_checked(conf, 'name')
+            if util.is_none_or_empty(name):
+                name = task_id
+                set_task_name(conf, name)
         run_opts.append('--name {}'.format(name))
         # parse labels option
         labels = _kv_read_checked(conf, 'labels')
@@ -4422,6 +4427,10 @@ def task_settings(
                 cc_args = None
         else:
             cc_args = [
+                'set +e',
+                'docker kill {}'.format(name),
+                'docker rm -v {}'.format(name),
+                'set -e',
                 'docker run {} {}{}'.format(
                     ' '.join(run_opts),
                     docker_image,

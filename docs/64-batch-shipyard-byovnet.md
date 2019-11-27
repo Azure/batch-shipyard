@@ -96,7 +96,7 @@ virtual network (and is sufficient for any pool resizes that may occur).
 If you are bringing your own public IPs, you must supply a sufficient number
 of public IPs in the pool configuration for the maximum number of compute
 nodes you intend to deploy for the pool. The current requirements are
-1 public IP per 50 dedicated nodes or 20 low priority nodes.
+1 public IP per 100 nodes.
 
 Note that enabling internode communication is not recommended unless
 running MPI (multinstance) jobs as this will restrict the upper-bound
