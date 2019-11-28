@@ -4219,6 +4219,7 @@ def _generate_next_generic_task_id(
         tasknum = sorted(
             [int(x.id.split(delimiter)[-1]) for x in tasklist])[-1] + 1
     except (batchmodels.BatchErrorException, IndexError, TypeError):
+        tasklist = []
         tasknum = 0
     if reserved is not None:
         tasknum_reserved = int(reserved.split(delimiter)[-1])
