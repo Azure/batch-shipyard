@@ -323,6 +323,9 @@ mapping:
             mapping:
               source:
                 type: str
+                required: true
+          ignore_warnings:
+            type: bool
       additional_node_prep:
         type: map
         mapping:

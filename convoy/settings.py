@@ -231,6 +231,7 @@ PoolSettings = collections.namedtuple(
         'certificates', 'prometheus', 'upload_diagnostics_logs_on_unusable',
         'container_runtimes_install', 'container_runtimes_default',
         'per_job_auto_scratch', 'batch_insights_enabled', 'public_ips',
+        'gpu_ignore_warnings',
     ]
 )
 SSHSettings = collections.namedtuple(
@@ -1396,9 +1397,11 @@ def pool_settings(config):
             (rac.starting_port > 49000 and rac.starting_port <= 55000) or
             rac.starting_port > 64536):
         raise ValueError('starting_port is invalid or in a reserved range')
-    # gpu driver
+    # gpu settings
+    gpu = _kv_read_checked(conf, 'gpu', default={})
+    gpu_ignore_warnings = _kv_read(gpu, 'ignore_warnings', default=False)
     try:
-        gpu_driver = _kv_read_checked(conf['gpu']['nvidia_driver'], 'source')
+        gpu_driver = _kv_read_checked(gpu['nvidia_driver'], 'source')
     except KeyError:
         gpu_driver = None
     # additional node prep
@@ -1474,6 +1477,7 @@ def pool_settings(config):
             password=rdp_password,
         ),
         gpu_driver=gpu_driver,
+        gpu_ignore_warnings=gpu_ignore_warnings,
         additional_node_prep=additional_node_prep,
         virtual_network=virtual_network_settings(
             conf,

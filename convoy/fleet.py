@@ -1719,6 +1719,14 @@ def _construct_pool_object(
                         value=','.join(pool_settings.prometheus.ca_options)
                     )
                 )
+        # gpu env vars
+        if pool_settings.gpu_ignore_warnings:
+            pool.start_task.environment_settings.append(
+                batchmodels.EnvironmentSetting(
+                    name='SHIPYARD_GPU_IGNORE_WARNINGS',
+                    value='1'
+                )
+            )
     # batch insights
     if pool_settings.batch_insights_enabled:
         pool.start_task.environment_settings.append(

@@ -654,8 +654,14 @@ enable_nvidia_persistence_mode() {
 }
 
 query_nvidia_card() {
+    if [ "$SHIPYARD_GPU_IGNORE_WARNINGS" -eq 1 ]; then
+        set +e
+    fi
     nvidia-smi -q
     nvidia-smi
+    if [ "$SHIPYARD_GPU_IGNORE_WARNINGS" -eq 1 ]; then
+        set -e
+    fi
 }
 
 check_for_nvidia_on_custom_or_native() {
@@ -1847,6 +1853,7 @@ echo "Storage cluster mounts (${#sc_args[@]}): ${sc_args[*]}"
 echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
 echo "Install LIS: $lis"
 echo "GPU: $gpu"
+echo "GPU ignore warnings: $SHIPYARD_GPU_IGNORE_WARNINGS"
 echo "Azure Blob: $azureblob"
 echo "Azure File: $azurefile"
 echo "GlusterFS on compute: $gluster_on_compute"

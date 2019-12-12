@@ -122,6 +122,7 @@ pool_specification:
   gpu:
     nvidia_driver:
       source: https://some.url
+    ignore_warnings: false
   batch_insights_enabled: false
   prometheus:
     node_exporter:

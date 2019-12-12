@@ -137,6 +137,7 @@ pool_specification:
   gpu:
     nvidia_driver:
       source: https://some.url
+    ignore_warnings: false
   batch_insights_enabled: false
   prometheus:
     node_exporter:
@@ -565,9 +566,14 @@ commands to execute on node start.
 * (optional) `gpu` property defines additional information for NVIDIA
 GPU-enabled VMs. If not specified, Batch Shipyard will automatically download
 the driver for the `vm_size` specified.
-    * `nvidia_driver` property contains the following required members:
-        * `source` is the source url to download the driver. This should be
-          the silent-installable driver package.
+    * (optional) `nvidia_driver` property contains the following members:
+        * (required) `source` is the source url to download the driver. This
+          should be the silent-installable driver package.
+    * (optional) `ignore_warnings` property allows overriding the default
+      beahvior to place the node in start task failed state if during node
+      prep there are warnings of possible GPU issues such as infoROM
+      corruption. It is recommended not to set this value to `true`. The
+      default, if not specified, is `false`.
 * (optional) `batch_insights_enabled` property enables
 [Batch Insights](https://github.com/Azure/batch-insights) monitoring for
 the pool. This provides simple non-realtime, host-based monitoring through
