@@ -9,9 +9,9 @@ set -o pipefail
 DOCKER_CE_VERSION_DEBIAN=19.03.5
 DOCKER_CE_VERSION_CENTOS=19.03.5
 DOCKER_CE_VERSION_SLES=17.09.1
-GLUSTER_VERSION_DEBIAN=4.1
-GLUSTER_VERSION_CENTOS=41
-IMDS_VERSION=2019-03-11
+GLUSTER_VERSION_DEBIAN=7
+GLUSTER_VERSION_CENTOS=6
+IMDS_VERSION=2019-04-30
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
@@ -1409,8 +1409,8 @@ install_beeond() {
         if { [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; } || { [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "16.04" ]; } then
             pkgnum=9
         elif [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
-            # TODO temporarily use 9 until debian 10 repo releases
-            pkgnum=9
+            logger ERROR "BeeGFS BeeOND is not supported on Ubuntu 18.04"
+            exit 1
         fi
         download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-deb${pkgnum}.list" "/etc/apt/sources.list.d/beegfs-deb${pkgnum}.list"
         add_repo "https://www.beegfs.io/release/latest-stable/gpg/DEB-GPG-KEY-beegfs"
@@ -1418,18 +1418,22 @@ install_beeond() {
     elif [ "$PACKAGER" == "yum" ]; then
         if [[ "$DISTRIB_RELEASE" == 7* ]]; then
             pkgnum=7
+        elif [[ "$DISTRIB_RELEASE" == 8* ]]; then
+            pkgnum=8
         fi
         download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-rhel${pkgnum}.repo" "/etc/yum.repos.d/beegfs-rhel${pkgnum}.repo"
         rpm --import "https://www.beegfs.io/release/latest-stable/gpg/RPM-GPG-KEY-beegfs"
-        install_kernel_devel_package
         led=elfutils-libelf-devel
+        install_kernel_devel_package
+        install_packages epel-release
     fi
     refresh_package_index
-    install_packages beeond $led
+    install_packages dkms beeond $led
     logger INFO "BeeGFS BeeOND installed"
 }
 
 install_glusterfs_on_compute() {
+    log DEBUG "Installing GlusterFS on compute"
     local gfsstart="systemctl start glusterd"
     local gfsenable="systemctl enable glusterd"
     if [ "$PACKAGER" == "zypper" ]; then
@@ -1457,6 +1461,7 @@ install_glusterfs_on_compute() {
     $gfsstart
     # create brick directory
     mkdir -p "${USER_MOUNTPOINT}"/gluster
+    log INFO "GlusterFS on compute installed"
 }
 
 check_for_storage_cluster_software() {
