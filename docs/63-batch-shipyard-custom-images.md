@@ -28,7 +28,7 @@ It is **strongly recommended** to use Shared Image Gallery resources instead
 of directly using an Azure Managed Image for increased reliability, robustness
 and performance of scale out (i.e., pool allocation with target node counts
 and resize up) operations with Azure Batch pools. These improvements hold even
-for Shared Image Gallery resource with a replica count of 1.
+for a Shared Image Gallery resource with a replica count of 1.
 
 This guide will focus on creating Shared Image Gallery resources for use with
 Azure Batch and Batch Shipyard.
@@ -263,11 +263,19 @@ and the required user-land software for Infiniband installed. It is best to
 base a custom image off of the existing Azure platform images that support
 Infiniband/RDMA.
 
+#### MPI Libraries
+If you are utilizing MPI, the associated runtime(s) must be installed such
+that they are invocable by the calling programs.
+
 #### Storage Cluster Auto-Linking and Mounting
 If mounting a storage cluster, the required NFSv4 or GlusterFS client tooling
 must be installed and invocable such that the auto-link mount functionality
 is operable. Both clients need not be installed unless you are mounting
 both types of storage clusters.
+
+#### Per-Job Autoscratch
+If utilizing the per-job autoscratch feature, then BeeGFS Beeond must be
+installed so that a shared file system can be created.
 
 #### GlusterFS On Compute
 If a GlusterFS on compute shared data volume is required, then GlusterFS
