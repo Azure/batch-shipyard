@@ -102,7 +102,7 @@ slurm:
             reclaim_exclude_num_nodes: 0
         max_runtime_limit: null
         default: true
-        preempty_type: preempt/partition_prio
+        preempt_type: preempt/partition_prio
         preempt_mode: requeue
         over_subscribe: no
         priority_tier: 10
