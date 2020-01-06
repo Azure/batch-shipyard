@@ -5312,6 +5312,8 @@ def slurm_options_settings(config):
     partitions = {}
     part_conf = _kv_read_checked(conf, 'elastic_partitions')
     for key in part_conf:
+        if key.lower() == 'default':
+            raise ValueError('elastic partition id cannot be named "default"')
         part = _kv_read_checked(part_conf, key)
         batch_pools = {}
         pool_conf = _kv_read_checked(part, 'batch_pools', default={})
