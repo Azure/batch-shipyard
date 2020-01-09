@@ -13,30 +13,18 @@ SUDO=sudo
 VENV_NAME=.shipyard
 
 # process options
-while getopts "h?23ce:u" opt; do
+while getopts "h?ce:u" opt; do
     case "$opt" in
         h|\?)
             echo "install.sh parameters"
             echo ""
-            echo "-2 install for Python 2.7"
-            echo "-3 install for Python 3.4+ [default]"
             echo "-c install for Cloud Shell (via Dockerfile)"
             echo "-e [environment name] install to a virtual environment"
             echo "-u force install into user python environment instead of a virtual enviornment"
             echo ""
             exit 1
             ;;
-        2)
-            PYTHON=python
-            PIP=pip
-            ;;
-        3)
-            PYTHON=python3
-            PIP=pip3
-            ;;
         c)
-            PYTHON=python3
-            PIP=pip3
             VENV_NAME=cloudshell
             SUDO=
             ;;
@@ -162,16 +150,9 @@ if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
         else
-            if [ $PYTHON == "python" ]; then
-                PYTHON_PKGS="libpython-dev python-dev"
-                if [ $ANACONDA -eq 0 ]; then
-                    PYTHON_PKGS="$PYTHON_PKGS python-pip"
-                fi
-            else
-                PYTHON_PKGS="libpython3-dev python3-dev"
-                if [ $ANACONDA -eq 0 ]; then
-                    PYTHON_PKGS="$PYTHON_PKGS python3-pip"
-                fi
+            PYTHON_PKGS="libpython3-dev python3-dev"
+            if [ $ANACONDA -eq 0 ]; then
+                PYTHON_PKGS="$PYTHON_PKGS python3-pip"
             fi
         fi
         # shellcheck disable=SC2086
@@ -183,21 +164,17 @@ if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
         else
-            if [ $PYTHON == "python" ]; then
-                PYTHON_PKGS="python-devel"
-            else
-                if ! yum list installed epel-release; then
-                    echo "epel-release package not installed."
-                    echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
-                    exit 1
-                fi
-                if ! yum list installed python34; then
-                    echo "python34 epel package not installed."
-                    echo "Please install the python34 epel package or refer to the Installation documentation for manual installation steps."
-                    exit 1
-                fi
-                PYTHON_PKGS="python34-devel"
+            if ! yum list installed epel-release; then
+                echo "epel-release package not installed."
+                echo "Please install the epel-release package or refer to the Installation documentation for manual installation steps".
+                exit 1
             fi
+            if ! yum list installed python36; then
+                echo "python36 epel package not installed."
+                echo "Please install the python36 epel package or refer to the Installation documentation for manual installation steps."
+                exit 1
+            fi
+            PYTHON_PKGS="python36-devel"
         fi
         # shellcheck disable=SC2086
         $SUDO yum install -y gcc openssl-devel libffi-devel openssl \
@@ -210,11 +187,7 @@ if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
         else
-            if [ $PYTHON == "python" ]; then
-                PYTHON_PKGS="python-devel"
-            else
-                PYTHON_PKGS="python3-devel"
-            fi
+            PYTHON_PKGS="python3-devel"
         fi
         # shellcheck disable=SC2086
         $SUDO zypper -n in gcc libopenssl-devel libffi48-devel openssl \
@@ -325,15 +298,9 @@ EOF
     fi
 fi
 
-if [ $PYTHON == "python" ]; then
-cat >> shipyard << 'EOF'
-python $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
-EOF
-else
 cat >> shipyard << 'EOF'
 python3 $BATCH_SHIPYARD_ROOT_DIR/shipyard.py $*
 EOF
-fi
 
 if [ -n "$VENV_NAME" ]; then
     if [ $ANACONDA -eq 0 ]; then

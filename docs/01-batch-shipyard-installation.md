@@ -2,9 +2,9 @@
 There are multiple available options for installing Batch Shipyard. Please
 pick an option that is most suitable for your work environment.
 
-* [Azure Cloud Shell](#cloudshell)
 * [Pre-built binary](#binary)
 * [Installers](#installers)
+* [Azure Cloud Shell](#cloudshell)
 * [Docker image](#docker-install)
 * [Singularity image](#singularity-install)
 * [Jupyter Notebooks](#jupyter)
@@ -12,20 +12,6 @@ pick an option that is most suitable for your work environment.
 If you wish to install Batch Shipyard into your Azure App Service (e.g.,
 Azure Function App) environment, please see
 [this guide](60-batch-shipyard-site-extension.md).
-
-## <a name="cloudshell"></a>Azure Cloud Shell
-Batch Shipyard is now integrated into
-[Azure Cloud Shell](https://docs.microsoft.com/azure/cloud-shell/overview)
-with no installation required. Simply request a Cloud Shell session and type
-`shipyard` to invoke the CLI. Data stored in your home directory or
-`clouddrive` will persist between Cloud Shell sessions.
-
-Note that Azure Cloud Shell may not have the most recent release of
-Batch Shipyard. You can see the version of Batch Shipyard installed with
-the command `shipyard --version`.
-
-If you wish to install Batch Shipyard on your machine, please proceed to the
-Installation section.
 
 ## <a name="binary"></a>Pre-built Binary
 Download an appropriate [Release](https://github.com/Azure/batch-shipyard/releases)
@@ -42,6 +28,20 @@ Installation is an easy two-step process if using the installers: fetch the
 code and run the install script to download and setup dependencies. This
 is typically the most flexible and compatible installation outside of the
 Docker image for the CLI.
+
+## <a name="cloudshell"></a>Azure Cloud Shell
+Batch Shipyard is now integrated into
+[Azure Cloud Shell](https://docs.microsoft.com/azure/cloud-shell/overview)
+with no installation required. Simply request a Cloud Shell session and type
+`shipyard` to invoke the CLI. Data stored in your home directory or
+`clouddrive` will persist between Cloud Shell sessions.
+
+Note that Azure Cloud Shell may not have the most recent release of
+Batch Shipyard. You can see the version of Batch Shipyard installed with
+the command `shipyard --version`.
+
+If you wish to install Batch Shipyard on your machine, please proceed to the
+Installation section.
 
 ### Step 1: Acquire Batch Shipyard
 Clone the repository:
@@ -70,11 +70,7 @@ a variety of recent Linux distributions. This installation script can be used
 regardless of if you obtained Batch Shipyard through `git clone` or
 downloading a release package.
 
-Please ensure that your target Python distribution is 2.7 or 3.5+. It is
-recommended to install Batch Shipyard on Python 3.5 or later. Although Python
-3.5+ is recommended, if you cannot easily install Python 3.5+ on
-your system but Python 2.7 is available, then please use that version of
-Python to avoid installation hassles with a Python interpreter.
+Please ensure that your target Python is 3.5+.
 
 The `install.sh` script supports isolated installation through a virtual
 environment so that other system-wide or user python dependencies are left
@@ -84,9 +80,7 @@ If you would like to specify the virtual environment to use, use the
 `-e` parameter. If you don't want to use a virtual environment and instead
 would like to install into your user environment, specify the `-u` option.
 Using this option will require modifying your shell rc file for advanced
-data movement capability provided by Batch Shipyard. Note that the default
-installation targets `python3`; you can use the `-2` argument to install
-for `python` (Python 2.7).
+data movement capability provided by Batch Shipyard.
 
 The recommended installation method with a virtual environment:
 ```shell
@@ -94,10 +88,8 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+ (recommended) in the virtual environment ".shipyard"
+# Install for Python 3.5+ in the virtual environment ".shipyard"
 ./install.sh
-# Or install for Python 2.7 (not recommended) in the virtual environment ".shipyard"
-./install.sh -2
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -121,10 +113,8 @@ Alternatively, install directly into your "user" environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+
+# Install in user environment
 ./install.sh -u
-# Or install for Python 2.7
-./install.sh -2 -u
 # Add $HOME/.local/bin to your PATH in your shell rc file if it is not present.
 # For example, the following line can be added to ~/.bashrc for bash shells:
 export PATH=$PATH:$HOME/.local/bin
@@ -143,7 +133,7 @@ release of Batch Shipyard.
 #### Installation on CentOS 6.x / RHEL 6.x / Fedora 13 to 18
 The default python interpreter distributed with 6.x series releases is
 incompatible with Batch Shipyard. To install on these distributions, you must
-install `epel-release` package first then the `python34` epel package. Once
+install `epel-release` package first then the `python36` epel package. Once
 these packages are installed, then invoke the installer in the following
 manner:
 
@@ -152,7 +142,7 @@ DISTRIB_ID=centos DISTRIB_RELEASE=6.x ./install.sh
 ```
 
 #### Unsupported Linux Distributions
-The following distributions will not work with the `install.sh` script:
+The following distributions will NOT work with the `install.sh` script:
 
 * CentOS < 6.0
 * Debian < 8
@@ -166,12 +156,10 @@ Please follow the manual installation instructions found later in this
 document for these distributions.
 
 ### <a name="mac-install"></a>Step 2 [Mac]: Run the `install.sh` Script
-It is recommended to follow the steps outlined on
+You will need to follow the steps outlined on
 [this guide](http://docs.python-guide.org/en/latest/starting/install3/osx/#install3-osx)
 to install Batch Shipyard on a Python3 installation rather than the default
-Python 2.7 that is shipped with Mac OS X. However, if you prefer to use
-the system defaulted Python 2.7, the installation will work with that
-environment as well.
+Python2 that is shipped with Mac OS X.
 
 The `install.sh` script supports isolated installation through a virtual
 environment so that other system-wide or user python dependencies are left
@@ -186,10 +174,8 @@ The recommended installation method with a virtual environment:
 # Obtain Batch Shipyard through git clone or downloading the archive and unpacking
 # Change directory to where Batch Shipyard was cloned or unpacked to
 cd batch-shipyard
-# Install for Python 3.5+ (recommended) in the virtual environment ".shipyard"
+# Install for Python 3.5+ in the virtual environment ".shipyard"
 ./install.sh
-# Or to install for Python 2.7 in the virtual environment ".shipyard"
-./install.sh -2
 ```
 
 A helper script named `shipyard` will be generated with a successful
@@ -240,12 +226,6 @@ there is a larger startup delay for invoking `shipyard.cmd` with Anaconda
 environments due to the delay in activating a conda environment.
 Python from [python.org](https://www.python.org) (CPython) is recommended as
 the execution environment.
-
-If you are installing on Python 2.7, you can download the necessary
-development headers and compiler
-[from Microsoft](http://aka.ms/vcpython27). It is recommended to upgrade to
-Python 3.5 or later so that you do not need a compiler to install the
-dependencies.
 
 Alternatively you can install Batch Shipyard using the `requirements.txt`
 file:
@@ -353,9 +333,8 @@ respective platform below.
 
 #### Linux, Mac, and Windows Subsystem for Linux
 Rerun the `install.sh` script with the appropriate parameters for all
-upgrades. Please ensure that if you specified `-2`, `-3` and/or the
-`-e <env name>` parameter, then these parameters are issued again for
-upgrades.
+upgrades. Please ensure that if you specified `-u` or  `-e <env name>`
+parameter that these parameters are issued again for upgrades.
 
 #### Windows
 Rerun the `install.cmd` script with the same virtual environment parameter.
@@ -389,13 +368,13 @@ properly.
 ## Manual Installation
 ### Requirements
 The Batch Shipyard tool is written in Python. The client script is compatible
-with Python 2.7 or 3.5+ (recommended). You will also
-need to install dependent Python packages that Batch Shipyard requires.
-Installation can be performed using the [requirements.txt](../requirements.txt)
-file via the command `pip install --upgrade --user -r requirements.txt` (or
-via `pip3` for Python3). Note that this `pip` command should be run for every
-Batch Shipyard upgrade if not using `install.sh`. The use of `install.sh` is
-highly recommended instead of these manual steps below on Linux platforms.
+with Python 3.5+. You will also need to install dependent Python packages that
+Batch Shipyard requires. Installation can be performed using
+the [requirements.txt](../requirements.txt) file via the command
+`pip3 install --upgrade --user -r requirements.txt`. Note that this `pip3`
+command should be run for every Batch Shipyard upgrade if not using
+`install.sh`. The use of `install.sh` is highly recommended instead of these
+manual steps below on Linux platforms.
 
 Batch Shipyard has some Python dependencies which require a valid compiler,
 ssl, ffi, and Python development libraries to be installed due to the
@@ -408,32 +387,23 @@ is needed. The following are example commands to execute (as root or with
 #### Ubuntu/Debian
 ```
 apt-get update
-apt-get install -y build-essential libssl-dev libffi-dev libpython-dev python-dev python-pip
-pip install --upgrade pip
+apt-get install -y build-essential libssl-dev libffi-dev python3-dev python3-pip
+pip3 install --upgrade pip
 ```
 
 #### CentOS/RHEL/Fedora
 ```
-yum install -y gcc openssl-devel libffi-devel python-devel
+yum install -y epel-release
+yum install -y python36-devel gcc openssl-devel libffi-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
 
 #### SLES/OpenSUSE
 ```
 zypper ref
-zypper -n in gcc libopenssl-devel libffi48-devel python-devel
+zypper -n in gcc libopenssl-devel libffi48-devel python3-devel
 curl -fSsL https://bootstrap.pypa.io/get-pip.py | python
 ```
-
-#### Note about Python 3.5+
-If installing for Python 3.5+, then simply use the Python3 equivalents for
-the python dependencies. For example, on Ubuntu/Debian:
-```
-apt-get update
-apt-get install -y build-essential libssl-dev libffi-dev libpython3-dev python3-dev python3-pip
-pip3 install --upgrade pip
-```
-would install the proper dependencies for Python3.
 
 ### Data Movement Support
 Batch Shipyard contains native support for moving files locally accessible
