@@ -197,7 +197,7 @@ refresh_package_index() {
             apt-get update
             rc=$?
         elif [ "$PACKAGER" == "yum" ]; then
-            yum makecache -y fast
+            yum makecache -y
             rc=$?
         elif [ "$PACKAGER" == "zypper" ]; then
             zypper -n --gpg-auto-import-keys ref
