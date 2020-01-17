@@ -20,23 +20,20 @@ container pools.
 | Publisher             | Offer                 | Sku | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------------------|-----------------------|-----|:---:|:-------:|:-----------:|:--------------:|
 | microsoft-azure-batch | centos-container      | 7-4 |  X  |         |      X      |                |
-| microsoft-azure-batch | centos-container      | 7-6 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container      | 7-7 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |  X (4)  |      X      |                |
-| microsoft-azure-batch | centos-container-rdma | 7-6 |  X  |  X (5)  |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-7 |  X  |  X (5)  |      X      |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
-| OpenLogic             | CentOS                | 7.6 |  X  |         |             |        X       |
 | OpenLogic             | CentOS                | 7.7 |  X  |         |             |        X       |
+| OpenLogic             | CentOS                | 8.0 |  X  |         |             |                |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |  X (4)  |             |        X       |
-| OpenLogic             | CentOS-HPC            | 7.6 |  X  |  X (5)  |             |        X       |
 | OpenLogic             | CentOS-HPC            | 7.7 |  X  |  X (5)  |             |        X       |
 
 ### Debian
 
-| Publisher | Offer  | Sku | GPU | IB/RDMA | Native Only | Native Convert |
-|-----------|--------|-----|:---:|:-------:|:-----------:|:--------------:|
-| Credativ  | Debian | 9   |     |         |             |                |
+| Publisher | Offer     | Sku | GPU | IB/RDMA | Native Only | Native Convert |
+|-----------|-----------|-----|:---:|:-------:|:-----------:|:--------------:|
+| Debian    | Debian-10 | 10  |     |         |             |                |
 
 ### SLES
 

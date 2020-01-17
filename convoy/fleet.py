@@ -2673,7 +2673,7 @@ def _adjust_settings_for_pool_creation(config):
                 shipyard_container_required = False
     elif publisher == 'credativ':
         if offer == 'debian':
-            if sku >= '9':
+            if sku >= '10':
                 allowed = True
     elif publisher == 'openlogic':
         if offer.startswith('centos'):
