@@ -15,6 +15,33 @@ be converted to the native equivalent on pool provisioning.
 Please see the [FAQ](97-faq.md) for more information about native mode
 container pools.
 
+### Enabling `microsoft-azure-batch` Native Images
+For Batch-managed pool allocation Batch accounts, no action is needed to
+enable use of `microsoft-azure-batch` published `native` images. For User
+Subscription pool allocation Batch accounts, you will need to explicitly
+accept Marketplace terms for each image and image version. Periodically new
+image versions will be published and you will need to accept terms
+individually for each image version. If you do not accept Marketplace terms
+for these images and attempt to deploy a Batch pool with a
+`microsoft-azure-batch` `native` image using a User subscription pool
+allocation Batch account, you will observe a Resize Error on your pool with
+the error `AllocationFailed: Desired number of dedicated nodes could not be
+allocated`. The error details will have the message: `Reason: Allocation
+failed due to marketplace purchase eligibilty check returned errors`.
+
+You can accept Marketplace terms for `microsoft-azure-batch` published
+`native` images using the Azure CLI:
+
+1. Ensure that you are on the correct subscription id of the Batch account
+in the Azure CLI.
+2. Run `az vm image list --all --publisher microsoft-azure-batch`
+3. Find the correlated VM image using the tables provided below. Locate
+the `urn` of that image in the JSON object in the output of the command.
+4. Run `az vm image accept-terms --urn <corresponding-urn>` for the
+corresponding `urn` to accept the terms for the image.
+
+## Image Support Matrix for Batch Shipyard
+
 ### CentOS
 
 | Publisher             | Offer                 | Sku | GPU | IB/RDMA | Native Only | Native Convert |

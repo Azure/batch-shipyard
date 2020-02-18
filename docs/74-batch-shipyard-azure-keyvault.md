@@ -1,7 +1,9 @@
 # Using Azure KeyVault for Credentials with Batch Shipyard
 The focus of this article is to explain how to use Azure KeyVault for
 managing credentials config files and/or individual keys and passwords for use
-with Batch Shipyard.
+with Batch Shipyard. The concepts presented here are specifically for managing
+credentials and secrets in configuration files and are tangential to an
+Azure KeyVault required for User Subscription pool allocation Batch accounts.
 
 ## Introduction and Concepts
 The [credentials.yaml](10-batch-shipyard-configuration.md#cred) file
