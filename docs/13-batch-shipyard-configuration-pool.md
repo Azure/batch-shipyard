@@ -572,7 +572,7 @@ the driver for the `vm_size` specified.
     * (optional) `ignore_warnings` property allows overriding the default
       beahvior to place the node in start task failed state if during node
       prep there are warnings of possible GPU issues such as infoROM
-      corruption. It is recommended not to set this value to `true`. The
+      corruption. It is not recommended to set this value to `true`. The
       default, if not specified, is `false`.
 * (optional) `batch_insights_enabled` property enables
 [Batch Insights](https://github.com/Azure/batch-insights) monitoring for

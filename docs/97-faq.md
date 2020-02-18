@@ -68,6 +68,12 @@ for more information. Compliant
 [custom images](63-batch-shipyard-custom-images.md) are compatible with
 `native` mode.
 
+Note that if using `native` images on User Subscription pool allocation Batch
+accounts, you will need to explicitly accpet Marketplace terms for each iamge
+and image version. Please see the
+[Batch Shipyard Platform Image support doc](25-batch-shipyard-platform-image-support.md)
+for more information about this process.
+
 Advantages of `native` mode are:
 
 * Batch Shipyard with a provisioned SSH user is no longer necessary to
