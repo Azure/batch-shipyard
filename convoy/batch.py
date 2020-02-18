@@ -660,7 +660,8 @@ def _block_for_nodes_ready(
             errors = []
             for err in pool.resize_errors:
                 errors.append('{}: {}'.format(err.code, err.message))
-                if (err.code == 'AccountCoreQuotaReached' or
+                if (err.code == 'AllocationFailed' or
+                        err.code == 'AccountCoreQuotaReached' or
                         (err.code == 'AccountLowPriorityCoreQuotaReached' and
                          pool.target_dedicated_nodes == 0) or
                         (err.code == 'AllocationTimedout' and
@@ -669,6 +670,12 @@ def _block_for_nodes_ready(
                          pool.allocation_state ==
                          batchmodels.AllocationState.steady)):
                     fatal_resize_error = True
+            if util.is_not_empty(pool.resize_errors):
+                for err in pool.resize_errors:
+                    if util.is_not_empty(err.values):
+                        for de in err.values:
+                            errors.append('{}: {}'.format(
+                                de.name, de.value))
             if fatal_resize_error:
                 pool_stats(batch_client, config, pool_id=pool_id)
                 raise RuntimeError(
