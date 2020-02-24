@@ -2671,8 +2671,8 @@ def _adjust_settings_for_pool_creation(config):
             elif sku == '18.04-lts':
                 allowed = True
                 shipyard_container_required = False
-    elif publisher == 'credativ':
-        if offer == 'debian':
+    elif publisher == 'debian':
+        if offer == 'debian-10':
             if sku >= '10':
                 allowed = True
     elif publisher == 'openlogic':
