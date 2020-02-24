@@ -51,8 +51,8 @@ if [ -e /etc/os-release ]; then
     DISTRIB_RELEASE=$VERSION_ID
     DISTRIB_CODENAME=$VERSION_CODENAME
     if [ -z "$DISTRIB_CODENAME" ]; then
-        if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; then
-            DISTRIB_CODENAME=stretch
+        if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "10" ]; then
+            DISTRIB_CODENAME=buster
         fi
     fi
 else
@@ -912,9 +912,7 @@ mount_azureblob_container() {
                 download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
             elif [ "$DISTRIB_ID" == "debian" ]; then
                 install_packages apt-transport-https
-                if [ "$DISTRIB_RELEASE" == "9" ]; then
-                    download_file_as "https://packages.microsoft.com/config/ubuntu/16.04/${mspkg}" "$mspkg"
-                fi
+                download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
             fi
         elif [ "$PACKAGER" == "yum" ]; then
             mspkg=packages-microsoft-prod.rpm
@@ -1406,10 +1404,14 @@ install_beeond() {
     local led
     local pkgnum
     if [ "$PACKAGER" == "apt" ]; then
-        if { [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; } || { [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "16.04" ]; } then
-            pkgnum=9
-        elif [ "$DISTRIB_ID" == "ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
-            logger ERROR "BeeGFS BeeOND is not supported on Ubuntu 18.04"
+        if [ "$DISTRIB_ID" == "ubuntu" ] ; then
+            if [ "$DISTRIB_RELEASE" == "16.04" ] || [ "$DISTRIB_RELEASE" == "18.04" ]; then
+                # 18.04 is technically on buster/debian 10
+                pkgnum=9
+            fi
+        fi
+        if [ -z "$pkgnum" ]; then
+            logger ERROR "BeeGFS BeeOND is not supported on $DISTRIB_ID $DISTRIB_RELEASE"
             exit 1
         fi
         download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-deb${pkgnum}.list" "/etc/apt/sources.list.d/beegfs-deb${pkgnum}.list"
@@ -1418,8 +1420,10 @@ install_beeond() {
     elif [ "$PACKAGER" == "yum" ]; then
         if [[ "$DISTRIB_RELEASE" == 7* ]]; then
             pkgnum=7
-        elif [[ "$DISTRIB_RELEASE" == 8* ]]; then
-            pkgnum=8
+        fi
+        if [ -z "$pkgnum" ]; then
+            logger ERROR "BeeGFS BeeOND is not supported on $DISTRIB_ID $DISTRIB_RELEASE"
+            exit 1
         fi
         download_file_as "https://www.beegfs.io/release/latest-stable/dists/beegfs-rhel${pkgnum}.repo" "/etc/yum.repos.d/beegfs-rhel${pkgnum}.repo"
         rpm --import "https://www.beegfs.io/release/latest-stable/gpg/RPM-GPG-KEY-beegfs"
@@ -1872,8 +1876,15 @@ echo "Block on images: $block"
 echo "Singularity decryption certs: $SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES"
 echo ""
 
-# set python env vars
-export LC_ALL=en_US.UTF-8
+# set locale
+if [ "$DISTRIB_ID" == "debian" ]; then
+    export LC_ALL=C.UTF-8
+else
+    export LC_ALL=en_US.UTF-8
+fi
+set +e
+localectl
+set -e
 
 # store node prep start
 if command -v python3 > /dev/null 2>&1; then
