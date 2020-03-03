@@ -299,6 +299,9 @@ def list_supported_images(
                 image.image_reference.publisher.lower() not in
                 settings.get_valid_publishers()):
             continue
+        if (not show_unrelated and
+                not settings.check_for_container_capability(image)):
+            continue
         if image.image_reference.publisher not in image_map[os_type]:
             image_map[os_type][image.image_reference.publisher] = {}
         if (image.image_reference.offer not in

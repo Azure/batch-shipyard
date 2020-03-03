@@ -143,8 +143,11 @@ _VM_IB_CLASS = {
     'edr_ib': re.compile(r'^standard_(hc|hb)+[\d]+rs$', re.IGNORECASE),
 }
 _VALID_PUBLISHERS = frozenset((
-    'canonical', 'credativ', 'microsoft-azure-batch',
+    'canonical', 'debian', 'microsoft-azure-batch',
     'microsoftwindowsserver', 'openlogic'
+))
+_VALID_PUBLISHERS_CHECK_CAPABILITIES = frozenset((
+    'microsoft-azure-batch', 'microsoftwindowsserver'
 ))
 _SINGULARITY_COMMANDS = frozenset(('exec', 'run'))
 _FORBIDDEN_MERGE_TASK_PROPERTIES = frozenset((
@@ -620,6 +623,21 @@ def get_valid_publishers():
     :return: publisher set
     """
     return _VALID_PUBLISHERS
+
+
+def check_for_container_capability(image):
+    # type: (batchmodels.Image) -> bool
+    """Check for container capability for publisher
+    :param batchmodels.Image: image to check
+    :rtype: bool
+    :return: image has container capability or isn't in cap check set
+    """
+    if (image.image_reference.publisher.lower() not in
+            _VALID_PUBLISHERS_CHECK_CAPABILITIES):
+        return True
+    if image.capabilities is None:
+        return False
+    return 'DockerCompatible' in image.capabilities
 
 
 def get_tensorboard_docker_image():
