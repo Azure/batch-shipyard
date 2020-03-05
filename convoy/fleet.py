@@ -69,7 +69,7 @@ _REQUEST_CHUNK_SIZE = 4194304
 _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent
 _RESOURCES_PATH = None
 _NVIDIA_DRIVER = {
-    'compute_cc37': {
+    'compute': {
         'url': (
             'http://us.download.nvidia.com/tesla/'
             '418.87/NVIDIA-Linux-x86_64-418.87.01.run'
@@ -77,19 +77,9 @@ _NVIDIA_DRIVER = {
         'sha256': (
             'fe6dcba384d67e906fad3cdc707fb6b0993cf190fc694660b70224d49a69144f'
         ),
-        'target': 'nvidia-driver_cc37.run'
+        'target': 'nvidia-driver-compute.run'
     },
-    'compute_cc6-7': {
-        'url': (
-            'http://us.download.nvidia.com/tesla/'
-            '418.87/NVIDIA-Linux-x86_64-418.87.01.run'
-        ),
-        'sha256': (
-            'fe6dcba384d67e906fad3cdc707fb6b0993cf190fc694660b70224d49a69144f'
-        ),
-        'target': 'nvidia-driver_cc6-7.run'
-    },
-    'viz_cc52': {
+    'viz': {
         # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (

@@ -56,34 +56,29 @@ _TENSORBOARD_DOCKER_IMAGE = (
     '/usr/local/lib/python2.7/dist-packages/tensorboard/main.py',
     6006
 )
-_GPU_CC37_INSTANCES = re.compile(
-    # standard nc
-    r'^standard_nc[\d]+r?(_promo)?$',
-    re.IGNORECASE
-)
 _GPU_COMPUTE_INSTANCES = re.compile(
     # standard nc, ncv2, ncv3, nd, ndv2
     r'^standard_n[cd][\d]+r?s?(_v[\d])?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_VISUALIZATION_INSTANCES = re.compile(
-    # standard nv, nvv2
-    r'^standard_nv[\d]+s?(_v2)?(_promo)?$',
+    # standard nv, nvv3
+    r'^standard_nv[\d]+s?(_v3)?(_promo)?$',
     re.IGNORECASE
 )
 _SRIOV_RDMA_INSTANCES = re.compile(
-    # standard hb/hc
-    r'^standard_((hb|hc)[\d]+m?rs?(_v[\d])?)$',
+    # standard hb/hc, nc+r_v3, ndv2
+    r'^standard_(((hb|hc)[\d]+m?rs?(_v[\d])?)|(nc[\d]+rs_v3)|(nd[\d]+rs_v2))$',
     re.IGNORECASE
 )
 _SRIOV_RDMA_TRANSITION_INSTANCES = re.compile(
-    # standard nc+r_v3
-    r'^standard_(nc[\d]+rs_v3)$',
+    # standard nc+r_v2
+    r'^standard_(nc[\d]+rs_v2)$',
     re.IGNORECASE
 )
 _NETWORKDIRECT_RDMA_INSTANCES = re.compile(
     # standard a8/a9, h+r, nc+r, nd+r
-    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?(_v[1-3])?))(_promo)?$',
+    r'^standard_((a8|a9)|((h|nc|nd)[\d]+m?rs?))(_promo)?$',
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
@@ -772,12 +767,9 @@ def get_gpu_type_from_vm_size(vm_size):
     :return: type of gpu and compute capability
     """
     if is_gpu_compute_pool(vm_size):
-        if _GPU_CC37_INSTANCES.match(vm_size):
-            return 'compute_cc37'
-        else:
-            return 'compute_cc6-7'
+        return 'compute'
     elif is_gpu_visualization_pool(vm_size):
-        return 'viz_cc52'
+        return 'viz'
     else:
         return None
 

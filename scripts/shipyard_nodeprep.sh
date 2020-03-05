@@ -383,13 +383,13 @@ get_vm_size_from_imds() {
     fi
     curl -fSsL -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
     vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
-    if [[ "$vm_size" =~ ^standard_((hb|hc)[0-9]+m?rs?(_v[1-9])?)$ ]]; then
+    if [[ "$vm_size" =~ ^standard_(((hb|hc)[0-9]+m?rs?(_v[1-9])?)|(nc[0-9]+rs_v3)|(nd[0-9]+rs_v2))$ ]]; then
         # SR-IOV RDMA
         vm_rdma_type=1
-    elif [[ "$vm_size" =~ ^standard_(nc[0-9]+rs_v3)$ ]]; then
+    elif [[ "$vm_size" =~ ^standard_(nc[0-9]+rs_v2)$ ]]; then
         # SR-IOV RDMA (transition)
         vm_rdma_type=1
-    elif [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)[0-9]+m?rs?(_v[1-3])?))$ ]]; then
+    elif [[ "$vm_size" =~ ^standard_((a8|a9)|((h|nc|nd)[0-9]+m?rs?))$ ]]; then
         # network direct RDMA
         vm_rdma_type=2
     fi
