@@ -5250,7 +5250,7 @@ def add_jobs(
             # catalog multi instance tasks for cleanup
             if settings.is_multi_instance_task(task):
                 has_multi_instance = True
-                if not native:
+                if not native and util.is_not_empty(di):
                     mi_docker_container_names.add(
                         util.normalize_docker_image_name_for_job(job_id, di))
             del di
