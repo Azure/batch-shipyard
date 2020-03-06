@@ -960,7 +960,9 @@ docker_pull_image_fallback() {
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
         local tht
         tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
-        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]]; then
+        local rcc
+        rcc=$(grep -i 'request canceled while waiting for connection' <<<"$pull_out")
+        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]] || [[ -n "$rcc" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
@@ -1011,7 +1013,9 @@ docker_pull_image() {
         uhs=$(grep -i 'received unexpected HTTP status' <<<"$pull_out")
         local tht
         tht=$(grep -i 'TLS handshake timeout' <<<"$pull_out")
-        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]]; then
+        local rcc
+        rcc=$(grep -i 'request canceled while waiting for connection' <<<"$pull_out")
+        if [[ -n "$tmr" ]] || [[ -n "$crbp" ]] || [[ -n "$epic" ]] || [[ -n "$erb" ]] || [[ -n "$uhs" ]] || [[ -n "$tht" ]] || [[ -n "$rcc" ]]; then
             log WARNING "will retry: $pull_out"
         else
             log ERROR "$pull_out"
