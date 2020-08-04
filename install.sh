@@ -133,6 +133,7 @@ else
         . /etc/os-release
         DISTRIB_ID=$ID
         DISTRIB_RELEASE=$VERSION_ID
+        DISTRIB_LIKE=$ID_LIKE
     fi
     # check for OS X
     if [ -z "${DISTRIB_ID+x}" ] && [ "$(uname)" == "Darwin" ]; then
@@ -157,7 +158,7 @@ echo "Detected OS: $DISTRIB_ID $DISTRIB_RELEASE"
 
 # install requisite packages from distro repo
 if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
-    if [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "debian" ]; then
+    if [ "$DISTRIB_LIKE" == "debian" ]; then
         $SUDO apt-get update
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
