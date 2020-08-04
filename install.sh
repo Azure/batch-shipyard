@@ -158,7 +158,7 @@ echo "Detected OS: $DISTRIB_ID $DISTRIB_RELEASE"
 
 # install requisite packages from distro repo
 if [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ]; then
-    if [ "$DISTRIB_LIKE" == "debian" ]; then
+    if [ "$DISTRIB_ID" == "debian" || "$DISTRIB_LIKE" == "debian" ]; then
         $SUDO apt-get update
         if [ $ANACONDA -eq 1 ]; then
             PYTHON_PKGS=
