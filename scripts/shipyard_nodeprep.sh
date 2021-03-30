@@ -382,7 +382,11 @@ get_vm_size_from_imds() {
         return
     fi
     curl -fSsL -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
-    vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
+    if command -v python3 > /dev/null 2>&1; then
+        vm_size=$(python3 -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize'].lower())")
+    else
+        vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize'].lower())")
+    fi
     if [[ "$vm_size" =~ ^standard_(((hb|hc)[0-9]+m?rs?(_v[1-9])?)|(nc[0-9]+rs_v3)|(nd[0-9]+rs_v2))$ ]]; then
         # SR-IOV RDMA
         vm_rdma_type=1
