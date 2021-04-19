@@ -1,0 +1,10 @@
+name: $(SourceBranch)$(Rev:.r)
+
+jobs:
+  - job: Replicate Singularity Images
+    pool:
+      vmImage: ubuntu-20.04
+    steps:
+      - template: replicate-singularity.yml
+        parameters:
+          enabled: True

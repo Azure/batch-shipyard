@@ -16,7 +16,6 @@ WORKDIR C:\\batch-shipyard
 RUN git clone -b $Env:GIT_BRANCH --single-branch https://github.com/Azure/batch-shipyard.git C:\batch-shipyard ; \
     git checkout $Env:GIT_COMMIT ; \
     pip install --no-cache-dir -r requirements.txt ; \
-    pip install --no-cache-dir --no-deps -r req_nodeps.txt ; \
     Remove-Item .git -Force -Recurse ; \
     Remove-Item .git* -Force -Recurse ; \
     Remove-Item .vsts -Force -Recurse ; \

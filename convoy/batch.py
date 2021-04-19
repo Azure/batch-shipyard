@@ -22,13 +22,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import codecs
 import collections
@@ -40,10 +33,7 @@ import json
 import logging
 import multiprocessing
 import os
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
+import pathlib
 import ssl
 import sys
 import time
@@ -3121,10 +3111,7 @@ def get_remote_login_settings(
                     pool_id, node.id)
             for node_id in futures:
                 ret[node_id] = futures[node_id].result()
-        if util.on_python2():
-            ret = collections.OrderedDict(sorted(ret.iteritems()))
-        else:
-            ret = collections.OrderedDict(sorted(ret.items()))
+        ret = collections.OrderedDict(sorted(ret.items()))
         if not suppress_output:
             for node_id in ret:
                 logger.info('node {}: ip {} port {}'.format(

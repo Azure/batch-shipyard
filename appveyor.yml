@@ -8,13 +8,20 @@ cache:
 environment:
   matrix:
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-    PYTHON: "C:\\Python35-x64"
-    PYTHON_VERSION: "3.5"
-    PYTHON_ARCH: "64"
-  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
     PYTHON: "C:\\Python36-x64"
     PYTHON_VERSION: "3.6"
     PYTHON_ARCH: "64"
+    TOX_ENV: "py36"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    PYTHON: "C:\\Python37-x64"
+    PYTHON_VERSION: "3.7"
+    PYTHON_ARCH: "64"
+    TOX_ENV: "py37"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    PYTHON: "C:\\Python38-x64"
+    PYTHON_VERSION: "3.8"
+    PYTHON_ARCH: "64"
+    TOX_ENV: "py38"
 
 init:
 - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
@@ -24,14 +31,13 @@ install:
 - where pip
 - pip install --upgrade setuptools wheel
 - pip install -r requirements.txt
-- pip install --no-deps -r req_nodeps.txt
-- pip install flake8==3.6.0
+- pip install flake8
 - pip list --format=columns --outdated
 
 build: off
 
 test_script:
-- flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy\\*.py
-- IF "%PYTHON_VERSION%" GEQ "3.5" (
-  flake8 --select F,E,W --ignore W504 --statistics cascade\\*.py cargo\\*.py federation\\*.py heimdall\\*.py slurm\\*.py
+- flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy\\*.py
+- IF "%PYTHON_VERSION%" GEQ "3.8" (
+  flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade\\*.py cargo\\*.py federation\\*.py heimdall\\*.py slurm\\*.py
   )

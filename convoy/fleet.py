@@ -22,21 +22,11 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import concurrent.futures
 import logging
 import os
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
+import pathlib
 import requests
 import sys
 import tempfile

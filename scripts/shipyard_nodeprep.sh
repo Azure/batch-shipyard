@@ -1738,6 +1738,7 @@ run_cascade() {
     if [ $cascadecontainer -ne 0 ]; then d="-d"; else d=""; fi
     log_directory=$(pwd)
     set +e
+    # shellcheck disable=SC2086
     "${AZ_BATCH_TASK_WORKING_DIR}"/shipyard_cascade.sh \
         -b "$block" \
         -c "$concurrent_source_downloads" \

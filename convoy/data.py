@@ -22,27 +22,14 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import datetime
 import fnmatch
 import logging
 import math
 import os
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
-try:
-    from shlex import quote as shellquote
-except ImportError:
-    from pipes import quote as shellquote
+import pathlib
+from shlex import quote as shellquote
 import threading
 import time
 # non-stdlib imports
@@ -59,7 +46,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_BLOBXFER_VERSION = '1.9.4'
+_BLOBXFER_VERSION = '1.10.0'
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'

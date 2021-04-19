@@ -1,0 +1,33 @@
+parameters:
+  enabled: false
+  folder: ./bin
+  pattern: '*.nupkg'
+
+steps:
+  - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+    displayName: "Code Sign - Nuget Packages"
+    condition: ${{ parameters.enabled }}
+    inputs:
+      ConnectedServiceName: 'ESRP CodeSign'
+      FolderPath: ${{ parameters.folder }}
+      Pattern: ${{ parameters.pattern }}
+      UseMinimatch: false
+      signConfigType: inlineSignParams
+      inlineOperation: |
+        [
+          {
+            "KeyCode" : "CP-401405",
+            "OperationCode" : "NuGetSign",
+            "Parameters" : {},
+            "ToolName" : "sign",
+            "ToolVersion" : "1.0"
+          },
+          {
+            "KeyCode" : "CP-401405",
+            "OperationCode" : "NuGetVerify",
+            "Parameters" : {},
+            "ToolName" : "sign",
+            "ToolVersion" : "1.0"
+          }
+        ]
+      SessionTimeout: 60

@@ -22,19 +22,9 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import logging
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
+import pathlib
 import os
 import time
 import uuid
@@ -52,7 +42,7 @@ logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 
 # global defines
-_SINGULARITY_VERSION = '3.5.0'
+_SINGULARITY_VERSION = '3.7.3'
 _TENSORBOARD_LOG_ARGS = frozenset((
     '--tensorboard_logdir', '-tensorboard_logdir', '--logdir', '--log_dir',
     '--log-dir',
