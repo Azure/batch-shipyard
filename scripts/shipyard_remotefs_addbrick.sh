@@ -115,14 +115,14 @@ gluster_add_bricks() {
         gluster volume add-brick $gluster_volname ${volarg} ${bricks}
     fi
     # get info and status
-    gluster volume info $gluster_volname
-    gluster volume status $gluster_volname detail
+    gluster volume info "$gluster_volname"
+    gluster volume status "$gluster_volname" detail
     # rebalance
     echo "Rebalancing gluster volume $gluster_volname"
     set +e
-    if gluster volume rebalance $gluster_volname start; then
+    if gluster volume rebalance "$gluster_volname" start; then
         sleep 5
-        gluster volume rebalance $gluster_volname status
+        gluster volume rebalance "$gluster_volname" status
     fi
     set -e
 }

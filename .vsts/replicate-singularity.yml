@@ -1,0 +1,38 @@
+parameters:
+  enabled: false
+
+steps:
+  - script: |
+      set -e
+      set -o pipefail
+      docker version
+      docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
+      export DOCKER_CLI_EXPERIMENTAL=enabled
+      singularity_version=$(grep -m1 _SINGULARITY_VERSION convoy/misc.py | cut -d "'" -f 2)
+      echo "Replicating Singularity version $singularity_version images to MCR"
+      chkImage=mcr.microsoft.com/azure-batch/shipyard:${singularity_version}-singularity-mnt
+      set +e
+      if docker manifest inspect "$chkImage"; then
+        echo "$chkImage exists, skipping replication"
+      else
+        set -e
+        dhImage="alfpark/singularity:${singularity_version}-mnt"
+        mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt"
+        docker pull "$dhImage"
+        docker tag "$dhImage" "$mcrImage"
+        docker push "$mcrImage"
+      fi
+      chkImage=mcr.microsoft.com/azure-batch/shipyard:${singularity_version}-singularity-mnt-resource
+      set +e
+      if docker manifest inspect "$chkImage"; then
+        echo "$chkImage exists, skipping replication"
+      else
+        set -e
+        dhImage="alfpark/singularity:${singularity_version}-mnt-resource"
+        mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt-resource"
+        docker pull "$dhImage"
+        docker tag "$dhImage" "$mcrImage"
+        docker push "$mcrImage"
+      fi
+    displayName: Replicate Singularity Container Images
+    condition: ${{ parameters.enabled }}

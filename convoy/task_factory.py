@@ -22,13 +22,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import collections
 import copy
@@ -38,10 +31,7 @@ import functools
 import importlib
 import itertools
 import random
-try:
-    from urllib.parse import quote as urlquote
-except ImportError:  # pramga: no cover
-    from urllib import quote as urlquote
+from urllib.parse import quote as urlquote
 # non-stdlib imports
 import azure.storage.blob as azureblob
 import azure.storage.file as azurefile

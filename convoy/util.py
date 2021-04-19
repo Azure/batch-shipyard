@@ -22,13 +22,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import base64
 import copy
@@ -38,40 +31,17 @@ import json
 import logging
 import logging.handlers
 import os
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
+import pathlib
 import platform
 import socket
 import struct
 import subprocess
-try:
-    from os import scandir as scandir
-except ImportError:
-    from scandir import scandir as scandir
-import sys
 import time
-# function remaps
-try:
-    raw_input
-except NameError:
-    raw_input = input
 
 
 # global defines
-_PY2 = sys.version_info.major == 2
 _ON_WINDOWS = platform.system() == 'Windows'
 _REGISTERED_LOGGER_HANDLERS = []
-
-
-def on_python2():
-    # type: (None) -> bool
-    """Execution on python2
-    :rtype: bool
-    :return: if on Python2
-    """
-    return _PY2
 
 
 def on_windows():
@@ -175,7 +145,7 @@ def get_input(prompt):
     :rtype: str
     :return: user input
     """
-    return raw_input(prompt)
+    return input(prompt)
 
 
 def confirm_action(config, msg=None, allow_auto=True):
@@ -280,7 +250,7 @@ def scantree(path):
     :rtype: DirEntry
     :return: DirEntry via generator
     """
-    for entry in scandir(path):
+    for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=True):
             # due to python2 compat, cannot use yield from here
             for t in scantree(entry.path):
@@ -400,10 +370,7 @@ def base64_encode_string(string):
     :rtype: str
     :return: base64-encoded string
     """
-    if on_python2():
-        return base64.b64encode(string)
-    else:
-        return str(base64.b64encode(string), 'ascii')
+    return str(base64.b64encode(string), 'ascii')
 
 
 def base64_decode_string(string):

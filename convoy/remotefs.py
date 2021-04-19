@@ -22,22 +22,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# compat imports
-from __future__ import (
-    absolute_import, division, print_function
-)
-from builtins import (  # noqa
-    bytes, dict, int, list, object, range, str, ascii, chr, hex, input,
-    next, oct, open, pow, round, super, filter, map, zip)
 # stdlib imports
 import functools
 import json
 import logging
 import os
-try:
-    import pathlib2 as pathlib
-except ImportError:
-    import pathlib
+import pathlib
 # non-stdlib imports
 import azure.mgmt.compute.models as computemodels
 import msrestazure.azure_exceptions
@@ -1120,13 +1110,9 @@ def resize_storage_cluster(
     stdout, stderr = proc.communicate()
     logline = 'add brick script completed with ec={}'.format(proc.returncode)
     if util.is_not_empty(stdout):
-        if util.on_python2():
-            stdout = stdout.decode('utf8')
         if util.on_windows():
             stdout = stdout.replace('\n', os.linesep)
     if util.is_not_empty(stderr):
-        if util.on_python2():
-            stderr = stderr.decode('utf8')
         if util.on_windows():
             stderr = stderr.replace('\n', os.linesep)
     if proc.returncode != 0:
@@ -1351,13 +1337,9 @@ def expand_storage_cluster(
             command=['sudo', script_cmd])
         stdout, stderr = proc.communicate()
         if util.is_not_empty(stdout):
-            if util.on_python2():
-                stdout = stdout.decode('utf8')
             if util.on_windows():
                 stdout = stdout.replace('\n', os.linesep)
         if util.is_not_empty(stderr):
-            if util.on_python2():
-                stderr = stderr.decode('utf8')
             if util.on_windows():
                 stderr = stderr.replace('\n', os.linesep)
         vms[offset]['status'] = proc.returncode
@@ -1891,13 +1873,9 @@ def stat_storage_cluster(
                 command=['sudo', script_cmd])
             stdout = proc.communicate()[0]
             if util.is_not_empty(stdout):
-                if util.on_python2():
-                    stdout = stdout.decode('utf8')
                 if util.on_windows():
                     stdout = stdout.replace('\n', os.linesep)
             fsstatfmt = '>> File Server Status for {} ec={}:{}{}'
-            if util.on_python2():
-                fsstatfmt = unicode(fsstatfmt)  # noqa
             fsstatus.append(
                 fsstatfmt.format(vm.name, proc.returncode, os.linesep, stdout))
         vmstatus[vm.name] = {

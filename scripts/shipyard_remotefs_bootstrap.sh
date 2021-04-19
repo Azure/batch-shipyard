@@ -283,7 +283,7 @@ setup_glusterfs() {
             echo "$myhostname:/$gluster_volname $mountpath glusterfs defaults,_netdev,noauto,x-systemd.automount,fetch-attempts=10 0 2" >> /etc/fstab
         fi
         # create mountpath
-        mkdir -p $mountpath
+        mkdir -p "$mountpath"
         # mount it
         echo "Mounting gluster volume $gluster_volname locally to $mountpath"
         local START

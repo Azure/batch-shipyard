@@ -1,5 +1,12 @@
 name: $(SourceBranch)$(Rev:.r)
 
+variables:
+  VENV_VERSION: '20.4.3'
+  PY36_VER: '3.6.13'
+  PY37_VER: '3.7.10'
+  PY38_VER: '3.8.9'
+  PY39_VER: '3.9.4'
+
 jobs:
   - job: ComponentGovernance
     pool:
@@ -11,16 +18,17 @@ jobs:
     steps:
       - task: ComponentGovernanceComponentDetection@0
         displayName: 'CG Component Detection'
+
   - job: Windows
     pool:
       vmImage: vs2017-win2016
     strategy:
-      maxParallel: 1
+      maxParallel: 0
       matrix:
-        Python37:
-          python.version: '3.7'
-          PYENV_VERSION: '3.7.5'
-          VENV_VERSION: '16.2.0'
+        Python39:
+          python.version: '3.9'
+          PYENV_VERSION: $(PY39_VER)
+          PYTOX_ENV: 'py39'
     steps:
       - task: InstallPython@1
         inputs:
@@ -30,14 +38,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
           python -m pip install -r requirements.txt
-          python -m pip install --no-deps -r req_nodeps.txt
-          python -m pip install flake8==3.6.0
+          python -m pip install flake8
           python -m pip list --format=columns --outdated
         displayName: Fetch Dependencies
       - powershell: |
-          flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy\*.py
-          if ($env:PYTHON_VERSION -eq "3.7") {
-            flake8 --select F,E,W --ignore W504 --statistics cascade\*.py cargo\*.py federation\*.py heimdall\*.py slurm\*.py
+          flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy\*.py
+          if ($env:PYTHON_VERSION -eq $env:PY39_VER) {
+            flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade\*.py cargo\*.py federation\*.py heimdall\*.py slurm\*.py
           }
         displayName: Static Analysis
       - powershell: |
@@ -50,10 +57,12 @@ jobs:
           echo "##vso[task.setvariable variable=BUILDVER_TUPLE;]$buildverTuple"
           echo "##vso[task.setvariable variable=ARTIFACT_CLI;]$artifactCli"
           echo "##vso[task.setvariable variable=ARTIFACT_UPLOAD_PATH;]$artifactUploadPath"
+          $nugetPkgVer = "0.0." + $env:BUILD_BUILDID
+          echo "##vso[task.setvariable variable=NUGET_PACKAGE_VERSION;]$nugetPkgVer"
         displayName: Pre-build Environment (Branch)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.7'))
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.9'))
       - powershell: |
           git tag -l --points-at $env:BUILD_SOURCEVERSION | Tee-Object -Variable gitTag
           $gitTag -match "^([\d\.])+"
@@ -77,7 +86,7 @@ jobs:
         displayName: Pre-build Environment (Tagged Release)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.7'))
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.9'))
       - powershell: |
           $artifactCliPath = "bin\\" + $env:ARTIFACT_CLI
           echo "##vso[task.setvariable variable=ARTIFACT_CLI_PATH;]$artifactCliPath"
@@ -105,18 +114,25 @@ jobs:
           pip -V
           pip install --no-cache-dir pyinstaller
           pip install --upgrade -r requirements.txt
-          pip install --upgrade --no-deps -r req_nodeps.txt
           pyinstaller -F -n "%ARTIFACT_CLI%" -p batch-shipyard --add-data federation\\docker-compose.yml;federation --add-data heimdall;heimdall --add-data schemas;schemas --add-data scripts;scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --icon images\\docker\\windows\\azure.ico --version-file images\\docker\\windows\\file_version_info.txt --distpath bin shipyard.py
-          blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%ARTIFACT_CLI_PATH%" --strip-components 1 --file-md5 --overwrite
           call pyi\\Scripts\\deactivate.bat
         displayName: Build
-        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI_PATH'], ''))
+      - template: ./sign-exec.yml
+        parameters:
+          enabled: ne(variables['ARTIFACT_CLI_PATH'], '')
+      - script: |
+          blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%ARTIFACT_CLI_PATH%" --strip-components 1 --file-md5 --overwrite
+        displayName: CLI Artifact Upload
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI_PATH'], ''))
       - powershell: |
           Invoke-WebRequest "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile "nuget.exe"
           $env:GIT_TAG | Out-File site-extension\\version.txt -Force -NoNewline -Encoding ASCII
           Get-Content -Path site-extension\\version.txt
           $nugetArtifact = 'BatchShipyard.' + $env:NUGET_PACKAGE_VERSION + '.nupkg'
+          $nugetArtifactPath = "bin\\" + $nugetArtifact
           echo "##vso[task.setvariable variable=NUGET_ARTIFACT;]$nugetArtifact"
+          echo "##vso[task.setvariable variable=NUGET_ARTIFACT_PATH;]$nugetArtifactPath"
           .\\nuget.exe pack site-extension\\BatchShipyard.nuspec -Version $env:NUGET_PACKAGE_VERSION
           [Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem')
           $zip = [IO.Compression.ZipFile]::OpenRead($nugetArtifact)
@@ -124,10 +140,17 @@ jobs:
             [string]::Format("{0}: {1} -> {2}", $entry.FullName, $entry.Length, $entry.CompressedLength)
           }
           $zip.Dispose()
-          move $nugetArtifact bin\\$nugetArtifact
+          move $nugetArtifact $nugetArtifactPath
           dir bin
         displayName: Nuget Pack
         condition: and(succeeded(), ne(variables['NUGET_PACKAGE_VERSION'], ''))
+      - template: ./sign-nuget.yml
+        parameters:
+          enabled: ne(variables['NUGET_ARTIFACT_PATH'], '')
+      - script: |
+          blobxfer upload --storage-account "$(blobxfer.storageAccount)" --storage-account-key "$(blobxfer.storageAccountKey)" --remote-path "%ARTIFACT_UPLOAD_PATH%" --local-path "%NUGET_ARTIFACT_PATH%" --strip-components 1 --file-md5 --overwrite
+        displayName: Nuget Artifact Upload
+        condition: and(succeeded(), ne(variables['NUGET_ARTIFACT_PATH'], ''))
       - powershell: |
           $versionTag = "bin\\version_tag.txt"
           $env:GIT_TAG | Out-File $versionTag -Force -NoNewline -Encoding ASCII
@@ -140,7 +163,7 @@ jobs:
         inputs:
           pathtoPublish: bin
           artifactName: BatchShipyard-Windows
-        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+        condition: and(succeeded(), ne(variables['ARTIFACT_CLI_PATH'], ''))
       - powershell: |
           docker version
           docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
@@ -156,17 +179,30 @@ jobs:
           popd
         displayName: Docker build
         condition: and(succeeded(), ne(variables['DOCKER_TAG'], ''))
+        enabled: false
 
   - job: Linux
     pool:
-      vmImage: ubuntu-16.04
+      vmImage: ubuntu-20.04
     strategy:
-      maxParallel: 1
+      maxParallel: 0
       matrix:
+        Python36:
+          python.version: '3.6'
+          PYENV_VERSION: $(PY36_VER)
+          PYTOX_ENV: 'py36'
         Python37:
           python.version: '3.7'
-          PYENV_VERSION: '3.7.5'
-          VENV_VERSION: '16.2.0'
+          PYENV_VERSION: $(PY37_VER)
+          PYTOX_ENV: 'py37'
+        Python38:
+          python.version: '3.8'
+          PYENV_VERSION: $(PY38_VER)
+          PYTOX_ENV: 'py38'
+        Python39:
+          python.version: '3.9'
+          PYENV_VERSION: $(PY39_VER)
+          PYTOX_ENV: 'py39'
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -176,19 +212,12 @@ jobs:
           set -e
           set -o pipefail
           env
-          curl -fSsL "https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz" | tar -xJvp -C /tmp/
+          curl -fSsL "https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz" | tar -xJvp -C /tmp/
           echo "##vso[task.prependpath]/tmp/shellcheck-stable"
-          if [[ "$PYENV_VERSION" == 3.* ]]; then
-            which python3
-            python3 --version
-            echo "##vso[task.setvariable variable=PYTHON;]python3"
-            echo "##vso[task.setvariable variable=PIP;]pip3"
-          else
-            which python
-            python --version
-            echo "##vso[task.setvariable variable=PYTHON;]python"
-            echo "##vso[task.setvariable variable=PIP;]pip"
-          fi
+          which python3
+          python3 --version
+          echo "##vso[task.setvariable variable=PYTHON;]python3"
+          echo "##vso[task.setvariable variable=PIP;]pip3"
         displayName: Initialize Build
       - script: |
           set -e
@@ -199,16 +228,15 @@ jobs:
           $PYTHON -m pip install --upgrade pip
           $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
-          $PIP install --no-deps -r req_nodeps.txt
-          $PIP install flake8==3.6.0
+          $PIP install flake8
           $PIP list --format=columns --outdated
         displayName: Fetch Dependencies
       - script: |
           set -e
           set -o pipefail
-          flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
-          if [[ "$PYENV_VERSION" == 3.7* ]]; then
-            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
+          flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
+          if [[ "$PYENV_VERSION" == "$PY39_VER" ]]; then
+            flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
           fi
           shellcheck ./*.sh cargo/*.sh cascade/*.sh images/*.sh scripts/*.sh
         displayName: Static Analysis
@@ -228,7 +256,7 @@ jobs:
         displayName: Pre-build Environment (Branch)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.7'))
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.9'))
       - script: |
           GIT_TAG=$(git tag -l --points-at $BUILD_SOURCEVERSION)
           ARTIFACT_CLI="batch-shipyard-${GIT_TAG}-cli-linux-x86_64"
@@ -240,41 +268,10 @@ jobs:
         displayName: Pre-build Environment (Tagged Release)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.7'))
-      - script: |
-          set -e
-          set -o pipefail
-          docker version
-          docker login "$(docker.servername)" -u="$(docker.username)" -p="$(docker.password)"
-          export DOCKER_CLI_EXPERIMENTAL=enabled
-          singularity_version=$(grep -m1 _SINGULARITY_VERSION convoy/misc.py | cut -d "'" -f 2)
-          echo "Replicating Singularity version $singularity_version images to MCR"
-          chkImage=mcr.microsoft.com/azure-batch/shipyard:${singularity_version}-singularity-mnt
-          set +e
-          if docker manifest inspect "$chkImage"; then
-            echo "$chkImage exists, skipping replication"
-          else
-            set -e
-            dhImage="alfpark/singularity:${singularity_version}-mnt"
-            mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt"
-            docker pull "$dhImage"
-            docker tag "$dhImage" "$mcrImage"
-            docker push "$mcrImage"
-          fi
-          chkImage=mcr.microsoft.com/azure-batch/shipyard:${singularity_version}-singularity-mnt-resource
-          set +e
-          if docker manifest inspect "$chkImage"; then
-            echo "$chkImage exists, skipping replication"
-          else
-            set -e
-            dhImage="alfpark/singularity:${singularity_version}-mnt-resource"
-            mcrImage="$(docker.servername)/public/azure-batch/shipyard:${singularity_version}-singularity-mnt-resource"
-            docker pull "$dhImage"
-            docker tag "$dhImage" "$mcrImage"
-            docker push "$mcrImage"
-          fi
-        displayName: Replicate Singularity Container Images
-        condition: and(succeeded(), ne(variables['ARTIFACT_CLI'], ''))
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.9'))
+      - template: replicate-singularity.yml
+        parameters:
+          enabled: ne(variables['ARTIFACT_CLI'], '')
       - template: ./pyenv.yml
       - script: |
           set -e
@@ -291,7 +288,6 @@ jobs:
           "set -e; source pyi/bin/activate; \
            pip install pyinstaller; \
            pip install --upgrade -r requirements.txt; \
-           pip install --upgrade --no-deps -r req_nodeps.txt; \
            pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data federation/docker-compose.yml:federation --add-data heimdall:heimdall --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
            deactivate"
           chmod +x ${ARTIFACT_CLI_PATH}
@@ -349,17 +345,19 @@ jobs:
           popd
         displayName: Docker Build
         condition: and(succeeded(), ne(variables['DOCKER_TAG'], ''))
+        enabled: false
 
   - job: MacOS
+    condition: false
     pool:
-      vmImage: macOS-10.13
+      vmImage: macOS-10.15
     strategy:
-      maxParallel: 1
+      maxParallel: 0
       matrix:
-        Python37:
-          python.version: '3.7'
-          PYENV_VERSION: '3.7.5'
-          VENV_VERSION: '16.2.0'
+        Python39:
+          python.version: '3.9'
+          PYENV_VERSION: $(PY39_VER)
+          PYTOX_ENV: 'py39'
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -369,17 +367,10 @@ jobs:
           set -e
           set -o pipefail
           env
-          if [[ "$PYENV_VERSION" == 3.* ]]; then
-            which python3
-            python3 --version
-            echo "##vso[task.setvariable variable=PYTHON;]python3"
-            echo "##vso[task.setvariable variable=PIP;]pip3"
-          else
-            which python
-            python --version
-            echo "##vso[task.setvariable variable=PYTHON;]python"
-            echo "##vso[task.setvariable variable=PIP;]pip"
-          fi
+          which python3
+          python3 --version
+          echo "##vso[task.setvariable variable=PYTHON;]python3"
+          echo "##vso[task.setvariable variable=PIP;]pip3"
         displayName: Initialize Build
       - script: |
           set -e
@@ -389,16 +380,15 @@ jobs:
           $PYTHON -m pip install --upgrade pip
           $PIP install --upgrade setuptools wheel
           $PIP install -r requirements.txt
-          $PIP install --no-deps -r req_nodeps.txt
-          $PIP install flake8==3.6.0
+          $PIP install flake8
           $PIP list --format=columns --outdated
         displayName: Fetch Dependencies
       - script: |
           set -e
           set -o pipefail
-          flake8 --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
-          if [[ "$PYENV_VERSION" == 3.7* ]]; then
-            flake8 --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
+          flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy/*.py
+          if [[ "$PYENV_VERSION" == "$PY39_VER" ]]; then
+            flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade/*.py cargo/*.py federation/*.py heimdall/*.py slurm/*.py
           fi
         displayName: Static Analysis
       - script: |
@@ -412,7 +402,7 @@ jobs:
         displayName: Pre-build Environment (Branch)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.7'))
+          in(variables['Build.SourceBranchName'], 'master', 'develop'), eq(variables['python.version'], '3.9'))
       - script: |
           GIT_TAG=$(git tag -l --points-at $BUILD_SOURCEVERSION)
           ARTIFACT_CLI="batch-shipyard-${GIT_TAG}-cli-mac-x86_64"
@@ -423,7 +413,7 @@ jobs:
         displayName: Pre-build Environment (Tagged Release)
         condition: >
           and(succeeded(), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'),
-          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.7'))
+          startsWith(variables['Build.SourceBranch'], 'refs/tags/'), eq(variables['python.version'], '3.9'))
       - template: ./pyenv.yml
       - script: |
           set -e
@@ -440,7 +430,6 @@ jobs:
           "set -e; source pyi/bin/activate; \
            pip install pyinstaller; \
            pip install --upgrade -r requirements.txt; \
-           pip install --upgrade --no-deps -r req_nodeps.txt; \
            pyinstaller -F -n ${ARTIFACT_CLI} -p batch-shipyard --add-data federation/docker-compose.yml:federation --add-data heimdall:heimdall --add-data schemas:schemas --add-data scripts:scripts --exclude-module future.tests --exclude-module future.backports.test --exclude-module future.moves.test --distpath bin shipyard.py; \
            deactivate"
           chmod +x ${ARTIFACT_CLI_PATH}
