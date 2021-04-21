@@ -82,12 +82,6 @@ if ($a) {
 	.\azurefile-mount.cmd
 }
 
-if (Test-Path $NodePrepFinished -pathType Leaf)
-{
-	Write-Host "$NodePrepFinished file exists, assuming successful completion of node prep"
-	exit 0
-}
-
 # download blobxfer binary
 $bxurl = "https://github.com/Azure/blobxfer/releases/download/${x}/blobxfer-${x}-win-amd64.exe"
 $bxoutf = Join-Path $Env:AZ_BATCH_TASK_WORKING_DIR -ChildPath "blobxfer.exe"
@@ -96,6 +90,13 @@ Invoke-WebRequest -Uri $bxurl -OutFile $bxoutf
 if (!$?)
 {
 	throw "Download from $bxurl to $bxoutf failed"
+}
+
+# check if this script was run successfully prior
+if (Test-Path $NodePrepFinished -pathType Leaf)
+{
+	Write-Host "$NodePrepFinished file exists, assuming successful completion of node prep"
+	exit 0
 }
 
 # pull required images
