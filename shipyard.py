@@ -1953,7 +1953,7 @@ def jobs(ctx):
 @jobs.command('add')
 @click.option(
     '--recreate', is_flag=True,
-    help='Recreate any completed jobs with the same id')
+    help='Recreate any completed job or job schedules with the same id')
 @click.option(
     '--tail',
     help='Tails the specified file of the last job and task added')
