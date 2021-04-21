@@ -2,7 +2,9 @@ job_specifications:
 - id: openfoamjob
   auto_complete: true
   shm_size: 256m
-  auto_scratch: true
+  auto_scratch:
+    setup: dependency
+    num_instances: pool_current_dedicated
   tasks:
   - docker_image: alfpark/openfoam:4.0-icc-intelmpi
     resource_files:
@@ -12,7 +14,7 @@ job_specifications:
       num_instances: pool_current_dedicated
       pre_execution_command: source set_up_sample.sh
       mpi:
-        runtime: intelmpi
+        runtime: intelmpi-ofa
         options:
           - -np $np
           - -ppn $ppn
