@@ -305,8 +305,9 @@ install_docker_host_engine() {
     docker info
     log INFO "Docker Host Engine installed"
     # install docker-compose
-    install_packages python3-pip python3-distutils apache2-utils
-    pip3 install --upgrade setuptools wheel
+    install_packages rustc cargo build-essential libssl-dev libffi-dev \
+        python3-dev python3-pip python3-distutils apache2-utils
+    pip3 install --upgrade setuptools setuptools-rust wheel
     pip3 install docker-compose
     log INFO "Docker-compose installed"
 }
