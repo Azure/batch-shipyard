@@ -5567,6 +5567,9 @@ def add_jobs(
                 if ('The specified job is already in a completed state.' in
                         ex.message.value):
                     if recreate:
+                        logger.debug(
+                            'detected completed job {} with recreate '
+                            'flag'.format(job_id))
                         # get job state
                         _job = batch_client.job.get(job_id)
                         if _job.state == batchmodels.JobState.completed:
@@ -5737,12 +5740,34 @@ def add_jobs(
             if util.is_none_or_empty(federation_id):
                 logger.info('Adding jobschedule {} to pool {}'.format(
                     job_id, pool.id))
+                _del_js_rf = False
                 try:
                     batch_client.job_schedule.add(jobschedule)
-                except Exception:
+                except Exception as ex:
+                    _del_js_rf = True
+                    if ('The specified job schedule is already in '
+                            'completed state.' in ex.message.value):
+                        if recreate:
+                            logger.debug(
+                                'detected completed job schedule {} with '
+                                'recreate flag'.format(job_id))
+                            # get job schedule state
+                            _js = batch_client.job_schedule.get(job_id)
+                            if (_js.state ==
+                                    batchmodels.JobScheduleState.completed):
+                                delete_or_terminate_jobs(
+                                    batch_client, config, True,
+                                    jobscheduleid=job_id, wait=True)
+                                time.sleep(1)
+                                batch_client.job_schedule.add(jobschedule)
+                                _del_js_rf = False
+                        else:
+                            raise
+                finally:
                     # delete uploaded task map
-                    storage.delete_resource_file(blob_client, taskmaploc)
-                    raise
+                    if _del_js_rf:
+                        storage.delete_resource_file(blob_client, taskmaploc)
+                del _del_js_rf
             else:
                 if storage.check_if_job_exists_in_federation(
                         table_client, federation_id, jobschedule.id):
