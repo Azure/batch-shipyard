@@ -4,7 +4,7 @@ pool_specification:
     platform_image:
       publisher: OpenLogic
       offer: CentOS-HPC
-      sku: '7.1'
+      sku: '7.4'
   vm_count:
     dedicated: 2
     low_priority: 0

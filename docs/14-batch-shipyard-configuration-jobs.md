@@ -1144,7 +1144,7 @@ property are:
       may be null.
     * (required if using MPI) `mpi` contains the following members:
         * (required) `runtime` is the runtime that should be used. Valid
-          values are `intelmpi`, `intelmpi_ofa`, `mpich`, and `openmpi`.
+          values are `intelmpi`, `intelmpi-ofa`, `mpich`, and `openmpi`.
           With Docker containers, it is the user's responsibility to provide
           a container image that has the specified runtime installed. For
           Singularity containers, the specified runtime must be installed
