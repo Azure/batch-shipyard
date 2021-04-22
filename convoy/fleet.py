@@ -61,11 +61,11 @@ _RESOURCES_PATH = None
 _NVIDIA_DRIVER = {
     'compute': {
         'url': (
-            'http://us.download.nvidia.com/tesla/'
-            '418.87/NVIDIA-Linux-x86_64-418.87.01.run'
+            'https://us.download.nvidia.com/tesla/'
+            '460.73.01/NVIDIA-Linux-x86_64-460.73.01.run'
         ),
         'sha256': (
-            'fe6dcba384d67e906fad3cdc707fb6b0993cf190fc694660b70224d49a69144f'
+            '11b1c918de26799e9ee3dc5db13d8630922b6aa602b9af3fbbd11a9a8aab1e88'
         ),
         'target': 'nvidia-driver-compute.run'
     },
@@ -73,12 +73,12 @@ _NVIDIA_DRIVER = {
         # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'https://download.microsoft.com/download/1/a/5/'
-            '1a537cae-5b52-4348-acd2-2f210fc412b0/'
-            'NVIDIA-Linux-x86_64-430.46-grid.run'
+            'https://download.microsoft.com/download/9/5/c/'
+            '95c667ff-ab95-4c56-89e0-e13e9a76782d/'
+            'NVIDIA-Linux-x86_64-460.32.03-grid-azure.run'
         ),
         'sha256': (
-            'a06b13c36c8c203babf7e681f1b83e7d7967c76e4bdb71ba4a2cd80dad502bfd'
+            '6b539691e3b4a3b92d907ce3a002d03f4564420ff7f0c13b11826f140fb6c44e'
         ),
         'target': 'nvidia-driver-grid.run'
     },
