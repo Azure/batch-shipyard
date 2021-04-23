@@ -7,6 +7,7 @@ param(
 	[String] $x   # blobxfer version
 )
 
+Set-Variable ImdsVersion -option Constant -value "2021-01-01"
 Set-Variable NodePrepFinished -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath ".batch_shipyard_node_prep_finished")
 Set-Variable VolatileStartupSave -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "volatile" | Join-Path -ChildPath "startup" | Join-Path -ChildPath ".save")
 Set-Variable MountsPath -option Constant -value (Join-Path $env:AZ_BATCH_NODE_ROOT_DIR -ChildPath "mounts")
@@ -45,6 +46,9 @@ Write-Host "Custom image: $u"
 Write-Host "Encrypted: $e"
 Write-Host "Azure File: $a"
 Write-Host ""
+
+# retrive IMDS
+Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -Proxy $Null -Uri "http://169.254.169.254/metadata/instance?api-version=${ImdsVersion}" | ConvertTo-Json -Depth 64 | Out-File imd.json
 
 # touch volatile startup save file
 New-Item -ItemType file $VolatileStartupSave -Force
