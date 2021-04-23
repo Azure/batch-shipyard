@@ -11,7 +11,8 @@ DOCKER_CE_VERSION_CENTOS=19.03.5
 DOCKER_CE_VERSION_SLES=17.09.1
 GLUSTER_VERSION_DEBIAN=7
 GLUSTER_VERSION_CENTOS=6
-IMDS_VERSION=2019-04-30
+BLOBFUSE_VERSION=1.3.6
+IMDS_VERSION=2021-01-01
 
 # consts
 DOCKER_CE_PACKAGE_DEBIAN="5:${DOCKER_CE_VERSION_DEBIAN}~3-0~"
@@ -381,7 +382,7 @@ get_vm_size_from_imds() {
     if [ -n "$vm_size" ]; then
         return
     fi
-    curl -fSsL -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
+    curl -fSsL -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
     vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
     if [[ "$vm_size" =~ ^standard_(((hb|hc)[0-9]+m?rs?(_v[1-9])?)|(nc[0-9]+rs_v3)|(nd[0-9]+rs_v2))$ ]]; then
         # SR-IOV RDMA
@@ -906,8 +907,10 @@ mount_azureblob_container() {
     else
         log DEBUG "blobfuse is not installed"
         local mspkg
+        local bfpkg
         if [ "$PACKAGER" == "apt" ]; then
             mspkg=packages-microsoft-prod.deb
+            bfpkg="blobfuse=${BLOBFUSE_VERSION}"
             if [ "$DISTRIB_ID" == "ubuntu" ]; then
                 download_file_as "https://packages.microsoft.com/config/${DISTRIB_ID}/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
             elif [ "$DISTRIB_ID" == "debian" ]; then
@@ -916,18 +919,19 @@ mount_azureblob_container() {
             fi
         elif [ "$PACKAGER" == "yum" ]; then
             mspkg=packages-microsoft-prod.rpm
+            bfpkg="blobfuse-${BLOBFUSE_VERSION}"
             download_file_as "https://packages.microsoft.com/config/rhel/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
         elif [ "$PACKAGER" == "zypper" ]; then
             mspkg=packages-microsoft-prod.rpm
             download_file_as "https://packages.microsoft.com/config/sles/${DISTRIB_RELEASE}/${mspkg}" "$mspkg"
         fi
-        if [ ! -f ${mspkg} ]; then
+        if [ ! -f ${mspkg} ] || [ -z "${bfpkg}" ]; then
             echo "ERROR: unsupported distribution for Azure blob: $DISTRIB_ID $DISTRIB_RELEASE"
             exit 1
         fi
         install_local_packages ${mspkg}
         refresh_package_index
-        install_packages blobfuse
+        install_packages ${bfpkg}
     fi
     ./azureblob-mount.sh
     rm azureblob-mount.sh
