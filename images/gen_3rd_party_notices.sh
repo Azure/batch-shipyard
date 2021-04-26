@@ -27,12 +27,6 @@ DEPENDENCIES=(
     click
     https://github.com/pallets/click
     https://github.com/pallets/click/raw/master/LICENSE.rst
-    future
-    https://github.com/PythonCharmers/python-future
-    https://github.com/PythonCharmers/python-future/raw/master/LICENSE.txt
-    libtorrent
-    https://github.com/arvidn/libtorrent
-    https://github.com/arvidn/libtorrent/raw/libtorrent-1_0_11/LICENSE
     msrest
     https://github.com/Azure/msrest-for-python
     https://github.com/Azure/msrest-for-python/raw/master/LICENSE.md
@@ -52,11 +46,11 @@ DEPENDENCIES=(
     https://github.com/requests/requests
     https://github.com/requests/requests/raw/master/LICENSE
     ruamel.yaml
-    https://bitbucket.org/ruamel/yaml
-    https://bitbucket.org/ruamel/yaml/raw/75c831644aa26f12ff33ac81180fbaa23b81d4bb/LICENSE
+    https://sourceforge.net/p/ruamel-yaml/code/ci/default/tree/
+    "https://sourceforge.net/p/ruamel-yaml/code/ci/default/tree/LICENSE?format=raw"
     singularity
-    https://github.com/sylabs/singularity
-    https://github.com/sylabs/singularity/raw/master/LICENSE.md
+    https://github.com/hpcng/singularity
+    https://github.com/hpcng/singularity/raw/master/LICENSE.md
 )
 DEPLEN=${#DEPENDENCIES[@]}
 

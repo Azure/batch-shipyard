@@ -1,7 +1,7 @@
 name: $(SourceBranch)$(Rev:.r)
 
 jobs:
-  - job: Replicate Singularity Images
+  - job: ReplicateSingularityImages
     pool:
       vmImage: ubuntu-20.04
     steps:
