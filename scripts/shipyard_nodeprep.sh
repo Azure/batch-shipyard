@@ -6,12 +6,12 @@ set -e
 set -o pipefail
 
 # version consts
-DOCKER_CE_VERSION_DEBIAN=19.03.5
-DOCKER_CE_VERSION_CENTOS=19.03.5
+DOCKER_CE_VERSION_DEBIAN=20.10.8
+DOCKER_CE_VERSION_CENTOS=20.10.8
 DOCKER_CE_VERSION_SLES=17.09.1
-GLUSTER_VERSION_DEBIAN=7
-GLUSTER_VERSION_CENTOS=6
-BLOBFUSE_VERSION=1.3.6
+GLUSTER_VERSION_DEBIAN=9
+GLUSTER_VERSION_CENTOS=9
+BLOBFUSE_VERSION=1.4.1
 IMDS_VERSION=2021-01-01
 
 # consts
@@ -30,6 +30,7 @@ UCX_IB_PKEY_FILE=$AZ_BATCH_TASK_WORKING_DIR/UCX_IB_PKEY
 MCR_REPO=mcr.microsoft.com
 BLOBXFER_IMAGE_PREFIX=${MCR_REPO}/blobxfer
 SHIPYARD_IMAGE_PREFIX=${MCR_REPO}/azure-batch/shipyard
+SINGULARITY_IMAGE_PREFIX=${SHIPYARD_IMAGE_PREFIX}
 
 # status file consts
 lisinstalled=${VOLATILE_PATH}/.batch_shipyard_lis_installed
@@ -50,6 +51,7 @@ if [ -e /etc/os-release ]; then
     . /etc/os-release
     DISTRIB_ID=$ID
     DISTRIB_RELEASE=$VERSION_ID
+    DISTRIB_LIKE=$ID_LIKE
     DISTRIB_CODENAME=$VERSION_CODENAME
     if [ -z "$DISTRIB_CODENAME" ]; then
         if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "10" ]; then
@@ -70,14 +72,13 @@ if [ -z "${DISTRIB_CODENAME}" ]; then
 fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+DISTRIB_LIKE=${DISTRIB_LIKE,,}
 DISTRIB_CODENAME=${DISTRIB_CODENAME,,}
 
 # set distribution specific vars
 PACKAGER=
 SYSTEMD_PATH=/lib/systemd/system
-if [ "$DISTRIB_ID" == "ubuntu" ]; then
-    PACKAGER=apt
-elif [ "$DISTRIB_ID" == "debian" ]; then
+if [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "debian" ] || [ "$DISTRIB_LIKE" == "debian" ]; then
     PACKAGER=apt
 elif [[ $DISTRIB_ID == centos* ]] || [ "$DISTRIB_ID" == "rhel" ]; then
     PACKAGER=yum
@@ -87,6 +88,15 @@ else
 fi
 if [ "$PACKAGER" == "apt" ]; then
     export DEBIAN_FRONTEND=noninteractive
+fi
+
+# set python and pip
+if command -v python3 > /dev/null 2>&1; then
+    PYTHON=python3
+    PIP=pip3
+else
+    PYTHON=python
+    PIP=pip
 fi
 
 # globals
@@ -249,6 +259,14 @@ if [ -z "$blobxferversion" ]; then
     exit 1
 fi
 
+get_current_timestamp() {
+    if [ $PYTHON == "python3" ]; then
+        $PYTHON -c 'import datetime;print(datetime.datetime.utcnow().timestamp())'
+    else
+        $PYTHON -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))'
+    fi
+}
+
 save_startup_to_volatile() {
     set +e
     touch "${VOLATILE_PATH}"/startup/.save
@@ -383,7 +401,7 @@ get_vm_size_from_imds() {
         return
     fi
     curl -fSsL -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
-    vm_size=$(python -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
+    vm_size=$(${PYTHON} -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
     if [[ "$vm_size" =~ ^standard_(((hb|hc)[0-9]+m?rs?(_v[1-9])?)|(nc[0-9]+rs_v3)|(nd[0-9]+rs_v2))$ ]]; then
         # SR-IOV RDMA
         vm_rdma_type=1
@@ -1069,7 +1087,7 @@ install_singularity() {
     fi
     install_packages squashfs-tools $cryptpkg
     # fetch docker image for singularity bits
-    local di="${SHIPYARD_IMAGE_PREFIX}:${singularityversion}-${disuffix}"
+    local di="${SINGULARITY_IMAGE_PREFIX}:${singularityversion}-${disuffix}"
     log DEBUG "Image=${di} basedir=${singularity_basedir}"
     docker_pull_image "$di"
     mkdir -p /opt/singularity
@@ -1852,14 +1870,15 @@ install_and_start_batch_insights() {
 log INFO "Prep start"
 echo "Configuration:"
 echo "--------------"
-echo "Custom image: $custom_image"
-echo "Native mode: $native_mode"
-echo "OS Distribution: $DISTRIB_ID $DISTRIB_RELEASE"
 echo "Batch Shipyard version: $shipyardversion"
-echo "Blobxfer version: $blobxferversion"
-echo "Singularity version: $singularityversion"
+echo "OS Distribution: $DISTRIB_ID $DISTRIB_RELEASE"
+echo "Python=$PYTHON pip=$PIP"
 echo "User mountpoint: $USER_MOUNTPOINT"
 echo "Mount path: $MOUNTS_PATH"
+echo "Custom image: $custom_image"
+echo "Native mode: $native_mode"
+echo "Blobxfer version: $blobxferversion"
+echo "Singularity version: $singularityversion"
 echo "Batch Insights: $batch_insights"
 echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
 echo "Network optimization: $networkopt"
@@ -1896,11 +1915,7 @@ localectl
 set -e
 
 # store node prep start
-if command -v python3 > /dev/null 2>&1; then
-    npstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
-else
-    npstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
-fi
+npstart=$(get_current_timestamp)
 
 # get ephemeral device/disk
 get_ephemeral_device
