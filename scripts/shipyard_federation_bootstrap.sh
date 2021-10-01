@@ -27,6 +27,7 @@ if [ -e /etc/os-release ]; then
     . /etc/os-release
     DISTRIB_ID=$ID
     DISTRIB_RELEASE=$VERSION_ID
+    DISTRIB_LIKE=$ID_LIKE
     DISTRIB_CODENAME=$VERSION_CODENAME
     if [ -z "$DISTRIB_CODENAME" ]; then
         if [ "$DISTRIB_ID" == "debian" ] && [ "$DISTRIB_RELEASE" == "9" ]; then
@@ -47,13 +48,12 @@ if [ -z "${DISTRIB_CODENAME}" ]; then
 fi
 DISTRIB_ID=${DISTRIB_ID,,}
 DISTRIB_RELEASE=${DISTRIB_RELEASE,,}
+DISTRIB_LIKE=${DISTRIB_LIKE,,}
 DISTRIB_CODENAME=${DISTRIB_CODENAME,,}
 
 # set distribution specific vars
 PACKAGER=
-if [ "$DISTRIB_ID" == "ubuntu" ]; then
-    PACKAGER=apt
-elif [ "$DISTRIB_ID" == "debian" ]; then
+if [ "$DISTRIB_ID" == "ubuntu" ] || [ "$DISTRIB_ID" == "debian" ] || [ "$DISTRIB_LIKE" == "debian" ]; then
     PACKAGER=apt
 elif [[ $DISTRIB_ID == centos* ]] || [ "$DISTRIB_ID" == "rhel" ]; then
     PACKAGER=yum
