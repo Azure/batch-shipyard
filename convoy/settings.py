@@ -47,8 +47,8 @@ _TENSORBOARD_DOCKER_IMAGE = (
     6006
 )
 _GPU_COMPUTE_INSTANCES = re.compile(
-    # standard nc, ncv2, ncv3, nd, ndv2
-    r'^standard_n[cd][\d]+r?s?(_v[\d])?(_promo)?$',
+    # standard nc, ncv2, ncv3, nd, ndv2, ncas_t4_v3, ndasr_v4
+    r'^standard_n[cd][\d]+(as_t4)?(as)?r?s?(_v[\d])?(_promo)?$',
     re.IGNORECASE
 )
 _GPU_VISUALIZATION_INSTANCES = re.compile(
@@ -57,13 +57,9 @@ _GPU_VISUALIZATION_INSTANCES = re.compile(
     re.IGNORECASE
 )
 _SRIOV_RDMA_INSTANCES = re.compile(
-    # standard hb/hc, nc+r_v3, ndv2
-    r'^standard_(((hb|hc)[\d]+m?rs?(_v[\d])?)|(nc[\d]+rs_v3)|(nd[\d]+rs_v2))$',
-    re.IGNORECASE
-)
-_SRIOV_RDMA_TRANSITION_INSTANCES = re.compile(
-    # standard nc+r_v2
-    r'^standard_(nc[\d]+rs_v2)$',
+    # standard hb, hbv2, hbv3, hc, nc+r_v2, nc+r_v3, ndv1, ndv2, ndasr_v4
+    (r'^standard_(((hb|hc)[\d]+m?rs?(_v[\d])?)|'
+     r'(nc[\d]+rs_v[2-4])|(nd[\d]+(rs|rs_v2|asr_v4)))$'),
     re.IGNORECASE
 )
 _NETWORKDIRECT_RDMA_INSTANCES = re.compile(
@@ -72,7 +68,7 @@ _NETWORKDIRECT_RDMA_INSTANCES = re.compile(
     re.IGNORECASE
 )
 _PREMIUM_STORAGE_INSTANCES = re.compile(
-    r'^standard_(([a-z]+[\d]+.*s(_v[\d])?)|([dg]s[\d]+(_v2)?))$',
+    r'^standard_(([a-z]+[\d]+.*s(_v[\d])?)|([dg]s[\d]+(_v[\d]+)?))$',
     re.IGNORECASE
 )
 _NESTED_VIRTUALIZATION_INSTANCES = re.compile(
@@ -846,9 +842,9 @@ def is_lis_install_required(config, vm_size=None):
         publisher = pool_publisher(config, lower=True)
         offer = pool_offer(config, lower=True)
         sku = pool_sku(config, lower=True)
-        # current lis (4.3.5) does not support 7.8+
+        # lis (4.3.5) is not needed for 7.8+
         if (publisher == 'openlogic' and offer == 'centos' and
-                sku > '7.3' and sku <= '7.7'):
+                sku >= '7.4' and sku <= '7.7'):
             return True
     return False
 
@@ -889,10 +885,7 @@ def is_sriov_rdma_pool(vm_size):
     :rtype: bool
     :return: if sriov rdma is present
     """
-    return (
-        _SRIOV_RDMA_INSTANCES.match(vm_size) is not None or
-        _SRIOV_RDMA_TRANSITION_INSTANCES.match(vm_size) is not None
-    )
+    return _SRIOV_RDMA_INSTANCES.match(vm_size) is not None
 
 
 def is_networkdirect_rdma_pool(vm_size):
@@ -902,10 +895,7 @@ def is_networkdirect_rdma_pool(vm_size):
     :rtype: bool
     :return: if network direct rdma is present
     """
-    return (
-        _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None and
-        _SRIOV_RDMA_TRANSITION_INSTANCES.match(vm_size) is None
-    )
+    return _NETWORKDIRECT_RDMA_INSTANCES.match(vm_size) is not None
 
 
 def is_rdma_pool(vm_size):
@@ -1148,14 +1138,13 @@ def _populate_pool_vm_configuration(config):
                 )
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer.startswith('centos') and
-                  (vm_config.sku == '7.4' or vm_config.sku == '7.5' or
-                   vm_config.sku == '7.6' or vm_config.sku == '7.7' or
-                   vm_config.sku == '7_8')):
+                  ((vm_config.sku >= '7.4' and vm_config.sku <= '7.7') or
+                   (vm_config.sku >= '7_8' and vm_config.sku < '8_'))):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
                     offer='centos-container{}'.format(
                         '-rdma' if is_rdma_pool(vm_size) else ''),
-                    sku=vm_config.sku.replace('.', '-'),
+                    sku=vm_config.sku.replace('.', '-').replace('_', '-'),
                     version='latest',
                     native=True,
                     license_type=None,
