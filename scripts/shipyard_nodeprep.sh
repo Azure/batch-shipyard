@@ -401,7 +401,7 @@ get_vm_size_from_imds() {
         return
     fi
     curl -fSsL -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=${IMDS_VERSION}" > imd.json
-    vm_size=$(${PYTHON} -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize']).lower()")
+    vm_size=$(${PYTHON} -c "import json;f=open('imd.json','r');a=json.load(f);print(a['compute']['vmSize'].lower())")
     if [[ "$vm_size" =~ ^standard_(((hb|hc)[0-9]+m?rs?(_v[1-9])?)|(nc[0-9]+rs_v3)|(nd[0-9]+rs_v2))$ ]]; then
         # SR-IOV RDMA
         vm_rdma_type=1
@@ -627,9 +627,9 @@ execute_command_with_retry() {
 }
 
 # TODO remove this once native images are fixed
-blacklist_kernel_upgrade() {
+denylist_kernel_upgrade() {
     if [ "$DISTRIB_ID" != "ubuntu" ]; then
-        log DEBUG "No kernel upgrade blacklist required on $DISTRIB_ID $DISTRIB_RELEASE"
+        log DEBUG "No kernel upgrade denylist required on $DISTRIB_ID $DISTRIB_RELEASE"
         return
     fi
     set +e
@@ -638,7 +638,7 @@ blacklist_kernel_upgrade() {
     set -e
     if [ $rc -ne 0 ]; then
         sed -i "/^Unattended-Upgrade::Package-Blacklist {/a\"linux-azure\";\\n\"linux-cloud-tools-azure\";\\n\"linux-headers-azure\";\\n\"linux-image-azure\";\\n\"linux-tools-azure\";" /etc/apt/apt.conf.d/50unattended-upgrades
-        log INFO "Added linux-azure to package blacklist for unattended upgrades"
+        log INFO "Added linux-azure to package denylist for unattended upgrades"
     fi
 }
 
@@ -698,7 +698,7 @@ check_for_nvidia_on_custom_or_native() {
     else
         check_for_nvidia_driver_on_custom_or_native
         # prevent kernel upgrades from breaking driver
-        blacklist_kernel_upgrade
+        denylist_kernel_upgrade
         enable_nvidia_persistence_mode
         query_nvidia_card
     fi
@@ -775,7 +775,7 @@ install_kernel_devel_package() {
                 installed=1
             fi
             if [ "$installed" -eq 0 ]; then
-                if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]] || [[ "$centos_ver" == 7.6.* ]]; then
+                if [[ "$centos_ver" == 7.3.* ]] || [[ "$centos_ver" == 7.4.* ]] || [[ "$centos_ver" == 7.5.* ]] || [[ "$centos_ver" == 7.6.* ]] || [[ "$centos_ver" == 7.7.* ]] || [[ "$centos_ver" == 7.8.* ]]; then
                     local pkg
                     pkg="${kernel_devel_package}.rpm"
                     download_file_as "http://vault.centos.org/${centos_ver}/updates/x86_64/Packages/${pkg}" "$pkg"
@@ -812,7 +812,7 @@ install_nvidia_software() {
         exit 1
     fi
     set -e
-    # blacklist nouveau from being loaded if rebooted
+    # denylist nouveau from being loaded if rebooted
     local blfile
     if [ "$DISTRIB_ID" == "ubuntu" ]; then
         blfile=/etc/modprobe.d/blacklist-nouveau.conf
@@ -1700,11 +1700,7 @@ setup_cascade() {
     envfile=$AZ_BATCH_NODE_STARTUP_DIR/wd/.cascade_envfile
     if [ $cascadecontainer -eq 1 ]; then
         # store shipyard docker pull start
-        if command -v python3 > /dev/null 2>&1; then
-            drpstart=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
-        else
-            drpstart=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
-        fi
+        drpstart=$(get_current_timestamp)
         log DEBUG "Pulling $cascade_docker_image"
         docker_pull_image "$cascade_docker_image"
         if [ -n "$singularity_basedir" ]; then
@@ -1712,11 +1708,7 @@ setup_cascade() {
             docker_pull_image "$cascade_singularity_image"
         fi
         # store shipyard pull end
-        if command -v python3 > /dev/null 2>&1; then
-            drpend=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
-        else
-            drpend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
-        fi
+        drpend=$(get_current_timestamp)
         # create env file
 cat > "$envfile" << EOF
 PYTHONASYNCIODEBUG=1
@@ -1867,42 +1859,45 @@ install_and_start_batch_insights() {
     log INFO "Batch Insights enabled."
 }
 
+print_configuration() {
+    echo "Configuration:"
+    echo "--------------"
+    echo "Batch Shipyard version: $shipyardversion"
+    echo "OS Distribution: $DISTRIB_ID $DISTRIB_RELEASE"
+    echo "Python=$PYTHON pip=$PIP"
+    echo "User mountpoint: $USER_MOUNTPOINT"
+    echo "Mount path: $MOUNTS_PATH"
+    echo "Custom image: $custom_image"
+    echo "Native mode: $native_mode"
+    echo "Blobxfer version: $blobxferversion"
+    echo "Singularity version: $singularityversion"
+    echo "Batch Insights: $batch_insights"
+    echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
+    echo "Network optimization: $networkopt"
+    echo "Encryption cert thumbprint: $encrypted"
+    echo "Install Kata Containers: $kata"
+    echo "Default container runtime: $default_container_runtime"
+    echo "Install BeeGFS BeeOND: $beeond"
+    echo "Storage cluster mounts (${#sc_args[@]}): ${sc_args[*]}"
+    echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
+    echo "Install LIS: $lis"
+    echo "GPU: $gpu"
+    echo "GPU ignore warnings: $SHIPYARD_GPU_IGNORE_WARNINGS"
+    echo "Azure Blob: $azureblob"
+    echo "Azure File: $azurefile"
+    echo "GlusterFS on compute: $gluster_on_compute"
+    echo "HPN-SSH: $hpnssh"
+    echo "Enable Azure Batch group for Docker access: $docker_group"
+    echo "Fallback registry: $fallback_registry"
+    echo "Docker image preload delay: $delay_preload"
+    echo "Cascade via container: $cascadecontainer"
+    echo "Concurrent source downloads: $concurrent_source_downloads"
+    echo "Block on images: $block"
+    echo "Singularity decryption certs: $SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES"
+    echo ""
+}
+
 log INFO "Prep start"
-echo "Configuration:"
-echo "--------------"
-echo "Batch Shipyard version: $shipyardversion"
-echo "OS Distribution: $DISTRIB_ID $DISTRIB_RELEASE"
-echo "Python=$PYTHON pip=$PIP"
-echo "User mountpoint: $USER_MOUNTPOINT"
-echo "Mount path: $MOUNTS_PATH"
-echo "Custom image: $custom_image"
-echo "Native mode: $native_mode"
-echo "Blobxfer version: $blobxferversion"
-echo "Singularity version: $singularityversion"
-echo "Batch Insights: $batch_insights"
-echo "Prometheus: NE=$PROM_NODE_EXPORTER_PORT,$PROM_NODE_EXPORTER_OPTIONS CA=$PROM_CADVISOR_PORT,$PROM_CADVISOR_OPTIONS"
-echo "Network optimization: $networkopt"
-echo "Encryption cert thumbprint: $encrypted"
-echo "Install Kata Containers: $kata"
-echo "Default container runtime: $default_container_runtime"
-echo "Install BeeGFS BeeOND: $beeond"
-echo "Storage cluster mounts (${#sc_args[@]}): ${sc_args[*]}"
-echo "Custom mount: $SHIPYARD_CUSTOM_MOUNTS_FSTAB"
-echo "Install LIS: $lis"
-echo "GPU: $gpu"
-echo "GPU ignore warnings: $SHIPYARD_GPU_IGNORE_WARNINGS"
-echo "Azure Blob: $azureblob"
-echo "Azure File: $azurefile"
-echo "GlusterFS on compute: $gluster_on_compute"
-echo "HPN-SSH: $hpnssh"
-echo "Enable Azure Batch group for Docker access: $docker_group"
-echo "Fallback registry: $fallback_registry"
-echo "Docker image preload delay: $delay_preload"
-echo "Cascade via container: $cascadecontainer"
-echo "Concurrent source downloads: $concurrent_source_downloads"
-echo "Block on images: $block"
-echo "Singularity decryption certs: $SHIPYARD_SINGULARITY_DECRYPTION_CERTIFICATES"
-echo ""
 
 # set locale
 if [ "$DISTRIB_ID" == "debian" ]; then
@@ -1925,6 +1920,9 @@ check_for_buggy_ntfs_mount
 
 # set ephemeral device/user mountpoint
 set_user_mountpoint
+
+# show configuration
+print_configuration
 
 # save startup stderr/stdout
 save_startup_to_volatile
@@ -2086,11 +2084,7 @@ process_storage_clusters
 process_custom_fstab
 
 # store node prep end
-if command -v python3 > /dev/null 2>&1; then
-    npend=$(python3 -c 'import datetime;print(datetime.datetime.utcnow().timestamp())')
-else
-    npend=$(python -c 'import datetime;import time;print(time.mktime(datetime.datetime.utcnow().timetuple()))')
-fi
+npend=$(get_current_timestamp)
 
 # touch node prep finished file to preserve idempotency
 touch "$nodeprepfinished"
