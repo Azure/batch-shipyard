@@ -480,8 +480,8 @@ def _setup_intel_mpi_rt_package(config, pool_settings):
     :rtype: pathlib.Path
     :return: package path
     """
-    # only for native ubuntu rdma
-    if (not settings.is_rdma_pool(pool_settings.vm_size) or
+    # only for native ubuntu networkdirect rdma
+    if (not settings.is_networkdirect_rdma_pool(pool_settings.vm_size) or
             not pool_settings.vm_configuration.offer ==
             'ubuntu-server-container-rdma'):
         return None
