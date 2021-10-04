@@ -47,12 +47,11 @@ corresponding `urn` to accept the terms for the image.
 | Publisher             | Offer                 | Sku | GPU | IB/RDMA | Native Only | Native Convert |
 |-----------------------|-----------------------|-----|:---:|:-------:|:-----------:|:--------------:|
 | microsoft-azure-batch | centos-container      | 7-4 |  X  |         |      X      |                |
-| microsoft-azure-batch | centos-container      | 7-7 |  X  |         |      X      |                |
+| microsoft-azure-batch | centos-container      | 7-8 |  X  |         |      X      |                |
 | microsoft-azure-batch | centos-container-rdma | 7-4 |  X  |  X (4)  |      X      |                |
-| microsoft-azure-batch | centos-container-rdma | 7-7 |  X  |  X (5)  |      X      |                |
+| microsoft-azure-batch | centos-container-rdma | 7-8 |  X  |  X (5)  |      X      |                |
 | OpenLogic             | CentOS                | 7.4 |  X  |         |             |        X       |
-| OpenLogic             | CentOS                | 7.7 |  X  |         |             |        X       |
-| OpenLogic             | CentOS                | 8.0 |  X  |         |             |                |
+| OpenLogic             | CentOS                | 7_8 |  X  |         |             |        X       |
 | OpenLogic             | CentOS-HPC            | 7.4 |  X  |  X (4)  |             |        X       |
 | OpenLogic             | CentOS-HPC            | 7.7 |  X  |  X (5)  |             |        X       |
 
@@ -70,22 +69,22 @@ SLES is not supported at this time.
 
 | Publisher             | Offer                        | Sku         | GPU |  IB/RDMA  | Native Only | Native Convert |
 |-----------------------|------------------------------|-------------|:---:|:---------:|:-----------:|:--------------:|
-| Canonical             | UbuntuServer                 | 16.04-LTS   |  X  |  X (1)    |             |     X (2,4)    |
 | Canonical             | UbuntuServer                 | 18.04-LTS   |  X  |  X (1)    |             |                |
-| microsoft-azure-batch | ubuntu-server-container      | 16-04-lts   |  X  |           |      X      |                |
-| microsoft-azure-batch | ubuntu-server-container-rdma | 16-04-lts   |  X  |  X (3,4)  |      X      |                |
+| Canonical             | 0001-com-ubuntu-server-focal | 20_04-lts   |  X  |  X (1)    |             |     X (2,5)    |
+| microsoft-azure-batch | ubuntu-server-container      | 20-04-lts   |  X  |           |      X      |                |
+| microsoft-azure-batch | ubuntu-server-container-rdma | 20-04-lts   |  X  |  X (5)    |      X      |                |
 
 ### Windows
+
+Note that `WindowsServer` Skus ending with suffixes such as `-gs`,
+`-smalldisk`, `-smalldisk-gs`, and `-smalldisk-g2` are supported.
 
 | Publisher              | Offer                   | Sku                                            | GPU | IB/RDMA | Native Only | Native Convert |
 |------------------------|-------------------------|------------------------------------------------|:---:|:-------:|:-----------:|:--------------:|
 | MicrosoftWindowsServer | WindowsServer           | 2016-Datacenter-with-Containers                |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-with-Containers                |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-with-Containers-smalldisk      |     |         |      X      |                |
 | MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers           |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServer           | 2019-Datacenter-Core-with-Containers-smalldisk |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServer           | Datacenter-Core-1903-with-Containers-smalldisk |     |         |      X      |                |
-| MicrosoftWindowsServer | WindowsServerSemiAnnual | Datacenter-Core-1809-with-Containers-smalldisk |     |         |      X      |                |
+| MicrosoftWindowsServer | WindowsServer           | Datacenter-Core-20H2-with-Containers           |     |         |      X      |                |
 
 ## Notes
 1. IB/RDMA is supported for this host OS with a custom image unless

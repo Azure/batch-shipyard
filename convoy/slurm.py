@@ -93,8 +93,8 @@ def _apply_slurm_config_to_batch_pools(
                     'Cannot create a Slurm partition {} on a Windows '
                     'pool {}'.format(partname, pool.id))
             elif (na_sku != 'batch.node.centos 7' and
-                  na_sku != 'batch.node.ubuntu 16.04' and
-                  na_sku != 'batch.node.ubuntu 18.04'):
+                  na_sku != 'batch.node.ubuntu 18.04' and
+                  na_sku != 'batch.node.ubuntu 20.04'):
                 raise RuntimeError(
                     'Cannot create a Slurm partition {} on pool {} with node '
                     'agent sku id {}'.format(partname, pool.id, na_sku))

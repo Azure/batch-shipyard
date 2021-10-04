@@ -815,9 +815,11 @@ def gpu_configuration_check(config, vm_size=None):
     sku = pool_sku(config, lower=True)
     if publisher == 'microsoft-azure-batch':
         return True
-    elif (publisher == 'canonical' and offer == 'ubuntuserver' and
-            sku > '16.04'):
-        return True
+    elif publisher == 'canonical':
+        if offer == 'ubuntuserver' and sku == '18.04':
+            return True
+        elif offer.startswith('0001-com-ubuntu-server') and sku >= '20_04':
+            return True
     elif publisher == 'openlogic':
         if offer == 'centos-hpc' and sku >= '7.3':
             return True
@@ -844,7 +846,9 @@ def is_lis_install_required(config, vm_size=None):
         publisher = pool_publisher(config, lower=True)
         offer = pool_offer(config, lower=True)
         sku = pool_sku(config, lower=True)
-        if publisher == 'openlogic' and offer == 'centos' and sku > '7.3':
+        # current lis (4.3.5) does not support 7.8+
+        if (publisher == 'openlogic' and offer == 'centos' and
+                sku > '7.3' and sku <= '7.7'):
             return True
     return False
 
@@ -982,7 +986,8 @@ def temp_disk_mountpoint(config, offer=None):
                 offer = '!ubuntu'
     else:
         offer = offer.lower()
-    if offer.startswith('ubuntu'):
+    if (offer.startswith('ubuntu') or
+            offer.startswith('0001-com-ubuntu-server')):
         return '/mnt'
     elif offer.startswith('windows'):
         return 'D:\\batch'
@@ -1130,13 +1135,13 @@ def _populate_pool_vm_configuration(config):
         if not vm_config.native and _kv_read(conf, 'native', default=False):
             vm_size = _pool_vm_size(config)
             if (vm_config.publisher == 'canonical' and
-                    vm_config.offer == 'ubuntuserver' and
-                    vm_config.sku == '16.04-lts'):
+                    vm_config.offer == '0001-com-ubuntu-server-focal' and
+                    vm_config.sku == '20_04-lts'):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
                     offer='ubuntu-server-container{}'.format(
                         '-rdma' if is_rdma_pool(vm_size) else ''),
-                    sku=vm_config.sku.replace('.', '-'),
+                    sku=vm_config.sku.replace('_', '-'),
                     version='latest',
                     native=True,
                     license_type=None,
@@ -1144,7 +1149,8 @@ def _populate_pool_vm_configuration(config):
             elif (vm_config.publisher == 'openlogic' and
                   vm_config.offer.startswith('centos') and
                   (vm_config.sku == '7.4' or vm_config.sku == '7.5' or
-                   vm_config.sku == '7.6' or vm_config.sku == '7.7')):
+                   vm_config.sku == '7.6' or vm_config.sku == '7.7' or
+                   vm_config.sku == '7_8')):
                 vm_config = PoolVmPlatformImageSettings(
                     publisher='microsoft-azure-batch',
                     offer='centos-container{}'.format(

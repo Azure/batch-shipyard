@@ -62,10 +62,10 @@ _NVIDIA_DRIVER = {
     'compute': {
         'url': (
             'https://us.download.nvidia.com/tesla/'
-            '460.73.01/NVIDIA-Linux-x86_64-460.73.01.run'
+            '470.57.02/NVIDIA-Linux-x86_64-470.57.02.run'
         ),
         'sha256': (
-            '11b1c918de26799e9ee3dc5db13d8630922b6aa602b9af3fbbd11a9a8aab1e88'
+            '55d7ae104827faa79e975321fe2b60f9dd42fbff65642053443c0e56fdb4c47d'
         ),
         'target': 'nvidia-driver-compute.run'
     },
@@ -73,12 +73,12 @@ _NVIDIA_DRIVER = {
         # https://aka.ms/nvgrid-linux
         # https://go.microsoft.com/fwlink/?linkid=874272
         'url': (
-            'https://download.microsoft.com/download/9/5/c/'
-            '95c667ff-ab95-4c56-89e0-e13e9a76782d/'
-            'NVIDIA-Linux-x86_64-460.32.03-grid-azure.run'
+            'https://download.microsoft.com/download/b/d/d/'
+            'bdd729ee-5003-4427-ace4-a7b9172b2e29/'
+            'NVIDIA-Linux-x86_64-470.63.01-grid-azure.run'
         ),
         'sha256': (
-            '6b539691e3b4a3b92d907ce3a002d03f4564420ff7f0c13b11826f140fb6c44e'
+            '71852dc93f8c28b289db8b6ac8d41fae6139d63bb16b4f4afc91dc8b2418cdd6'
         ),
         'target': 'nvidia-driver-grid.run'
     },
@@ -105,10 +105,10 @@ _LIS_PACKAGE = {
     'url': (
         'http://download.microsoft.com/download/6/8/F/'
         '68FE11B8-FAA4-4F8D-8C7D-74DA7F2CFC8C/'
-        'lis-rpms-4.3.4.x86_64.tar.gz'
+        'lis-rpms-4.3.5.x86_64.tar.gz'
     ),
     'sha256': (
-        '5317176c536c6f013b5090c20e1a6045df155ac927afbcd1fb5059e49d19bc2b'
+        '2fcfd68473fc3a46c97688acf6702a966561d02ec7b08c6b9ca668d54c83f20d'
     ),
     'target': 'lis.tar.gz',
     'intermediate': 'lis_compact.tar',
@@ -430,7 +430,8 @@ def _download_file(desc, pkg, dldict):
     :param dict dldict: download dict
     """
     logger.debug('downloading {} to {}'.format(desc, dldict['target']))
-    response = requests.get(dldict['url'], stream=True)
+    response = requests.get(
+        dldict['url'], stream=True, headers={'User-Agent': 'Mozilla/5.0'})
     with pkg.open('wb') as f:
         for chunk in response.iter_content(chunk_size=_REQUEST_CHUNK_SIZE):
             if chunk:
@@ -2635,20 +2636,18 @@ def _adjust_settings_for_pool_creation(config):
     allowed = False
     shipyard_container_required = True
     if publisher == 'microsoft-azure-batch':
-        if offer == 'centos-container':
-            allowed = True
-        elif offer == 'centos-container-rdma':
-            allowed = True
-        elif offer == 'ubuntu-server-container':
-            allowed = True
-        elif offer == 'ubuntu-server-container-rdma':
+        if (offer == 'centos-container' or
+                offer == 'centos-container-rdma' or
+                offer == 'ubuntu-server-container' or
+                offer == 'ubuntu-server-container-rdma'):
             allowed = True
     elif publisher == 'canonical':
         if offer == 'ubuntuserver':
-            if sku == '16.04-lts':
+            if sku == '18.04-lts':
                 allowed = True
                 shipyard_container_required = False
-            elif sku == '18.04-lts':
+        elif offer == '0001-com-ubuntu-server-focal':
+            if sku == '20_04-lts':
                 allowed = True
                 shipyard_container_required = False
     elif publisher == 'debian':
@@ -2657,20 +2656,16 @@ def _adjust_settings_for_pool_creation(config):
                 allowed = True
     elif publisher == 'openlogic':
         if offer.startswith('centos'):
-            if sku >= '7':
+            if sku >= '7' and sku < '8':
                 allowed = True
     elif publisher == 'microsoftwindowsserver':
         if offer == 'windowsserver':
-            if (sku == '2016-datacenter-with-containers' or
-                    sku == '2019-datacenter-with-containers' or
-                    sku == '2019-datacenter-with-containers-smalldisk' or
-                    sku == '2019-datacenter-core-with-containers' or
-                    sku == '2019-datacenter-core-with-containers-smalldisk'):
-                allowed = True
-        elif offer == 'windowsserversemiannual':
-            if (sku == 'datacenter-core-1709-with-containers-smalldisk' or
-                    sku == 'datacenter-core-1803-with-containers-smalldisk' or
-                    sku == 'datacenter-core-1809-with-containers-smalldisk'):
+            if (sku.startswith('2016-datacenter-with-containers') or
+                    sku.startswith('2019-datacenter-with-containers') or
+                    sku.startswith('2022-datacenter-with-containers') or
+                    sku.startswith('2019-datacenter-core-with-containers') or
+                    sku.startswith('2022-datacenter-core-with-containers') or
+                    sku.startswith('datacenter-core-20h2-with-containers')):
                 allowed = True
     if (util.is_not_empty(node_agent) and
             node_agent.lower().startswith('batch.node.ubuntu')):
@@ -2868,7 +2863,9 @@ def _adjust_settings_for_pool_creation(config):
             if is_windows:
                 raise ValueError(
                     'Cannot install kata_containers runtime on Windows')
-            if not ((publisher == 'canonical' and offer == 'ubuntuserver') or
+            if not ((publisher == 'canonical' and
+                     (offer == 'ubuntuserver' or
+                      offer.startswith('0001-com-ubuntu-server'))) or
                     (publisher == 'openlogic' and
                      offer.startswith('centos')) or
                     publisher == 'microsoft-azure-batch'):
