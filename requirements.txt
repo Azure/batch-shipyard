@@ -11,14 +11,14 @@ azure-mgmt-storage==10.0.0
 azure-storage-blob>=2.1.0,<3
 azure-storage-file>=2.1.0,<3
 azure-storage-queue>=2.1.0,<3
-blobxfer==1.10.0
-click>=7.0,<8
-keyrings.alt>=4.0.2,<5
+blobxfer==1.11.0
+click>=8.0.1,<9
+keyrings.alt>=4.1.0,<5
 msrest==0.6.21
 msrestazure==0.6.4
 pathlib2==2.3.5; python_version < '3.5'
-pykwalify==1.8.0
-python-dateutil>=2.8.1,<3
-requests>=2.25.1,<3
-ruamel.yaml>=0.17.4,<1
+pykwalify>=1.8.0,<2
+python-dateutil>=2.8.2,<3
+requests>=2.26.0,<3
+ruamel.yaml>=0.17.16,<1
 scandir==1.10.0; python_version < '3.5'
