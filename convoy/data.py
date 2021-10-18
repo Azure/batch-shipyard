@@ -46,7 +46,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 util.setup_logger(logger)
 # global defines
-_BLOBXFER_VERSION = '1.10.0'
+_BLOBXFER_VERSION = '1.11.0'
 _MEGABYTE = 1048576
 _MAX_READ_BLOCKSIZE_BYTES = 4194304
 _FILE_SPLIT_PREFIX = '_shipyard-'
