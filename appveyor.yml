@@ -7,27 +7,31 @@ cache:
 
 environment:
   matrix:
-  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-    PYTHON: "C:\\Python36-x64"
-    PYTHON_VERSION: "3.6"
-    PYTHON_ARCH: "64"
-    TOX_ENV: "py36"
-  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     PYTHON: "C:\\Python37-x64"
     PYTHON_VERSION: "3.7"
     PYTHON_ARCH: "64"
     TOX_ENV: "py37"
-  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     PYTHON: "C:\\Python38-x64"
     PYTHON_VERSION: "3.8"
     PYTHON_ARCH: "64"
     TOX_ENV: "py38"
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+    PYTHON: "C:\\Python39-x64"
+    PYTHON_VERSION: "3.9"
+    PYTHON_ARCH: "64"
+    TOX_ENV: "py39"
 
 init:
 - echo %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
 
 install:
+#- curl -fsSL -o rustup-init.exe https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
+#- rustup-init.exe -y --default-host x86_64-pc-windows-msvc --default-toolchain stable
 - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+#- where rustc
+- python -m pip install -U pip
 - where pip
 - pip install --upgrade setuptools wheel
 - pip install -r requirements.txt
@@ -37,7 +41,7 @@ install:
 build: off
 
 test_script:
-- flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy\\*.py
-- IF "%PYTHON_VERSION%" GEQ "3.8" (
-  flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade\\*.py cargo\\*.py federation\\*.py heimdall\\*.py slurm\\*.py
+- flake8 --exit-zero --select F,E,W --ignore W504 --statistics shipyard.py convoy
+- IF "%PYTHON_VERSION%" GEQ "3.9" (
+  flake8 --exit-zero --select F,E,W --ignore W504 --statistics cascade cargo federation heimdall slurm
   )
