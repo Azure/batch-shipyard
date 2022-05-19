@@ -495,8 +495,9 @@ positional argument (i.e., `*args`), we are creating a range from `0` to that
 argument value and `yield`ing the result as a iterable (tuple). Yielding
 the result as an iterable is mandatory as the return value is unpacked and
 applied to the `command`. This allows for multiple parameters to be generated
-and applied for each generated task. An example corresponding configuration
-may be similar to the following:
+and applied for each generated task. The iterable can also be a dictionary to
+allow named placeholders when applied to `command'. An example corresponding
+configuration may be similar to the following:
 
 ```yaml
 task_factory:

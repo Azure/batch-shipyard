@@ -333,7 +333,10 @@ def generate_task(task, storage_settings):
                 args = module.generate()
         for arg in args:
             taskcopy = copy.copy(base_task_copy)
-            taskcopy['command'] = taskcopy['command'].format(*arg)
+            if isinstance(arg, collections.Mapping):
+                taskcopy['command'] = taskcopy['command'].format(**arg)
+            else:
+                taskcopy['command'] = taskcopy['command'].format(*arg)
             yield taskcopy
     elif 'file' in task_factory:
         for file in _get_storage_entities(task_factory, storage_settings):
