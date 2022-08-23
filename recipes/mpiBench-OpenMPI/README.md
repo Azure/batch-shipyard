@@ -17,12 +17,12 @@ execution configuration.
 #### Docker-based
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
+* `task_slots_per_node` must be set to 1 or omitted
 
 #### Singularity-based
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
+* `task_slots_per_node` must be set to 1 or omitted
 * `additional_node_prep` should contains the commands necessary for
   installing Open MPI on the node. For example:
     ```

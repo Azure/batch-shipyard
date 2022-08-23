@@ -32,7 +32,7 @@ pool_specification:
   vm_count:
     dedicated: 4
     low_priority: 8
-  max_tasks_per_node: 1
+  task_slots_per_node: 1
   resize_timeout: 00:20:00
   node_fill_type: pack
   autoscale:
@@ -242,15 +242,15 @@ of nodes). The format for this property is a timedelta with a string
 representation of "d.HH:mm:ss". "HH:mm:ss" is required, but "d" is optional,
 if specified. If not specified, the default is 15 minutes. This should not
 be specified (and is ignored) for `autoscale` enabled pools.
-* (optional) `max_tasks_per_node` is the maximum number of concurrent tasks
-that can be running at any one time on a compute node. This defaults to a
-value of 1 if not specified. The maximum value for the property that Azure
-Batch will accept is `4 x <# cores per compute node>`. For instance, for a
-`STANDARD_F2` instance, because the virtual machine has 2 cores, the maximum
-allowable value for this property would be `8`.
+* (optional) `task_slots_per_node` is the maximum number of concurrent task
+slots configured for a single compute node. This defaults to a value of `1`
+if not specified. The maximum value for the property that Azure Batch will
+accept is `4 x <# vCPUs per compute node>` or `256`. For instance, for a
+`STANDARD_D2_V3` instance, because the virtual machine has 2 vCPUs, the
+maximum allowable value for this property would be `8`.
 * (optional) `node_fill_type` is the task scheduling compute node fill type
 policy to apply. `pack`, which is the default, attempts to pack the
-maximum number of tasks on a node (controlled through `max_tasks_per_node`
+maximum number of tasks on a node (controlled through `task_slots_per_node`
 before scheduling tasks to another node). `spread` will schedule tasks
 evenly across compute nodes before packing.
 * (optional) `autoscale` designates the autoscale settings for the pool. If
@@ -356,12 +356,13 @@ The default, if not specified, is `false`.
 * (optional) `reboot_on_start_task_failed` allows Batch Shipyard to reboot the
 compute node in case there is a transient failure in node preparation (e.g.,
 network timeout, resolution failure or download problem). This defaults to
+`false`. This option is ignored for `auto_pool` where the behvaior is always
 `false`.
 * (optional) `attempt_recovery_on_unusable` allows Batch Shipyard to attempt
 to recover nodes that enter `unusable` state automatically. Note that
 enabling this option can lead to infinite wait on `pool add` or `pool resize`
 with `--wait`. This defaults to `false` and is ignored for `custom_image`
-where the behavior is always `false`.
+and `auto_pool` where the behavior is always `false`.
 * (optional) `upload_diagnostics_logs_on_unusable` allows Batch Shipyard
 to attempt upload of diagnostics logs for nodes that have entered unusable
 state during provisioning to the storage account designated under the

@@ -276,7 +276,7 @@ non-native and use the same setting consistently across all pools and all job
 * `arm_image_id` under `vm_configuration`:`custom_image` will allow
 routing of task groups with `custom_image_arm_id` constraints.
 * `vm_size` will be impacted by `compute_node` job constraints.
-* `max_tasks_per_node` will impact available scheduling slots and the
+* `task_slots_per_node` will impact available scheduling slots and the
 `compute_node`:`exclusive` constraint.
 * `autoscale` changes behavior of scheduling across various constraints.
 * `inter_node_communication` enabled pools will allow tasks that contain

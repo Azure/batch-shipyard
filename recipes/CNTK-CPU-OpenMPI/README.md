@@ -9,7 +9,7 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
+* `task_slots_per_node` must be set to 1 or omitted
 
 ### Global Configuration
 The global configuration should set the following properties:

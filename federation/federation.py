@@ -1824,11 +1824,11 @@ class Federation():
                 cp.target_low_priority_nodes)
             return True
         # exclusive
-        if constraints.compute_node.exclusive and cp.max_tasks_per_node > 1:
+        if constraints.compute_node.exclusive and cp.task_slots_per_node > 1:
             self._log_constraint_failure(
                 unique_id, cp.id, 'exclusive',
                 constraints.compute_node.exclusive,
-                cp.max_tasks_per_node)
+                cp.task_slots_per_node)
             return True
         # vm size
         if (is_not_empty(constraints.compute_node.vm_size) and
@@ -1973,7 +1973,7 @@ class Federation():
             schedulable_slots = (
                 pool.schedulable_dedicated_nodes +
                 pool.schedulable_low_priority_nodes
-            ) * cp.max_tasks_per_node
+            ) * cp.task_slots_per_node
             if schedulable_slots > 0:
                 ratio = pool.active_tasks_count / schedulable_slots
             else:
@@ -2302,7 +2302,7 @@ class Federation():
                 dedicated_vms['idle'][rk] = pool.node_counts.dedicated.idle
                 dedicated_slots['idle'][rk] = (
                     pool.node_counts.dedicated.idle *
-                    pool.cloud_pool.max_tasks_per_node
+                    pool.cloud_pool.task_slots_per_node
                 )
             if pool.node_counts.low_priority.idle > 0:
                 low_priority_vms['idle'][rk] = (
@@ -2310,7 +2310,7 @@ class Federation():
                 )
                 low_priority_slots['idle'][rk] = (
                     pool.node_counts.low_priority.idle *
-                    pool.cloud_pool.max_tasks_per_node
+                    pool.cloud_pool.task_slots_per_node
                 )
             # for availbility counts, allow pools to be added to map even
             # with zero nodes if they can autoscale
@@ -2319,7 +2319,7 @@ class Federation():
                 dedicated_vms['avail'][rk] = pool.schedulable_dedicated_nodes
                 dedicated_slots['avail'][rk] = (
                     pool.schedulable_dedicated_nodes *
-                    pool.cloud_pool.max_tasks_per_node
+                    pool.cloud_pool.task_slots_per_node
                 )
             if (pool.schedulable_low_priority_nodes > 0 or
                     pool.cloud_pool.enable_auto_scale):
@@ -2328,7 +2328,7 @@ class Federation():
                 )
                 low_priority_slots['avail'][rk] = (
                     pool.schedulable_low_priority_nodes *
-                    pool.cloud_pool.max_tasks_per_node
+                    pool.cloud_pool.task_slots_per_node
                 )
         del update_futures
         # check for non-availability

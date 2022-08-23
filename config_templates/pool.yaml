@@ -17,7 +17,7 @@ pool_specification:
   vm_count:
     dedicated: 4
     low_priority: 8
-  max_tasks_per_node: 1
+  task_slots_per_node: 1
   resize_timeout: 00:20:00
   node_fill_type: pack
   autoscale:

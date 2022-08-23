@@ -1454,7 +1454,7 @@ def _construct_pool_object(
             pool_settings.vm_count.low_priority if not asenable else None
         ),
         resize_timeout=pool_settings.resize_timeout if not asenable else None,
-        max_tasks_per_node=pool_settings.max_tasks_per_node,
+        task_slots_per_node=pool_settings.task_slots_per_node,
         enable_inter_node_communication=pool_settings.
         inter_node_communication_enabled,
         start_task=batchmodels.StartTask(
@@ -1778,7 +1778,7 @@ def _construct_auto_pool_specification(
     poolspec = batchmodels.PoolSpecification(
         vm_size=pool.vm_size,
         virtual_machine_configuration=pool.virtual_machine_configuration,
-        max_tasks_per_node=pool.max_tasks_per_node,
+        task_slots_per_node=pool.task_slots_per_node,
         task_scheduling_policy=pool.task_scheduling_policy,
         resize_timeout=pool.resize_timeout,
         target_dedicated_nodes=pool.target_dedicated_nodes,
@@ -2783,9 +2783,9 @@ def _adjust_settings_for_pool_creation(config):
                     raise ValueError(
                         'vm_count dedicated should exceed 1 for glusterfs '
                         'on compute')
-                if pool.max_tasks_per_node > 1:
+                if pool.task_slots_per_node > 1:
                     raise ValueError(
-                        'max_tasks_per_node cannot exceed 1 for glusterfs '
+                        'task_slots_per_node cannot exceed 1 for glusterfs '
                         'on compute')
                 num_gluster += 1
                 try:

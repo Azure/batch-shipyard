@@ -422,15 +422,15 @@ a set interval.
           nodes provisioned.
         * (optional) `run_exclusive` forces the job manager to run on a compute
           node where there are no other tasks running. The default is `false`.
-          This is only relevant when the pool's `max_tasks_per_node` setting is
-          greater than 1.
+          This is only relevant when the pool's `task_slots_per_node` setting
+          is greater than 1.
         * (optional) `monitor_task_completion` allows the job manager to
           monitor the tasks in the job for completion instead of relying on
           `auto_complete`. The advantage for doing so is that the job can move
           much more quickly into completed state thus allowing the next job
           recurrence to be created for very small values of
           `recurrence_interval`. In order to properly utilize this feature,
-          you must either set your pool's `max_tasks_per_node` to greater
+          you must either set your pool's `task_slots_per_node` to greater
           than 1 or have more than one compute node in your pool. If neither
           of these conditions are met, then the tasks that the job manager
           creates will be blocked as there will be no free scheduling slots
@@ -752,7 +752,7 @@ information and terminology definitions.
         * (optional) `exclusive` specifies if each task within the task group
           must not be co-scheduled with other running tasks on compute nodes.
           Effectively this excludes pools as scheduling targets that have
-          been provisioned with the setting `max_tasks_per_node` greater
+          been provisioned with the setting `task_slots_per_node` greater
           than `1`.
         * (optional) `gpu` specifies if tasks within the task group should
           be scheduled on a compute node that has a GPU. Note that specifying

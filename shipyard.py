@@ -2175,14 +2175,14 @@ def tasks_list(ctx, all, jobid, poll_until_tasks_complete, taskid):
 
 @tasks.command('count')
 @click.option(
-    '--jobid', help='List tasks in the specified job id')
+    '--jobid', help='Get task and slot counts in the specified job id')
 @common_options
 @batch_options
 @keyvault_options
 @aad_options
 @pass_cli_context
 def tasks_count(ctx, jobid):
-    """Get task counts for a job"""
+    """Get task and slot counts for a job"""
     ctx.initialize_for_batch()
     convoy.fleet.action_jobs_tasks_count(ctx.batch_client, ctx.config, jobid)
 

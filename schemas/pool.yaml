@@ -61,10 +61,11 @@ mapping:
             type: int
             range:
               min: 0
-      max_tasks_per_node:
+      task_slots_per_node:
         type: int
         range:
           min: 1
+          max: 256
       resize_timeout:
         type: str
       node_fill_type:

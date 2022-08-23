@@ -37,7 +37,7 @@ then uploaded to the specified storage account to be retrieved by the
 parallelized BLAST stage. In the parallelized BLAST stage, represented
 by the `jobs-blast.yaml` file, each individual query file is run
 across its own individual task. If multiple compute nodes (or
-nodes with a larger `max_tasks_per_node` setting that are able to
+nodes with a larger `task_slots_per_node` setting that are able to
 accommodate the tasks) are available, then the requisite blast commands
 are run in parallel. Batch Shipyard automatically generates the correct
 number of parallel tasks via a `task_factory` that iterates over the

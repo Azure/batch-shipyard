@@ -188,7 +188,7 @@ The `pool images update` command runs as a normal job if your pool is
 comprised entirely of dedicated compute nodes. Thus, your compute
 nodes must be able to accommodate this update job and task. If your pool only
 has one node in it, it will run as a single task under a job. If the node in
-this pool is busy and the `max_tasks_per_node` in your `pool.yaml` is either
+this pool is busy and the `task_slots_per_node` in your `pool.yaml` is either
 unspecified or set to 1, then it will be blocked behind the running task.
 
 For pools with more than 1 node, then the update images command will run
@@ -199,7 +199,7 @@ the `pool images update` command is issued. If before the task can be
 scheduled, the pool is resized down and the number of nodes decreases, then
 the update container images job will not be able to execute and will stay
 active until the number of compute nodes reaches the prior number.
-Additionally, if `max_tasks_per_node` is set to 1 or unspecified in
+Additionally, if `task_slots_per_node` is set to 1 or unspecified in
 `pool.yaml` and any task is running on any node, the update container images
 job will be blocked until that task completes.
 

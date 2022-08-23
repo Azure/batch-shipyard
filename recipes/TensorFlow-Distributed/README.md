@@ -20,7 +20,7 @@ CPU-based VM size can be selected.
 If not using GPUs, you can select any appropriate platform image.
 
 If on multiple CPUs:
-* `max_tasks_per_node` must be set to 1 or omitted
+* `task_slots_per_node` must be set to 1 or omitted
 
 Other pool properties such as `publisher`, `offer`, `sku`, `vm_size` and
 `vm_count` should be set to your desired values for multiple CPU configuration.

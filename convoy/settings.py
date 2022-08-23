@@ -205,7 +205,7 @@ AdditionalNodePrepSettings = collections.namedtuple(
 )
 PoolSettings = collections.namedtuple(
     'PoolSettings', [
-        'id', 'vm_size', 'vm_count', 'resize_timeout', 'max_tasks_per_node',
+        'id', 'vm_size', 'vm_count', 'resize_timeout', 'task_slots_per_node',
         'inter_node_communication_enabled', 'vm_configuration',
         'reboot_on_start_task_failed', 'attempt_recovery_on_unusable',
         'block_until_all_global_resources_loaded',
@@ -1277,7 +1277,7 @@ def pool_settings(config):
     :return: pool settings from specification
     """
     conf = pool_specification(config)
-    max_tasks_per_node = _kv_read(conf, 'max_tasks_per_node', default=1)
+    task_slots_per_node = _kv_read(conf, 'task_slots_per_node', default=1)
     resize_timeout = _kv_read_checked(conf, 'resize_timeout')
     if util.is_not_empty(resize_timeout):
         resize_timeout = util.convert_string_to_timedelta(resize_timeout)
@@ -1446,7 +1446,7 @@ def pool_settings(config):
         vm_size=_pool_vm_size(config),
         vm_count=_pool_vm_count(config),
         resize_timeout=resize_timeout,
-        max_tasks_per_node=max_tasks_per_node,
+        task_slots_per_node=task_slots_per_node,
         inter_node_communication_enabled=inter_node_communication_enabled,
         vm_configuration=_populate_pool_vm_configuration(config),
         reboot_on_start_task_failed=reboot_on_start_task_failed,

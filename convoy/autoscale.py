@@ -32,7 +32,7 @@ from . import util
 _UNBOUND_MAX_NODES = 16777216
 AutoscaleMinMax = collections.namedtuple(
     'AutoscaleMinMax', [
-        'max_tasks_per_node',
+        'task_slots_per_node',
         'min_target_dedicated',
         'min_target_low_priority',
         'max_target_dedicated',
@@ -79,7 +79,7 @@ def _formula_tasks(pool):
                  task_type,
                  pool.autoscale.scenario.required_sample_percentage,
             ),
-            'reqVMs = {}TaskAvg / maxTasksPerNode'.format(task_type),
+            'reqVMs = {}TaskAvg / taskSlotsPerNode'.format(task_type),
         ]
         if pool.autoscale.scenario.rebalance_preemption_percentage is not None:
             req_vms.extend([
@@ -101,7 +101,7 @@ def _formula_tasks(pool):
             '{}TaskAvg = avg(${}Tasks.GetSample(sli, {}))'.format(
                 task_type, task_type,
                 pool.autoscale.scenario.required_sample_percentage),
-            'reqVMs = {}TaskAvg / maxTasksPerNode'.format(task_type),
+            'reqVMs = {}TaskAvg / taskSlotsPerNode'.format(task_type),
             'reqVMs = ({}TaskAvg > 0 && reqVMs < 1) ? 1 : reqVMs'.format(
                 task_type),
         ]
@@ -186,7 +186,7 @@ def _formula_tasks(pool):
                 pool.autoscale.scenario.bias_node_type))
     target_vms = ';\n'.join(target_vms)
     formula = [
-        'maxTasksPerNode = {}'.format(minmax.max_tasks_per_node),
+        'taskSlotsPerNode = {}'.format(minmax.task_slots_per_node),
         'minTargetDedicated = {}'.format(minmax.min_target_dedicated),
         'minTargetLowPriority = {}'.format(minmax.min_target_low_priority),
         'maxTargetDedicated = {}'.format(minmax.max_target_dedicated),
@@ -274,7 +274,7 @@ def _formula_day_of_week(pool):
                     pool.autoscale.scenario.bias_node_type))
     target_vms = ';\n'.join(target_vms)
     formula = [
-        'maxTasksPerNode = {}'.format(minmax.max_tasks_per_node),
+        'taskSlotsPerNode = {}'.format(minmax.task_slots_per_node),
         'minTargetDedicated = {}'.format(minmax.min_target_dedicated),
         'minTargetLowPriority = {}'.format(minmax.min_target_low_priority),
         'maxTargetDedicated = {}'.format(minmax.max_target_dedicated),
@@ -327,7 +327,7 @@ def _get_minmax(pool):
     if max_inc_low_priority <= 0:
         max_inc_low_priority = _UNBOUND_MAX_NODES
     return AutoscaleMinMax(
-        max_tasks_per_node=pool.max_tasks_per_node,
+        task_slots_per_node=pool.task_slots_per_node,
         min_target_dedicated=min_target_dedicated,
         min_target_low_priority=min_target_low_priority,
         max_target_dedicated=max_target_dedicated,

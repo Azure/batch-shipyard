@@ -1313,7 +1313,7 @@ def list_pools(batch_client, config):
             '    * low priority:',
             '      * current: {}'.format(pool.current_low_priority_nodes),
             '      * target: {}'.format(pool.target_low_priority_nodes),
-            '  * max tasks per node: {}'.format(pool.max_tasks_per_node),
+            '  * tasks slots per node: {}'.format(pool.task_slots_per_node),
             '  * enable inter node communication: {}'.format(
                 pool.enable_inter_node_communication),
             '  * autoscale enabled: {}'.format(pool.enable_auto_scale),
@@ -1517,10 +1517,10 @@ def pool_stats(batch_client, config, pool_id=None):
         if node.running_tasks_count is not None:
             tasks_running.append(node.running_tasks_count)
     total_running_tasks = sum(tasks_running)
-    runnable_task_slots = runnable_nodes * pool.max_tasks_per_node
+    runnable_task_slots = runnable_nodes * pool.task_slots_per_node
     total_task_slots = (
         pool.current_dedicated_nodes + pool.current_low_priority_nodes
-    ) * pool.max_tasks_per_node
+    ) * pool.task_slots_per_node
     busy_task_slots_fraction = (
         0 if runnable_task_slots == 0 else
         total_running_tasks / runnable_task_slots
@@ -1998,17 +1998,32 @@ def job_stats(batch_client, config, jobid=None):
     task_wall_times = []
     task_counts = batchmodels.TaskCounts(
         active=0, running=0, completed=0, succeeded=0, failed=0)
+    task_slots = batchmodels.TaskSlotCounts(
+        active=0, running=0, completed=0, succeeded=0, failed=0)
     total_tasks = 0
+    total_slots = 0
     for job in jobs:
         job_count += 1
         # get task counts
         tc = batch_client.job.get_task_counts(job_id=job.id)
-        task_counts.active += tc.active
-        task_counts.running += tc.running
-        task_counts.completed += tc.completed
-        task_counts.succeeded += tc.succeeded
-        task_counts.failed += tc.failed
-        total_tasks += tc.active + tc.running + tc.completed
+        task_counts.active += tc.task_counts.active
+        task_counts.running += tc.task_counts.running
+        task_counts.completed += tc.task_counts.completed
+        task_counts.succeeded += tc.task_counts.succeeded
+        task_counts.failed += tc.task_counts.failed
+        total_tasks += (
+            tc.task_counts.active + tc.task_counts.running +
+            tc.task_counts.completed
+        )
+        task_slots.active += tc.task_slot_counts.active
+        task_slots.running += tc.task_slot_counts.running
+        task_slots.completed += tc.task_slot_counts.completed
+        task_slots.succeeded += tc.task_slot_counts.succeeded
+        task_slots.failed += tc.task_slot_counts.failed
+        total_slots = (
+            tc.task_slot_counts.active + tc.task_slot_counts.running +
+            tc.task_slot_counts.completed
+        )
         if job.execution_info.end_time is not None:
             job_times.append(
                 (job.execution_info.end_time -
@@ -2053,6 +2068,29 @@ def job_stats(batch_client, config, jobid=None):
             task_counts.failed,
             100 * task_counts.failed / task_counts.completed
             if task_counts.completed > 0 else 0
+        ),
+        '* Total slots: {}'.format(total_slots),
+        '  * Active: {0} ({1:.2f}% of total)'.format(
+            task_slots.active,
+            100 * task_slots.active / total_slots if total_slots > 0 else 0
+        ),
+        '  * Running: {0} ({1:.2f}% of total)'.format(
+            task_slots.running,
+            100 * task_slots.running / total_slots if total_slots > 0 else 0
+        ),
+        '  * Completed: {0} ({1:.2f}% of total)'.format(
+            task_slots.completed,
+            100 * task_slots.completed / total_slots if total_slots > 0 else 0
+        ),
+        '    * Succeeded: {0} ({1:.2f}% of completed)'.format(
+            task_slots.succeeded,
+            100 * task_slots.succeeded / task_slots.completed
+            if task_slots.completed > 0 else 0
+        ),
+        '    * Failed: {0} ({1:.2f}% of completed)'.format(
+            task_slots.failed,
+            100 * task_slots.failed / task_slots.completed
+            if task_slots.completed > 0 else 0
         ),
     ]
     if len(job_times) > 0:
@@ -3883,7 +3921,7 @@ def get_task_counts(batch_client, config, jobid=None):
     raw = {}
     for job in jobs:
         jobid = settings.job_id(job)
-        log = ['task counts for job {}'.format(jobid)]
+        log = ['task counts and slot counts for job {}'.format(jobid)]
         try:
             if settings.raw(config):
                 raw[jobid] = util.print_raw_output(
@@ -3901,11 +3939,25 @@ def get_task_counts(batch_client, config, jobid=None):
                 raise
         else:
             if not settings.raw(config):
-                log.append('* active: {}'.format(tc.active))
-                log.append('* running: {}'.format(tc.running))
-                log.append('* completed: {}'.format(tc.completed))
-                log.append('  * succeeded: {}'.format(tc.succeeded))
-                log.append('  * failed: {}'.format(tc.failed))
+                log.append('* task counts:')
+                log.append('  * active: {}'.format(tc.task_counts.active))
+                log.append('  * running: {}'.format(tc.task_counts.running))
+                log.append('  * completed: {}'.format(
+                    tc.task_counts.completed))
+                log.append('    * succeeded: {}'.format(
+                    tc.task_counts.succeeded))
+                log.append('    * failed: {}'.format(tc.task_counts.failed))
+                log.append('* task slots:')
+                log.append('  * active: {}'.format(
+                    tc.task_slot_counts.active))
+                log.append('  * running: {}'.format(
+                    tc.task_slot_counts.running))
+                log.append('  * completed: {}'.format(
+                    tc.task_slot_counts.completed))
+                log.append('    * succeeded: {}'.format(
+                    tc.task_slot_counts.succeeded))
+                log.append('    * failed: {}'.format(
+                    tc.task_slot_counts.failed))
                 logger.info(os.linesep.join(log))
     if util.is_not_empty(raw):
         util.print_raw_json(raw)
@@ -5429,7 +5481,7 @@ def add_jobs(
                         if recurrence.job_manager.allow_low_priority_node
                         else 0
                     )
-                    total_slots = cloud_pool.max_tasks_per_node * total_vms
+                    total_slots = cloud_pool.task_slots_per_node * total_vms
                 else:
                     total_vms = (
                         pool.vm_count.dedicated +
@@ -5437,7 +5489,7 @@ def add_jobs(
                         if recurrence.job_manager.allow_low_priority_node
                         else 0
                     )
-                    total_slots = pool.max_tasks_per_node * total_vms
+                    total_slots = pool.task_slots_per_node * total_vms
                 if total_slots == 1:
                     logger.error(
                         ('Only 1 scheduling slot available which is '

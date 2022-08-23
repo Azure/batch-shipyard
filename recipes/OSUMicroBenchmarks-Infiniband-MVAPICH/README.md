@@ -14,7 +14,7 @@ this recipe.
 ### Pool Configuration
 The pool configuration should enable the following properties:
 * `inter_node_communication_enabled` must be set to `true`
-* `max_tasks_per_node` must be set to 1 or omitted
+* `task_slots_per_node` must be set to 1 or omitted
 * `vm_configuration` must be defined
   * `platform_image` must be defined
     * `publisher` must be set to `OpenLogic`
