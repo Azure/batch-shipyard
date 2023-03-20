@@ -3,6 +3,13 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/3a0j0gww57o6nkpw/branch/master?svg=true)](https://ci.appveyor.com/project/alfpark/batch-shipyard)
 
 # Batch Shipyard
+
+## PROJECT STATUS
+**This toolkit is no longer actively maintained.** The `develop` branch has
+proposed fixes for outstanding issues, but they will not be merged back to
+`master`. Please see the main [Azure Batch](https://github.com/Azure/Batch)
+GitHub repository for more information about Azure Batch.
+
 <img src="https://azurebatchshipyard.blob.core.windows.net/github/README-dash.gif" alt="dashboard" width="1024" />
 
 [Batch Shipyard](https://github.com/Azure/batch-shipyard) is a tool to help
