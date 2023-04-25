@@ -1,8 +1,8 @@
 job_specifications:
 - id: tensorflowjob
   tasks:
-  - docker_image: tensorflow/tensorflow
+  - docker_image: tensorflow/tensorflow:1.15.2
     resource_files:
-    - blob_source: https://raw.githubusercontent.com/tensorflow/models/master/tutorials/image/mnist/convolutional.py
+    - blob_source: https://raw.githubusercontent.com/tensorflow/models/v1.7.0/tutorials/image/mnist/convolutional.py
       file_path: convolutional.py
     command: python -u convolutional.py
